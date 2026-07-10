@@ -26,6 +26,12 @@ final class WatchAppModel {
 
     private(set) var phase: Phase = .waiting
 
+    /// Deployment configuration from the last hand-off; drives the domain
+    /// picker in the new-address flow.
+    private(set) var configuration: Configuration?
+
+    var domains: [MailDomain] { configuration?.domains ?? [] }
+
     private let secureStore: any SecureStore
     private let defaults: UserDefaults
     private var apiClient: URLSessionApiClient?
@@ -43,6 +49,9 @@ final class WatchAppModel {
     /// previously handed-off session from local storage. Idempotent, so the
     /// app's `.task` can call it across scene re-attaches.
     func start() {
+        #if DEBUG
+        if seedPreviewStateIfRequested() { return }
+        #endif
         activateSessionIfPossible()
         if apiClient == nil {
             restoreFromStorage()
@@ -58,6 +67,7 @@ final class WatchAppModel {
     func apply(_ handoff: WatchHandoff) {
         guard let data = try? JSONEncoder().encode(handoff.configuration) else { return }
         defaults.set(data, forKey: Self.configurationDefaultsKey)
+        configuration = handoff.configuration
         let auth = CognitoAuthService(
             configuration: handoff.configuration,
             secureStore: secureStore
@@ -81,8 +91,54 @@ final class WatchAppModel {
         try? secureStore.remove(SecureStoreKey.authTokens)
         try? secureStore.remove(SecureStoreKey.imapUsername)
         defaults.removeObject(forKey: Self.configurationDefaultsKey)
+        configuration = nil
         apiClient = nil
         phase = .waiting
+    }
+
+    // MARK: - Address lifecycle
+
+    /// Mints a new relationship-scoped address and returns the composed
+    /// string for the confirmation screen. The list refreshes in the
+    /// background so it's current when the user dismisses.
+    func createAddress(
+        username: String,
+        subdomain: String,
+        domain: String,
+        comment: String?
+    ) async throws {
+        guard let apiClient else { throw CabalmailError.notSignedIn }
+        let address = "\(username)@\(subdomain).\(domain)"
+        try await apiClient.newAddress(
+            username: username,
+            subdomain: subdomain,
+            tld: domain,
+            comment: comment,
+            address: address
+        )
+        Task { await loadAddresses() }
+    }
+
+    /// Revokes a burned address. The row is pruned locally only after the
+    /// call succeeds (mirroring the iOS view model) — a failed revoke must
+    /// not make the address look gone while it still delivers.
+    func revoke(_ address: Address) async {
+        guard let apiClient else { return }
+        do {
+            try await apiClient.revokeAddress(
+                address: address.address,
+                subdomain: address.subdomain,
+                tld: address.tld,
+                publicKey: address.publicKey
+            )
+            if case .ready(let addresses) = phase {
+                phase = .ready(addresses.filter { $0.address != address.address })
+            }
+        } catch {
+            // Re-sync with the server rather than guessing at state; if the
+            // API is down this lands on the retry-able failure screen.
+            await loadAddresses()
+        }
     }
 
     // MARK: - Internals
@@ -105,6 +161,7 @@ final class WatchAppModel {
             phase = .waiting
             return
         }
+        self.configuration = configuration
         let auth = CognitoAuthService(configuration: configuration, secureStore: secureStore)
         apiClient = URLSessionApiClient(configuration: configuration, authService: auth)
         Task { await loadAddresses() }
@@ -135,6 +192,56 @@ final class WatchAppModel {
         }
     }
 }
+
+#if DEBUG
+extension WatchAppModel {
+    /// Simulator/screenshot scaffolding. The watch can't sign in by itself,
+    /// so every state past `.waiting` is unreachable without a paired,
+    /// signed-in iPhone — which automated visual checks don't have. Launching
+    /// with CABAL_WATCH_PREVIEW=list (or =new, which additionally auto-pushes
+    /// the new-address flow) seeds a fake signed-in session instead. The API
+    /// client stays nil, so nothing can reach the network from this state.
+    var previewAutoPushNewAddress: Bool {
+        ["new", "created"].contains(
+            ProcessInfo.processInfo.environment["CABAL_WATCH_PREVIEW"] ?? ""
+        )
+    }
+
+    fileprivate func seedPreviewStateIfRequested() -> Bool {
+        guard let mode = ProcessInfo.processInfo.environment["CABAL_WATCH_PREVIEW"],
+              ["list", "new", "created"].contains(mode) else {
+            return false
+        }
+        configuration = Configuration(
+            controlDomain: "cabalmail.example",
+            domains: [MailDomain(domain: "cabalmail.com"), MailDomain(domain: "cabalmail.net")],
+            invokeUrl: URL(string: "https://api.invalid/preview")!,
+            cognito: .init(region: "us-east-1", userPoolId: "preview", clientId: "preview")
+        )
+        phase = .ready([
+            Address(
+                address: "h7k2m9pq@x4n8w2jb.cabalmail.com",
+                subdomain: "x4n8w2jb",
+                tld: "cabalmail.com",
+                comment: "Hardware store",
+                favorite: true
+            ),
+            Address(
+                address: "q3v8t1zr@p9c5d7ka.cabalmail.com",
+                subdomain: "p9c5d7ka",
+                tld: "cabalmail.com",
+                comment: "Newsletter"
+            ),
+            Address(
+                address: "b2f6s4mx@r8g3h5ne.cabalmail.net",
+                subdomain: "r8g3h5ne",
+                tld: "cabalmail.net"
+            ),
+        ])
+        return true
+    }
+}
+#endif
 
 /// WCSession delegate. Split out of the model because WCSession requires an
 /// NSObject delegate and calls it on its own queue; the relay decodes the

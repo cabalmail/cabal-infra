@@ -6,10 +6,25 @@ import SwiftUI
 struct ContentView: View {
     @Environment(WatchAppModel.self) private var model
 
+    /// Row awaiting revoke confirmation (drives the dialog).
+    @State private var pendingRevoke: Address?
+
+    /// Screenshot scaffolding: pushes the new-address flow on launch when
+    /// the CABAL_WATCH_PREVIEW=new seed is active (see WatchAppModel).
+    @State private var autoPushNewAddress = false
+
     var body: some View {
         NavigationStack {
             content
                 .navigationTitle("Cabalmail")
+                .navigationDestination(isPresented: $autoPushNewAddress) {
+                    NewAddressView()
+                }
+                .onAppear {
+                    #if DEBUG
+                    autoPushNewAddress = model.previewAutoPushNewAddress
+                    #endif
+                }
         }
     }
 
@@ -55,17 +70,54 @@ struct ContentView: View {
     private func list(_ addresses: [Address]) -> some View {
         List {
             if addresses.isEmpty {
-                Text("No addresses yet.")
+                Text("No addresses yet. Tap + to mint one.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             ForEach(addresses, id: \.address) { address in
                 row(address)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            pendingRevoke = address
+                        } label: {
+                            Label("Revoke", systemImage: "xmark.bin")
+                        }
+                    }
             }
         }
         .refreshable {
             await model.refresh()
         }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    NewAddressView()
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("New address")
+            }
+        }
+        .confirmationDialog(
+            "Revoke \(pendingRevoke?.address ?? "address")?",
+            isPresented: revokeDialogBinding,
+            titleVisibility: .visible,
+            presenting: pendingRevoke
+        ) { address in
+            Button("Revoke", role: .destructive) {
+                Task { await model.revoke(address) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Mail sent to it will stop being delivered.")
+        }
+    }
+
+    private var revokeDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingRevoke != nil },
+            set: { if !$0 { pendingRevoke = nil } }
+        )
     }
 
     private func row(_ address: Address) -> some View {

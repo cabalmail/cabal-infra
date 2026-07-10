@@ -91,6 +91,7 @@ Regenerated outputs (all committed; never hand-edit):
   Apple — apple/Cabalmail/Assets.xcassets/AppIcon.appiconset        (iOS light/dark/tinted)
           apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack  (visionOS 3 layers)
           apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset     (macOS size ladder)
+          apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset   (watchOS single 1024)
           apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset
   React — react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}
           react/admin/src/assets/logo.svg
@@ -400,6 +401,7 @@ generate_all() {
   local ios="${REPO_ROOT}/apple/Cabalmail/Assets.xcassets/AppIcon.appiconset"
   local vision="${REPO_ROOT}/apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack"
   local mac="${REPO_ROOT}/apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset"
+  local watch="${REPO_ROOT}/apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset"
   local pub="${REPO_ROOT}/react/admin/public"
 
   # --- Apple: iOS appiconset (light/dark opaque; tinted keeps alpha) ---
@@ -415,6 +417,12 @@ generate_all() {
     size="${pair%%:*}"; name="${pair##*:}"
     render "${d}/AppIcon-ios-light.svg" "${size}" "${size}" "${mac}/${name}.png" opaque
   done
+
+  # --- Apple: watchOS single universal slot (1024, opaque). The system
+  #     applies the circular home-screen mask itself, so this is the same
+  #     full-bleed light art as iOS; the optically-centered glyph sits well
+  #     inside the circle. watchOS has no dark/tinted variants. ---
+  render "${d}/AppIcon-ios-light.svg" 1024 1024 "${watch}/AppIcon-watch.png" opaque
 
   # --- Apple: visionOS layered stack (1024 per layer). The back plate must be
   #     fully opaque; the middle/front glyph layers keep transparency. ---
