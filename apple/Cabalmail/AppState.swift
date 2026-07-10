@@ -53,6 +53,16 @@ final class AppState {
     /// via mailto leave the seed parked here until `MessageListView`
     /// first appears.
     var pendingComposeSeed: Draft?
+    /// Forwarded-message attachments awaiting pickup by the compose
+    /// surface, keyed by seed draft id. The forward action stashes the
+    /// original message's decoded attachments here — they're too big to
+    /// ride the Codable `Draft` through `openWindow` — and `ComposeView`
+    /// consumes them in its `.task`. In-memory only: like hand-picked
+    /// compose attachments, they don't survive a relaunch or a resumed
+    /// draft. `@ObservationIgnored` because no view renders this
+    /// directly; it's a one-shot handoff, and consuming it during view
+    /// setup must not invalidate anyone's body.
+    @ObservationIgnored var pendingComposeAttachments: [UUID: [Attachment]] = [:]
     /// Reply / reply-all / forward intent counters bumped from the macOS
     /// menu bar so the shortcut fires regardless of which scene holds
     /// AppKit first-responder focus. The currently-presented
@@ -577,6 +587,20 @@ extension AppState {
     func consumePendingComposeSeed() -> Draft? {
         defer { pendingComposeSeed = nil }
         return pendingComposeSeed
+    }
+
+    /// Stash the original message's attachments for a forward seed. The
+    /// compose surface picks them up via `consumeComposeAttachments(for:)`.
+    func stashComposeAttachments(_ attachments: [Attachment], for draftId: UUID) {
+        pendingComposeAttachments[draftId] = attachments
+    }
+
+    /// Reads and clears the stashed attachments for one compose seed.
+    /// Pop-once, so a system-restored compose scene (whose stashed bytes
+    /// are gone) degrades to composing without them rather than stalling.
+    func consumeComposeAttachments(for draftId: UUID) -> [Attachment] {
+        defer { pendingComposeAttachments[draftId] = nil }
+        return pendingComposeAttachments[draftId] ?? []
     }
 
     /// Kick off a one-shot contacts authorization request,

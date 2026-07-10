@@ -67,6 +67,15 @@ struct ComposeView: View {
             #endif
             .toolbar { toolbarContent }
             .task {
+                // Pick up forwarded attachments stashed by the forward
+                // action. They hand off out-of-band because the seed
+                // `Draft` travels through `openWindow` as a Codable
+                // value. Pop-once: a system-restored compose scene finds
+                // nothing and simply composes without them.
+                let forwarded = appState.consumeComposeAttachments(for: model.draftId)
+                if !forwarded.isEmpty {
+                    model.seedForwardedAttachments(forwarded)
+                }
                 await model.start()
                 // Snapshot contacts once per compose surface. The list is
                 // bounded by the user's address book; the per-keystroke
