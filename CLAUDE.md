@@ -240,6 +240,8 @@ Use semantic versioning. Record changelog entries as **fragments**, not by editi
 
 Don't repeat the category subheading word (or a close synonym) in the fragment text - the collator already prints it as an `### Added:`/`### Removed:`/etc. heading, so "Added a new UI element for X" reads as redundant under `### Added:`. Instead, lead with a bold noun-phrase summary followed by details: `- **New UI element for X.** <details>`. Same for `Removed`, `Deprecated`, `Changed`, `Fixed`, `Security`.
 
+Any fragment describing a change to the **Apple clients** (`apple/Cabalmail`, `apple/CabalmailMac`, `apple/CabalmailKit/Sources`) **must** prefix its entry with `Apple:` - right after the leading `- ` and before the bold summary: `- Apple: **Threaded reader.** <details>`. This prefix scopes the entry into the TestFlight "What to Test" notes: `set-testflight-notes.py` keeps only `Apple:`-prefixed entries (stripping the prefix, since it's redundant in an Apple app) and drops the rest, so an Apple change without the prefix silently vanishes from the notes testers read. A PR that touches the Apple client sources fails the `changelog` gate in `lint.yml` unless it adds such a fragment; opt out for non-user-facing Apple work (refactors, test-only, CI) with the `no-changelog` PR label.
+
 ## Roadmap
 
 See the [project wiki](https://github.com/cabalmail/cabal-infra/wiki) for the current roadmap.
