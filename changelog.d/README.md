@@ -54,10 +54,10 @@ section by `.github/scripts/set-testflight-notes.py`, which keeps only the
 an Apple app) and drops everything else. So an Apple-client change without the
 prefix silently disappears from the notes testers see.
 
-A PR that touches the Apple client sources fails the `changelog` job in
-`.github/workflows/lint.yml` unless it adds such a fragment. For a genuinely
-non-user-facing Apple change (refactor, test-only, CI, xcodegen), apply the
-`no-changelog` label to the PR to opt out.
+A PR that touches the Apple client sources fails the
+`.github/workflows/apple-changelog.yml` check unless it adds such a fragment.
+For a genuinely non-user-facing Apple change (refactor, test-only, CI,
+xcodegen), apply the `no-changelog` label to the PR to opt out.
 
 ## Releasing
 

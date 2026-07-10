@@ -15,7 +15,9 @@
 # Some Apple-source PRs are legitimately not user-facing (refactors, test-only,
 # CI, xcodegen). Apply the `no-changelog` PR label to opt those out.
 #
-# Runs from lint.yml on pull_request, gated on the apple_src path filter.
+# Runs from the apple-changelog.yml workflow on every pull_request event
+# (including labeled/unlabeled). No path filter: this script self-gates by
+# diffing the PR range and exits 0 early when no Apple client source changed.
 #
 # Required env:
 #   BASE_SHA  PR base branch tip (github.event.pull_request.base.sha)

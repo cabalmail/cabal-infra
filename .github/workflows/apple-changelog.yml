@@ -1,0 +1,46 @@
+---
+name: Apple changelog
+
+# Require an `Apple:`-prefixed changelog fragment when a PR changes the shipped
+# Apple client sources, so the change reaches the TestFlight "What to Test"
+# notes (set-testflight-notes.py filters those notes to Apple-scoped entries).
+# Opt out for non-user-facing Apple work with the `no-changelog` PR label. See
+# CLAUDE.md and changelog.d/README.md.
+#
+# Its own workflow - not a job in lint.yml - specifically so it can trigger on
+# `labeled`/`unlabeled`: applying the opt-out label must re-run the check to
+# clear the failure. Wiring those events into lint.yml would rerun the heavy
+# Terraform/Swift/React scanners on every label toggle (including the
+# automation labels). The check is cheap and self-gating - the script exits 0
+# early when no Apple client source changed - so it runs on every PR with no
+# path filter and reports a definite pass/fail rather than a skip.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+# Supersede in-flight runs when the PR is updated or its labels change; keyed
+# on the PR number so concurrent PRs don't cancel each other.
+concurrency:
+  group: apple-changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  apple-changelog:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      with:
+        # Full history so the script can diff the PR range (base...head) and
+        # read the fragment files added on the branch.
+        fetch-depth: 0
+    - name: require-apple-fragment
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        OPT_OUT: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+      run: ./.github/scripts/check-apple-changelog.sh
