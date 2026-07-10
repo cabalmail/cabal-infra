@@ -21,6 +21,7 @@ options:
     iOS: "18.0"
     macOS: "15.0"
     visionOS: "2.0"
+    watchOS: "11.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
 
@@ -262,6 +263,64 @@ targets:
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "$(MAC_APP_STORE_PROFILE_UUID)"
 
+  # Watch companion app, scoped to the address lifecycle (create / list /
+  # revoke) — mail reading stays on the other platforms. Deliberately NOT
+  # embedded in the iOS app yet: embedding adds the watch app to the iOS
+  # archive's signing inputs (every App Store upload would need the watch
+  # provisioning profile), so that lands with the watch signing/TestFlight
+  # work. Until then the target builds and runs in the simulator via its
+  # own scheme and CI leg.
+  CabalmailWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: CabalmailWatch
+    dependencies:
+      - package: CabalmailKit
+    info:
+      path: CabalmailWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail
+        ITSAppUsesNonExemptEncryption: false
+        # Single-target watchOS app (SwiftUI app lifecycle, no WatchKit
+        # extension bundle). Required for the watchOS 7+ app structure.
+        WKApplication: true
+        # Pairs the watch app with the iOS companion. The credential
+        # bootstrap (Configuration + Cognito refresh token) arrives from
+        # the phone over WatchConnectivity — the two devices do not share
+        # a keychain, so the watch cannot read the phone's tokens.
+        WKCompanionAppBundleIdentifier: com.cabalmail.Cabalmail
+        # See the Cabalmail target's equivalent comment — XcodeGen defaults
+        # these to "1" / "1.0" unless explicitly plumbed through to the
+        # build settings.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+    settings:
+      base:
+        # Apple's convention for a watch app paired to an iOS companion:
+        # the companion's bundle id plus a `.watchkitapp` suffix.
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail.watchkitapp
+        # On-watch app name; defaults to the target name otherwise.
+        PRODUCT_NAME: Cabalmail
+        # App Store validation requires a watch app's version to match its
+        # iOS companion exactly — keep both fields in lockstep with the
+        # Cabalmail target above.
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # XcodeGen defaults ASSETCATALOG_COMPILER_APPICON_NAME to AppIcon
+        # for application targets, so the catalog carries a placeholder
+        # (empty) AppIcon.appiconset — a single 1024pt universal watch
+        # slot. The actual artwork is generated with the signing /
+        # TestFlight work, alongside the CFBundleIconName plumbing the
+        # other targets carry.
+        CODE_SIGN_ENTITLEMENTS: CabalmailWatch/CabalmailWatch.entitlements
+      # No manual Release signing block yet — that arrives with the watch
+      # provisioning profile (WATCHOS_APP_STORE_PROFILE_UUID, mirroring the
+      # IOS_/MAC_ convention) when the TestFlight path is wired up. Debug
+      # uses the project-level Automatic style like the other targets.
+
 schemes:
   Cabalmail:
     build:
@@ -275,6 +334,14 @@ schemes:
     build:
       targets:
         CabalmailMac: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  CabalmailWatch:
+    build:
+      targets:
+        CabalmailWatch: all
     run:
       config: Debug
     archive:

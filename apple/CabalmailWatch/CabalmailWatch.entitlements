@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        This file is wired into the watch target's signing via
+        `apple/project.yml` (CODE_SIGN_ENTITLEMENTS). It ships empty on
+        purpose, mirroring the iOS target's convention: wiring the file
+        from day one means later phases only edit the entitlements file,
+        not `project.yml`. The watch app stores its own credentials in
+        its own keychain (bootstrapped from the phone over
+        WatchConnectivity), so no keychain-sharing or app-group
+        entitlement is needed for the core address features.
+    -->
+</dict>
+</plist>
