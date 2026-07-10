@@ -176,6 +176,9 @@ jobs:
           - scheme: CabalmailMac
             platform: macOS
             destination: 'generic/platform=macOS'
+          - scheme: CabalmailWatch
+            platform: watchOS
+            destination: 'generic/platform=watchOS'
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -184,6 +187,17 @@ jobs:
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
         with:
           xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Ensure watchOS platform
+        # The runner image ships every platform for its default Xcode, but a
+        # setup-xcode selection can land on a copy without the watchOS
+        # runtime, and even a `generic/platform=watchOS` device build fails
+        # destination resolution when the platform bundle is absent. No-op
+        # when it is already installed.
+        if: matrix.platform == 'watchOS'
+        run: |
+          xcrun simctl list runtimes | grep -q watchOS \
+            || sudo xcodebuild -downloadPlatform watchOS
 
       - name: Install XcodeGen + xcbeautify
         # See the kit-test job for the rationale on the per-package check.

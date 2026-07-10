@@ -245,20 +245,6 @@ final class AppState {
         }
     }
 
-    /// Last-used control domain, persisted so repeat launches skip re-entry.
-    var controlDomain: String {
-        get { UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.controlDomain") }
-    }
-
-    /// Last-used username, same persistence rationale. Passwords are never
-    /// persisted here — `CognitoAuthService` holds them in the data-protection
-    /// keychain via `KeychainSecureStore`.
-    var lastUsername: String {
-        get { UserDefaults.standard.string(forKey: "cabalmail.lastUsername") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.lastUsername") }
-    }
-
     private(set) var client: CabalmailClient?
 
     /// Cross-client navigation cursor for the current session: remembers and
@@ -304,6 +290,7 @@ final class AppState {
             self.status = .signedIn
             startInboxBadgePolling()
             requestContactsAccessIfNeeded()
+            await pushSessionToWatch(client: newClient, username: username)
         } catch let error as CabalmailError {
             status = .error(message(for: error))
         } catch {
@@ -321,6 +308,8 @@ final class AppState {
         // cache.
         await client.clearLocalData()
         try? await client.authService.signOut()
+        // Tell the watch to drop its copy of the credentials too.
+        WatchSessionBridge.shared.pushSignedOut()
         self.client = nil
         self.navCoordinator = nil
         self.status = .signedOut
@@ -387,6 +376,9 @@ final class AppState {
             self.status = .signedIn
             startInboxBadgePolling()
             requestContactsAccessIfNeeded()
+            // Restore is the common launch path, so this is what keeps the
+            // watch's copy of the session fresh across app launches.
+            await pushSessionToWatch(client: newClient, username: username)
         } catch let error as CabalmailError {
             switch error {
             case .authExpired, .invalidCredentials, .notSignedIn:
@@ -489,6 +481,24 @@ final class AppState {
     }
 }
 
+// MARK: - Persisted last-session fields
+
+extension AppState {
+    /// Last-used control domain, persisted so repeat launches skip re-entry.
+    var controlDomain: String {
+        get { UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.controlDomain") }
+    }
+
+    /// Last-used username, same persistence rationale. Passwords are never
+    /// persisted here — `CognitoAuthService` holds them in the data-protection
+    /// keychain via `KeychainSecureStore`.
+    var lastUsername: String {
+        get { UserDefaults.standard.string(forKey: "cabalmail.lastUsername") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.lastUsername") }
+    }
+}
+
 // MARK: - Cache directory
 
 extension AppState {
@@ -505,6 +515,22 @@ extension AppState {
         let directory = base.appendingPathComponent("Cabalmail", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+}
+
+// MARK: - Watch hand-off
+
+extension AppState {
+    /// Hands the signed-in session (configuration + Cognito tokens) to the
+    /// paired watch. `WatchSessionBridge` is a no-op stub on platforms
+    /// without WatchConnectivity, so callers don't need platform guards.
+    private func pushSessionToWatch(client: CabalmailClient, username: String) async {
+        guard let tokens = await client.authService.currentTokens() else { return }
+        WatchSessionBridge.shared.pushSession(
+            configuration: client.configuration,
+            tokens: tokens,
+            username: username
+        )
     }
 }
 

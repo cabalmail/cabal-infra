@@ -1,4 +1,10 @@
 import Foundation
+// The rich-text composer is backed by WKWebView, which does not exist on
+// watchOS. Guarding the whole file keeps CabalmailKit buildable for a watchOS
+// companion target (address management only); the type is self-contained and
+// referenced solely from the iOS/macOS/visionOS compose views in the app
+// targets, so compiling it out has no effect on those platforms.
+#if canImport(WebKit)
 @preconcurrency import WebKit
 #if canImport(AppKit)
 import AppKit
@@ -372,3 +378,4 @@ extension RichTextEditorController.Selection {
         canRedo = states["canRedo"] as? Bool ?? false
     }
 }
+#endif

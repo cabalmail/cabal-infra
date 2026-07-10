@@ -5,6 +5,7 @@
 included:
   - Cabalmail
   - CabalmailMac
+  - CabalmailWatch
   - CabalmailKit/Sources
   - CabalmailKit/Tests
 
