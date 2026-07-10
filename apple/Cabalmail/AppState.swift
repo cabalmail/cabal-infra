@@ -532,6 +532,17 @@ extension AppState {
             username: username
         )
     }
+
+    /// Re-offers the current session to the watch. Called on every return
+    /// to the foreground: the watch's "open Cabalmail on your iPhone"
+    /// instruction has to work when the app was *already running* — the
+    /// launch-time push has long since fired by then, and
+    /// `restoreIfPossible()` is deliberately a no-op while signed in, so
+    /// without this the instruction only worked after a cold start.
+    func refreshWatchSession() async {
+        guard let client else { return }
+        await pushSessionToWatch(client: client, username: lastUsername)
+    }
 }
 
 // MARK: - Message-menu selection intents
