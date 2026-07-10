@@ -547,6 +547,13 @@
   max-width: 240px;
 }
 
+/* Forwarded attachments whose bytes are still downloading. The chip keeps
+   its final footprint — only the tone changes — so nothing shifts when the
+   Blob lands. */
+.compose-attachment-chip--pending {
+  opacity: 0.55;
+}
+
 .compose-attachment-name {
   overflow: hidden;
   text-overflow: ellipsis;

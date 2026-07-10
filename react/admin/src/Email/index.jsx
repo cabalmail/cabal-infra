@@ -202,7 +202,7 @@ function Email({
     });
   }, [openCompose]);
 
-  const launchComposer = useCallback((recipient, body, env, other_headers, type) => {
+  const launchComposer = useCallback((recipient, body, env, other_headers, type, source) => {
     const prefix = type === "forward" ? "Fwd: " : "Re: ";
     const subject = prefix + env.subject.replace(/^(re:?\s|fwd?:?\s)?/i, "");
     const extended_body = prepBody(body, env);
@@ -212,7 +212,10 @@ function Email({
       recipient: recipient,
       body: extended_body,
       type: type,
-      other_headers: other_headers
+      other_headers: other_headers,
+      // Forward only: `{folder, id, seen, attachments}` of the original
+      // message, so the compose window can carry its attachments over.
+      forward_attachments: source
     });
   }, [openCompose]);
 
@@ -224,8 +227,8 @@ function Email({
     launchComposer(recipient, body, env, other_headers, "replyAll");
   }, [launchComposer]);
 
-  const forward = useCallback((recipient, body, env, other_headers) => {
-    launchComposer(recipient, body, env, other_headers, "forward");
+  const forward = useCallback((recipient, body, env, other_headers, source) => {
+    launchComposer(recipient, body, env, other_headers, "forward", source);
   }, [launchComposer]);
 
   // Register keyboard-shortcut handlers with App-level hook.
@@ -433,6 +436,7 @@ function Email({
               subject={w.subject}
               type={w.type}
               other_headers={w.other_headers}
+              forward_attachments={w.forward_attachments}
               composeFromAddress={composeFromAddress}
               setComposeFromAddress={setComposeFromAddress}
               layout={layout}
