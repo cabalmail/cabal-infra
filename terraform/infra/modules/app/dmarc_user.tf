@@ -52,6 +52,16 @@ resource "aws_dynamodb_table_item" "caa_address" {
   })
 
   depends_on = [aws_cognito_user.dmarc]
+
+  # The admin may assign additional users to this address (assign_address
+  # appends to the slash-delimited user attribute) so CAA reports also land
+  # in a personal mailbox. Ignore item drift so an apply never silently
+  # reverts that assignment back to the dmarc user alone. Trade-off: later
+  # Terraform edits to this row (e.g. a changed comment) will not apply
+  # either - taint the resource to force an intentional rewrite.
+  lifecycle {
+    ignore_changes = [item]
+  }
 }
 
 # DNS records for the mail-admin subdomain on the first mail domain.

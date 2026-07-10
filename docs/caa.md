@@ -82,6 +82,11 @@ Two operational notes:
   it up at the next periodic sendmail map regeneration rather than instantly
   (the SNS-triggered reconfigure fires only for addresses created through the
   app).
+- To also receive these reports in a personal mailbox, assign an additional
+  user to the address via the `assign_address` admin API (the owning `dmarc`
+  user is hidden from the admin UI, but the API only validates the user being
+  added). Terraform ignores drift on this row, so the assignment survives
+  later applies.
 
 ## Authorizing a new CA
 
