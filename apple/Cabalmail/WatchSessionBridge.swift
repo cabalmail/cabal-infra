@@ -24,10 +24,14 @@ import WatchConnectivity
 final class WatchSessionBridge: NSObject, WCSessionDelegate, @unchecked Sendable {
     static let shared = WatchSessionBridge()
 
-    /// Context waiting for session activation to complete. Guarded by
-    /// `lock` — delegate callbacks arrive on WatchConnectivity's own queue.
+    /// Guarded by `lock` — delegate callbacks arrive on WatchConnectivity's
+    /// own queue. `pendingContext` waits for session activation to complete;
+    /// `lastContext` is re-offered when the watch state changes (e.g. the
+    /// watch app was just installed), so a watch that arrives after the
+    /// phone's launch-time push doesn't sit waiting for the next cold start.
     private let lock = NSLock()
     private var pendingContext: [String: Any]?
+    private var lastContext: [String: Any]?
 
     func pushSession(configuration: Configuration, tokens: AuthTokens, username: String) {
         let handoff = WatchHandoff(
@@ -51,10 +55,14 @@ final class WatchSessionBridge: NSObject, WCSessionDelegate, @unchecked Sendable
             session.delegate = self
         }
         if session.activationState == .activated {
+            lock.lock()
+            lastContext = context
+            lock.unlock()
             try? session.updateApplicationContext(context)
         } else {
             lock.lock()
             pendingContext = context
+            lastContext = context
             lock.unlock()
             session.activate()
         }
@@ -78,6 +86,22 @@ final class WatchSessionBridge: NSObject, WCSessionDelegate, @unchecked Sendable
     }
 
     func sessionDidBecomeInactive(_ session: WCSession) {}
+
+    func sessionWatchStateDidChange(_ session: WCSession) {
+        // Fires when pairing / watch-app-install state changes. The case
+        // that matters: the watch app was just installed while this app was
+        // already running, so the launch-time push predates the watch's
+        // existence. Re-offer the current session immediately rather than
+        // leaving the watch on its "open Cabalmail on your iPhone" screen
+        // until the phone's next cold start.
+        guard session.activationState == .activated else { return }
+        lock.lock()
+        let context = lastContext
+        lock.unlock()
+        if let context {
+            try? session.updateApplicationContext(context)
+        }
+    }
 
     func sessionDidDeactivate(_ session: WCSession) {
         // Apple's contract for the user switching to a different paired
