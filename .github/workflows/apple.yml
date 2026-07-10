@@ -288,6 +288,8 @@ jobs:
           S5: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           S6: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           S7: ${{ secrets.IOS_APP_STORE_PROFILE }}
+          S8: ${{ secrets.WATCHOS_APP_STORE_PROFILE }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
           MISSING=()
           [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
@@ -297,11 +299,15 @@ jobs:
           [ -z "$S5" ] && MISSING+=("APP_STORE_CONNECT_API_ISSUER_ID")
           [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
           [ -z "$S7" ] && MISSING+=("IOS_APP_STORE_PROFILE")
+          # The iOS archive embeds the watch app, so it also needs the watch
+          # profile. The visionOS leg does not (the embed dependency is
+          # destination-filtered to iOS in project.yml).
+          [ "$PLATFORM" = "iOS" ] && [ -z "$S8" ] && MISSING+=("WATCHOS_APP_STORE_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
-            echo "All seven signing secrets present."
+            echo "All required signing secrets present."
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -386,6 +392,16 @@ jobs:
           extension: mobileprovision
           env-name: IOS_APP_STORE_PROFILE_UUID
 
+      - name: Install watchOS App Store provisioning profile
+        # iOS leg only: the iOS archive embeds the watch app; the visionOS
+        # archive doesn't build it at all.
+        if: steps.check.outputs.enabled == 'true' && matrix.platform == 'iOS'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.WATCHOS_APP_STORE_PROFILE }}
+          extension: mobileprovision
+          env-name: WATCHOS_APP_STORE_PROFILE_UUID
+
       - name: Archive Cabalmail
         if: steps.check.outputs.enabled == 'true'
         working-directory: apple
@@ -432,6 +448,10 @@ jobs:
           # provisioning profiles"). The Release config in project.yml
           # references `$(IOS_APP_STORE_PROFILE_UUID)`; we inject it below
           # as a user-defined setting so it only resolves on the app target.
+          # WATCHOS_APP_STORE_PROFILE_UUID is set only on the iOS leg (the
+          # watch app embeds in the iOS archive; the visionOS archive
+          # filters the watch target out entirely, so the empty value is
+          # never consulted there).
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme Cabalmail \
@@ -440,6 +460,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             IOS_APP_STORE_PROFILE_UUID="$IOS_APP_STORE_PROFILE_UUID" \
+            WATCHOS_APP_STORE_PROFILE_UUID="${WATCHOS_APP_STORE_PROFILE_UUID:-}" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
@@ -455,6 +476,13 @@ jobs:
           # a profile; the archive's embedded profile alone isn't always
           # consulted during export.
           PLIST="$RUNNER_TEMP/ExportOptions-${{ matrix.altool_type }}.plist"
+          # The embedded watch app needs its own bundle-id -> profile
+          # mapping, but only on the iOS leg (the visionOS archive carries
+          # no watch app).
+          WATCH_PROFILE_ENTRY=""
+          if [ -n "${WATCHOS_APP_STORE_PROFILE_UUID:-}" ]; then
+            WATCH_PROFILE_ENTRY="<key>com.cabalmail.Cabalmail.watchkitapp</key><string>$WATCHOS_APP_STORE_PROFILE_UUID</string>"
+          fi
           cat > "$PLIST" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -476,6 +504,7 @@ jobs:
               <dict>
                   <key>com.cabalmail.Cabalmail</key>
                   <string>$IOS_APP_STORE_PROFILE_UUID</string>
+                  $WATCH_PROFILE_ENTRY
               </dict>
           </dict>
           </plist>
