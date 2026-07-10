@@ -39,6 +39,26 @@ an `## [Unreleased]` section - the collator owns the top of that file. Record
 only what shipped to users: no fragment for a bug introduced and fixed within
 the same unreleased cycle, or a latent bug fixed before exposure.
 
+## Apple client entries
+
+Any fragment describing a change to the Apple clients (`apple/Cabalmail`,
+`apple/CabalmailMac`, `apple/CabalmailKit/Sources`) must prefix its entry with
+`Apple:`, right after the leading `- `:
+
+    - Apple: **Threaded reader.** Messages now group into conversation
+      threads in the reader pane.
+
+The TestFlight "What to Test" notes are built from the released `CHANGELOG.md`
+section by `.github/scripts/set-testflight-notes.py`, which keeps only the
+`Apple:`-prefixed entries (stripping the prefix, since it is redundant inside
+an Apple app) and drops everything else. So an Apple-client change without the
+prefix silently disappears from the notes testers see.
+
+A PR that touches the Apple client sources fails the `changelog` job in
+`.github/workflows/lint.yml` unless it adds such a fragment. For a genuinely
+non-user-facing Apple change (refactor, test-only, CI, xcodegen), apply the
+`no-changelog` label to the PR to opt out.
+
 ## Releasing
 
 `scripts/promote.sh` (or `make promote VERSION=<x.y.z>`) runs the
