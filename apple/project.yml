@@ -187,6 +187,9 @@ targets:
       - path: Cabalmail/AppStateSignals.swift
       - path: Cabalmail/NavStateCoordinator.swift
       - path: Cabalmail/Pasteboard.swift
+      # Shared with AppState.swift: the no-op stub branch compiles here
+      # (WatchConnectivity is iOS-only). See WatchSessionBridge.swift.
+      - path: Cabalmail/WatchSessionBridge.swift
       - path: Cabalmail/Views
       - path: Cabalmail/ViewModels
     dependencies:
