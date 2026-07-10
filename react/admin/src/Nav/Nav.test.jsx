@@ -71,6 +71,7 @@ describe('Nav', () => {
     expect(screen.queryByRole('menuitem', { name: 'Addresses' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Users' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'DMARC' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'CAA' })).not.toBeInTheDocument();
   });
 
   it('shows admin-only items when isAdmin is true', () => {
@@ -79,6 +80,7 @@ describe('Nav', () => {
     expect(screen.getByRole('menuitem', { name: 'Addresses' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Users' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'DMARC' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'CAA' })).toBeInTheDocument();
   });
 
   it('marks the active view in the menu', () => {

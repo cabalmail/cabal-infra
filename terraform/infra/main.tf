@@ -156,7 +156,10 @@ module "caa" {
   control_domain         = var.control_domain
   control_domain_zone_id = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   mail_domains           = [for d in module.domains.domains : { domain = d.domain, zone_id = d.zone_id }]
-  iodef_email            = var.email
+  # iodef reports land in the dmarc system user's mailbox (the caa-reports
+  # address is provisioned next to dmarc-reports in modules/app/dmarc_user.tf)
+  # and are ingested by process_dmarc into the admin site's CAA view.
+  iodef_email = "caa-reports@mail-admin.${module.domains.domains[0].domain}"
 }
 
 # Public front door site at www.<control_domain>. Hosts the home page

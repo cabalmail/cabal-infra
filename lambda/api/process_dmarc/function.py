@@ -1,11 +1,14 @@
-'''Ingests DMARC aggregate reports from the dmarc user's IMAP mailbox into DynamoDB'''
+'''Ingests DMARC aggregate reports and CAA iodef violation reports from the
+dmarc user's IMAP mailbox into DynamoDB'''
 import email
 import email.header
+import email.utils
 import gzip
 import io
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -16,13 +19,19 @@ from defusedxml.common import DefusedXmlException  # pylint: disable=import-erro
 
 control_domain = os.environ['CONTROL_DOMAIN']
 table_name = os.environ['DMARC_TABLE_NAME']
+caa_table_name = os.environ.get('CAA_TABLE_NAME', 'cabal-caa-reports')
 dmarc_user = os.environ.get('DMARC_USER', 'dmarc')
 ping_param = os.environ.get('HEALTHCHECK_PING_PARAM', '')
 XML_BUCKET = f'cache.{control_domain}'
 
+# Local part that marks a message as a CAA iodef violation report (the
+# modules/caa iodef target shares this mailbox with dmarc-reports).
+CAA_REPORT_LOCAL_PART = os.environ.get('CAA_REPORT_LOCAL_PART', 'caa-reports').lower()
+
 ssm = boto3.client('ssm')
 ddb = boto3.resource('dynamodb')
 table = ddb.Table(table_name)
+caa_table = ddb.Table(caa_table_name)
 s3 = boto3.client('s3')
 
 PROCESSED_FOLDER = 'INBOX.Processed'
@@ -167,6 +176,24 @@ def sender_allowed(domain):
     return any(domain.endswith('.' + allowed) for allowed in DMARC_REPORT_SENDERS)
 
 
+def is_caa_recipient(envelope):
+    '''True when any To: recipient's local part is the CAA iodef mailbox.
+
+    CAA messages bypass the DMARC sender allowlist: they come from whichever
+    CA refused a certificate request, and the set of CA sender domains is not
+    knowable in advance.
+    '''
+    if envelope is None or not envelope.to:
+        return False
+    for addr in envelope.to:
+        mailbox = addr.mailbox
+        if isinstance(mailbox, bytes):
+            mailbox = mailbox.decode('ascii', errors='replace')
+        if (mailbox or '').strip().lower() == CAA_REPORT_LOCAL_PART:
+            return True
+    return False
+
+
 def _el_text(parent, tag, default=''):
     '''Safely extracts text from an XML child element'''
     el = parent.find(tag) if parent is not None else None
@@ -232,18 +259,18 @@ def xml_key_for(meta):
     )
 
 
-def upload_xml(xml_data, key):
-    '''Uploads the raw DMARC report XML to S3'''
+def upload_xml(xml_data, key, content_type='application/xml'):
+    '''Uploads a raw report artifact (DMARC XML or CAA iodef message) to S3'''
     try:
         s3.put_object(
             Bucket=XML_BUCKET,
             Key=key,
             Body=xml_data,
-            ContentType='application/xml'
+            ContentType=content_type
         )
         return True
     except Exception as err:  # pylint: disable=broad-exception-caught
-        print(f'Failed to upload XML to s3://{XML_BUCKET}/{key}: {err}')
+        print(f'Failed to upload artifact to s3://{XML_BUCKET}/{key}: {err}')
         return False
 
 
@@ -274,7 +301,7 @@ def write_records(records, xml_key):
 
 
 def decode_filename(raw_filename):
-    '''Decodes an RFC 2047 encoded filename'''
+    '''Decodes an RFC 2047 encoded header value (filename, subject)'''
     if not raw_filename:
         return ''
     decoded_parts = email.header.decode_header(raw_filename)
@@ -360,6 +387,56 @@ def process_message(msg_data, counters):
     return total
 
 
+def _received_epoch(msg):
+    '''Epoch seconds from the Date: header, falling back to ingest time'''
+    try:
+        parsed = email.utils.parsedate_to_datetime(msg.get('Date', ''))
+        if parsed is not None:
+            return int(parsed.timestamp())
+    except (TypeError, ValueError):
+        pass
+    return int(time.time())
+
+
+def process_caa_message(msg_data, counters):
+    '''Stores a CAA iodef violation report: raw message to S3, one item to
+    the CAA table.
+
+    iodef payload formats vary by CA (RFC 7970 XML when conformant, prose
+    otherwise) and the volume is near zero - any message here means a CA
+    refused a certificate request that violated our CAA policy. So rather
+    than parse deeply, keep the whole message reviewable and surface the
+    envelope facts the admin view needs.
+    '''
+    msg = email.message_from_bytes(msg_data)
+    from_name, from_addr = email.utils.parseaddr(msg.get('From', ''))
+    from_domain = from_addr.rsplit('@', 1)[-1].lower() if '@' in from_addr else 'unknown'
+    subject = decode_filename(msg.get('Subject', ''))
+    message_id = (msg.get('Message-ID', '') or '').strip()
+    received = _received_epoch(msg)
+
+    key = (
+        f'caa/{received}/'
+        f'{_safe_segment(from_domain)}-{_safe_segment(message_id)}.eml'
+    )
+    stored = upload_xml(msg_data, key, content_type='message/rfc822')
+
+    caa_table.put_item(Item={
+        'pk': f'{from_domain}#{received}',
+        'sk': message_id or f'no-msgid-{received}',
+        'from_addr': from_addr,
+        'from_name': from_name,
+        'from_domain': from_domain,
+        'subject': subject,
+        'received': str(received),
+        'message_id': message_id,
+        'raw_key': key if stored else '',
+    })
+    counters['caa_reports'] += 1
+    print(f'[process_dmarc] CAA iodef report from {from_addr!r}: {subject!r}')
+    return 1
+
+
 def _response(counters):
     '''Builds the Lambda response from the per-run counters'''
     return {
@@ -374,6 +451,7 @@ def _new_counters():
         'queued': 0,
         'processed': 0,
         'records': 0,
+        'caa_reports': 0,
         'unknown_sender': 0,
         'oversize_message': 0,
         'no_attachment': 0,
@@ -386,34 +464,41 @@ def _new_counters():
 def _partition_candidates(client, candidates, counters):
     '''Cheap metadata pass over candidate UIDs.
 
-    Returns (to_fetch, skipped_ids): messages from unknown senders or over the
-    size cap are skipped (and tallied) before their full bodies are downloaded.
+    Returns (to_fetch, caa_fetch, skipped_ids): messages from unknown senders
+    or over the size cap are skipped (and tallied) before their full bodies
+    are downloaded. Messages addressed to the CAA iodef mailbox are routed to
+    caa_fetch; the size cap applies but the DMARC sender allowlist does not.
     '''
     meta = client.fetch(candidates, ['ENVELOPE', 'RFC822.SIZE'])
     to_fetch = []
+    caa_fetch = []
     skipped_ids = []
     for msg_id in candidates:
         info = meta.get(msg_id, {})
-        domain = sender_domain(info.get(b'ENVELOPE'))
+        envelope = info.get(b'ENVELOPE')
+        domain = sender_domain(envelope)
         size = info.get(b'RFC822.SIZE', 0) or 0
-        if not sender_allowed(domain):
-            counters['unknown_sender'] += 1
-            skipped_ids.append(msg_id)
-            print(f'[process_dmarc] skip message {msg_id}: '
-                  f'sender domain {domain!r} not in allowlist')
-        elif size > MAX_MESSAGE_BYTES:
+        is_caa = is_caa_recipient(envelope)
+        if size > MAX_MESSAGE_BYTES:
             counters['oversize_message'] += 1
             skipped_ids.append(msg_id)
             print(f'[process_dmarc] skip message {msg_id}: '
                   f'size {size} exceeds {MAX_MESSAGE_BYTES} bytes')
+        elif is_caa:
+            caa_fetch.append(msg_id)
+        elif not sender_allowed(domain):
+            counters['unknown_sender'] += 1
+            skipped_ids.append(msg_id)
+            print(f'[process_dmarc] skip message {msg_id}: '
+                  f'sender domain {domain!r} not in allowlist')
         else:
             to_fetch.append(msg_id)
-    return to_fetch, skipped_ids
+    return to_fetch, caa_fetch, skipped_ids
 
 
-def _ingest_messages(client, to_fetch, counters):
-    '''Fetches the RFC822 bodies for to_fetch and ingests each, returning the
-    list of successfully-handled UIDs.'''
+def _ingest_messages(client, to_fetch, counters, processor=process_message):
+    '''Fetches the RFC822 bodies for to_fetch and ingests each through
+    processor, returning the list of successfully-handled UIDs.'''
     if not to_fetch:
         return []
     fetched = client.fetch(to_fetch, ['RFC822'])
@@ -425,7 +510,7 @@ def _ingest_messages(client, to_fetch, counters):
             print(f'[process_dmarc] message {msg_id}: empty RFC822 fetch')
             continue
         try:
-            count = process_message(data[b'RFC822'], counters)
+            count = processor(data[b'RFC822'], counters)
             counters['processed'] += 1
             processed_ids.append(msg_id)
             print(f'[process_dmarc] message {msg_id}: {count} records')
@@ -466,9 +551,12 @@ def handler(_event, _context):
             if len(messages) > len(candidates):
                 print(f'[process_dmarc] {len(messages)} messages queued; '
                       f'processing first {len(candidates)} this run')
-            to_fetch, skipped_ids = _partition_candidates(client, candidates, counters)
+            to_fetch, caa_fetch, skipped_ids = _partition_candidates(
+                client, candidates, counters)
             processed_ids = _ingest_messages(client, to_fetch, counters)
-            _move_handled(client, processed_ids, skipped_ids)
+            caa_ids = _ingest_messages(
+                client, caa_fetch, counters, processor=process_caa_message)
+            _move_handled(client, processed_ids + caa_ids, skipped_ids)
         else:
             print('[process_dmarc] no messages to process')
     finally:

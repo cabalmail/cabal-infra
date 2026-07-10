@@ -18,7 +18,7 @@ variable "mail_domains" {
 
 variable "iodef_email" {
   type        = string
-  description = "Contact address for the CAA iodef property, where a CA reports requests that violate the policy. The root stack sets this to the Let's Encrypt contact email (var.email)."
+  description = "Contact address for the CAA iodef property, where a CA reports requests that violate the policy. The root stack sets this to caa-reports@mail-admin.<first mail domain>, which is delivered to the dmarc system user and ingested by process_dmarc."
 }
 
 variable "ttl" {

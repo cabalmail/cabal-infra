@@ -34,6 +34,36 @@ resource "aws_dynamodb_table_item" "dmarc_address" {
   depends_on = [aws_cognito_user.dmarc]
 }
 
+# Address record so mail to caa-reports@mail-admin.<domain> is also delivered
+# to the dmarc user. This is the CAA iodef target (see modules/caa): a CA that
+# receives a certificate request violating our CAA policy reports it here, and
+# process_dmarc ingests it into cabal-caa-reports alongside the DMARC pipeline.
+resource "aws_dynamodb_table_item" "caa_address" {
+  table_name = "cabal-addresses"
+  hash_key   = "address"
+  item = jsonencode({
+    address   = { S = "caa-reports@mail-admin.${var.domains[0].domain}" }
+    tld       = { S = var.domains[0].domain }
+    user      = { S = "dmarc" }
+    username  = { S = "caa-reports" }
+    subdomain = { S = "mail-admin" }
+    "zone-id" = { S = var.domains[0].zone_id }
+    comment   = { S = "System address for CAA iodef violation reports" }
+  })
+
+  depends_on = [aws_cognito_user.dmarc]
+
+  # The admin may assign additional users to this address (assign_address
+  # appends to the slash-delimited user attribute) so CAA reports also land
+  # in a personal mailbox. Ignore item drift so an apply never silently
+  # reverts that assignment back to the dmarc user alone. Trade-off: later
+  # Terraform edits to this row (e.g. a changed comment) will not apply
+  # either - taint the resource to force an intentional rewrite.
+  lifecycle {
+    ignore_changes = [item]
+  }
+}
+
 # DNS records for the mail-admin subdomain on the first mail domain.
 # If these already exist from a previously created address, import them:
 #   terraform import 'module.admin.aws_route53_record.dmarc_subdomain_mx' <zone_id>_mail-admin.<domain>_MX

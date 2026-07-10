@@ -1,4 +1,4 @@
-'''Lists DMARC aggregate report records (admin only)'''
+'''Lists CAA iodef violation report records (admin only)'''
 # pylint: disable=duplicate-code
 import base64
 import json
@@ -6,16 +6,16 @@ import os
 import boto3  # pylint: disable=import-error
 from helper import sign_url  # pylint: disable=import-error
 
-table_name = os.environ.get('DMARC_TABLE_NAME', 'cabal-dmarc-reports')
+table_name = os.environ.get('CAA_TABLE_NAME', 'cabal-caa-reports')
 control_domain = os.environ['CONTROL_DOMAIN']
-XML_BUCKET = f'cache.{control_domain}'
+RAW_BUCKET = f'cache.{control_domain}'
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table(table_name)
 
 
 def handler(event, _context):
-    '''Returns DMARC report records in reverse chronological order'''
+    '''Returns CAA violation report records in reverse chronological order'''
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
     if 'admin' not in groups.strip('[]').replace(',', ' ').split():
         return {
@@ -37,24 +37,20 @@ def handler(event, _context):
         response = table.scan(**scan_kwargs)
         items = response.get('Items', [])
 
-        # Sort by date_end descending for reverse chronological order
-        items.sort(key=lambda x: x.get('date_end', '0'), reverse=True)
+        # Sort by received time descending for reverse chronological order
+        items.sort(key=lambda x: x.get('received', '0'), reverse=True)
 
         reports = []
         for item in items:
-            xml_key = item.get('xml_key', '')
+            raw_key = item.get('raw_key', '')
             reports.append({
-                'org_name': item.get('org_name', ''),
-                'report_id': item.get('report_id', ''),
-                'date_begin': item.get('date_begin', ''),
-                'date_end': item.get('date_end', ''),
-                'source_ip': item.get('source_ip', ''),
-                'count': item.get('count', '0'),
-                'disposition': item.get('disposition', ''),
-                'dkim_result': item.get('dkim_result', ''),
-                'spf_result': item.get('spf_result', ''),
-                'header_from': item.get('header_from', ''),
-                'xml_url': sign_url(XML_BUCKET, xml_key) if xml_key else ''
+                'from_addr': item.get('from_addr', ''),
+                'from_name': item.get('from_name', ''),
+                'from_domain': item.get('from_domain', ''),
+                'subject': item.get('subject', ''),
+                'received': item.get('received', ''),
+                'message_id': item.get('message_id', ''),
+                'raw_url': sign_url(RAW_BUCKET, raw_key) if raw_key else ''
             })
 
         result = {'Reports': reports}

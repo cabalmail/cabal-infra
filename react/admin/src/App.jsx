@@ -15,6 +15,7 @@ const Email = React.lazy(() => import('./Email'));
 const Addresses = React.lazy(() => import('./Addresses'));
 const Users = React.lazy(() => import('./Users'));
 const Dmarc = React.lazy(() => import('./Dmarc'));
+const Caa = React.lazy(() => import('./Caa'));
 const About = React.lazy(() => import('./About'));
 
 // Pre-login Components
@@ -307,7 +308,7 @@ function App() {
   // Bounce non-admins away from admin-only views (e.g. "Addresses" persisted
   // in localStorage from a prior admin session, or a deep-link).
   useEffect(() => {
-    const adminOnlyViews = ["Addresses", "Users", "DMARC"];
+    const adminOnlyViews = ["Addresses", "Users", "DMARC", "CAA"];
     if (state.loggedIn && !isAdmin && adminOnlyViews.includes(state.view)) {
       setState({ view: "Email" });
     }
@@ -547,6 +548,12 @@ function App() {
         return (
           <ErrorBoundary name="DMARC">
             <Dmarc />
+          </ErrorBoundary>
+        );
+      case "CAA":
+        return (
+          <ErrorBoundary name="CAA">
+            <Caa />
           </ErrorBoundary>
         );
       case "Addresses":

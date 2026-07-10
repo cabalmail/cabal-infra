@@ -1,10 +1,44 @@
 # DMARC report ingestion pipeline: DynamoDB table, Lambda, IAM, and EventBridge schedule.
+# The same Lambda also ingests CAA iodef violation reports (delivered to the
+# caa-reports address in the same mailbox) into cabal-caa-reports; one reader
+# per mailbox, so the two report streams cannot race each other's IMAP moves.
 
 # -- DynamoDB table for parsed DMARC report records ----------
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "dmarc_reports" {
   name                        = "cabal-dmarc-reports"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "pk"
+  range_key                   = "sk"
+  deletion_protection_enabled = true
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+# -- DynamoDB table for CAA iodef violation reports ----------
+
+# One item per report message. Expected to stay empty in normal operation: a
+# CA sends an iodef report only when it refuses a certificate request that
+# violates our CAA policy, so any row here is a mis-issuance attempt (or a
+# deliberate test) and worth investigating.
+#tfsec:ignore:aws-dynamodb-table-customer-key
+resource "aws_dynamodb_table" "caa_reports" {
+  name                        = "cabal-caa-reports"
   billing_mode                = "PAY_PER_REQUEST"
   hash_key                    = "pk"
   range_key                   = "sk"
@@ -73,12 +107,18 @@ resource "aws_iam_role_policy" "process_dmarc" {
           "dynamodb:Query",
           "dynamodb:Scan"
         ]
-        Resource = aws_dynamodb_table.dmarc_reports.arn
+        Resource = [
+          aws_dynamodb_table.dmarc_reports.arn,
+          aws_dynamodb_table.caa_reports.arn,
+        ]
       },
       {
-        Effect   = "Allow"
-        Action   = ["s3:PutObject"]
-        Resource = "arn:aws:s3:::cache.${var.control_domain}/dmarc/*"
+        Effect = "Allow"
+        Action = ["s3:PutObject"]
+        Resource = [
+          "arn:aws:s3:::cache.${var.control_domain}/dmarc/*",
+          "arn:aws:s3:::cache.${var.control_domain}/caa/*",
+        ]
       },
       {
         Effect = "Allow"
@@ -126,8 +166,15 @@ resource "aws_lambda_function" "process_dmarc" {
     variables = {
       CONTROL_DOMAIN         = var.control_domain
       DMARC_TABLE_NAME       = aws_dynamodb_table.dmarc_reports.name
+      CAA_TABLE_NAME         = aws_dynamodb_table.caa_reports.name
       DMARC_USER             = "dmarc"
       HEALTHCHECK_PING_PARAM = var.dmarc_healthcheck_ping_param
+
+      # Local part that marks a message as a CAA iodef violation report (the
+      # modules/caa iodef target). Messages To: this mailbox bypass the DMARC
+      # sender allowlist - they come from whichever CA refused the request,
+      # and the set of CA sender domains is not knowable in advance.
+      CAA_REPORT_LOCAL_PART = "caa-reports"
 
       # Phase 1 hardening (docs/0.10.x/application-surface-hardening-plan.md).
       # Allowlist of From: domains permitted to deliver reports; subdomains of
