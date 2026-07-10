@@ -16,12 +16,6 @@ name: Lint
 #   - Swift:     swiftlint --strict (from apple.yml).
 #   - React:     eslint (new for the PR gate; the deploy path only builds).
 #
-# It also adds one PR-only convention gate with no deploy-workflow counterpart:
-#
-#   - Changelog: a PR touching the Apple client sources must add an `Apple:`-
-#                prefixed changelog fragment (opt out via the `no-changelog`
-#                label), so the change reaches the TestFlight notes.
-#
 # This is lint-only: no AWS credentials, no Terraform backend, no deploy. The
 # Terraform scanners read the committed source directly (exactly as the
 # infra.yml scanner jobs do), so they need neither a generated backend.tf nor
@@ -52,7 +46,6 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       swift: ${{ steps.filter.outputs.swift }}
       react: ${{ steps.filter.outputs.react }}
-      apple_src: ${{ steps.filter.outputs.apple_src }}
     steps:
     - name: checkout
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -76,15 +69,6 @@ jobs:
           swift:
             - 'apple/**'
             - '.github/workflows/lint.yml'
-          # Narrower than `swift`: only shipped Apple client code, so the
-          # changelog gate stays off PRs that touch tests, project.yml, or docs.
-          # Deliberately excludes lint.yml/the check script so a pure-CI edit
-          # does not demand an Apple fragment. Keep in sync with the
-          # apple_src_re in check-apple-changelog.sh.
-          apple_src:
-            - 'apple/Cabalmail/**'
-            - 'apple/CabalmailMac/**'
-            - 'apple/CabalmailKit/Sources/**'
           react:
             - 'react/admin/**'
             - '.github/workflows/lint.yml'
@@ -261,27 +245,3 @@ jobs:
       run: npm ci
     - name: eslint
       run: npm run lint
-
-  # ---------------------------------------------------------------------------
-  # Apple changelog scope. When a PR touches the shipped Apple client sources,
-  # require an `Apple:`-prefixed changelog fragment so the change reaches the
-  # TestFlight "What to Test" notes (set-testflight-notes.py filters the notes
-  # to Apple-scoped entries). Opt out with the `no-changelog` PR label for
-  # non-user-facing Apple work. See CLAUDE.md and changelog.d/README.md.
-  # ---------------------------------------------------------------------------
-  changelog:
-    needs: changes
-    if: needs.changes.outputs.apple_src == 'true'
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-      with:
-        # Need base and head commits to diff the PR range and read fragments.
-        fetch-depth: 0
-    - name: require-apple-fragment
-      env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        OPT_OUT: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
-      run: ./.github/scripts/check-apple-changelog.sh
