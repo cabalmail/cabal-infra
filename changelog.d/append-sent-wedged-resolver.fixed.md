@@ -1,13 +1,13 @@
-- **Sent-copy delivery no longer trapped by a wedged sandbox resolver.** The
-  `append_sent` consumer's Lambda sandboxes can wedge such that glibc DNS
-  resolution of the IMAP host fails with `EBUSY` for the container's entire
-  life, and because the SQS event source (batch size 1) pins redelivery to the
-  same warm container, the Sent copy retried until the DLQ instead of being
-  written. Only this consumer was exposed. It now resolves the IMAP host
-  through a ladder — glibc first, a direct DNS query (dnspython) on `EBUSY`,
-  and the address cached at INIT as the last resort — with the winning rung
-  logged, and performs the first resolution at INIT so a sandbox wedged on
-  every rung fails INIT and is replaced by Lambda. TLS certificate validation
-  stays against the hostname throughout. SMTP delivery was never affected,
-  and no Sent copy was lost — undelivered copies wait in the queue or DLQ
-  with the raw message staged in S3.
+- **Sent copies no longer silently stranded by a missing environment
+  variable.** The `append_sent` consumer — the one Lambda defined outside the
+  call module's shared environment block — never carried `CONTROL_DOMAIN`, so
+  when the input-validation hardening switched every IMAP connection to the
+  environment-derived host, the consumer began dialing the garbage name
+  `imap.` and every Sent-copy append failed until the DLQ. glibc surfaced the
+  bad name as an inscrutable `getaddrinfo` EBUSY rather than a resolution
+  error, which sent the diagnosis down several wrong paths. The function's
+  Terraform now sets `CONTROL_DOMAIN`, and `get_imap_client` fails loudly with
+  the actual problem if any function ever reaches IMAP without it. SMTP
+  delivery was never affected, and no Sent copy was lost — undelivered copies
+  wait in the queue or DLQ with the raw message staged in S3, and can be
+  redriven after deploy.

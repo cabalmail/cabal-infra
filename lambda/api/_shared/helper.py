@@ -233,6 +233,16 @@ def get_imap_client(_host, user, folder, read_only=False):
     master password, so honoring a client-supplied host would let any
     authenticated caller exfiltrate that credential to a server they control. We
     always dial the environment's canonical IMAP_HOST instead.'''
+    if not CONTROL_DOMAIN:
+        # Fail loudly, not with a DNS lookup of the garbage name "imap.".
+        # CONTROL_DOMAIN's blank import-time default exists for functions that
+        # never touch IMAP; a function that reaches this line without it is
+        # missing its Terraform environment block (append_sent shipped that
+        # way and glibc surfaced it as an inscrutable getaddrinfo EBUSY).
+        raise RuntimeError(
+            'CONTROL_DOMAIN is not set for this function; cannot derive '
+            "IMAP_HOST. Add it to the function's Terraform environment block."
+        )
     _raise_if_maintenance()
     return open_imap_client(IMAP_HOST, user, folder, read_only, mpw)
 
