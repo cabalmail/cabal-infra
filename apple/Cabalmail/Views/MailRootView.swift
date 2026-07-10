@@ -455,9 +455,10 @@ extension MailRootView {
     }
 
     /// The search field itself — magnifying-glass icon, the query text field,
-    /// and a clear button — on a rounded translucent background. Shared by the
-    /// sidebar (compact) and toolbar (wide) hosts, which add their own outer
-    /// layout (`searchField` / `toolbarSearchField`).
+    /// and a clear button — on a rounded translucent background. The wide
+    /// (iPad-regular / macOS) toolbar host (`toolbarSearchField`) adds its own
+    /// outer layout; compact iPhone has no sidebar search field (it uses the
+    /// bottom Search tab), so this is the only remaining host.
     @ViewBuilder
     private var searchFieldCore: some View {
         HStack(spacing: 6) {
@@ -492,18 +493,6 @@ extension MailRootView {
         )
     }
 
-    /// Sidebar host for the search field (compact iPhone): full column width
-    /// with the sidebar's edge padding. Engaging it (focus, a query, or an
-    /// active search) swaps the content column to cross-folder results; clearing
-    /// and unfocusing it returns to the folder.
-    @ViewBuilder
-    private var searchField: some View {
-        searchFieldCore
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
-    }
-
     /// Toolbar host for the search field (wide iPad-regular / macOS): a fixed
     /// width so it right-aligns cleanly above the message detail column rather
     /// than stretching. Same query/focus wiring as the sidebar host.
@@ -529,12 +518,12 @@ extension MailRootView {
             .padding(.top, 12)
             #endif
 
-            // On wide layouts (iPad-regular / macOS) global search moved to the
-            // detail column's toolbar (see `detailColumn`); the sidebar keeps it
-            // only on compact iPhone, which has no reading-pane toolbar.
-            if !isWideSidebar {
-                searchField
-            }
+            // Global search lives in the detail column's toolbar on wide layouts
+            // (iPad-regular / macOS; see `detailColumn`) and in the dedicated
+            // Search tab on compact iPhone (`SignedInRootView`'s
+            // `Tab(role: .search)`). The sidebar carries no search field of its
+            // own — one above the folder list would be redundant with the Search
+            // tab on compact.
 
             // Folders own the sidebar; addresses moved to the trailing inspector
             // (see `.inspector` in `body`). The wide layout's per-context filter —
@@ -581,8 +570,16 @@ extension MailRootView {
             // On OS 26's liquid glass, a bare toolbar item gets wrapped in a
             // glass capsule, which makes the decorative mark read as a button.
             // Detach it from the shared glass background where the API exists;
-            // earlier systems render toolbar images plain anyway.
-            if #available(iOS 26.0, visionOS 26.0, *) {
+            // earlier systems render toolbar images plain anyway. The SDK
+            // marks `sharedBackgroundVisibility` explicitly unavailable on
+            // visionOS (a runtime `#available` check can't gate a symbol the
+            // compiler rejects), so the visionOS build takes the plain path.
+            #if os(visionOS)
+            ToolbarItem(placement: .topBarLeading) {
+                CabalmailMark(size: isWideSidebar ? 102 : 132)
+            }
+            #else
+            if #available(iOS 26.0, *) {
                 ToolbarItem(placement: .topBarLeading) {
                     CabalmailMark(size: isWideSidebar ? 102 : 132)
                 }
@@ -592,6 +589,7 @@ extension MailRootView {
                     CabalmailMark(size: isWideSidebar ? 102 : 132)
                 }
             }
+            #endif
         }
         #endif
     }

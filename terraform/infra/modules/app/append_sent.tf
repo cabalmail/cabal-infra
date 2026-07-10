@@ -123,6 +123,16 @@ resource "aws_lambda_function" "append_sent" {
     log_group  = aws_cloudwatch_log_group.append_sent.name
   }
 
+  # helper.py derives IMAP_HOST as imap.<CONTROL_DOMAIN>; without this the
+  # consumer dials the garbage name "imap." and every append fails. The
+  # endpoint lambdas get this from the call module's shared environment block;
+  # this function is defined outside that factory, so it must carry its own.
+  environment {
+    variables = {
+      CONTROL_DOMAIN = var.control_domain
+    }
+  }
+
   depends_on = [aws_cloudwatch_log_group.append_sent]
 
   # Out-of-band Lambda deploys mutate code via aws lambda update-function-code;

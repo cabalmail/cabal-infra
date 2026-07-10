@@ -52,8 +52,13 @@ targets:
       properties:
         CFBundleDisplayName: Cabalmail
         # Required by App Store validation for apps built against
-        # iOS 11+ SDKs that ship icons in an asset catalog.
-        CFBundleIconName: AppIcon
+        # iOS 11+ SDKs that ship icons in an asset catalog. Routed through
+        # the build setting so it tracks the per-SDK override below —
+        # `AppIcon` on iOS/iPadOS, `AppIconVision` on visionOS. A literal
+        # `AppIcon` here points visionOS at an icon that isn't in its
+        # compiled catalog (actool compiles only the xros primary icon),
+        # so the device falls back to a flat squircle in the icon well.
+        CFBundleIconName: "$(ASSETCATALOG_COMPILER_APPICON_NAME)"
         # App uses only standard HTTPS/TLS; exempt from export compliance
         # questions on every TestFlight upload.
         ITSAppUsesNonExemptEncryption: false

@@ -101,24 +101,35 @@ struct AvatarView: View {
             .overlay(
                 Text(initials)
                     .font(.system(size: size * 0.42, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(initialsForeground)
             )
             .frame(width: size, height: size)
     }
 
-    /// Stable color per sender so the same correspondent always shows
-    /// the same swatch — easier to scan than randomly-rotating colors.
-    /// Hash the full mailbox+host so two senders at the same domain
-    /// don't collide visually.
+    /// Stable color per sender *domain* so every message from the same
+    /// domain shows the same swatch — a whole correspondent's domain reads
+    /// as one color, which is easier to scan than a per-address rainbow.
+    /// Keyed on the host alone (lowercased), disregarding the local part.
     ///
     /// Uses a fixed FNV-1a hash over the UTF-8 bytes rather than
     /// `String.hashValue`, which is seeded with a per-process random value
     /// and so would pick a different color on every app launch.
     private var backgroundColor: Color {
-        let key = "\(sender?.mailbox ?? "")@\(sender?.host ?? "")"
+        let key = (sender?.host ?? "").lowercased()
+        // Muted pastels and earth tones — low saturation keeps a wall of
+        // avatars calm. Initials render in `initialsForeground`, a dark
+        // ink chosen to stay legible on every swatch below.
         let palette: [Color] = [
-            .blue, .teal, .indigo, .purple, .pink,
-            .orange, .brown, .green, .mint, .cyan
+            Color(red: 0.86, green: 0.72, blue: 0.70), // dusty rose
+            Color(red: 0.73, green: 0.81, blue: 0.69), // sage
+            Color(red: 0.89, green: 0.83, blue: 0.66), // sand
+            Color(red: 0.71, green: 0.80, blue: 0.85), // dusty sky
+            Color(red: 0.85, green: 0.70, blue: 0.58), // terracotta
+            Color(red: 0.79, green: 0.74, blue: 0.85), // lavender
+            Color(red: 0.67, green: 0.80, blue: 0.78), // muted teal
+            Color(red: 0.90, green: 0.78, blue: 0.66), // pale peach
+            Color(red: 0.75, green: 0.76, blue: 0.61), // moss
+            Color(red: 0.80, green: 0.76, blue: 0.71)  // taupe
         ]
         // FNV-1a (64-bit): deterministic across launches and platforms.
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
@@ -128,6 +139,12 @@ struct AvatarView: View {
         }
         let index = Int(hash % UInt64(palette.count))
         return palette[index]
+    }
+
+    /// Dark, warm-neutral ink for the initials. Legible on every pastel /
+    /// earth-tone swatch in `backgroundColor`, where white would wash out.
+    private var initialsForeground: Color {
+        Color(red: 0.20, green: 0.19, blue: 0.17)
     }
 
     private var initials: String {
