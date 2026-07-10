@@ -137,6 +137,10 @@ If you enabled backups (`TF_VAR_BACKUP=true`), one step cannot be automated: cro
 
 DNSSEC signing for your zones is off by default (`TF_VAR_DNSSEC_ENABLED`). Enabling it involves a registrar DS-record step whose ordering matters; read [DNSSEC](./dnssec.md) first. The cicd policy in [the AWS setup guide](./aws.md) marks which permissions DNSSEC needs.
 
+## CAA records
+
+CAA records authorizing only the CAs Cabalmail uses (ACM and Let's Encrypt on the control domain, ACM only on the mail domains) are published automatically from Terraform. The `iodef` violation-report contact is a system-managed address whose messages appear in the admin site's CAA view. See [CAA records](./caa.md) for what is authorized, why Let's Encrypt is control-domain only, and how to authorize an additional CA (e.g. for a BIMI mark certificate).
+
 ## Port 25 Block (What to do with the `relay_ips` output)
 
 The output contains the IP address of each of your outgoing mail relays. (More specifically, it's the elastic IP addresses used for egress on the NAT instances.) In order to send mail reliably, you must get AWS to allow outbound traffic on port 25. There is no API for this, so the process cannot be automated. Instead, you must fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits).

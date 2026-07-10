@@ -148,6 +148,20 @@ module "cert" {
   zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
 }
 
+# Publishes CAA records authorizing only the CAs we use: ACM + Let's Encrypt on
+# the control domain, ACM only on the mail domains (Let's Encrypt is used only
+# on the control domain). See modules/caa and docs/caa.md.
+module "caa" {
+  source                 = "./modules/caa"
+  control_domain         = var.control_domain
+  control_domain_zone_id = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  mail_domains           = [for d in module.domains.domains : { domain = d.domain, zone_id = d.zone_id }]
+  # iodef reports land in the dmarc system user's mailbox (the caa-reports
+  # address is provisioned next to dmarc-reports in modules/app/dmarc_user.tf)
+  # and are ingested by process_dmarc into the admin site's CAA view.
+  iodef_email = "caa-reports@mail-admin.${module.domains.domains[0].domain}"
+}
+
 # Public front door site at www.<control_domain>. Hosts the home page
 # and the privacy/terms pages referenced by carrier registrations.
 # See docs/front-door.md.

@@ -42,8 +42,38 @@ extension MessageDetailView {
                 mode: mode,
                 userAddresses: addresses
             )
+            if mode == .forward {
+                stashForwardAttachments(for: seed)
+            }
             presentCompose(seed: seed)
         }
+    }
+
+    /// Forwarding includes the original message's attachments. The detail
+    /// view model decoded them to temp files during the MIME parse, so
+    /// re-read the bytes and stash them on `AppState` keyed by the seed
+    /// id — they can't ride the Codable `Draft` through `openWindow`, and
+    /// `ComposeView` consumes the stash on appearance. Inline `cid:`
+    /// images stay behind: they live in the quoted body, not the
+    /// attachment strip, matching the React composer's scope.
+    private func stashForwardAttachments(for seed: Draft) {
+        guard let source = model?.attachments, !source.isEmpty else { return }
+        let loaded: [Attachment] = source.compactMap { attachment in
+            guard let data = try? Data(contentsOf: attachment.fileURL) else { return nil }
+            return Attachment(
+                filename: attachment.filename,
+                mimeType: attachment.mimeType,
+                data: data
+            )
+        }
+        if loaded.count < source.count {
+            appState.showToast(Toast(
+                kind: .warning,
+                message: "Some attachments couldn't be carried into the forward."
+            ))
+        }
+        guard !loaded.isEmpty else { return }
+        appState.stashComposeAttachments(loaded, for: seed.id)
     }
 
     /// Opens compose resuming the open Drafts-folder message: recipients,

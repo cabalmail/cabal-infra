@@ -149,6 +149,7 @@ function ComposeOverlay({
   subject: propSubject,
   type,
   other_headers,
+  forward_attachments,
   smtp_host,
   domains: propDomains,
   stackIndex = 0,
@@ -290,6 +291,43 @@ function ComposeOverlay({
       default:
         break;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Forwarding includes the original message's attachments. Seed a chip per
+  // attachment right away (marked pending, from the metadata the reader had
+  // already loaded), then fetch each one's bytes — /fetch_attachment mints a
+  // presigned GET URL — and swap the Blob in. A chip can be removed while
+  // still pending; the late-arriving Blob then finds no row and is dropped.
+  useEffect(() => {
+    if (type !== 'forward') return;
+    const src = forward_attachments;
+    if (!src || !Array.isArray(src.attachments) || src.attachments.length === 0) return;
+    const seeded = src.attachments.map((a) => ({
+      id: `fwd-${src.id}-${a.id}`,
+      filename: a.name,
+      mimeType: a.type || 'application/octet-stream',
+      file: null,
+      size: a.size || 0,
+      pending: true,
+    }));
+    setAttachments(prev => [...prev, ...seeded]);
+    src.attachments.forEach((a, i) => {
+      api.getAttachment(a, src.folder, src.id, src.seen)
+        .then((data) => api.downloadAttachment(data.data.url))
+        .then((resp) => {
+          setAttachments(prev => prev.map(x => (x.id === seeded[i].id
+            ? {
+              ...x, file: resp.data, size: resp.data.size || x.size, pending: false,
+            }
+            : x)));
+        })
+        .catch((err) => {
+          console.log(err);
+          setAttachments(prev => prev.filter(x => x.id !== seeded[i].id));
+          setMessage(`Couldn't carry over attachment "${a.name}" from the original message.`, true);
+        });
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -489,6 +527,10 @@ function ComposeOverlay({
     }
     if (addresses.indexOf(address) === -1) {
       setMessage("Please select an address from which to send.", true);
+      return;
+    }
+    if (attachments.some(a => a.pending)) {
+      setMessage("Attachments are still loading — please wait a moment.", true);
       return;
     }
     setSending(true);
@@ -833,10 +875,15 @@ function ComposeOverlay({
           <>
             <ul className="compose-attachments" aria-label="Attachments">
               {attachments.map((a) => (
-                <li key={a.id} className="compose-attachment-chip">
+                <li
+                  key={a.id}
+                  className={`compose-attachment-chip${a.pending ? ' compose-attachment-chip--pending' : ''}`}
+                >
                   <Paperclip size={12} aria-hidden="true" />
                   <span className="compose-attachment-name" title={a.filename}>{a.filename}</span>
-                  <span className="compose-attachment-size">{formatBytes(a.size)}</span>
+                  <span className="compose-attachment-size">
+                    {a.pending ? 'loading…' : formatBytes(a.size)}
+                  </span>
                   <button
                     type="button"
                     className="compose-attachment-remove"

@@ -511,6 +511,16 @@ export default class ApiClient {
     });
   }
 
+  // Download attachment bytes from a presigned S3 GET URL (as minted by
+  // /fetch_attachment) into a Blob. No Authorization header — the signed
+  // URL carries its own credentials.
+  downloadAttachment(signedUrl) {
+    return axios.get(signedUrl, {
+      responseType: 'blob',
+      timeout: ONE_SECOND * 90,
+    });
+  }
+
   getAttachment(a, folder, id, seen) {
     const response = axios.get('/fetch_attachment',
       {
@@ -551,6 +561,32 @@ export default class ApiClient {
   }
 
   fetchDmarcXml(signedUrl) {
+    return axios.get(signedUrl, {
+      responseType: 'text',
+      transformResponse: [(v) => v],
+      timeout: ONE_SECOND * 30,
+    });
+  }
+
+  // Admin — CAA violation reports (iodef messages ingested by process_dmarc)
+
+  listCaaReports(nextToken) {
+    const params = {};
+    if (nextToken) {
+      params.next_token = nextToken;
+    }
+    const response = axios.get('/list_caa_reports', {
+      params: params,
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
+  fetchCaaReport(signedUrl) {
     return axios.get(signedUrl, {
       responseType: 'text',
       transformResponse: [(v) => v],

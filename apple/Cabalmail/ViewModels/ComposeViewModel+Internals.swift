@@ -26,6 +26,21 @@ extension ComposeViewModel {
         attachments.removeAll { $0.id == id }
     }
 
+    /// Seed the composer with the forwarded message's attachments. Called
+    /// by `ComposeView` on appearance with the bytes the forward action
+    /// stashed on `AppState` (see `MessageDetailView.beginCompose`). The
+    /// seeded rows are ordinary `ComposeAttachment`s from here on — the
+    /// user can remove them, and send stages them like hand-picked files.
+    func seedForwardedAttachments(_ forwarded: [Attachment]) {
+        for attachment in forwarded {
+            addAttachment(
+                filename: attachment.filename,
+                mimeType: attachment.mimeType,
+                data: attachment.data
+            )
+        }
+    }
+
     // MARK: - Internals
 
     /// Resolves the current `fromAddress` string into a parsed

@@ -123,6 +123,7 @@ resource "aws_iam_role_policy" "lambda" {
             "Resource": [
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-dmarc-reports",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-caa-reports",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-preferences",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-domain-access",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-rate-limits"
@@ -207,6 +208,7 @@ resource "aws_lambda_function" "api_call" {
       ADDRESS_CHANGED_TOPIC_ARN   = var.address_changed_topic_arn
       USER_POOL_ID                = var.user_pool_id
       DMARC_TABLE_NAME            = "cabal-dmarc-reports"
+      CAA_TABLE_NAME              = "cabal-caa-reports"
       USER_PREFERENCES_TABLE_NAME = "cabal-user-preferences"
       IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
     }
