@@ -1,4 +1,5 @@
 '''Lists DMARC aggregate report records (admin only)'''
+# pylint: disable=duplicate-code
 import base64
 import json
 import os

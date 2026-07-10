@@ -1,4 +1,5 @@
 '''Lists CAA iodef violation report records (admin only)'''
+# pylint: disable=duplicate-code
 import base64
 import json
 import os
