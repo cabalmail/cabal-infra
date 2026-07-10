@@ -10,12 +10,16 @@ const mockGetAddresses = vi.fn().mockResolvedValue({
 const mockSendMessage = vi.fn().mockResolvedValue({});
 const mockGetAttachmentUploadUrls = vi.fn();
 const mockUploadAttachmentToS3 = vi.fn().mockResolvedValue({});
+const mockGetAttachment = vi.fn();
+const mockDownloadAttachment = vi.fn();
 
 const mockApi = {
   getAddresses: mockGetAddresses,
   sendMessage: mockSendMessage,
   getAttachmentUploadUrls: mockGetAttachmentUploadUrls,
   uploadAttachmentToS3: mockUploadAttachmentToS3,
+  getAttachment: mockGetAttachment,
+  downloadAttachment: mockDownloadAttachment,
   newAddress: vi.fn().mockResolvedValue({ data: { address: 'new@test.com' } }),
 };
 
@@ -306,6 +310,123 @@ describe('ComposeOverlay', () => {
     } finally {
       unmount();
     }
+  });
+
+  describe('forwarded attachments', () => {
+    const FWD_ENVELOPE = { from: ['sender@example.com'], to: ['me@test.com'], cc: [], subject: 'Test' };
+    const FWD_SOURCE = {
+      folder: 'INBOX',
+      id: 42,
+      seen: true,
+      attachments: [{ name: 'report.pdf', type: 'application/pdf', size: 5, id: 2 }],
+    };
+
+    function renderForward(source = FWD_SOURCE) {
+      return renderCompose({
+        type: 'forward',
+        envelope: FWD_ENVELOPE,
+        recipient: 'me@test.com',
+        subject: 'Fwd: Test',
+        forward_attachments: source,
+      });
+    }
+
+    it('carries the original attachments into the compose window and sends them', async () => {
+      const blob = new Blob(['12345'], { type: 'application/pdf' });
+      mockGetAttachment.mockResolvedValueOnce({ data: { url: 'https://s3/get' } });
+      mockDownloadAttachment.mockResolvedValueOnce({ data: blob });
+      mockGetAttachmentUploadUrls.mockResolvedValueOnce({
+        data: { uploads: [{ key: 'outbound/cog-user/uuid/report.pdf', url: 'https://s3/put' }] }
+      });
+      const { unmount } = renderForward();
+      try {
+        // Chip appears immediately (pending), then resolves once the Blob lands.
+        expect(screen.getByText('report.pdf')).toBeInTheDocument();
+        expect(screen.getByText('loading…')).toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.queryByText('loading…')).not.toBeInTheDocument();
+        });
+        expect(mockGetAttachment).toHaveBeenCalledWith(
+          FWD_SOURCE.attachments[0], 'INBOX', 42, true
+        );
+        expect(mockDownloadAttachment).toHaveBeenCalledWith('https://s3/get');
+
+        // Complete the form and send — the forwarded Blob goes up like a
+        // hand-picked file.
+        fireEvent.click(screen.getByLabelText('From'));
+        fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+        const toInput = screen.getByLabelText('Recipients');
+        fireEvent.change(toInput, { target: { value: 'dest@test.com' } });
+        fireEvent.keyDown(toInput, { key: 'Enter' });
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+        await waitFor(() => {
+          expect(mockUploadAttachmentToS3).toHaveBeenCalledWith('https://s3/put', blob);
+        });
+        await waitFor(() => {
+          expect(mockSendMessage).toHaveBeenCalled();
+        });
+        const wireAttachments = mockSendMessage.mock.calls[0][10];
+        expect(wireAttachments).toEqual([{
+          filename: 'report.pdf',
+          mime_type: 'application/pdf',
+          s3_key: 'outbound/cog-user/uuid/report.pdf',
+        }]);
+      } finally {
+        unmount();
+      }
+    });
+
+    it('blocks Send while a forwarded attachment is still downloading', async () => {
+      mockGetAttachment.mockReturnValueOnce(new Promise(() => {})); // never resolves
+      const { unmount } = renderForward();
+      try {
+        await waitFor(() => {
+          expect(mockGetAddresses).toHaveBeenCalled();
+        });
+        fireEvent.click(screen.getByLabelText('From'));
+        fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+        const toInput = screen.getByLabelText('Recipients');
+        fireEvent.change(toInput, { target: { value: 'dest@test.com' } });
+        fireEvent.keyDown(toInput, { key: 'Enter' });
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+        expect(setMessage).toHaveBeenCalledWith(
+          'Attachments are still loading — please wait a moment.', true
+        );
+        expect(mockSendMessage).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
+
+    it('drops the chip and warns when a forwarded attachment fails to download', async () => {
+      mockGetAttachment.mockRejectedValueOnce(new Error('boom'));
+      const { unmount } = renderForward();
+      try {
+        expect(screen.getByText('report.pdf')).toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.queryByText('report.pdf')).not.toBeInTheDocument();
+        });
+        expect(setMessage).toHaveBeenCalledWith(
+          'Couldn\'t carry over attachment "report.pdf" from the original message.', true
+        );
+      } finally {
+        unmount();
+      }
+    });
+
+    it('allows removing a forwarded attachment before it finishes downloading', async () => {
+      mockGetAttachment.mockReturnValueOnce(new Promise(() => {}));
+      const { unmount } = renderForward();
+      try {
+        expect(screen.getByText('report.pdf')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Remove attachment report.pdf' }));
+        expect(screen.queryByText('report.pdf')).not.toBeInTheDocument();
+        await act(async () => { await Promise.resolve(); });
+      } finally {
+        unmount();
+      }
+    });
   });
 
   it('shows a warning when total attachment size exceeds 20 MB', async () => {

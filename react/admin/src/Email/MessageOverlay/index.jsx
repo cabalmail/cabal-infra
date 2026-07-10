@@ -220,8 +220,13 @@ function MessageOverlay({
 
   const forward = useCallback(() => {
     const [r, b, e, h] = createPayload();
-    forwardProp(r, b, e, h);
-  }, [createPayload, forwardProp]);
+    // Forwarding carries the original attachments along. The compose window
+    // needs the source coordinates (folder / uid / seen) plus the metadata
+    // already loaded here to fetch the bytes itself.
+    forwardProp(r, b, e, h, {
+      folder, id: envelopeId, seen, attachments,
+    });
+  }, [createPayload, forwardProp, folder, envelopeId, seen, attachments]);
 
   const downloadAttachment = useCallback((id) => {
     const a = attachments.find((att) => att.id === id);

@@ -511,6 +511,16 @@ export default class ApiClient {
     });
   }
 
+  // Download attachment bytes from a presigned S3 GET URL (as minted by
+  // /fetch_attachment) into a Blob. No Authorization header — the signed
+  // URL carries its own credentials.
+  downloadAttachment(signedUrl) {
+    return axios.get(signedUrl, {
+      responseType: 'blob',
+      timeout: ONE_SECOND * 90,
+    });
+  }
+
   getAttachment(a, folder, id, seen) {
     const response = axios.get('/fetch_attachment',
       {
