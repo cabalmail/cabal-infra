@@ -7,9 +7,17 @@ import SwiftUI
 /// anywhere else. Mail reading and compose stay on the other platforms.
 @main
 struct CabalmailWatchApp: App {
+    @State private var model = WatchAppModel()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(model)
+                .task {
+                    // Arms the WCSession receiver and restores a previously
+                    // handed-off session. Idempotent across `.task` re-fires.
+                    model.start()
+                }
         }
     }
 }
