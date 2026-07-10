@@ -9,9 +9,11 @@ struct ContentView: View {
     /// Row awaiting revoke confirmation (drives the dialog).
     @State private var pendingRevoke: Address?
 
-    /// Screenshot scaffolding: pushes the new-address flow on launch when
-    /// the CABAL_WATCH_PREVIEW=new seed is active (see WatchAppModel).
+    /// Screenshot scaffolding: pushes the new-address flow (or the first
+    /// address's large-type detail) on launch when the matching
+    /// CABAL_WATCH_PREVIEW seed is active (see WatchAppModel).
     @State private var autoPushNewAddress = false
+    @State private var autoPushDetail = false
 
     var body: some View {
         NavigationStack {
@@ -20,9 +22,15 @@ struct ContentView: View {
                 .navigationDestination(isPresented: $autoPushNewAddress) {
                     NewAddressView()
                 }
+                .navigationDestination(isPresented: $autoPushDetail) {
+                    if case .ready(let addresses) = model.phase, let first = addresses.first {
+                        AddressDetailView(address: first)
+                    }
+                }
                 .onAppear {
                     #if DEBUG
                     autoPushNewAddress = model.previewAutoPushNewAddress
+                    autoPushDetail = model.previewAutoPushDetail
                     #endif
                 }
         }
@@ -121,22 +129,28 @@ struct ContentView: View {
     }
 
     private func row(_ address: Address) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                if address.favorite {
-                    Image(systemName: "star.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.yellow)
+        // Tap → large-type display (AddressDetailView); the trailing
+        // swipe action for revoke coexists with the link.
+        NavigationLink {
+            AddressDetailView(address: address)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    if address.favorite {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.yellow)
+                    }
+                    Text(address.address)
+                        .font(.footnote)
+                        .lineLimit(2)
                 }
-                Text(address.address)
-                    .font(.footnote)
-                    .lineLimit(2)
-            }
-            if let comment = address.comment, !comment.isEmpty {
-                Text(comment)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if let comment = address.comment, !comment.isEmpty {
+                    Text(comment)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
         }
     }

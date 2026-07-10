@@ -207,9 +207,13 @@ extension WatchAppModel {
         )
     }
 
+    var previewAutoPushDetail: Bool {
+        ProcessInfo.processInfo.environment["CABAL_WATCH_PREVIEW"] == "detail"
+    }
+
     fileprivate func seedPreviewStateIfRequested() -> Bool {
         guard let mode = ProcessInfo.processInfo.environment["CABAL_WATCH_PREVIEW"],
-              ["list", "new", "created"].contains(mode) else {
+              ["list", "new", "created", "detail"].contains(mode) else {
             return false
         }
         configuration = Configuration(
