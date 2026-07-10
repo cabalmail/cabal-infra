@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.44] - 2026-07-10
+
+### Added
+- **visionOS section tab bar.** The visionOS app now navigates through a
+  floating leading tab bar — Mail, Folders, Addresses, Settings, and Search —
+  instead of the iPad-style single sidebar, whose folder-list reveal toggle
+  visionOS never surfaced. Picking a folder in the Folders tab drives the Mail
+  tab's message list and brings it forward.
+- **Native visionOS build in CI.** `apple.yml` now compiles the Cabalmail
+  scheme for visionOS in the unsigned build gate (catching xros-only compile
+  breaks that an iOS build misses) and ships a native visionOS archive to
+  TestFlight alongside the iOS one, so the Vision Pro can install the real
+  app — layered parallax icon and all — instead of the iPad build in
+  compatibility mode.
+
+### Changed
+- **Decluttered the iPhone navigation.** Removed the redundant Folders tab from
+  the bottom tab bar — the Mail tab's sidebar already browses and manages
+  folders — and dropped the global search field from above the folder list,
+  since the tab bar's dedicated Search tab already owns all-mail search. The
+  iPad and macOS sidebar search field is unchanged (those layouts have no tab
+  bar).
+- **Sender avatar colors are calmer and domain-keyed.** The initials
+  swatch now draws from a muted pastel / earth-tone palette instead of
+  the saturated system colors, and its color is derived from the
+  sender's domain alone (ignoring the local part) so every message from
+  the same domain shares one color.
+
+### Fixed
+- **Sent copies no longer silently stranded by a missing environment
+  variable.** The `append_sent` consumer — the one Lambda defined outside the
+  call module's shared environment block — never carried `CONTROL_DOMAIN`, so
+  when the input-validation hardening switched every IMAP connection to the
+  environment-derived host, the consumer began dialing the garbage name
+  `imap.` and every Sent-copy append failed until the DLQ. glibc surfaced the
+  bad name as an inscrutable `getaddrinfo` EBUSY rather than a resolution
+  error, which sent the diagnosis down several wrong paths. The function's
+  Terraform now sets `CONTROL_DOMAIN`, and `get_imap_client` fails loudly with
+  the actual problem if any function ever reaches IMAP without it. SMTP
+  delivery was never affected, and no Sent copy was lost — undelivered copies
+  wait in the queue or DLQ with the raw message staged in S3, and can be
+  redriven after deploy.
+- **Native visionOS build and icon restored.** The visionOS target had not
+  compiled since the sidebar-branding change (`sharedBackgroundVisibility` is
+  compile-time unavailable on visionOS, which a runtime `#available` check
+  cannot gate), and the hardcoded `CFBundleIconName: AppIcon` pointed visionOS
+  at the flat iOS icon instead of the layered `AppIconVision` stack. The
+  toolbar mark now takes the plain path on visionOS, and `CFBundleIconName`
+  is routed through `ASSETCATALOG_COMPILER_APPICON_NAME` so each platform
+  resolves its own icon.
+
 ## [0.10.43] - 2026-07-08
 
 ### Added
