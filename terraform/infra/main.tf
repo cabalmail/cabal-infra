@@ -148,6 +148,17 @@ module "cert" {
   zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
 }
 
+# Publishes CAA records authorizing only the CAs we use: ACM + Let's Encrypt on
+# the control domain, ACM only on the mail domains (Let's Encrypt is used only
+# on the control domain). See modules/caa and docs/caa.md.
+module "caa" {
+  source                 = "./modules/caa"
+  control_domain         = var.control_domain
+  control_domain_zone_id = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  mail_domains           = [for d in module.domains.domains : { domain = d.domain, zone_id = d.zone_id }]
+  iodef_email            = var.email
+}
+
 # Public front door site at www.<control_domain>. Hosts the home page
 # and the privacy/terms pages referenced by carrier registrations.
 # See docs/front-door.md.
