@@ -22,6 +22,10 @@ Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](
 
 DNSSEC signing for the control-domain and mail-apex zones is opt-in per environment (`TF_VAR_DNSSEC_ENABLED`). Enabling, disabling, and KSK rotation all involve registrar DS-record steps whose ordering matters - a DS record published against an unsigned zone is an outage. See [DNSSEC](./dnssec.md) for the runbooks before touching any of it.
 
+# CAA records
+
+CAA records lock certificate issuance for your domains to only the CAs Cabalmail uses: ACM plus Let's Encrypt on the control domain, ACM only on the mail domains. They are published from Terraform (`terraform/infra/modules/caa`) and signed automatically where DNSSEC is on. See [CAA records](./caa.md) for what is authorized, the `iodef` violation-report contact, and how to authorize an additional CA (for example a DigiCert or Entrust mark certificate for BIMI).
+
 # NLB access logs
 
 The mail NLB writes TLS-connection access logs (the IMAPS listener; SMTP listeners are TCP passthrough and produce none) to a dedicated, versioned, 180-day-lifecycled S3 bucket. See [NLB access logs](./nlb-access-logs.md) for what the logs do and do not cover and for the Athena setup to query them.
