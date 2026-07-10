@@ -105,14 +105,80 @@ re-issue.
 
 ## Verifying
 
-CAA records are signed automatically when the zone has DNSSEC enabled; no extra
-steps. After an apply, confirm what resolvers see:
+A CAA record that *looks* right in Route 53 proves nothing by itself: CAA has
+no effect on existing certificates or mail flow, and only gates *new*
+issuance. A wrong record therefore breaks nothing today and then quietly
+blocks the next renewal. Verify both directions - that the policy blocks what
+it should and still allows what it must - by forcing real issuance attempts
+rather than waiting for the next renewal to find out.
+
+Requesting a certificate your own CAA policy forbids is responsible and
+routine: CAA denial is designed-for CA behavior, the refusal is logged like
+any failed validation, and nothing reaches Certificate Transparency (CT logs
+record only issued certificates). Use staging endpoints where offered and
+keep it to a handful of manual attempts.
+
+### 1. Record visibility
+
+After an apply, confirm what public resolvers see (the CA queries your
+authoritative servers, not your local cache):
 
 ```
-dig +short CAA <control_domain>
-dig +short CAA <mail_domain>
+dig +short CAA <control_domain> @1.1.1.1
+dig +short CAA <mail_domain> @1.1.1.1
 ```
 
 You should see the `issue`/`issuewild` lines for the authorized CAs and the
-`iodef` line. Allow for the record TTL (one hour by default) before expecting a
-change to be visible everywhere.
+`iodef` line. Allow for the record TTL (one hour by default) before expecting
+a change to be visible everywhere.
+
+Where the zone is DNSSEC-signed, also confirm the CAA RRset validates - a CA
+whose CAA lookup gets SERVFAIL must treat it as a hard failure, so a broken
+signature blocks issuance even when the record content is correct:
+
+```
+dig +dnssec CAA <mail_domain> @1.1.1.1
+```
+
+Expect the records plus an `RRSIG CAA`, and the `ad` flag in the header.
+
+### 2. Negative test: an unauthorized CA is refused
+
+Let's Encrypt is not authorized on the mail domains, and its staging endpoint
+performs real CAA checks without touching production rate limits - so it makes
+a perfect refusal probe. From CloudShell in the account that owns the zone
+(certbot's Route 53 plugin picks up the session credentials automatically):
+
+```
+pip3 install --user certbot certbot-dns-route53
+
+~/.local/bin/certbot certonly --staging --dns-route53 \
+  --domains caa-test.<mail_domain> \
+  --config-dir /tmp/cb --work-dir /tmp/cb --logs-dir /tmp/cb \
+  --email <you> --agree-tos --non-interactive
+```
+
+Expected: failure citing `CAA record for caa-test.<mail_domain> prevents
+issuance`. A DNS or permission error from the plugin *before* any CAA mention
+means the Route 53 TXT write failed (wrong account) - that is not a CAA
+result. To probe the control domain's lockdown with a CA outside its
+authorized set, ZeroSSL or Buypass (both free ACME CAs) behave the same way.
+
+### 3. Positive test: the authorized CAs can still issue
+
+This is the higher-stakes direction - it is the one whose failure mode is a
+silently broken renewal weeks later.
+
+- **Let's Encrypt on the control domain**: rerun the certbot command above
+  with `--domains caa-test.<control_domain>`. Expected: a staging certificate
+  is issued. The fuller version is invoking the `cabal-certbot-renewal`
+  Lambda, which exercises the production renewal path itself at the cost of
+  rolling the mail tiers.
+- **ACM on the control domain**: request a throwaway DNS-validated
+  certificate for `caa-test.<control_domain>`, confirm it reaches ISSUED,
+  then delete it. This proves whichever Amazon issuing intermediate serves
+  your region is within the authorized set.
+
+For a zero-issuance preflight, [Let's Debug](https://letsdebug.net) runs
+Let's Encrypt-style CAA and DNSSEC checks against a domain without requesting
+anything.
