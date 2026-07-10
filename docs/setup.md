@@ -139,7 +139,7 @@ DNSSEC signing for your zones is off by default (`TF_VAR_DNSSEC_ENABLED`). Enabl
 
 ## CAA records
 
-CAA records authorizing only the CAs Cabalmail uses (ACM and Let's Encrypt on the control domain, ACM only on the mail domains) are published automatically from Terraform. The `iodef` violation-report contact is set to `TF_VAR_EMAIL`. See [CAA records](./caa.md) for what is authorized, why Let's Encrypt is control-domain only, and how to authorize an additional CA (e.g. for a BIMI mark certificate).
+CAA records authorizing only the CAs Cabalmail uses (ACM and Let's Encrypt on the control domain, ACM only on the mail domains) are published automatically from Terraform. The `iodef` violation-report contact is a system-managed address whose messages appear in the admin site's CAA view. See [CAA records](./caa.md) for what is authorized, why Let's Encrypt is control-domain only, and how to authorize an additional CA (e.g. for a BIMI mark certificate).
 
 ## Port 25 Block (What to do with the `relay_ips` output)
 

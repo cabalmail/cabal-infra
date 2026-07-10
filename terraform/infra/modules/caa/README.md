@@ -28,7 +28,7 @@ authorized for both `issue` and `issuewild`.
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Root domain for infrastructure. CAA authorizing ACM and Let's Encrypt is published at its apex. | `string` | n/a | yes |
 | <a name="input_control_domain_zone_id"></a> [control\_domain\_zone\_id](#input\_control\_domain\_zone\_id) | Route 53 Zone ID for the control domain (owned by the bootstrap terraform/dns stack). | `string` | n/a | yes |
 | <a name="input_mail_domains"></a> [mail\_domains](#input\_mail\_domains) | Mail domains and their Route 53 zone IDs (module.domains.domains). Each gets an ACM-only CAA record; the control domain is skipped here as it is covered by control\_domain\_zone\_id. | `list(object({ domain = string, zone_id = string }))` | n/a | yes |
-| <a name="input_iodef_email"></a> [iodef\_email](#input\_iodef\_email) | Contact address for the CAA iodef property, where a CA reports requests that violate the policy. The root stack sets this to the Let's Encrypt contact email (var.email). | `string` | n/a | yes |
+| <a name="input_iodef_email"></a> [iodef\_email](#input\_iodef\_email) | Contact address for the CAA iodef property, where a CA reports requests that violate the policy. The root stack sets this to caa-reports@mail-admin.<first mail domain>, which is delivered to the dmarc system user and ingested by process\_dmarc. | `string` | n/a | yes |
 | <a name="input_ttl"></a> [ttl](#input\_ttl) | TTL in seconds for the CAA records. | `number` | `3600` | no |
 ## Modules
 

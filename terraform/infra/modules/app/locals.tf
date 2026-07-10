@@ -257,6 +257,14 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    list_caa_reports = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     check_dns_record = {
       runtime = "python3.13"
 

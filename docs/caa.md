@@ -53,10 +53,35 @@ issue for them without a deliberate policy change here.
 
 ## Violation reporting (iodef)
 
-Each record carries an `iodef` property pointing at the Let's Encrypt contact
-email (`TF_VAR_EMAIL`). A conformant CA that receives a request violating the
-policy can report it to that address. Treat any such report as a signal worth
-investigating.
+Each record carries an `iodef` property pointing at
+`caa-reports@mail-admin.<first mail domain>`, a system-managed address
+provisioned alongside `dmarc-reports` and delivered to the same system
+mailbox. A conformant CA that receives a request violating the policy can
+report it there.
+
+These reports follow the DMARC-report pipeline: the scheduled `process_dmarc`
+Lambda recognizes messages addressed to `caa-reports`, archives the raw
+message to S3 (`caa/` prefix in the cache bucket), records it in the
+`cabal-caa-reports` DynamoDB table, and the admin site's **CAA** view (admin
+group only) lists them with the raw message viewable and downloadable.
+
+Unlike DMARC aggregate reports, which arrive daily from every major receiving
+provider, CAA violation reports are expected to *never* arrive: a CA sends one
+only when it refuses a certificate request that violates this policy, and
+`iodef` support is optional and patchy among CAs (Let's Encrypt does not send
+them). An empty CAA view is the healthy state. Any report that does appear
+means someone asked a CA to issue for one of your domains and was refused -
+investigate it.
+
+Two operational notes:
+
+- Messages to `caa-reports` bypass the DMARC sender allowlist
+  (`DMARC_REPORT_SENDERS`): reports come from whichever CA refused the
+  request, and the set of CA sender domains is not knowable in advance.
+- The address row is written to DynamoDB by Terraform, so the mail tiers pick
+  it up at the next periodic sendmail map regeneration rather than instantly
+  (the SNS-triggered reconfigure fires only for addresses created through the
+  app).
 
 ## Authorizing a new CA
 
