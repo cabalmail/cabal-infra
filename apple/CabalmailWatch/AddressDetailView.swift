@@ -18,8 +18,7 @@ struct AddressDetailView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Text(address.address)
-                    .font(.system(.title3, design: .monospaced, weight: .semibold))
+                LargeTypeAddress(address: address.address)
                 if address.favorite {
                     Label("Favorite", systemImage: "star.fill")
                         .font(.caption2)
@@ -28,5 +27,22 @@ struct AddressDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// The shared large-type address treatment, used wherever an address is
+/// shown across a counter: this detail view and the new-address success
+/// screen. largeTitle (~32pt on watchOS) over the earlier title3 (~19pt) —
+/// device testing found title3 not big enough to read at arm's length.
+/// Long addresses wrap to more lines and scroll; the right trade for a
+/// display whose whole job is legibility.
+struct LargeTypeAddress: View {
+    let address: String
+
+    var body: some View {
+        Text(address)
+            .font(.system(.largeTitle, design: .monospaced, weight: .semibold))
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

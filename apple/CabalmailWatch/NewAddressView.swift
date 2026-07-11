@@ -113,15 +113,16 @@ struct NewAddressView: View {
 
     private func success(_ address: String) -> some View {
         ScrollView {
-            VStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Created", systemImage: "checkmark.circle.fill")
+                    .font(.caption2)
                     .foregroundStyle(.green)
-                Text(address)
-                    .font(.system(.footnote, design: .monospaced))
-                    .multilineTextAlignment(.center)
+                // Same treatment as the tap-a-row detail view: this screen
+                // is shown across the same counters.
+                LargeTypeAddress(address: address)
                 Button("Done") { dismiss() }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
