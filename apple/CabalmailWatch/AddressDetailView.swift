@@ -19,7 +19,12 @@ struct AddressDetailView: View {
                         .foregroundStyle(.secondary)
                 }
                 Text(address.address)
-                    .font(.system(.title3, design: .monospaced, weight: .semibold))
+                    // largeTitle (~32pt on watchOS) over the original
+                    // title3 (~19pt): device testing found title3 not big
+                    // enough to comfortably show across a counter. Long
+                    // addresses wrap to more lines and scroll — the right
+                    // trade for a display meant to be read at arm's length.
+                    .font(.system(.largeTitle, design: .monospaced, weight: .semibold))
                 if address.favorite {
                     Label("Favorite", systemImage: "star.fill")
                         .font(.caption2)
