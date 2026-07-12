@@ -40,9 +40,19 @@ struct LargeTypeAddress: View {
     let address: String
 
     var body: some View {
-        Text(address)
+        Text(wrappableAddress)
             .font(.system(.largeTitle, design: .monospaced, weight: .semibold))
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(address)
+    }
+
+    /// The address with a zero-width space after every character, so the
+    /// layout engine can wrap at any point instead of hyphenating a long
+    /// unbreakable token. A soft hyphen at a wrap point is ambiguous —
+    /// addresses can contain real hyphens — so every visible character
+    /// must be one the reader should type.
+    private var wrappableAddress: String {
+        String(address.flatMap { [$0, "\u{200B}"] }.dropLast())
     }
 }
