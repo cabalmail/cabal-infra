@@ -118,7 +118,8 @@ class ApnsClient:  # pylint: disable=too-few-public-methods
             for event in self.conn.receive_data(data):
                 if isinstance(event, h2.events.ResponseReceived) \
                         and event.stream_id == stream_id:
-                    status = int(dict(event.headers)[b':status'])
+                    # h2 yields header names/values as bytes by default.
+                    status = int(dict(event.headers)[b':status'].decode())
                 elif isinstance(event, h2.events.DataReceived) \
                         and event.stream_id == stream_id:
                     chunks.append(event.data)
