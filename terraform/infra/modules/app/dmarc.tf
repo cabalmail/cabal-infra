@@ -136,7 +136,7 @@ resource "aws_iam_role_policy" "process_dmarc" {
 
 resource "aws_cloudwatch_log_group" "process_dmarc" {
   name              = "/cabal/lambda/process_dmarc"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 data "aws_s3_object" "process_dmarc_hash" {

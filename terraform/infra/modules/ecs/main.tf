@@ -190,5 +190,5 @@ resource "aws_security_group_rule" "ecs_instance_ingress_vpc" {
 resource "aws_cloudwatch_log_group" "tier" {
   for_each          = local.tiers
   name              = "/ecs/cabal-${each.key}"
-  retention_in_days = 30
+  retention_in_days = 365
 }

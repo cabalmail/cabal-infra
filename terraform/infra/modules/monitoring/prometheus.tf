@@ -30,7 +30,7 @@ resource "aws_efs_access_point" "prometheus" {
 
 resource "aws_cloudwatch_log_group" "prometheus" {
   name              = "/ecs/cabal-prometheus"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 resource "aws_iam_role" "prometheus_execution" {

@@ -48,7 +48,7 @@ resource "aws_iam_role_policy" "backup_heartbeat" {
 
 resource "aws_cloudwatch_log_group" "backup_heartbeat" {
   name              = "/cabal/lambda/backup_heartbeat"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 #tfsec:ignore:aws-lambda-enable-tracing

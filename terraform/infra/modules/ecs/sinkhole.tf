@@ -59,7 +59,7 @@ resource "aws_security_group_rule" "sinkhole_ingress_vpc" {
 resource "aws_cloudwatch_log_group" "sinkhole" {
   count             = var.sinkhole ? 1 : 0
   name              = "/ecs/cabal-sinkhole"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 # -- SSM Parameter for runtime mode -----------------------------

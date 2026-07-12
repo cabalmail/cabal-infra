@@ -77,7 +77,7 @@ resource "aws_iam_role_policy" "healthchecks_iac" {
 
 resource "aws_cloudwatch_log_group" "healthchecks_iac" {
   name              = "/cabal/lambda/healthchecks_iac"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 # Lambda lives in private subnets so the Cloud Map A record for
