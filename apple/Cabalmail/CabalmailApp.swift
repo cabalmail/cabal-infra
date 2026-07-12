@@ -9,6 +9,14 @@ import CabalmailKit
 /// for every downstream view.
 @main
 struct CabalmailApp: App {
+    #if os(iOS)
+    // Push notifications: APNs token callbacks and the notification-center
+    // delegate have no SwiftUI-native surface, so the iOS build carries a
+    // minimal UIKit delegate (see AppDelegate.swift). visionOS skips it —
+    // the NSE and push registration are iOS-only for now (project.yml
+    // destination-filters the extension the same way).
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
     @Environment(\.scenePhase) private var scenePhase

@@ -74,18 +74,23 @@ def handler(event, _context):
     if bundle_id not in ALLOWED_BUNDLE_IDS:
         return {'statusCode': 400, 'body': json.dumps({'Error': 'Unknown bundle_id.'})}
 
-    try:
-        enabled_folders = _validate_enabled_folders(body['enabled_folders']) \
-            if body.get('enabled_folders') else []
-    except ValueError as err:
-        return {'statusCode': 400, 'body': json.dumps({'Error': str(err)})}
+    # Tri-state, matching set_preferences' merge semantics: key absent =
+    # leave the row's existing selection alone (the app re-registers on
+    # every launch and must not wipe preferences it isn't sending); key
+    # present but empty = explicit reset to the inbox-only default; key
+    # present with folders = replace.
+    enabled_folders = None
+    if 'enabled_folders' in body:
+        try:
+            enabled_folders = _validate_enabled_folders(body['enabled_folders'] or [])
+        except ValueError as err:
+            return {'statusCode': 400, 'body': json.dumps({'Error': str(err)})}
 
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     # Merge-style upsert: created_at survives re-registration, last_seen_at
     # tracks it, and a previous last_failure is cleared by the fresh proof of
-    # life. enabled_folders is REMOVEd when the client sends none, so a reset
-    # back to the inbox-only default actually lands. Every attribute name is
-    # #-aliased: several of them collide with DynamoDB reserved words.
+    # life. Every attribute name is #-aliased: several of them collide with
+    # DynamoDB reserved words.
     sets = [
         '#b = :b', '#p = :p', '#v = :v', '#l = :l',
         '#c = if_not_exists(#c, :now)', '#s = :now',
@@ -106,7 +111,9 @@ def handler(event, _context):
     if enabled_folders:
         sets.append('#ef = :f')
         values[':f'] = set(enabled_folders)
-    else:
+    elif enabled_folders is not None:
+        # Explicit empty list: reset to the inbox-only default (DynamoDB
+        # string sets cannot be empty, so "default" is attribute absence).
         removes.append('#ef')
 
     try:
