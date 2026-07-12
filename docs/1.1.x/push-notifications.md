@@ -34,31 +34,20 @@ The design also targets the macOS app ([apple/CabalmailMac](../../apple/Cabalmai
 
 ### Component diagram
 
-```
-                                                        +------------------------+
-                                                        |  iOS / macOS app       |
-                                                        |  +------------------+  |
-   +-------------+        +--------------------+        |  | Notification     |  |
-   | Inbound MX  |        | imap container     |        |  | Service          |  |
-   | (smtp-in)   |  --->  | sendmail+procmail  |  -+    |  | Extension (NSE)  |  |
-   +-------------+        +--------------------+   |    |  +--------+---------+  |
-                                                   |    |           | enrich     |
-                                                   v    |           v            |
-                                          +-----------+ |  +-----------------+   |
-                                          |  push SQS | |  | main app        |   |
-                                          +-----+-----+ |  | (action handler)|   |
-                                                |       |  +-----------------+   |
-                                                v       +------------+-----------+
-                                          +-----------+              ^
-                                          |  push     |              |
-                                          |  Lambda   |  --APNs-->   | OS
-                                          +-----+-----+              |
-                                                |                    |
-                                                v                    |
-                                          +-----------+               |
-                                          | DynamoDB  |               |
-                                          | tokens    |               |
-                                          +-----------+              ----- Apple APNs edge
+```mermaid
+flowchart TD
+    mx["Inbound MX<br/>(smtp-in)"] --> imap["imap container<br/>sendmail+procmail"]
+    imap --> sqs["push SQS"]
+    sqs --> lambda["push Lambda"]
+    lambda --> ddb["DynamoDB<br/>tokens"]
+    lambda -->|APNs| apns["Apple APNs edge"]
+    apns --> os["OS"]
+
+    subgraph app["iOS / macOS app"]
+        nse["Notification Service<br/>Extension (NSE)"] -->|enrich| mainapp["main app<br/>(action handler)"]
+    end
+
+    os --> app
 ```
 
 ### Message flow
