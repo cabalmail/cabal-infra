@@ -62,6 +62,11 @@ struct NewAddressSheet: View {
                     }
                 }
         }
+        // The form is short; let the sheet shrink to its content instead of
+        // filling a fixed-size card. On iPad/macOS this trims the excess
+        // height; on compact-width iPhone `presentationSizing` is ignored and
+        // the sheet keeps its full-height card presentation.
+        .presentationSizing(.fitted)
     }
 
     // MARK: - Platform layouts
@@ -176,11 +181,6 @@ struct NewAddressSheet: View {
             }
             .labelsHidden()
         }
-        // The form is short; let the sheet shrink to its content instead of
-        // filling a fixed-size card. On iPad/macOS this trims the excess
-        // height; on compact-width iPhone `presentationSizing` is ignored and
-        // the sheet keeps its full-height card presentation.
-        .presentationSizing(.fitted)
     }
 
     private var composedAddress: String? {
