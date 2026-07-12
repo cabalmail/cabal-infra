@@ -1,6 +1,6 @@
 resource "aws_cloudwatch_log_group" "certbot" {
   name              = "/cabal/lambda/certbot-renewal"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 # Phase 4 of docs/0.9.x/build-deploy-simplification-plan.md.

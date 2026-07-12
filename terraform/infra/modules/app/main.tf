@@ -76,7 +76,7 @@ resource "aws_api_gateway_deployment" "deployment" {
 
 resource "aws_cloudwatch_log_group" "api_logs" {
   name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.gateway.id}/${var.stage_name}"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 #tfsec:ignore:aws-api-gateway-enable-tracing
