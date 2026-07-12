@@ -89,6 +89,9 @@ class ApnsClient:  # pylint: disable=too-few-public-methods
     def _connect(self):
         '''Opens the TLS socket and performs the HTTP/2 connection preface.'''
         context = ssl.create_default_context()
+        # create_default_context still admits TLS 1.0/1.1; APNs requires 1.2+
+        # (and HTTP/2 forbids anything older), so pin the floor explicitly.
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.set_alpn_protocols(['h2'])
         raw = socket.create_connection((self.host, 443), timeout=REQUEST_TIMEOUT_SECONDS)
         self.sock = context.wrap_socket(raw, server_hostname=self.host)
