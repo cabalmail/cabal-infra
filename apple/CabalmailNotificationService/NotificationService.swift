@@ -37,6 +37,12 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
         let state = self.state
+        // The Swift 5.10 region-isolation checker emits a spurious
+        // "pattern ... does not understand" warning for this Task even
+        // though every capture is Sendable (endpoint/token/query are value
+        // types; DeliveryState is @unchecked Sendable with lock-guarded
+        // state). Extraction and Task.detached were both tried and do not
+        // silence it; revisit when the toolchain moves past 5.10.
         Task {
             let envelope = await Self.fetchEnvelope(endpoint: endpoint, token: token, query: query)
             state.deliver(envelope)
@@ -89,8 +95,13 @@ private struct EnvelopeQuery: Sendable {
             let folder = ref["folder"] as? String, !folder.isEmpty
         else { return nil }
         self.folder = folder
-        self.uid = (ref["uid"] as? NSNumber)?.uint32Value
-        self.messageID = ref["msg_id"] as? String
+        // 0 is the dispatch Lambda's explicit "no hint" sentinel (procmail
+        // could not read Dovecot's next-uid); map it to nil so it is never
+        // forwarded as if it were a real UID.
+        let rawUid = (ref["uid"] as? NSNumber)?.uint32Value
+        self.uid = rawUid == 0 ? nil : rawUid
+        let rawMessageID = ref["msg_id"] as? String
+        self.messageID = (rawMessageID?.isEmpty ?? true) ? nil : rawMessageID
     }
 
     var requestBody: [String: Any] {
@@ -101,11 +112,14 @@ private struct EnvelopeQuery: Sendable {
     }
 }
 
-/// Decoded `/push_envelope` response.
+/// Decoded `/push_envelope` response. `uid` is the server-resolved UID (the
+/// payload's was a pre-delivery hint); `deliver` writes it back into the
+/// notification's msgRef so the main app's actions target the right message.
 private struct PushEnvelope: Decodable, Sendable {
     let from: String
     let subject: String
     let snippet: String
+    let uid: UInt32?
 }
 
 /// Deliver-once box shared between `didReceive`'s enrichment task and
@@ -138,6 +152,16 @@ private final class DeliveryState: @unchecked Sendable {
            let enriched = original.mutableCopy() as? UNMutableNotificationContent {
             enriched.title = envelope.from
             enriched.body = envelope.subject + "\n" + envelope.snippet
+            // The payload's uid was a pre-delivery hint; the server resolved
+            // the real one by Message-ID. Rewrite msgRef so Mark as Read /
+            // Archive / Open act on the message this notification shows.
+            if let resolved = envelope.uid, resolved != 0,
+               var ref = enriched.userInfo["msgRef"] as? [String: Any] {
+                ref["uid"] = Int(resolved)
+                var info = enriched.userInfo
+                info["msgRef"] = ref
+                enriched.userInfo = info
+            }
             content = enriched
         } else {
             content = original

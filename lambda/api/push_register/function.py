@@ -27,7 +27,11 @@ ALLOWED_BUNDLE_IDS = {
 }
 
 MAX_ENABLED_FOLDERS = 100
-FOLDER_RE = re.compile(r'^[A-Za-z0-9 _\-./]{1,255}$')
+# Mirrors helper.validate_folder_name's grammar (charset, 255-byte cap,
+# no ''/'.'/'..' segments) without importing helper: these names are only
+# ever compared against push_dispatch's folder strings, and helper's import
+# would drag imapclient plus an SSM read into this otherwise-tiny zip.
+FOLDER_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 
 MAX_INFO_LENGTH = 64
 
@@ -44,7 +48,9 @@ def _validate_enabled_folders(value):
     for folder in value:
         if folder == '*':
             return ['*']
-        if not isinstance(folder, str) or not FOLDER_RE.match(folder):
+        if not isinstance(folder, str) or not FOLDER_RE.match(folder) \
+                or len(folder.encode('utf-8')) > 255 \
+                or any(seg in ('', '.', '..') for seg in folder.split('/')):
             raise ValueError(f'invalid folder name: {folder!r}')
         cleaned.append(folder.replace('/', '.'))
     return cleaned
@@ -98,7 +104,7 @@ def handler(event, _context):
     names = {
         '#b': 'bundle_id', '#p': 'platform', '#v': 'app_version',
         '#l': 'locale', '#c': 'created_at', '#s': 'last_seen_at',
-        '#lf': 'last_failure', '#ef': 'enabled_folders',
+        '#lf': 'last_failure',
     }
     values = {
         ':b': bundle_id,
@@ -108,12 +114,17 @@ def handler(event, _context):
         ':now': now,
     }
     removes = ['#lf']
+    # '#ef' joins names only when an expression uses it: DynamoDB rejects the
+    # whole update ("Value provided in ExpressionAttributeNames unused") if an
+    # alias appears without a reference, which is the common key-absent case.
     if enabled_folders:
+        names['#ef'] = 'enabled_folders'
         sets.append('#ef = :f')
         values[':f'] = set(enabled_folders)
     elif enabled_folders is not None:
         # Explicit empty list: reset to the inbox-only default (DynamoDB
         # string sets cannot be empty, so "default" is attribute absence).
+        names['#ef'] = 'enabled_folders'
         removes.append('#ef')
 
     try:

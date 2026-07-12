@@ -9,7 +9,8 @@ enriches it locally before display.
 
 ```mermaid
 flowchart LR
-    imap["imap container<br/>procmail :0c recipe"] -->|"{user, folder, uid, msg_id}"| sqs["cabal-push-queue"]
+    imap["imap container<br/>procmail :0c recipe"] -->|"spool file"| drain["push-spool-drain<br/>(supervisord)"]
+    drain -->|"{user, folder, uid, msg_id}"| sqs["cabal-push-queue"]
     sqs --> dispatch["push_dispatch Lambda"]
     dispatch --> tokens["cabal-push-tokens"]
     dispatch -->|"content-free alert"| apns["APNs"]
@@ -18,10 +19,13 @@ flowchart LR
 ```
 
 1. Procmail fires a carbon-copy (`:0c`) recipe after each local delivery on
-   the `imap` tier. `push-enqueue.sh` sends one JSON wake signal to the
-   `cabal-push-queue` SQS queue, best-effort: a slow or unreachable queue
-   never blocks or fails mail delivery. Messages the spam rule files away are
-   never enqueued.
+   the `imap` tier. `push-enqueue.sh` writes one JSON wake signal into
+   `/var/spool/cabal-push`; the `push-spool-drain` supervisord program
+   forwards spool files to the `cabal-push-queue` SQS queue and ages out
+   anything it cannot send within an hour. The split keeps the delivery path
+   fast and credential-free: the per-user delivery agents never hold AWS
+   credentials, and a slow or unreachable queue never blocks or fails mail
+   delivery. Messages the spam rule files away are never enqueued.
 2. The `push_dispatch` Lambda consumes the queue, looks up the recipient's
    registered device tokens in the `cabal-push-tokens` DynamoDB table,
    filters by each token's folder opt-in, and sends one APNs request per
@@ -127,8 +131,15 @@ works on real devices:
   `Cabal/Push` namespace via CloudWatch EMF.
 - **Quiesce.** A quiesced environment delivers no mail, so nothing is
   enqueued. Residual signals from before the quiesce age out of the queue
-  within the hour. The Lambda itself costs nothing while idle and is not
-  scaled down.
+  (and the container spool) within the hour. The Lambda itself costs nothing
+  while idle and is not scaled down.
+- **Spool.** `/var/spool/cabal-push` inside the imap container is sticky
+  world-writable (like `/tmp`); the drain daemon authenticates each signal
+  file by comparing its owner to the user it names, drops malformed or
+  stale files, and the enqueue side sheds new signals if the spool backs up
+  past 1000 files. The spool is container-local scratch — it is not on EFS
+  and does not survive a task replacement, which loses at most the last
+  seconds of wake signals, not mail.
 - **Token hygiene.** `last_seen_at` on each `cabal-push-tokens` row is
   updated on every successful push and registration; `last_failure` records
   the most recent APNs rejection reason. Rows for uninstalled devices are

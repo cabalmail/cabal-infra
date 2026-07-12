@@ -19,11 +19,18 @@
 # drops wake signals instead of retrying them into the DLQ, so environments
 # without an APNs key (or with no Apple app installed) stay quiet.
 
+locals {
+  # The "placeholder-" prefix is load-bearing: push_dispatch's function.py
+  # (PLACEHOLDER_PREFIX) matches on it to decide the environment is not yet
+  # provisioned. Keep the two in sync.
+  apns_placeholder = "placeholder-set-via-aws-ssm-put-parameter"
+}
+
 resource "aws_ssm_parameter" "apns_team_id" {
   name        = "/cabal/apns/team_id"
   description = "Apple Developer Team ID for APNs token auth. Populate via aws ssm put-parameter --overwrite."
   type        = "SecureString"
-  value       = "placeholder-set-via-aws-ssm-put-parameter"
+  value       = local.apns_placeholder
 
   lifecycle {
     ignore_changes = [value]
@@ -34,7 +41,7 @@ resource "aws_ssm_parameter" "apns_key_id" {
   name        = "/cabal/apns/key_id"
   description = "Key ID of the APNs auth key (.p8). Populate via aws ssm put-parameter --overwrite."
   type        = "SecureString"
-  value       = "placeholder-set-via-aws-ssm-put-parameter"
+  value       = local.apns_placeholder
 
   lifecycle {
     ignore_changes = [value]
@@ -45,7 +52,7 @@ resource "aws_ssm_parameter" "apns_private_key" {
   name        = "/cabal/apns/private_key"
   description = "APNs auth key (.p8 PEM content). High-value: rotate via App Store Connect per docs/push-notifications.md. Populate via aws ssm put-parameter --overwrite."
   type        = "SecureString"
-  value       = "placeholder-set-via-aws-ssm-put-parameter"
+  value       = local.apns_placeholder
 
   lifecycle {
     ignore_changes = [value]
@@ -91,9 +98,15 @@ resource "aws_iam_role_policy" "push_dispatch" {
     Version = "2012-10-17"
     Statement = [
       {
+        # GetParametersByPath authorizes against the path itself as well as
+        # the parameters under it, hence both resource forms.
         Effect = "Allow"
-        Action = ["ssm:GetParameter"]
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParametersByPath",
+        ]
         Resource = [
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/apns",
           "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/apns/*",
         ]
       },

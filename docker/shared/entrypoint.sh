@@ -20,8 +20,9 @@
 # Optional:          NETWORK_CIDR (VPC CIDR for Dovecot login_trusted_networks)
 #                    PREFLIGHT (=1: run all preparation steps, then exit 0
 #                    instead of starting services - deploy validation)
-#                    PUSH_QUEUE_URL (imap: enables the procmail push-enqueue
-#                    side effect; see docs/0.11.0/push-notifications.md)
+#                    PUSH_QUEUE_URL (imap: consumed by the push-spool-drain
+#                    supervisord program, not this script; see
+#                    docs/0.11.0/push-notifications.md)
 # IMAP-only:         MASTER_PASSWORD
 # SMTP-OUT-only:     DKIM_PRIVATE_KEY
 set -euo pipefail
@@ -169,21 +170,17 @@ if [ "$TIER" = "imap" ]; then
   htpasswd -b -c -s /etc/dovecot/master-users admin "${MASTER_PASSWORD}"
 fi
 
-# ── Step 5b: Push-enqueue environment (IMAP only) ─────────────
-# sendmail sanitizes the environment it hands delivery agents, so procmail's
-# push-enqueue.sh child cannot inherit the queue URL or the ECS task-role
-# credential URI from the container env. Persist them at startup; the
-# credential URI is stable for the life of the task. Absent PUSH_QUEUE_URL
-# (task definition predating push, or push retired) leaves no file and the
-# script no-ops. See docs/0.11.0/push-notifications.md.
-if [ "$TIER" = "imap" ] && [ -n "${PUSH_QUEUE_URL:-}" ]; then
-  echo "[entrypoint] Writing push-enqueue environment..."
-  cat > /etc/cabal-push-enqueue.env <<PUSHENV
-PUSH_QUEUE_URL=${PUSH_QUEUE_URL}
-AWS_REGION=${AWS_REGION}
-AWS_CONTAINER_CREDENTIALS_RELATIVE_URI=${AWS_CONTAINER_CREDENTIALS_RELATIVE_URI:-}
-PUSHENV
-  chmod 644 /etc/cabal-push-enqueue.env
+# ── Step 5b: Push wake-signal spool (IMAP only) ───────────────
+# procmail's push-enqueue.sh (run as the recipient user, with sendmail's
+# sanitized environment and no AWS credentials) writes wake signals here;
+# the push-spool-drain.sh supervisord program (root, full container env)
+# forwards them to SQS. Sticky world-writable, like /tmp: any user may
+# create signal files, none may delete another's; the drain daemon
+# authenticates each file by owner. See docs/0.11.0/push-notifications.md.
+if [ "$TIER" = "imap" ]; then
+  echo "[entrypoint] Preparing push wake-signal spool..."
+  mkdir -p /var/spool/cabal-push
+  chmod 1777 /var/spool/cabal-push
 fi
 
 # ── Step 6: Prepare rsyslog working directory ─────────────────

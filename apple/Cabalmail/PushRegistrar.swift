@@ -23,8 +23,15 @@ struct PushMessageRef: Sendable {
             let folder = ref["folder"] as? String, !folder.isEmpty
         else { return nil }
         self.folder = folder
-        self.uid = (ref["uid"] as? NSNumber)?.uint32Value
-        self.messageID = ref["msg_id"] as? String
+        // 0 is the dispatch Lambda's "no hint" sentinel; mapping it to nil
+        // makes the action handlers' `guard let uid` skip cleanly instead of
+        // flag/move-ing UID 0 (which the API rejects as out of range). The
+        // NSE rewrites msgRef with the server-resolved uid when enrichment
+        // succeeds, so a nil here means the uid genuinely never resolved.
+        let rawUid = (ref["uid"] as? NSNumber)?.uint32Value
+        self.uid = rawUid == 0 ? nil : rawUid
+        let rawMessageID = ref["msg_id"] as? String
+        self.messageID = (rawMessageID?.isEmpty ?? true) ? nil : rawMessageID
     }
 }
 

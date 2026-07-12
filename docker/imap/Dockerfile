@@ -142,9 +142,12 @@ COPY shared/prepare-sendmail.sh            /usr/local/bin/prepare-sendmail.sh
 # Clears the planned-maintenance SSM flag once Dovecot is serving (imap only).
 COPY shared/clear-maintenance.sh           /usr/local/bin/clear-maintenance.sh
 
-# Enqueues a push-notification wake signal per local delivery (imap only;
-# invoked by the :0c recipe in procmailrc).
+# Push wake signals (imap only): the :0c recipe in procmailrc spools one
+# JSON signal per local delivery via push-enqueue.sh; the push-spool-drain
+# supervisord program forwards the spool to SQS with the task-role
+# credentials the per-user delivery agents deliberately never see.
 COPY shared/push-enqueue.sh                /usr/local/bin/push-enqueue.sh
+COPY shared/push-spool-drain.sh            /usr/local/bin/push-spool-drain.sh
 
 # Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)
 COPY shared/rsyslog-mail.conf              /etc/rsyslog.conf

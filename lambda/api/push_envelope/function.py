@@ -11,13 +11,19 @@ enqueues before Dovecot assigns the UID). When msg_id is present it is
 authoritative: the folder is searched for it and the resolved UID is returned
 so the client can route "Open" to the right message.
 '''
+import email
 import json
+from email.policy import default
 from html.parser import HTMLParser
 
+from helper import CACHE_BUCKET  # pylint: disable=import-error
 from helper import get_imap_client  # pylint: disable=import-error
 from helper import get_message  # pylint: disable=import-error
+from helper import get_object  # pylint: disable=import-error
+from helper import key_exists  # pylint: disable=import-error
 from helper import maintenance_guard  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
+from helper import upload_object  # pylint: disable=import-error
 from helper import validate_content_id  # pylint: disable=import-error
 from helper import validate_folder_name  # pylint: disable=import-error
 from helper import validate_uid  # pylint: disable=import-error
@@ -90,19 +96,31 @@ def _snippet(message):
     return text[:MAX_SNIPPET_LENGTH]
 
 
-def _resolve_uid(user, folder, uid, msg_id):
-    '''Returns the UID to fetch: the Message-ID search result when available
-    (the enqueue-side UID is only a hint), else the caller's hint.'''
-    if not msg_id:
-        return uid
+def _load_by_message_id(user, folder, uid_hint, msg_id):
+    '''Resolves the real UID by Message-ID search and loads the message on
+    the SAME connection (the NSE runs against a hard deadline; a second TLS +
+    LOGIN + SELECT handshake is the biggest avoidable cost here), honoring
+    and warming the S3 cache like get_message. Returns (uid, message-or-None).
+    '''
     client = get_imap_client(None, user, folder, read_only=True)
     try:
         matches = client.search(['HEADER', 'Message-ID', msg_id])
+        uid = max(matches) if matches else uid_hint
+        if uid is None:
+            return None, None
+        key = f'{user}/{folder}/{uid}/raw'
+        if key_exists(CACHE_BUCKET, key):
+            raw = get_object(CACHE_BUCKET, key)
+        else:
+            fetched = client.fetch([uid], ['RFC822'])
+            if uid not in fetched:
+                # Expunged, or a stale hint with no Message-ID match.
+                return uid, None
+            raw = fetched[uid][b'RFC822']
+            upload_object(CACHE_BUCKET, key, 'text/plain', raw)
     finally:
         client.logout()
-    if matches:
-        return max(matches)
-    return uid
+    return uid, email.message_from_bytes(raw, policy=default)
 
 
 @maintenance_guard
@@ -115,19 +133,27 @@ def handler(event, _context):
     try:
         folder = validate_folder_name(str(body.get('folder', ''))).replace('/', '.')
         uid = validate_uid(body.get('uid')) if body.get('uid') else None
-        msg_id = validate_content_id(body['msg_id']) if body.get('msg_id') else None
     except ValueError as err:
         return {'statusCode': 400, 'body': json.dumps({'Error': str(err)})}
+    # msg_id is advisory identity, not a gate: validate_content_id caps at a
+    # length real Message-IDs exceed (RFC 5322 allows ~990 chars), and a
+    # rejected msg_id must degrade to the uid hint, not 400 the enrichment.
+    try:
+        msg_id = validate_content_id(body['msg_id']) if body.get('msg_id') else None
+    except ValueError:
+        msg_id = None
     if uid is None and msg_id is None:
         return {'statusCode': 400, 'body': json.dumps({'Error': 'uid or msg_id is required'})}
 
-    uid = _resolve_uid(user, folder, uid, msg_id)
-    if uid is None:
-        return {'statusCode': 404, 'body': json.dumps({'Error': 'message not found'})}
-    try:
-        message = get_message(None, user, folder, uid)
-    except KeyError:
-        # client.fetch returned no entry for the UID: expunged or a stale hint.
+    if msg_id:
+        uid, message = _load_by_message_id(user, folder, uid, msg_id)
+    else:
+        try:
+            message = get_message(None, user, folder, uid)
+        except KeyError:
+            message = None
+    if uid is None or message is None:
+        # No UID resolvable, expunged, or a stale hint.
         return {'statusCode': 404, 'body': json.dumps({'Error': 'message not found'})}
 
     return {

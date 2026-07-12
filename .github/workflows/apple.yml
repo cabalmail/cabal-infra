@@ -300,12 +300,20 @@ jobs:
           [ -z "$S5" ] && MISSING+=("APP_STORE_CONNECT_API_ISSUER_ID")
           [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
           [ -z "$S7" ] && MISSING+=("IOS_APP_STORE_PROFILE")
-          # The iOS archive embeds the watch app and the Notification
-          # Service Extension, so it also needs their profiles. The visionOS
-          # leg does not (both embed dependencies are destination-filtered
-          # to iOS in project.yml).
+          # The iOS archive embeds the watch app, so it also needs the watch
+          # profile. The visionOS leg does not (the embed dependency is
+          # destination-filtered to iOS in project.yml).
           [ "$PLATFORM" = "iOS" ] && [ -z "$S8" ] && MISSING+=("WATCHOS_APP_STORE_PROFILE")
-          [ "$PLATFORM" = "iOS" ] && [ -z "$S9" ] && MISSING+=("IOS_NSE_APP_STORE_PROFILE")
+          # The NSE profile gates BOTH legs even though only the iOS archive
+          # embeds the extension: the push entitlements (aps-environment,
+          # app group, keychain sharing) live on the shared Cabalmail target,
+          # so every leg's archive needs profiles regenerated with the new
+          # capabilities. The operator does that portal work in one sitting
+          # with the NSE App ID/profile creation, making this secret the
+          # "push signing assets are ready" sentinel — until it exists, both
+          # legs skip cleanly instead of failing codesign against stale
+          # profiles.
+          [ -z "$S9" ] && MISSING+=("IOS_NSE_APP_STORE_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"

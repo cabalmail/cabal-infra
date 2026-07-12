@@ -19,6 +19,7 @@ Failure posture:
 
 The event source mapping uses batch_size 1 so a single failing signal retries
 on its own rather than dragging a whole batch with it.'''
+import hashlib
 import json
 import os
 import time
@@ -26,7 +27,7 @@ import time
 import boto3  # pylint: disable=import-error
 from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
 
-from apns import ApnsClient, ApnsError  # pylint: disable=import-error
+from apns import ApnsClient, ApnsError, ApnsTransportError  # pylint: disable=import-error
 
 ddb = boto3.resource('dynamodb')
 TABLE_NAME = os.environ.get('PUSH_TOKENS_TABLE_NAME', 'cabal-push-tokens')
@@ -37,33 +38,49 @@ ssm = boto3.client('ssm')
 # push_dispatch.tf); a value still carrying it means "not configured".
 PLACEHOLDER_PREFIX = 'placeholder-'
 
+# How long a warm container trusts a "not configured" verdict before
+# re-reading SSM. Without the recheck, a container that went warm before the
+# operator provisioned the APNs key would ack-and-drop signals until Lambda
+# happened to recycle it — hours, under steady mail flow.
+NOT_CONFIGURED_TTL_SECONDS = 300
+
+# Skip the per-send last_seen_at write when the row was refreshed this
+# recently; the attribute exists to GC dead tokens, not to timestamp pushes.
+LAST_SEEN_REFRESH_SECONDS = 12 * 3600
+
 # Warm-container caches: the APNs config/connection survive across
 # invocations, which is what makes provider-token reuse worthwhile.
 _APNS_CLIENT = None
-_APNS_CONFIGURED = None
+_APNS_RECHECK_AT = 0.0
 
 
 def _apns_client():
-    '''Returns the shared ApnsClient, or None when APNs is not configured.'''
-    global _APNS_CLIENT, _APNS_CONFIGURED  # pylint: disable=global-statement
-    if _APNS_CONFIGURED is not None:
+    '''Returns the shared ApnsClient, or None when APNs is not configured.
+    A configured client is cached for the container's life; the unconfigured
+    verdict is re-checked after NOT_CONFIGURED_TTL_SECONDS so provisioning
+    the SSM parameters takes effect without waiting out warm containers.'''
+    global _APNS_CLIENT, _APNS_RECHECK_AT  # pylint: disable=global-statement
+    if _APNS_CLIENT is not None:
         return _APNS_CLIENT
+    if time.monotonic() < _APNS_RECHECK_AT:
+        return None
+    response = ssm.get_parameters_by_path(
+        Path='/cabal/apns', WithDecryption=True)
     config = {
-        name: ssm.get_parameter(
-            Name=f'/cabal/apns/{name}', WithDecryption=True
-        )['Parameter']['Value']
-        for name in ('team_id', 'key_id', 'private_key', 'endpoint')
+        param['Name'].rsplit('/', 1)[-1]: param['Value']
+        for param in response['Parameters']
     }
-    if any(value.startswith(PLACEHOLDER_PREFIX) for value in config.values()):
+    required = ('team_id', 'key_id', 'private_key', 'endpoint')
+    if any(config.get(name, PLACEHOLDER_PREFIX).startswith(PLACEHOLDER_PREFIX)
+           for name in required):
         print('[push-dispatch] APNs credentials not provisioned; '
               'wake signals will be dropped')
-        _APNS_CONFIGURED = False
+        _APNS_RECHECK_AT = time.monotonic() + NOT_CONFIGURED_TTL_SECONDS
         return None
     _APNS_CLIENT = ApnsClient(
         config['endpoint'], config['team_id'], config['key_id'],
         config['private_key'],
     )
-    _APNS_CONFIGURED = True
     return _APNS_CLIENT
 
 
@@ -95,6 +112,19 @@ def _emit_metrics(sent, failed, latency_ms):
     }))
 
 
+def _is_stale(last_seen_at, now):
+    '''True when the ISO-8601 last_seen_at is absent, unparseable, or older
+    than LAST_SEEN_REFRESH_SECONDS relative to `now` (same format).'''
+    if not last_seen_at:
+        return True
+    try:
+        then = time.mktime(time.strptime(str(last_seen_at)[:19], '%Y-%m-%dT%H:%M:%S'))
+        current = time.mktime(time.strptime(now[:19], '%Y-%m-%dT%H:%M:%S'))
+    except ValueError:
+        return True
+    return current - then > LAST_SEEN_REFRESH_SECONDS
+
+
 def _mark(user, device_token, attribute, value):
     '''Best-effort bookkeeping write on a token row; never fails a dispatch.'''
     try:
@@ -124,8 +154,12 @@ def _payload(signal):
     }
     # Collapse on message identity so a redelivered signal replaces, rather
     # than stacks on, the notification it already produced. The UID hint can
-    # be 0 (procmail runs before Dovecot assigns one), so fold msg_id in.
-    return payload, f'{folder}:{uid}:{msg_id}'
+    # be 0 (procmail runs before Dovecot assigns one), so fold msg_id in —
+    # hashed, because APNs caps apns-collapse-id at 64 bytes and truncating a
+    # raw Message-ID would collapse distinct messages that share a long
+    # provider prefix (Exchange ids differ only near the end).
+    msg_digest = hashlib.sha256(msg_id.encode()).hexdigest()[:16] if msg_id else ''
+    return payload, f'{folder}:{uid}:{msg_digest}'[:64]
 
 
 def _dispatch(client, signal):
@@ -161,8 +195,21 @@ def _dispatch(client, signal):
                 print(f'[push-dispatch] send failed for {user}: {err}')
                 _mark(user, device_token, 'last_failure', err.reason or str(err.status))
             continue
+        except ApnsTransportError as err:
+            # Caught per token, not per signal: a transport failure on one
+            # send must not abort the loop and strand the remaining devices
+            # (the handler docstring's "raises only when nothing delivered"
+            # depends on this).
+            failed += 1
+            retryable += 1
+            print(f'[push-dispatch] transport failure for {user}: {err}')
+            continue
         sent += 1
-        _mark(user, device_token, 'last_seen_at', now)
+        # Freshness bookkeeping only; skip the write when the row is already
+        # recent so a busy mailbox doesn't pay one UpdateItem per device per
+        # delivered message.
+        if _is_stale(row.get('last_seen_at'), now):
+            _mark(user, device_token, 'last_seen_at', now)
     return sent, failed, retryable
 
 

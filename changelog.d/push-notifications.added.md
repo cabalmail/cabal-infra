@@ -1,7 +1,9 @@
 - **Push notifications for the Apple clients.** New mail now raises an APNs
   notification on iOS within seconds of delivery, without Apple's
-  infrastructure seeing message content: procmail enqueues a content-free
-  wake signal (`cabal-push-queue`) per local delivery, the new
+  infrastructure seeing message content: procmail spools a content-free
+  wake signal per local delivery (forwarded to `cabal-push-queue` by a
+  credential-holding drain daemon, keeping AWS credentials away from the
+  per-user delivery agents), the new
   `push_dispatch` Lambda fans it out to the user's registered devices
   (`cabal-push-tokens`, managed by the new `/push_register` and
   `/push_deregister` endpoints), and the app's Notification Service

@@ -24,6 +24,7 @@ import ecdsa  # pylint: disable=import-error
 import ecdsa.util  # pylint: disable=import-error
 import h2.connection  # pylint: disable=import-error
 import h2.events  # pylint: disable=import-error
+import h2.exceptions  # pylint: disable=import-error
 
 # APNs provider tokens are valid for 20-60 minutes; refresh at 45 so a token
 # is never presented near the edge of the window.
@@ -41,6 +42,12 @@ class ApnsError(Exception):
         self.status = status
         self.reason = reason
         self.permanent = status == 410 or reason == 'BadDeviceToken'
+
+
+class ApnsTransportError(Exception):
+    '''The request never produced an APNs verdict: connect/TLS failure,
+    timeout, dropped connection, or an HTTP/2 protocol violation — after the
+    one transparent reconnect-and-retry. Always worth an SQS redelivery.'''
 
 
 def _b64url(data):
@@ -135,9 +142,10 @@ class ApnsClient:  # pylint: disable=too-few-public-methods
             self.sock.sendall(self.conn.data_to_send())
 
     def send(self, device_token, topic, payload, collapse_id):
-        '''Sends one alert push. Returns the apns-id-free None on success and
-        raises ApnsError (permanent or not) on a non-2xx response; transport
-        errors get one transparent reconnect-and-retry before propagating.'''
+        '''Sends one alert push. Returns None on success, raises ApnsError
+        (permanent or not) on a non-2xx response, and raises
+        ApnsTransportError when no verdict was obtained — after one
+        transparent reconnect-and-retry.'''
         body = json.dumps(payload).encode()
         headers = [
             (':method', 'POST'),
@@ -157,12 +165,16 @@ class ApnsClient:  # pylint: disable=too-few-public-methods
                     self._connect()
                 status, response = self._request(headers, body)
                 break
-            except (OSError, ConnectionError, TimeoutError, ssl.SSLError):
-                # A dropped keep-alive connection surfaces here; reconnect
-                # once, then let a genuine outage propagate for SQS retry.
+            except (OSError, ConnectionError, ssl.SSLError,
+                    h2.exceptions.ProtocolError) as err:
+                # A dropped keep-alive connection (or an h2 state-machine
+                # violation, which poisons the connection object) surfaces
+                # here. Always close — a poisoned self.conn would otherwise
+                # fail every request this warm container ever makes — then
+                # reconnect once, then report a genuine outage.
                 self._close()
                 if attempt == 2:
-                    raise
+                    raise ApnsTransportError(str(err)) from err
         if 200 <= status < 300:
             return
         reason = ''
