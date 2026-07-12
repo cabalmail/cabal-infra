@@ -1,7 +1,7 @@
 # Cabalmail Apple Client
 
-Native iOS / iPadOS / visionOS / macOS client for Cabalmail. The original
-implementation plan is preserved at
+Native iOS / iPadOS / visionOS / macOS / watchOS client for Cabalmail. The
+original implementation plan is preserved at
 [`docs/0.6.0/ios-client-plan.md`](../docs/0.6.0/ios-client-plan.md) for
 historical context; this README describes the as-implemented state.
 
@@ -13,6 +13,8 @@ apple/
   Cabalmail.xcworkspace/     # Workspace referencing the generated project + kit package
   Cabalmail/                 # iOS / iPadOS / visionOS app target (SwiftUI)
   CabalmailMac/              # Native macOS app target (SwiftUI)
+  CabalmailWatch/            # Watch companion app (address management only),
+                             #   embedded in the iOS product
   CabalmailKit/              # Shared Swift package — networking, models, auth, caching
 ```
 
@@ -148,18 +150,21 @@ are expanded in the sections further down.
    its own cert — `Apple Distribution` signs the `.app`, Mac Installer
    Distribution signs the `.pkg`. See [Exporting the Mac Installer
    certificate](#exporting-the-mac-installer-certificate).
-4. **Register both bundle identifiers** in the Developer portal at
+4. **Register the bundle identifiers** in the Developer portal at
    [developer.apple.com](https://developer.apple.com/account) →
    Certificates, Identifiers & Profiles → **Identifiers** → **+**:
    - App ID `com.cabalmail.Cabalmail` (description: `Cabalmail`)
+   - App ID `com.cabalmail.Cabalmail.watchkitapp` (description:
+     `Cabalmail Watch`) — the watch companion app embedded in the iOS
+     archive
    - App ID `com.cabalmail.CabalmailMac` (description: `Cabalmail Mac`)
 
    CI uses **manual code signing**, so App IDs must exist before you
    create the matching provisioning profiles in the next step.
 5. **Create the provisioning profiles** for each App ID. See
    [Creating provisioning profiles](#creating-provisioning-profiles) —
-   produces the `IOS_APP_STORE_PROFILE` / `MAC_APP_STORE_PROFILE` /
-   (optional) `MAC_DEVID_PROFILE` secrets.
+   produces the `IOS_APP_STORE_PROFILE` / `WATCHOS_APP_STORE_PROFILE` /
+   `MAC_APP_STORE_PROFILE` / (optional) `MAC_DEVID_PROFILE` secrets.
 6. **Create an App Store Connect API key** with the **App Manager** role. See
    [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)
    — produces the `APP_STORE_CONNECT_API_KEY_ID` /
@@ -248,6 +253,7 @@ Environments → `stage` / `prod`).
 | Secret | What it is |
 |---|---|
 | `IOS_APP_STORE_PROFILE` | base64 of the `.mobileprovision` for `com.cabalmail.Cabalmail` (App Store distribution). See [Creating provisioning profiles](#creating-provisioning-profiles) below. |
+| `WATCHOS_APP_STORE_PROFILE` | base64 of the `.mobileprovision` for `com.cabalmail.Cabalmail.watchkitapp` (App Store distribution). The iOS archive embeds the watch app, so the iOS upload leg skips (with a warning) until this secret exists; the visionOS leg is unaffected. |
 
 **Required (macOS job only):**
 
@@ -352,6 +358,8 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    [developer.apple.com → Identifiers](https://developer.apple.com/account/resources/identifiers/list)
    → **+**, if you haven't already:
    - `com.cabalmail.Cabalmail` (App IDs → iOS, tvOS, watchOS, visionOS)
+   - `com.cabalmail.Cabalmail.watchkitapp` (App IDs → iOS, tvOS, watchOS,
+     visionOS) — the embedded watch companion app
    - `com.cabalmail.CabalmailMac` (App IDs → macOS)
 
 2. **Create the profiles** at
@@ -361,6 +369,7 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    | Profile | Distribution type | App ID | Certificate | Filename extension |
    |---|---|---|---|---|
    | Cabalmail iOS App Store | App Store | `com.cabalmail.Cabalmail` | Apple Distribution | `.mobileprovision` |
+   | Cabalmail Watch App Store | App Store | `com.cabalmail.Cabalmail.watchkitapp` | Apple Distribution | `.mobileprovision` |
    | Cabalmail macOS App Store | App Store | `com.cabalmail.CabalmailMac` | Apple Distribution | `.provisionprofile` |
    | Cabalmail macOS Developer ID *(optional)* | Developer ID | `com.cabalmail.CabalmailMac` | Developer ID Application | `.provisionprofile` |
 
@@ -376,6 +385,7 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    | Downloaded file | GitHub secret |
    |---|---|
    | iOS `.mobileprovision` | `IOS_APP_STORE_PROFILE` |
+   | Watch `.mobileprovision` | `WATCHOS_APP_STORE_PROFILE` |
    | macOS App Store `.provisionprofile` | `MAC_APP_STORE_PROFILE` |
    | macOS Developer ID `.provisionprofile` | `MAC_DEVID_PROFILE` |
 

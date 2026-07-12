@@ -7,6 +7,7 @@ let package = Package(
         .iOS("18.0"),
         .macOS("15.0"),
         .visionOS("2.0"),
+        .watchOS("11.0"),
     ],
     products: [
         .library(name: "CabalmailKit", targets: ["CabalmailKit"]),

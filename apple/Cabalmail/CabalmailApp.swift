@@ -11,6 +11,7 @@ import CabalmailKit
 struct CabalmailApp: App {
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -38,6 +39,14 @@ struct CabalmailApp: App {
                     if preferences.crashReportingEnabled {
                         appState.client?.setCrashReportingEnabled(true)
                     }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Re-offer the session to the watch on every return to
+                    // the foreground — see AppState.refreshWatchSession()
+                    // for why the launch-time push alone strands a watch
+                    // app installed while this app was already running.
+                    guard phase == .active else { return }
+                    Task { await appState.refreshWatchSession() }
                 }
                 .onOpenURL { url in
                     // Cold-launch mailto: arrives here before any view

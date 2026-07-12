@@ -139,6 +139,17 @@ public actor CognitoAuthService: AuthService {
         try secureStore.remove(SecureStoreKey.imapPassword)
     }
 
+    /// Installs externally obtained tokens — the watch app's credential
+    /// bootstrap, where the paired iPhone hands its session over via a
+    /// `WatchHandoff`. The password never leaves the phone, so
+    /// `currentImapCredentials()` stays unavailable on the adopting device;
+    /// the API-backed clients only need `currentIdToken()`, which refreshes
+    /// off the adopted refresh token.
+    public func adopt(tokens: AuthTokens, username: String) throws {
+        try persist(tokens: tokens)
+        try secureStore.setString(username, forKey: SecureStoreKey.imapUsername)
+    }
+
     // MARK: - Token access
 
     public func currentIdToken() async throws -> String {
