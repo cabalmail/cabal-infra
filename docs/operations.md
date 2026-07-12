@@ -46,6 +46,10 @@ By default the Terraform state bucket uses SSE-S3, so any principal with `s3:Get
 
 Envelope payloads from `/list_envelopes` and `/search_envelopes` carry the RFC 5322 threading identity (`message_id` / `in_reply_to` / `references`), and the `/save_draft` Lambda gives drafts a server-side lifecycle (save returns UIDPLUS coordinates, save can atomically replace a prior copy, discard removes one — all Drafts-scoped and UIDVALIDITY-guarded). The Apple clients sync compose drafts across devices through that path. See [Draft sync and threading headers](./draft-sync-and-threading.md) for the wire contract, the safety posture, and the client sync loop.
 
+# Push notifications
+
+The Apple clients get new-mail notifications through APNs without Apple's infrastructure ever seeing message content: procmail enqueues a content-free wake signal per delivery, the `push_dispatch` Lambda fans it out to the user's registered devices, and each device enriches the alert locally via `/push_envelope` before display. Push is inert until an APNs auth key is provisioned per environment. See [Push notifications](./push-notifications.md) for the architecture, the key provisioning and rotation runbooks, and the operational notes (DLQ, metrics, token hygiene).
+
 # IMAP full-text search index
 
 The `imap` container ships [dovecot-fts-flatcurve](https://github.com/slusarz/dovecot-fts-flatcurve) (pinned upstream tag and commit baked into `docker/imap/Dockerfile`, licence preserved at `/usr/share/doc/fts-flatcurve/` inside the image). The plugin gives `/search_envelopes` an inverted index instead of a sequential body scan; configuration lives in `docker/imap/configs/dovecot/90-fts.conf`.
