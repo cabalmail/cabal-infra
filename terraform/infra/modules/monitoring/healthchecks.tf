@@ -32,7 +32,7 @@ resource "aws_efs_access_point" "healthchecks" {
 
 resource "aws_cloudwatch_log_group" "healthchecks" {
   name              = "/ecs/cabal-healthchecks"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 resource "aws_iam_role" "healthchecks_execution" {

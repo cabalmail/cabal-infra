@@ -28,7 +28,7 @@ resource "aws_efs_access_point" "kuma" {
 
 resource "aws_cloudwatch_log_group" "kuma" {
   name              = "/ecs/cabal-uptime-kuma"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 resource "aws_iam_role" "kuma_execution" {

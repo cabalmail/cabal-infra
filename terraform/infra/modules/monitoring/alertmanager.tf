@@ -24,7 +24,7 @@ resource "aws_efs_access_point" "alertmanager" {
 
 resource "aws_cloudwatch_log_group" "alertmanager" {
   name              = "/ecs/cabal-alertmanager"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 resource "aws_iam_role" "alertmanager_execution" {

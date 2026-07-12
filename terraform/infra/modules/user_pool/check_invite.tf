@@ -98,7 +98,7 @@ resource "aws_iam_role_policy" "check_invite" {
 
 resource "aws_cloudwatch_log_group" "check_invite" {
   name              = "/aws/lambda/check_invite"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 resource "aws_lambda_function" "check_invite" {

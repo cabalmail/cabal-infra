@@ -174,7 +174,7 @@ RUNPOLICY
 
 resource "aws_cloudwatch_log_group" "lambda_log" {
   name              = "/cabal/lambda/${var.name}"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 data "aws_s3_object" "lambda_function_hash" {
