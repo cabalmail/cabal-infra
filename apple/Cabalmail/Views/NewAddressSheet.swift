@@ -34,79 +34,147 @@ struct NewAddressSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("New address") {
-                    HStack {
-                        TextField("username", text: $username)
-                            .autocorrectionDisabled()
-                            #if os(iOS) || os(visionOS)
-                            .textInputAutocapitalization(.never)
-                            #endif
-                        Text("@")
-                            .foregroundStyle(.secondary)
-                        TextField("subdomain", text: $subdomain)
-                            .autocorrectionDisabled()
-                            #if os(iOS) || os(visionOS)
-                            .textInputAutocapitalization(.never)
-                            #endif
-                        Text(".")
-                            .foregroundStyle(.secondary)
-                        Picker("", selection: $domain) {
-                            Text("domain").tag("")
-                            ForEach(domains) { entry in
-                                Text(entry.domain).tag(entry.domain)
+            content
+                .navigationTitle("Create Address")
+                #if os(iOS) || os(visionOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            Task { await submit() }
+                        } label: {
+                            if isSubmitting {
+                                ProgressView()
+                            } else {
+                                Text("Create")
                             }
                         }
-                        .labelsHidden()
-                    }
-                    if let preview = composedAddress {
-                        Text(preview)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        .disabled(!canSubmit || isSubmitting)
                     }
                 }
-                Section("Comment") {
-                    TextField("optional reminder", text: $comment)
-                        .autocorrectionDisabled()
-                }
-                if let errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
+                .onAppear {
+                    if domain.isEmpty, let first = domains.first?.domain {
+                        domain = first
                     }
                 }
+        }
+    }
+
+    // MARK: - Platform layouts
+    //
+    // `Form` is kept for iOS/visionOS, where its grouped list style renders
+    // the field titles as in-field placeholders and section headers as tidy
+    // group captions. On macOS that same `Form` instead pins every title as
+    // an external left-hand label — which shatters the email-shaped row and
+    // drops the in-field placeholders — so macOS gets a hand-built layout
+    // that reproduces the iOS look: in-field placeholders, an `@`/`.`
+    // email-shaped row, headline section captions, and real content margins.
+
+    @ViewBuilder
+    private var content: some View {
+        #if os(macOS)
+        macContent
+        #else
+        formContent
+        #endif
+    }
+
+    #if os(macOS)
+    private var macContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("New address")
+                    .font(.headline)
+                addressRow
+                    .textFieldStyle(.roundedBorder)
+                if let preview = composedAddress {
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Comment")
+                    .font(.headline)
+                TextField("optional reminder", text: $comment)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+            }
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Button("Random", action: randomize)
+                    .disabled(domains.isEmpty)
+                Spacer()
+            }
+        }
+        .padding(24)
+        .frame(width: 460, alignment: .leading)
+    }
+    #else
+    private var formContent: some View {
+        Form {
+            Section("New address") {
+                addressRow
+                if let preview = composedAddress {
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+            Section("Comment") {
+                TextField("optional reminder", text: $comment)
+                    .autocorrectionDisabled()
+            }
+            if let errorMessage {
                 Section {
-                    Button("Random", action: randomize)
-                        .disabled(domains.isEmpty)
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
                 }
             }
-            .navigationTitle("Create Address")
-            #if os(iOS) || os(visionOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task { await submit() }
-                    } label: {
-                        if isSubmitting {
-                            ProgressView()
-                        } else {
-                            Text("Create")
-                        }
-                    }
-                    .disabled(!canSubmit || isSubmitting)
+            Section {
+                Button("Random", action: randomize)
+                    .disabled(domains.isEmpty)
+            }
+        }
+    }
+    #endif
+
+    /// The email-shaped input row shared by both layouts: `username @
+    /// subdomain . domain`, with the domain drawn from the deployment's
+    /// configured mail domains.
+    @ViewBuilder
+    private var addressRow: some View {
+        HStack {
+            TextField("username", text: $username)
+                .autocorrectionDisabled()
+                #if os(iOS) || os(visionOS)
+                .textInputAutocapitalization(.never)
+                #endif
+            Text("@")
+                .foregroundStyle(.secondary)
+            TextField("subdomain", text: $subdomain)
+                .autocorrectionDisabled()
+                #if os(iOS) || os(visionOS)
+                .textInputAutocapitalization(.never)
+                #endif
+            Text(".")
+                .foregroundStyle(.secondary)
+            Picker("", selection: $domain) {
+                Text("domain").tag("")
+                ForEach(domains) { entry in
+                    Text(entry.domain).tag(entry.domain)
                 }
             }
-            .onAppear {
-                if domain.isEmpty, let first = domains.first?.domain {
-                    domain = first
-                }
-            }
+            .labelsHidden()
         }
     }
 
