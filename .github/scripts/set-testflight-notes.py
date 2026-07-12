@@ -18,6 +18,14 @@
 # one marketing version, so the whole section maps to that one TestFlight
 # version; multiple builds under it would all carry the same notes.
 #
+# Apple scoping: these notes go to Apple-client testers, so only entries that
+# describe an Apple-client change are relevant. Such entries are prefixed
+# `Apple:` in the changelog (a convention enforced for Apple client PRs - see
+# CLAUDE.md and changelog.d/README.md). This script keeps only those bullets,
+# strips the redundant `Apple:` prefix, and drops any section heading left with
+# no bullets. A release with no Apple-scoped entries falls back to generic
+# maintenance text so testers never see a blank "What to Test".
+#
 # Best-effort by design: the binary is already uploaded by the time this runs,
 # so any failure here (build still processing past the timeout, transient API
 # error, missing config) emits a `::warning::` and exits 0 rather than turning
@@ -60,6 +68,12 @@ import jwt  # PyJWT, installed in the calling step's venv
 
 API_BASE = "https://api.appstoreconnect.apple.com"
 WHATS_NEW_MAX = 4000  # App Store Connect's hard cap on the field.
+
+# Changelog bullets meant for Apple-client testers are prefixed `Apple:`.
+APPLE_PREFIX = re.compile(r"^Apple:\s*")
+# Shown when a release carries no Apple-scoped entries, so the field is never
+# blank for testers.
+FALLBACK_NOTES = "Bug fixes and behind-the-scenes improvements."
 
 
 def warn(message):
@@ -123,7 +137,13 @@ def flatten_changelog(changelog_path):
     Takes everything from the first `## [x.y.z]` heading up to the next one,
     drops the version heading itself, turns `### Section` into `Section:`, and
     rejoins hard-wrapped bullets (two-space continuation indent) into single
-    lines. Truncates to App Store Connect's field cap.
+    lines.
+
+    Then narrows to the Apple-client audience: only bullets prefixed `Apple:`
+    are kept (with that prefix stripped), and any `### Section` heading left
+    with no surviving bullets is dropped. If nothing Apple-scoped remains,
+    returns generic maintenance text so the field is never blank. Truncates to
+    App Store Connect's field cap.
     """
     with open(changelog_path, encoding="utf-8") as handle:
         lines = handle.read().splitlines()
@@ -142,13 +162,15 @@ def flatten_changelog(changelog_path):
             break
         section.append(line)
 
-    out = []
+    # Parse the section into ordered tokens: ("heading", text) and
+    # ("bullet", text), rejoining hard-wrapped bullet continuations.
+    tokens = []
     current = None
 
     def flush():
         nonlocal current
         if current is not None:
-            out.append(f"- {current}")
+            tokens.append(("bullet", current))
             current = None
 
     for line in section:
@@ -158,23 +180,48 @@ def flatten_changelog(changelog_path):
         heading = re.match(r"^### (.+)$", line)
         if heading:
             flush()
-            if out and out[-1] != "":
-                out.append("")
-            out.append(f"{heading.group(1).strip()}:")
+            tokens.append(("heading", heading.group(1).strip()))
         elif line.startswith("- "):
             flush()
             current = line[2:].strip()
         elif line.startswith("  ") and current is not None:
             # Continuation of the current hard-wrapped bullet.
             current += " " + line.strip()
-        else:
-            flush()
-            out.append(line.strip())
+        # Stray non-bullet, non-heading text is not Apple-scoped; drop it.
     flush()
+
+    # Keep only Apple-scoped bullets (prefix stripped), then drop headings that
+    # have no surviving bullet before the next heading.
+    scoped = [
+        ("bullet", APPLE_PREFIX.sub("", text, count=1))
+        if kind == "bullet" and APPLE_PREFIX.match(text)
+        else (kind, text)
+        for kind, text in tokens
+        if kind == "heading" or APPLE_PREFIX.match(text)
+    ]
+
+    out = []
+    for index, (kind, text) in enumerate(scoped):
+        if kind == "heading":
+            # Emit the heading only if a bullet follows it before the next one.
+            has_bullet = False
+            for next_kind, _ in scoped[index + 1:]:
+                if next_kind == "heading":
+                    break
+                has_bullet = True
+                break
+            if not has_bullet:
+                continue
+            if out and out[-1] != "":
+                out.append("")
+            out.append(f"{text}:")
+        else:
+            out.append(f"- {text}")
 
     text = "\n".join(out).strip()
     if not text:
-        raise RuntimeError("flattened changelog section is empty")
+        # No Apple-scoped entries this release; give testers sensible notes.
+        return FALLBACK_NOTES
     if len(text) > WHATS_NEW_MAX:
         # Truncate on a line boundary where possible, leaving room for the marker.
         marker = "\n..."
