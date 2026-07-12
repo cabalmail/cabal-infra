@@ -134,3 +134,8 @@ variable "access_logs_bucket" {
   type        = string
   description = "Name of the shared S3 server-access-log target bucket (modules/s3_access_logs) the cache bucket's access logs are delivered to."
 }
+
+variable "push_queue_arn" {
+  type        = string
+  description = "ARN of the push wake-signal SQS queue (modules/ecs). Event source for the push_dispatch Lambda."
+}
