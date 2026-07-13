@@ -52,10 +52,15 @@ Push is inert until an APNs auth key is provisioned; without one,
 `push_dispatch` logs that it is unconfigured and drops wake signals (they do
 not pile up in the DLQ). Per environment:
 
-1. In [App Store Connect](https://appstoreconnect.apple.com) → Users and
-   Access → Integrations → Keys, create a key with the **Apple Push
-   Notifications service** enabled. Download the `.p8` file (one chance) and
-   note the **Key ID** and your **Team ID**.
+1. In the [Apple Developer portal](https://developer.apple.com/account) →
+   Certificates, Identifiers & Profiles → Keys, create a key with the
+   **Apple Push Notifications service (APNs)** capability checked. This is
+   an APNs *authentication key*, not an App Store Connect API key — if the
+   form asks you to choose a role (Admin/Developer/...), you are on the
+   wrong screen. Download the `.p8` file (one chance) and note the **Key
+   ID** (shown on the key's page) and your **Team ID** (Membership
+   details). The key has no expiry and no role; creating it requires the
+   Admin or Account Holder role on your Apple account.
 2. Populate the SSM parameters (from CloudShell in the target account):
 
    ```bash
@@ -93,15 +98,15 @@ The `.p8` key is high-value: whoever holds it can send arbitrary
 notifications to every Cabalmail device. It is stored only in SSM
 (SecureString), readable only by the `push_dispatch` Lambda role. To rotate:
 
-1. Create a second APNs key in App Store Connect (do not revoke the old one
-   yet).
+1. Create a second APNs key in the Developer portal (do not revoke the old
+   one yet).
 2. Update `/cabal/apns/key_id` and `/cabal/apns/private_key` in each
    environment.
 3. Wait for in-flight Lambda containers to recycle (or force it:
    `aws lambda update-function-configuration --function-name push_dispatch
    --description "key rotation $(date +%F)"`), and confirm pushes still
    arrive.
-4. Revoke the old key in App Store Connect.
+4. Revoke the old key in the Developer portal.
 
 Revoking first inverts the order of operations and takes push down until the
 new key lands everywhere.

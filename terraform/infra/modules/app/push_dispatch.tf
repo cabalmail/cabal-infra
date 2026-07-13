@@ -11,8 +11,8 @@
 # content.
 
 # -- APNs credentials --------------------------------------------
-# Operator-populated after creating an APNs auth key in App Store Connect
-# (see docs/push-notifications.md for the runbook):
+# Operator-populated after creating an APNs auth key in the Apple Developer
+# portal (see docs/push-notifications.md for the runbook):
 #   aws ssm put-parameter --name /cabal/apns/private_key \
 #     --type SecureString --value file://AuthKey_XXXXXXXXXX.p8 --overwrite
 # The dispatch Lambda treats the placeholder value as "not configured" and
@@ -50,7 +50,7 @@ resource "aws_ssm_parameter" "apns_key_id" {
 
 resource "aws_ssm_parameter" "apns_private_key" {
   name        = "/cabal/apns/private_key"
-  description = "APNs auth key (.p8 PEM content). High-value: rotate via App Store Connect per docs/push-notifications.md. Populate via aws ssm put-parameter --overwrite."
+  description = "APNs auth key (.p8 PEM content). High-value: rotate via the Apple Developer portal per docs/push-notifications.md. Populate via aws ssm put-parameter --overwrite."
   type        = "SecureString"
   value       = local.apns_placeholder
 
