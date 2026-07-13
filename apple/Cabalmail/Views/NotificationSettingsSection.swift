@@ -253,6 +253,12 @@ struct NotificationFolderPickerView: View {
 
     private func toggle(_ path: String) {
         if selection.contains(path) {
+            // Never allow an empty selection: the wire format has no "no
+            // folders" value — an empty enabled_folders list is the server's
+            // "reset to inbox only", which would contradict what this screen
+            // shows. Turning notifications off entirely is the master
+            // toggle's job, so the last selected folder stays put.
+            guard selection.count > 1 else { return }
             selection.remove(path)
         } else {
             selection.insert(path)

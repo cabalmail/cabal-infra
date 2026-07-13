@@ -1040,7 +1040,6 @@ jobs:
 
       - name: Clean up keychain and API key
         if: always() && steps.check.outputs.enabled == 'true'
-        if: always()
         run: |
           security delete-keychain "${KEYCHAIN_PATH:-}" || true
           rm -f "$RUNNER_TEMP/keychain-password"

@@ -249,6 +249,16 @@ final class PushRegistrar {
         Task {
             do {
                 try await client.apiClient.registerPushDevice(registration)
+                // The user can flip the master toggle off while this
+                // round trip is in flight; its upsert would then resurrect
+                // the row disablePush just deleted — and with the disabled
+                // flag set, no later launch would ever clean it up. This
+                // Task is main-actor (class isolation), so the flag read is
+                // ordered after any toggle that landed during the await.
+                if PushSettings.isUserDisabled {
+                    try? await client.apiClient.deregisterPushDevice(token: tokenHex)
+                    return
+                }
                 UserDefaults.standard.set(tokenHex, forKey: Self.lastTokenKey)
             } catch {
                 // Best-effort: a failed registration means no pushes until
