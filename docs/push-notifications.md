@@ -153,7 +153,10 @@ team):
 - `com.cabalmail.CabalmailMac`: **Push Notifications** + **App Groups**;
   re-issue its App Store profile afterwards.
 - `com.cabalmail.CabalmailMac.NotificationService`: **App Groups only**,
-  plus its own App Store profile.
+  plus its own App Store profile — minted with
+  `scripts/make-mac-profile.py` (needs the App Store Connect API `.p8`
+  at hand), because the portal UI cannot produce macOS profiles for
+  universal App IDs.
 - Secrets: refresh `MAC_APP_STORE_PROFILE`, add
   `MAC_NSE_APP_STORE_PROFILE` (the macOS upload leg's skip-gate
   sentinel). The optional notarized-artifact leg additionally needs

@@ -162,27 +162,32 @@ are expanded in the sections further down.
    registration time (capabilities added later invalidate any profiles
    already issued against the App ID).
 
-   The **Platform** column matters more than it looks: it is chosen
-   once, on the App ID registration form, and every provisioning
-   profile inherits it — the profile-generation flow offers no
-   platform choice of its own. Registering an App ID
-   platform-universal (`iOS, iPadOS, macOS, ...`) yields **iOS-family
-   profiles only** (`iOS, xrOS, visionOS` — no `OSX`), which a macOS
-   target rejects at archive time ("has platforms iOS..., which does
-   not match the current platform macOS"), and the only fix is
-   deleting and re-registering the App ID with **macOS** selected.
+   **The macOS profile trap.** The current portal registers every new
+   App ID as platform-universal (`iOS, iPadOS, macOS, ...`) and offers
+   no platform choice anywhere — not at registration, not in the
+   profile flow — and a profile generated through the portal UI
+   against a universal App ID comes out **iOS-family only**
+   (`Platform: iOS, xrOS, visionOS`, no `OSX`), which a macOS target
+   rejects at archive time ("has platforms iOS..., which does not
+   match the current platform macOS"). Profiles for macOS targets on
+   universal App IDs must instead be minted through the App Store
+   Connect API, where the profile type is explicit —
+   [`scripts/make-mac-profile.py`](../scripts/make-mac-profile.py)
+   does it in one call using the same ASC API key CI uploads with
+   (which is why that `.p8` must be kept at hand; see
+   [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)).
    Verify any mac profile before uploading its secret:
    `security cms -D -i <file> | plutil -p - | grep -A6 Platform`
-   must list `OSX` (the download's file extension is not a reliable
-   signal).
+   must list `OSX` — the download's file extension is not a reliable
+   signal.
 
-   | App ID | Platform | Description | Capabilities |
-   |---|---|---|---|
-   | `com.cabalmail.Cabalmail` | iOS | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`) |
-   | `com.cabalmail.Cabalmail.NotificationService` | iOS | `Cabalmail Notification Service` | **App Groups** (same group). Not Push Notifications — the extension never registers for push itself; it only reads the shared containers |
-   | `com.cabalmail.Cabalmail.watchkitapp` | iOS | `Cabalmail Watch` | none |
-   | `com.cabalmail.CabalmailMac` | **macOS** | `Cabalmail Mac` | **Push Notifications**; **App Groups** (same group) |
-   | `com.cabalmail.CabalmailMac.NotificationService` | **macOS** | `Cabalmail Mac Notification Service` | **App Groups** (same group), same rationale as the iOS extension |
+   | App ID | Description | Capabilities |
+   |---|---|---|
+   | `com.cabalmail.Cabalmail` | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`) |
+   | `com.cabalmail.Cabalmail.NotificationService` | `Cabalmail Notification Service` | **App Groups** (same group). Not Push Notifications — the extension never registers for push itself; it only reads the shared containers |
+   | `com.cabalmail.Cabalmail.watchkitapp` | `Cabalmail Watch` | none |
+   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | **Push Notifications**; **App Groups** (same group) |
+   | `com.cabalmail.CabalmailMac.NotificationService` | `Cabalmail Mac Notification Service` | **App Groups** (same group), same rationale as the iOS extension |
 
    Keychain sharing (the app and the extension share a keychain access
    group) needs no portal capability — profiles honor the
@@ -406,19 +411,29 @@ distribution cert you just exported. Recreate them whenever the cert rolls
      Extension embedded in the iOS archive
    - `com.cabalmail.Cabalmail.watchkitapp` (App IDs → iOS, tvOS, watchOS,
      visionOS) — the embedded watch companion app
-   - `com.cabalmail.CabalmailMac` (App IDs → **macOS**) — Push
-     Notifications + App Groups
-   - `com.cabalmail.CabalmailMac.NotificationService` (App IDs →
-     **macOS**) — App Groups only; the push Notification Service
-     Extension embedded in the macOS archive
+   - `com.cabalmail.CabalmailMac` — Push Notifications + App Groups
+   - `com.cabalmail.CabalmailMac.NotificationService` — App Groups
+     only; the push Notification Service Extension embedded in the
+     macOS archive
 
-   The two Mac App IDs must be registered with the **macOS** platform
-   selected: profiles inherit their platform from the App ID, the
-   profile flow offers no platform choice, and a platform-universal
-   App ID yields iOS-family profiles that mac targets reject (see the
-   platform note in [Signing prerequisites](#signing-prerequisites),
-   including the `security cms` check to run before uploading any mac
-   profile secret).
+   For the two Mac App IDs, create the profiles with
+   [`scripts/make-mac-profile.py`](../scripts/make-mac-profile.py)
+   rather than the portal UI — the portal cannot produce a
+   macOS-platform profile for a universal App ID (see the macOS
+   profile trap in [Signing prerequisites](#signing-prerequisites)),
+   e.g.:
+
+   ```sh
+   ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_KEY_P8=~/keys/AuthKey_....p8 \
+   python3 scripts/make-mac-profile.py \
+     com.cabalmail.CabalmailMac.NotificationService \
+     "Cabalmail macOS NSE App Store"
+   ```
+
+   The script writes the `.provisionprofile`, prints the exact base64
+   for the GitHub secret, and names the `security cms` platform check
+   to run first. API-minted profiles appear in the portal's Profiles
+   list afterwards and are manageable there like any other.
 
    Capabilities must be on the App ID **before** its profiles are
    created: editing an App ID's capabilities flips every existing
@@ -443,9 +458,13 @@ distribution cert you just exported. Recreate them whenever the cert rolls
 
    Profile names are arbitrary — CI matches by the UUID embedded in the
    file, not the name. All profiles share the same Apple Distribution
-   certificate.
+   certificate. Create the four macOS rows with
+   `scripts/make-mac-profile.py` (pass `MAC_APP_DIRECT` as the third
+   argument for the Developer ID variants), not the portal UI — see
+   the macOS profile trap above.
 
-3. **Download each profile** (click the profile → **Download**).
+3. **Download each profile** (click the profile → **Download**; the
+   script already wrote the mac ones locally and printed their base64).
 
 4. **Base64-encode each** and paste into the matching GitHub secret:
    ```sh
@@ -475,9 +494,14 @@ distribution cert you just exported. Recreate them whenever the cert rolls
 1. App Store Connect → **Users and Access** → **Integrations** tab → **Keys**.
 2. Click the **+** to generate a new key.
 3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **App Manager**.
-   App Manager covers everything CI needs — TestFlight upload and
-   notarization — because archives sign manually and don't call the
-   profile-creation API.
+   App Manager covers everything CI needs — TestFlight upload,
+   notarization, and the profile-creation API that
+   `scripts/make-mac-profile.py` calls to mint macOS profiles.
+   **Keep the downloaded `.p8` somewhere durable** (a password
+   manager, not just the GitHub secret): Apple only lets you download
+   it once, and you will need it locally again every time a macOS
+   profile has to be re-minted — capability changes invalidate
+   profiles, and the portal UI cannot recreate the macOS ones.
 4. Copy the **Issuer ID** (top of the page) → `APP_STORE_CONNECT_API_ISSUER_ID`.
 5. Copy the **Key ID** (shown in the row for the new key) →
    `APP_STORE_CONNECT_API_KEY_ID`.
