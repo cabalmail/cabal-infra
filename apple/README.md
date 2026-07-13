@@ -160,7 +160,26 @@ are expanded in the sections further down.
 
    Then the App IDs, with the capabilities each one needs checked at
    registration time (capabilities added later invalidate any profiles
-   already issued against the App ID):
+   already issued against the App ID).
+
+   **The macOS profile trap.** The current portal registers every new
+   App ID as platform-universal (`iOS, iPadOS, macOS, ...`) and offers
+   no platform choice anywhere — not at registration, not in the
+   profile flow — and a profile generated through the portal UI
+   against a universal App ID comes out **iOS-family only**
+   (`Platform: iOS, xrOS, visionOS`, no `OSX`), which a macOS target
+   rejects at archive time ("has platforms iOS..., which does not
+   match the current platform macOS"). Profiles for macOS targets on
+   universal App IDs must instead be minted through the App Store
+   Connect API, where the profile type is explicit —
+   [`scripts/make-mac-profile.py`](../scripts/make-mac-profile.py)
+   does it in one call using the same ASC API key CI uploads with
+   (which is why that `.p8` must be kept at hand; see
+   [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)).
+   Verify any mac profile before uploading its secret:
+   `security cms -D -i <file> | plutil -p - | grep -A6 Platform`
+   must list `OSX` — the download's file extension is not a reliable
+   signal.
 
    | App ID | Description | Capabilities |
    |---|---|---|
@@ -392,7 +411,29 @@ distribution cert you just exported. Recreate them whenever the cert rolls
      Extension embedded in the iOS archive
    - `com.cabalmail.Cabalmail.watchkitapp` (App IDs → iOS, tvOS, watchOS,
      visionOS) — the embedded watch companion app
-   - `com.cabalmail.CabalmailMac` (App IDs → macOS)
+   - `com.cabalmail.CabalmailMac` — Push Notifications + App Groups
+   - `com.cabalmail.CabalmailMac.NotificationService` — App Groups
+     only; the push Notification Service Extension embedded in the
+     macOS archive
+
+   For the two Mac App IDs, create the profiles with
+   [`scripts/make-mac-profile.py`](../scripts/make-mac-profile.py)
+   rather than the portal UI — the portal cannot produce a
+   macOS-platform profile for a universal App ID (see the macOS
+   profile trap in [Signing prerequisites](#signing-prerequisites)),
+   e.g.:
+
+   ```sh
+   ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_KEY_P8=~/keys/AuthKey_....p8 \
+   python3 scripts/make-mac-profile.py \
+     com.cabalmail.CabalmailMac.NotificationService \
+     "Cabalmail macOS NSE App Store"
+   ```
+
+   The script writes the `.provisionprofile`, prints the exact base64
+   for the GitHub secret, and names the `security cms` platform check
+   to run first. API-minted profiles appear in the portal's Profiles
+   list afterwards and are manageable there like any other.
 
    Capabilities must be on the App ID **before** its profiles are
    created: editing an App ID's capabilities flips every existing
@@ -417,9 +458,13 @@ distribution cert you just exported. Recreate them whenever the cert rolls
 
    Profile names are arbitrary — CI matches by the UUID embedded in the
    file, not the name. All profiles share the same Apple Distribution
-   certificate.
+   certificate. Create the four macOS rows with
+   `scripts/make-mac-profile.py` (pass `MAC_APP_DIRECT` as the third
+   argument for the Developer ID variants), not the portal UI — see
+   the macOS profile trap above.
 
-3. **Download each profile** (click the profile → **Download**).
+3. **Download each profile** (click the profile → **Download**; the
+   script already wrote the mac ones locally and printed their base64).
 
 4. **Base64-encode each** and paste into the matching GitHub secret:
    ```sh
@@ -449,9 +494,14 @@ distribution cert you just exported. Recreate them whenever the cert rolls
 1. App Store Connect → **Users and Access** → **Integrations** tab → **Keys**.
 2. Click the **+** to generate a new key.
 3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **App Manager**.
-   App Manager covers everything CI needs — TestFlight upload and
-   notarization — because archives sign manually and don't call the
-   profile-creation API.
+   App Manager covers everything CI needs — TestFlight upload,
+   notarization, and the profile-creation API that
+   `scripts/make-mac-profile.py` calls to mint macOS profiles.
+   **Keep the downloaded `.p8` somewhere durable** (a password
+   manager, not just the GitHub secret): Apple only lets you download
+   it once, and you will need it locally again every time a macOS
+   profile has to be re-minted — capability changes invalidate
+   profiles, and the portal UI cannot recreate the macOS ones.
 4. Copy the **Issuer ID** (top of the page) → `APP_STORE_CONNECT_API_ISSUER_ID`.
 5. Copy the **Key ID** (shown in the row for the new key) →
    `APP_STORE_CONNECT_API_KEY_ID`.
