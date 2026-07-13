@@ -451,6 +451,11 @@ extension PushRegistrar {
         }
         do {
             try await work(client)
+            // The action just mutated a folder server-side; if the app is
+            // running, its open views only learn of external changes on the
+            // next poll — nudge the shared refresh tick so Mark as Read /
+            // Archive appear immediately instead of at the poll boundary.
+            appState?.requestRefresh()
         } catch {
             CabalmailLog.warn("Push", "\(name) failed: \(error)")
         }
