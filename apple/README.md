@@ -1,7 +1,7 @@
 # Cabalmail Apple Client
 
-Native iOS / iPadOS / visionOS / macOS client for Cabalmail. The original
-implementation plan is preserved at
+Native iOS / iPadOS / visionOS / macOS / watchOS client for Cabalmail. The
+original implementation plan is preserved at
 [`docs/0.6.0/ios-client-plan.md`](../docs/0.6.0/ios-client-plan.md) for
 historical context; this README describes the as-implemented state.
 
@@ -13,6 +13,8 @@ apple/
   Cabalmail.xcworkspace/     # Workspace referencing the generated project + kit package
   Cabalmail/                 # iOS / iPadOS / visionOS app target (SwiftUI)
   CabalmailMac/              # Native macOS app target (SwiftUI)
+  CabalmailWatch/            # Watch companion app (address management only),
+                             #   embedded in the iOS product
   CabalmailKit/              # Shared Swift package — networking, models, auth, caching
 ```
 
@@ -148,18 +150,43 @@ are expanded in the sections further down.
    its own cert — `Apple Distribution` signs the `.app`, Mac Installer
    Distribution signs the `.pkg`. See [Exporting the Mac Installer
    certificate](#exporting-the-mac-installer-certificate).
-4. **Register both bundle identifiers** in the Developer portal at
-   [developer.apple.com](https://developer.apple.com/account) →
-   Certificates, Identifiers & Profiles → **Identifiers** → **+**:
-   - App ID `com.cabalmail.Cabalmail` (description: `Cabalmail`)
-   - App ID `com.cabalmail.CabalmailMac` (description: `Cabalmail Mac`)
+4. **Register the App Group and bundle identifiers** in the Developer
+   portal at [developer.apple.com](https://developer.apple.com/account) →
+   Certificates, Identifiers & Profiles → **Identifiers** → **+**.
+
+   First the App Group (the shared container the push Notification
+   Service Extension reads; select **App Groups** on the + screen):
+   - `group.com.cabalmail.Cabalmail` (description: `Cabalmail`)
+
+   Then the App IDs, with the capabilities each one needs checked at
+   registration time (capabilities added later invalidate any profiles
+   already issued against the App ID):
+
+   | App ID | Description | Capabilities |
+   |---|---|---|
+   | `com.cabalmail.Cabalmail` | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`) |
+   | `com.cabalmail.Cabalmail.NotificationService` | `Cabalmail Notification Service` | **App Groups** (same group). Not Push Notifications — the extension never registers for push itself; it only reads the shared containers |
+   | `com.cabalmail.Cabalmail.watchkitapp` | `Cabalmail Watch` | none |
+   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | none |
+
+   Keychain sharing (the app and the extension share a keychain access
+   group) needs no portal capability — profiles honor the
+   `keychain-access-groups` entitlement for any team-prefixed group
+   automatically.
+
+   The APNs **authentication key** that the server's `push_dispatch`
+   Lambda signs with is a separate, CI-unrelated credential (Keys →
+   **+**, no role, one per team covers every app); see
+   [docs/push-notifications.md](../docs/push-notifications.md) for
+   creating and seeding it.
 
    CI uses **manual code signing**, so App IDs must exist before you
    create the matching provisioning profiles in the next step.
 5. **Create the provisioning profiles** for each App ID. See
    [Creating provisioning profiles](#creating-provisioning-profiles) —
-   produces the `IOS_APP_STORE_PROFILE` / `MAC_APP_STORE_PROFILE` /
-   (optional) `MAC_DEVID_PROFILE` secrets.
+   produces the `IOS_APP_STORE_PROFILE` / `IOS_NSE_APP_STORE_PROFILE` /
+   `WATCHOS_APP_STORE_PROFILE` / `MAC_APP_STORE_PROFILE` / (optional)
+   `MAC_DEVID_PROFILE` secrets.
 6. **Create an App Store Connect API key** with the **App Manager** role. See
    [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)
    — produces the `APP_STORE_CONNECT_API_KEY_ID` /
@@ -247,7 +274,9 @@ Environments → `stage` / `prod`).
 
 | Secret | What it is |
 |---|---|
-| `IOS_APP_STORE_PROFILE` | base64 of the `.mobileprovision` for `com.cabalmail.Cabalmail` (App Store distribution). See [Creating provisioning profiles](#creating-provisioning-profiles) below. |
+| `IOS_APP_STORE_PROFILE` | base64 of the `.mobileprovision` for `com.cabalmail.Cabalmail` (App Store distribution). See [Creating provisioning profiles](#creating-provisioning-profiles) below. One profile covers both the iOS and visionOS upload legs — modern App Store profiles list both platforms. |
+| `WATCHOS_APP_STORE_PROFILE` | base64 of the `.mobileprovision` for `com.cabalmail.Cabalmail.watchkitapp` (App Store distribution). The iOS archive embeds the watch app, so the iOS upload leg skips (with a warning) until this secret exists; the visionOS leg is unaffected. |
+| `IOS_NSE_APP_STORE_PROFILE` | base64 of the `.mobileprovision` for `com.cabalmail.Cabalmail.NotificationService` (App Store distribution), the push Notification Service Extension embedded in the iOS archive. Gates **both** the iOS and visionOS upload legs: the push entitlements live on the shared app target, so every leg's archive needs profiles issued against the capability-bearing App ID — this secret doubles as the "push signing assets are ready" sentinel, and both legs skip (with a warning) until it exists. |
 
 **Required (macOS job only):**
 
@@ -348,11 +377,26 @@ macOS Developer ID — and each lives in App Store Connect referencing the
 distribution cert you just exported. Recreate them whenever the cert rolls
 (typically once a year); otherwise nothing to do.
 
-1. **Register the App IDs** (one-time) at
+1. **Register the App Group and App IDs** (one-time) at
    [developer.apple.com → Identifiers](https://developer.apple.com/account/resources/identifiers/list)
-   → **+**, if you haven't already:
+   → **+**, if you haven't already — with the capabilities listed in
+   step 4 of [Signing prerequisites](#signing-prerequisites):
+   - App Group `group.com.cabalmail.Cabalmail`
    - `com.cabalmail.Cabalmail` (App IDs → iOS, tvOS, watchOS, visionOS)
+     — Push Notifications + App Groups
+   - `com.cabalmail.Cabalmail.NotificationService` (App IDs → iOS, tvOS,
+     watchOS, visionOS) — App Groups only; the push Notification Service
+     Extension embedded in the iOS archive
+   - `com.cabalmail.Cabalmail.watchkitapp` (App IDs → iOS, tvOS, watchOS,
+     visionOS) — the embedded watch companion app
    - `com.cabalmail.CabalmailMac` (App IDs → macOS)
+
+   Capabilities must be on the App ID **before** its profiles are
+   created: editing an App ID's capabilities flips every existing
+   profile for it to **Invalid**, and each must then be re-issued
+   (click the profile → Edit → Save/Generate → Download) and its
+   GitHub secret refreshed. Profiles for *other* App IDs are
+   unaffected.
 
 2. **Create the profiles** at
    [developer.apple.com → Profiles](https://developer.apple.com/account/resources/profiles/list)
@@ -361,11 +405,14 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    | Profile | Distribution type | App ID | Certificate | Filename extension |
    |---|---|---|---|---|
    | Cabalmail iOS App Store | App Store | `com.cabalmail.Cabalmail` | Apple Distribution | `.mobileprovision` |
+   | Cabalmail NSE App Store | App Store | `com.cabalmail.Cabalmail.NotificationService` | Apple Distribution | `.mobileprovision` |
+   | Cabalmail Watch App Store | App Store | `com.cabalmail.Cabalmail.watchkitapp` | Apple Distribution | `.mobileprovision` |
    | Cabalmail macOS App Store | App Store | `com.cabalmail.CabalmailMac` | Apple Distribution | `.provisionprofile` |
    | Cabalmail macOS Developer ID *(optional)* | Developer ID | `com.cabalmail.CabalmailMac` | Developer ID Application | `.provisionprofile` |
 
    Profile names are arbitrary — CI matches by the UUID embedded in the
-   file, not the name.
+   file, not the name. All profiles share the same Apple Distribution
+   certificate.
 
 3. **Download each profile** (click the profile → **Download**).
 
@@ -376,8 +423,15 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    | Downloaded file | GitHub secret |
    |---|---|
    | iOS `.mobileprovision` | `IOS_APP_STORE_PROFILE` |
+   | NSE `.mobileprovision` | `IOS_NSE_APP_STORE_PROFILE` |
+   | Watch `.mobileprovision` | `WATCHOS_APP_STORE_PROFILE` |
    | macOS App Store `.provisionprofile` | `MAC_APP_STORE_PROFILE` |
    | macOS Developer ID `.provisionprofile` | `MAC_DEVID_PROFILE` |
+
+   Stray whitespace — a trailing newline from the paste, or a `base64`
+   build that wraps its output — is harmless: the workflow strips all
+   whitespace before decoding, and the very next step fails loudly if
+   the decoded bytes aren't a valid signed profile.
 
 5. **Delete the downloaded files** — they embed the team's distribution
    cert public key and the App ID's capabilities, and can be re-created

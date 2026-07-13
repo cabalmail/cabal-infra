@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-13
+
+### Added
+- Apple: **Apple Watch app.** Mint, list, and revoke relationship-scoped
+  addresses from the wrist. Dictate a label, pick a mail domain, and the
+  minted address appears big enough to read aloud; tapping any address in
+  the list shows it in the same large type; a burned address is a swipe
+  (plus a confirmation) away from gone. The watch receives its session
+  from the paired iPhone automatically — open Cabalmail on the phone once
+  and the watch signs itself in, no wrist typing.
+- **Archive mailbox.** Dovecot now defines an auto-subscribed `Archive`
+  folder with the `\Archive` special-use flag for every mailbox, giving the
+  notification Archive action (and any IMAP client's archive gesture) a
+  standard target.
+- Apple: **Push notifications.** New mail now raises a notification within
+  seconds of delivery, enriched on-device with the sender, subject, and a
+  snippet — Apple's servers never see message content, and with previews off
+  the lock screen shows only "New mail". Notifications offer Open, Mark as
+  Read, and Archive (the latter two complete in the background without
+  launching the app); foreground arrivals play a sound without a duplicate
+  banner. Enable by allowing notifications when prompted after sign-in;
+  signing out stops them.
+- **Push notifications for the Apple clients.** New mail now raises an APNs
+  notification on iOS within seconds of delivery, without Apple's
+  infrastructure seeing message content: procmail spools a content-free
+  wake signal per local delivery (forwarded to `cabal-push-queue` by a
+  credential-holding drain daemon, keeping AWS credentials away from the
+  per-user delivery agents), the new
+  `push_dispatch` Lambda fans it out to the user's registered devices
+  (`cabal-push-tokens`, managed by the new `/push_register` and
+  `/push_deregister` endpoints), and the app's Notification Service
+  Extension enriches the alert on-device via the new `/push_envelope`
+  endpoint — falling back to a generic "New mail" when enrichment cannot
+  complete. Notifications carry Open / Mark as Read / Archive actions; the
+  enqueue is a best-effort side effect that never blocks or fails mail
+  delivery, and spam-filed messages do not notify. Inert until an operator
+  provisions an APNs auth key (see docs/push-notifications.md).
+
+### Changed
+- Apple: **Release notes now show only app-relevant changes.** The
+  TestFlight "What to Test" notes are built from just the changelog entries
+  scoped to the Apple clients, instead of the whole release. Entries are
+  tagged `Apple:` in the changelog and a PR check requires the tag when a
+  change touches the Apple client sources.
+- **CloudWatch log retention raised to one year.** Every log group
+  (API Gateway, Lambda, the mail tiers, Cognito triggers, certbot, and the
+  dormant monitoring stack) now sets `retention_in_days = 365` instead of the
+  previous 14 or 30 days, clearing the `CKV_AWS_338` scanner findings. Storage
+  cost on this low-volume system is negligible and a year of logs is a real
+  operational win.
+
+### Fixed
+- Apple: **Create Address sheet no longer over-tall on iPad/Mac.** The compose
+  "Create Address" form now sizes the sheet to its content
+  (`presentationSizing(.fitted)`) instead of filling a fixed-size card, trimming
+  the empty space on iPad and macOS. Compact-width iPhone keeps its full-height
+  presentation.
+- Apple: **Create Address sheet on macOS.** The compose "Create Address" form now
+  matches the iOS/iPadOS layout — in-field placeholders, an email-shaped
+  `username @ subdomain . domain` row, headline section captions, and proper
+  content margins — instead of `Form`'s macOS default, which pinned each
+  field title as an external label and broke up the address components.
+- Apple: **No more inserted hyphens in the watch's large-type address view.**
+  When a long address wrapped, the layout engine broke it mid-token and
+  inserted a soft hyphen — ambiguous, since an address can contain a real
+  hyphen. The address now wraps at any character with nothing inserted, so
+  every visible character is one the reader should type.
+
 ## [0.10.45] - 2026-07-10
 
 ### Added

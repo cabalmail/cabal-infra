@@ -29,7 +29,7 @@ resource "aws_efs_access_point" "ntfy" {
 
 resource "aws_cloudwatch_log_group" "ntfy" {
   name              = "/ecs/cabal-ntfy"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 resource "aws_iam_role" "ntfy_execution" {

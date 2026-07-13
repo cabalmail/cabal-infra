@@ -368,6 +368,33 @@ locals {
       memory    = 128
       cache     = false
       cache_ttl = 0
+    },
+    push_register = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    push_deregister = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    push_envelope = {
+      runtime = "python3.13"
+
+      method = "POST"
+      # Fetches and MIME-parses the full message on a cache miss (same code
+      # path as fetch_message) to extract the sender/subject/snippet, so it
+      # needs more than the 128 MB floor.
+      memory    = 512
+      cache     = false
+      cache_ttl = 0
     }
   }
 }

@@ -17,7 +17,7 @@
 
 resource "aws_cloudwatch_log_group" "cloudwatch_exporter" {
   name              = "/ecs/cabal-cloudwatch-exporter"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 resource "aws_iam_role" "cloudwatch_exporter_execution" {
@@ -187,7 +187,7 @@ resource "aws_ecs_service" "cloudwatch_exporter" {
 
 resource "aws_cloudwatch_log_group" "cloudwatch_exporter_us_east_1" {
   name              = "/ecs/cabal-cloudwatch-exporter-us-east-1"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 resource "aws_ecs_task_definition" "cloudwatch_exporter_us_east_1" {
@@ -265,7 +265,7 @@ resource "aws_ecs_service" "cloudwatch_exporter_us_east_1" {
 
 resource "aws_cloudwatch_log_group" "blackbox_exporter" {
   name              = "/ecs/cabal-blackbox-exporter"
-  retention_in_days = 30
+  retention_in_days = 365
 }
 
 resource "aws_iam_role" "blackbox_exporter_execution" {
@@ -394,7 +394,7 @@ resource "aws_ecs_service" "blackbox_exporter" {
 
 resource "aws_cloudwatch_log_group" "node_exporter" {
   name              = "/ecs/cabal-node-exporter"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 resource "aws_iam_role" "node_exporter_execution" {

@@ -293,6 +293,20 @@ struct MailRootView: View {
             }
         }
         .task {
+            // A navigate request can be parked before this view exists —
+            // cold launch from a tapped push notification routes as soon as
+            // the session is wired, which precedes the first render, so the
+            // `.onChange` above never fires for it. Draining it here also
+            // pre-empts the sidebar's INBOX landing (`onFoldersLoaded`
+            // guards on `selectedFolder == nil`).
+            if let coordinator = appState.navCoordinator,
+               let request = coordinator.navigateRequest {
+                coordinator.navigateRequest = nil
+                coordinator.scheduleRestore(for: request)
+                if selectedFolder?.path != request.folder {
+                    selectedFolder = Folder(path: request.folder)
+                }
+            }
             if searchModel == nil, let client = appState.client {
                 searchModel = MessageListViewModel(
                     scope: .search,

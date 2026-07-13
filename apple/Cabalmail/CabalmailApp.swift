@@ -9,8 +9,17 @@ import CabalmailKit
 /// for every downstream view.
 @main
 struct CabalmailApp: App {
+    #if os(iOS)
+    // Push notifications: APNs token callbacks and the notification-center
+    // delegate have no SwiftUI-native surface, so the iOS build carries a
+    // minimal UIKit delegate (see AppDelegate.swift). visionOS skips it —
+    // the NSE and push registration are iOS-only for now (project.yml
+    // destination-filters the extension the same way).
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -38,6 +47,14 @@ struct CabalmailApp: App {
                     if preferences.crashReportingEnabled {
                         appState.client?.setCrashReportingEnabled(true)
                     }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Re-offer the session to the watch on every return to
+                    // the foreground — see AppState.refreshWatchSession()
+                    // for why the launch-time push alone strands a watch
+                    // app installed while this app was already running.
+                    guard phase == .active else { return }
+                    Task { await appState.refreshWatchSession() }
                 }
                 .onOpenURL { url in
                     // Cold-launch mailto: arrives here before any view

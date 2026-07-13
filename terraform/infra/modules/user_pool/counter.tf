@@ -105,7 +105,7 @@ resource "aws_iam_role_policy" "lambda" {
 # root module, hence the split.
 resource "aws_cloudwatch_log_group" "assign_osid" {
   name              = "/aws/lambda/assign_osid"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 resource "aws_lambda_function" "assign_osid" {

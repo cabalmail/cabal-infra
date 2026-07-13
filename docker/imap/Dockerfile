@@ -13,7 +13,7 @@
 #   https://github.com/slusarz/dovecot-fts-flatcurve (v1.0.5)
 # Licences are preserved at /usr/share/doc/{xapian,fts-flatcurve}/
 # in the runtime image; see docs/operations.md.
-FROM amazonlinux:2023@sha256:32f61af6a24e178e8142fb7b0079f4af3a5cda6816cd53d2c611a921ef029ca0 AS fts-builder
+FROM amazonlinux:2023@sha256:f590f33787c76bee9c42cc6826ee887bc1f3b60ba5ed137af450a6c0a79cdb57 AS fts-builder
 
 ARG XAPIAN_VERSION=1.4.31
 ARG FTS_FLATCURVE_VERSION=v1.0.5
@@ -85,7 +85,7 @@ RUN rm -rf /staging/usr/local \
 # ───────────────────────────────────────────────────────────────
 # Runtime image
 # ───────────────────────────────────────────────────────────────
-FROM amazonlinux:2023@sha256:32f61af6a24e178e8142fb7b0079f4af3a5cda6816cd53d2c611a921ef029ca0
+FROM amazonlinux:2023@sha256:f590f33787c76bee9c42cc6826ee887bc1f3b60ba5ed137af450a6c0a79cdb57
 
 # System packages
 RUN dnf install -y \
@@ -141,6 +141,13 @@ COPY shared/prepare-sendmail.sh            /usr/local/bin/prepare-sendmail.sh
 
 # Clears the planned-maintenance SSM flag once Dovecot is serving (imap only).
 COPY shared/clear-maintenance.sh           /usr/local/bin/clear-maintenance.sh
+
+# Push wake signals (imap only): the :0c recipe in procmailrc spools one
+# JSON signal per local delivery via push-enqueue.sh; the push-spool-drain
+# supervisord program forwards the spool to SQS with the task-role
+# credentials the per-user delivery agents deliberately never see.
+COPY shared/push-enqueue.sh                /usr/local/bin/push-enqueue.sh
+COPY shared/push-spool-drain.sh            /usr/local/bin/push-spool-drain.sh
 
 # Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)
 COPY shared/rsyslog-mail.conf              /etc/rsyslog.conf

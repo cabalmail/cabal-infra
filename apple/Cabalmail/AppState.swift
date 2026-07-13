@@ -245,20 +245,6 @@ final class AppState {
         }
     }
 
-    /// Last-used control domain, persisted so repeat launches skip re-entry.
-    var controlDomain: String {
-        get { UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.controlDomain") }
-    }
-
-    /// Last-used username, same persistence rationale. Passwords are never
-    /// persisted here — `CognitoAuthService` holds them in the data-protection
-    /// keychain via `KeychainSecureStore`.
-    var lastUsername: String {
-        get { UserDefaults.standard.string(forKey: "cabalmail.lastUsername") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.lastUsername") }
-    }
-
     private(set) var client: CabalmailClient?
 
     /// Cross-client navigation cursor for the current session: remembers and
@@ -283,10 +269,10 @@ final class AppState {
         status = .signingIn
         do {
             let configuration = try await ConfigLoader.load(controlDomain: controlDomain)
-            let cacheDirectory = try makeCacheDirectory()
+            let cacheDirectory = try Self.makeCacheDirectory()
             let newClient = try CabalmailClient.make(
                 configuration: configuration,
-                secureStore: KeychainSecureStore(),
+                secureStore: Self.makeSecureStore(),
                 cacheDirectory: cacheDirectory
             )
             try await newClient.authService.signIn(username: username, password: password)
@@ -299,11 +285,7 @@ final class AppState {
             }
             self.controlDomain = controlDomain
             self.lastUsername = username
-            self.client = newClient
-            self.navCoordinator = NavStateCoordinator(client: newClient)
-            self.status = .signedIn
-            startInboxBadgePolling()
-            requestContactsAccessIfNeeded()
+            await wireSession(client: newClient, username: username)
         } catch let error as CabalmailError {
             status = .error(message(for: error))
         } catch {
@@ -314,6 +296,12 @@ final class AppState {
     func signOut() async {
         stopInboxBadgePolling()
         guard let client else { status = .signedOut; return }
+        #if os(iOS)
+        // Deregister the APNs token while the Cognito session still works —
+        // `/push_deregister` is an authenticated call like every other, and
+        // `authService.signOut()` below wipes the tokens.
+        await PushRegistrar.shared.sessionWillEnd()
+        #endif
         await client.imapClient.disconnect()
         // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
         // dropping the session so the next account to sign in on this device
@@ -321,6 +309,8 @@ final class AppState {
         // cache.
         await client.clearLocalData()
         try? await client.authService.signOut()
+        // Tell the watch to drop its copy of the credentials too.
+        WatchSessionBridge.shared.pushSignedOut()
         self.client = nil
         self.navCoordinator = nil
         self.status = .signedOut
@@ -362,7 +352,7 @@ final class AppState {
             status = .signedOut
             return
         }
-        let secureStore = KeychainSecureStore()
+        let secureStore = Self.makeSecureStore()
         guard (try? secureStore.get(SecureStoreKey.authTokens)) != nil else {
             status = .signedOut
             return
@@ -371,7 +361,7 @@ final class AppState {
         status = .restoring
         do {
             let configuration = try await ConfigLoader.load(controlDomain: domain)
-            let cacheDirectory = try makeCacheDirectory()
+            let cacheDirectory = try Self.makeCacheDirectory()
             let newClient = try CabalmailClient.make(
                 configuration: configuration,
                 secureStore: secureStore,
@@ -382,11 +372,10 @@ final class AppState {
             // silent refresh; an expired / revoked refresh throws
             // `.authExpired` (Cognito's `NotAuthorizedException`).
             _ = try await newClient.authService.currentIdToken()
-            self.client = newClient
-            self.navCoordinator = NavStateCoordinator(client: newClient)
-            self.status = .signedIn
-            startInboxBadgePolling()
-            requestContactsAccessIfNeeded()
+            // Restore is the common launch path, so this is what keeps the
+            // watch's session copy and the device's `/push_register` row
+            // fresh across app launches (see `wireSession`).
+            await wireSession(client: newClient, username: username)
         } catch let error as CabalmailError {
             switch error {
             case .authExpired, .invalidCredentials, .notSignedIn:
@@ -489,13 +478,69 @@ final class AppState {
     }
 }
 
-// MARK: - Cache directory
+// MARK: - Persisted last-session fields
 
 extension AppState {
+    /// Last-used control domain, persisted so repeat launches skip re-entry.
+    var controlDomain: String {
+        get { UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.controlDomain") }
+    }
+
+    /// Last-used username, same persistence rationale. Passwords are never
+    /// persisted here — `CognitoAuthService` holds them in the data-protection
+    /// keychain via `KeychainSecureStore`.
+    var lastUsername: String {
+        get { UserDefaults.standard.string(forKey: "cabalmail.lastUsername") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.lastUsername") }
+    }
+}
+
+// MARK: - Session wiring
+
+extension AppState {
+    /// Shared tail of `signIn` and `restoreIfPossible`: installs the client,
+    /// flips to `.signedIn`, and kicks off the session-scoped side flows —
+    /// badge polling, the contacts prompt, push registration (iOS), and the
+    /// watch hand-off.
+    private func wireSession(client newClient: CabalmailClient, username: String) async {
+        self.client = newClient
+        self.navCoordinator = NavStateCoordinator(client: newClient)
+        self.status = .signedIn
+        startInboxBadgePolling()
+        requestContactsAccessIfNeeded()
+        #if os(iOS)
+        // Runs on both entry paths, so every launch re-registers the APNs
+        // token — `/push_register` upserts, making this a cheap refresh of
+        // the row's `last_seen_at`.
+        PushRegistrar.shared.sessionDidStart(appState: self, client: newClient)
+        #endif
+        await pushSessionToWatch(client: newClient, username: username)
+    }
+}
+
+// MARK: - Client construction helpers
+
+extension AppState {
+    /// The keychain store the session client persists Cognito tokens
+    /// through. On iOS it's wrapped in `PushMirroringSecureStore` so every
+    /// token write — sign-in and each silent refresh — also lands in the
+    /// shared containers the Notification Service Extension reads (see
+    /// `PushEnrichmentStore`). Static (and non-private) so the push
+    /// action-handler's cold-launch bootstrap builds an identical stack.
+    static func makeSecureStore() -> SecureStore {
+        #if os(iOS)
+        return PushMirroringSecureStore(base: KeychainSecureStore())
+        #else
+        return KeychainSecureStore()
+        #endif
+    }
+
     /// Returns the application-support cache directory for this app, creating
     /// it if needed. Per-folder subdirectories are created by the cache
-    /// actors themselves.
-    private func makeCacheDirectory() throws -> URL {
+    /// actors themselves. Static for the same bootstrap reason as
+    /// `makeSecureStore`.
+    static func makeCacheDirectory() throws -> URL {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -505,6 +550,33 @@ extension AppState {
         let directory = base.appendingPathComponent("Cabalmail", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+}
+
+// MARK: - Watch hand-off
+
+extension AppState {
+    /// Hands the signed-in session (configuration + Cognito tokens) to the
+    /// paired watch. `WatchSessionBridge` is a no-op stub on platforms
+    /// without WatchConnectivity, so callers don't need platform guards.
+    private func pushSessionToWatch(client: CabalmailClient, username: String) async {
+        guard let tokens = await client.authService.currentTokens() else { return }
+        WatchSessionBridge.shared.pushSession(
+            configuration: client.configuration,
+            tokens: tokens,
+            username: username
+        )
+    }
+
+    /// Re-offers the current session to the watch. Called on every return
+    /// to the foreground: the watch's "open Cabalmail on your iPhone"
+    /// instruction has to work when the app was *already running* — the
+    /// launch-time push has long since fired by then, and
+    /// `restoreIfPossible()` is deliberately a no-op while signed in, so
+    /// without this the instruction only worked after a cold start.
+    func refreshWatchSession() async {
+        guard let client else { return }
+        await pushSessionToWatch(client: client, username: lastUsername)
     }
 }
 

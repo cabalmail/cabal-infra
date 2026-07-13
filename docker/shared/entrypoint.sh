@@ -20,6 +20,9 @@
 # Optional:          NETWORK_CIDR (VPC CIDR for Dovecot login_trusted_networks)
 #                    PREFLIGHT (=1: run all preparation steps, then exit 0
 #                    instead of starting services - deploy validation)
+#                    PUSH_QUEUE_URL (imap: consumed by the push-spool-drain
+#                    supervisord program, not this script; see
+#                    docs/0.11.0/push-notifications.md)
 # IMAP-only:         MASTER_PASSWORD
 # SMTP-OUT-only:     DKIM_PRIVATE_KEY
 set -euo pipefail
@@ -165,6 +168,19 @@ fi
 if [ "$TIER" = "imap" ]; then
   echo "[entrypoint] Setting dovecot master password..."
   htpasswd -b -c -s /etc/dovecot/master-users admin "${MASTER_PASSWORD}"
+fi
+
+# ── Step 5b: Push wake-signal spool (IMAP only) ───────────────
+# procmail's push-enqueue.sh (run as the recipient user, with sendmail's
+# sanitized environment and no AWS credentials) writes wake signals here;
+# the push-spool-drain.sh supervisord program (root, full container env)
+# forwards them to SQS. Sticky world-writable, like /tmp: any user may
+# create signal files, none may delete another's; the drain daemon
+# authenticates each file by owner. See docs/0.11.0/push-notifications.md.
+if [ "$TIER" = "imap" ]; then
+  echo "[entrypoint] Preparing push wake-signal spool..."
+  mkdir -p /var/spool/cabal-push
+  chmod 1777 /var/spool/cabal-push
 fi
 
 # ── Step 6: Prepare rsyslog working directory ─────────────────

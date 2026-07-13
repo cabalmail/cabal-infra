@@ -53,7 +53,7 @@ resource "aws_iam_role_policy" "alert_sink" {
 
 resource "aws_cloudwatch_log_group" "alert_sink" {
   name              = "/cabal/lambda/alert_sink"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 #tfsec:ignore:aws-lambda-enable-tracing

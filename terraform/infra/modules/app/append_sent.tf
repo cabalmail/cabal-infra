@@ -97,7 +97,7 @@ resource "aws_iam_role_policy" "append_sent" {
 
 resource "aws_cloudwatch_log_group" "append_sent" {
   name              = "/cabal/lambda/append_sent"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
 data "aws_s3_object" "append_sent_hash" {

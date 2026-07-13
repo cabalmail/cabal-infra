@@ -110,6 +110,14 @@ resource "aws_iam_policy" "ecs_task" {
         Resource = [for q in aws_sqs_queue.tier : q.arn]
       },
       {
+        # The imap container's push-enqueue.sh (procmail side effect) sends
+        # one wake-signal message per local delivery. Shared task role, so
+        # scope to the single push queue; the smtp tiers simply never send.
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = aws_sqs_queue.push.arn
+      },
+      {
         Effect = "Allow"
         Action = [
           "ssmmessages:CreateControlChannel",

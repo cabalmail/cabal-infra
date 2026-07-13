@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Wired via `apple/project.yml` (CODE_SIGN_ENTITLEMENTS on the
+        CabalmailNotificationService target). The extension reads two
+        values the main app mirrors for it (see CabalmailKit's
+        `PushEnrichmentStore`):
+
+          - the API Gateway URL, from the App Group `UserDefaults`, and
+          - the Cognito ID token, from the shared keychain access group.
+
+        The NSE never registers for push itself, so no `aps-environment`
+        here — only the containers it reads from.
+    -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.cabalmail.Cabalmail</string>
+    </array>
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.cabalmail.Cabalmail.NotificationService</string>
+        <string>$(AppIdentifierPrefix)com.cabalmail.shared</string>
+    </array>
+</dict>
+</plist>

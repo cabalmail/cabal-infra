@@ -2,6 +2,8 @@
 Cabalmail.xcodeproj/
 Cabalmail/Info.plist
 CabalmailMac/Info.plist
+CabalmailWatch/Info.plist
+CabalmailNotificationService/Info.plist
 
 # Local per-developer overrides (team ID, etc.). Never commit.
 Local.xcconfig

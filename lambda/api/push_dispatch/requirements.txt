@@ -1,0 +1,21 @@
+# Pure-python only, on purpose: the APNs provider API requires HTTP/2 and
+# ES256 provider tokens, and the obvious stacks for both (httpx[http2],
+# cryptography) drag in platform-specific binary wheels that the x86_64 CI
+# runner cannot install for this arm64 function. h2 (+hpack/hyperframe) gives
+# HTTP/2 framing and python-ecdsa gives ES256, all as universal wheels — the
+# same trade fetch_bimi made when it kept its pip closure pure. The one ES256
+# signature per ~45 minutes per warm container makes ecdsa's pure-python
+# slowness irrelevant.
+h2==4.2.0 \
+    --hash=sha256:479a53ad425bb29af087f3458a61d30780bc818e4ebcf01f0b536ba916462ed0
+hpack==4.1.0 \
+    --hash=sha256:157ac792668d995c657d93111f46b4535ed114f0c9c8d672271bbec7eae1b496
+hyperframe==6.1.0 \
+    --hash=sha256:b03380493a519fce58ea5af42e4a42317bf9bd425596f7a0835ffce80f1a42e5
+ecdsa==0.19.1 \
+    --hash=sha256:30638e27cf77b7e15c4c4cc1973720149e1033827cfd00661ca5c8cc0cdb24c3
+# six is ecdsa's only runtime dependency; pinned and hashed so
+# pip --require-hashes can resolve the full tree.
+six==1.17.0 \
+    --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
+    --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81

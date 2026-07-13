@@ -76,7 +76,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - Watch mode: `cd react/admin && npm run test:watch`
 
 ### Lambda Functions (`lambda/api`)
-- Lint all: `cd lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py` (covers the shared modules and every handler)
+- Lint all: `cd lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py push_dispatch/apns.py` (covers the shared modules, every handler, and the one handler-sibling module the `*/function.py` glob misses)
 - Local test: `cd lambda/api/[function_dir] && python -m function`
 
 ### Apple Clients (`apple/`)
@@ -229,7 +229,9 @@ Shared infrastructure:
   - Use locals for repeated values or complex expressions
 
 - **Docker/Shell**:
-  - `set -euo pipefail` in all scripts
+  - `set -euo pipefail` in all scripts (a best-effort delivery-path side
+    effect may drop `-e` with an in-file comment justifying it and explicit
+    handling on every failure path; see docker/shared/push-enqueue.sh)
   - Structured logging with `[component]` prefixes
   - Environment variable validation at script entry
   - Comments explaining non-obvious configuration choices
@@ -239,6 +241,8 @@ Shared infrastructure:
 Use semantic versioning. Record changelog entries as **fragments**, not by editing `CHANGELOG.md` directly: add a file `changelog.d/<slug>.<category>.md` whose body is the entry exactly as it should appear (leading `- `, hard-wrapped, two-space continuation indent). `<category>` is one of `added`/`changed`/`deprecated`/`removed`/`fixed`/`security`. Do not create an `## [Unreleased]` section and do not pre-assign a version - the release collator (`scripts/collate-changelog.sh`, run by `promote.sh` / `make promote`) folds every pending fragment into a dated section at release time. Only record what shipped, not trials or blind alleys. See [`changelog.d/README.md`](changelog.d/README.md) and [`docs/releasing.md`](docs/releasing.md).
 
 Don't repeat the category subheading word (or a close synonym) in the fragment text - the collator already prints it as an `### Added:`/`### Removed:`/etc. heading, so "Added a new UI element for X" reads as redundant under `### Added:`. Instead, lead with a bold noun-phrase summary followed by details: `- **New UI element for X.** <details>`. Same for `Removed`, `Deprecated`, `Changed`, `Fixed`, `Security`.
+
+Any fragment describing a change to the **Apple clients** (`apple/Cabalmail`, `apple/CabalmailMac`, `apple/CabalmailKit/Sources`) **must** prefix its entry with `Apple:` - right after the leading `- ` and before the bold summary: `- Apple: **Threaded reader.** <details>`. This prefix scopes the entry into the TestFlight "What to Test" notes: `set-testflight-notes.py` keeps only `Apple:`-prefixed entries (stripping the prefix, since it's redundant in an Apple app) and drops the rest, so an Apple change without the prefix silently vanishes from the notes testers read. A PR that touches the Apple client sources fails the `apple-changelog.yml` gate unless it adds such a fragment; opt out for non-user-facing Apple work (refactors, test-only, CI) with the `no-changelog` PR label.
 
 ## Roadmap
 
