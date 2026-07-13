@@ -167,7 +167,8 @@ are expanded in the sections further down.
    | `com.cabalmail.Cabalmail` | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`) |
    | `com.cabalmail.Cabalmail.NotificationService` | `Cabalmail Notification Service` | **App Groups** (same group). Not Push Notifications — the extension never registers for push itself; it only reads the shared containers |
    | `com.cabalmail.Cabalmail.watchkitapp` | `Cabalmail Watch` | none |
-   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | none |
+   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | **Push Notifications**; **App Groups** (same group) |
+   | `com.cabalmail.CabalmailMac.NotificationService` | `Cabalmail Mac Notification Service` | **App Groups** (same group), same rationale as the iOS extension |
 
    Keychain sharing (the app and the extension share a keychain access
    group) needs no portal capability — profiles honor the
@@ -283,6 +284,7 @@ Environments → `stage` / `prod`).
 | Secret | What it is |
 |---|---|
 | `MAC_APP_STORE_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (App Store distribution). |
+| `MAC_NSE_APP_STORE_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac.NotificationService` (App Store distribution), the push Notification Service Extension embedded in the macOS archive. The macOS upload leg skips (with a warning) until this secret exists — it doubles as the "macOS push signing assets are ready" sentinel. |
 | `MAC_INSTALLER_CERT_P12` | base64 of a **Mac Installer Distribution** `.p12`. The outer `.pkg` that wraps the macOS `.app` is signed with this cert (distinct from `Apple Distribution`, which signs the `.app` bundle itself). See [Exporting the Mac Installer certificate](#exporting-the-mac-installer-certificate). |
 | `MAC_INSTALLER_CERT_PASSWORD` | Password used when exporting the `.p12`. Must be non-empty. |
 
@@ -292,7 +294,8 @@ Environments → `stage` / `prod`).
 |---|---|
 | `DEVELOPER_ID_CERT_P12` | base64 of your **Developer ID Application** `.p12` (different cert type from Apple Distribution) |
 | `DEVELOPER_ID_CERT_PASSWORD` | Password you set when exporting the `.p12` |
-| `MAC_DEVID_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (Developer ID distribution). Both `DEVELOPER_ID_CERT_P12` and this must be set to produce the notarized artifact; either missing one and the job completes after the TestFlight upload and skips notarization. |
+| `MAC_DEVID_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (Developer ID distribution). All three Developer-ID secrets (cert + this + the NSE profile below) must be set to produce the notarized artifact; missing any one and the job completes after the TestFlight upload and skips notarization. |
+| `MAC_NSE_DEVID_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac.NotificationService` (Developer ID distribution) — the embedded extension needs its own profile under the developer-id export method. |
 
 The App Store Connect API key triple (`KEY_ID` + `ISSUER_ID` + `P8`) is used
 for `altool` uploads and macOS `notarytool` submission. Under manual signing
@@ -408,7 +411,9 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    | Cabalmail NSE App Store | App Store | `com.cabalmail.Cabalmail.NotificationService` | Apple Distribution | `.mobileprovision` |
    | Cabalmail Watch App Store | App Store | `com.cabalmail.Cabalmail.watchkitapp` | Apple Distribution | `.mobileprovision` |
    | Cabalmail macOS App Store | App Store | `com.cabalmail.CabalmailMac` | Apple Distribution | `.provisionprofile` |
+   | Cabalmail macOS NSE App Store | App Store | `com.cabalmail.CabalmailMac.NotificationService` | Apple Distribution | `.provisionprofile` |
    | Cabalmail macOS Developer ID *(optional)* | Developer ID | `com.cabalmail.CabalmailMac` | Developer ID Application | `.provisionprofile` |
+   | Cabalmail macOS NSE Developer ID *(optional)* | Developer ID | `com.cabalmail.CabalmailMac.NotificationService` | Developer ID Application | `.provisionprofile` |
 
    Profile names are arbitrary — CI matches by the UUID embedded in the
    file, not the name. All profiles share the same Apple Distribution
@@ -426,7 +431,9 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    | NSE `.mobileprovision` | `IOS_NSE_APP_STORE_PROFILE` |
    | Watch `.mobileprovision` | `WATCHOS_APP_STORE_PROFILE` |
    | macOS App Store `.provisionprofile` | `MAC_APP_STORE_PROFILE` |
+   | macOS NSE App Store `.provisionprofile` | `MAC_NSE_APP_STORE_PROFILE` |
    | macOS Developer ID `.provisionprofile` | `MAC_DEVID_PROFILE` |
+   | macOS NSE Developer ID `.provisionprofile` | `MAC_NSE_DEVID_PROFILE` |
 
    Stray whitespace — a trailing newline from the paste, or a `base64`
    build that wraps its output — is harmless: the workflow strips all

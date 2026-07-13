@@ -630,6 +630,14 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
       - name: Verify secrets are present
+        # Skip-not-fail, matching the iOS job: the archive cannot succeed
+        # without every profile the scheme's embedded targets sign with, so
+        # a missing secret must park the upload leg (with a warning) rather
+        # than paint the workflow red until the operator finishes the
+        # portal work. MAC_NSE_APP_STORE_PROFILE is the newest addition —
+        # the macOS Notification Service Extension embeds in the archive —
+        # and doubles as the "macOS push signing assets are ready" sentinel.
+        id: check
         env:
           S1: ${{ secrets.APPLE_TEAM_ID }}
           S2: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
@@ -640,6 +648,7 @@ jobs:
           S7: ${{ secrets.MAC_APP_STORE_PROFILE }}
           S8: ${{ secrets.MAC_INSTALLER_CERT_P12 }}
           S9: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD }}
+          S10: ${{ secrets.MAC_NSE_APP_STORE_PROFILE }}
         run: |
           MISSING=()
           [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
@@ -651,18 +660,23 @@ jobs:
           [ -z "$S7" ] && MISSING+=("MAC_APP_STORE_PROFILE")
           [ -z "$S8" ] && MISSING+=("MAC_INSTALLER_CERT_P12")
           [ -z "$S9" ] && MISSING+=("MAC_INSTALLER_CERT_PASSWORD")
+          [ -z "$S10" ] && MISSING+=("MAC_NSE_APP_STORE_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
-            echo "::error::Apple signing secrets missing: ${MISSING[*]}"
-            exit 1
+            echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "All required signing secrets present."
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "All nine signing secrets present."
 
       - name: Select Xcode
+        if: steps.check.outputs.enabled == 'true'
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
         with:
           xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Install XcodeGen + xcbeautify
+        if: steps.check.outputs.enabled == 'true'
         # See the kit-test job for the rationale on the per-package check.
         run: |
           for pkg in xcodegen xcbeautify; do
@@ -670,15 +684,18 @@ jobs:
           done
 
       - name: Generate Xcode project
+        if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         run: xcodegen generate
 
       - name: Sync vendored CabalmailKit resources (marked + turndown)
+        if: steps.check.outputs.enabled == 'true'
         # See the kit-test job for the rationale. Same script, same files.
         working-directory: apple
         run: scripts/sync-vendored.sh
 
       - name: Import signing certificates
+        if: steps.check.outputs.enabled == 'true'
         env:
           APPLE_DIST_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
           APPLE_DIST_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
@@ -724,6 +741,7 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Install App Store Connect API key
+        if: steps.check.outputs.enabled == 'true'
         env:
           ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -745,13 +763,25 @@ jobs:
           echo "ASC_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
 
       - name: Install macOS App Store provisioning profile
+        if: steps.check.outputs.enabled == 'true'
         uses: ./.github/actions/install-provisioning-profile
         with:
           base64: ${{ secrets.MAC_APP_STORE_PROFILE }}
           extension: provisionprofile
           env-name: MAC_APP_STORE_PROFILE_UUID
 
+      - name: Install macOS NSE App Store provisioning profile
+        # The macOS Notification Service Extension embeds in the archive,
+        # same shape as the iOS job's NSE profile step.
+        if: steps.check.outputs.enabled == 'true'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.MAC_NSE_APP_STORE_PROFILE }}
+          extension: provisionprofile
+          env-name: MAC_NSE_APP_STORE_PROFILE_UUID
+
       - name: Archive CabalmailMac
+        if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -783,11 +813,13 @@ jobs:
             -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             MAC_APP_STORE_PROFILE_UUID="$MAC_APP_STORE_PROFILE_UUID" \
+            MAC_NSE_APP_STORE_PROFILE_UUID="${MAC_NSE_APP_STORE_PROFILE_UUID:-}" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
 
       - name: Export app-store .pkg
+        if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         run: |
           set -o pipefail
@@ -813,6 +845,8 @@ jobs:
               <dict>
                   <key>com.cabalmail.CabalmailMac</key>
                   <string>$MAC_APP_STORE_PROFILE_UUID</string>
+                  <key>com.cabalmail.CabalmailMac.NotificationService</key>
+                  <string>$MAC_NSE_APP_STORE_PROFILE_UUID</string>
               </dict>
           </dict>
           </plist>
@@ -824,6 +858,7 @@ jobs:
             | xcbeautify --renderer github-actions
 
       - name: Summarize macOS upload
+        if: steps.check.outputs.enabled == 'true'
         run: |
           {
             echo "### macOS TestFlight upload"
@@ -834,6 +869,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload macOS to TestFlight
+        if: steps.check.outputs.enabled == 'true'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
@@ -864,14 +900,19 @@ jobs:
           echo "::notice::altool upload completed cleanly."
 
       - name: Check for Developer ID certificate and profile
+        if: steps.check.outputs.enabled == 'true'
         id: devid
         env:
           DEVID_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
           DEVID_PROFILE: ${{ secrets.MAC_DEVID_PROFILE }}
+          DEVID_NSE_PROFILE: ${{ secrets.MAC_NSE_DEVID_PROFILE }}
         run: |
           MISSING=()
           [ -z "$DEVID_P12" ] && MISSING+=("DEVELOPER_ID_CERT_P12")
           [ -z "$DEVID_PROFILE" ] && MISSING+=("MAC_DEVID_PROFILE")
+          # The embedded Notification Service Extension needs its own
+          # Developer ID profile for the developer-id export method.
+          [ -z "$DEVID_NSE_PROFILE" ] && MISSING+=("MAC_NSE_DEVID_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::notice::Developer-ID secrets missing (${MISSING[*]}); skipping notarized .app artifact. TestFlight upload already completed."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -907,6 +948,14 @@ jobs:
           extension: provisionprofile
           env-name: MAC_DEVID_PROFILE_UUID
 
+      - name: Install macOS NSE Developer ID provisioning profile
+        if: steps.devid.outputs.enabled == 'true'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.MAC_NSE_DEVID_PROFILE }}
+          extension: provisionprofile
+          env-name: MAC_NSE_DEVID_PROFILE_UUID
+
       - name: Export developer-id build for notarization
         if: steps.devid.outputs.enabled == 'true'
         working-directory: apple
@@ -934,6 +983,8 @@ jobs:
               <dict>
                   <key>com.cabalmail.CabalmailMac</key>
                   <string>$MAC_DEVID_PROFILE_UUID</string>
+                  <key>com.cabalmail.CabalmailMac.NotificationService</key>
+                  <string>$MAC_NSE_DEVID_PROFILE_UUID</string>
               </dict>
           </dict>
           </plist>
@@ -975,7 +1026,7 @@ jobs:
       # - and never blocks it on the up-to-20-minute processing poll.
       - name: Set TestFlight "What to Test" notes (prod only)
         # Prod releases only. Best-effort - see the iOS job for rationale.
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' && steps.check.outputs.enabled == 'true'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
@@ -988,7 +1039,7 @@ jobs:
           "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/set-testflight-notes.py"
 
       - name: Clean up keychain and API key
-        if: always()
+        if: always() && steps.check.outputs.enabled == 'true'
         run: |
           security delete-keychain "${KEYCHAIN_PATH:-}" || true
           rm -f "$RUNNER_TEMP/keychain-password"

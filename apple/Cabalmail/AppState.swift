@@ -296,7 +296,7 @@ final class AppState {
     func signOut() async {
         stopInboxBadgePolling()
         guard let client else { status = .signedOut; return }
-        #if os(iOS)
+        #if os(iOS) || os(macOS)
         // Deregister the APNs token while the Cognito session still works —
         // `/push_deregister` is an authenticated call like every other, and
         // `authService.signOut()` below wipes the tokens.
@@ -501,15 +501,15 @@ extension AppState {
 extension AppState {
     /// Shared tail of `signIn` and `restoreIfPossible`: installs the client,
     /// flips to `.signedIn`, and kicks off the session-scoped side flows —
-    /// badge polling, the contacts prompt, push registration (iOS), and the
-    /// watch hand-off.
+    /// badge polling, the contacts prompt, push registration (iOS/macOS),
+    /// and the watch hand-off.
     private func wireSession(client newClient: CabalmailClient, username: String) async {
         self.client = newClient
         self.navCoordinator = NavStateCoordinator(client: newClient)
         self.status = .signedIn
         startInboxBadgePolling()
         requestContactsAccessIfNeeded()
-        #if os(iOS)
+        #if os(iOS) || os(macOS)
         // Runs on both entry paths, so every launch re-registers the APNs
         // token — `/push_register` upserts, making this a cheap refresh of
         // the row's `last_seen_at`.
@@ -523,13 +523,13 @@ extension AppState {
 
 extension AppState {
     /// The keychain store the session client persists Cognito tokens
-    /// through. On iOS it's wrapped in `PushMirroringSecureStore` so every
-    /// token write — sign-in and each silent refresh — also lands in the
-    /// shared containers the Notification Service Extension reads (see
-    /// `PushEnrichmentStore`). Static (and non-private) so the push
+    /// through. On iOS and macOS it's wrapped in `PushMirroringSecureStore`
+    /// so every token write — sign-in and each silent refresh — also lands
+    /// in the shared containers the Notification Service Extension reads
+    /// (see `PushEnrichmentStore`). Static (and non-private) so the push
     /// action-handler's cold-launch bootstrap builds an identical stack.
     static func makeSecureStore() -> SecureStore {
-        #if os(iOS)
+        #if os(iOS) || os(macOS)
         return PushMirroringSecureStore(base: KeychainSecureStore())
         #else
         return KeychainSecureStore()

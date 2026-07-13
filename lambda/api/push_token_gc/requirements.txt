@@ -1,0 +1,1 @@
+# boto3 only (provided by the Lambda runtime); no bundled dependencies.

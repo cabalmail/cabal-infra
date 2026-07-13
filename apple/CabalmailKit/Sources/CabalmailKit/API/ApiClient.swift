@@ -435,9 +435,11 @@ public struct PushDeviceRegistration: Sendable, Hashable {
     public let platform: String
     public let appVersion: String
     public let locale: String
-    /// Folders to push for (`["*"]` = all). Nil omits the field so the
-    /// server keeps its stored / default value — the per-folder picker is
-    /// a later phase.
+    /// Folders to push for. `["*"]` = all folders, `[]` = explicit reset
+    /// to the server's inbox-only default, a list = exactly those folders
+    /// (display-form `/` paths are fine; the Lambda normalizes). Nil omits
+    /// the field so the server keeps its stored value — the apps always
+    /// send an explicit value (see `PushSettings.enabledFolders`).
     public let enabledFolders: [String]?
 
     public init(
