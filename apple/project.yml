@@ -385,6 +385,11 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).NotificationService"
+        # Runtime team-prefix for the explicit-group keychain read (macOS
+        # resolves group-less data-protection-keychain searches differently
+        # from iOS; see PushHandoff.currentIdToken). Same expansion
+        # caveat as the app targets: empty in unsigned builds.
+        AppIdentifierPrefix: "$(AppIdentifierPrefix)"
         # See the Cabalmail target's equivalent comment — XcodeGen defaults
         # these to "1" / "1.0" unless explicitly plumbed through to the
         # build settings. App Store validation additionally requires an
@@ -436,6 +441,11 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).NotificationService"
+        # Runtime team-prefix for the explicit-group keychain read (macOS
+        # resolves group-less data-protection-keychain searches differently
+        # from iOS; see PushHandoff.currentIdToken). Same expansion
+        # caveat as the app targets: empty in unsigned builds.
+        AppIdentifierPrefix: "$(AppIdentifierPrefix)"
         # See the Cabalmail target's equivalent comment — XcodeGen defaults
         # these to "1" / "1.0" unless explicitly plumbed through to the
         # build settings. App Store validation additionally requires an
