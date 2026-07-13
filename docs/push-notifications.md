@@ -144,11 +144,20 @@ push-specific portal work, in order:
    are ready" sentinel, so neither leg can fail codesign against a stale
    profile.
 
-The macOS app carries none of the push entitlements and no extension, so
-its App ID and profiles need no changes until a macOS Notification Service
-Extension ships; the backend is already multi-app (the dispatch Lambda
-selects the APNs topic per registered token, and the same APNs key covers
-every app on the team).
+The macOS app repeats the same shape with its own identifiers — the
+backend needs nothing either way (the dispatch Lambda selects the APNs
+topic per registered token, and the same APNs key covers every app on the
+team):
+
+- App Group: the same `group.com.cabalmail.Cabalmail`.
+- `com.cabalmail.CabalmailMac`: **Push Notifications** + **App Groups**;
+  re-issue its App Store profile afterwards.
+- `com.cabalmail.CabalmailMac.NotificationService`: **App Groups only**,
+  plus its own App Store profile.
+- Secrets: refresh `MAC_APP_STORE_PROFILE`, add
+  `MAC_NSE_APP_STORE_PROFILE` (the macOS upload leg's skip-gate
+  sentinel). The optional notarized-artifact leg additionally needs
+  `MAC_NSE_DEVID_PROFILE` alongside the existing Developer ID pair.
 
 ## Operational notes
 
@@ -173,9 +182,12 @@ every app on the team).
   and does not survive a task replacement, which loses at most the last
   seconds of wake signals, not mail.
 - **Token hygiene.** `last_seen_at` on each `cabal-push-tokens` row is
-  updated on every successful push and registration; `last_failure` records
-  the most recent APNs rejection reason. Rows for uninstalled devices are
-  pruned automatically on the next push attempt.
+  updated on registration and refreshed by successful pushes;
+  `last_failure` records the most recent APNs rejection reason. Rows for
+  uninstalled devices are pruned automatically on the next push attempt,
+  and the weekly `push_token_gc` Lambda reaps rows idle for 90+ days as
+  the backstop for devices no rejection ever surfaces (logs at
+  `/cabal/lambda/push_token_gc`).
 - **Enrichment during IMAP rolls.** `/push_envelope` returns 503 while a
   planned IMAP redeploy is in flight; devices fall back to the generic
   alert. Nothing needs doing.
