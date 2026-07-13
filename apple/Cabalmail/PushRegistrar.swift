@@ -42,6 +42,71 @@ struct PushMessageRef: Sendable {
     }
 }
 
+/// The user's folder-scope choice for new-mail pushes (Notifications
+/// settings, phase 5). Raw values are the UserDefaults wire format — don't
+/// rename cases without migrating `PushSettings.folderScopeKey`.
+enum PushFolderScope: String, CaseIterable {
+    case inboxOnly
+    case all
+    case custom
+}
+
+/// Per-device push preferences, persisted in UserDefaults. Deliberately a
+/// nonisolated enum (not state on `PushRegistrar`, which is @MainActor) so
+/// SwiftUI property initializers can read the stored values synchronously.
+///
+/// This state is per *device* by design: the server keeps the resolved
+/// folder list on this device's token row (`cabal-push-tokens`), so there is
+/// no cross-device mirror in get/set_preferences — that would add a second
+/// source of truth for something inherently device-scoped.
+enum PushSettings {
+    /// True once the user flips the master toggle off. Launches must then
+    /// neither re-prompt for permission nor re-register the token until the
+    /// user turns the toggle back on (`PushRegistrar.enablePush`).
+    static let disabledKey = "cabalmail.push.userDisabled"
+    /// Raw `PushFolderScope` value; absent means `.inboxOnly`.
+    static let folderScopeKey = "cabalmail.push.folderScope"
+    /// `/`-delimited folder paths for the `.custom` scope.
+    static let chosenFoldersKey = "cabalmail.push.chosenFolders"
+
+    static var isUserDisabled: Bool {
+        UserDefaults.standard.bool(forKey: disabledKey)
+    }
+
+    static func setUserDisabled(_ disabled: Bool) {
+        UserDefaults.standard.set(disabled, forKey: disabledKey)
+    }
+
+    static var folderScope: PushFolderScope {
+        UserDefaults.standard.string(forKey: folderScopeKey)
+            .flatMap(PushFolderScope.init(rawValue:)) ?? .inboxOnly
+    }
+
+    /// Defaults to INBOX so the "Choose folders" list opens with the one
+    /// folder everyone expects preselected.
+    static var chosenFolders: [String] {
+        UserDefaults.standard.stringArray(forKey: chosenFoldersKey) ?? ["INBOX"]
+    }
+
+    static func setScope(_ scope: PushFolderScope, chosenFolders: [String]) {
+        UserDefaults.standard.set(scope.rawValue, forKey: folderScopeKey)
+        UserDefaults.standard.set(chosenFolders, forKey: chosenFoldersKey)
+    }
+
+    /// The explicit `enabled_folders` value every `/push_register` call
+    /// sends. Always explicit — never nil/omitted — so the server row is
+    /// deterministic after each registration rather than relying on the
+    /// Lambda's preserve-stored-value behavior. `[]` is the server's
+    /// "inbox only" reset; `["*"]` is all folders.
+    static var enabledFolders: [String] {
+        switch folderScope {
+        case .inboxOnly: return []
+        case .all: return ["*"]
+        case .custom: return chosenFolders
+        }
+    }
+}
+
 /// Owns the APNs registration lifecycle and the notification-action
 /// handlers for the iOS and macOS apps (docs/0.11.0/push-notifications.md,
 /// phases 1/3/4; macOS parity is phase 6). `AppState` drives the session
@@ -134,13 +199,18 @@ final class PushRegistrar {
         self.appState = appState
         self.client = client
         PushEnrichmentStore().updateAPIURL(client.configuration.invokeUrl)
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let granted = (try? await center.requestAuthorization(
-                options: [.alert, .badge, .sound]
-            )) ?? false
-            guard granted else { return }
-            Platform.registerForRemoteNotifications()
+        // Honor the user's master toggle: once notifications are off, a
+        // launch neither re-prompts nor re-registers — only `enablePush`
+        // (the Settings toggle) restarts the pipeline.
+        if !PushSettings.isUserDisabled {
+            Task {
+                let center = UNUserNotificationCenter.current()
+                let granted = (try? await center.requestAuthorization(
+                    options: [.alert, .badge, .sound]
+                )) ?? false
+                guard granted else { return }
+                Platform.registerForRemoteNotifications()
+            }
         }
         if let token = pendingToken {
             pendingToken = nil
@@ -153,8 +223,15 @@ final class PushRegistrar {
     }
 
     /// Called with the hex-encoded APNs token — on every launch (the
-    /// system re-delivers it) and whenever APNs rotates it.
+    /// system re-delivers it) and whenever APNs rotates it. Every
+    /// registration carries the explicit current folder scope
+    /// (`PushSettings.enabledFolders`), so the server row always reflects
+    /// this device's latest choice.
     func deviceTokenDidChange(_ tokenHex: String) {
+        // The system can re-deliver a token after the user flipped the
+        // master toggle off (e.g. a rotation callback racing the toggle);
+        // registering it would silently re-enable pushes.
+        guard !PushSettings.isUserDisabled else { return }
         guard let client else {
             pendingToken = tokenHex
             return
@@ -166,7 +243,8 @@ final class PushRegistrar {
             appVersion: Bundle.main.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
             ) as? String ?? "0",
-            locale: Locale.current.identifier
+            locale: Locale.current.identifier,
+            enabledFolders: PushSettings.enabledFolders
         )
         Task {
             do {
@@ -205,6 +283,61 @@ final class PushRegistrar {
             // reinstall / re-sign-in upserts over it.
             CabalmailLog.warn("Push", "push_deregister failed: \(error)")
         }
+    }
+}
+
+// MARK: - Notifications settings (phase 5)
+
+extension PushRegistrar {
+    /// Master toggle ON. Requests notification permission (a no-op prompt
+    /// if already determined) and, when granted, clears the user-disabled
+    /// flag and re-registers for remote notifications — the token callback
+    /// then upserts the server row with the current folder scope. Returns
+    /// false when the OS permission is (or just was) denied, so the toggle
+    /// can reflect the real system state instead of lying.
+    func enablePush() async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        let granted = (try? await center.requestAuthorization(
+            options: [.alert, .badge, .sound]
+        )) ?? false
+        guard granted else { return false }
+        PushSettings.setUserDisabled(false)
+        Platform.registerForRemoteNotifications()
+        return true
+    }
+
+    /// Master toggle OFF. Sets the user-disabled flag first — that alone
+    /// stops `sessionDidStart` / `deviceTokenDidChange` from re-registering
+    /// on future launches — then best-effort deregisters the stored token so
+    /// the server stops dispatching immediately rather than at next APNs
+    /// rejection.
+    func disablePush() async {
+        PushSettings.setUserDisabled(true)
+        pendingToken = nil
+        guard
+            let client = await activeClient(),
+            let token = UserDefaults.standard.string(forKey: Self.lastTokenKey)
+        else { return }
+        do {
+            try await client.apiClient.deregisterPushDevice(token: token)
+            UserDefaults.standard.removeObject(forKey: Self.lastTokenKey)
+        } catch {
+            // Best-effort, same posture as sessionWillEnd: a row we fail to
+            // remove is pruned by push_dispatch on the next APNs rejection.
+            CabalmailLog.warn("Push", "push_deregister failed: \(error)")
+        }
+    }
+
+    /// Persists a folder-scope change and, while registered, immediately
+    /// re-registers the stored token so the server row picks it up without
+    /// waiting for the next launch (the `/push_register` upsert is cheap).
+    func updateFolderScope(_ scope: PushFolderScope, chosenFolders: [String]) {
+        PushSettings.setScope(scope, chosenFolders: chosenFolders)
+        guard
+            !PushSettings.isUserDisabled,
+            let token = UserDefaults.standard.string(forKey: Self.lastTokenKey)
+        else { return }
+        deviceTokenDidChange(token)
     }
 }
 
