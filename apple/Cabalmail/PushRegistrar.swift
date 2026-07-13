@@ -1,6 +1,13 @@
-#if os(iOS)
+// See AppDelegate.swift for why these are explicit `os(...)` guards:
+// push ships on iOS and macOS; the visionOS build of the shared
+// Cabalmail target must not compile this.
+#if os(iOS) || os(macOS)
 import Foundation
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 import UserNotifications
 import CabalmailKit
 
@@ -36,17 +43,47 @@ struct PushMessageRef: Sendable {
 }
 
 /// Owns the APNs registration lifecycle and the notification-action
-/// handlers for the iOS app (docs/0.11.0/push-notifications.md, phases
-/// 1/3/4). `AppState` drives the session edges (`sessionDidStart` /
-/// `sessionWillEnd`), `AppDelegate` feeds it token and action callbacks.
+/// handlers for the iOS and macOS apps (docs/0.11.0/push-notifications.md,
+/// phases 1/3/4; macOS parity is phase 6). `AppState` drives the session
+/// edges (`sessionDidStart` / `sessionWillEnd`), `AppDelegate` feeds it
+/// token and action callbacks. One implementation for both platforms —
+/// the UIKit/AppKit divergences live in small shims (`Platform` below and
+/// `BackgroundTaskToken` at the bottom of the file).
 ///
 /// A singleton (rather than something hung off `AppState`) because the
-/// UIKit delegate callbacks it services — token registration, background
-/// notification actions — can fire before SwiftUI has built any state,
-/// e.g. on a cold background launch from a lock-screen action.
+/// application-delegate callbacks it services — token registration,
+/// background notification actions — can fire before SwiftUI has built any
+/// state, e.g. on a cold background launch from a lock-screen action.
 @MainActor
 final class PushRegistrar {
     static let shared = PushRegistrar()
+
+    /// The two values `/push_register` derives the APNs topic from. The
+    /// Lambda validates the pair (`com.cabalmail.Cabalmail` -> `ios`,
+    /// `com.cabalmail.CabalmailMac` -> `macos`); `platform` itself is
+    /// informational — `bundle_id` is authoritative server-side.
+    private enum Platform {
+        #if os(iOS)
+        static let name = "ios"
+        static let fallbackBundleId = "com.cabalmail.Cabalmail"
+        #else
+        static let name = "macos"
+        static let fallbackBundleId = "com.cabalmail.CabalmailMac"
+        #endif
+
+        /// One seam over UIKit/AppKit's identically-named registration
+        /// call. Both must run on the main thread; the explicit @MainActor
+        /// is required because nested types don't inherit the enclosing
+        /// class's isolation.
+        @MainActor
+        static func registerForRemoteNotifications() {
+            #if os(iOS)
+            UIApplication.shared.registerForRemoteNotifications()
+            #else
+            NSApplication.shared.registerForRemoteNotifications()
+            #endif
+        }
+    }
 
     /// Set by `sessionDidStart`; navigation targets (`navCoordinator`)
     /// hang off it. Weak — the registrar outlives any session.
@@ -56,9 +93,10 @@ final class PushRegistrar {
     /// built for a background action on a terminated app (`activeClient()`).
     private var client: CabalmailClient?
 
-    /// APNs token that arrived before a session was wired (iOS re-delivers
-    /// the token on every `registerForRemoteNotifications`, which can beat
-    /// the launch restore). Registered as soon as the session starts.
+    /// APNs token that arrived before a session was wired (the system
+    /// re-delivers the token on every `registerForRemoteNotifications`,
+    /// which can beat the launch restore). Registered as soon as the
+    /// session starts.
     private var pendingToken: String?
 
     /// A tapped notification that arrived before sign-in / restore
@@ -90,8 +128,8 @@ final class PushRegistrar {
 
     /// Wires a signed-in session: mirrors the API URL for the NSE, asks for
     /// notification permission, and (re-)registers for remote notifications.
-    /// iOS re-delivers the device token on every registration, so each
-    /// launch refreshes the server row — a cheap upsert by design.
+    /// The system re-delivers the device token on every registration, so
+    /// each launch refreshes the server row — a cheap upsert by design.
     func sessionDidStart(appState: AppState, client: CabalmailClient) {
         self.appState = appState
         self.client = client
@@ -102,7 +140,7 @@ final class PushRegistrar {
                 options: [.alert, .badge, .sound]
             )) ?? false
             guard granted else { return }
-            UIApplication.shared.registerForRemoteNotifications()
+            Platform.registerForRemoteNotifications()
         }
         if let token = pendingToken {
             pendingToken = nil
@@ -114,8 +152,8 @@ final class PushRegistrar {
         }
     }
 
-    /// Called with the hex-encoded APNs token — on every launch (iOS
-    /// re-delivers it) and whenever APNs rotates it.
+    /// Called with the hex-encoded APNs token — on every launch (the
+    /// system re-delivers it) and whenever APNs rotates it.
     func deviceTokenDidChange(_ tokenHex: String) {
         guard let client else {
             pendingToken = tokenHex
@@ -123,7 +161,8 @@ final class PushRegistrar {
         }
         let registration = PushDeviceRegistration(
             deviceToken: tokenHex,
-            bundleId: Bundle.main.bundleIdentifier ?? "com.cabalmail.Cabalmail",
+            bundleId: Bundle.main.bundleIdentifier ?? Platform.fallbackBundleId,
+            platform: Platform.name,
             appVersion: Bundle.main.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
             ) as? String ?? "0",
@@ -173,8 +212,9 @@ final class PushRegistrar {
 
 extension PushRegistrar {
     /// Dispatches a notification response. Runs the IMAP work inside a
-    /// UIKit background task and returns only once the operation resolves,
-    /// so `AppDelegate` can end the system's action budget truthfully.
+    /// background task (a real UIKit one on iOS, a no-op shim on macOS)
+    /// and returns only once the operation resolves, so `AppDelegate` can
+    /// end the system's action budget truthfully.
     func handleNotificationAction(identifier: String, ref: PushMessageRef?) async {
         switch identifier {
         case "MARK_READ":
@@ -251,10 +291,10 @@ extension PushRegistrar {
 // MARK: - Background execution plumbing
 
 extension PushRegistrar {
-    /// Runs `work` with an active session client inside a UIKit background
-    /// task, so a lock-screen action started with the app suspended isn't
-    /// killed mid-flight. Errors are logged, not surfaced — there is no UI
-    /// to surface them to.
+    /// Runs `work` with an active session client inside a background task
+    /// (see `BackgroundTaskToken`), so an iOS lock-screen action started
+    /// with the app suspended isn't killed mid-flight. Errors are logged,
+    /// not surfaced — there is no UI to surface them to.
     private func withBackgroundTask(
         named name: String,
         _ work: (CabalmailClient) async throws -> Void
@@ -301,6 +341,7 @@ extension PushRegistrar {
     }
 }
 
+#if os(iOS)
 /// Minimal RAII-ish wrapper around `beginBackgroundTask` /
 /// `endBackgroundTask`. Class (not struct) so the expiration handler can
 /// reach back and end the task if the system calls time first.
@@ -320,4 +361,15 @@ private final class BackgroundTaskToken {
         id = .invalid
     }
 }
+#else
+/// macOS has no `beginBackgroundTask` equivalent and doesn't need one:
+/// mac apps aren't suspended mid-notification-action, so the work in
+/// `withBackgroundTask` runs to completion on its own. A no-op shim (same
+/// shape as the iOS class) keeps the call site platform-neutral.
+@MainActor
+private final class BackgroundTaskToken {
+    func begin(named name: String) {}
+    func end() {}
+}
+#endif
 #endif

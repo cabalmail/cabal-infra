@@ -11,6 +11,11 @@ import CabalmailKit
 /// carries the full request/revoke and create/delete affordances.
 @main
 struct CabalmailMacApp: App {
+    // Push notifications: APNs token callbacks and the notification-center
+    // delegate have no SwiftUI-native surface, so the macOS build carries a
+    // minimal AppKit delegate — the same AppDelegate.swift source the iOS
+    // target compiles, with an NSApplicationDelegate branch (see that file).
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
 

@@ -212,10 +212,19 @@ targets:
       # Shared with AppState.swift: the no-op stub branch compiles here
       # (WatchConnectivity is iOS-only). See WatchSessionBridge.swift.
       - path: Cabalmail/WatchSessionBridge.swift
+      # Push notifications (phase 6, macOS parity): one implementation for
+      # both platforms — each file carries an `#if os(iOS)` / `#else`
+      # (AppKit) branch around the small platform seams.
+      - path: Cabalmail/AppDelegate.swift
+      - path: Cabalmail/PushRegistrar.swift
       - path: Cabalmail/Views
       - path: Cabalmail/ViewModels
     dependencies:
       - package: CabalmailKit
+      # Notification Service Extension, macOS flavor: same enrichment
+      # source as the iOS target's extension, compiled into a separate
+      # macOS appex (see the CabalmailMacNotificationService target).
+      - target: CabalmailMacNotificationService
     info:
       path: CabalmailMac/Info.plist
       properties:
@@ -251,6 +260,11 @@ targets:
           and name next to mail you receive, and to add senders to
           your contacts when you choose. Your contacts stay on
           this device.
+        # See the Cabalmail target's equivalent comment: read at runtime by
+        # `PushEnrichmentStore` to compose the fully-qualified shared
+        # keychain access group. Without it the mac app never mirrors the
+        # ID token and every notification stays "New mail".
+        AppIdentifierPrefix: "$(AppIdentifierPrefix)"
         # See the Cabalmail target's equivalent comment — XcodeGen defaults
         # these to "1" / "1.0" unless explicitly plumbed through to the
         # build settings.
@@ -402,6 +416,61 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "$(IOS_NSE_APP_STORE_PROFILE_UUID)"
+
+  # macOS twin of CabalmailNotificationService (push phase 6). Compiles the
+  # SAME Swift source — the NSE is Foundation + UserNotifications + Security
+  # only, with nothing platform-conditional in it — into a separate macOS
+  # appex product with its own bundle id, Info.plist, and entitlements
+  # (sandboxed mac processes need explicit network.client; see the
+  # entitlements file). Embedded in CabalmailMac, never in the iOS/visionOS
+  # app.
+  CabalmailMacNotificationService:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: CabalmailNotificationService/NotificationService.swift
+    info:
+      path: CabalmailMacNotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail Notification Service
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).NotificationService"
+        # See the Cabalmail target's equivalent comment — XcodeGen defaults
+        # these to "1" / "1.0" unless explicitly plumbed through to the
+        # build settings. App Store validation additionally requires an
+        # extension's versions to match its host app exactly; CI passes both
+        # on the xcodebuild command line, reaching every target at once.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+    settings:
+      base:
+        # Apple's convention for app extensions: the host app's bundle id
+        # plus a suffix. The push-dispatch Lambda targets the *host* topic
+        # (com.cabalmail.CabalmailMac, already in push_register's
+        # allowlist); this id only matters for embedding and provisioning.
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac.NotificationService
+        # Keep in lockstep with the CabalmailMac target above (host/extension
+        # version match is enforced at App Store validation).
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        # Same requirement as the host app: hardened runtime is mandatory
+        # for notarized / App Store macOS code, extensions included.
+        ENABLE_HARDENED_RUNTIME: YES
+        # App Group (shared UserDefaults for api_url), shared keychain
+        # access group (Cognito ID token), sandbox + outbound network.
+        # Mirrors the host app's additions in CabalmailMac.entitlements.
+        CODE_SIGN_ENTITLEMENTS: CabalmailMacNotificationService/CabalmailMacNotificationService.entitlements
+      configs:
+        # See the Cabalmail target's matching block for why manual-signing
+        # settings live per-target instead of on the xcodebuild command
+        # line. CI injects MAC_NSE_APP_STORE_PROFILE_UUID as a user-defined
+        # setting when archiving the mac app (which embeds this target).
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "$(MAC_NSE_APP_STORE_PROFILE_UUID)"
 
 schemes:
   Cabalmail:
