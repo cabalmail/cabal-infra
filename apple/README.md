@@ -160,25 +160,29 @@ are expanded in the sections further down.
 
    Then the App IDs, with the capabilities each one needs checked at
    registration time (capabilities added later invalidate any profiles
-   already issued against the App ID). Newly registered App IDs come
-   out platform-universal (`iOS, iPadOS, macOS, ...`), which is fine —
-   but it moves the platform choice into the **profile**-generation
-   flow, where a Platform selector appears for universal App IDs and
-   defaults to iOS. When creating a profile for a macOS target, set
-   that selector to macOS or the download is a `.mobileprovision` the
-   mac target rejects at archive time ("has platforms iOS..., which
-   does not match the current platform macOS"). Verify any mac profile
-   before uploading its secret:
-   `security cms -D -i <file> | plutil -p - | grep -A3 Platform`
-   must show `OSX`.
+   already issued against the App ID).
 
-   | App ID | Description | Capabilities |
-   |---|---|---|
-   | `com.cabalmail.Cabalmail` | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`) |
-   | `com.cabalmail.Cabalmail.NotificationService` | `Cabalmail Notification Service` | **App Groups** (same group). Not Push Notifications — the extension never registers for push itself; it only reads the shared containers |
-   | `com.cabalmail.Cabalmail.watchkitapp` | `Cabalmail Watch` | none |
-   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | **Push Notifications**; **App Groups** (same group) |
-   | `com.cabalmail.CabalmailMac.NotificationService` | `Cabalmail Mac Notification Service` | **App Groups** (same group), same rationale as the iOS extension |
+   The **Platform** column matters more than it looks: it is chosen
+   once, on the App ID registration form, and every provisioning
+   profile inherits it — the profile-generation flow offers no
+   platform choice of its own. Registering an App ID
+   platform-universal (`iOS, iPadOS, macOS, ...`) yields **iOS-family
+   profiles only** (`iOS, xrOS, visionOS` — no `OSX`), which a macOS
+   target rejects at archive time ("has platforms iOS..., which does
+   not match the current platform macOS"), and the only fix is
+   deleting and re-registering the App ID with **macOS** selected.
+   Verify any mac profile before uploading its secret:
+   `security cms -D -i <file> | plutil -p - | grep -A6 Platform`
+   must list `OSX` (the download's file extension is not a reliable
+   signal).
+
+   | App ID | Platform | Description | Capabilities |
+   |---|---|---|---|
+   | `com.cabalmail.Cabalmail` | iOS | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`) |
+   | `com.cabalmail.Cabalmail.NotificationService` | iOS | `Cabalmail Notification Service` | **App Groups** (same group). Not Push Notifications — the extension never registers for push itself; it only reads the shared containers |
+   | `com.cabalmail.Cabalmail.watchkitapp` | iOS | `Cabalmail Watch` | none |
+   | `com.cabalmail.CabalmailMac` | **macOS** | `Cabalmail Mac` | **Push Notifications**; **App Groups** (same group) |
+   | `com.cabalmail.CabalmailMac.NotificationService` | **macOS** | `Cabalmail Mac Notification Service` | **App Groups** (same group), same rationale as the iOS extension |
 
    Keychain sharing (the app and the extension share a keychain access
    group) needs no portal capability — profiles honor the
@@ -402,17 +406,19 @@ distribution cert you just exported. Recreate them whenever the cert rolls
      Extension embedded in the iOS archive
    - `com.cabalmail.Cabalmail.watchkitapp` (App IDs → iOS, tvOS, watchOS,
      visionOS) — the embedded watch companion app
-   - `com.cabalmail.CabalmailMac` (macOS) — Push Notifications + App
-     Groups
-   - `com.cabalmail.CabalmailMac.NotificationService` (macOS) — App
-     Groups only; the push Notification Service Extension embedded in
-     the macOS archive
+   - `com.cabalmail.CabalmailMac` (App IDs → **macOS**) — Push
+     Notifications + App Groups
+   - `com.cabalmail.CabalmailMac.NotificationService` (App IDs →
+     **macOS**) — App Groups only; the push Notification Service
+     Extension embedded in the macOS archive
 
-   When generating a profile against a platform-universal App ID, the
-   profile flow shows a **Platform** selector that defaults to iOS —
-   set it to macOS for the two Mac App IDs or the download is a
-   `.mobileprovision` the mac targets reject at archive time (see the
-   platform note in [Signing prerequisites](#signing-prerequisites)).
+   The two Mac App IDs must be registered with the **macOS** platform
+   selected: profiles inherit their platform from the App ID, the
+   profile flow offers no platform choice, and a platform-universal
+   App ID yields iOS-family profiles that mac targets reject (see the
+   platform note in [Signing prerequisites](#signing-prerequisites),
+   including the `security cms` check to run before uploading any mac
+   profile secret).
 
    Capabilities must be on the App ID **before** its profiles are
    created: editing an App ID's capabilities flips every existing
