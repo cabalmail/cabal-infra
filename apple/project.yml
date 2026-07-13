@@ -54,6 +54,14 @@ targets:
       # without this, the visionOS TestFlight leg would fail validation.
       - target: CabalmailWatch
         destinationFilters: [iOS]
+      # Notification Service Extension: enriches the wake-signal push
+      # ("New mail") with sender / subject / snippet on-device, so message
+      # content never transits APNs (see docs/0.11.0/push-notifications.md).
+      # iOS-only for now, same destination-filter rationale as the watch —
+      # the push feature ships on iOS first and a visionOS archive must not
+      # embed an extension its provisioning doesn't cover.
+      - target: CabalmailNotificationService
+        destinationFilters: [iOS]
     info:
       path: Cabalmail/Info.plist
       properties:
@@ -99,6 +107,14 @@ targets:
           and name next to mail you receive, and to add senders to
           your contacts when you choose. Your contacts stay on
           this device.
+        # Expands at build time to "<TEAMID>." — read at runtime by
+        # `PushEnrichmentStore` to compose the fully-qualified shared
+        # keychain access group (`<TEAMID>.com.cabalmail.shared`), which
+        # SecItem requires verbatim (the entitlement's
+        # `$(AppIdentifierPrefix)` shorthand is signing-time only). Unsigned
+        # builds expand it to the empty string; the resulting SecItem
+        # failure is tolerated (push enrichment is best-effort).
+        AppIdentifierPrefix: "$(AppIdentifierPrefix)"
         # Route the plist's version fields through build settings so CI's
         # `CURRENT_PROJECT_VERSION=<timestamp>` actually reaches the shipped
         # Info.plist. Without this, XcodeGen hardcodes "1" / "1.0" and
@@ -335,6 +351,57 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "$(WATCHOS_APP_STORE_PROFILE_UUID)"
+
+  # Notification Service Extension for the iOS app. Wakes on every
+  # `mutable-content: 1` push, calls `/push_envelope` with the Cognito ID
+  # token the main app mirrors into the shared keychain group, and rewrites
+  # the bare "New mail" alert into sender / subject / snippet. Deliberately
+  # tiny: Foundation + UserNotifications only, no CabalmailKit — the values
+  # it needs arrive via the App Group container and the shared keychain
+  # (see docs/0.11.0/push-notifications.md and PushEnrichmentStore).
+  CabalmailNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: CabalmailNotificationService
+    info:
+      path: CabalmailNotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail Notification Service
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).NotificationService"
+        # See the Cabalmail target's equivalent comment — XcodeGen defaults
+        # these to "1" / "1.0" unless explicitly plumbed through to the
+        # build settings. App Store validation additionally requires an
+        # extension's versions to match its host app exactly; CI passes both
+        # on the xcodebuild command line, reaching every target at once.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+    settings:
+      base:
+        # Apple's convention for app extensions: the host app's bundle id
+        # plus a suffix. The push-dispatch Lambda targets the *host* topic;
+        # this id only matters for embedding and provisioning.
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail.NotificationService
+        # Keep in lockstep with the Cabalmail target above (host/extension
+        # version match is enforced at App Store validation).
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        # App Group (shared UserDefaults for api_url) + shared keychain
+        # access group (Cognito ID token). Mirrors the host app's additions
+        # in Cabalmail/Cabalmail.entitlements.
+        CODE_SIGN_ENTITLEMENTS: CabalmailNotificationService/CabalmailNotificationService.entitlements
+      configs:
+        # See the Cabalmail target's matching block for why manual-signing
+        # settings live per-target instead of on the xcodebuild command
+        # line. CI injects IOS_NSE_APP_STORE_PROFILE_UUID as a user-defined
+        # setting when archiving the iOS app (which embeds this target).
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "$(IOS_NSE_APP_STORE_PROFILE_UUID)"
 
 schemes:
   Cabalmail:

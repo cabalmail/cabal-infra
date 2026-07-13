@@ -83,6 +83,40 @@ resource "aws_dynamodb_table" "rate_limits" {
 }
 
 /**
+* APNs device tokens for push notifications (docs/0.11.0/push-notifications.md).
+* One row per (Cognito username, device token); a user with an iPhone and an
+* iPad has two rows. Written by the push_register / push_deregister Lambdas;
+* read (Query on `user`) and pruned (on APNs Unregistered/BadDeviceToken) by
+* push_dispatch. Rows are re-created by the app on every launch, so the data
+* is fully reconstructible and deliberately outside the backup plan (matching
+* cabal-user-preferences).
+*/
+
+#tfsec:ignore:aws-dynamodb-table-customer-key
+resource "aws_dynamodb_table" "push_tokens" {
+  name                        = "cabal-push-tokens"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "user"
+  range_key                   = "device_token"
+  deletion_protection_enabled = true
+
+  attribute {
+    name = "user"
+    type = "S"
+  }
+  attribute {
+    name = "device_token"
+    type = "S"
+  }
+  server_side_encryption {
+    enabled = true
+  }
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+/**
 * Per-user, per-domain allow list for address creation. The presence of a
 * (user, domain) row means the user IS permitted to create addresses on that
 * apex domain; the absence of a row defaults to deny. This matches the

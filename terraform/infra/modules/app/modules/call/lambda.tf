@@ -126,7 +126,8 @@ resource "aws_iam_role_policy" "lambda" {
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-caa-reports",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-preferences",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-domain-access",
-                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-rate-limits"
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-rate-limits",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-push-tokens"
             ]
         },
         {
@@ -210,6 +211,7 @@ resource "aws_lambda_function" "api_call" {
       DMARC_TABLE_NAME            = "cabal-dmarc-reports"
       CAA_TABLE_NAME              = "cabal-caa-reports"
       USER_PREFERENCES_TABLE_NAME = "cabal-user-preferences"
+      PUSH_TOKENS_TABLE_NAME      = "cabal-push-tokens"
       IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
     }
   }

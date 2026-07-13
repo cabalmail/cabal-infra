@@ -7,3 +7,20 @@ MAILDIR=$HOME/Maildir       # Make sure this directory exists!
 :0:
 *^X-Mailer: Outlook Express 3.14159
 IN-spam/
+
+# Push notifications (docs/0.11.0/push-notifications.md): enqueue a
+# content-free wake signal as a delivery side effect. The :0c carbon-copy
+# flag means delivery continues unconditionally, and the script itself is
+# best-effort (always exits 0), so a slow or unreachable SQS can never
+# block mail flow. Placed after the spam rule on purpose: a message that
+# rule files away never reaches this recipe, so junk does not buzz phones.
+#
+# This same file is installed at /etc/procmailrc AND copied to each user's
+# ~/.procmailrc (sync-users.sh), and procmail processes both in one run.
+# The PUSH_ENQUEUED variable survives the /etc -> $HOME rcfile transition,
+# so the guard makes the enqueue fire exactly once whichever copy runs
+# first.
+:0c
+* ! PUSH_ENQUEUED ?? yes
+| /usr/local/bin/push-enqueue.sh "$LOGNAME" "INBOX"
+PUSH_ENQUEUED=yes

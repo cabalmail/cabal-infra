@@ -126,6 +126,19 @@ public protocol ApiClient: Sendable {
     /// cursor from elsewhere and offer to follow it.
     func saveNavState(_ state: NavState) async throws
 
+    // MARK: Push notifications
+    /// Registers (or upserts) this device's APNs token via `/push_register`,
+    /// scoped server-side to the authenticated Cognito user. Called after
+    /// sign-in once notification permission is granted, and again whenever
+    /// APNs rotates the token — the Lambda upserts, so repeat calls are
+    /// cheap. See `docs/0.11.0/push-notifications.md`.
+    func registerPushDevice(_ registration: PushDeviceRegistration) async throws
+
+    /// Removes this device's APNs token via `/push_deregister` so a signed-
+    /// out device stops receiving mail notifications without operator
+    /// intervention.
+    func deregisterPushDevice(token: String) async throws
+
     // MARK: Send
     /// Submits an outgoing message via the Lambda send pipeline (Outbox
     /// APPEND -> SMTP -> Sent move). Mirrors `react/admin/src/ApiClient.js
@@ -406,6 +419,41 @@ public struct ApiSendAttachment: Sendable, Hashable {
         self.filename = filename
         self.mimeType = mimeType
         self.s3Key = s3Key
+    }
+}
+
+/// Parameters for `/push_register`. One row per device token in the
+/// `cabal-push-tokens` table; the Lambda upserts on every call, so the
+/// client re-registers freely on launch and on token rotation.
+public struct PushDeviceRegistration: Sendable, Hashable {
+    /// APNs device token, hex-encoded.
+    public let deviceToken: String
+    /// Host-app bundle id (`com.cabalmail.Cabalmail`). Determines which
+    /// APNs topic the dispatch Lambda uses.
+    public let bundleId: String
+    /// `ios` today; informational — `bundleId` is authoritative server-side.
+    public let platform: String
+    public let appVersion: String
+    public let locale: String
+    /// Folders to push for (`["*"]` = all). Nil omits the field so the
+    /// server keeps its stored / default value — the per-folder picker is
+    /// a later phase.
+    public let enabledFolders: [String]?
+
+    public init(
+        deviceToken: String,
+        bundleId: String,
+        platform: String = "ios",
+        appVersion: String,
+        locale: String,
+        enabledFolders: [String]? = nil
+    ) {
+        self.deviceToken = deviceToken
+        self.bundleId = bundleId
+        self.platform = platform
+        self.appVersion = appVersion
+        self.locale = locale
+        self.enabledFolders = enabledFolders
     }
 }
 

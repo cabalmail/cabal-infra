@@ -57,8 +57,11 @@ locals {
 # v5 (phase 4 of the same plan): add the LOGIN_TRUSTED_NETWORKS env var (NLB
 # public-subnet CIDRs) the entrypoint needs to keep NLB-forwarded logins
 # working once disable_plaintext_auth = yes lands in the image.
+# v6 (docs/0.11.0/push-notifications.md phase 2): add the PUSH_QUEUE_URL env
+# var so the entrypoint can hand the queue URL + task-role credential URI to
+# procmail's push-enqueue.sh (sendmail sanitizes the delivery agents' env).
 resource "terraform_data" "imap_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v5+hc" : "imap-taskdef-v5"
+  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v6+hc" : "imap-taskdef-v6"
 }
 
 resource "aws_ecs_task_definition" "imap" {
@@ -98,6 +101,7 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "NETWORK_CIDR", value = var.cidr_block },
       { name = "LOGIN_TRUSTED_NETWORKS", value = join(" ", var.login_trusted_cidrs) },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["imap"].url },
+      { name = "PUSH_QUEUE_URL", value = aws_sqs_queue.push.url },
     ]
 
     secrets = concat([

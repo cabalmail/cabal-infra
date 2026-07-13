@@ -18,6 +18,11 @@ output "sns_topic_arn" {
   description = "ARN of the address-changed SNS topic. Lambdas publish here to trigger reconfiguration."
 }
 
+output "push_queue_arn" {
+  value       = aws_sqs_queue.push.arn
+  description = "ARN of the push wake-signal queue. The app module's push_dispatch Lambda consumes it."
+}
+
 output "imap_service_name" {
   value       = aws_ecs_service.imap.name
   description = "Name of the IMAP ECS service."

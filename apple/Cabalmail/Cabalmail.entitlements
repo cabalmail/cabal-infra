@@ -4,10 +4,9 @@
 <dict>
     <!--
         This file is wired into the iOS target's signing via
-        `apple/project.yml` (CODE_SIGN_ENTITLEMENTS). It ships empty
-        on purpose: the only iOS entitlement Cabalmail has ever needed
-        is `com.apple.developer.mail-client`, which Apple grants
-        case-by-case via:
+        `apple/project.yml` (CODE_SIGN_ENTITLEMENTS). One entitlement
+        remains absent on purpose: `com.apple.developer.mail-client`,
+        which Apple grants case-by-case via:
 
           https://developer.apple.com/contact/request/default-mail-client
 
@@ -20,5 +19,37 @@
         See the "Setting Cabalmail as the default mail handler" section
         in apple/README.md for the full rollout.
     -->
+
+    <!--
+        Push notifications (docs/0.11.0/push-notifications.md). The value
+        here is always `development`; a distribution provisioning profile
+        rewrites it to `production` at signing time, so no per-config
+        switching is needed.
+    -->
+    <key>aps-environment</key>
+    <string>development</string>
+
+    <!--
+        App Group shared with the Notification Service Extension. Carries
+        the API Gateway URL via `UserDefaults(suiteName:)` so the NSE can
+        call `/push_envelope` without linking CabalmailKit.
+    -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.cabalmail.Cabalmail</string>
+    </array>
+
+    <!--
+        Keychain sharing with the NSE. The app's own identifier stays FIRST:
+        items stored without an explicit access group default to the first
+        entry, so existing Cognito-token / IMAP-password items keep landing
+        in the app-private group exactly as before this entitlement existed.
+        Only `PushEnrichmentStore` targets the shared group, explicitly.
+    -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.cabalmail.Cabalmail</string>
+        <string>$(AppIdentifierPrefix)com.cabalmail.shared</string>
+    </array>
 </dict>
 </plist>

@@ -289,6 +289,7 @@ jobs:
           S6: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           S7: ${{ secrets.IOS_APP_STORE_PROFILE }}
           S8: ${{ secrets.WATCHOS_APP_STORE_PROFILE }}
+          S9: ${{ secrets.IOS_NSE_APP_STORE_PROFILE }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           MISSING=()
@@ -303,6 +304,16 @@ jobs:
           # profile. The visionOS leg does not (the embed dependency is
           # destination-filtered to iOS in project.yml).
           [ "$PLATFORM" = "iOS" ] && [ -z "$S8" ] && MISSING+=("WATCHOS_APP_STORE_PROFILE")
+          # The NSE profile gates BOTH legs even though only the iOS archive
+          # embeds the extension: the push entitlements (aps-environment,
+          # app group, keychain sharing) live on the shared Cabalmail target,
+          # so every leg's archive needs profiles regenerated with the new
+          # capabilities. The operator does that portal work in one sitting
+          # with the NSE App ID/profile creation, making this secret the
+          # "push signing assets are ready" sentinel — until it exists, both
+          # legs skip cleanly instead of failing codesign against stale
+          # profiles.
+          [ -z "$S9" ] && MISSING+=("IOS_NSE_APP_STORE_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -402,6 +413,16 @@ jobs:
           extension: mobileprovision
           env-name: WATCHOS_APP_STORE_PROFILE_UUID
 
+      - name: Install NSE App Store provisioning profile
+        # iOS leg only: the Notification Service Extension embed is
+        # destination-filtered to iOS in project.yml, same as the watch app.
+        if: steps.check.outputs.enabled == 'true' && matrix.platform == 'iOS'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.IOS_NSE_APP_STORE_PROFILE }}
+          extension: mobileprovision
+          env-name: IOS_NSE_APP_STORE_PROFILE_UUID
+
       - name: Archive Cabalmail
         if: steps.check.outputs.enabled == 'true'
         working-directory: apple
@@ -461,6 +482,7 @@ jobs:
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             IOS_APP_STORE_PROFILE_UUID="$IOS_APP_STORE_PROFILE_UUID" \
             WATCHOS_APP_STORE_PROFILE_UUID="${WATCHOS_APP_STORE_PROFILE_UUID:-}" \
+            IOS_NSE_APP_STORE_PROFILE_UUID="${IOS_NSE_APP_STORE_PROFILE_UUID:-}" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
@@ -482,6 +504,11 @@ jobs:
           WATCH_PROFILE_ENTRY=""
           if [ -n "${WATCHOS_APP_STORE_PROFILE_UUID:-}" ]; then
             WATCH_PROFILE_ENTRY="<key>com.cabalmail.Cabalmail.watchkitapp</key><string>$WATCHOS_APP_STORE_PROFILE_UUID</string>"
+          fi
+          # Same shape for the embedded Notification Service Extension.
+          NSE_PROFILE_ENTRY=""
+          if [ -n "${IOS_NSE_APP_STORE_PROFILE_UUID:-}" ]; then
+            NSE_PROFILE_ENTRY="<key>com.cabalmail.Cabalmail.NotificationService</key><string>$IOS_NSE_APP_STORE_PROFILE_UUID</string>"
           fi
           cat > "$PLIST" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -505,6 +532,7 @@ jobs:
                   <key>com.cabalmail.Cabalmail</key>
                   <string>$IOS_APP_STORE_PROFILE_UUID</string>
                   $WATCH_PROFILE_ENTRY
+                  $NSE_PROFILE_ENTRY
               </dict>
           </dict>
           </plist>
