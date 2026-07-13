@@ -72,9 +72,12 @@ not pile up in the DLQ). Per environment:
      --value file://AuthKey_YOURKEYID.p8 --overwrite
    ```
 
-3. Development-signed builds (Xcode direct installs) register **sandbox**
-   tokens; TestFlight and App Store builds register **production** tokens.
-   The endpoint is per-environment:
+3. Check the endpoint matches how the app reaches devices. TestFlight and
+   App Store builds register **production** tokens, so a deployment whose
+   every environment installs from TestFlight keeps the default
+   (production) endpoint everywhere and skips this step. Only
+   development-signed builds (Xcode direct installs) register **sandbox**
+   tokens:
 
    ```bash
    # only for an environment serving development-signed builds:
@@ -82,9 +85,8 @@ not pile up in the DLQ). Per environment:
      --value 'https://api.sandbox.push.apple.com' --overwrite
    ```
 
-   The default is the production endpoint. A token sent to the wrong
-   endpoint fails with `BadDeviceToken` and is pruned; re-launching the app
-   re-registers it.
+   A token sent to the wrong endpoint fails with `BadDeviceToken` and is
+   pruned; re-launching the app re-registers it.
 
 One key works for every app under the same team (iOS and macOS); the
 dispatch Lambda selects the APNs topic from each token's registered bundle
@@ -113,15 +115,40 @@ new key lands everywhere.
 
 ## Client-side manual steps
 
-The iOS/macOS app needs one-time Apple developer setup before registration
-works on real devices:
+The iOS app needs one-time Apple developer setup before push registration
+works on real devices. The generic signing mechanics (certificates, profile
+creation, secret encoding) live in
+[apple/README.md](../apple/README.md#creating-provisioning-profiles); the
+push-specific portal work, in order:
 
-- Enable the **Push Notifications** capability on the app's App ID (and the
-  Notification Service Extension's App ID) in the developer portal, then
-  regenerate any manual provisioning profiles CI uses — an entitlement change
-  invalidates them.
-- The Notification Service Extension ships as its own bundle id with its own
-  App Store profile; CI expects its profile UUID alongside the app's.
+1. **Register the App Group** (Identifiers → ➕ → App Groups):
+   `group.com.cabalmail.Cabalmail`. It carries the API URL and the mirrored
+   Cognito token from the app to the Notification Service Extension.
+2. **Add capabilities to the app's App ID** (`com.cabalmail.Cabalmail`):
+   **Push Notifications**, and **App Groups** configured with the group
+   above. Saving this warns that existing profiles are invalidated — that
+   is step 4. Keychain sharing needs no portal capability.
+3. **Register the NSE App ID** (`com.cabalmail.Cabalmail.NotificationService`,
+   explicit) with **App Groups only** — the extension never registers for
+   push itself, so it does not get the Push Notifications capability.
+4. **Re-issue the app's App Store profile** (it turned Invalid in step 2:
+   Profiles → click it → Edit → Save → Download) and **create the NSE's App
+   Store profile** against the same Apple Distribution certificate. The one
+   app profile covers both the iOS and visionOS upload legs; the watch
+   profile belongs to an untouched App ID and is unaffected.
+5. **Update the GitHub environment secrets** per environment: refresh
+   `IOS_APP_STORE_PROFILE` with the re-issued profile and add
+   `IOS_NSE_APP_STORE_PROFILE` (base64 each; stray whitespace is stripped
+   by the workflow). Until the NSE secret exists, **both** TestFlight
+   upload legs skip with a warning — it doubles as the "push signing assets
+   are ready" sentinel, so neither leg can fail codesign against a stale
+   profile.
+
+The macOS app carries none of the push entitlements and no extension, so
+its App ID and profiles need no changes until a macOS Notification Service
+Extension ships; the backend is already multi-app (the dispatch Lambda
+selects the APNs topic per registered token, and the same APNs key covers
+every app on the team).
 
 ## Operational notes
 
