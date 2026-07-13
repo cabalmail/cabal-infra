@@ -160,7 +160,17 @@ are expanded in the sections further down.
 
    Then the App IDs, with the capabilities each one needs checked at
    registration time (capabilities added later invalidate any profiles
-   already issued against the App ID):
+   already issued against the App ID). Newly registered App IDs come
+   out platform-universal (`iOS, iPadOS, macOS, ...`), which is fine —
+   but it moves the platform choice into the **profile**-generation
+   flow, where a Platform selector appears for universal App IDs and
+   defaults to iOS. When creating a profile for a macOS target, set
+   that selector to macOS or the download is a `.mobileprovision` the
+   mac target rejects at archive time ("has platforms iOS..., which
+   does not match the current platform macOS"). Verify any mac profile
+   before uploading its secret:
+   `security cms -D -i <file> | plutil -p - | grep -A3 Platform`
+   must show `OSX`.
 
    | App ID | Description | Capabilities |
    |---|---|---|
@@ -392,7 +402,17 @@ distribution cert you just exported. Recreate them whenever the cert rolls
      Extension embedded in the iOS archive
    - `com.cabalmail.Cabalmail.watchkitapp` (App IDs → iOS, tvOS, watchOS,
      visionOS) — the embedded watch companion app
-   - `com.cabalmail.CabalmailMac` (App IDs → macOS)
+   - `com.cabalmail.CabalmailMac` (macOS) — Push Notifications + App
+     Groups
+   - `com.cabalmail.CabalmailMac.NotificationService` (macOS) — App
+     Groups only; the push Notification Service Extension embedded in
+     the macOS archive
+
+   When generating a profile against a platform-universal App ID, the
+   profile flow shows a **Platform** selector that defaults to iOS —
+   set it to macOS for the two Mac App IDs or the download is a
+   `.mobileprovision` the mac targets reject at archive time (see the
+   platform note in [Signing prerequisites](#signing-prerequisites)).
 
    Capabilities must be on the App ID **before** its profiles are
    created: editing an App ID's capabilities flips every existing
