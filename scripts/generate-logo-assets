@@ -57,7 +57,7 @@ readonly PLATE_0="#FAF4E4"      PLATE_1="#EFE2C0"      PLATE_2="#D9C890"
 # edge-to-edge; 0.72 read undersized next to system icons on a real Home
 # Screen / Dock. 0.85 matches neighboring icons' visual weight while keeping
 # the M's right edge clear of the squircle mask (0.90 crowds it).
-readonly ICON_GLYPH_SCALE="0.85"
+readonly ICON_GLYPH_SCALE="0.95"
 
 # The docs masthead logo is a solid silhouette (composited over a dark
 # animated plate by docs/_sass) — black preserves its established look.
