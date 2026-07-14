@@ -162,6 +162,16 @@ team):
   sentinel). The optional notarized-artifact leg additionally needs
   `MAC_NSE_DEVID_PROFILE` alongside the existing Developer ID pair.
 
+On macOS the extension rarely gets to run: the system notification daemon
+kills service extensions before they receive the notification (a
+long-standing, unresolved platform defect). The Mac app compensates while
+it is running — when it is open but not focused, the app itself fetches the
+envelope and posts the enriched notification in place of the generic one;
+when it is focused, no banner shows at all (the app already displays the
+mail). Only when the Mac app is quit do notifications fall back to the
+generic "New mail". The extension ships regardless, so a future macOS fix
+restores full enrichment without an app change.
+
 ## Operational notes
 
 - **Queue and DLQ.** `cabal-push-queue` retains signals for one hour (a

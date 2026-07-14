@@ -431,6 +431,63 @@ extension PushRegistrar {
     }
 }
 
+// MARK: - Foreground enrichment workaround (macOS)
+
+#if os(macOS)
+extension PushRegistrar {
+    /// Enriches a remote push while the app runs unfocused. macOS's
+    /// notification daemon kills our Notification Service Extension before
+    /// `didReceive` ever runs (the long-standing "sluggish startup" platform
+    /// defect — Apple forums threads 693011 / 806789), so a remote push can
+    /// only show the generic "New mail" once it leaves APNs. While the app
+    /// itself is running it can do the NSE's job instead: fetch the envelope
+    /// through the session client, post an enriched *local* notification,
+    /// and let `willPresent` suppress the generic original. Returns false on
+    /// any failure so the caller presents the original instead — a generic
+    /// banner beats a silent drop. The NSE stays shipped as-is; if Apple
+    /// fixes the platform it takes over the app-not-running case.
+    func presentEnrichedNotification(for ref: PushMessageRef) async -> Bool {
+        guard let client = await activeClient() else {
+            CabalmailLog.warn("Push", "foreground enrichment skipped: no signed-in session")
+            return false
+        }
+        do {
+            let envelope = try await client.apiClient.fetchPushEnvelope(
+                folder: ref.folder,
+                uid: ref.uid,
+                messageID: ref.messageID
+            )
+            let content = UNMutableNotificationContent()
+            content.title = envelope.from
+            content.body = envelope.subject + "\n" + envelope.snippet
+            content.sound = .default
+            content.categoryIdentifier = "MAIL_MESSAGE"
+            // Same msgRef contract as the dispatch payload, carrying the
+            // server-resolved uid (the push's was a pre-delivery hint; 0
+            // is the "unresolved" sentinel, and a missing resolution keeps
+            // the original hint) so Mark as Read / Archive / Open act on
+            // the message this notification shows.
+            var msgRef: [String: Any] = ["folder": ref.folder]
+            let resolvedUid = envelope.uid.flatMap { $0 == 0 ? nil : $0 } ?? ref.uid
+            if let resolvedUid { msgRef["uid"] = Int(resolvedUid) }
+            if let messageID = ref.messageID { msgRef["msg_id"] = messageID }
+            content.userInfo = ["msgRef": msgRef]
+            try await UNUserNotificationCenter.current().add(
+                UNNotificationRequest(
+                    identifier: UUID().uuidString,
+                    content: content,
+                    trigger: nil
+                )
+            )
+            return true
+        } catch {
+            CabalmailLog.warn("Push", "foreground enrichment failed: \(error)")
+            return false
+        }
+    }
+}
+#endif
+
 // MARK: - Background execution plumbing
 
 extension PushRegistrar {
