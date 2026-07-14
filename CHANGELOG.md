@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-07-14
+
+### Added
+- Apple: **Menu-bar presence and launch at login for the Mac app.** Mac
+  notifications are enriched by the running app (see the silent-push
+  entry), so a quit app hears nothing; these two residency affordances
+  make quitting rare. A status-item menu — on by default, removable in
+  Settings > Notifications — shows the Inbox unread count with Open /
+  New Message / Quit actions, and an opt-in launch-at-login toggle (off
+  until the user enables it, honest about the system's approval state)
+  starts Cabalmail at login so new-mail notifications keep working
+  without opening the app.
+- Apple: **Notification settings and macOS push.** The Mac app now gets
+  new-mail notifications with the Open / Mark as Read / Archive actions
+  (see the companion entry for how and when they are enriched), and both
+  platforms gain a Notifications section in Settings: a master toggle (honest about the system-level
+  permission state, with a pointer to Settings/System Settings when denied
+  there) and a folder scope — Inbox only, All folders, or a hand-picked
+  folder list. Scope changes take effect immediately; turning the toggle
+  off deregisters the device and stays off across launches.
+- **Weekly push-token garbage collection.** A scheduled Lambda
+  (`push_token_gc`) reaps device-token rows idle for 90+ days — the backstop
+  for tokens that neither APNs-rejection pruning nor sign-out deregistration
+  can reach (a device that stopped launching the app whose user receives no
+  mail). A reaped device transparently re-registers on its next app launch.
+
+### Changed
+- Apple: **Mac notifications are enriched whenever the app is running.**
+  The server sends Macs a silent wake instead of a visible alert; the
+  running app (focused or not) fetches the envelope and posts the
+  sender/subject/snippet notification itself — no banner while the app is
+  frontmost (it already shows the mail), and a generic "New mail" if the
+  fetch fails. macOS kills notification service extensions before they run
+  (a long-standing platform defect), so extension-side enrichment — the
+  iOS approach — cannot work there; the extension stays shipped so a
+  future macOS fix restores it, including for the one case this design
+  cannot cover: a quit Mac app receives no notification (a paired iPhone
+  shows the fully enriched banner regardless).
+
+### Fixed
+- Apple: **Notification actions update the open app immediately.** Mark as
+  Read and Archive from a notification now refresh the running app's views
+  right away instead of waiting for the next poll. (Also fixed the Mac
+  notification extension's shared-keychain read — a macOS/iOS platform
+  difference in group-less keychain searches — so extension-side enrichment
+  works the moment macOS stops killing the extension at startup; see the
+  companion entry for how Mac notifications get their content today.)
+
 ## [0.11.0] - 2026-07-13
 
 ### Added

@@ -32,4 +32,20 @@ extension URLSessionApiClient {
         ])
         _ = try await send(request, expectedStatuses: 200..<300)
     }
+
+    public func fetchPushEnvelope(
+        folder: String,
+        uid: UInt32?,
+        messageID: String?
+    ) async throws -> PushEnvelope {
+        var body: [String: Any] = ["folder": folder]
+        // Omitted (not null) when unset — same posture as the NSE's
+        // `EnvelopeQuery.requestBody`; the Lambda resolves by whichever
+        // coordinates it receives (msg_id authoritative, uid a hint).
+        if let uid { body["uid"] = Int(uid) }
+        if let messageID { body["msg_id"] = messageID }
+        let request = try await post("/push_envelope", json: body)
+        let data = try await send(request, expectedStatuses: 200..<300)
+        return try JSONDecoder().decode(PushEnvelope.self, from: data)
+    }
 }

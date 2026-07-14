@@ -70,6 +70,11 @@ struct SettingsView: View {
             readingSection(bindable: preferences)
             composingSection(bindable: preferences)
             actionsSection(bindable: preferences)
+            // Push ships on iOS and macOS only; the visionOS build has no
+            // PushRegistrar, so the section is compiled out with it.
+            #if os(iOS) || os(macOS)
+            NotificationSettingsSection()
+            #endif
             appearanceSection(bindable: preferences)
             diagnosticsSection(bindable: preferences)
             AboutSettingsSection()

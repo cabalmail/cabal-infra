@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Wired via `apple/project.yml` (CODE_SIGN_ENTITLEMENTS on the
+        CabalmailMacNotificationService target). macOS twin of the iOS
+        NSE's entitlements: the extension reads two values the main app
+        mirrors for it (see CabalmailKit's `PushEnrichmentStore`):
+
+          - the API Gateway URL, from the App Group `UserDefaults`, and
+          - the Cognito ID token, from the shared keychain access group.
+
+        The NSE never registers for push itself, so no aps-environment
+        here — only the containers it reads from, plus the two macOS-only
+        sandbox keys below (iOS is implicitly sandboxed and grants
+        outbound network by default; a sandboxed mac process gets neither
+        implicitly).
+    -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!--
+        The enrichment call to `/push_envelope` is an outbound HTTPS
+        request; without this the sandboxed extension's URLSession fails
+        and every notification degrades to the "New mail" fallback.
+    -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.cabalmail.Cabalmail</string>
+    </array>
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.cabalmail.CabalmailMac.NotificationService</string>
+        <string>$(AppIdentifierPrefix)com.cabalmail.shared</string>
+    </array>
+</dict>
+</plist>

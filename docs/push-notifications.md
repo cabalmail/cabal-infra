@@ -144,11 +144,46 @@ push-specific portal work, in order:
    are ready" sentinel, so neither leg can fail codesign against a stale
    profile.
 
-The macOS app carries none of the push entitlements and no extension, so
-its App ID and profiles need no changes until a macOS Notification Service
-Extension ships; the backend is already multi-app (the dispatch Lambda
-selects the APNs topic per registered token, and the same APNs key covers
-every app on the team).
+The macOS app repeats the same shape with its own identifiers — the
+backend needs nothing either way (the dispatch Lambda selects the APNs
+topic per registered token, and the same APNs key covers every app on the
+team):
+
+- App Group: the same `group.com.cabalmail.Cabalmail`.
+- `com.cabalmail.CabalmailMac`: **Push Notifications** + **App Groups**;
+  re-issue its App Store profile afterwards.
+- `com.cabalmail.CabalmailMac.NotificationService`: **App Groups only**,
+  plus its own App Store profile — minted with
+  `scripts/make-mac-profile.py` (needs the App Store Connect API `.p8`
+  at hand), because the portal UI cannot produce macOS profiles for
+  universal App IDs.
+- Secrets: refresh `MAC_APP_STORE_PROFILE`, add
+  `MAC_NSE_APP_STORE_PROFILE` (the macOS upload leg's skip-gate
+  sentinel). The optional notarized-artifact leg additionally needs
+  `MAC_NSE_DEVID_PROFILE` alongside the existing Developer ID pair.
+
+On macOS the extension rarely gets to run: the system notification daemon
+kills service extensions before they receive the notification (a
+long-standing, unresolved platform defect). The dispatch Lambda therefore
+sends Macs a *silent* push (`content-available: 1` with the `msgRef`, no
+alert) instead of an alert push. A running Mac app — focused or not —
+receives it, fetches the envelope, and posts an enriched local
+notification itself: a full banner when the app is unfocused, sound only
+(no banner) when it is frontmost, since the app already displays the mail.
+If the fetch fails, the app posts a generic "New mail" notification
+instead, so nothing is dropped silently. A quit Mac app receives no
+notification at all — a deliberate trade, since the paired iPhone covers
+that case with a fully enriched banner. That gap only opens when the
+user quits explicitly, and two residency affordances (Settings >
+Notifications) exist to make that rare: an opt-in launch-at-login item
+(off until the user enables it; the toggle mirrors the system's
+`SMAppService` status, pointing at System Settings > General > Login
+Items when approval is pending) and a menu-bar presence (on by default)
+whose status-item menu shows the Inbox unread count with Open / New
+Message / Quit actions, keeping the app legibly alive with every window
+closed. The extension ships regardless (a monthly automated check
+watches for the macOS fix that would let it take over the quit-app case
+without an app change).
 
 ## Operational notes
 
@@ -173,9 +208,12 @@ every app on the team).
   and does not survive a task replacement, which loses at most the last
   seconds of wake signals, not mail.
 - **Token hygiene.** `last_seen_at` on each `cabal-push-tokens` row is
-  updated on every successful push and registration; `last_failure` records
-  the most recent APNs rejection reason. Rows for uninstalled devices are
-  pruned automatically on the next push attempt.
+  updated on registration and refreshed by successful pushes;
+  `last_failure` records the most recent APNs rejection reason. Rows for
+  uninstalled devices are pruned automatically on the next push attempt,
+  and the weekly `push_token_gc` Lambda reaps rows idle for 90+ days as
+  the backstop for devices no rejection ever surfaces (logs at
+  `/cabal/lambda/push_token_gc`).
 - **Enrichment during IMAP rolls.** `/push_envelope` returns 503 while a
   planned IMAP redeploy is in flight; devices fall back to the generic
   alert. Nothing needs doing.

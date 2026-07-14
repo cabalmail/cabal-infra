@@ -87,6 +87,85 @@ final class ApiClientPushTests: XCTestCase {
         XCTAssertEqual(payload?["device_token"] as? String, "ab12cd34")
     }
 
+    func testFetchPushEnvelopePostsFolderOnlyWhenHintsAreNil() async throws {
+        let response = """
+        {"from": "Ada Lovelace <ada@example.com>", "subject": "Hello", \
+        "snippet": "First line", "uid": 4271}
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(response.utf8), 200)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let envelope = try await client.fetchPushEnvelope(
+            folder: "INBOX",
+            uid: nil,
+            messageID: nil
+        )
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0].httpMethod, "POST")
+        XCTAssertEqual(
+            requests[0].url?.absoluteString,
+            "https://api.cabalmail.example/prod/push_envelope"
+        )
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Authorization"), "idtoken")
+        let payload = try JSONSerialization.jsonObject(with: requests[0].httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(payload?["folder"] as? String, "INBOX")
+        // Nil hints are OMITTED (not null) so the Lambda resolves purely by
+        // whichever coordinates the payload actually carried.
+        XCTAssertEqual(payload?.count, 1)
+        XCTAssertEqual(envelope.from, "Ada Lovelace <ada@example.com>")
+        XCTAssertEqual(envelope.subject, "Hello")
+        XCTAssertEqual(envelope.snippet, "First line")
+        XCTAssertEqual(envelope.uid, 4271)
+    }
+
+    func testFetchPushEnvelopeForwardsUidAndMessageID() async throws {
+        let response = """
+        {"from": "Ada <ada@example.com>", "subject": "Hi", "snippet": ""}
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(response.utf8), 200)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let envelope = try await client.fetchPushEnvelope(
+            folder: "INBOX",
+            uid: 4271,
+            messageID: "<abc@mx.example>"
+        )
+        let requests = await http.requests
+        let payload = try JSONSerialization.jsonObject(with: requests[0].httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(payload?["folder"] as? String, "INBOX")
+        XCTAssertEqual(payload?["uid"] as? Int, 4271)
+        XCTAssertEqual(payload?["msg_id"] as? String, "<abc@mx.example>")
+        XCTAssertEqual(payload?.count, 3)
+        // A response without `uid` decodes with a nil resolved uid — callers
+        // then keep the original hint for the notification's msgRef.
+        XCTAssertNil(envelope.uid)
+    }
+
+    func testFetchPushEnvelopeSurfacesServerError() async throws {
+        let http = RecordingHTTPTransport(responses: [(Data("boom".utf8), 500)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        do {
+            _ = try await client.fetchPushEnvelope(folder: "INBOX", uid: nil, messageID: nil)
+            XCTFail("Expected server error")
+        } catch let error as CabalmailError {
+            guard case .server(let code, _) = error else {
+                return XCTFail("Expected .server, got \(error)")
+            }
+            XCTAssertEqual(code, "500")
+        }
+    }
+
     func testRegisterPushDeviceSurfacesServerError() async throws {
         let http = RecordingHTTPTransport(responses: [(Data("boom".utf8), 500)])
         let client = URLSessionApiClient(

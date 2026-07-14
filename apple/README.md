@@ -160,14 +160,34 @@ are expanded in the sections further down.
 
    Then the App IDs, with the capabilities each one needs checked at
    registration time (capabilities added later invalidate any profiles
-   already issued against the App ID):
+   already issued against the App ID).
+
+   **The macOS profile trap.** The current portal registers every new
+   App ID as platform-universal (`iOS, iPadOS, macOS, ...`) and offers
+   no platform choice anywhere — not at registration, not in the
+   profile flow — and a profile generated through the portal UI
+   against a universal App ID comes out **iOS-family only**
+   (`Platform: iOS, xrOS, visionOS`, no `OSX`), which a macOS target
+   rejects at archive time ("has platforms iOS..., which does not
+   match the current platform macOS"). Profiles for macOS targets on
+   universal App IDs must instead be minted through the App Store
+   Connect API, where the profile type is explicit —
+   [`scripts/make-mac-profile.py`](../scripts/make-mac-profile.py)
+   does it in one call using the same ASC API key CI uploads with
+   (which is why that `.p8` must be kept at hand; see
+   [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)).
+   Verify any mac profile before uploading its secret:
+   `security cms -D -i <file> | plutil -p - | grep -A6 Platform`
+   must list `OSX` — the download's file extension is not a reliable
+   signal.
 
    | App ID | Description | Capabilities |
    |---|---|---|
    | `com.cabalmail.Cabalmail` | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`) |
    | `com.cabalmail.Cabalmail.NotificationService` | `Cabalmail Notification Service` | **App Groups** (same group). Not Push Notifications — the extension never registers for push itself; it only reads the shared containers |
    | `com.cabalmail.Cabalmail.watchkitapp` | `Cabalmail Watch` | none |
-   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | none |
+   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | **Push Notifications**; **App Groups** (same group) |
+   | `com.cabalmail.CabalmailMac.NotificationService` | `Cabalmail Mac Notification Service` | **App Groups** (same group), same rationale as the iOS extension |
 
    Keychain sharing (the app and the extension share a keychain access
    group) needs no portal capability — profiles honor the
@@ -283,6 +303,7 @@ Environments → `stage` / `prod`).
 | Secret | What it is |
 |---|---|
 | `MAC_APP_STORE_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (App Store distribution). |
+| `MAC_NSE_APP_STORE_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac.NotificationService` (App Store distribution), the push Notification Service Extension embedded in the macOS archive. The macOS upload leg skips (with a warning) until this secret exists — it doubles as the "macOS push signing assets are ready" sentinel. |
 | `MAC_INSTALLER_CERT_P12` | base64 of a **Mac Installer Distribution** `.p12`. The outer `.pkg` that wraps the macOS `.app` is signed with this cert (distinct from `Apple Distribution`, which signs the `.app` bundle itself). See [Exporting the Mac Installer certificate](#exporting-the-mac-installer-certificate). |
 | `MAC_INSTALLER_CERT_PASSWORD` | Password used when exporting the `.p12`. Must be non-empty. |
 
@@ -292,7 +313,8 @@ Environments → `stage` / `prod`).
 |---|---|
 | `DEVELOPER_ID_CERT_P12` | base64 of your **Developer ID Application** `.p12` (different cert type from Apple Distribution) |
 | `DEVELOPER_ID_CERT_PASSWORD` | Password you set when exporting the `.p12` |
-| `MAC_DEVID_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (Developer ID distribution). Both `DEVELOPER_ID_CERT_P12` and this must be set to produce the notarized artifact; either missing one and the job completes after the TestFlight upload and skips notarization. |
+| `MAC_DEVID_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (Developer ID distribution). All three Developer-ID secrets (cert + this + the NSE profile below) must be set to produce the notarized artifact; missing any one and the job completes after the TestFlight upload and skips notarization. |
+| `MAC_NSE_DEVID_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac.NotificationService` (Developer ID distribution) — the embedded extension needs its own profile under the developer-id export method. |
 
 The App Store Connect API key triple (`KEY_ID` + `ISSUER_ID` + `P8`) is used
 for `altool` uploads and macOS `notarytool` submission. Under manual signing
@@ -389,7 +411,29 @@ distribution cert you just exported. Recreate them whenever the cert rolls
      Extension embedded in the iOS archive
    - `com.cabalmail.Cabalmail.watchkitapp` (App IDs → iOS, tvOS, watchOS,
      visionOS) — the embedded watch companion app
-   - `com.cabalmail.CabalmailMac` (App IDs → macOS)
+   - `com.cabalmail.CabalmailMac` — Push Notifications + App Groups
+   - `com.cabalmail.CabalmailMac.NotificationService` — App Groups
+     only; the push Notification Service Extension embedded in the
+     macOS archive
+
+   For the two Mac App IDs, create the profiles with
+   [`scripts/make-mac-profile.py`](../scripts/make-mac-profile.py)
+   rather than the portal UI — the portal cannot produce a
+   macOS-platform profile for a universal App ID (see the macOS
+   profile trap in [Signing prerequisites](#signing-prerequisites)),
+   e.g.:
+
+   ```sh
+   ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_KEY_P8=~/keys/AuthKey_....p8 \
+   python3 scripts/make-mac-profile.py \
+     com.cabalmail.CabalmailMac.NotificationService \
+     "Cabalmail macOS NSE App Store"
+   ```
+
+   The script writes the `.provisionprofile`, prints the exact base64
+   for the GitHub secret, and names the `security cms` platform check
+   to run first. API-minted profiles appear in the portal's Profiles
+   list afterwards and are manageable there like any other.
 
    Capabilities must be on the App ID **before** its profiles are
    created: editing an App ID's capabilities flips every existing
@@ -408,13 +452,19 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    | Cabalmail NSE App Store | App Store | `com.cabalmail.Cabalmail.NotificationService` | Apple Distribution | `.mobileprovision` |
    | Cabalmail Watch App Store | App Store | `com.cabalmail.Cabalmail.watchkitapp` | Apple Distribution | `.mobileprovision` |
    | Cabalmail macOS App Store | App Store | `com.cabalmail.CabalmailMac` | Apple Distribution | `.provisionprofile` |
+   | Cabalmail macOS NSE App Store | App Store | `com.cabalmail.CabalmailMac.NotificationService` | Apple Distribution | `.provisionprofile` |
    | Cabalmail macOS Developer ID *(optional)* | Developer ID | `com.cabalmail.CabalmailMac` | Developer ID Application | `.provisionprofile` |
+   | Cabalmail macOS NSE Developer ID *(optional)* | Developer ID | `com.cabalmail.CabalmailMac.NotificationService` | Developer ID Application | `.provisionprofile` |
 
    Profile names are arbitrary — CI matches by the UUID embedded in the
    file, not the name. All profiles share the same Apple Distribution
-   certificate.
+   certificate. Create the four macOS rows with
+   `scripts/make-mac-profile.py` (pass `MAC_APP_DIRECT` as the third
+   argument for the Developer ID variants), not the portal UI — see
+   the macOS profile trap above.
 
-3. **Download each profile** (click the profile → **Download**).
+3. **Download each profile** (click the profile → **Download**; the
+   script already wrote the mac ones locally and printed their base64).
 
 4. **Base64-encode each** and paste into the matching GitHub secret:
    ```sh
@@ -426,7 +476,9 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    | NSE `.mobileprovision` | `IOS_NSE_APP_STORE_PROFILE` |
    | Watch `.mobileprovision` | `WATCHOS_APP_STORE_PROFILE` |
    | macOS App Store `.provisionprofile` | `MAC_APP_STORE_PROFILE` |
+   | macOS NSE App Store `.provisionprofile` | `MAC_NSE_APP_STORE_PROFILE` |
    | macOS Developer ID `.provisionprofile` | `MAC_DEVID_PROFILE` |
+   | macOS NSE Developer ID `.provisionprofile` | `MAC_NSE_DEVID_PROFILE` |
 
    Stray whitespace — a trailing newline from the paste, or a `base64`
    build that wraps its output — is harmless: the workflow strips all
@@ -442,9 +494,14 @@ distribution cert you just exported. Recreate them whenever the cert rolls
 1. App Store Connect → **Users and Access** → **Integrations** tab → **Keys**.
 2. Click the **+** to generate a new key.
 3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **App Manager**.
-   App Manager covers everything CI needs — TestFlight upload and
-   notarization — because archives sign manually and don't call the
-   profile-creation API.
+   App Manager covers everything CI needs — TestFlight upload,
+   notarization, and the profile-creation API that
+   `scripts/make-mac-profile.py` calls to mint macOS profiles.
+   **Keep the downloaded `.p8` somewhere durable** (a password
+   manager, not just the GitHub secret): Apple only lets you download
+   it once, and you will need it locally again every time a macOS
+   profile has to be re-minted — capability changes invalidate
+   profiles, and the portal UI cannot recreate the macOS ones.
 4. Copy the **Issuer ID** (top of the page) → `APP_STORE_CONNECT_API_ISSUER_ID`.
 5. Copy the **Key ID** (shown in the row for the new key) →
    `APP_STORE_CONNECT_API_KEY_ID`.

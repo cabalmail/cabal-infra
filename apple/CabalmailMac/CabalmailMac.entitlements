@@ -10,5 +10,41 @@
     <true/>
     <key>com.apple.security.personal-information.addressbook</key>
     <true/>
+
+    <!--
+        Push notifications (docs/0.11.0/push-notifications.md, phase 6).
+        NOTE: macOS uses the `com.apple.developer.`-prefixed key here,
+        unlike iOS's bare `aps-environment` — a real platform difference,
+        not a typo (compare Cabalmail/Cabalmail.entitlements). As on iOS,
+        the value is always `development`; a distribution provisioning
+        profile rewrites it to `production` at signing time, so no
+        per-config switching is needed.
+    -->
+    <key>com.apple.developer.aps-environment</key>
+    <string>development</string>
+
+    <!--
+        App Group shared with the Notification Service Extension. Carries
+        the API Gateway URL via `UserDefaults(suiteName:)` so the NSE can
+        call `/push_envelope` without linking CabalmailKit. Same group as
+        the iOS pair — macOS accepts `group.`-prefixed App Group IDs.
+    -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.cabalmail.Cabalmail</string>
+    </array>
+
+    <!--
+        Keychain sharing with the NSE. The app's own identifier stays FIRST:
+        items stored without an explicit access group default to the first
+        entry, so existing Cognito-token / IMAP-password items keep landing
+        in the app-private group exactly as before this entitlement existed.
+        Only `PushEnrichmentStore` targets the shared group, explicitly.
+    -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.cabalmail.CabalmailMac</string>
+        <string>$(AppIdentifierPrefix)com.cabalmail.shared</string>
+    </array>
 </dict>
 </plist>
