@@ -90,7 +90,7 @@ Options:
 Regenerated outputs (all committed; never hand-edit):
   Apple — apple/Cabalmail/Assets.xcassets/AppIcon.appiconset        (iOS light/dark/tinted)
           apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack  (visionOS 3 layers)
-          apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset     (macOS size ladder)
+          apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset     (macOS size ladder, light/dark)
           apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset   (watchOS single 1024)
           apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset
   React — react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}
@@ -409,13 +409,22 @@ generate_all() {
   render "${d}/AppIcon-ios-dark.svg"   1024 1024 "${ios}/AppIcon-dark.png"    opaque
   render "${d}/AppIcon-ios-tinted.svg" 1024 1024 "${ios}/AppIcon-tinted.png"  alpha
 
-  # --- Apple: macOS size ladder (opaque, each size re-rendered from light SVG) ---
+  # --- Apple: macOS size ladder. Each size is natively rendered from the SVG
+  #     (crisper than letting the system downscale one master) for both the
+  #     light default and the dark appearance variant; macOS 15+ swaps them
+  #     with the Icon & widget style (Default/Dark) setting. Only Dark needs an
+  #     explicit asset: macOS synthesizes the Tinted and Clear styles from the
+  #     base icon, but falls back to the light icon for Dark unless a dark
+  #     variant is supplied — which is why the icon ignored Dark before. No
+  #     tinted ladder is needed (the iOS tinted variant is a deliberate
+  #     white-glyph override; macOS is happy with the synthesized tint). ---
   local pair size name
   for pair in 16:icon_16x16 32:icon_16x16@2x 32:icon_32x32 64:icon_32x32@2x \
               128:icon_128x128 256:icon_128x128@2x 256:icon_256x256 512:icon_256x256@2x \
               512:icon_512x512 1024:icon_512x512@2x; do
     size="${pair%%:*}"; name="${pair##*:}"
-    render "${d}/AppIcon-ios-light.svg" "${size}" "${size}" "${mac}/${name}.png" opaque
+    render "${d}/AppIcon-ios-light.svg" "${size}" "${size}" "${mac}/${name}.png"      opaque
+    render "${d}/AppIcon-ios-dark.svg"  "${size}" "${size}" "${mac}/${name}_dark.png" opaque
   done
 
   # --- Apple: watchOS single universal slot (1024, opaque). The system
