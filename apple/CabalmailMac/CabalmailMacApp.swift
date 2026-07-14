@@ -1,14 +1,20 @@
 import SwiftUI
 import CabalmailKit
 
+/// Stable identifier for the main mail window's `WindowGroup`, shared
+/// with the menu-bar extra's "Open Cabalmail" item so both target the
+/// same scene group.
+let mainWindowID = "main"
+
 /// App entry point for the native macOS target.
 ///
 /// Shares the same observable roots as the iOS/iPadOS/visionOS target
 /// (`AppState`, `Preferences`) so every scene binds the same backing
-/// state. macOS gets two scenes: the main mail window and a General-only
-/// Settings window (⌘,). Address and folder management lives in the main
-/// window's mailbox sidebar (`AddressListView` / `FolderListView`), which
-/// carries the full request/revoke and create/delete affordances.
+/// state. macOS gets the main mail window, the standalone compose scene,
+/// a Settings window (⌘,), and an optional menu-bar extra (Mac
+/// residency). Address and folder management lives in the main window's
+/// mailbox sidebar (`AddressListView` / `FolderListView`), which carries
+/// the full request/revoke and create/delete affordances.
 @main
 struct CabalmailMacApp: App {
     // Push notifications: APNs token callbacks and the notification-center
@@ -18,9 +24,13 @@ struct CabalmailMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
+    // Mac residency: whether the status-item menu is installed. Backed by
+    // UserDefaults so the "Show in menu bar" toggle in Settings >
+    // Notifications inserts/removes the item live via `isInserted`.
+    @AppStorage(menuBarExtraDefaultsKey) private var showMenuBarExtra = true
 
     var body: some Scene {
-        WindowGroup("Cabalmail", id: "main") {
+        WindowGroup("Cabalmail", id: mainWindowID) {
             ContentView()
                 .environment(appState)
                 .environment(preferences)
@@ -61,6 +71,21 @@ struct CabalmailMacApp: App {
                 .preferredColorScheme(colorScheme(for: preferences.theme))
                 .frame(minWidth: 560, minHeight: 640)
         }
+        // Menu-bar presence (Mac residency). Enriched notifications need
+        // the app process alive (silent-push design, see
+        // docs/push-notifications.md); the status item keeps that
+        // residency legible and useful. `.menu` style: plain menu items,
+        // no custom panel. The brand mark's canvas is 1024pt, so the
+        // status item uses an SF Symbol sized for the menu bar instead.
+        MenuBarExtra(
+            "Cabalmail",
+            systemImage: "envelope",
+            isInserted: $showMenuBarExtra
+        ) {
+            MenuBarExtraMenu()
+                .environment(appState)
+        }
+        .menuBarExtraStyle(.menu)
     }
 
     private func colorScheme(for theme: AppTheme) -> ColorScheme? {

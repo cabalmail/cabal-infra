@@ -5,6 +5,10 @@
 import SwiftUI
 import UserNotifications
 import CabalmailKit
+#if os(macOS)
+import OSLog
+import ServiceManagement
+#endif
 
 /// "Notifications" section of the Settings form (push phase 5).
 ///
@@ -37,6 +41,18 @@ struct NotificationSettingsSection: View {
     // permanently disabled. Present the folder picker as a sheet instead,
     // same pattern as the Acknowledgements row.
     @State private var showingFolderPicker = false
+    // Mac residency: Macs get silent pushes and the running app enriches
+    // them, so a quit app gets no notification — these two rows exist to
+    // make "quit" rare. The login-item toggle reflects the system's
+    // actual `SMAppService` status (default: unregistered until the user
+    // opts in); the menu-bar toggle is the `isInserted` binding for the
+    // status item `CabalmailMacApp` declares.
+    @State private var loginItemStatus = SMAppService.mainApp.status
+    @AppStorage(menuBarExtraDefaultsKey) private var showInMenuBar = true
+    private let residencyLog = Logger(
+        subsystem: "com.cabalmail.Cabalmail",
+        category: "login-item"
+    )
     #endif
 
     var body: some View {
@@ -64,12 +80,26 @@ struct NotificationSettingsSection: View {
                         chosenFolders: newValue.sorted()
                     )
                 }
+            #if os(macOS)
+            // Deliberately not gated on `controlsEnabled`: residency is
+            // motivated by notification coverage but useful without it
+            // (menu-bar unread count, background mail polling).
+            Toggle("Launch at login", isOn: launchAtLoginBinding)
+            Toggle("Show in menu bar", isOn: $showInMenuBar)
+            #endif
         } header: {
             Text("Notifications")
         } footer: {
             // Always present (content swaps, structure doesn't) so the
             // sections below never reflow when the permission state changes.
+            #if os(macOS)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(footerText)
+                Text(residencyFooterText)
+            }
+            #else
             Text(footerText)
+            #endif
         }
     }
 
@@ -153,6 +183,41 @@ struct NotificationSettingsSection: View {
         )
     }
 
+    #if os(macOS)
+    /// Honest launch-at-login toggle: registration is attempted, then the
+    /// displayed state is re-read from the system rather than assumed —
+    /// a denied or approval-gated registration reverts the toggle instead
+    /// of lying "on".
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { loginItemStatus == .enabled },
+            set: { newValue in
+                do {
+                    if newValue {
+                        try SMAppService.mainApp.register()
+                    } else {
+                        try SMAppService.mainApp.unregister()
+                    }
+                } catch {
+                    let verb = newValue ? "register" : "unregister"
+                    let reason = error.localizedDescription
+                    residencyLog.error(
+                        "Login item \(verb, privacy: .public) failed: \(reason, privacy: .public)"
+                    )
+                }
+                loginItemStatus = SMAppService.mainApp.status
+            }
+        )
+    }
+
+    private var residencyFooterText: String {
+        if loginItemStatus == .requiresApproval {
+            return "Login item waiting for approval — allow Cabalmail in System Settings > General > Login Items."
+        }
+        return "Launching at login keeps new-mail notifications working without opening Cabalmail."
+    }
+    #endif
+
     private var footerText: String {
         if systemDenied {
             #if os(macOS)
@@ -167,6 +232,11 @@ struct NotificationSettingsSection: View {
     private func refreshSystemPermission() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         systemDenied = settings.authorizationStatus == .denied
+        #if os(macOS)
+        // Same round-trip logic as the permission: the user may have
+        // approved (or removed) the login item in System Settings.
+        loginItemStatus = SMAppService.mainApp.status
+        #endif
     }
 }
 
