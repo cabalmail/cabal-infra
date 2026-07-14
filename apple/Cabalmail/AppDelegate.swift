@@ -93,13 +93,40 @@ extension AppDelegate {
 // cross into an isolated witness). Sendable values are extracted up front;
 // only those hop to the main actor. Shared verbatim by iOS and macOS.
 extension AppDelegate: UNUserNotificationCenterDelegate {
-    /// Foreground delivery: the IDLE-driven UI already shows the new
-    /// message, so a banner would double-notify — play the sound only.
+    /// Foreground delivery. On iOS (and while the Mac app is frontmost) the
+    /// polling-driven UI already shows the new message, so a banner would
+    /// double-notify — play the sound only.
+    ///
+    /// The macOS branch additionally works around usernoted killing our
+    /// Notification Service Extension before it runs (see
+    /// `PushRegistrar.presentEnrichedNotification`): while the app is
+    /// running but *not* active, the app enriches the push itself — it posts
+    /// an enriched local notification and suppresses the generic remote one.
+    /// Any failure presents the generic original instead, so nothing is ever
+    /// dropped silently.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.sound]
+        #if os(macOS)
+        // Sendable extraction up front (see the extension comment); only
+        // these value types hop to the main actor below.
+        let isRemote = notification.request.trigger is UNPushNotificationTrigger
+        let ref = PushMessageRef(userInfo: notification.request.content.userInfo)
+        let isActive = await MainActor.run { NSApp.isActive }
+        if isActive { return [.sound] }
+        // Only a remote push with a parseable msgRef takes the enrichment
+        // path. Everything else — including the enriched local notification
+        // this very path posts, whose trigger is nil — presents as-is.
+        guard isRemote, let ref else { return [.banner, .sound] }
+        if await PushRegistrar.shared.presentEnrichedNotification(for: ref) {
+            // The enriched local copy is on its way; drop the generic one.
+            return []
+        }
+        return [.banner, .sound]
+        #else
+        return [.sound]
+        #endif
     }
 
     /// Action dispatch (notification buttons and the default tap). The async
