@@ -1,6 +1,14 @@
 import Foundation
+import os
 import Security
 import UserNotifications
+
+/// Fallback-path diagnostics. The *user-facing* posture stays silent (any
+/// failure ships the generic "New mail"), but each bail-out logs its reason
+/// so a `log show --predicate 'subsystem == "com.cabalmail.nse"'` names the
+/// failing guard instead of requiring elimination — the macOS keychain gap
+/// that motivated this took a whole debugging session to localize without it.
+let nseLog = Logger(subsystem: "com.cabalmail.nse", category: "enrich")
 
 /// Notification Service Extension: enriches the wake-signal push.
 ///
@@ -28,11 +36,18 @@ final class NotificationService: UNNotificationServiceExtension {
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
         state.begin(content: request.content, handler: contentHandler)
-        guard
-            let query = EnvelopeQuery(userInfo: request.content.userInfo),
-            let endpoint = PushHandoff.enrichmentEndpoint(),
-            let token = PushHandoff.currentIdToken()
-        else {
+        guard let query = EnvelopeQuery(userInfo: request.content.userInfo) else {
+            nseLog.error("fallback: no parseable msgRef in payload")
+            state.deliverFallback()
+            return
+        }
+        guard let endpoint = PushHandoff.enrichmentEndpoint() else {
+            nseLog.error("fallback: no api_url in the App Group container")
+            state.deliverFallback()
+            return
+        }
+        guard let token = PushHandoff.currentIdToken() else {
+            nseLog.error("fallback: no usable ID token in the shared keychain")
             state.deliverFallback()
             return
         }
@@ -72,12 +87,21 @@ final class NotificationService: UNNotificationServiceExtension {
             return nil
         }
         request.httpBody = body
-        guard
-            let (data, response) = try? await URLSession.shared.data(for: request),
-            let http = response as? HTTPURLResponse,
-            (200..<300).contains(http.statusCode)
-        else { return nil }
-        return try? JSONDecoder().decode(PushEnvelope.self, from: data)
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else {
+            nseLog.error("fallback: /push_envelope request failed (network)")
+            return nil
+        }
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            nseLog.error("fallback: /push_envelope returned \(status)")
+            return nil
+        }
+        guard let envelope = try? JSONDecoder().decode(PushEnvelope.self, from: data) else {
+            nseLog.error("fallback: /push_envelope response failed to decode")
+            return nil
+        }
+        return envelope
     }
 }
 
@@ -198,7 +222,7 @@ private enum PushHandoff {
     /// `kSecAttrAccessGroup` in the query: a read searches every group this
     /// extension can access, which avoids re-deriving the team-ID prefix.
     static func currentIdToken() -> String? {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: keychainAccount,
@@ -207,14 +231,36 @@ private enum PushHandoff {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var item: CFTypeRef?
-        guard
-            SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-            let data = item as? Data,
-            let payload = try? JSONDecoder().decode(TokenPayload.self, from: data)
+        var status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status != errSecSuccess {
+            // iOS resolves a group-less search across every entitled access
+            // group; macOS does not reliably include the shared group, so
+            // retry with it named explicitly. The team prefix comes from the
+            // Info.plist AppIdentifierPrefix key (project.yml routes the
+            // build setting through; empty in unsigned builds).
+            guard
+                let prefix = Bundle.main.object(
+                    forInfoDictionaryKey: "AppIdentifierPrefix") as? String,
+                !prefix.isEmpty
+            else {
+                nseLog.error("keychain: group-less read failed (\(status)) and no AppIdentifierPrefix for the explicit retry")
+                return nil
+            }
+            query[kSecAttrAccessGroup as String] = prefix + "com.cabalmail.shared"
+            status = SecItemCopyMatching(query as CFDictionary, &item)
+        }
+        guard status == errSecSuccess, let data = item as? Data else {
+            nseLog.error("keychain: shared-group read failed (\(status))")
+            return nil
+        }
+        guard let payload = try? JSONDecoder().decode(TokenPayload.self, from: data)
         else { return nil }
         // 60s of leeway: a token the API would reject mid-flight isn't
         // worth the round trip; clock skew smaller than that still tries.
-        guard payload.expiresAt.timeIntervalSinceNow > -60 else { return nil }
+        guard payload.expiresAt.timeIntervalSinceNow > -60 else {
+            nseLog.error("keychain: mirrored token expired; enrichment skipped")
+            return nil
+        }
         return payload.idToken
     }
 

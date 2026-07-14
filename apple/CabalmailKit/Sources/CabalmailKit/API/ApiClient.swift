@@ -139,6 +139,19 @@ public protocol ApiClient: Sendable {
     /// intervention.
     func deregisterPushDevice(token: String) async throws
 
+    /// Resolves a pushed message reference into its display envelope via
+    /// `/push_envelope` — the same Lambda the Notification Service Extension
+    /// calls (the NSE deliberately keeps its own CabalmailKit-free copy of
+    /// this wire code). Used by the macOS app to enrich notifications while
+    /// it is running, working around the platform defect that kills the NSE
+    /// before it can. `uid` is a best-effort hint, `messageID` the durable
+    /// identity; the Lambda resolves the real uid server-side and returns it.
+    func fetchPushEnvelope(
+        folder: String,
+        uid: UInt32?,
+        messageID: String?
+    ) async throws -> PushEnvelope
+
     // MARK: Send
     /// Submits an outgoing message via the Lambda send pipeline (Outbox
     /// APPEND -> SMTP -> Sent move). Mirrors `react/admin/src/ApiClient.js
@@ -435,9 +448,11 @@ public struct PushDeviceRegistration: Sendable, Hashable {
     public let platform: String
     public let appVersion: String
     public let locale: String
-    /// Folders to push for (`["*"]` = all). Nil omits the field so the
-    /// server keeps its stored / default value — the per-folder picker is
-    /// a later phase.
+    /// Folders to push for. `["*"]` = all folders, `[]` = explicit reset
+    /// to the server's inbox-only default, a list = exactly those folders
+    /// (display-form `/` paths are fine; the Lambda normalizes). Nil omits
+    /// the field so the server keeps its stored value — the apps always
+    /// send an explicit value (see `PushSettings.enabledFolders`).
     public let enabledFolders: [String]?
 
     public init(
@@ -454,6 +469,27 @@ public struct PushDeviceRegistration: Sendable, Hashable {
         self.appVersion = appVersion
         self.locale = locale
         self.enabledFolders = enabledFolders
+    }
+}
+
+/// Decoded `/push_envelope` response: the sender / subject / snippet the
+/// dispatch payload deliberately omits. `uid` is the server-resolved UID
+/// (the payload's was a pre-delivery hint); callers stamp it back into the
+/// notification's msgRef so Mark as Read / Archive / Open act on the message
+/// the notification shows. Mirrors the NSE's private twin in
+/// `CabalmailNotificationService/NotificationService.swift` — keep the wire
+/// shapes in sync.
+public struct PushEnvelope: Decodable, Sendable {
+    public let from: String
+    public let subject: String
+    public let snippet: String
+    public let uid: UInt32?
+
+    public init(from: String, subject: String, snippet: String, uid: UInt32?) {
+        self.from = from
+        self.subject = subject
+        self.snippet = snippet
+        self.uid = uid
     }
 }
 

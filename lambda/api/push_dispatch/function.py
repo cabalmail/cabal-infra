@@ -48,6 +48,10 @@ NOT_CONFIGURED_TTL_SECONDS = 300
 # recently; the attribute exists to GC dead tokens, not to timestamp pushes.
 LAST_SEEN_REFRESH_SECONDS = 12 * 3600
 
+# Bundle ids that receive silent (content-available) pushes instead of
+# alerts; see _payload's docstring for the macOS rationale.
+SILENT_BUNDLE_IDS = frozenset({'com.cabalmail.CabalmailMac'})
+
 # Warm-container caches: the APNs config/connection survive across
 # invocations, which is what makes provider-token reuse worthwhile.
 _APNS_CLIENT = None
@@ -138,20 +142,34 @@ def _mark(user, device_token, attribute, value):
         print(f'[push-dispatch] bookkeeping write failed: {err}')
 
 
-def _payload(signal):
-    '''Builds the content-free APNs payload and its collapse id.'''
+def _payload(signal, silent):
+    '''Builds the content-free APNs payload and its collapse id.
+
+    `silent` selects a background (content-available) push with no alert:
+    macOS's notification daemon kills service extensions before they run
+    ("sluggish startup", an unresolved platform defect) AND only consults
+    willPresent while the app is frontmost, so an alert push to a Mac could
+    never be enriched. The Mac app instead receives this silent wake while
+    running (any focus state) and posts its own enriched local notification;
+    a quit Mac app gets nothing, a trade the maintainer chose over a
+    permanently generic banner. iOS keeps the alert form — its extension
+    works.'''
     folder = signal['folder']
     uid = int(signal.get('uid') or 0)
     msg_id = signal.get('msg_id') or ''
-    payload = {
-        'aps': {
-            'alert': 'New mail',
-            'mutable-content': 1,
-            'category': 'MAIL_MESSAGE',
-            'sound': 'default',
-        },
-        'msgRef': {'folder': folder, 'uid': uid, 'msg_id': msg_id},
-    }
+    ref = {'folder': folder, 'uid': uid, 'msg_id': msg_id}
+    if silent:
+        payload = {'aps': {'content-available': 1}, 'msgRef': ref}
+    else:
+        payload = {
+            'aps': {
+                'alert': 'New mail',
+                'mutable-content': 1,
+                'category': 'MAIL_MESSAGE',
+                'sound': 'default',
+            },
+            'msgRef': ref,
+        }
     # Collapse on message identity so a redelivered signal replaces, rather
     # than stacks on, the notification it already produced. The UID hint can
     # be 0 (procmail runs before Dovecot assigns one), so fold msg_id in —
@@ -172,7 +190,8 @@ def _dispatch(client, signal):
     user = signal['user']
     folder = signal['folder']
     rows = table.query(KeyConditionExpression=Key('user').eq(user))['Items']
-    payload, collapse_id = _payload(signal)
+    payloads = {silent: _payload(signal, silent)[0] for silent in (False, True)}
+    collapse_id = _payload(signal, silent=False)[1]
 
     sent, failed, retryable = 0, 0, 0
     now = time.strftime('%Y-%m-%dT%H:%M:%S+00:00', time.gmtime())
@@ -180,8 +199,10 @@ def _dispatch(client, signal):
         if not _wants_folder(row, folder):
             continue
         device_token = row['device_token']
+        silent = row['bundle_id'] in SILENT_BUNDLE_IDS
         try:
-            client.send(device_token, row['bundle_id'], payload, collapse_id)
+            client.send(device_token, row['bundle_id'], payloads[silent],
+                        collapse_id, background=silent)
         except ApnsError as err:
             failed += 1
             if err.permanent:
