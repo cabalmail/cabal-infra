@@ -173,9 +173,17 @@ notification itself: a full banner when the app is unfocused, sound only
 If the fetch fails, the app posts a generic "New mail" notification
 instead, so nothing is dropped silently. A quit Mac app receives no
 notification at all — a deliberate trade, since the paired iPhone covers
-that case with a fully enriched banner. The extension ships regardless
-(a monthly automated check watches for the macOS fix that would let it
-take over the quit-app case without an app change).
+that case with a fully enriched banner. That gap only opens when the
+user quits explicitly, and two residency affordances (Settings >
+Notifications) exist to make that rare: an opt-in launch-at-login item
+(off until the user enables it; the toggle mirrors the system's
+`SMAppService` status, pointing at System Settings > General > Login
+Items when approval is pending) and a menu-bar presence (on by default)
+whose status-item menu shows the Inbox unread count with Open / New
+Message / Quit actions, keeping the app legibly alive with every window
+closed. The extension ships regardless (a monthly automated check
+watches for the macOS fix that would let it take over the quit-app case
+without an app change).
 
 ## Operational notes
 
