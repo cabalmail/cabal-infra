@@ -1,11 +1,22 @@
 # Pure-python only, on purpose: the APNs provider API requires HTTP/2 and
 # ES256 provider tokens, and the obvious stacks for both (httpx[http2],
-# cryptography) drag in platform-specific binary wheels that the x86_64 CI
-# runner cannot install for this arm64 function. h2 (+hpack/hyperframe) gives
-# HTTP/2 framing and python-ecdsa gives ES256, all as universal wheels — the
-# same trade fetch_bimi made when it kept its pip closure pure. The one ES256
-# signature per ~45 minutes per warm container makes ecdsa's pure-python
-# slowness irrelevant.
+# cryptography) drag in platform-specific binary wheels. CI could install
+# arm64 binary wheels for this arm64 function (pip --platform, or the
+# ubuntu-24.04-arm runners the docker job already uses), but that build
+# machinery isn't worth it here: h2 (+hpack/hyperframe) gives HTTP/2 framing
+# and python-ecdsa gives ES256, all as universal wheels — the same trade
+# fetch_bimi made when it kept its pip closure pure. The one ES256 signature
+# per ~45 minutes per warm container makes ecdsa's pure-python slowness
+# irrelevant.
+#
+# ecdsa's CVE-2024-23342 (Minerva timing side-channel) is risk-accepted, not
+# awaiting a fix: upstream considers timing resistance out of scope for
+# pure-python EC and will not patch it. Signing here is internally triggered
+# at the once-per-45-minutes cadence above with no attacker-observable timing
+# oracle, and the key at stake is the revocable APNs push key, not user data.
+# The Dependabot alert (#165) is dismissed on that basis; migrating ES256 to
+# cryptography (with an arm64-wheel install per the note above) is the escape
+# hatch if that calculus ever changes.
 h2==4.2.0 \
     --hash=sha256:479a53ad425bb29af087f3458a61d30780bc818e4ebcf01f0b536ba916462ed0
 hpack==4.1.0 \
