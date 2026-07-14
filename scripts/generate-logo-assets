@@ -45,7 +45,6 @@ readonly PLACEMENT="translate(94.8 145.52) scale(2.036)"
 readonly FOREST="#2E5235"       # primary green
 readonly FOREST_DEEP="#1E3A24"  # secondary green (visionOS front layer)
 readonly PARCHMENT="#E8DFC8"    # secondary light; dark-mode glyph
-readonly WHITE="#FFFFFF"        # iOS tinted glyph (system tints white pixels)
 
 # Icon-backplate gradient tones. These are tints/shades of the cream and ink
 # tokens used only for the app-icon backplates; they match the design
@@ -88,9 +87,9 @@ Options:
   --help              Show this help.
 
 Regenerated outputs (all committed; never hand-edit):
-  Apple — apple/Cabalmail/Assets.xcassets/AppIcon.appiconset        (iOS light/dark/tinted)
+  Apple — apple/Cabalmail/AppIcon.icon                              (iOS Liquid Glass, Default/Dark)
+          apple/CabalmailMac/AppIcon.icon                           (macOS Liquid Glass, Default/Dark)
           apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack  (visionOS 3 layers)
-          apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset     (macOS size ladder, light/dark)
           apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset   (watchOS single 1024)
           apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset
   React — react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}
@@ -291,7 +290,19 @@ emit_derived() {
     printf '  <g fill="%s" transform="%s">\n' "${FOREST}" "${PLACEMENT}"; disc; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/cabalmail-mark.svg"
 
-  # 2. iOS light — forest glyph on cream gradient.
+  # 1b. Icon-glyph template — solid-ink mark on transparent, 1024 canvas. The
+  #     Liquid Glass .icon (see write_icon) recolors this per appearance via
+  #     layer fills, so its own color is irrelevant; black is the conventional
+  #     template ink. Same geometry/placement as the derived mark.
+  { svg_open "0 0 1024 1024" "${sz}"
+    printf '  <g fill="%s" transform="%s">\n' "${MASK_INK}" "${PLACEMENT}"; disc; envelope
+    printf '  </g>\n</svg>\n'; } > "${DERIVED}/AppIcon-glyph-mono.svg"
+
+  # 2. Light app-icon art — forest glyph on cream gradient, full-bleed 1024.
+  #    Feeds watchOS (single slot), the React logo PNGs, and docs/logo.png.
+  #    The macOS/iOS square icons are the Liquid Glass .icon instead, whose
+  #    Default/Dark fills come straight from the color constants (see
+  #    write_icon), so no separate dark/tinted full-bleed art is rendered.
   { svg_open "0 0 1024 1024" "${sz}"
     printf '  <defs>\n    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">\n'
     printf '      <stop offset="0" stop-color="%s"></stop>\n' "${LIGHT_TOP}"
@@ -301,22 +312,7 @@ emit_derived() {
     printf '  <g fill="%s" transform="%s">\n' "${FOREST}" "${PLACEMENT}"; disc; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/AppIcon-ios-light.svg"
 
-  # 3. iOS dark — parchment glyph on ink gradient.
-  { svg_open "0 0 1024 1024" "${sz}"
-    printf '  <defs>\n    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">\n'
-    printf '      <stop offset="0" stop-color="%s"></stop>\n' "${DARK_TOP}"
-    printf '      <stop offset="1" stop-color="%s"></stop>\n' "${DARK_BOTTOM}"
-    printf '    </linearGradient>\n  </defs>\n'
-    printf '  <rect width="1024" height="1024" fill="url(#bg)"></rect>\n'
-    printf '  <g fill="%s" transform="%s">\n' "${PARCHMENT}" "${PLACEMENT}"; disc; envelope
-    printf '  </g>\n</svg>\n'; } > "${DERIVED}/AppIcon-ios-dark.svg"
-
-  # 4. iOS tinted — white glyph on transparent (system tints the white).
-  { svg_open "0 0 1024 1024" "${sz}"
-    printf '  <g fill="%s" transform="%s">\n' "${WHITE}" "${PLACEMENT}"; disc; envelope
-    printf '  </g>\n</svg>\n'; } > "${DERIVED}/AppIcon-ios-tinted.svg"
-
-  # 5. visionOS back — cream radial plate. The back (last) layer must be a
+  # 3. visionOS back — cream radial plate. The back (last) layer must be a
   # fully-opaque 1024 bitmap (actool rejects transparent corners); the system
   # applies the circular mask, so fill the whole canvas rather than a circle.
   { svg_open "0 0 1024 1024" "${sz}"
@@ -328,17 +324,17 @@ emit_derived() {
     printf '  <rect width="1024" height="1024" fill="url(#plate)"></rect>\n</svg>\n'
   } > "${DERIVED}/AppIcon-visionos-back.svg"
 
-  # 6. visionOS middle — forest C-disc only.
+  # 4. visionOS middle — forest C-disc only.
   { svg_open "0 0 1024 1024" "${sz}"
     printf '  <g fill="%s" transform="%s">\n' "${FOREST}" "${PLACEMENT}"; disc
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/AppIcon-visionos-middle.svg"
 
-  # 7. visionOS front — forest-deep M envelope only.
+  # 5. visionOS front — forest-deep M envelope only.
   { svg_open "0 0 1024 1024" "${sz}"
     printf '  <g fill="%s" transform="%s">\n' "${FOREST_DEEP}" "${PLACEMENT}"; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/AppIcon-visionos-front.svg"
 
-  # 8. Web favicon — forest glyph on rounded cream plate.
+  # 6. Web favicon — forest glyph on rounded cream plate.
   { svg_open "0 0 1024 1024" "${sz}"
     printf '  <defs>\n    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">\n'
     printf '      <stop offset="0" stop-color="%s"></stop>\n' "${LIGHT_TOP}"
@@ -348,7 +344,7 @@ emit_derived() {
     printf '  <g fill="%s" transform="%s">\n' "${FOREST}" "${PLACEMENT}"; disc; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/favicon.svg"
 
-  # 9. In-app web logo — currentColor mark (React inlines this via ?raw). Paths
+  # 7. In-app web logo — currentColor mark (React inlines this via ?raw). Paths
   # come from the source vector, but the viewBox keeps the app's established
   # 2:1 brand-tile frame (4px vertical pad around the 400x192 glyph) so the
   # Nav / AuthShell logo does not shift size.
@@ -356,17 +352,76 @@ emit_derived() {
     printf '  <g fill="currentColor">\n'; disc; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/web-logo.svg"
 
-  # 10. front-door favicon — currentColor mark, 1024 canvas.
+  # 8. front-door favicon — currentColor mark, 1024 canvas.
   { svg_open "0 0 1024 1024" "${sz}"
     printf '  <g fill="currentColor" transform="%s">\n' "${PLACEMENT}"; disc; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/front-door-mark.svg"
 
-  # 11. Docs masthead — solid silhouette on a 2:1 tile (4px vertical pad).
+  # 9. Docs masthead — solid silhouette on a 2:1 tile (4px vertical pad).
   { svg_open "0 0 400 200"
     printf '  <g fill="%s" transform="translate(0 -80)">\n' "${MASK_INK}"; disc; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/mask.svg"
 
-  log "wrote 11 derived SVG treatments -> vector/derived/"
+  log "wrote 10 derived SVG treatments -> vector/derived/"
+}
+
+# --------------------------------------------------------------------------
+# Apple Liquid Glass app icon (.icon bundle, macOS 26 / iOS 26)
+# --------------------------------------------------------------------------
+#
+# The square app icon for macOS and iOS/iPadOS is an Icon Composer `.icon`
+# bundle — a folder holding icon.json plus an Assets/ dir. This is the only
+# format that carries a per-appearance (Default / Dark) macOS icon: an asset
+# catalog's `luminosity` appearances are silently dropped by actool for the
+# `mac` idiom (they compile to a legacy, appearance-blind .icns). actool also
+# emits the older prerendered fallbacks (.icns on macOS, AppIcon60x60/76x76 on
+# iOS) from the same .icon, so the macOS-15 / iOS-18 deployment floors keep a
+# valid icon while 26+ gets Liquid Glass.
+#
+# One shape, recolored per appearance. A single ink glyph template
+# (AppIcon-glyph-mono.svg) is placed twice: a forest copy on top (hidden in
+# Dark) and a parchment copy beneath. Default shows forest-on-cream, Dark
+# reveals parchment-on-ink — mirroring the iOS light/dark artwork. Layer-level
+# `fill-specializations` are ignored by the renderer, so the two-layer overlay
+# is how a bespoke dark glyph is expressed; only the top-level background fill
+# specializes cleanly. visionOS keeps its own layered AppIconVision stack and
+# watchOS its single 1024 slot — neither uses this .icon.
+
+# hex_srgb <#RRGGBB> -> "srgb:R,G,B,1.00000" — icon.json fills are 0..1 sRGB.
+hex_srgb() {
+  python3 -c "import sys; h=sys.argv[1].lstrip('#'); print('srgb:%.5f,%.5f,%.5f,1.00000'%(int(h[0:2],16)/255,int(h[2:4],16)/255,int(h[4:6],16)/255))" "$1"
+}
+
+# write_icon <target-source-dir> — (re)write <dir>/AppIcon.icon from constants.
+write_icon() {
+  local dir="$1/AppIcon.icon"
+  rm -rf "${dir}"; mkdir -p "${dir}/Assets"
+  install -m 0644 "${DERIVED}/AppIcon-glyph-mono.svg" "${dir}/Assets/Mark.svg"
+  local grad='"orientation":{"start":{"x":0.5,"y":0.0},"stop":{"x":0.5,"y":1.0}}'
+  cat > "${dir}/icon.json" <<EOF
+{
+  "fill" : { "linear-gradient" : [ "$(hex_srgb "${LIGHT_TOP}")", "$(hex_srgb "${LIGHT_BOTTOM}")" ], ${grad} },
+  "fill-specializations" : [
+    { "appearance" : "dark", "value" : { "linear-gradient" : [ "$(hex_srgb "${DARK_TOP}")", "$(hex_srgb "${DARK_BOTTOM}")" ], ${grad} } }
+  ],
+  "groups" : [
+    {
+      "layers" : [
+        { "image-name" : "Mark.svg", "name" : "Glyph Light", "glass" : true,
+          "fill" : { "solid" : "$(hex_srgb "${FOREST}")" },
+          "hidden-specializations" : [ { "appearance" : "dark", "value" : true } ],
+          "position" : { "scale" : 0.72, "translation-in-points" : [ 0, 0 ] } },
+        { "image-name" : "Mark.svg", "name" : "Glyph Dark", "glass" : true,
+          "fill" : { "solid" : "$(hex_srgb "${PARCHMENT}")" },
+          "position" : { "scale" : 0.72, "translation-in-points" : [ 0, 0 ] } }
+      ],
+      "specular" : true,
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 }
+    }
+  ],
+  "supported-platforms" : { "squares" : "shared" }
+}
+EOF
 }
 
 # --------------------------------------------------------------------------
@@ -398,34 +453,16 @@ PY
 # --------------------------------------------------------------------------
 generate_all() {
   local d="${DERIVED}"
-  local ios="${REPO_ROOT}/apple/Cabalmail/Assets.xcassets/AppIcon.appiconset"
   local vision="${REPO_ROOT}/apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack"
-  local mac="${REPO_ROOT}/apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset"
   local watch="${REPO_ROOT}/apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset"
   local pub="${REPO_ROOT}/react/admin/public"
 
-  # --- Apple: iOS appiconset (light/dark opaque; tinted keeps alpha) ---
-  render "${d}/AppIcon-ios-light.svg"  1024 1024 "${ios}/AppIcon-light.png"   opaque
-  render "${d}/AppIcon-ios-dark.svg"   1024 1024 "${ios}/AppIcon-dark.png"    opaque
-  render "${d}/AppIcon-ios-tinted.svg" 1024 1024 "${ios}/AppIcon-tinted.png"  alpha
-
-  # --- Apple: macOS size ladder. Each size is natively rendered from the SVG
-  #     (crisper than letting the system downscale one master) for both the
-  #     light default and the dark appearance variant; macOS 15+ swaps them
-  #     with the Icon & widget style (Default/Dark) setting. Only Dark needs an
-  #     explicit asset: macOS synthesizes the Tinted and Clear styles from the
-  #     base icon, but falls back to the light icon for Dark unless a dark
-  #     variant is supplied — which is why the icon ignored Dark before. No
-  #     tinted ladder is needed (the iOS tinted variant is a deliberate
-  #     white-glyph override; macOS is happy with the synthesized tint). ---
-  local pair size name
-  for pair in 16:icon_16x16 32:icon_16x16@2x 32:icon_32x32 64:icon_32x32@2x \
-              128:icon_128x128 256:icon_128x128@2x 256:icon_256x256 512:icon_256x256@2x \
-              512:icon_512x512 1024:icon_512x512@2x; do
-    size="${pair%%:*}"; name="${pair##*:}"
-    render "${d}/AppIcon-ios-light.svg" "${size}" "${size}" "${mac}/${name}.png"      opaque
-    render "${d}/AppIcon-ios-dark.svg"  "${size}" "${size}" "${mac}/${name}_dark.png" opaque
-  done
+  # --- Apple: square app icon (macOS + iOS/iPadOS) — one Liquid Glass .icon
+  #     per target, generated from the shared ink glyph template. This is what
+  #     carries the per-appearance Default/Dark macOS icon; see write_icon. The
+  #     iOS light/dark/tinted SVGs above still feed watchOS / React / docs. ---
+  write_icon "${REPO_ROOT}/apple/Cabalmail"
+  write_icon "${REPO_ROOT}/apple/CabalmailMac"
 
   # --- Apple: watchOS single universal slot (1024, opaque). The system
   #     applies the circular home-screen mask itself, so this is the same
