@@ -26,8 +26,20 @@ env:
   # resolve as "ineligible" ("iOS 18.1 is not installed").
   #
   # If reproducibility becomes important, pin to a specific version here AND
-  # ensure it matches a Xcode actually preinstalled on the macos-15 runner
+  # ensure it matches a Xcode actually preinstalled on the macos-26 runner
   # image.
+  #
+  # The runner image's HOST macOS version is load-bearing, not just a
+  # freshness preference: compiling the Liquid Glass AppIcon.icon for
+  # --platform macosx renders through the host's asset runtime
+  # (AssetCatalogAgent-AssetRuntime). On a macOS 15 host that agent crashes
+  # against Xcode 26's framework overrides (dyld "symbol missing from root
+  # that overrides CoreMedia", IBPlatformToolFailureException) and the
+  # CabalmailMac asset-catalog compile fails with no useful error through
+  # xcbeautify. iphoneos compiles of the same .icon are host-independent
+  # (they render via the SDK runtime inside Xcode), which is why only the
+  # macOS leg broke. Keep the runner's macOS >= the SDK major the .icon
+  # targets.
   XCODE_VERSION: 'latest-stable'
   WORKSPACE: apple/Cabalmail.xcworkspace
 
@@ -38,7 +50,7 @@ jobs:
   # -----------------------------------------------------------------------
   kit-test:
     name: Test CabalmailKit (${{ matrix.platform }})
-    runs-on: macos-15
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +65,7 @@ jobs:
           xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Install XcodeGen + SwiftLint + xcbeautify
-        # The macos-15 runner image preinstalls some of these (xcbeautify in
+        # The macOS runner image preinstalls some of these (xcbeautify in
         # particular), and `brew install` then emits a `Warning: foo is
         # already installed...` line that GitHub surfaces as a workflow
         # annotation. Filter to packages that aren't installed yet so the
@@ -162,7 +174,7 @@ jobs:
   # -----------------------------------------------------------------------
   app-build:
     name: Build ${{ matrix.scheme }} (${{ matrix.platform }})
-    runs-on: macos-15
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
@@ -261,7 +273,7 @@ jobs:
     name: Upload ${{ matrix.platform }} to TestFlight
     needs: approval
     if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
-    runs-on: macos-15
+    runs-on: macos-26
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     strategy:
       # Never cancel a leg mid-upload because the other leg failed.
@@ -623,7 +635,7 @@ jobs:
       actions: write
     needs: approval
     if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
-    runs-on: macos-15
+    runs-on: macos-26
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     steps:
       - name: Checkout
