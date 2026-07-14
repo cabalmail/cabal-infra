@@ -118,7 +118,7 @@ new key lands everywhere.
 The iOS app needs one-time Apple developer setup before push registration
 works on real devices. The generic signing mechanics (certificates, profile
 creation, secret encoding) live in
-[apple/README.md](../apple/README.md#creating-provisioning-profiles); the
+[docs/apple.md](apple.md#creating-provisioning-profiles); the
 push-specific portal work, in order:
 
 1. **Register the App Group** (Identifiers → ➕ → App Groups):

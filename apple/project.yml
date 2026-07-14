@@ -3,7 +3,7 @@
 # Run `xcodegen generate` in this directory to produce Cabalmail.xcodeproj.
 # The generated project is not committed; CI regenerates it before every build.
 #
-# Phase 1 decision: native macOS target (not Mac Catalyst). See apple/README.md.
+# Phase 1 decision: native macOS target (not Mac Catalyst). See docs/apple.md.
 
 name: Cabalmail
 
@@ -169,7 +169,7 @@ targets:
         # `com.apple.developer.mail-client`, which a fork enables by
         # adding the key once Apple has approved the request. See the
         # file's own comment, and the "Setting Cabalmail as the
-        # default mail handler" section of `apple/README.md`, for the
+        # default mail handler" section of `docs/apple.md`, for the
         # rollout. Wiring this empty file from day one means a fork
         # only edits the entitlements file, not `project.yml`, when
         # approval lands.

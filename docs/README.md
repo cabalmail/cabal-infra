@@ -61,4 +61,4 @@ See the linked docouments for information on:
 
 # Documentation
 
-This document refers to more detailed documentation in the [docs](.) directory. Automated code documentation is generated for the Terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md).
+This document refers to more detailed documentation in the [docs](.) directory. The native Apple clients (iOS / iPadOS / macOS / watchOS / visionOS) — layout, bootstrap, signing, Developer-account setup, CI — are documented in [Apple clients](./apple.md). Automated code documentation is generated for the Terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md).
