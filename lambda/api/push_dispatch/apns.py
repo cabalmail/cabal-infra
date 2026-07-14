@@ -144,11 +144,19 @@ class ApnsClient:  # pylint: disable=too-few-public-methods
             # Flush any acknowledgements/pings h2 queued while processing.
             self.sock.sendall(self.conn.data_to_send())
 
-    def send(self, device_token, topic, payload, collapse_id):
-        '''Sends one alert push. Returns None on success, raises ApnsError
+    # One argument over the cap, but a boolean mode beats duplicating the
+    # whole retry/verdict body into a second method.
+    def send(self, device_token, topic, payload, collapse_id, *,  # pylint: disable=too-many-arguments
+             background=False):
+        '''Sends one push. Returns None on success, raises ApnsError
         (permanent or not) on a non-2xx response, and raises
         ApnsTransportError when no verdict was obtained — after one
-        transparent reconnect-and-retry.'''
+        transparent reconnect-and-retry.
+
+        `background` sends a content-available wake instead of an alert:
+        push-type `background` with the priority-5 APNs mandates for it
+        (priority 10 on a background push is rejected). No collapse id —
+        it only affects displayed notifications.'''
         body = json.dumps(payload).encode()
         headers = [
             (':method', 'POST'),
@@ -157,11 +165,12 @@ class ApnsClient:  # pylint: disable=too-few-public-methods
             (':path', f'/3/device/{device_token}'),
             ('authorization', f'bearer {self._provider_token()}'),
             ('apns-topic', topic),
-            ('apns-push-type', 'alert'),
-            ('apns-priority', '10'),
-            # apns-collapse-id caps at 64 bytes; longer would 400 the request.
-            ('apns-collapse-id', collapse_id[:64]),
+            ('apns-push-type', 'background' if background else 'alert'),
+            ('apns-priority', '5' if background else '10'),
         ]
+        if not background:
+            # apns-collapse-id caps at 64 bytes; longer would 400 the request.
+            headers.append(('apns-collapse-id', collapse_id[:64]))
         for attempt in (1, 2):
             try:
                 if self.conn is None:
