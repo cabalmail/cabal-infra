@@ -53,6 +53,12 @@ readonly LIGHT_TOP="#FAF4E4"    LIGHT_BOTTOM="#EFE2C0"
 readonly DARK_TOP="#17261B"     DARK_BOTTOM="#0A130D"
 readonly PLATE_0="#FAF4E4"      PLATE_1="#EFE2C0"      PLATE_2="#D9C890"
 
+# Glyph size on the Liquid Glass .icon canvas. 1.0 runs the wide mark nearly
+# edge-to-edge; 0.72 read undersized next to system icons on a real Home
+# Screen / Dock. 0.85 matches neighboring icons' visual weight while keeping
+# the M's right edge clear of the squircle mask (0.90 crowds it).
+readonly ICON_GLYPH_SCALE="0.85"
+
 # The docs masthead logo is a solid silhouette (composited over a dark
 # animated plate by docs/_sass) — black preserves its established look.
 readonly MASK_INK="#000000"
@@ -410,10 +416,10 @@ write_icon() {
         { "image-name" : "Mark.svg", "name" : "Glyph Light", "glass" : true,
           "fill" : { "solid" : "$(hex_srgb "${FOREST}")" },
           "hidden-specializations" : [ { "appearance" : "dark", "value" : true } ],
-          "position" : { "scale" : 0.72, "translation-in-points" : [ 0, 0 ] } },
+          "position" : { "scale" : ${ICON_GLYPH_SCALE}, "translation-in-points" : [ 0, 0 ] } },
         { "image-name" : "Mark.svg", "name" : "Glyph Dark", "glass" : true,
           "fill" : { "solid" : "$(hex_srgb "${PARCHMENT}")" },
-          "position" : { "scale" : 0.72, "translation-in-points" : [ 0, 0 ] } }
+          "position" : { "scale" : ${ICON_GLYPH_SCALE}, "translation-in-points" : [ 0, 0 ] } }
       ],
       "specular" : true,
       "shadow" : { "kind" : "neutral", "opacity" : 0.5 }
