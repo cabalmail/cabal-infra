@@ -10,7 +10,7 @@ import Foundation
 /// - RFC 2047 encoded-word header decoding (via `HeaderDecoder`)
 /// - Transfer-encoding decode: 7bit/8bit/binary/base64/quoted-printable
 ///
-/// Known gaps (intentional, documented in `apple/README.md`):
+/// Known gaps (intentional, documented in `docs/apple.md`):
 /// - RFC 2231 extended parameters (charset+language in `filename*=...`)
 /// - S/MIME, PGP/MIME
 /// - `message/rfc822` nested messages (treated as opaque attachment parts)
