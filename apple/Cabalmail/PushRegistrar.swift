@@ -431,24 +431,27 @@ extension PushRegistrar {
     }
 }
 
-// MARK: - Foreground enrichment workaround (macOS)
+// MARK: - Silent-push enrichment (macOS)
 
 #if os(macOS)
 extension PushRegistrar {
-    /// Enriches a remote push while the app runs unfocused. macOS's
+    /// Enriches a silent push while the app is running. macOS's
     /// notification daemon kills our Notification Service Extension before
     /// `didReceive` ever runs (the long-standing "sluggish startup" platform
-    /// defect — Apple forums threads 693011 / 806789), so a remote push can
-    /// only show the generic "New mail" once it leaves APNs. While the app
-    /// itself is running it can do the NSE's job instead: fetch the envelope
-    /// through the session client, post an enriched *local* notification,
-    /// and let `willPresent` suppress the generic original. Returns false on
-    /// any failure so the caller presents the original instead — a generic
+    /// defect — Apple forums threads 693011 / 806789), so the server sends
+    /// Macs a background push instead of an alert and the running app does
+    /// the NSE's job itself: fetch the envelope through the session client
+    /// and post an enriched *local* notification, whose presentation then
+    /// follows the app's `willPresent` policy (sound only while active, full
+    /// banner otherwise). Called from `AppDelegate`'s
+    /// `didReceiveRemoteNotification`, which fires for a running app
+    /// regardless of focus. Returns false on any failure so the caller can
+    /// post the generic fallback (`presentGenericNotification`) — a generic
     /// banner beats a silent drop. The NSE stays shipped as-is; if Apple
     /// fixes the platform it takes over the app-not-running case.
     func presentEnrichedNotification(for ref: PushMessageRef) async -> Bool {
         guard let client = await activeClient() else {
-            CabalmailLog.warn("Push", "foreground enrichment skipped: no signed-in session")
+            CabalmailLog.warn("Push", "silent-push enrichment skipped: no signed-in session")
             return false
         }
         do {
@@ -481,8 +484,34 @@ extension PushRegistrar {
             )
             return true
         } catch {
-            CabalmailLog.warn("Push", "foreground enrichment failed: \(error)")
+            CabalmailLog.warn("Push", "silent-push enrichment failed: \(error)")
             return false
+        }
+    }
+
+    /// Fallback for a failed enrichment: posts the same generic "New mail"
+    /// notification an alert push used to show, carrying the silent push's
+    /// msgRef so the notification actions still work. Without this a fetch
+    /// failure would turn the silent push into no notification at all.
+    func presentGenericNotification(for ref: PushMessageRef) async {
+        let content = UNMutableNotificationContent()
+        content.title = "New mail"
+        content.sound = .default
+        content.categoryIdentifier = "MAIL_MESSAGE"
+        var msgRef: [String: Any] = ["folder": ref.folder]
+        if let uid = ref.uid { msgRef["uid"] = Int(uid) }
+        if let messageID = ref.messageID { msgRef["msg_id"] = messageID }
+        content.userInfo = ["msgRef": msgRef]
+        do {
+            try await UNUserNotificationCenter.current().add(
+                UNNotificationRequest(
+                    identifier: UUID().uuidString,
+                    content: content,
+                    trigger: nil
+                )
+            )
+        } catch {
+            CabalmailLog.warn("Push", "generic fallback notification failed: \(error)")
         }
     }
 }

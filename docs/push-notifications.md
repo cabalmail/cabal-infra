@@ -164,13 +164,18 @@ team):
 
 On macOS the extension rarely gets to run: the system notification daemon
 kills service extensions before they receive the notification (a
-long-standing, unresolved platform defect). The Mac app compensates while
-it is running — when it is open but not focused, the app itself fetches the
-envelope and posts the enriched notification in place of the generic one;
-when it is focused, no banner shows at all (the app already displays the
-mail). Only when the Mac app is quit do notifications fall back to the
-generic "New mail". The extension ships regardless, so a future macOS fix
-restores full enrichment without an app change.
+long-standing, unresolved platform defect). The dispatch Lambda therefore
+sends Macs a *silent* push (`content-available: 1` with the `msgRef`, no
+alert) instead of an alert push. A running Mac app — focused or not —
+receives it, fetches the envelope, and posts an enriched local
+notification itself: a full banner when the app is unfocused, sound only
+(no banner) when it is frontmost, since the app already displays the mail.
+If the fetch fails, the app posts a generic "New mail" notification
+instead, so nothing is dropped silently. A quit Mac app receives no
+notification at all — a deliberate trade, since the paired iPhone covers
+that case with a fully enriched banner. The extension ships regardless
+(a monthly automated check watches for the macOS fix that would let it
+take over the quit-app case without an app change).
 
 ## Operational notes
 

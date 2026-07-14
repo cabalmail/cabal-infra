@@ -75,6 +75,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // way the app works fine without push, so log and move on.
         CabalmailLog.warn("Push", "remote-notification registration failed: \(error)")
     }
+
+    /// Silent-push entry point. The server sends Macs a background push
+    /// (`content-available: 1` plus `msgRef`, no alert) because alert
+    /// pushes could not be enriched: the NSE is killed by usernoted before
+    /// it runs, and `willPresent` — the previous in-app fallback — is only
+    /// called while the app is frontmost. A *running* app (any focus)
+    /// receives the silent push here, fetches the envelope, and posts an
+    /// enriched local notification; macOS's normal foreground rule then
+    /// handles presentation via `willPresent` below. A quit app receives
+    /// nothing — the accepted trade; iOS covers that case.
+    ///
+    /// The class is main-actor isolated, so this hops off via `Task` for
+    /// the network work; `PushRegistrar` is itself @MainActor.
+    func application(
+        _ application: NSApplication,
+        didReceiveRemoteNotification userInfo: [String: Any]
+    ) {
+        guard let ref = PushMessageRef(userInfo: userInfo) else {
+            CabalmailLog.warn("Push", "silent push without a parseable msgRef; ignored")
+            return
+        }
+        Task {
+            if await !PushRegistrar.shared.presentEnrichedNotification(for: ref) {
+                // Enrichment failed (no session, fetch error): degrade to
+                // the generic "New mail" a legacy alert push would have
+                // shown, rather than dropping the notification silently.
+                await PushRegistrar.shared.presentGenericNotification(for: ref)
+            }
+        }
+    }
 }
 #endif
 
@@ -97,33 +127,23 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     /// polling-driven UI already shows the new message, so a banner would
     /// double-notify — play the sound only.
     ///
-    /// The macOS branch additionally works around usernoted killing our
-    /// Notification Service Extension before it runs (see
-    /// `PushRegistrar.presentEnrichedNotification`): while the app is
-    /// running but *not* active, the app enriches the push itself — it posts
-    /// an enriched local notification and suppresses the generic remote one.
-    /// Any failure presents the generic original instead, so nothing is ever
-    /// dropped silently.
+    /// No enrichment happens here anymore: macOS only calls `willPresent`
+    /// while the app is frontmost, so the #654 enrich-on-present branch was
+    /// unreachable exactly when it mattered (running but unfocused).
+    /// Enrichment moved to `didReceiveRemoteNotification` above, which fires
+    /// for a running app regardless of focus; what lands here is the enriched
+    /// local notification it posts (or a legacy alert push from an old server
+    /// during rollout, which presents generically).
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         #if os(macOS)
-        // Sendable extraction up front (see the extension comment); only
-        // these value types hop to the main actor below.
-        let isRemote = notification.request.trigger is UNPushNotificationTrigger
-        let ref = PushMessageRef(userInfo: notification.request.content.userInfo)
+        // Active: the UI already shows the mail, so sound only. Inactive:
+        // full banner — this is what presents our own local notifications
+        // while the app runs unfocused.
         let isActive = await MainActor.run { NSApp.isActive }
-        if isActive { return [.sound] }
-        // Only a remote push with a parseable msgRef takes the enrichment
-        // path. Everything else — including the enriched local notification
-        // this very path posts, whose trigger is nil — presents as-is.
-        guard isRemote, let ref else { return [.banner, .sound] }
-        if await PushRegistrar.shared.presentEnrichedNotification(for: ref) {
-            // The enriched local copy is on its way; drop the generic one.
-            return []
-        }
-        return [.banner, .sound]
+        return isActive ? [.sound] : [.banner, .sound]
         #else
         return [.sound]
         #endif
