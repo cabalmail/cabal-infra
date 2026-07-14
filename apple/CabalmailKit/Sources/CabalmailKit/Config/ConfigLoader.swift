@@ -2,7 +2,7 @@ import Foundation
 
 /// Loads the runtime `Configuration` from a control domain's `/config.json`.
 ///
-/// Phase 1 decision #2 (see `apple/README.md`) makes the client
+/// Phase 1 decision #2 (see `docs/apple.md`) makes the client
 /// environment-agnostic: the same build works against dev/stage/prod by
 /// pointing at a different control domain. This loader is what reads that
 /// indirection at sign-in time.

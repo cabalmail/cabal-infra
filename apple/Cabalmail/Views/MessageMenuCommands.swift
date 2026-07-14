@@ -7,7 +7,7 @@ import SwiftUI
 /// iPadOS gets the same chords through the hardware-keyboard menu.
 /// Every item dispatches through an `AppState` tick counter (see the
 /// "Commands dispatch through AppState tick counters" note in
-/// apple/README.md): the compose surfaces observe the reply ticks, and
+/// docs/apple.md): the compose surfaces observe the reply ticks, and
 /// the on-screen `MessageListView` observes the selection-scoped ticks,
 /// applying the action to its current selection — so the chords work
 /// regardless of which view holds first-responder focus.
