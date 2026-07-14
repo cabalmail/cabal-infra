@@ -712,36 +712,44 @@ References:
 
 ## App icons
 
-Real Cabalmail artwork is installed in both asset catalogs, all of it
-generated from the single source vector at
+Real Cabalmail artwork is installed for every target, all of it generated
+from the single source vector at
 [`vector/cabalmail-logo.svg`](../vector/cabalmail-logo.svg) by
 [`scripts/generate-logo-assets`](../scripts/generate-logo-assets). Nothing
-under the asset catalogs is hand-edited — edit the vector and regenerate.
-See [`vector/README.md`](../vector/README.md) for the full spec (geometry,
+is hand-edited — edit the vector and regenerate. See
+[`vector/README.md`](../vector/README.md) for the full spec (geometry,
 color tokens, placement transform, per-platform do-not list).
 
 ```
-apple/Cabalmail/Assets.xcassets/AppIcon.appiconset/
-  AppIcon-light.png      (1024×1024 RGB, forest glyph on cream gradient)
-  AppIcon-dark.png       (1024×1024 RGB, parchment glyph on ink gradient)
-  AppIcon-tinted.png     (1024×1024 RGBA — white glyph on transparent;
-                          system tints the white pixels at runtime)
+apple/Cabalmail/AppIcon.icon/           (iOS / iPadOS — Liquid Glass)
+apple/CabalmailMac/AppIcon.icon/        (macOS — Liquid Glass)
+  icon.json                Default = forest glyph on cream, Dark = parchment
+                           glyph on ink; one ink-glyph template recolored per
+                           appearance, on a specialized background gradient.
+  Assets/Mark.svg          the glyph template.
 apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack/
   Back / Middle / Front layers  (1024×1024; opaque cream plate, forest
-                          C-disc, forest-deep M — composited with parallax)
-apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset/
-  icon_16x16.png … icon_512x512@2x.png    (the full 10-file macOS ladder,
-                          re-rendered from the light SVG at each exact size
-                          — no bitmap downscaling)
+                           C-disc, forest-deep M — composited with parallax)
+apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset/
+  AppIcon-watch.png        (single 1024 slot; watchOS masks it itself)
 ```
 
-`Contents.json` in the iOS catalog uses the iOS 17+ `appearances`
-convention (`luminosity: dark` / `luminosity: tinted`) rather than the
-legacy single-idiom layout. Opaque icons are truecolor RGB (App Store
-forbids an alpha channel on opaque icons); the tinted and visionOS layers
-keep transparency.
+The square icon (iOS / iPadOS / macOS) is an Icon Composer `.icon` bundle,
+not an asset-catalog appiconset. This is the **only** format that carries a
+per-appearance **macOS** icon: an asset catalog's `luminosity` appearances
+are silently dropped by `actool` for the `mac` idiom (they compile to a
+legacy, appearance-blind `.icns`), which is why the macOS icon used to
+ignore the Dark setting. `actool` still emits the older prerendered
+fallbacks from the same `.icon` (`.icns` on macOS, `AppIcon60x60`/`76x76`
+on iOS), so the macOS-15 / iOS-18 deployment floors keep a valid icon while
+26+ gets the Liquid Glass rendering with Default/Dark (and system-synthesized
+Tinted/Clear). Layer-level `fill-specializations` are ignored by the
+renderer, so the bespoke dark glyph is expressed as two overlaid glyph
+layers (forest on top, hidden in Dark; parchment beneath) rather than one
+recolored layer.
 
-All catalogs pass `xcrun actool` cleanly (iphoneos 18, macosx 15, xros 2).
+All icons pass `xcrun actool` cleanly, and the three build destinations
+(iphoneos, macosx, xros) archive with the correct primary icon.
 
 ### Regenerating
 
@@ -767,7 +775,8 @@ with parallax on gaze focus), wired via a per-SDK icon-name override in
 "ASSETCATALOG_COMPILER_APPICON_NAME[sdk=xros*]": AppIconVision
 ```
 
-iOS / iPadOS keep the flat `AppIcon.appiconset`. The back plate is a
+iOS / iPadOS and macOS use the shared `AppIcon.icon` instead; visionOS is
+the one square-icon holdout on the layered stack. The back plate is a
 fully-opaque 1024 bitmap (actool rejects a transparent back layer); the
 system applies the circular mask. Validating the parallax depth effect
 still requires a visionOS device in the loop.
