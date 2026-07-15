@@ -90,9 +90,11 @@ public protocol ApiClient: Sendable {
     // MARK: Operations
     /// Sets or clears one or more flags on the supplied message UIDs.
     /// `request.operation` is `set` or `unset` to match the Lambda's
-    /// expected wire value (`lambda/api/set_flag/function.py`).
-    func setFlag(_ request: SetFlagRequest) async throws -> [UInt32]
-    func moveMessages(_ request: MoveMessagesRequest) async throws
+    /// expected wire value (`lambda/api/set_flag/function.py`). The result
+    /// carries the Lambda's succeeded/failed split; a fully-successful call
+    /// reports every requested UID as succeeded.
+    func setFlag(_ request: SetFlagRequest) async throws -> BulkOpResult
+    func moveMessages(_ request: MoveMessagesRequest) async throws -> BulkOpResult
 
     /// Permanently deletes (flags `\Deleted` + expunges) the given messages.
     /// The `/purge_messages` Lambda only accepts trash folders, so a client
@@ -259,6 +261,22 @@ public struct AttachmentUpload: Sendable, Hashable {
 }
 
 // MARK: - Request types
+
+/// Per-UID outcome of a bulk flag/move call. The Lambdas run their IMAP
+/// commands in bounded batches (`apply_in_batches` in
+/// `lambda/api/_shared/helper.py`) and return `status: "partial"` with a
+/// succeeded/failed split when some batches fail; on the plain
+/// `status: "submitted"` success body the API layer reports every
+/// requested UID as succeeded.
+public struct BulkOpResult: Sendable, Equatable {
+    public let succeeded: [UInt32]
+    public let failed: [UInt32]
+
+    public init(succeeded: [UInt32], failed: [UInt32]) {
+        self.succeeded = succeeded
+        self.failed = failed
+    }
+}
 
 /// Parameters for `/set_flag`. Bundled into a struct so the call site
 /// stays under SwiftLint's `function_parameter_count` limit while keeping

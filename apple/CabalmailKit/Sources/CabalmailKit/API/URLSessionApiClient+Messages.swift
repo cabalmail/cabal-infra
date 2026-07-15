@@ -21,12 +21,39 @@ private struct MessageIdsPayload: Decodable {
     }
 }
 
-private struct MessageIdsOptionalPayload: Decodable {
-    let messageIds: [UInt32]?
+/// Response body of the bulk-op Lambdas (`/set_flag`, `/move_messages`).
+/// Full success is `{"status": "submitted"}`; a batched partial failure is
+/// `{"status": "partial", "flagged_ids"/"moved_ids": [...], "failed_ids":
+/// [...]}` (the success key is endpoint-specific, so both are optional
+/// here). Older Lambdas returned `{"message_ids": [...]}` — decoding that
+/// yields no `status`, which the mapper treats as full success.
+private struct BulkOpPayload: Decodable {
+    let status: String?
+    let flaggedIds: [UInt32]?
+    let movedIds: [UInt32]?
+    let failedIds: [UInt32]?
 
     private enum CodingKeys: String, CodingKey {
-        case messageIds = "message_ids"
+        case status
+        case flaggedIds = "flagged_ids"
+        case movedIds = "moved_ids"
+        case failedIds = "failed_ids"
     }
+}
+
+/// Maps a bulk-op response body onto the requested UID list. Anything
+/// other than an explicit `status: "partial"` (including an undecodable
+/// body) is full success — a total failure arrives as a non-2xx status
+/// and throws inside `send` before reaching this.
+private func decodeBulkResult(_ data: Data, requested: [UInt32]) -> BulkOpResult {
+    guard let payload = try? JSONDecoder().decode(BulkOpPayload.self, from: data),
+          payload.status == "partial" else {
+        return BulkOpResult(succeeded: requested, failed: [])
+    }
+    return BulkOpResult(
+        succeeded: payload.flaggedIds ?? payload.movedIds ?? [],
+        failed: payload.failedIds ?? []
+    )
 }
 
 /// Day-granular date formatter matching `/search_envelopes`'s YYYY-MM-DD
@@ -225,7 +252,7 @@ extension URLSessionApiClient {
 
     // MARK: - Operations
 
-    public func setFlag(_ request: SetFlagRequest) async throws -> [UInt32] {
+    public func setFlag(_ request: SetFlagRequest) async throws -> BulkOpResult {
         let httpRequest = try await put("/set_flag", json: [
             "host": request.host,
             "folder": request.folder,
@@ -236,10 +263,10 @@ extension URLSessionApiClient {
             "sort_field": request.sortField,
         ])
         let data = try await send(httpRequest, expectedStatuses: 200..<300)
-        return (try? JSONDecoder().decode(MessageIdsOptionalPayload.self, from: data).messageIds) ?? []
+        return decodeBulkResult(data, requested: request.ids)
     }
 
-    public func moveMessages(_ request: MoveMessagesRequest) async throws {
+    public func moveMessages(_ request: MoveMessagesRequest) async throws -> BulkOpResult {
         let httpRequest = try await put("/move_messages", json: [
             "host": request.host,
             "source": request.source,
@@ -248,7 +275,8 @@ extension URLSessionApiClient {
             "sort_order": request.sortOrder,
             "sort_field": request.sortField,
         ])
-        _ = try await send(httpRequest, expectedStatuses: 200..<300)
+        let data = try await send(httpRequest, expectedStatuses: 200..<300)
+        return decodeBulkResult(data, requested: request.ids)
     }
 
     public func purgeMessages(host: String, folder: String, ids: [UInt32]) async throws {
