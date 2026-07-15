@@ -153,37 +153,53 @@ public actor ApiBackedImapClient: ImapClient {
         }
         // Snapshot actor state before fanning out; the child tasks run
         // outside this actor's isolation, so they must not touch `self`.
+        // Each per-flag leg walks the UID list in `bulkChunkSize` chunks
+        // (see `ApiBackedImapClient+Bulk.swift`) and reports its
+        // succeeded/failed split; the merge below throws
+        // `bulkPartialFailure` when any UID missed any flag.
         let api = self.api
         let host = self.host
         let sortOrder = defaultSortOrder
         let sortField = defaultSortField
-        try await withThrowingTaskGroup(of: Void.self) { group in
+        let outcomes = await withTaskGroup(of: BulkChunkOutcome.self) { group in
             for flag in flags {
                 group.addTask {
-                    _ = try await api.setFlag(SetFlagRequest(
-                        host: host,
-                        folder: folder,
-                        ids: uids,
-                        flag: flag.wireValue,
-                        operation: wireOp,
-                        sortOrder: sortOrder,
-                        sortField: sortField
-                    ))
+                    await Self.runChunked(uids: uids) { chunk in
+                        try await api.setFlag(SetFlagRequest(
+                            host: host,
+                            folder: folder,
+                            ids: chunk,
+                            flag: flag.wireValue,
+                            operation: wireOp,
+                            sortOrder: sortOrder,
+                            sortField: sortField
+                        ))
+                    }
                 }
             }
-            try await group.waitForAll()
+            var collected: [BulkChunkOutcome] = []
+            for await outcome in group { collected.append(outcome) }
+            return collected
         }
+        try Self.throwIfIncomplete(outcomes)
     }
 
     public func move(folder: String, uids: [UInt32], destination: String) async throws {
-        try await api.moveMessages(MoveMessagesRequest(
-            host: host,
-            source: folder,
-            destination: destination,
-            ids: uids,
-            sortOrder: defaultSortOrder,
-            sortField: defaultSortField
-        ))
+        let api = self.api
+        let host = self.host
+        let sortOrder = defaultSortOrder
+        let sortField = defaultSortField
+        let outcome = await Self.runChunked(uids: uids) { chunk in
+            try await api.moveMessages(MoveMessagesRequest(
+                host: host,
+                source: folder,
+                destination: destination,
+                ids: chunk,
+                sortOrder: sortOrder,
+                sortField: sortField
+            ))
+        }
+        try Self.throwIfIncomplete([outcome])
     }
 
     // MARK: - Search
