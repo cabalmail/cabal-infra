@@ -110,6 +110,11 @@ struct MessageListView: View {
     /// Forever?" confirmation for the captured UID set. Non-private so
     /// the `+Rows` / `+Bulk` / `+Actions` extensions can stage it.
     @State var purgeCandidate: PurgeCandidate?
+    /// Set by `requestDispose` when a dispose crosses the large-selection
+    /// threshold; presents the "Archive/Delete N Messages?" confirmation
+    /// (see `MessageListView+Actions.swift`). Non-private for the same
+    /// reason as `purgeCandidate`.
+    @State var disposeCandidate: DisposeCandidate?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
     /// Set by the wide-layout selection context menu's "Move to folder…"
@@ -156,6 +161,25 @@ struct MessageListView: View {
                 if !isPresented { purgeCandidate = nil }
             }
         )
+    }
+
+    /// Boolean projection of `disposeCandidate`, same shape as above.
+    private var disposeDialogBinding: Binding<Bool> {
+        Binding(
+            get: { disposeCandidate != nil },
+            set: { isPresented in
+                if !isPresented { disposeCandidate = nil }
+            }
+        )
+    }
+
+    /// Title for the large-selection dispose confirmation. Computed off
+    /// the staged candidate because `confirmationDialog`'s title is a
+    /// plain value, not a `presenting:` closure.
+    private var disposeDialogTitle: String {
+        guard let candidate = disposeCandidate else { return "" }
+        let verb = candidate.action == .trash ? "Delete" : "Archive"
+        return "\(verb) \(candidate.uids.count) Messages?"
     }
 
     @ViewBuilder
@@ -385,6 +409,34 @@ extension MessageListView {
                 candidate.uids.count == 1
                 ? "This message will be permanently deleted. This can't be undone."
                 : "These \(candidate.uids.count) messages will be permanently deleted. This can't be undone."
+            )
+        }
+        // Large-selection dispose guard (threshold in `+Actions.swift`):
+        // recoverable, unlike the purge above, but big enough that a
+        // mis-aimed select-all shouldn't file everything silently.
+        .confirmationDialog(
+            disposeDialogTitle,
+            isPresented: disposeDialogBinding,
+            titleVisibility: .visible,
+            presenting: disposeCandidate
+        ) { candidate in
+            Button(
+                candidate.action == .trash ? "Delete" : "Archive",
+                role: candidate.action == .trash ? .destructive : nil
+            ) {
+                disposeCandidate = nil
+                if let model {
+                    commitDispose(candidate, model: model)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                disposeCandidate = nil
+            }
+        } message: { candidate in
+            Text(
+                candidate.action == .trash
+                ? "\(candidate.uids.count) messages will be moved to Trash."
+                : "\(candidate.uids.count) messages will be archived."
             )
         }
     }
