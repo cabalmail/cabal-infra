@@ -26,8 +26,20 @@ env:
   # resolve as "ineligible" ("iOS 18.1 is not installed").
   #
   # If reproducibility becomes important, pin to a specific version here AND
-  # ensure it matches a Xcode actually preinstalled on the macos-15 runner
+  # ensure it matches a Xcode actually preinstalled on the macos-26 runner
   # image.
+  #
+  # The runner image's HOST macOS version is load-bearing, not just a
+  # freshness preference: compiling the Liquid Glass AppIcon.icon for
+  # --platform macosx renders through the host's asset runtime
+  # (AssetCatalogAgent-AssetRuntime). On a macOS 15 host that agent crashes
+  # against Xcode 26's framework overrides (dyld "symbol missing from root
+  # that overrides CoreMedia", IBPlatformToolFailureException) and the
+  # CabalmailMac asset-catalog compile fails with no useful error through
+  # xcbeautify. iphoneos compiles of the same .icon are host-independent
+  # (they render via the SDK runtime inside Xcode), which is why only the
+  # macOS leg broke. Keep the runner's macOS >= the SDK major the .icon
+  # targets.
   XCODE_VERSION: 'latest-stable'
   WORKSPACE: apple/Cabalmail.xcworkspace
 
@@ -38,7 +50,7 @@ jobs:
   # -----------------------------------------------------------------------
   kit-test:
     name: Test CabalmailKit (${{ matrix.platform }})
-    runs-on: macos-15
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +65,7 @@ jobs:
           xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Install XcodeGen + SwiftLint + xcbeautify
-        # The macos-15 runner image preinstalls some of these (xcbeautify in
+        # The macOS runner image preinstalls some of these (xcbeautify in
         # particular), and `brew install` then emits a `Warning: foo is
         # already installed...` line that GitHub surfaces as a workflow
         # annotation. Filter to packages that aren't installed yet so the
@@ -141,6 +153,10 @@ jobs:
 
       - name: Test CabalmailKit on ${{ matrix.platform }}
         working-directory: apple/CabalmailKit
+        # tee the raw xcodebuild output to a file: xcbeautify swallows the
+        # stderr of crashing subtools (an actool crash once surfaced as a bare
+        # "CompileAssetCatalogVariant failed" across two runs), so on failure
+        # a later step dumps the raw log.
         run: |
           set -o pipefail
           xcodebuild test \
@@ -150,7 +166,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-test.log" \
             | xcbeautify --renderer github-actions
+
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh
 
   # -----------------------------------------------------------------------
   # Build the app targets for the three product platforms. Unsigned — this
@@ -162,7 +183,7 @@ jobs:
   # -----------------------------------------------------------------------
   app-build:
     name: Build ${{ matrix.scheme }} (${{ matrix.platform }})
-    runs-on: macos-15
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
@@ -225,6 +246,8 @@ jobs:
 
       - name: Build ${{ matrix.scheme }} (unsigned)
         working-directory: apple
+        # tee: see the kit-test job's equivalent comment — on failure the
+        # next step dumps the raw log xcbeautify may have swallowed.
         run: |
           set -o pipefail
           xcodebuild build \
@@ -234,7 +257,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-build.log" \
             | xcbeautify --renderer github-actions
+
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh
 
   approval:
     needs: [kit-test, app-build]
@@ -261,7 +289,7 @@ jobs:
     name: Upload ${{ matrix.platform }} to TestFlight
     needs: approval
     if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
-    runs-on: macos-15
+    runs-on: macos-26
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     strategy:
       # Never cancel a leg mid-upload because the other leg failed.
@@ -485,6 +513,7 @@ jobs:
             IOS_NSE_APP_STORE_PROFILE_UUID="${IOS_NSE_APP_STORE_PROFILE_UUID:-}" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-archive.log" \
             | xcbeautify --renderer github-actions
 
       - name: Export IPA
@@ -541,6 +570,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
             -exportPath "$RUNNER_TEMP/export-${{ matrix.altool_type }}" \
             -exportOptionsPlist "$PLIST" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-export.log" \
             | xcbeautify --renderer github-actions
 
       - name: Upload to TestFlight
@@ -612,6 +642,10 @@ jobs:
           rm -f "$RUNNER_TEMP/keychain-password"
           rm -rf "$HOME/.appstoreconnect/private_keys"
 
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh
+
   # -----------------------------------------------------------------------
   # Signed archive + TestFlight upload + developer-id notarization for
   # macOS. Notarized .app is also attached as a workflow artifact.
@@ -623,7 +657,7 @@ jobs:
       actions: write
     needs: approval
     if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
-    runs-on: macos-15
+    runs-on: macos-26
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     steps:
       - name: Checkout
@@ -816,6 +850,7 @@ jobs:
             MAC_NSE_APP_STORE_PROFILE_UUID="${MAC_NSE_APP_STORE_PROFILE_UUID:-}" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-archive.log" \
             | xcbeautify --renderer github-actions
 
       - name: Export app-store .pkg
@@ -855,6 +890,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
             -exportPath "$RUNNER_TEMP/export-mac-appstore" \
             -exportOptionsPlist "$PLIST" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-export-appstore.log" \
             | xcbeautify --renderer github-actions
 
       - name: Summarize macOS upload
@@ -993,6 +1029,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
             -exportPath "$RUNNER_TEMP/export-mac-devid" \
             -exportOptionsPlist "$PLIST" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-export-devid.log" \
             | xcbeautify --renderer github-actions
 
       - name: Notarize and staple
@@ -1044,3 +1081,7 @@ jobs:
           security delete-keychain "${KEYCHAIN_PATH:-}" || true
           rm -f "$RUNNER_TEMP/keychain-password"
           rm -rf "$HOME/.appstoreconnect/private_keys"
+
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] - 2026-07-15
+
+### Changed
+- Apple: **Liquid Glass app icon on iOS 26 and macOS 26.** The iOS/iPadOS and
+  macOS square icons moved from flat asset-catalog artwork to an Icon Composer
+  `.icon`, so 26+ renders the mark with Liquid Glass material (specular,
+  refraction, depth) and the system Default/Dark/Tinted/Clear styles. Older
+  OSes (iOS 18–25, macOS 15) keep the flat fallback the compiler emits from the
+  same bundle. visionOS keeps its layered parallax icon; watchOS is unchanged.
+
+### Fixed
+- Apple: **macOS app icon now follows the system Appearance setting.** The
+  macOS icon stayed light in Dark mode because an asset catalog's
+  `luminosity` appearance variants are dropped by the icon compiler for the
+  Mac idiom (they produce a legacy, appearance-blind icon). The macOS and
+  iOS/iPadOS square icons are now a shared Icon Composer `.icon` bundle,
+  generated from the same source vector, so macOS renders forest-on-cream in
+  Default and parchment-on-ink in Dark — matching iOS.
+
 ## [0.11.1] - 2026-07-14
 
 ### Added

@@ -101,7 +101,7 @@ jobs:
           fi
 
           if [ "$NEED_MAC" = "true" ]; then
-            echo "runner=macos-15"     >> "$GITHUB_OUTPUT"
+            echo "runner=macos-26"     >> "$GITHUB_OUTPUT"
             echo "mode=apple"          >> "$GITHUB_OUTPUT"
           else
             echo "runner=ubuntu-latest" >> "$GITHUB_OUTPUT"
