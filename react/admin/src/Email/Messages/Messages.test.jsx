@@ -554,6 +554,77 @@ describe('Messages - optimistic bulk operations', () => {
     }
   });
 
+  it('restores and re-selects the failed rows on a partial bulk archive', async () => {
+    // The Lambda batches its IMAP commands: a 200 "partial" names the ids
+    // whose batch failed. Those rows must come back (they never left the
+    // folder), stay selected for a one-click retry, and the user must see
+    // the split — not a silent success.
+    mockMoveMessages.mockResolvedValue({
+      data: { status: 'partial', moved_ids: [1], failed_ids: [2] },
+    });
+    const setMessage = vi.fn();
+    const setSelected = vi.fn();
+    const { container, unmount } = render(
+      <Harness
+        folder="INBOX"
+        overrides={{ bulkMode: true, selected: new Set([1, 2]), setMessage, setSelected }}
+      />,
+    );
+    try {
+      await waitFor(() => {
+        expect(container.querySelectorAll('.envelope-row').length).toBe(3);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+      });
+      await flush();
+
+      // Row 1 moved and stays gone; row 2 failed and is restored beside the
+      // untouched row 3.
+      expect(container.querySelectorAll('.envelope-row').length).toBe(2);
+      expect(screen.getByText('Subject 2')).toBeInTheDocument();
+      expect(screen.queryByText('Subject 1')).not.toBeInTheDocument();
+      expect(setSelected).toHaveBeenCalledWith(new Set([2]));
+      expect(setMessage).toHaveBeenCalledWith(
+        'Archived 1 of 2 messages — 1 could not be archived.',
+        true,
+      );
+    } finally {
+      unmount();
+    }
+  });
+
+  it('rolls back the failed rows and reports the split on a partial mark-read', async () => {
+    mockSetFlag.mockResolvedValue({
+      data: { status: 'partial', flagged_ids: [1], failed_ids: [2] },
+    });
+    const setMessage = vi.fn();
+    const { container, unmount } = render(
+      <Harness
+        folder="INBOX"
+        overrides={{ bulkMode: true, selected: new Set([1, 2]), setMessage }}
+      />,
+    );
+    try {
+      await waitFor(() => {
+        expect(container.querySelectorAll('.envelope-row').length).toBe(3);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /mark read/i }));
+      });
+      await flush();
+
+      // Flag ops never remove rows; the user just learns which ids missed.
+      expect(container.querySelectorAll('.envelope-row').length).toBe(3);
+      expect(setMessage).toHaveBeenCalledWith(
+        'Updated 1 of 2 messages — 1 could not be updated.',
+        true,
+      );
+    } finally {
+      unmount();
+    }
+  });
+
   it('bulk mark-read chunks set_flag and reconciles without re-pulling the list', async () => {
     const { unmount } = render(
       <Harness folder="INBOX" overrides={{ bulkMode: true, selected: new Set([1, 2]) }} />,
