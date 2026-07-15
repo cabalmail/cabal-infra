@@ -23,24 +23,45 @@ const SORT_OPTIONS = [DATE, ARRIVAL, FROM, SUBJECT];
 // calling `onProgress(doneCount)` after each slice lands. Sequential (not
 // parallel) so the server sees a steady stream rather than a burst, and so a
 // failure tells us exactly how many ids got through: on the first chunk that
-// throws, the rejection carries `.done` (the count that succeeded before it)
-// and `.cause` (the underlying error) so the caller can roll back the rest.
+// throws, the rejection carries `.done` (the count submitted before it),
+// `.failed` (ids earlier chunks reported as failed) and `.cause` (the
+// underlying error) so the caller can roll back the rest.
+//
+// A 200 carrying `status: "partial"` is not a throw: the bulk-op Lambdas run
+// their IMAP commands in bounded batches and report the ids whose batch
+// failed in `failed_ids` (see `batch_result_response` in
+// `lambda/api/_shared/helper.py`). Those accumulate across chunks into the
+// resolved value's `failed` list so the caller can restore exactly those
+// rows instead of silently losing them.
 async function runInChunks(ids, chunkSize, doChunk, onProgress) {
   let done = 0;
+  const failed = [];
   for (let start = 0; start < ids.length; start += chunkSize) {
     const chunk = ids.slice(start, start + chunkSize);
     try {
-      await doChunk(chunk);
+      const res = await doChunk(chunk);
+      const body = res && res.data;
+      if (body && body.status === 'partial' && Array.isArray(body.failed_ids)) {
+        failed.push(...body.failed_ids.map(Number));
+      }
     } catch (cause) {
       const err = new Error('bulk chunk failed');
       err.done = done;
+      err.failed = failed;
       err.cause = cause;
       throw err;
     }
     done += chunk.length;
     if (typeof onProgress === 'function') onProgress(done);
   }
-  return done;
+  return { done, failed };
+}
+
+// "Moved 387 of 412 messages — 25 could not be moved."
+function partialNotice(verb, okCount, total, failedCount) {
+  const capped = verb[0].toUpperCase() + verb.slice(1);
+  return `${capped} ${okCount.toLocaleString()} of ${total.toLocaleString()} messages — `
+    + `${failedCount.toLocaleString()} could not be ${verb}.`;
 }
 
 function Messages({
@@ -284,8 +305,11 @@ function Messages({
   // stream the operation to the server in chunks (showing progress), then
   // reconcile via STATUS. On a chunk failure, restore the rows past the point
   // that landed and surface the error -- the rows that did move stay gone.
+  // A chunk that lands with `status: "partial"` restores exactly the ids the
+  // Lambda reported failed, re-selects them (still in bulk mode) so a retry
+  // is one click away, and tells the user "Moved X of Y".
   const runOptimisticRemoval = useCallback(
-    (ids, { verb, failMessage, doChunk }) => {
+    (ids, { verb, doneVerb, failMessage, doChunk }) => {
       const numIds = ids.map(Number);
       if (!numIds.length) return;
       const removeSet = new Set(numIds);
@@ -297,21 +321,46 @@ function Messages({
       setMessageIds((prev) => prev.filter((id) => !removeSet.has(Number(id))));
       setTotal((t) => Math.max(0, t - numIds.length));
 
+      // Restore the rows in `failedIds`: they never left the server folder.
+      // Filtering the snapshot (rather than appending) keeps the sort order.
+      const restoreFailed = (failedIds) => {
+        const failedSet = new Set(failedIds);
+        setMessageIds(snapshotIds.filter(
+          (id) => !removeSet.has(Number(id)) || failedSet.has(Number(id)),
+        ));
+        setTotal(Math.max(0, snapshotTotal - (numIds.length - failedIds.length)));
+      };
+
       runInChunks(numIds, BULK_CHUNK_SIZE, doChunk, (done) =>
         setBulkProgress({ verb, done, total: numIds.length }),
       )
-        .then(() => settleBulk(true))
+        .then(({ failed }) => {
+          if (!failed.length) {
+            settleBulk(true);
+            return;
+          }
+          restoreFailed(failed);
+          setSelected(new Set(failed));
+          setMessage(
+            partialNotice(doneVerb, numIds.length - failed.length, numIds.length, failed.length),
+            true,
+          );
+          settleBulk(false);
+        })
         .catch((err) => {
-          const landed = err.done || 0;
-          const moved = new Set(numIds.slice(0, landed));
-          setMessageIds(snapshotIds.filter((id) => !moved.has(Number(id))));
-          setTotal(Math.max(0, snapshotTotal - landed));
+          // Rows in chunks that never fired roll back wholesale; rows the
+          // landed chunks reported failed roll back too.
+          const failedSet = new Set(err.failed || []);
+          const moved = numIds.slice(0, err.done || 0).filter((id) => !failedSet.has(id));
+          const movedSet = new Set(moved);
+          setMessageIds(snapshotIds.filter((id) => !movedSet.has(Number(id))));
+          setTotal(Math.max(0, snapshotTotal - moved.length));
           setMessage(failMessage, true);
           console.error(err.cause || err);
           settleBulk(true);
         });
     },
-    [settleBulk, setMessage],
+    [settleBulk, setMessage, setSelected],
   );
 
   const runFlagOp = useCallback(
@@ -330,10 +379,23 @@ function Messages({
         (chunk) => api.setFlag(folder, spec.imap, spec.op, chunk, sortDir.imap, sortKey.imap),
         (done) => setBulkProgress({ verb, done, total: numIds.length }),
       )
-        .then(() => settleBulk(false))
+        .then(({ failed }) => {
+          if (failed.length) {
+            // Roll the optimistic flip back on just the ids the Lambda
+            // reported failed; the selection stays whole (the rows are all
+            // still on screen) so the user can simply re-run the action.
+            pushFlagPatch(failed, spec.imap, spec.op === 'set' ? 'unset' : 'set');
+            setMessage(
+              partialNotice('updated', numIds.length - failed.length, numIds.length, failed.length),
+              true,
+            );
+          }
+          settleBulk(false);
+        })
         .catch((err) => {
-          // Roll the flag back on the ids whose chunk never landed.
-          const reverted = numIds.slice(err.done || 0);
+          // Roll the flag back on the ids whose chunk never landed, plus any
+          // ids the landed chunks reported as failed.
+          const reverted = [...(err.failed || []), ...numIds.slice(err.done || 0)];
           pushFlagPatch(reverted, spec.imap, spec.op === 'set' ? 'unset' : 'set');
           setMessage('Unable to set flag on selected messages.', true);
           console.error(err.cause || err);
@@ -348,6 +410,7 @@ function Messages({
     if (bulkLimitExceeded(selectedCount)) return;
     runOptimisticRemoval(selectedIdsArray, {
       verb: 'Archiving',
+      doneVerb: 'archived',
       failMessage: 'Unable to archive selected messages.',
       doChunk: (chunk) => api.moveMessages(folder, 'Archive', chunk, sortDir.imap, sortKey.imap),
     });
@@ -362,6 +425,7 @@ function Messages({
     }
     runOptimisticRemoval(selectedIdsArray, {
       verb: 'Deleting',
+      doneVerb: 'deleted',
       failMessage: 'Unable to delete selected messages.',
       doChunk: (chunk) => api.moveMessages(folder, 'Trash', chunk, sortDir.imap, sortKey.imap),
     });
@@ -373,6 +437,7 @@ function Messages({
     if (bulkLimitExceeded(selectedCount)) return;
     runOptimisticRemoval(selectedIdsArray, {
       verb: 'Deleting',
+      doneVerb: 'deleted',
       failMessage: 'Unable to permanently delete selected messages.',
       doChunk: (chunk) => api.purgeMessages(folder, chunk),
     });
@@ -387,6 +452,7 @@ function Messages({
       if (bulkLimitExceeded(selectedCount)) return;
       runOptimisticRemoval(selectedIdsArray, {
         verb: 'Moving',
+        doneVerb: 'moved',
         failMessage: 'Unable to move selected messages.',
         doChunk: (chunk) => api.moveMessages(folder, destination, chunk, sortDir.imap, sortKey.imap),
       });
