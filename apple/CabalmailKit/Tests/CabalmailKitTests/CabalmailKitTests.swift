@@ -8,7 +8,7 @@ final class CabalmailKitTests: XCTestCase {
 
     func testConfigurationDecodesConfigJsonShape() throws {
         // Matches the real shape emitted by
-        // terraform/infra/modules/app/templates/config.js (which is valid
+        // terraform/infra/modules/app/templates/config.js.tftpl (which is valid
         // JSON) and the config.json sibling. `domains` is an array of
         // Route 53 hosted-zone records, not a plain string list.
         let json = Data("""
