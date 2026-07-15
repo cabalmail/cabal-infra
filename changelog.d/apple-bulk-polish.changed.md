@@ -1,4 +1,4 @@
-- **Large bulk disposes on Apple clients now confirm first.** Archiving or
+- Apple: **Large bulk disposes on Apple clients now confirm first.** Archiving or
   deleting 25 or more messages at once asks "Archive/Delete N Messages?"
   before running, on every dispose surface (action bar, selection context
   menu, Cmd+Delete). Smaller disposes and non-destructive bulk actions
