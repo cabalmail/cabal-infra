@@ -66,8 +66,10 @@ extension MessageListView {
     /// action bar dismisses on iPad / visionOS. No-op on macOS, which has no
     /// EditMode. The read/unread and flag buttons deliberately skip it:
     /// their rows stay on screen, and keeping the selection lets the user
-    /// chain another action onto the same messages.
-    private func endSelectionMode() {
+    /// chain another action onto the same messages. Internal (not private)
+    /// so `commitDispose` in `+Actions.swift` can drop the mode after a
+    /// confirmed large dispose.
+    func endSelectionMode() {
         #if !os(macOS)
         editMode = .inactive
         #endif
@@ -79,8 +81,6 @@ extension MessageListView {
     @ViewBuilder
     func bulkActionBar(model: MessageListViewModel) -> some View {
         let count = model.selectedUIDs.count
-        let hasUnread = bulkSelectionContainsUnread(model)
-        let hasUnflagged = bulkSelectionContainsUnflagged(model)
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 14) {
@@ -88,47 +88,7 @@ extension MessageListView {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Spacer()
-                bulkActionButton(systemImage: "archivebox", label: "Archive") {
-                    Task {
-                        // Inside Trash the dispose preference may point back
-                        // at Trash itself (a same-folder no-op); Archive on
-                        // this bar is the rescue path, so send the selection
-                        // to the real Archive folder there.
-                        if model.isTrashFolder {
-                            await model.bulkMove(to: DisposeAction.archive.destinationFolder)
-                        } else {
-                            await model.bulkDispose()
-                        }
-                    }
-                    endSelectionMode()
-                }
-                bulkActionButton(systemImage: "folder", label: "Move…") {
-                    bulkMoveSheetPresented = true
-                }
-                bulkActionButton(
-                    systemImage: hasUnread ? "envelope.open" : "envelope.badge",
-                    label: hasUnread ? "Read" : "Unread"
-                ) {
-                    Task { await model.bulkSetSeen(hasUnread) }
-                }
-                bulkActionButton(
-                    systemImage: hasUnflagged ? "flag" : "flag.slash",
-                    label: hasUnflagged ? "Flag" : "Unflag"
-                ) {
-                    Task { await model.bulkSetFlagged(hasUnflagged) }
-                }
-                // Trash only: permanent delete for the whole selection,
-                // behind the same "Delete Forever?" confirmation as the
-                // row swipe.
-                if model.isTrashFolder {
-                    bulkActionButton(
-                        systemImage: "trash.slash",
-                        label: "Delete",
-                        role: .destructive
-                    ) {
-                        purgeCandidate = PurgeCandidate(uids: model.selectedUIDs)
-                    }
-                }
+                bulkActionButtons(model: model, count: count)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -137,11 +97,83 @@ extension MessageListView {
         .disabled(count == 0)
     }
 
+    /// The action buttons themselves — split from `bulkActionBar` to keep
+    /// each function under SwiftLint's body-length cap.
+    @ViewBuilder
+    private func bulkActionButtons(model: MessageListViewModel, count: Int) -> some View {
+        let hasUnread = bulkSelectionContainsUnread(model)
+        let hasUnflagged = bulkSelectionContainsUnflagged(model)
+        bulkActionButton(
+            systemImage: "archivebox",
+            label: "Archive",
+            accessibilityLabel: "Archive \(messageCount(count))"
+        ) {
+            // Inside Trash the dispose preference may point back at Trash
+            // itself (a same-folder no-op); Archive on this bar is the
+            // rescue path, so send the selection to the real Archive
+            // folder there. Rescue is a plain move (non-destructive), so
+            // it skips the large-selection confirmation that
+            // requestDispose applies.
+            if model.isTrashFolder {
+                Task { await model.bulkMove(to: DisposeAction.archive.destinationFolder) }
+                endSelectionMode()
+            } else {
+                requestDispose(
+                    uids: model.selectedUIDs,
+                    action: model.disposeAction,
+                    exitBulk: true,
+                    model: model
+                )
+            }
+        }
+        bulkActionButton(
+            systemImage: "folder",
+            label: "Move…",
+            accessibilityLabel: "Move \(messageCount(count))"
+        ) {
+            bulkMoveSheetPresented = true
+        }
+        bulkActionButton(
+            systemImage: hasUnread ? "envelope.open" : "envelope.badge",
+            label: hasUnread ? "Read" : "Unread",
+            accessibilityLabel: "Mark \(messageCount(count)) \(hasUnread ? "read" : "unread")"
+        ) {
+            Task { await model.bulkSetSeen(hasUnread) }
+        }
+        bulkActionButton(
+            systemImage: hasUnflagged ? "flag" : "flag.slash",
+            label: hasUnflagged ? "Flag" : "Unflag",
+            accessibilityLabel: "\(hasUnflagged ? "Flag" : "Unflag") \(messageCount(count))"
+        ) {
+            Task { await model.bulkSetFlagged(hasUnflagged) }
+        }
+        // Trash only: permanent delete for the whole selection, behind
+        // the same "Delete Forever?" confirmation as the row swipe.
+        if model.isTrashFolder {
+            bulkActionButton(
+                systemImage: "trash.slash",
+                label: "Delete",
+                role: .destructive,
+                accessibilityLabel: "Delete \(messageCount(count)) forever"
+            ) {
+                purgeCandidate = PurgeCandidate(uids: model.selectedUIDs)
+            }
+        }
+    }
+
+    /// "12 messages" / "1 message" — the count phrase VoiceOver reads on
+    /// every bulk action button, so "Archive" is announced as "Archive 12
+    /// messages" rather than a bare verb with no scope.
+    private func messageCount(_ count: Int) -> String {
+        count == 1 ? "1 message" : "\(count) messages"
+    }
+
     @ViewBuilder
     private func bulkActionButton(
         systemImage: String,
         label: String,
         role: ButtonRole? = nil,
+        accessibilityLabel: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(role: role, action: action) {
@@ -155,7 +187,7 @@ extension MessageListView {
         // `.plain` drops the automatic destructive tinting, so red is
         // applied explicitly for destructive roles.
         .foregroundStyle(role == .destructive ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
-        .accessibilityLabel(label)
+        .accessibilityLabel(accessibilityLabel ?? label)
     }
 
     @ViewBuilder

@@ -19,6 +19,22 @@ struct PurgeCandidate: Identifiable {
     let id = UUID()
 }
 
+/// UID set staged for the large-selection dispose confirmation: an
+/// archive/trash dispose of `largeDisposeThreshold`-or-more messages
+/// pauses on an "are you sure" dialog before it runs (Phase 3 of
+/// docs/1.1.x/multi-select-bulk-operations.md). Smaller disposes commit
+/// immediately, and non-destructive bulk ops (move, flag, read) never
+/// confirm at any size.
+struct DisposeCandidate: Identifiable {
+    let uids: Set<UInt32>
+    let action: DisposeAction
+    /// Leave selection / edit mode once the dispose commits — set by the
+    /// bulk action bar, whose flow ends with the bar dismissing. The
+    /// context menu and Cmd+Delete leave the mode as the user had it.
+    let exitBulk: Bool
+    let id = UUID()
+}
+
 // Selection-scoped actions for `MessageListView`'s wide/keyboard
 // layouts (macOS, iPad regular, visionOS): the List-level context menu
 // that acts on the whole multi-selection, and the handlers behind the
@@ -66,7 +82,7 @@ extension MessageListView {
                 Label("Move to folder…", systemImage: "folder")
             }
             Button {
-                Task { await model.disposeMessages(uids: uids, action: .archive) }
+                requestDispose(uids: uids, action: .archive, exitBulk: false, model: model)
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
@@ -81,7 +97,7 @@ extension MessageListView {
                 }
             } else {
                 Button(role: .destructive) {
-                    Task { await model.disposeMessages(uids: uids, action: .trash) }
+                    requestDispose(uids: uids, action: .trash, exitBulk: false, model: model)
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -163,7 +179,40 @@ extension MessageListView {
             purgeCandidate = PurgeCandidate(uids: uids)
             return
         }
-        let action = model.disposeAction
-        Task { await model.disposeMessages(uids: uids, action: action) }
+        requestDispose(uids: uids, action: model.disposeAction, exitBulk: false, model: model)
+    }
+
+    /// Selection size at which a dispose asks first. Large enough that
+    /// routine triage never sees the dialog; small enough that a
+    /// mis-aimed select-all can't silently file hundreds of messages.
+    static var largeDisposeThreshold: Int { 25 }
+
+    /// Routes every non-Trash dispose surface (action bar, selection
+    /// context menu, Cmd+Delete): a large selection stages the
+    /// confirmation dialog, a small one commits immediately.
+    func requestDispose(
+        uids: Set<UInt32>,
+        action: DisposeAction,
+        exitBulk: Bool,
+        model: MessageListViewModel
+    ) {
+        guard !uids.isEmpty else { return }
+        let candidate = DisposeCandidate(uids: uids, action: action, exitBulk: exitBulk)
+        if uids.count >= Self.largeDisposeThreshold {
+            disposeCandidate = candidate
+        } else {
+            commitDispose(candidate, model: model)
+        }
+    }
+
+    /// Runs a staged (or immediately-committed) dispose. Selection /
+    /// edit mode drops right away when requested — the candidate holds
+    /// its own UID copy, so clearing the live selection is safe.
+    func commitDispose(_ candidate: DisposeCandidate, model: MessageListViewModel) {
+        Task { await model.disposeMessages(uids: candidate.uids, action: candidate.action) }
+        if candidate.exitBulk {
+            model.exitBulkMode()
+            endSelectionMode()
+        }
     }
 }
