@@ -57,6 +57,14 @@ struct CabalmailMacApp: App {
                     }
                 }
         }
+        // A WindowGroup's default reaction to an external event (an
+        // incoming mailto: URL) is to *spawn a fresh window of the
+        // group* to receive it — so a mailto: click used to open a
+        // spurious second main window alongside the compose window the
+        // handler above requests. An empty matching set disables that
+        // new-window spawning; `.onOpenURL` is still delivered to the
+        // existing main window, which is what we want.
+        .handlesExternalEvents(matching: [])
         .commands {
             CabalmailCommands(appState: appState)
         }
