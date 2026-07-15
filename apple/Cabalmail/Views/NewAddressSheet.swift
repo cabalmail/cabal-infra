@@ -24,9 +24,6 @@ struct NewAddressSheet: View {
     let onCreate: @MainActor (String) async -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
-    #if os(iOS) || os(visionOS)
-    @Environment(\.horizontalSizeClass) private var hSizeClass
-    #endif
 
     @State private var username: String = ""
     @State private var subdomain: String = ""
@@ -65,48 +62,41 @@ struct NewAddressSheet: View {
                     }
                 }
         }
-        // Size the sheet to the form's actual height instead of a fixed
-        // card. `.fitted` measures the content's ideal size, which works
-        // because the regular-width layout (macOS and iPad) is the
-        // hand-built VStack in `cardContent` — it reports a real intrinsic
-        // width and height. (A `Form` cannot be measured this way: it
-        // reports no compact ideal size, so `.fitted` over a Form collapses
-        // to a tiny box.) On compact-width iPhone `presentationSizing` is
-        // ignored, so the `Form` there keeps its full-height card.
+        // Size the sheet for its content instead of filling a full-height
+        // card. On iPad, `.form` yields a properly proportioned form-sized
+        // sheet; `.fitted` (used previously) collapsed to the `Form`'s tiny
+        // intrinsic width, rendering an absurdly small box. On compact-width
+        // iPhone `presentationSizing` is ignored and the sheet keeps its
+        // full-height card presentation. macOS keeps `.fitted` because its
+        // hand-built layout already pins its own `.frame(width:)`.
+        #if os(macOS)
         .presentationSizing(.fitted)
+        #else
+        .presentationSizing(.form)
+        #endif
     }
 
     // MARK: - Platform layouts
     //
-    // Two layouts, chosen by how the sheet is sized:
-    //
-    // - `cardContent` — a hand-built VStack used on macOS and on
-    //   regular-width iOS/visionOS (iPad). It has a real intrinsic height,
-    //   so `.presentationSizing(.fitted)` can shrink the sheet to the form
-    //   instead of leaving ~40% empty space. It reproduces the grouped
-    //   look manually: in-field placeholders, an `@`/`.` email-shaped row,
-    //   and headline section captions.
-    // - `formContent` — SwiftUI's grouped `Form`, used only on
-    //   compact-width iPhone, where the sheet is a full-height card and
-    //   `presentationSizing` is ignored, so the Form's inability to
-    //   self-size to its content doesn't matter. (A `Form` also renders
-    //   cleaner grouped sections than the hand-built layout when it has the
-    //   full card to fill.)
+    // `Form` is kept for iOS/visionOS, where its grouped list style renders
+    // the field titles as in-field placeholders and section headers as tidy
+    // group captions. On macOS that same `Form` instead pins every title as
+    // an external left-hand label — which shatters the email-shaped row and
+    // drops the in-field placeholders — so macOS gets a hand-built layout
+    // that reproduces the iOS look: in-field placeholders, an `@`/`.`
+    // email-shaped row, headline section captions, and real content margins.
 
     @ViewBuilder
     private var content: some View {
         #if os(macOS)
-        cardContent
+        macContent
         #else
-        if hSizeClass == .regular {
-            cardContent
-        } else {
-            formContent
-        }
+        formContent
         #endif
     }
 
-    private var cardContent: some View {
+    #if os(macOS)
+    private var macContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("New address")
@@ -140,8 +130,7 @@ struct NewAddressSheet: View {
         .padding(24)
         .frame(width: 460, alignment: .leading)
     }
-
-    #if os(iOS) || os(visionOS)
+    #else
     private var formContent: some View {
         Form {
             Section("New address") {
