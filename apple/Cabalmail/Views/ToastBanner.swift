@@ -59,6 +59,10 @@ struct BannerView: View {
             Capsule(style: .continuous)
                 .stroke(tint.opacity(0.3), lineWidth: 1)
         )
+        // Cap the banner at ~70% of the container width so it clears the
+        // toolbar/action buttons it would otherwise overlap. Text wraps within
+        // this width (no lineLimit) and the capsule grows vertically to fit.
+        .containerRelativeFrame(.horizontal) { width, _ in width * 0.7 }
     }
 }
 
