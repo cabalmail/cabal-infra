@@ -62,11 +62,18 @@ struct NewAddressSheet: View {
                     }
                 }
         }
-        // The form is short; let the sheet shrink to its content instead of
-        // filling a fixed-size card. On iPad/macOS this trims the excess
-        // height; on compact-width iPhone `presentationSizing` is ignored and
-        // the sheet keeps its full-height card presentation.
+        // Size the sheet for its content instead of filling a full-height
+        // card. On iPad, `.form` yields a properly proportioned form-sized
+        // sheet; `.fitted` (used previously) collapsed to the `Form`'s tiny
+        // intrinsic width, rendering an absurdly small box. On compact-width
+        // iPhone `presentationSizing` is ignored and the sheet keeps its
+        // full-height card presentation. macOS keeps `.fitted` because its
+        // hand-built layout already pins its own `.frame(width:)`.
+        #if os(macOS)
         .presentationSizing(.fitted)
+        #else
+        .presentationSizing(.form)
+        #endif
     }
 
     // MARK: - Platform layouts
