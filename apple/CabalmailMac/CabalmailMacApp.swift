@@ -24,6 +24,7 @@ struct CabalmailMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
+    @Environment(\.scenePhase) private var scenePhase
     // Mac residency: whether the status-item menu is installed. Backed by
     // UserDefaults so the "Show in menu bar" toggle in Settings >
     // Notifications inserts/removes the item live via `isInserted`.
@@ -36,6 +37,10 @@ struct CabalmailMacApp: App {
                 .environment(preferences)
                 .preferredColorScheme(colorScheme(for: preferences.theme))
                 .task {
+                    // Hand the app-root Preferences to AppState before any
+                    // restore so the session's PreferencesSyncCoordinator can
+                    // pull the server copy (server wins on login).
+                    appState.usePreferences(preferences)
                     await appState.restoreIfPossible()
                     if preferences.crashReportingEnabled {
                         appState.client?.setCrashReportingEnabled(true)
@@ -46,6 +51,13 @@ struct CabalmailMacApp: App {
                     if preferences.crashReportingEnabled {
                         appState.client?.setCrashReportingEnabled(true)
                     }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Pick up settings changed on another device while this
+                    // window was in the background (server wins, unless a
+                    // local edit is still pending its push).
+                    guard phase == .active else { return }
+                    Task { await appState.prefsCoordinator?.reconcile() }
                 }
                 .onOpenURL { url in
                     // mailto: clicks from Safari / Mail.app / other

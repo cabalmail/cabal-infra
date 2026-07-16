@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.4] - 2026-07-16
+
+### Added
+- Apple: **Settings sync across devices.** Reading, composing, action,
+  appearance, and diagnostics preferences now follow your Cabalmail account —
+  change a setting on one device and it applies the next time you sign in on
+  another, regardless of which Apple ID each device uses.
+
+### Fixed
+- **Apple changelog gate no longer blocks release PRs.** The
+  `apple-changelog` check now accepts an `Apple:`-prefixed entry added to
+  `CHANGELOG.md` as equivalent to a `changelog.d/` fragment, so a stage->main
+  release PR (whose fragments have already been collated into `CHANGELOG.md`
+  and deleted) passes without needing the `no-changelog` opt-out. Apple
+  changes with no note anywhere still fail.
+
 ## [0.11.3] - 2026-07-16
 
 ### Changed

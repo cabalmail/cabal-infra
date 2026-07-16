@@ -1,4 +1,4 @@
-'''Fetches the current user's preferences (theme/accent/density/name).'''
+'''Fetches the current user's preferences (theme/accent/density/name/app).'''
 import json
 import os
 import boto3  # pylint: disable=import-error
@@ -22,6 +22,12 @@ def handler(event, _context):
         response = table.get_item(Key={'user': user})
         item = response.get('Item', {})
         prefs = {k: item.get(k, default) for k, default in DEFAULTS.items()}
+        # The Apple clients namespace their own preferences under `app` (a
+        # DynamoDB Map) so they never collide with the flat theme/accent/
+        # density fields the React app owns. Absent for users who have only
+        # ever used the web client - an empty object, which the Apple client
+        # reads as "fall back to local defaults".
+        prefs['app'] = item.get('app', {})
     except Exception as err:  # pylint: disable=broad-exception-caught
         return {
             'statusCode': 500,

@@ -70,6 +70,18 @@ while IFS= read -r file; do
   fi
 done <<< "$changed"
 
+# Release PRs (stage -> main) carry no fragments: collate-changelog.sh has
+# already folded them into CHANGELOG.md and deleted the fragment files, so the
+# base...head diff shows the collated CHANGELOG.md gaining the entries and no
+# surviving changelog.d/*.md. Accept an `- Apple:` line added to CHANGELOG.md
+# as equivalent to a fragment - the note still reaches the TestFlight "What to
+# Test" build (set-testflight-notes.py reads the collated CHANGELOG.md).
+if git diff "${BASE_SHA}...${HEAD_SHA}" -- CHANGELOG.md \
+     | grep -qE '^\+- Apple:'; then
+  echo "[apple-changelog] Found Apple entry added to CHANGELOG.md (release PR)."
+  exit 0
+fi
+
 echo "::error::Apple client sources changed but no 'Apple:'-prefixed changelog fragment was added."
 cat >&2 <<'MSG'
 Add a fragment changelog.d/<slug>.<category>.md whose entry begins with
