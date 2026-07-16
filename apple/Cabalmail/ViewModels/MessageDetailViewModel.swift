@@ -413,39 +413,25 @@ private extension MessageDetailViewModel {
         threadingMessageId = MessageIds.parse(root.headerValue("Message-ID")).first
         threadingInReplyTo = MessageIds.parse(root.headerValue("In-Reply-To")).first
         threadingReferences = MessageIds.parse(root.headerValue("References"))
-        var attachmentList: [Attachment] = []
-        var inlineMap: [String: URL] = [:]
-        for leaf in root.leafParts where isAttachmentLike(leaf) {
-            // Inline `cid:` images are embedded as `data:` URIs, not temp
-            // files: the body web view loads with an opaque origin and can't
-            // fetch `file://` subresources, so a file URL would silently fail
-            // to render. See `MimePart.inlineImageDataURL`.
-            if let contentID = leaf.contentID,
-               let dataURL = leaf.inlineImageDataURL {
-                inlineMap[contentID] = dataURL
-                continue
-            }
-            let filename = leaf.contentDisposition?.filename
-                ?? leaf.contentType.name
-                ?? "attachment-\(UUID().uuidString).bin"
-            let url = try writeToTmp(data: leaf.decodedBody, filename: filename)
-            attachmentList.append(Attachment(
-                id: leaf.contentID ?? url.lastPathComponent,
+        // Classification (which leaves are downloadable attachments vs inline
+        // `cid:` images) is a pure decision, lifted into `MimePart.attachmentPlan()`
+        // in CabalmailKit so it's unit-tested. Inline images are embedded as
+        // `data:` URIs, not temp files: the body web view loads with an opaque
+        // origin and can't fetch `file://` subresources, so a file URL would
+        // silently fail to render. See `MimePart.inlineImageDataURL`.
+        let plan = root.attachmentPlan()
+        inlineImages = plan.inlineImages
+        attachments = try plan.attachments.map { item in
+            let filename = item.filename ?? "attachment-\(UUID().uuidString).bin"
+            let url = try writeToTmp(data: item.data, filename: filename)
+            return Attachment(
+                id: item.contentID ?? url.lastPathComponent,
                 filename: filename,
-                mimeType: leaf.contentType.mimeType,
-                size: leaf.decodedBody.count,
+                mimeType: item.mimeType,
+                size: item.data.count,
                 fileURL: url
-            ))
+            )
         }
-        attachments = attachmentList
-        inlineImages = inlineMap
-    }
-
-    func isAttachmentLike(_ part: MimePart) -> Bool {
-        if part.contentDisposition?.isAttachment == true { return true }
-        if part.contentType.isText, part.contentType.subtype == "plain" { return false }
-        if part.contentType.isText, part.contentType.subtype == "html" { return false }
-        return !part.contentType.isMultipart
     }
 
     /// Writes a decoded part to the app's temp directory. Phase-7 polish can
