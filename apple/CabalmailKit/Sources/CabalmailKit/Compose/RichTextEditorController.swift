@@ -153,13 +153,13 @@ public final class RichTextEditorController: NSObject {
         controller.add(BridgeRelay(target: self), name: "cabal")
         webView.navigationDelegate = self
 
-        // `.copy("Compose/Resources")` lands the folder in the bundle as
-        // "Resources/". Fall back to a flat root lookup so a future
+        // `.copy("Compose/WebAssets")` lands the folder in the bundle as
+        // "WebAssets/". Fall back to a flat root lookup so a future
         // restructure of Package.swift (per-file `.copy`s) keeps working.
         let url = Bundle.module.url(
             forResource: "editor",
             withExtension: "html",
-            subdirectory: "Resources"
+            subdirectory: "WebAssets"
         ) ?? Bundle.module.url(forResource: "editor", withExtension: "html")
 
         guard let editorUrl = url else {

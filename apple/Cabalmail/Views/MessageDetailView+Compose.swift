@@ -1,8 +1,5 @@
 import SwiftUI
 import CabalmailKit
-#if canImport(AppKit)
-import AppKit
-#endif
 
 // Compose-related helpers for `MessageDetailView`. Lifted out of the main
 // file so the struct body stays under SwiftLint's type_body_length cap;
@@ -10,21 +7,6 @@ import AppKit
 // and route their actions back through them.
 
 extension MessageDetailView {
-    @ViewBuilder
-    func composeSheet(for seed: Draft) -> some View {
-        if let client = appState.client {
-            ComposeView(model: ComposeViewModel(
-                seed: seed,
-                client: client,
-                draftStore: client.draftStore,
-                preferences: preferences,
-                onClose: { composeSeed = nil }
-            ))
-            .environment(appState)
-            .environment(preferences)
-        }
-    }
-
     /// Opens compose pre-populated for a `reply` / `replyAll` / `forward`.
     /// Pulls the user's address list so `ReplyBuilder` can pick a default
     /// From by matching the original message's recipients against owned
@@ -88,21 +70,12 @@ extension MessageDetailView {
         }
     }
 
-    /// macOS / iPadOS / visionOS open compose in its own scene; iPhone
-    /// keeps the sheet so the message stays on-screen behind it.
+    /// Routes to the app-wide compose receiver (`ComposeRequestRouter` on
+    /// `SignedInRootView`): a compose window on macOS / iPadOS / visionOS,
+    /// the root-hosted sheet on iPhone. Root-hosted rather than view-local
+    /// so a mailto: arriving mid-reply and this reply flow never race two
+    /// sheet presentations against each other.
     func presentCompose(seed: Draft) {
-        if composeOpensInWindow {
-            openWindow(id: composeWindowID, value: seed)
-            #if canImport(AppKit)
-            // SwiftUI's openWindow occasionally drops the new compose
-            // scene behind the main mail window when triggered from a
-            // menu-bar shortcut. Force the app forward so the new
-            // window comes to the user instead of stranding it under
-            // whatever they were just reading.
-            NSApp.activate(ignoringOtherApps: true)
-            #endif
-        } else {
-            composeSeed = seed
-        }
+        appState.requestCompose(seed: seed)
     }
 }

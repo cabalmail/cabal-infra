@@ -58,7 +58,7 @@ public enum Acknowledgements {
     }
 
     /// Loads a vendored license file from the bundle. The composer resources
-    /// land under the `Resources` subdirectory via `.copy("Compose/Resources")`
+    /// land under the `WebAssets` subdirectory via `.copy("Compose/WebAssets")`
     /// in `Package.swift` — the same location `RichTextEditorController`
     /// loads `editor.html` from.
     private static func licenseText(resource: String, extension ext: String?) -> String {
@@ -66,7 +66,7 @@ public enum Acknowledgements {
             let url = Bundle.module.url(
                 forResource: resource,
                 withExtension: ext,
-                subdirectory: "Resources"
+                subdirectory: "WebAssets"
             ),
             let text = try? String(contentsOf: url, encoding: .utf8)
         else {
