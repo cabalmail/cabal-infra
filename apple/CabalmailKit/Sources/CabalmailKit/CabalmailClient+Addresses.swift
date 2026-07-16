@@ -64,4 +64,17 @@ extension CabalmailClient {
     public func setDisplayName(_ name: String) async throws {
         try await apiClient.updateDisplayName(name)
     }
+
+    /// Fetches the Apple client's synced preferences (the row's `app` map) so
+    /// a fresh sign-in on another device picks up settings changed elsewhere.
+    /// Empty means "none saved yet"; the caller keeps its local defaults.
+    public func fetchAppPreferences() async throws -> [String: String] {
+        try await apiClient.fetchAppPreferences()
+    }
+
+    /// Persists the Apple client's preferences server-side, anchored to the
+    /// signed-in Cognito user so they follow the account across devices.
+    public func saveAppPreferences(_ prefs: [String: String]) async throws {
+        try await apiClient.saveAppPreferences(prefs)
+    }
 }

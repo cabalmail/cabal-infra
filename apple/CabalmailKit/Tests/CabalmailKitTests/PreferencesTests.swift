@@ -146,4 +146,82 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.markAsRead, .manual)
         XCTAssertEqual(preferences.theme, .system)
     }
+
+    // MARK: - Server sync marshalling
+
+    /// The full payload sent to the server round-trips back through
+    /// `applyRemote(_:)` so a setting saved on one device reproduces exactly on
+    /// another. Every synced key is exercised with a non-default value.
+    func testAppPreferencesPayloadRoundTripsThroughApplyRemote() {
+        let source = Preferences(store: InMemoryPreferenceStore())
+        source.markAsRead = .afterDelay
+        source.loadRemoteContent = .always
+        source.defaultFromAddress = "me@example.com"
+        source.signature = "Cheers,\nChris"
+        source.disposeAction = .trash
+        source.theme = .dark
+        source.crashReportingEnabled = true
+        source.defaultBodyRenderMode = .reader
+        source.folderCountDisplay = .both
+
+        let target = Preferences(store: InMemoryPreferenceStore())
+        target.applyRemote(source.appPreferencesPayload())
+
+        XCTAssertEqual(target.markAsRead, .afterDelay)
+        XCTAssertEqual(target.loadRemoteContent, .always)
+        XCTAssertEqual(target.defaultFromAddress, "me@example.com")
+        XCTAssertEqual(target.signature, "Cheers,\nChris")
+        XCTAssertEqual(target.disposeAction, .trash)
+        XCTAssertEqual(target.theme, .dark)
+        XCTAssertTrue(target.crashReportingEnabled)
+        XCTAssertEqual(target.defaultBodyRenderMode, .reader)
+        XCTAssertEqual(target.folderCountDisplay, .both)
+    }
+
+    /// An empty From address is encoded as "" on the wire and must decode back
+    /// to `nil` ("no default"), not an empty string.
+    func testApplyRemoteEmptyFromAddressBecomesNil() {
+        let preferences = Preferences(store: InMemoryPreferenceStore())
+        preferences.defaultFromAddress = "was@example.com"
+        preferences.applyRemote(["default_from_address": ""])
+        XCTAssertNil(preferences.defaultFromAddress)
+    }
+
+    /// A server apply must write through to the local store (so the fast-path
+    /// cache matches the server) but must NOT fire `onLocalChange` — echoing an
+    /// inbound update back out as a save would loop between devices.
+    func testApplyRemoteWritesStoreButDoesNotFireOnLocalChange() {
+        let store = InMemoryPreferenceStore()
+        let preferences = Preferences(store: store)
+        var localChangeCount = 0
+        preferences.onLocalChange = { localChangeCount += 1 }
+
+        preferences.applyRemote(["theme": "dark", "dispose_action": "trash"])
+
+        XCTAssertEqual(localChangeCount, 0)
+        // Written through to the local store as a cache of the server value.
+        XCTAssertEqual(store.stringValue(forKey: Preferences.Key.theme.rawValue), "dark")
+        XCTAssertEqual(store.stringValue(forKey: Preferences.Key.disposeAction.rawValue), "trash")
+    }
+
+    /// A genuine user edit fires `onLocalChange` so the sync coordinator can
+    /// debounce a push. Unknown/garbage remote values leave the value untouched.
+    func testLocalEditFiresOnLocalChange() {
+        let preferences = Preferences(store: InMemoryPreferenceStore())
+        var localChangeCount = 0
+        preferences.onLocalChange = { localChangeCount += 1 }
+
+        preferences.theme = .light
+        preferences.disposeAction = .trash
+
+        XCTAssertEqual(localChangeCount, 2)
+    }
+
+    func testApplyRemoteIgnoresUnknownAndMissingValues() {
+        let preferences = Preferences(store: InMemoryPreferenceStore())
+        preferences.theme = .dark
+        // A garbage theme and a key we don't recognize both leave state intact.
+        preferences.applyRemote(["theme": "lunar-eclipse", "unknown_key": "x"])
+        XCTAssertEqual(preferences.theme, .dark)
+    }
 }

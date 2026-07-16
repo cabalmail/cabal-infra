@@ -198,6 +198,15 @@ public final class Preferences {
 
     private let store: PreferenceStore
     private var isReloading = false
+    private var isApplyingRemote = false
+
+    /// Fired after a user-driven preference write, once the new value has been
+    /// persisted locally. The session's `PreferencesSyncCoordinator` sets this
+    /// to debounce a push of the full `app` map to the server so settings
+    /// follow the Cabalmail account across devices. Deliberately *not* fired
+    /// for the `reload()` (inbound iCloud) or `applyRemote(_:)` (inbound
+    /// server) paths — echoing an inbound update back out would loop.
+    public var onLocalChange: (() -> Void)?
 
     public init(store: PreferenceStore) {
         self.store = store
@@ -254,6 +263,12 @@ public final class Preferences {
     private func persist(_ key: Key, _ value: String?) {
         guard !isReloading else { return }
         store.setString(value, forKey: key.rawValue)
+        // A server-applied value is already persisted locally by the write
+        // above; it must not be pushed straight back to the server, or a
+        // fetched change would echo out as a fresh save. Only genuine user
+        // edits fall through to notify the sync coordinator.
+        guard !isApplyingRemote else { return }
+        onLocalChange?()
     }
 
     private static func readEnum<Value: RawRepresentable>(
@@ -261,6 +276,78 @@ public final class Preferences {
     ) -> Value where Value.RawValue == String {
         guard let raw = store.stringValue(forKey: key.rawValue) else { return fallback }
         return Value(rawValue: raw) ?? fallback
+    }
+
+    // MARK: - Server sync marshalling
+
+    /// Wire keys for the server-synced `app` map (the `set_preferences` Lambda
+    /// validates against these exact names). Distinct from `Key`, whose dotted
+    /// raw values are the local UserDefaults/iCloud keys; these short
+    /// snake_case names are the cross-client JSON contract.
+    private enum AppWireKey {
+        static let markAsRead = "mark_as_read"
+        static let loadRemoteContent = "load_remote_content"
+        static let defaultFromAddress = "default_from_address"
+        static let signature = "signature"
+        static let disposeAction = "dispose_action"
+        static let theme = "theme"
+        static let crashReportingEnabled = "crash_reporting_enabled"
+        static let defaultBodyRenderMode = "default_body_render_mode"
+        static let folderCountDisplay = "folder_count_display"
+    }
+
+    /// The complete set of synced preferences as the `app` map the server
+    /// stores. Always sends every key (the server replaces the whole map), with
+    /// `defaultFromAddress`'s "no default" (`nil`) encoded as an empty string.
+    public func appPreferencesPayload() -> [String: String] {
+        [
+            AppWireKey.markAsRead: markAsRead.rawValue,
+            AppWireKey.loadRemoteContent: loadRemoteContent.rawValue,
+            AppWireKey.defaultFromAddress: defaultFromAddress ?? "",
+            AppWireKey.signature: signature,
+            AppWireKey.disposeAction: disposeAction.rawValue,
+            AppWireKey.theme: theme.rawValue,
+            AppWireKey.crashReportingEnabled: crashReportingEnabled ? "1" : "0",
+            AppWireKey.defaultBodyRenderMode: defaultBodyRenderMode.rawValue,
+            AppWireKey.folderCountDisplay: folderCountDisplay.rawValue,
+        ]
+    }
+
+    /// Applies a server-fetched `app` map (server wins on login). Each value is
+    /// written through to the local store as a cache, but `isApplyingRemote`
+    /// suppresses the `onLocalChange` push so the fetch doesn't bounce back out.
+    /// Missing or unrecognized values leave the current value untouched.
+    public func applyRemote(_ remote: [String: String]) {
+        isApplyingRemote = true
+        defer { isApplyingRemote = false }
+        if let raw = remote[AppWireKey.markAsRead], let value = MarkAsReadBehavior(rawValue: raw) {
+            markAsRead = value
+        }
+        if let raw = remote[AppWireKey.loadRemoteContent], let value = LoadRemoteContentPolicy(rawValue: raw) {
+            loadRemoteContent = value
+        }
+        if let raw = remote[AppWireKey.defaultFromAddress] {
+            // Empty string is the wire encoding for "no default".
+            defaultFromAddress = raw.isEmpty ? nil : raw
+        }
+        if let raw = remote[AppWireKey.signature] {
+            signature = raw
+        }
+        if let raw = remote[AppWireKey.disposeAction], let value = DisposeAction(rawValue: raw) {
+            disposeAction = value
+        }
+        if let raw = remote[AppWireKey.theme], let value = AppTheme(rawValue: raw) {
+            theme = value
+        }
+        if let raw = remote[AppWireKey.crashReportingEnabled] {
+            crashReportingEnabled = raw == "1"
+        }
+        if let raw = remote[AppWireKey.defaultBodyRenderMode], let value = BodyRenderMode(rawValue: raw) {
+            defaultBodyRenderMode = value
+        }
+        if let raw = remote[AppWireKey.folderCountDisplay], let value = FolderCountDisplay(rawValue: raw) {
+            folderCountDisplay = value
+        }
     }
 }
 
