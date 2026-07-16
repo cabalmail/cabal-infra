@@ -8,6 +8,7 @@ included:
   - CabalmailWatch
   - CabalmailKit/Sources
   - CabalmailKit/Tests
+  - CabalmailTests
 
 excluded:
   - build

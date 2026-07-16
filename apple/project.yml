@@ -484,6 +484,31 @@ targets:
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "$(MAC_NSE_APP_STORE_PROFILE_UUID)"
 
+  # Unit tests for the shared app layer (view models, app state). Hosted
+  # by CabalmailMac rather than the iOS app deliberately: the mac target
+  # already compiles the exact same shared sources (see its source list
+  # above), and a macOS test bundle runs natively on the CI mac runner —
+  # no simulator boot. The suite lives in CabalmailTests/ (no "Mac" in
+  # the directory name) because nothing in it is platform-specific; only
+  # the host choice is.
+  CabalmailMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: CabalmailTests
+    dependencies:
+      - target: CabalmailMac
+      - package: CabalmailKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMacTests
+        GENERATE_INFOPLIST_FILE: YES
+        # XcodeGen derives TEST_HOST from the host target's NAME, but
+        # CabalmailMac overrides PRODUCT_NAME to "Cabalmail" (the bundle
+        # ships as Cabalmail.app), so spell the path out.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Cabalmail.app/Contents/MacOS/Cabalmail"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
 schemes:
   Cabalmail:
     build:
@@ -497,8 +522,13 @@ schemes:
     build:
       targets:
         CabalmailMac: all
+        CabalmailMacTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - CabalmailMacTests
     archive:
       config: Release
   CabalmailWatch:
