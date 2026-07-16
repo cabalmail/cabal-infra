@@ -10,7 +10,7 @@
 # those bytes get there.
 #
 # Files produced (all gitignored; see apple/.gitignore):
-#   apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/
+#   apple/CabalmailKit/Sources/CabalmailKit/Compose/WebAssets/
 #     marked.umd.js
 #     turndown.js
 #     marked-LICENSE.md
@@ -31,7 +31,7 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 REACT_DIR="$REPO_ROOT/react/admin"
-DEST_DIR="$REPO_ROOT/apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources"
+DEST_DIR="$REPO_ROOT/apple/CabalmailKit/Sources/CabalmailKit/Compose/WebAssets"
 
 if [ ! -d "$REACT_DIR" ]; then
     echo "error: react/admin not found at $REACT_DIR" >&2

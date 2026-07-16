@@ -17,13 +17,15 @@ let package = Package(
             name: "CabalmailKit",
             path: "Sources/CabalmailKit",
             resources: [
-                // Rich-text editor HTML + bundled marked + turndown copies
-                // (vendored from react/admin/node_modules so the Apple
-                // composer round-trips identically to the React one).
-                // .copy preserves the folder so editor.html can find its
-                // sibling marked.umd.js / turndown.js / editor-bridge.js
-                // via relative <script src=...> tags.
-                .copy("Compose/Resources"),
+                // Rich-text editor HTML + bridge script. .copy preserves
+                // the folder so editor.html can find its sibling
+                // editor-bridge.js via a relative <script src=...> tag.
+                // The folder is deliberately NOT named "Resources": a
+                // top-level "Resources/" directory inside a shallow
+                // iOS/watchOS bundle makes `codesign` reject the bundle
+                // as "format unrecognized" (ambiguous shallow-vs-deep
+                // layout), which breaks any locally signed build.
+                .copy("Compose/WebAssets"),
             ]
         ),
         .testTarget(
