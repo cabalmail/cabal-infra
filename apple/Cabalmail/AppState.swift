@@ -47,11 +47,13 @@ final class AppState {
     var refreshRequestTick = 0
     /// Seed paired with the next compose-request tick. The mailto:
     /// URL handler stashes a pre-filled draft here before bumping
-    /// `composeRequestTick`; the receiver in `MessageListView` reads
-    /// and clears it when it opens the compose surface. Falls back to
-    /// `ReplyBuilder.newDraft()` when nil. Cold launches that arrive
-    /// via mailto leave the seed parked here until `MessageListView`
-    /// first appears.
+    /// `composeRequestTick`; the receiver (`ComposeRequestRouter` on
+    /// `SignedInRootView`) reads and clears it when it opens the
+    /// compose surface. Falls back to `ReplyBuilder.newDraft()` when
+    /// nil. Cold launches that arrive via mailto leave the seed parked
+    /// here until the signed-in root first appears — as does a mailto:
+    /// that lands while an iPhone compose sheet is already up (drained
+    /// when that sheet dismisses, so it never clobbers a draft).
     var pendingComposeSeed: Draft?
     /// Forwarded-message attachments awaiting pickup by the compose
     /// surface, keyed by seed draft id. The forward action stashes the
@@ -642,20 +644,23 @@ extension AppState {
 @MainActor
 extension AppState {
     /// Variant of `requestCompose` that pairs an explicit seed with
-    /// the request. Used by the mailto: URL handler; menu shortcuts
-    /// and toolbar buttons continue to call the zero-arg form, which
-    /// leaves `pendingComposeSeed` nil and lets the receiver fall
-    /// back to a fresh draft.
+    /// the request. Used by the mailto: URL handler and by every
+    /// view-level compose entry point (toolbar New Message, reply /
+    /// forward, resume draft); the macOS Commands menu still calls the
+    /// zero-arg form, which leaves `pendingComposeSeed` nil and lets
+    /// the receiver fall back to a fresh draft.
     func requestCompose(seed: Draft) {
         pendingComposeSeed = seed
         composeRequestTick += 1
     }
 
     /// Reads and clears the pending compose seed. Called by the
-    /// compose-request receiver in `MessageListView` both on
-    /// `.onChange(of: composeRequestTick)` (warm path) and on the
-    /// view's initial `.task` (cold-launch mailto: arrived before the
-    /// view was in the hierarchy).
+    /// compose-request receiver (`ComposeRequestRouter`) on
+    /// `.onChange(of: composeRequestTick)` (warm path), on its initial
+    /// `.task` (cold-launch mailto: arrived before the signed-in root
+    /// was in the hierarchy), and on compose-sheet dismissal (a
+    /// mailto: that arrived while a draft was open stays parked until
+    /// the draft closes).
     func consumePendingComposeSeed() -> Draft? {
         defer { pendingComposeSeed = nil }
         return pendingComposeSeed

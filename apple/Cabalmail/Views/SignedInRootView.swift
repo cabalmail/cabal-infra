@@ -49,6 +49,11 @@ struct SignedInRootView: View {
                     .animation(.default, value: appState.toast)
             }
             .task { await observeReachability() }
+            // App-wide compose-request receiver (mailto: URLs, menu and
+            // toolbar New Message). Lives here — not on MessageListView —
+            // because this view is in the visible hierarchy in every tab,
+            // folder, and modal state; see ComposeRequestRouter.
+            .composeRequestRouter()
     }
 
     @ViewBuilder

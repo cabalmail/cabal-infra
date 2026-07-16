@@ -60,7 +60,8 @@ struct CabalmailApp: App {
                     // Cold-launch mailto: arrives here before any view
                     // is wired to observe `composeRequestTick`. The seed
                     // is parked on `AppState.pendingComposeSeed` and
-                    // drained by `MessageListView`'s initial `.task`.
+                    // drained by `ComposeRequestRouter`'s initial `.task`
+                    // on the signed-in root.
                     if let mailto = MailtoURL(url) {
                         appState.requestCompose(seed: mailto.draft())
                     }
