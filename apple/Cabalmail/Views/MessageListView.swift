@@ -1,8 +1,5 @@
 import SwiftUI
 import CabalmailKit
-#if canImport(AppKit)
-import AppKit
-#endif
 
 /// Envelope list for a single folder. Selection is lifted to the parent so
 /// the split view can bind the detail pane to it.
@@ -47,7 +44,6 @@ struct MessageListView: View {
     // used for `model` and `filtersPresented` further down.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
-    @Environment(\.openWindow) private var openWindow
     #if !os(macOS)
     // Wide vs. compact gates whether message rows are draggable. On a
     // compact iPhone the sidebar and the message list never share the
@@ -69,7 +65,6 @@ struct MessageListView: View {
     // modifier) so the same-module extensions in `+Search` and `+macOS`
     // can read them without round-tripping through accessors.
     @State var model: MessageListViewModel?
-    @State private var composeSeed: Draft?
     /// List-row height. Rows are pinned to this so the virtualized list
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
@@ -100,9 +95,8 @@ struct MessageListView: View {
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false
     /// Set by the row context menu's "Move to folder…" item; presents the
-    /// MoveToFolderSheet anchored to this envelope. `Envelope` is
-    /// `Identifiable` so `.sheet(item:)` reuses the same presentation
-    /// machinery as composeSeed.
+    /// MoveToFolderSheet anchored to this envelope via `.sheet(item:)`
+    /// (`Envelope` is `Identifiable`).
     @State var envelopeToMove: Envelope?
     /// Set by the delete affordances while the list shows Trash (row
     /// swipe / menu for a single message; selection menu, action bar,
@@ -110,6 +104,11 @@ struct MessageListView: View {
     /// Forever?" confirmation for the captured UID set. Non-private so
     /// the `+Rows` / `+Bulk` / `+Actions` extensions can stage it.
     @State var purgeCandidate: PurgeCandidate?
+    /// Set by `requestDispose` when a dispose crosses the large-selection
+    /// threshold; presents the "Archive/Delete N Messages?" confirmation
+    /// (see `MessageListView+Actions.swift`). Non-private for the same
+    /// reason as `purgeCandidate`.
+    @State var disposeCandidate: DisposeCandidate?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
     /// Set by the wide-layout selection context menu's "Move to folder…"
@@ -158,19 +157,23 @@ struct MessageListView: View {
         )
     }
 
-    @ViewBuilder
-    private func composeSheet(for seed: Draft) -> some View {
-        if let client = appState.client {
-            ComposeView(model: ComposeViewModel(
-                seed: seed,
-                client: client,
-                draftStore: client.draftStore,
-                preferences: preferences,
-                onClose: { composeSeed = nil }
-            ))
-            .environment(appState)
-            .environment(preferences)
-        }
+    /// Boolean projection of `disposeCandidate`, same shape as above.
+    private var disposeDialogBinding: Binding<Bool> {
+        Binding(
+            get: { disposeCandidate != nil },
+            set: { isPresented in
+                if !isPresented { disposeCandidate = nil }
+            }
+        )
+    }
+
+    /// Title for the large-selection dispose confirmation. Computed off
+    /// the staged candidate because `confirmationDialog`'s title is a
+    /// plain value, not a `presenting:` closure.
+    private var disposeDialogTitle: String {
+        guard let candidate = disposeCandidate else { return "" }
+        let verb = candidate.action == .trash ? "Delete" : "Archive"
+        return "\(verb) \(candidate.uids.count) Messages?"
     }
 
     @ViewBuilder
@@ -195,23 +198,14 @@ struct MessageListView: View {
         }
     }
 
-    /// Hands off to the standalone compose window where the platform
-    /// supports it (macOS, iPadOS, visionOS); the iPhone path keeps
-    /// the existing sheet so the user doesn't lose the mailbox they
-    /// were just reading.
+    /// Routes to the app-wide compose receiver (`ComposeRequestRouter`
+    /// on `SignedInRootView`), which opens a compose window on the
+    /// platforms that support one and hosts the compose sheet on
+    /// iPhone. Presentation is deliberately NOT view-local: a sheet
+    /// anchored here can't present when this view isn't visible, and
+    /// two competing sheet hosts would block each other.
     private func presentCompose(seed: Draft) {
-        if composeOpensInWindow {
-            openWindow(id: composeWindowID, value: seed)
-            #if canImport(AppKit)
-            // Match MessageDetailView's presentCompose: pull the new
-            // compose window forward when openWindow is dispatched
-            // from a menu-bar shortcut, which otherwise can land it
-            // behind the main window.
-            NSApp.activate(ignoringOtherApps: true)
-            #endif
-        } else {
-            composeSeed = seed
-        }
+        appState.requestCompose(seed: seed)
     }
 
     @ViewBuilder
@@ -351,9 +345,6 @@ extension MessageListView {
         .sheet(isPresented: $filtersPresented) {
             filtersSheet
         }
-        .sheet(item: $composeSeed) { seed in
-            composeSheet(for: seed)
-        }
         .sheet(item: $envelopeToMove) { envelope in
             moveSheet(for: envelope)
         }
@@ -387,6 +378,34 @@ extension MessageListView {
                 : "These \(candidate.uids.count) messages will be permanently deleted. This can't be undone."
             )
         }
+        // Large-selection dispose guard (threshold in `+Actions.swift`):
+        // recoverable, unlike the purge above, but big enough that a
+        // mis-aimed select-all shouldn't file everything silently.
+        .confirmationDialog(
+            disposeDialogTitle,
+            isPresented: disposeDialogBinding,
+            titleVisibility: .visible,
+            presenting: disposeCandidate
+        ) { candidate in
+            Button(
+                candidate.action == .trash ? "Delete" : "Archive",
+                role: candidate.action == .trash ? .destructive : nil
+            ) {
+                disposeCandidate = nil
+                if let model {
+                    commitDispose(candidate, model: model)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                disposeCandidate = nil
+            }
+        } message: { candidate in
+            Text(
+                candidate.action == .trash
+                ? "\(candidate.uids.count) messages will be moved to Trash."
+                : "\(candidate.uids.count) messages will be archived."
+            )
+        }
     }
 
     /// Lifecycle: initial load + IDLE watcher start, the 60-second
@@ -414,14 +433,6 @@ extension MessageListView {
                     // its envelope is loaded.
                     if let model { applyPendingRestore(model: model) }
                 }
-            }
-            // Cold-launch mailto: arrives via `.onOpenURL` in the app
-            // entry, which parks the seed on AppState before this
-            // view's `.onChange(of: composeRequestTick)` is in the
-            // hierarchy. Drain it here so the compose surface opens
-            // on first appear.
-            if let seed = appState.consumePendingComposeSeed() {
-                presentCompose(seed: seed)
             }
         }
         // Wall-clock fallback refresh. IDLE usually pushes new mail within
@@ -457,18 +468,13 @@ extension MessageListView {
     /// move requests.
     private var observersLayer: some View {
         lifecycleLayer
-        // macOS Commands menu (File → New Message, Mailbox → Refresh) and
-        // keyboard shortcuts route through `AppState` tick counters. The
-        // view lifted into view reacts by opening compose / kicking a
-        // refresh. Using the currently-displayed list as the refresh target
-        // matches every desktop mail client's convention.
-        .onChange(of: appState.composeRequestTick) { _, _ in
-            // Menu shortcuts pass nil; the mailto: URL handler parks
-            // a pre-filled draft. Fall back to a fresh draft when no
-            // seed accompanies the request.
-            let seed = appState.consumePendingComposeSeed() ?? ReplyBuilder.newDraft()
-            presentCompose(seed: seed)
-        }
+        // macOS Commands menu (Mailbox → Refresh) and keyboard shortcuts
+        // route through `AppState` tick counters. Using the currently-
+        // displayed list as the refresh target matches every desktop mail
+        // client's convention. (`composeRequestTick` is consumed by
+        // `ComposeRequestRouter` on the signed-in root, not here — this
+        // view isn't in the visible hierarchy in every state a compose
+        // request can arrive from.)
         .onChange(of: appState.refreshRequestTick) { _, _ in
             // Manual refresh paths (Mailbox > Refresh menu item, the
             // arrow.clockwise toolbar button) get hard-reload semantics

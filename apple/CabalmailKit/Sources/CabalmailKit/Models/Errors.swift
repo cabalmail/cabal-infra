@@ -32,4 +32,12 @@ public enum CabalmailError: Error, Sendable, Equatable {
     /// 503 with `{"status":"maintenance"}`. `message` is the client-facing copy
     /// so the UI can show "temporarily unavailable" instead of a raw error.
     case maintenance(message: String)
+
+    /// A bulk flag/move landed for some UIDs but not others. The bulk-op
+    /// Lambdas issue their IMAP commands in bounded batches and report a
+    /// succeeded/failed split (`status: "partial"`); the API-backed client
+    /// also aggregates across its own request chunks into one of these.
+    /// Callers keep the succeeded UIDs applied and restore (or offer to
+    /// retry) the failed ones.
+    case bulkPartialFailure(succeeded: Set<UInt32>, failed: Set<UInt32>)
 }

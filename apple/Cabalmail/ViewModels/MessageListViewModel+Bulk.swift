@@ -84,32 +84,34 @@ extension MessageListViewModel {
 
     /// \Seen / unset-\Seen for an explicit UID set. Walks the set per-
     /// source-folder. Optimistically updates the in-memory flags so the
-    /// row styling flips before the wire call lands. Leaves any active
-    /// selection intact.
+    /// row styling flips before the wire call lands; rows the server
+    /// rejects (whole-group or `bulkPartialFailure` split) revert to
+    /// their pre-op state. Leaves any active selection intact.
     func setSeen(_ shouldBeSeen: Bool, uids: Set<UInt32>) async {
         let grouping = groupedByFolder(uids)
-        // Unread badge tracking — count actual transitions per folder
-        // BEFORE the optimistic loop rewrites the flags: marking an
-        // already-read message read must not move the sidebar counter.
+        let prior = priorFlagState(uids: uids, flag: .seen)
+        // Unread badge tracking — capture the actual transition UIDs per
+        // folder BEFORE the optimistic loop rewrites the flags: marking an
+        // already-read message read must not move the sidebar counter, and
+        // a partial failure must only count transitions that landed.
         let transitionsByFolder = Dictionary(
             grouping: envelopes.filter {
                 uids.contains($0.uid) && $0.flags.contains(.seen) != shouldBeSeen
             },
             by: { sourceFolder(for: $0) }
-        ).mapValues(\.count)
+        ).mapValues { Set($0.map(\.uid)) }
         for uid in uids {
             applyOptimisticFlag(uid: uid, flag: .seen, add: shouldBeSeen)
         }
         pendingFlagUIDs.formUnion(uids)
         defer { pendingFlagUIDs.subtract(uids) }
         for (source, groupUIDs) in grouping {
-            try? await client.imapClient.setFlags(
-                folder: source,
-                uids: groupUIDs,
-                flags: [.seen],
-                operation: shouldBeSeen ? .add : .remove
+            let applied = await applyFlagGroup(
+                folder: source, uids: groupUIDs,
+                flag: .seen, add: shouldBeSeen, prior: prior
             )
-            if let transitions = transitionsByFolder[source], transitions > 0 {
+            let transitions = transitionsByFolder[source]?.intersection(applied).count ?? 0
+            if transitions > 0 {
                 appState.applyUnreadDelta(
                     folderPath: source,
                     delta: shouldBeSeen ? -transitions : transitions
@@ -123,18 +125,60 @@ extension MessageListViewModel {
     /// the sidebar).
     func setFlagged(_ shouldBeFlagged: Bool, uids: Set<UInt32>) async {
         let grouping = groupedByFolder(uids)
+        let prior = priorFlagState(uids: uids, flag: .flagged)
         for uid in uids {
             applyOptimisticFlag(uid: uid, flag: .flagged, add: shouldBeFlagged)
         }
         pendingFlagUIDs.formUnion(uids)
         defer { pendingFlagUIDs.subtract(uids) }
         for (source, groupUIDs) in grouping {
-            try? await client.imapClient.setFlags(
-                folder: source,
-                uids: groupUIDs,
-                flags: [.flagged],
-                operation: shouldBeFlagged ? .add : .remove
+            _ = await applyFlagGroup(
+                folder: source, uids: groupUIDs,
+                flag: .flagged, add: shouldBeFlagged, prior: prior
             )
+        }
+    }
+
+    /// Pre-op flag membership per UID, captured before the optimistic
+    /// rewrite so a rejected row can revert to exactly what it had — a
+    /// blind "apply the opposite" would corrupt rows that already carried
+    /// the target state (e.g. mark-read over an already-read message).
+    private func priorFlagState(uids: Set<UInt32>, flag: Flag) -> [UInt32: Bool] {
+        Dictionary(uniqueKeysWithValues: envelopes
+            .filter { uids.contains($0.uid) }
+            .map { ($0.uid, $0.flags.contains(flag)) })
+    }
+
+    /// One flag-group wire call plus reconciliation: returns the UIDs the
+    /// server actually applied. A `bulkPartialFailure` keeps the succeeded
+    /// rows, reverts the failed ones, and surfaces an "X of Y" message;
+    /// any other error reverts the whole group.
+    private func applyFlagGroup(
+        folder: String,
+        uids: [UInt32],
+        flag: Flag,
+        add: Bool,
+        prior: [UInt32: Bool]
+    ) async -> Set<UInt32> {
+        do {
+            try await client.imapClient.setFlags(
+                folder: folder, uids: uids, flags: [flag],
+                operation: add ? .add : .remove
+            )
+            return Set(uids)
+        } catch CabalmailError.bulkPartialFailure(let succeeded, let failed) {
+            for uid in failed {
+                applyOptimisticFlag(uid: uid, flag: flag, add: prior[uid] ?? !add)
+            }
+            errorMessage = "Updated \(succeeded.count) of \(uids.count) messages. "
+                + "\(failed.count) could not be updated."
+            return succeeded
+        } catch {
+            for uid in uids {
+                applyOptimisticFlag(uid: uid, flag: flag, add: prior[uid] ?? !add)
+            }
+            errorMessage = "\(error)"
+            return []
         }
     }
 

@@ -83,7 +83,7 @@ jobs:
         # marked.umd.js + turndown.js live in react/admin/package.json as
         # the version-of-truth and are gitignored under apple/. The script
         # runs `npm ci` (react/admin/node_modules isn't cached between
-        # jobs) and copies the four files into Compose/Resources so
+        # jobs) and copies the four files into Compose/WebAssets so
         # SwiftPM can find them when xcodebuild test compiles CabalmailKit.
         working-directory: apple
         run: scripts/sync-vendored.sh
@@ -162,6 +162,71 @@ jobs:
           xcodebuild test \
             -scheme CabalmailKit \
             -destination '${{ steps.dest.outputs.destination }}' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-test.log" \
+            | xcbeautify --renderer github-actions
+
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh
+
+  # -----------------------------------------------------------------------
+  # App-layer unit tests (view models, app state) — the CabalmailMacTests
+  # bundle hosted by CabalmailMac. macOS-only by design: the mac target
+  # compiles the same shared Cabalmail/ViewModels sources as the iOS app,
+  # and a native macOS test run skips the simulator boot entirely.
+  # -----------------------------------------------------------------------
+  app-test:
+    name: Test app layer (macOS)
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        run: |
+          for pkg in xcodegen xcbeautify; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-macOS-${{ hashFiles('apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-macOS-
+            spm-${{ runner.os }}-
+
+      - name: Test CabalmailMac scheme (app-layer unit tests)
+        working-directory: apple
+        # Same tee-the-raw-log arrangement as kit-test: xcbeautify swallows
+        # the stderr of crashing subtools, so on failure a later step dumps
+        # the raw output.
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -workspace Cabalmail.xcworkspace \
+            -scheme CabalmailMac \
+            -destination 'platform=macOS' \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -265,7 +330,7 @@ jobs:
         run: .github/scripts/dump-xcodebuild-raw.sh
 
   approval:
-    needs: [kit-test, app-build]
+    needs: [kit-test, app-test, app-build]
     environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     runs-on: ubuntu-latest
     steps:

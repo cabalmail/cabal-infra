@@ -62,8 +62,15 @@ export default defineConfig({
     // Run test files serially in a single forked process. jsdom is heavy
     // and the default parallel worker pool was driving RSS into multi-GB
     // territory on this suite. Trades wall-clock for memory ceiling.
+    // (Vitest 4 spelling; replaces the v3 poolOptions.forks.singleFork.)
     pool: 'forks',
-    forks: { singleFork: true },
+    fileParallelism: false,
+    // Node 24+ exposes its own experimental file-backed `localStorage` global
+    // by default; without --localstorage-file it is a getter that returns
+    // undefined, and it shadows jsdom's localStorage in the test environment
+    // (every window.localStorage access sees undefined). Disable it so
+    // jsdom's implementation wins regardless of Node version.
+    execArgv: ['--no-experimental-webstorage'],
     server: {
       deps: {
         inline: [/@tiptap\/.*/]

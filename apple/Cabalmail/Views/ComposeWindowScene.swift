@@ -49,8 +49,32 @@ struct ComposeWindowScene: Scene {
     var body: some Scene {
         WindowGroup("New Message", id: composeWindowID, for: Draft.self) { $draft in
             ComposeWindowContent(seed: draft ?? Draft())
+                // Re-identify by seed: `ComposeView` keeps its model in
+                // `@State`, so when the mailto: handler below replaces the
+                // window value the subtree must rebuild for the new seed
+                // to take effect. Safe because the seed only changes
+                // before the user has touched the fresh window.
+                .id(draft)
                 .environment(appState)
                 .environment(preferences)
+                .onOpenURL { url in
+                    // On macOS the main window group declines external
+                    // events (`handlesExternalEvents(matching: [])`, see
+                    // CabalmailMacApp) so a mailto: click routes here:
+                    // the system spawns a compose window with a default
+                    // empty Draft and delivers the URL to it. Seed the
+                    // window value from the URL; without this the window
+                    // opens with blank To/Subject fields.
+                    if let mailto = MailtoURL(url) {
+                        draft = mailto.draft()
+                    }
+                }
+                // A mailto: click can cold-launch the app straight into
+                // this scene, in which case the main window's `.task` —
+                // the usual `restoreIfPossible` call site — may not have
+                // run. Idempotent, so calling it again is a no-op when
+                // the main window already restored the session.
+                .task { await appState.restoreIfPossible() }
         }
         // Give the macOS compose window a sensible starting size so it
         // doesn't inherit the main mail window's geometry. iPadOS and

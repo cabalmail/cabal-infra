@@ -102,26 +102,83 @@ extension MessageListViewModel {
         for (source, uids) in groups {
             do {
                 if markSeenFirst {
-                    try await client.imapClient.setFlags(
-                        folder: source, uids: uids,
-                        flags: [.seen], operation: .add
-                    )
+                    do {
+                        try await client.imapClient.setFlags(
+                            folder: source, uids: uids,
+                            flags: [.seen], operation: .add
+                        )
+                    } catch CabalmailError.bulkPartialFailure {
+                        // Seen-marking is best-effort cosmetics on a
+                        // dispose; a partial miss must not abort the move.
+                    }
                 }
                 try await client.imapClient.move(
                     folder: source, uids: uids, destination: destination
                 )
                 await pruneCachesAfter(move: source, uids: uids)
+            } catch CabalmailError.bulkPartialFailure(let succeeded, let failed) {
+                restoreAfterPartialMove(
+                    source: source, destination: destination, snapshot: snapshot,
+                    failed: failed, markSeenFirst: markSeenFirst
+                )
+                await pruneCachesAfter(move: source, uids: Array(succeeded))
+                errorMessage = "Moved \(succeeded.count) of \(uids.count) messages. "
+                    + "\(failed.count) could not be moved."
             } catch {
-                let restored = snapshot.filter { sourceFolder(for: $0) == source }
-                envelopes.append(contentsOf: restored)
-                envelopes.sort(by: envelopeOrder)
-                let unread = unreadBySource[source] ?? 0
-                appState.applyUnreadDelta(folderPath: source, delta: unread)
-                if !markSeenFirst {
-                    appState.applyUnreadDelta(folderPath: destination, delta: -unread)
-                }
+                restoreAfterFailedMove(
+                    source: source, destination: destination, snapshot: snapshot,
+                    unread: unreadBySource[source] ?? 0, markSeenFirst: markSeenFirst
+                )
                 errorMessage = "\(error)"
             }
+        }
+    }
+
+    /// Whole-group revert for a move that failed outright: every row from
+    /// `source` comes back and its unread count returns to the source (and
+    /// leaves the destination, when the optimistic pass had granted it).
+    private func restoreAfterFailedMove(
+        source: String,
+        destination: String,
+        snapshot: [Envelope],
+        unread: Int,
+        markSeenFirst: Bool
+    ) {
+        let restored = snapshot.filter { sourceFolder(for: $0) == source }
+        envelopes.append(contentsOf: restored)
+        envelopes.sort(by: envelopeOrder)
+        appState.applyUnreadDelta(folderPath: source, delta: unread)
+        if !markSeenFirst {
+            appState.applyUnreadDelta(folderPath: destination, delta: -unread)
+        }
+    }
+
+    /// Partial-failure counterpart of `performMove`'s whole-group revert:
+    /// only the failed rows come back. On a dispose (`markSeenFirst`) the
+    /// restored rows re-appear as read — the seen-marking already landed
+    /// server-side and the top-of-move unread subtraction assumed it — so
+    /// no unread deltas move; a plain move hands the failed rows' unread
+    /// counts back to the source and reclaims them from the destination.
+    private func restoreAfterPartialMove(
+        source: String,
+        destination: String,
+        snapshot: [Envelope],
+        failed: Set<UInt32>,
+        markSeenFirst: Bool
+    ) {
+        let restored = snapshot.filter {
+            sourceFolder(for: $0) == source && failed.contains($0.uid)
+        }
+        envelopes.append(contentsOf: restored)
+        envelopes.sort(by: envelopeOrder)
+        if markSeenFirst {
+            for envelope in restored {
+                applyOptimisticFlag(uid: envelope.uid, flag: .seen, add: true)
+            }
+        } else {
+            let unread = restored.filter { !$0.flags.contains(.seen) }.count
+            appState.applyUnreadDelta(folderPath: source, delta: unread)
+            appState.applyUnreadDelta(folderPath: destination, delta: -unread)
         }
     }
 }

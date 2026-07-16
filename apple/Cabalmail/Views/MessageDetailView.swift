@@ -24,9 +24,7 @@ struct MessageDetailView: View {
     // accepted way to keep this struct under SwiftLint's body-length cap.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) var preferences
-    @Environment(\.openWindow) var openWindow
     @State var model: MessageDetailViewModel?
-    @State var composeSeed: Draft?
     @State var moveSheetPresented = false
     @State var sourceSheetTab: MessageSourceSheet.Tab?
     @State var senderContactName: String?
@@ -111,9 +109,6 @@ struct MessageDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         #endif
         .toolbar { toolbarContent }
-        .sheet(item: $composeSeed) { seed in
-            composeSheet(for: seed)
-        }
         .sheet(isPresented: $moveSheetPresented) {
             moveSheet
         }

@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3] - 2026-07-16
+
+### Changed
+- Apple: **Apple bulk actions now chunk large selections and report partial
+  failures.** Flag and move operations go to the server in 1,000-message
+  chunks as a timeout safety net, and when only some messages succeed the
+  client keeps the ones that landed, restores the ones that failed, and
+  shows "Moved X of Y" instead of silently losing rows.
+- Apple: **Large bulk disposes on Apple clients now confirm first.** Archiving or
+  deleting 25 or more messages at once asks "Archive/Delete N Messages?"
+  before running, on every dispose surface (action bar, selection context
+  menu, Cmd+Delete). Smaller disposes and non-destructive bulk actions
+  (move, flag, mark read) are unchanged. VoiceOver now announces the
+  selection size on every bulk action button ("Archive 12 messages").
+- **Web bulk actions now report partial failures.** When the server
+  completes a bulk move, archive, delete, or flag change for only some of
+  the selected messages, the web app restores the rows that failed,
+  keeps them selected for a one-click retry, and shows "Moved X of Y
+  messages" instead of silently dropping them from view.
+- Apple: **Narrower toast banners.** Transient toasts and status banners
+  now cap at ~70% of the container width instead of spanning nearly the
+  full width, reducing overlap with toolbar and action buttons. Longer
+  messages wrap and the banner grows vertically to fit.
+
+### Fixed
+- Apple: **Attachments carrying a Content-ID now appear in the reader.**
+  An attached image whose part also carried a `Content-ID` (Gmail stamps one
+  on every attached image) was mis-classified as an inline image and hidden
+  from the attachment strip, so it could be neither viewed nor downloaded on
+  iOS and macOS. Attachment listing and inline-image resolution are now two
+  independent decisions, matching the web client: a part flagged
+  `Content-Disposition: attachment` always gets an attachment chip, even when
+  it also resolves a `cid:` reference in the body.
+- Apple: **Create-address sheet size on iPad.** The New Address form
+  no longer renders as a tiny box on iPadOS — it now uses a
+  form-appropriate sheet size instead of collapsing to the form's
+  intrinsic width.
+- Apple: **mailto: links populate the compose fields again (macOS).**
+  The stray-window fix rerouted incoming `mailto:` clicks to the compose
+  window scene, which spawned its window with a blank draft and dropped
+  the URL — To, Cc, Bcc, Subject, and body arrived empty. The compose
+  window now seeds itself from the delivered URL, and a `mailto:` click
+  that cold-launches the app restores the signed-in session instead of
+  showing a sign-in placeholder.
+- Apple: **mailto: links open a pre-filled compose from any screen
+  (iOS/iPadOS/visionOS).** A `mailto:` tap used to be silently dropped
+  whenever the message list wasn't the visible view — on iPhone the
+  compose sheet was anchored to that list, which cannot present from a
+  background tab, so the app just showed its last state (an App Review
+  rejection for the default-mail-app request) and the orphaned compose
+  then ambushed the user on their next visit to the Mail tab. Compose
+  requests are now received at the signed-in root, which is visible in
+  every tab, folder, and modal state. A `mailto:` arriving while a
+  draft is already open no longer replaces the draft mid-typing; it
+  opens once that draft is closed.
+- Apple: **No stray main window when opening a mailto: link (macOS).**
+  Clicking a `mailto:` link with Cabalmail set as the default mail reader
+  opened the compose window as intended but also spawned an empty second
+  main window; the main window group no longer creates a new window in
+  response to external URL events, so only the compose window appears.
+- **React test suite compatibility with Node 24+.** Node's experimental
+  file-backed `localStorage` global shadowed jsdom's in the Vitest
+  environment, failing every test that touches storage; the test runner now
+  disables it (`--no-experimental-webstorage`). Also restored the intended
+  single-fork serial test execution, which had been silently ignored since
+  the Vitest 4 upgrade (`poolOptions.forks.singleFork` is now
+  `fileParallelism: false`).
+
 ## [0.11.2] - 2026-07-15
 
 ### Changed
