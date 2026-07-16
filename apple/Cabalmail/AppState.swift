@@ -254,6 +254,17 @@ final class AppState {
     /// Wired alongside `client` on sign-in / restore, cleared on sign-out.
     private(set) var navCoordinator: NavStateCoordinator?
 
+    /// Syncs app `Preferences` to the server so settings changed on one Apple
+    /// client follow the Cabalmail account to another. Wired alongside `client`
+    /// on sign-in / restore, cleared on sign-out.
+    private(set) var prefsCoordinator: PreferencesSyncCoordinator?
+
+    /// The app-root `Preferences` instance, handed in at launch by the app
+    /// entry (`usePreferences(_:)`) so `wireSession` can start a
+    /// `PreferencesSyncCoordinator` for it. Weak-by-convention: the app scene
+    /// owns it for the whole process lifetime.
+    private var preferences: Preferences?
+
     /// Local-only contacts lookup, used by message list / detail / avatar
     /// to enrich incoming mail with the user's own name and photo for the
     /// sender. One instance per app launch — the actor caches results for
@@ -315,7 +326,16 @@ final class AppState {
         WatchSessionBridge.shared.pushSignedOut()
         self.client = nil
         self.navCoordinator = nil
+        self.prefsCoordinator?.stop()
+        self.prefsCoordinator = nil
         self.status = .signedOut
+    }
+
+    /// Hands the app-root `Preferences` to `AppState` at launch, before any
+    /// sign-in or restore, so `wireSession` can start a
+    /// `PreferencesSyncCoordinator` for the signed-in user. Idempotent.
+    func usePreferences(_ preferences: Preferences) {
+        self.preferences = preferences
     }
 
     /// Launch-time auto-restore. Looks at the UserDefaults-persisted
@@ -508,6 +528,14 @@ extension AppState {
     private func wireSession(client newClient: CabalmailClient, username: String) async {
         self.client = newClient
         self.navCoordinator = NavStateCoordinator(client: newClient)
+        if let preferences {
+            let coordinator = PreferencesSyncCoordinator(client: newClient, preferences: preferences)
+            self.prefsCoordinator = coordinator
+            // Non-blocking: the initial server pull (server wins on login)
+            // shouldn't hold up the UI flipping to signed-in; the applied
+            // values land a moment later.
+            Task { await coordinator.start() }
+        }
         self.status = .signedIn
         startInboxBadgePolling()
         requestContactsAccessIfNeeded()

@@ -118,6 +118,19 @@ public protocol ApiClient: Sendable {
     /// server-side when composing the From header.
     func updateDisplayName(_ name: String) async throws
 
+    /// Fetches the Apple client's synced preferences from `/get_preferences`.
+    /// These live under the row's `app` map (namespaced away from the web
+    /// client's flat theme/accent/density), so this returns just that
+    /// sub-object as wire-key -> value. An empty dictionary means the user has
+    /// no server-side app preferences yet (fall back to local/enum defaults).
+    func fetchAppPreferences() async throws -> [String: String]
+
+    /// Persists the Apple client's preferences via `/set_preferences`, wrapped
+    /// in an `{"app": {...}}` envelope so the Lambda merges only that map and
+    /// never disturbs the display name or the web client's fields. The client
+    /// always sends its complete set; the server replaces the whole `app` map.
+    func saveAppPreferences(_ prefs: [String: String]) async throws
+
     // MARK: Navigation cursor
     /// Loads the cross-client navigation cursor from `/get_nav_state`, or nil
     /// when none has been saved yet (the Lambda returns `{}`). See `NavState`.

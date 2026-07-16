@@ -28,6 +28,10 @@ struct CabalmailApp: App {
                 .environment(preferences)
                 .preferredColorScheme(colorScheme(for: preferences.theme))
                 .task {
+                    // Hand the app-root Preferences to AppState before any
+                    // restore so the session's PreferencesSyncCoordinator can
+                    // pull the server copy (server wins on login).
+                    appState.usePreferences(preferences)
                     // Launch-time auto-restore. `restoreIfPossible()` is a
                     // no-op once the user is signed in, so SwiftUI re-
                     // running this `.task` across scene re-attaches (e.g.
@@ -55,6 +59,10 @@ struct CabalmailApp: App {
                     // app installed while this app was already running.
                     guard phase == .active else { return }
                     Task { await appState.refreshWatchSession() }
+                    // Pick up settings changed on another device while this
+                    // one was backgrounded (server wins, unless a local edit
+                    // is still pending its push).
+                    Task { await appState.prefsCoordinator?.reconcile() }
                 }
                 .onOpenURL { url in
                     // Cold-launch mailto: arrives here before any view

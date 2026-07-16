@@ -66,4 +66,65 @@ final class ApiClientPreferencesTests: XCTestCase {
         XCTAssertEqual(payload?.count, 1)
         XCTAssertEqual(payload?["name"] as? String, "Chris Carr")
     }
+
+    // MARK: - App preferences (cross-device settings sync)
+
+    func testFetchAppPreferencesDecodesAppMap() async throws {
+        // get_preferences returns the whole row; the Apple client reads only
+        // the namespaced `app` sub-object.
+        let body = #"""
+        {"theme":"light","accent":"forest","density":"compact","name":"Chris",\#
+        "app":{"theme":"dark","dispose_action":"trash","signature":"Cheers"}}
+        """#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let prefs = try await client.fetchAppPreferences()
+        XCTAssertEqual(prefs["theme"], "dark")
+        XCTAssertEqual(prefs["dispose_action"], "trash")
+        XCTAssertEqual(prefs["signature"], "Cheers")
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0].httpMethod, "GET")
+        XCTAssertTrue(requests[0].url!.absoluteString.contains("/get_preferences"))
+    }
+
+    func testFetchAppPreferencesEmptyWhenAbsent() async throws {
+        // A user who has only ever used the web client (or an older Lambda)
+        // has no `app` key; that must read as "none saved", not an error.
+        let body = #"{"theme":"light","accent":"forest","density":"compact"}"#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let prefs = try await client.fetchAppPreferences()
+        XCTAssertTrue(prefs.isEmpty)
+    }
+
+    func testSaveAppPreferencesWrapsInAppEnvelope() async throws {
+        let http = RecordingHTTPTransport(responses: [(Data(#"{"app":{"theme":"dark"}}"#.utf8), 200)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        try await client.saveAppPreferences(["theme": "dark", "dispose_action": "trash"])
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0].httpMethod, "PUT")
+        XCTAssertTrue(requests[0].url!.absoluteString.contains("/set_preferences"))
+        let payload = try JSONSerialization.jsonObject(with: requests[0].httpBody ?? Data()) as? [String: Any]
+        // The body must carry only the `app` envelope - set_preferences merges
+        // per top-level key, so this must not disturb `name` or the web
+        // client's theme/accent/density.
+        XCTAssertEqual(payload?.count, 1)
+        let app = payload?["app"] as? [String: Any]
+        XCTAssertEqual(app?["theme"] as? String, "dark")
+        XCTAssertEqual(app?["dispose_action"] as? String, "trash")
+    }
 }
