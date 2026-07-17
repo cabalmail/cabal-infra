@@ -364,8 +364,10 @@ public final class Preferences {
     }
 
     /// The complete set of synced preferences as the `app` map the server
-    /// stores. Always sends every key (the server replaces the whole map), with
-    /// `defaultFromAddress`'s "no default" (`nil`) encoded as an empty string.
+    /// stores. Always sends every key this build knows; the server merges
+    /// per key, so keys a newer client added (and this build doesn't know)
+    /// survive the push. `defaultFromAddress`'s "no default" (`nil`) is
+    /// encoded as an empty string — key removal is never needed.
     public func appPreferencesPayload() -> [String: String] {
         [
             AppWireKey.markAsRead: markAsRead.rawValue,
