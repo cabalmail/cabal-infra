@@ -143,6 +143,8 @@ final class ApiBackedImapClientTests: XCTestCase {
         let payload = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
         XCTAssertEqual(payload?["source"] as? String, "INBOX")
         XCTAssertEqual(payload?["destination"] as? String, "Archive")
+        // A plain move (three-arg convenience) leaves read state alone.
+        XCTAssertEqual(payload?["mark_seen"] as? Bool, false)
     }
 
     func testPurgeIssuesDeleteWithExpectedBody() async throws {
@@ -445,5 +447,27 @@ extension ApiBackedImapClientTests {
         XCTAssertTrue(listURL.contains("offset=2"))
         XCTAssertTrue(listURL.contains("limit=3"))
         XCTAssertTrue(requests[1].url!.absoluteString.contains("/list_envelopes"))
+    }
+}
+
+// Split into a sibling extension so the primary class body stays under
+// SwiftLint's 250-line type_body_length cap.
+extension ApiBackedImapClientTests {
+    func testMoveWithMarkSeenSetsFlagInBody() async throws {
+        let body = #"{"status":"submitted"}"#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
+        // Archive/dispose asks the server to mark `\Seen` before the move so
+        // the whole action is one round trip.
+        try await client.move(folder: "INBOX", uids: [1, 2, 3], destination: "Archive", markSeen: true)
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        let payload = try JSONSerialization.jsonObject(with: requests[0].httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(payload?["mark_seen"] as? Bool, true)
     }
 }

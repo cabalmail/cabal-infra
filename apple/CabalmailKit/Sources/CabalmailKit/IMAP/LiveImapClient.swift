@@ -255,12 +255,17 @@ public actor LiveImapClient: ImapClient {
         }
     }
 
-    public func move(folder: String, uids: [UInt32], destination: String) async throws {
+    public func move(folder: String, uids: [UInt32], destination: String, markSeen: Bool) async throws {
         try await withTransportRetry {
             let conn = try self.requireConnection()
             try await self.select(folder: folder, on: conn)
             let uidList = uids.map(String.init).joined(separator: ",")
             let dest = self.quoteAstring(self.toServerPath(destination))
+            // Archive == read: STORE \Seen while the UIDs still exist in the
+            // source (post-move they're gone here, so the flag can't be set).
+            if markSeen {
+                _ = try await conn.sendCommand("UID STORE \(uidList) +FLAGS (\\Seen)")
+            }
             do {
                 _ = try await conn.sendCommand("UID MOVE \(uidList) \(dest)")
                 return
