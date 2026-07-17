@@ -18,7 +18,7 @@ struct CabalmailApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     #endif
     @State private var appState = AppState()
-    @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
+    @State private var preferences = Preferences(store: UserDefaultsPreferenceStore())
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

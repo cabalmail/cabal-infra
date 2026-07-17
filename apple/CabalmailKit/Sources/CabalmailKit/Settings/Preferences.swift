@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-// User-facing behavior toggles persisted across launches and — via
-// `UbiquitousPreferenceStore` — synced between the user's devices through
-// iCloud's key-value store.
+// User-facing behavior toggles persisted across launches (per Cabalmail
+// account, in local `UserDefaults`) and synced between the user's devices
+// through the server's per-user preferences row — never through iCloud.
 //
 // Phase 6 scope (`docs/0.6.0/ios-client-plan.md`) covers four surfaces:
 // Reading (mark-as-read + remote-content gating), Composing (default From
@@ -14,7 +14,7 @@ import Observation
 // and read access happens synchronously on the main queue where every
 // SwiftUI body already runs. A paired `PreferenceStore` abstraction keeps
 // the storage side pluggable so tests can exercise external-change handling
-// without reaching for the real iCloud key-value store.
+// without reaching for the real `UserDefaults`.
 
 // MARK: - Enums
 
@@ -108,11 +108,10 @@ public enum FolderCountDisplay: String, Codable, Sendable, CaseIterable, Identif
 
 /// Minimal key/value surface `Preferences` needs from its backing store.
 ///
-/// Production wires a `UbiquitousPreferenceStore` that writes to both
-/// `UserDefaults` (for fast local reads) and `NSUbiquitousKeyValueStore`
-/// (for cross-device sync via iCloud). Tests inject
-/// `InMemoryPreferenceStore` and drive external-change semantics via
-/// `simulateExternalChange(_:)`.
+/// Production wires a `UserDefaultsPreferenceStore` — local-only on
+/// purpose; cross-device sync goes through the server's per-user
+/// preferences row, never iCloud. Tests inject `InMemoryPreferenceStore`
+/// and drive external-change semantics via `simulateExternalChange(_:)`.
 ///
 /// The protocol is `@MainActor`-bound so `Preferences` — also `@MainActor`
 /// — can call into the store without actor hops. Strict concurrency on this
@@ -123,8 +122,10 @@ public protocol PreferenceStore: AnyObject {
     func setString(_ value: String?, forKey key: String)
 
     /// Registers the single external-change handler the store invokes when
-    /// a value arrives from another device. The store retains the handler
-    /// until `stopObserving()` or store deinit. Calling twice replaces the
+    /// a value changes underneath `Preferences` (a no-op for the production
+    /// `UserDefaults` store; `InMemoryPreferenceStore` fires it from
+    /// `simulateExternalChange`). The store retains the handler until
+    /// `stopObserving()` or store deinit. Calling twice replaces the
     /// previous handler.
     func startObserving(_ handler: @escaping @MainActor () -> Void)
     func stopObserving()
@@ -135,16 +136,29 @@ public protocol PreferenceStore: AnyObject {
 /// Observable preferences surface consumed by views and view models.
 ///
 /// Persists to its `PreferenceStore` synchronously in each property's
-/// `didSet`. External updates (e.g. an iCloud push from another device)
-/// land through `reload()`, which sets `isReloading` to suppress the
-/// persistence hooks while it rewrites stored state — preventing a local
-/// write from bouncing the value right back to cloud and thrashing.
+/// `didSet`. Store-driven updates land through `reload()`, which sets
+/// `isReloading` to suppress the persistence hooks while it rewrites
+/// stored state — preventing a reload from re-persisting (or echoing to
+/// the server as an edit) the values it just read.
+///
+/// Storage is scoped **per Cabalmail account**: `activate(controlDomain:
+/// username:)` switches every read and write to that account's own keys
+/// and reloads. Until the first activation the properties carry their
+/// defaults and writes stay in memory. This is what keeps one account's
+/// settings — the default From address especially — from surviving a
+/// sign-out and showing up for (or being overwritten by) the next account
+/// on the same device; the server copy (`applyRemote(_:)`, per Cognito
+/// user) is the cross-device authority layered on top. The local store is
+/// this device's `UserDefaults` only — settings never touch iCloud.
 @Observable
 @MainActor
 public final class Preferences {
-    /// Canonical keys for every stored preference. Rawvalues double as the
-    /// on-disk key in `UserDefaults` and `NSUbiquitousKeyValueStore`, so
-    /// these strings are load-bearing — don't rename without a migration.
+    /// Canonical keys for every stored preference. Each account's value
+    /// lives at `rawValue` + `"."` + the account's scope hash (see
+    /// `storageKey(_:)`); the bare rawValue is the legacy device-wide key
+    /// from before account scoping, which `activate` deletes so no account
+    /// can inherit another's settings. These strings are load-bearing —
+    /// don't rename without a migration.
     public enum Key: String, CaseIterable, Sendable {
         case markAsRead = "cabalmail.prefs.mark_as_read"
         case loadRemoteContent = "cabalmail.prefs.load_remote_content"
@@ -200,69 +214,117 @@ public final class Preferences {
     private var isReloading = false
     private var isApplyingRemote = false
 
+    /// Scope hash of the account whose settings are currently loaded, or
+    /// `nil` before the first `activate` (fresh install, first launch
+    /// signed out). While `nil`, reads fall back to defaults and writes
+    /// are not persisted.
+    public private(set) var accountScope: String?
+
     /// Fired after a user-driven preference write, once the new value has been
     /// persisted locally. The session's `PreferencesSyncCoordinator` sets this
     /// to debounce a push of the full `app` map to the server so settings
     /// follow the Cabalmail account across devices. Deliberately *not* fired
-    /// for the `reload()` (inbound iCloud) or `applyRemote(_:)` (inbound
-    /// server) paths — echoing an inbound update back out would loop.
+    /// for the `reload()` (store change / account switch) or `applyRemote(_:)`
+    /// (inbound server) paths — echoing an inbound update back out would loop.
     public var onLocalChange: (() -> Void)?
 
     public init(store: PreferenceStore) {
         self.store = store
-        self.markAsRead = Self.readEnum(
-            .markAsRead, store: store, default: .manual
-        )
-        self.loadRemoteContent = Self.readEnum(
-            .loadRemoteContent, store: store, default: .off
-        )
-        self.defaultFromAddress = store.stringValue(forKey: Key.defaultFromAddress.rawValue)
-        self.signature = store.stringValue(forKey: Key.signature.rawValue) ?? ""
-        self.disposeAction = Self.readEnum(
-            .disposeAction, store: store, default: .archive
-        )
-        self.theme = Self.readEnum(.theme, store: store, default: .system)
-        self.crashReportingEnabled = store.stringValue(
-            forKey: Key.crashReportingEnabled.rawValue
-        ) == "1"
-        self.defaultBodyRenderMode = Self.readEnum(
-            .defaultBodyRenderMode, store: store, default: .original
-        )
-        self.folderCountDisplay = Self.readEnum(
-            .folderCountDisplay, store: store, default: .unread
-        )
+        // Pure defaults: which account's stored values apply isn't known
+        // until `activate` names one. Assignments in an initializer don't
+        // fire `didSet`, so nothing persists here.
+        self.markAsRead = .manual
+        self.loadRemoteContent = .off
+        self.defaultFromAddress = nil
+        self.signature = ""
+        self.disposeAction = .archive
+        self.theme = .system
+        self.crashReportingEnabled = false
+        self.defaultBodyRenderMode = .original
+        self.folderCountDisplay = .unread
         store.startObserving { [weak self] in
             self?.reload()
         }
     }
 
+    // MARK: - Account scoping
+
+    /// Stable per-account scope hash (FNV-1a 64 of the normalized control
+    /// domain + username). Hashing keeps usernames out of stored key names
+    /// and the key length bounded regardless of username length. `nil`
+    /// when either input is empty.
+    static func scopeIdentifier(controlDomain: String, username: String) -> String? {
+        let domain = controlDomain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let user = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !domain.isEmpty, !user.isEmpty else { return nil }
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in "\(domain)|\(user)".utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return String(format: "%016llx", hash)
+    }
+
+    /// Switches the loaded settings to `username`'s account and reloads
+    /// every property from that account's stored values (defaults on its
+    /// first sign-in). Called on sign-in / session restore; sign-out
+    /// deliberately leaves the last scope active so the signed-out UI
+    /// (theme, the macOS Settings scene) doesn't snap to defaults. No-op
+    /// when the inputs are empty or the account is already active.
+    ///
+    /// Also deletes any values still stored under the legacy device-wide
+    /// keys. Those keys were shared across accounts, which is exactly the
+    /// leak this scoping closes; leaving them behind would hand one
+    /// account's settings (default From address included) to the next
+    /// account that signs in.
+    public func activate(controlDomain: String, username: String) {
+        guard let scope = Self.scopeIdentifier(
+            controlDomain: controlDomain, username: username
+        ) else { return }
+        guard scope != accountScope else { return }
+        accountScope = scope
+        purgeLegacyUnscopedValues()
+        reload()
+    }
+
+    /// The store key for `key` under the active account, or `nil` while no
+    /// account is active. Suffixes (rather than replaces) the legacy key so
+    /// every stored name keeps the greppable `cabalmail.prefs.` prefix.
+    func storageKey(_ key: Key) -> String? {
+        guard let accountScope else { return nil }
+        return "\(key.rawValue).\(accountScope)"
+    }
+
+    private func purgeLegacyUnscopedValues() {
+        for key in Key.allCases where store.stringValue(forKey: key.rawValue) != nil {
+            store.setString(nil, forKey: key.rawValue)
+        }
+    }
+
+    // MARK: - Store round-trips
+
     /// Re-reads every preference from the store without firing persistence
-    /// hooks. Called when the store signals an external change.
+    /// hooks. Called when the store signals an external change and after
+    /// `activate` swaps the account scope.
     public func reload() {
         isReloading = true
         defer { isReloading = false }
-        markAsRead = Self.readEnum(.markAsRead, store: store, default: .manual)
-        loadRemoteContent = Self.readEnum(
-            .loadRemoteContent, store: store, default: .off
-        )
-        defaultFromAddress = store.stringValue(forKey: Key.defaultFromAddress.rawValue)
-        signature = store.stringValue(forKey: Key.signature.rawValue) ?? ""
-        disposeAction = Self.readEnum(.disposeAction, store: store, default: .archive)
-        theme = Self.readEnum(.theme, store: store, default: .system)
-        crashReportingEnabled = store.stringValue(
-            forKey: Key.crashReportingEnabled.rawValue
-        ) == "1"
-        defaultBodyRenderMode = Self.readEnum(
-            .defaultBodyRenderMode, store: store, default: .original
-        )
-        folderCountDisplay = Self.readEnum(
-            .folderCountDisplay, store: store, default: .unread
-        )
+        markAsRead = readEnum(.markAsRead, default: .manual)
+        loadRemoteContent = readEnum(.loadRemoteContent, default: .off)
+        defaultFromAddress = readString(.defaultFromAddress)
+        signature = readString(.signature) ?? ""
+        disposeAction = readEnum(.disposeAction, default: .archive)
+        theme = readEnum(.theme, default: .system)
+        crashReportingEnabled = readString(.crashReportingEnabled) == "1"
+        defaultBodyRenderMode = readEnum(.defaultBodyRenderMode, default: .original)
+        folderCountDisplay = readEnum(.folderCountDisplay, default: .unread)
     }
 
     private func persist(_ key: Key, _ value: String?) {
         guard !isReloading else { return }
-        store.setString(value, forKey: key.rawValue)
+        if let storageKey = storageKey(key) {
+            store.setString(value, forKey: storageKey)
+        }
         // A server-applied value is already persisted locally by the write
         // above; it must not be pushed straight back to the server, or a
         // fetched change would echo out as a fresh save. Only genuine user
@@ -271,10 +333,15 @@ public final class Preferences {
         onLocalChange?()
     }
 
-    private static func readEnum<Value: RawRepresentable>(
-        _ key: Key, store: PreferenceStore, default fallback: Value
+    private func readString(_ key: Key) -> String? {
+        guard let storageKey = storageKey(key) else { return nil }
+        return store.stringValue(forKey: storageKey)
+    }
+
+    private func readEnum<Value: RawRepresentable>(
+        _ key: Key, default fallback: Value
     ) -> Value where Value.RawValue == String {
-        guard let raw = store.stringValue(forKey: key.rawValue) else { return fallback }
+        guard let raw = readString(key) else { return fallback }
         return Value(rawValue: raw) ?? fallback
     }
 
@@ -282,8 +349,8 @@ public final class Preferences {
 
     /// Wire keys for the server-synced `app` map (the `set_preferences` Lambda
     /// validates against these exact names). Distinct from `Key`, whose dotted
-    /// raw values are the local UserDefaults/iCloud keys; these short
-    /// snake_case names are the cross-client JSON contract.
+    /// raw values are the local UserDefaults keys; these short snake_case
+    /// names are the cross-client JSON contract.
     private enum AppWireKey {
         static let markAsRead = "mark_as_read"
         static let loadRemoteContent = "load_remote_content"
@@ -353,4 +420,4 @@ public final class Preferences {
 
 // Concrete `PreferenceStore` implementations live in sibling files:
 // `InMemoryPreferenceStore.swift` (tests + previews) and
-// `UbiquitousPreferenceStore.swift` (production, UserDefaults + iCloud).
+// `UserDefaultsPreferenceStore.swift` (production, local-only).

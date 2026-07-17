@@ -5,8 +5,9 @@ import CabalmailKit
 /// Apple client shows up the next time they sign in on another. The settings
 /// are stored per Cognito user (the `app` map on the `cabal-user-preferences`
 /// row, behind `/get_preferences` / `/set_preferences`), which anchors them to
-/// the Cabalmail login rather than the Apple ID that iCloud key-value sync
-/// keys on.
+/// the Cabalmail login rather than the Apple ID. This is the ONLY sync path:
+/// the local `PreferenceStore` is device-local `UserDefaults`, account-scoped
+/// (see `Preferences.activate`), and never touches iCloud.
 ///
 /// Created by `AppState` when a client is wired (sign-in or restore) and torn
 /// down on sign-out. `@MainActor` because it drives the main-actor-isolated

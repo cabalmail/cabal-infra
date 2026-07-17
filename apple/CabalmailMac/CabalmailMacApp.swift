@@ -23,7 +23,7 @@ struct CabalmailMacApp: App {
     // target compiles, with an NSApplicationDelegate branch (see that file).
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState()
-    @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
+    @State private var preferences = Preferences(store: UserDefaultsPreferenceStore())
     @Environment(\.scenePhase) private var scenePhase
     // Mac residency: whether the status-item menu is installed. Backed by
     // UserDefaults so the "Show in menu bar" toggle in Settings >
