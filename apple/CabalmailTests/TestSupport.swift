@@ -24,6 +24,7 @@ actor FakeImapClient: ImapClient {
         let folder: String
         let uids: Set<UInt32>
         let destination: String
+        let markSeen: Bool
     }
 
     private(set) var flagCalls: [FlagCall] = []
@@ -55,9 +56,9 @@ actor FakeImapClient: ImapClient {
         }
     }
 
-    func move(folder: String, uids: [UInt32], destination: String) async throws {
+    func move(folder: String, uids: [UInt32], destination: String, markSeen: Bool) async throws {
         moveCalls.append(MoveCall(
-            folder: folder, uids: Set(uids), destination: destination
+            folder: folder, uids: Set(uids), destination: destination, markSeen: markSeen
         ))
         if !moveResults.isEmpty {
             try moveResults.removeFirst().get()
