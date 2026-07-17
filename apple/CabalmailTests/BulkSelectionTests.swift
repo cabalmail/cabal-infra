@@ -186,6 +186,7 @@ final class BulkSelectionTests: XCTestCase {
         XCTAssertEqual(calls.count, 1)
         XCTAssertEqual(calls.first?.uids, [1, 2])
         XCTAssertEqual(calls.first?.destination, "Archive")
+        XCTAssertEqual(calls.first?.markSeen, false, "a plain move leaves read state alone")
     }
 
     func testMovePartialFailureRestoresOnlyFailedRows() async throws {
@@ -227,13 +228,11 @@ final class BulkSelectionTests: XCTestCase {
         XCTAssertNotNil(model.errorMessage)
     }
 
-    func testDisposeProceedsWhenSeenMarkingPartiallyFails() async throws {
-        // Dispose marks \Seen before the move (archived == read). A partial
-        // miss on that cosmetic step must not abort the move itself.
+    func testDisposeArchivesInOneMoveMarkingSeenServerSide() async throws {
+        // Archive == read, folded into the move: dispose issues a single
+        // `move` carrying `markSeen: true` (the server adds \Seen before
+        // relocating) rather than a separate STORE followed by a MOVE.
         let imap = FakeImapClient()
-        await imap.scriptFlagResults([
-            .failure(CabalmailError.bulkPartialFailure(succeeded: [1], failed: [2])),
-        ])
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)]
@@ -241,9 +240,12 @@ final class BulkSelectionTests: XCTestCase {
 
         await model.disposeMessages(uids: [1, 2], action: .archive)
 
-        XCTAssertTrue(model.envelopes.isEmpty, "the move ran despite the partial seen-marking")
+        XCTAssertTrue(model.envelopes.isEmpty)
+        let flags = await imap.flagCalls
+        XCTAssertTrue(flags.isEmpty, "no separate seen-marking round trip")
         let moves = await imap.moveCalls
         XCTAssertEqual(moves.count, 1)
         XCTAssertEqual(moves.first?.uids, [1, 2])
+        XCTAssertEqual(moves.first?.markSeen, true)
     }
 }
