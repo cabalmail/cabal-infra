@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-// User-facing behavior toggles persisted across launches and — via
-// `UbiquitousPreferenceStore` — synced between the user's devices through
-// iCloud's key-value store.
+// User-facing behavior toggles persisted across launches (per Cabalmail
+// account, in local `UserDefaults`) and synced between the user's devices
+// through the server's per-user preferences row — never through iCloud.
 //
 // Phase 6 scope (`docs/0.6.0/ios-client-plan.md`) covers four surfaces:
 // Reading (mark-as-read + remote-content gating), Composing (default From
@@ -14,7 +14,7 @@ import Observation
 // and read access happens synchronously on the main queue where every
 // SwiftUI body already runs. A paired `PreferenceStore` abstraction keeps
 // the storage side pluggable so tests can exercise external-change handling
-// without reaching for the real iCloud key-value store.
+// without reaching for the real `UserDefaults`.
 
 // MARK: - Enums
 
@@ -108,11 +108,10 @@ public enum FolderCountDisplay: String, Codable, Sendable, CaseIterable, Identif
 
 /// Minimal key/value surface `Preferences` needs from its backing store.
 ///
-/// Production wires a `UbiquitousPreferenceStore` that writes to both
-/// `UserDefaults` (for fast local reads) and `NSUbiquitousKeyValueStore`
-/// (for cross-device sync via iCloud). Tests inject
-/// `InMemoryPreferenceStore` and drive external-change semantics via
-/// `simulateExternalChange(_:)`.
+/// Production wires a `UserDefaultsPreferenceStore` — local-only on
+/// purpose; cross-device sync goes through the server's per-user
+/// preferences row, never iCloud. Tests inject `InMemoryPreferenceStore`
+/// and drive external-change semantics via `simulateExternalChange(_:)`.
 ///
 /// The protocol is `@MainActor`-bound so `Preferences` — also `@MainActor`
 /// — can call into the store without actor hops. Strict concurrency on this
@@ -123,8 +122,10 @@ public protocol PreferenceStore: AnyObject {
     func setString(_ value: String?, forKey key: String)
 
     /// Registers the single external-change handler the store invokes when
-    /// a value arrives from another device. The store retains the handler
-    /// until `stopObserving()` or store deinit. Calling twice replaces the
+    /// a value changes underneath `Preferences` (a no-op for the production
+    /// `UserDefaults` store; `InMemoryPreferenceStore` fires it from
+    /// `simulateExternalChange`). The store retains the handler until
+    /// `stopObserving()` or store deinit. Calling twice replaces the
     /// previous handler.
     func startObserving(_ handler: @escaping @MainActor () -> Void)
     func stopObserving()
@@ -135,10 +136,10 @@ public protocol PreferenceStore: AnyObject {
 /// Observable preferences surface consumed by views and view models.
 ///
 /// Persists to its `PreferenceStore` synchronously in each property's
-/// `didSet`. External updates (e.g. an iCloud push from another device)
-/// land through `reload()`, which sets `isReloading` to suppress the
-/// persistence hooks while it rewrites stored state — preventing a local
-/// write from bouncing the value right back to cloud and thrashing.
+/// `didSet`. Store-driven updates land through `reload()`, which sets
+/// `isReloading` to suppress the persistence hooks while it rewrites
+/// stored state — preventing a reload from re-persisting (or echoing to
+/// the server as an edit) the values it just read.
 ///
 /// Storage is scoped **per Cabalmail account**: `activate(controlDomain:
 /// username:)` switches every read and write to that account's own keys
@@ -147,7 +148,8 @@ public protocol PreferenceStore: AnyObject {
 /// settings — the default From address especially — from surviving a
 /// sign-out and showing up for (or being overwritten by) the next account
 /// on the same device; the server copy (`applyRemote(_:)`, per Cognito
-/// user) is the cross-device authority layered on top.
+/// user) is the cross-device authority layered on top. The local store is
+/// this device's `UserDefaults` only — settings never touch iCloud.
 @Observable
 @MainActor
 public final class Preferences {
@@ -222,8 +224,8 @@ public final class Preferences {
     /// persisted locally. The session's `PreferencesSyncCoordinator` sets this
     /// to debounce a push of the full `app` map to the server so settings
     /// follow the Cabalmail account across devices. Deliberately *not* fired
-    /// for the `reload()` (inbound iCloud) or `applyRemote(_:)` (inbound
-    /// server) paths — echoing an inbound update back out would loop.
+    /// for the `reload()` (store change / account switch) or `applyRemote(_:)`
+    /// (inbound server) paths — echoing an inbound update back out would loop.
     public var onLocalChange: (() -> Void)?
 
     public init(store: PreferenceStore) {
@@ -248,11 +250,9 @@ public final class Preferences {
     // MARK: - Account scoping
 
     /// Stable per-account scope hash (FNV-1a 64 of the normalized control
-    /// domain + username). Deterministic across devices so the same account
-    /// maps to the same iCloud key-value keys everywhere, and short enough
-    /// that every scoped key stays inside `NSUbiquitousKeyValueStore`'s
-    /// 64-byte key limit regardless of username length. `nil` when either
-    /// input is empty.
+    /// domain + username). Hashing keeps usernames out of stored key names
+    /// and the key length bounded regardless of username length. `nil`
+    /// when either input is empty.
     static func scopeIdentifier(controlDomain: String, username: String) -> String? {
         let domain = controlDomain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let user = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -273,10 +273,10 @@ public final class Preferences {
     /// when the inputs are empty or the account is already active.
     ///
     /// Also deletes any values still stored under the legacy device-wide
-    /// keys — locally and, through the store, from iCloud. Those keys were
-    /// shared across accounts, which is exactly the leak this scoping
-    /// closes; leaving them behind would hand one account's settings
-    /// (default From address included) to the next account that signs in.
+    /// keys. Those keys were shared across accounts, which is exactly the
+    /// leak this scoping closes; leaving them behind would hand one
+    /// account's settings (default From address included) to the next
+    /// account that signs in.
     public func activate(controlDomain: String, username: String) {
         guard let scope = Self.scopeIdentifier(
             controlDomain: controlDomain, username: username
@@ -349,8 +349,8 @@ public final class Preferences {
 
     /// Wire keys for the server-synced `app` map (the `set_preferences` Lambda
     /// validates against these exact names). Distinct from `Key`, whose dotted
-    /// raw values are the local UserDefaults/iCloud keys; these short
-    /// snake_case names are the cross-client JSON contract.
+    /// raw values are the local UserDefaults keys; these short snake_case
+    /// names are the cross-client JSON contract.
     private enum AppWireKey {
         static let markAsRead = "mark_as_read"
         static let loadRemoteContent = "load_remote_content"
@@ -420,4 +420,4 @@ public final class Preferences {
 
 // Concrete `PreferenceStore` implementations live in sibling files:
 // `InMemoryPreferenceStore.swift` (tests + previews) and
-// `UbiquitousPreferenceStore.swift` (production, UserDefaults + iCloud).
+// `UserDefaultsPreferenceStore.swift` (production, local-only).

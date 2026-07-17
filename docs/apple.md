@@ -988,17 +988,20 @@ best-effort expunges the Drafts copy once delivery succeeds.
   comment, with a **Random** button that seeds alphanumerics so the
   mint-an-address flow stays a one-tap affordance.
 
-### Preferences storage: `UserDefaults` + `NSUbiquitousKeyValueStore`
+### Preferences storage: account-scoped `UserDefaults` + server sync
 
 `CabalmailKit.Preferences` persists through a pluggable `PreferenceStore`
-protocol. Production uses `UbiquitousPreferenceStore`, which writes to
-both `UserDefaults` (fast local reads) and `NSUbiquitousKeyValueStore`
-(cross-device sync via iCloud). An
-`NSUbiquitousKeyValueStoreDidChangeExternallyNotification` observer
-mirrors every pushed key back into `UserDefaults` so subsequent
-synchronous reads stay fast. The store degrades gracefully on an
-iCloud-disabled install — the ubiquitous half becomes a no-op and
-`UserDefaults` carries the whole load.
+protocol. Production uses `UserDefaultsPreferenceStore` — plain local
+`UserDefaults`, nothing else; settings never touch iCloud. Storage is
+scoped per Cabalmail account: `Preferences.activate(controlDomain:
+username:)` runs on sign-in / restore and switches every read and write
+to that account's own keys (the shared key plus a stable hash of
+domain + username), so two accounts on one device can never see or
+overwrite each other's settings. Cross-device sync rides the Cabalmail
+account instead: `PreferencesSyncCoordinator` stores the settings per
+Cognito user on the server (`/get_preferences` / `/set_preferences`),
+pulls with server-wins semantics on login and foreground, and pushes
+debounced local edits.
 
 A single `@Observable` class is used in preference to `@AppStorage`
 property wrappers because multiple views (compose, message detail,

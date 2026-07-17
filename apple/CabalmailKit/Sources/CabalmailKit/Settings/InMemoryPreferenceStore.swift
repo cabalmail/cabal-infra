@@ -1,8 +1,8 @@
 import Foundation
 
 /// Storage adapter that keeps values in a dictionary. Useful for SwiftUI
-/// previews and unit tests — `simulateExternalChange(_:)` mimics the iCloud
-/// push notification path that real deployments exercise.
+/// previews and unit tests — `simulateExternalChange(_:)` exercises the
+/// external-change path (a store mutating underneath `Preferences`).
 @MainActor
 public final class InMemoryPreferenceStore: PreferenceStore {
     private var values: [String: String] = [:]
@@ -33,15 +33,15 @@ public final class InMemoryPreferenceStore: PreferenceStore {
     }
 
     /// Applies a mutation to the backing dictionary and then fires the
-    /// external-change handler, as if another device pushed the change
-    /// through iCloud's key-value store.
+    /// external-change handler, as if the store changed underneath
+    /// `Preferences`.
     public func simulateExternalChange(_ mutation: (InMemoryPreferenceStore) -> Void) {
         mutation(self)
         handler?()
     }
 
     /// Mutates the dictionary without firing the observer, mirroring a
-    /// `UbiquitousPreferenceStore` write that originated locally.
+    /// production store write that originated locally.
     public func setSilently(_ value: String?, forKey key: String) {
         setString(value, forKey: key)
     }

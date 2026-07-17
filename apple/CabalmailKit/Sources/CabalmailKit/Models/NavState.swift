@@ -118,9 +118,10 @@ extension NavState {
 /// A stable, per-install identifier used as `NavState.clientID`.
 ///
 /// Generated once on first use and persisted in `UserDefaults` — deliberately
-/// NOT in the iCloud-synced preference store, because each install must be
-/// distinguishable (two devices sharing one identifier would each think the
-/// other's cursor was their own and never offer the cross-device jump).
+/// NOT in the account-scoped, server-synced preferences, because each install
+/// must be distinguishable (two devices sharing one identifier would each
+/// think the other's cursor was their own and never offer the cross-device
+/// jump).
 public enum InstallIdentity {
     /// `UserDefaults` key for the persisted identifier.
     public static let defaultsKey = "cabalmail.install.clientId"

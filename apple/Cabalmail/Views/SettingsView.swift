@@ -5,9 +5,10 @@ import CabalmailKit
 ///
 /// Grouped into the five sections the plan calls out — Account, Reading,
 /// Composing, Actions, Appearance — plus an About block. Every knob binds
-/// directly to the `Preferences` instance hoisted at the App level; writes
-/// round-trip through `NSUbiquitousKeyValueStore` so they follow the user
-/// to their other devices without any extra plumbing in this view.
+/// directly to the `Preferences` instance hoisted at the App level; the
+/// session's `PreferencesSyncCoordinator` pushes writes to the server so
+/// they follow the Cabalmail account to the user's other devices without
+/// any extra plumbing in this view.
 ///
 /// The Default From picker is seeded asynchronously from the address list
 /// on appear so the picker stays in sync with "Request New" in the
