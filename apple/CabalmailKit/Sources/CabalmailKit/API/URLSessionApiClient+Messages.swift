@@ -272,6 +272,7 @@ extension URLSessionApiClient {
             "source": request.source,
             "destination": request.destination,
             "ids": request.ids.map { Int($0) },
+            "mark_seen": request.markSeen,
             "sort_order": request.sortOrder,
             "sort_field": request.sortField,
         ])

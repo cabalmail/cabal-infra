@@ -184,7 +184,7 @@ public actor ApiBackedImapClient: ImapClient {
         try Self.throwIfIncomplete(outcomes)
     }
 
-    public func move(folder: String, uids: [UInt32], destination: String) async throws {
+    public func move(folder: String, uids: [UInt32], destination: String, markSeen: Bool) async throws {
         let api = self.api
         let host = self.host
         let sortOrder = defaultSortOrder
@@ -195,6 +195,7 @@ public actor ApiBackedImapClient: ImapClient {
                 source: folder,
                 destination: destination,
                 ids: chunk,
+                markSeen: markSeen,
                 sortOrder: sortOrder,
                 sortField: sortField
             ))

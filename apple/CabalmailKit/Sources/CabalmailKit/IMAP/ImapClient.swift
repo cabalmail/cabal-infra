@@ -62,7 +62,13 @@ public protocol ImapClient: Sendable {
     func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage
     func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data
     func setFlags(folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation) async throws
-    func move(folder: String, uids: [UInt32], destination: String) async throws
+
+    /// Moves messages to `destination`. When `markSeen` is true the server
+    /// adds `\Seen` before the move, folding archive's "mark read, then file"
+    /// into a single round trip (see `/move_messages`' `mark_seen`). The
+    /// three-argument convenience below forwards with `markSeen: false` so
+    /// plain "file this for later" moves stay unread.
+    func move(folder: String, uids: [UInt32], destination: String, markSeen: Bool) async throws
 
     /// Permanently deletes (expunges) the given messages. The backing
     /// `/purge_messages` Lambda only accepts trash folders, so callers
@@ -108,6 +114,13 @@ public protocol ImapClient: Sendable {
 }
 
 public extension ImapClient {
+    /// Convenience overload — a plain move that leaves read state alone.
+    /// "File this for later" keeps unread; only archive/dispose passes
+    /// `markSeen: true`.
+    func move(folder: String, uids: [UInt32], destination: String) async throws {
+        try await move(folder: folder, uids: uids, destination: destination, markSeen: false)
+    }
+
     /// Convenience overload — the cheap STATUS-only call (no flagged count).
     /// Existing callers (the inbox badge poller, idle, the sidebar count
     /// refresh) keep working unchanged; only the message-list refresh, which

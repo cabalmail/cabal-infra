@@ -329,6 +329,9 @@ public struct MoveMessagesRequest: Sendable {
     public let source: String
     public let destination: String
     public let ids: [UInt32]
+    /// When true the Lambda adds `\Seen` before the move (archive == read),
+    /// so a dispose commits in one round trip instead of a separate STORE.
+    public let markSeen: Bool
     public let sortOrder: String
     public let sortField: String
 
@@ -337,6 +340,7 @@ public struct MoveMessagesRequest: Sendable {
         source: String,
         destination: String,
         ids: [UInt32],
+        markSeen: Bool = false,
         sortOrder: String,
         sortField: String
     ) {
@@ -344,6 +348,7 @@ public struct MoveMessagesRequest: Sendable {
         self.source = source
         self.destination = destination
         self.ids = ids
+        self.markSeen = markSeen
         self.sortOrder = sortOrder
         self.sortField = sortField
     }
