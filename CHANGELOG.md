@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.5] - 2026-07-17
+
+### Fixed
+- **Per-key merge for the synced `app` preference map.** `set_preferences`
+  replaced the Apple clients' `app` map wholesale on every save, so once a
+  newer client version introduced an additional preference key, a settings
+  edit from a device still running an older version would silently delete
+  it for every device. The server now merges the map per key (`app.x`
+  nested updates, seeding the map on first save), making concurrent and
+  cross-version edits last-write-wins per key; keys unknown to the saving
+  client survive. An empty `app` map is now a no-op instead of wiping the
+  stored map.
+- Apple: **Settings no longer leak across accounts on one device.** The
+  locally cached preferences (default view, default From address,
+  mark-as-read, remote content, signature, theme, and the rest) were
+  stored device-wide, so signing in as a different user showed — and let
+  you overwrite — the previous account's choices, including a default
+  From address the new account doesn't own. Each account now has its own
+  local settings scope, activated at sign-in before the server copy is
+  pulled, and the old device-wide values are deleted on first sign-in
+  after updating (settings re-sync from the server, or reset to defaults
+  for accounts that never synced). The local cache is now plain
+  `UserDefaults` on this device only — the iCloud key-value mirror is
+  gone entirely, so nothing is read from or written to iCloud, even as a
+  fallback; cross-device sync rides the Cabalmail account.
+- Apple: **Icon badge tracks archives immediately.** The badge is now
+  updated the moment a message is archived or marked read, rather than
+  waiting for the 60-second Inbox poll — which can't run once the app is
+  backgrounded, so archiving then backgrounding used to leave the badge
+  showing the pre-archive count. Archive also commits in a single API round
+  trip (the server marks `\Seen` before moving), so it reliably lands within
+  the brief window the app has when it's being backgrounded.
+
 ## [0.11.4] - 2026-07-16
 
 ### Added
