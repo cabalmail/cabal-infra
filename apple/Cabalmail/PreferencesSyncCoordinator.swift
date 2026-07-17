@@ -5,8 +5,9 @@ import CabalmailKit
 /// Apple client shows up the next time they sign in on another. The settings
 /// are stored per Cognito user (the `app` map on the `cabal-user-preferences`
 /// row, behind `/get_preferences` / `/set_preferences`), which anchors them to
-/// the Cabalmail login rather than the Apple ID that iCloud key-value sync
-/// keys on.
+/// the Cabalmail login rather than the Apple ID. This is the ONLY sync path:
+/// the local `PreferenceStore` is device-local `UserDefaults`, account-scoped
+/// (see `Preferences.activate`), and never touches iCloud.
 ///
 /// Created by `AppState` when a client is wired (sign-in or restore) and torn
 /// down on sign-out. `@MainActor` because it drives the main-actor-isolated
@@ -15,9 +16,10 @@ import CabalmailKit
 /// Lifecycle:
 /// - **Start** (`start`): fetch the server copy once and apply it — the server
 ///   wins on login — then observe local edits via `Preferences.onLocalChange`.
-/// - **Local edit**: debounce, then push the complete `app` map. The client
-///   always sends every key, so the server replaces the whole map (concurrent
-///   multi-device edits are last-write-wins).
+/// - **Local edit**: debounce, then push the complete `app` map (every key
+///   this build knows). The server merges per key, so concurrent multi-device
+///   edits are last-write-wins per key, and a key introduced by a newer
+///   client build survives a push from an older one.
 /// - **Foreground** (`reconcile`): re-fetch and re-apply so a change made on
 ///   another device mid-session lands, unless a local edit is still pending
 ///   (never clobber an edit we haven't managed to push yet).

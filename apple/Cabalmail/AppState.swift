@@ -336,6 +336,12 @@ final class AppState {
     /// `PreferencesSyncCoordinator` for the signed-in user. Idempotent.
     func usePreferences(_ preferences: Preferences) {
         self.preferences = preferences
+        // Pre-activate the persisted last session's account scope so the
+        // launch UI (theme especially) renders from that account's cached
+        // settings while `restoreIfPossible()` is still resolving over the
+        // network. `wireSession` re-activates with the confirmed username;
+        // for the normal restore path that's the same scope and a no-op.
+        preferences.activate(controlDomain: controlDomain, username: lastUsername)
     }
 
     /// Launch-time auto-restore. Looks at the UserDefaults-persisted
@@ -525,6 +531,12 @@ extension AppState {
         self.client = newClient
         self.navCoordinator = NavStateCoordinator(client: newClient)
         if let preferences {
+            // Swap the local settings cache to this account's scoped keys
+            // before the server pull below: the previous account's values
+            // (default From address included) must never carry over, even
+            // when this account has no server copy yet or the pull fails
+            // offline. No-op when the same account signs back in.
+            preferences.activate(controlDomain: controlDomain, username: username)
             let coordinator = PreferencesSyncCoordinator(client: newClient, preferences: preferences)
             self.prefsCoordinator = coordinator
             // Non-blocking: the initial server pull (server wins on login)

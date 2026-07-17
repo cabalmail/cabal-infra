@@ -3,10 +3,32 @@ import XCTest
 
 @MainActor
 final class PreferencesTests: XCTestCase {
+    private static let domain = "cabal.example.com"
+
+    /// The store key `Preferences` uses for `key` under `username`'s
+    /// account scope, for seeding stores and asserting writes.
+    private func scopedKey(
+        _ key: Preferences.Key, username: String = "chris"
+    ) throws -> String {
+        let scope = try XCTUnwrap(Preferences.scopeIdentifier(
+            controlDomain: Self.domain, username: username
+        ))
+        return "\(key.rawValue).\(scope)"
+    }
+
+    private func makeActivated(
+        store: InMemoryPreferenceStore? = nil,
+        username: String = "chris"
+    ) -> Preferences {
+        let preferences = Preferences(store: store ?? InMemoryPreferenceStore())
+        preferences.activate(controlDomain: Self.domain, username: username)
+        return preferences
+    }
+
     // MARK: - Defaults
 
     func testDefaultsMatchTheSpec() {
-        let preferences = Preferences(store: InMemoryPreferenceStore())
+        let preferences = makeActivated()
         XCTAssertEqual(preferences.markAsRead, .manual)
         XCTAssertEqual(preferences.loadRemoteContent, .off)
         XCTAssertNil(preferences.defaultFromAddress)
@@ -23,9 +45,9 @@ final class PreferencesTests: XCTestCase {
 
     // MARK: - Persistence
 
-    func testAssignmentsArePersistedImmediately() {
+    func testAssignmentsArePersistedImmediately() throws {
         let store = InMemoryPreferenceStore()
-        let preferences = Preferences(store: store)
+        let preferences = makeActivated(store: store)
 
         preferences.markAsRead = .onOpen
         preferences.loadRemoteContent = .ask
@@ -36,54 +58,143 @@ final class PreferencesTests: XCTestCase {
         preferences.defaultBodyRenderMode = .reader
 
         XCTAssertEqual(
-            store.stringValue(forKey: Preferences.Key.markAsRead.rawValue),
+            store.stringValue(forKey: try scopedKey(.markAsRead)),
             "on_open"
         )
         XCTAssertEqual(
-            store.stringValue(forKey: Preferences.Key.loadRemoteContent.rawValue),
+            store.stringValue(forKey: try scopedKey(.loadRemoteContent)),
             "ask"
         )
         XCTAssertEqual(
-            store.stringValue(forKey: Preferences.Key.defaultFromAddress.rawValue),
+            store.stringValue(forKey: try scopedKey(.defaultFromAddress)),
             "me@example.com"
         )
         XCTAssertEqual(
-            store.stringValue(forKey: Preferences.Key.signature.rawValue),
+            store.stringValue(forKey: try scopedKey(.signature)),
             "-- sent from iOS"
         )
         XCTAssertEqual(
-            store.stringValue(forKey: Preferences.Key.disposeAction.rawValue),
+            store.stringValue(forKey: try scopedKey(.disposeAction)),
             "trash"
         )
         XCTAssertEqual(
-            store.stringValue(forKey: Preferences.Key.theme.rawValue),
+            store.stringValue(forKey: try scopedKey(.theme)),
             "dark"
         )
         XCTAssertEqual(
-            store.stringValue(forKey: Preferences.Key.defaultBodyRenderMode.rawValue),
+            store.stringValue(forKey: try scopedKey(.defaultBodyRenderMode)),
             "reader"
         )
+        // Nothing lands on the legacy device-wide keys.
+        for key in Preferences.Key.allCases {
+            XCTAssertNil(store.stringValue(forKey: key.rawValue))
+        }
     }
 
-    func testNilDefaultFromRemovesKey() {
+    func testNilDefaultFromRemovesKey() throws {
         let store = InMemoryPreferenceStore()
-        let preferences = Preferences(store: store)
+        let preferences = makeActivated(store: store)
         preferences.defaultFromAddress = "me@example.com"
         preferences.defaultFromAddress = nil
+        XCTAssertNil(store.stringValue(forKey: try scopedKey(.defaultFromAddress)))
+    }
+
+    // MARK: - Account scoping
+
+    /// The reported cross-account leak: sign in as chris, set preferences,
+    /// sign out, sign in as apple, set different preferences, sign back in
+    /// as chris. Chris must get chris's values back — never apple's, and
+    /// most especially not apple's default From address.
+    func testAccountSwitchIsolatesPreferences() {
+        let store = InMemoryPreferenceStore()
+        let preferences = makeActivated(store: store, username: "chris")
+        preferences.defaultBodyRenderMode = .reader
+        preferences.defaultFromAddress = nil
+        preferences.markAsRead = .manual
+        preferences.loadRemoteContent = .off
+
+        preferences.activate(controlDomain: Self.domain, username: "apple")
+        // A fresh account starts from defaults, not from chris's values.
+        XCTAssertEqual(preferences.defaultBodyRenderMode, .original)
+        XCTAssertNil(preferences.defaultFromAddress)
+        preferences.defaultBodyRenderMode = .original
+        preferences.defaultFromAddress = "apple@testsubdomain.example.com"
+        preferences.markAsRead = .onOpen
+        preferences.loadRemoteContent = .always
+
+        preferences.activate(controlDomain: Self.domain, username: "chris")
+        XCTAssertEqual(preferences.defaultBodyRenderMode, .reader)
+        XCTAssertNil(preferences.defaultFromAddress)
+        XCTAssertEqual(preferences.markAsRead, .manual)
+        XCTAssertEqual(preferences.loadRemoteContent, .off)
+    }
+
+    /// Values stored under the legacy device-wide keys (pre-account-scoping
+    /// builds) are deleted on activation, not inherited by whichever
+    /// account signs in next.
+    func testActivationPurgesLegacyDeviceWideValues() {
+        let store = InMemoryPreferenceStore(initialValues: [
+            Preferences.Key.theme.rawValue: "dark",
+            Preferences.Key.defaultFromAddress.rawValue: "previous-user@example.com",
+        ])
+        let preferences = makeActivated(store: store)
+        XCTAssertEqual(preferences.theme, .system)
+        XCTAssertNil(preferences.defaultFromAddress)
+        XCTAssertNil(store.stringValue(forKey: Preferences.Key.theme.rawValue))
         XCTAssertNil(store.stringValue(forKey: Preferences.Key.defaultFromAddress.rawValue))
+    }
+
+    /// Before any activation (fresh install, signed out) edits stay in
+    /// memory: nothing persists, and the first activation resets to that
+    /// account's stored state.
+    func testWritesBeforeActivationAreNotPersisted() {
+        let store = InMemoryPreferenceStore()
+        let preferences = Preferences(store: store)
+        preferences.theme = .dark
+        preferences.defaultFromAddress = "me@example.com"
+        for key in Preferences.Key.allCases {
+            XCTAssertNil(store.stringValue(forKey: key.rawValue))
+        }
+        preferences.activate(controlDomain: Self.domain, username: "chris")
+        XCTAssertEqual(preferences.theme, .system)
+        XCTAssertNil(preferences.defaultFromAddress)
+    }
+
+    /// Re-activating the already-active account must not reload (and so
+    /// must not clobber an in-memory value mid-write) — `wireSession`
+    /// re-activates on every sign-in and restore.
+    func testReactivatingSameAccountIsANoOp() {
+        let preferences = makeActivated()
+        preferences.theme = .dark
+        preferences.activate(controlDomain: Self.domain, username: "chris")
+        XCTAssertEqual(preferences.theme, .dark)
+    }
+
+    /// Account switches happen inside `reload()`'s persistence guard, so
+    /// they must never read as local edits and echo out to the server as a
+    /// save under the new account.
+    func testActivationDoesNotFireOnLocalChange() {
+        let preferences = makeActivated(username: "chris")
+        var localChangeCount = 0
+        preferences.onLocalChange = { localChangeCount += 1 }
+        preferences.activate(controlDomain: Self.domain, username: "apple")
+        XCTAssertEqual(localChangeCount, 0)
     }
 
     // MARK: - External change handling
 
-    func testExternalChangeRefreshesValues() {
+    func testExternalChangeRefreshesValues() throws {
         let store = InMemoryPreferenceStore()
-        let preferences = Preferences(store: store)
+        let preferences = makeActivated(store: store)
         XCTAssertEqual(preferences.theme, .system)
 
+        let themeKey = try scopedKey(.theme)
+        let markAsReadKey = try scopedKey(.markAsRead)
+        let fromKey = try scopedKey(.defaultFromAddress)
         store.simulateExternalChange { snapshot in
-            snapshot.setSilently("dark", forKey: Preferences.Key.theme.rawValue)
-            snapshot.setSilently("on_open", forKey: Preferences.Key.markAsRead.rawValue)
-            snapshot.setSilently("alice@example.com", forKey: Preferences.Key.defaultFromAddress.rawValue)
+            snapshot.setSilently("dark", forKey: themeKey)
+            snapshot.setSilently("on_open", forKey: markAsReadKey)
+            snapshot.setSilently("alice@example.com", forKey: fromKey)
         }
 
         XCTAssertEqual(preferences.theme, .dark)
@@ -95,36 +206,37 @@ final class PreferencesTests: XCTestCase {
     /// into an infinite loop — `reload()` sets a `isReloading` guard so the
     /// `didSet` hooks don't re-persist. This test pins that guard by making
     /// every key an external update and asserting no additional writes.
-    func testExternalReloadDoesNotReentrantlyPersist() {
+    func testExternalReloadDoesNotReentrantlyPersist() throws {
         let store = InMemoryPreferenceStore()
-        let preferences = Preferences(store: store)
+        let preferences = makeActivated(store: store)
+        let signatureKey = try scopedKey(.signature)
         // Seed some local writes so we can tell one-off vs. doubled writes.
         preferences.signature = "one"
-        XCTAssertEqual(store.stringValue(forKey: Preferences.Key.signature.rawValue), "one")
+        XCTAssertEqual(store.stringValue(forKey: signatureKey), "one")
 
         // Silently mutate the store (as iCloud would) and fire the handler.
         store.simulateExternalChange { snapshot in
-            snapshot.setSilently("two", forKey: Preferences.Key.signature.rawValue)
+            snapshot.setSilently("two", forKey: signatureKey)
         }
         XCTAssertEqual(preferences.signature, "two")
         // Value in the store should still be the pushed value — no double
         // write from the reload path.
-        XCTAssertEqual(store.stringValue(forKey: Preferences.Key.signature.rawValue), "two")
+        XCTAssertEqual(store.stringValue(forKey: signatureKey), "two")
     }
 
     // MARK: - Initial reads from populated store
 
-    func testInitialValuesReadFromStore() {
+    func testActivationReadsStoredAccountValues() throws {
         let store = InMemoryPreferenceStore(initialValues: [
-            Preferences.Key.markAsRead.rawValue: "after_delay",
-            Preferences.Key.loadRemoteContent.rawValue: "always",
-            Preferences.Key.defaultFromAddress.rawValue: "alice@example.com",
-            Preferences.Key.signature.rawValue: "Best,\nAlice",
-            Preferences.Key.disposeAction.rawValue: "trash",
-            Preferences.Key.theme.rawValue: "light",
-            Preferences.Key.defaultBodyRenderMode.rawValue: "reader",
+            try scopedKey(.markAsRead): "after_delay",
+            try scopedKey(.loadRemoteContent): "always",
+            try scopedKey(.defaultFromAddress): "alice@example.com",
+            try scopedKey(.signature): "Best,\nAlice",
+            try scopedKey(.disposeAction): "trash",
+            try scopedKey(.theme): "light",
+            try scopedKey(.defaultBodyRenderMode): "reader",
         ])
-        let preferences = Preferences(store: store)
+        let preferences = makeActivated(store: store)
         XCTAssertEqual(preferences.markAsRead, .afterDelay)
         XCTAssertEqual(preferences.loadRemoteContent, .always)
         XCTAssertEqual(preferences.defaultFromAddress, "alice@example.com")
@@ -137,12 +249,12 @@ final class PreferencesTests: XCTestCase {
     /// Garbage values in the store (wire drift, a legacy build, a typo) fall
     /// back to the enum's default rather than crashing or persisting an
     /// invalid value forward.
-    func testUnknownRawValuesFallBackToDefaults() {
+    func testUnknownRawValuesFallBackToDefaults() throws {
         let store = InMemoryPreferenceStore(initialValues: [
-            Preferences.Key.markAsRead.rawValue: "whenever",
-            Preferences.Key.theme.rawValue: "lunar-eclipse",
+            try scopedKey(.markAsRead): "whenever",
+            try scopedKey(.theme): "lunar-eclipse",
         ])
-        let preferences = Preferences(store: store)
+        let preferences = makeActivated(store: store)
         XCTAssertEqual(preferences.markAsRead, .manual)
         XCTAssertEqual(preferences.theme, .system)
     }
@@ -153,7 +265,7 @@ final class PreferencesTests: XCTestCase {
     /// `applyRemote(_:)` so a setting saved on one device reproduces exactly on
     /// another. Every synced key is exercised with a non-default value.
     func testAppPreferencesPayloadRoundTripsThroughApplyRemote() {
-        let source = Preferences(store: InMemoryPreferenceStore())
+        let source = makeActivated()
         source.markAsRead = .afterDelay
         source.loadRemoteContent = .always
         source.defaultFromAddress = "me@example.com"
@@ -164,7 +276,7 @@ final class PreferencesTests: XCTestCase {
         source.defaultBodyRenderMode = .reader
         source.folderCountDisplay = .both
 
-        let target = Preferences(store: InMemoryPreferenceStore())
+        let target = makeActivated()
         target.applyRemote(source.appPreferencesPayload())
 
         XCTAssertEqual(target.markAsRead, .afterDelay)
@@ -181,7 +293,7 @@ final class PreferencesTests: XCTestCase {
     /// An empty From address is encoded as "" on the wire and must decode back
     /// to `nil` ("no default"), not an empty string.
     func testApplyRemoteEmptyFromAddressBecomesNil() {
-        let preferences = Preferences(store: InMemoryPreferenceStore())
+        let preferences = makeActivated()
         preferences.defaultFromAddress = "was@example.com"
         preferences.applyRemote(["default_from_address": ""])
         XCTAssertNil(preferences.defaultFromAddress)
@@ -190,24 +302,25 @@ final class PreferencesTests: XCTestCase {
     /// A server apply must write through to the local store (so the fast-path
     /// cache matches the server) but must NOT fire `onLocalChange` — echoing an
     /// inbound update back out as a save would loop between devices.
-    func testApplyRemoteWritesStoreButDoesNotFireOnLocalChange() {
+    func testApplyRemoteWritesStoreButDoesNotFireOnLocalChange() throws {
         let store = InMemoryPreferenceStore()
-        let preferences = Preferences(store: store)
+        let preferences = makeActivated(store: store)
         var localChangeCount = 0
         preferences.onLocalChange = { localChangeCount += 1 }
 
         preferences.applyRemote(["theme": "dark", "dispose_action": "trash"])
 
         XCTAssertEqual(localChangeCount, 0)
-        // Written through to the local store as a cache of the server value.
-        XCTAssertEqual(store.stringValue(forKey: Preferences.Key.theme.rawValue), "dark")
-        XCTAssertEqual(store.stringValue(forKey: Preferences.Key.disposeAction.rawValue), "trash")
+        // Written through to the local store as a cache of the server value,
+        // under the active account's keys.
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.theme)), "dark")
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.disposeAction)), "trash")
     }
 
     /// A genuine user edit fires `onLocalChange` so the sync coordinator can
     /// debounce a push. Unknown/garbage remote values leave the value untouched.
     func testLocalEditFiresOnLocalChange() {
-        let preferences = Preferences(store: InMemoryPreferenceStore())
+        let preferences = makeActivated()
         var localChangeCount = 0
         preferences.onLocalChange = { localChangeCount += 1 }
 
@@ -218,7 +331,7 @@ final class PreferencesTests: XCTestCase {
     }
 
     func testApplyRemoteIgnoresUnknownAndMissingValues() {
-        let preferences = Preferences(store: InMemoryPreferenceStore())
+        let preferences = makeActivated()
         preferences.theme = .dark
         // A garbage theme and a key we don't recognize both leave state intact.
         preferences.applyRemote(["theme": "lunar-eclipse", "unknown_key": "x"])
