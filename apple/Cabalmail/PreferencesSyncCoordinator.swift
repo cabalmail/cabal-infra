@@ -16,9 +16,10 @@ import CabalmailKit
 /// Lifecycle:
 /// - **Start** (`start`): fetch the server copy once and apply it — the server
 ///   wins on login — then observe local edits via `Preferences.onLocalChange`.
-/// - **Local edit**: debounce, then push the complete `app` map. The client
-///   always sends every key, so the server replaces the whole map (concurrent
-///   multi-device edits are last-write-wins).
+/// - **Local edit**: debounce, then push the complete `app` map (every key
+///   this build knows). The server merges per key, so concurrent multi-device
+///   edits are last-write-wins per key, and a key introduced by a newer
+///   client build survives a push from an older one.
 /// - **Foreground** (`reconcile`): re-fetch and re-apply so a change made on
 ///   another device mid-session lands, unless a local edit is still pending
 ///   (never clobber an edit we haven't managed to push yet).
