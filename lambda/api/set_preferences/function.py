@@ -121,6 +121,41 @@ def _build_updates(body):
     return updates
 
 
+def _build_expression(flat, app):
+    '''Builds the UpdateExpression pieces for the flat keys and the nested
+    `app` keys. Every name is aliased - `name` is a DynamoDB reserved word,
+    and the `app` member names are aliased for uniformity.'''
+    sets = []
+    names = {}
+    values = {}
+    for i, key in enumerate(flat):
+        sets.append(f'#k{i} = :v{i}')
+        names[f'#k{i}'] = key
+        values[f':v{i}'] = flat[key]
+    if app:
+        names['#app'] = 'app'
+        for j, key in enumerate(app):
+            sets.append(f'#app.#a{j} = :a{j}')
+            names[f'#a{j}'] = key
+            values[f':a{j}'] = app[key]
+    return sets, names, values
+
+
+def _ensure_app_map(user):
+    '''Creates the row's `app` map if it does not exist yet, so the nested
+    per-key SETs in the main update cannot fail on a missing document path.
+    A separate write because DynamoDB rejects overlapping document paths
+    (`app` and `app.x`) in a single update expression. Idempotent and
+    non-destructive (`if_not_exists`), so a race between two first saves is
+    harmless.'''
+    table.update_item(
+        Key={'user': user},
+        UpdateExpression='SET #app = if_not_exists(#app, :empty)',
+        ExpressionAttributeNames={'#app': 'app'},
+        ExpressionAttributeValues={':empty': {}},
+    )
+
+
 def handler(event, _context):
     '''Validates and merges the caller's preferences into their row.'''
     user = event['requestContext']['authorizer']['claims']['cognito:username']
@@ -138,27 +173,36 @@ def handler(event, _context):
             'statusCode': 400,
             'body': json.dumps({'Error': str(err)})
         }
-    # Merge rather than replace: clients save only the keys they own (the
-    # React app sends theme/accent/density, the Apple clients send name and the
-    # `app` map), so a put_item here would clobber the other client's
-    # preferences. The `app` map itself is replaced wholesale - the Apple client
-    # always sends its complete set, so concurrent multi-device edits are
-    # last-write-wins. Every key is aliased - `name` is a DynamoDB reserved word.
-    expression = ', '.join(f'#k{i} = :v{i}' for i in range(len(updates)))
-    names = {f'#k{i}': key for i, key in enumerate(updates)}
-    values = {f':v{i}': updates[key] for i, key in enumerate(updates)}
+    # Merge rather than replace, at BOTH levels. Top level: clients save only
+    # the keys they own (the React app sends theme/accent/density, the Apple
+    # clients send name and the `app` map), so a put_item here would clobber
+    # the other client's preferences. Inside `app`: each member merges
+    # individually (`app.x = :v`), so a client that predates a newer client's
+    # preference key cannot delete it by saving its own, older set -
+    # concurrent multi-device edits are last-write-wins per key. A replace
+    # here would let one stale device silently wipe every newer setting.
+    app = updates.pop('app', None)
+    sets, names, values = _build_expression(updates, app)
     try:
-        table.update_item(
-            Key={'user': user},
-            UpdateExpression=f'SET {expression}',
-            ExpressionAttributeNames=names,
-            ExpressionAttributeValues=values,
-        )
+        if app:
+            _ensure_app_map(user)
+        # `{"app": {}}` validates to an empty merge - nothing to write. (The
+        # old wholesale replace would have wiped the map here; there is no
+        # legitimate caller for that.)
+        if sets:
+            table.update_item(
+                Key={'user': user},
+                UpdateExpression='SET ' + ', '.join(sets),
+                ExpressionAttributeNames=names,
+                ExpressionAttributeValues=values,
+            )
     except Exception as err:  # pylint: disable=broad-exception-caught
         return {
             'statusCode': 500,
             'body': json.dumps({'Error': str(err)})
         }
+    if app is not None:
+        updates['app'] = app
     return {
         'statusCode': 200,
         'body': json.dumps(updates)

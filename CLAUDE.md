@@ -81,7 +81,8 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 
 ### Apple Clients (`apple/`)
 - Generate Xcode project: `cd apple && xcodegen generate` (regenerates `Cabalmail.xcodeproj` from `project.yml`; not committed)
-- Kit tests: `cd apple/CabalmailKit && swift test` (only automated coverage for the Apple side)
+- Kit tests: `cd apple/CabalmailKit && swift test` (the bulk of the Apple-side coverage — networking, parsing, caching, auth)
+- App-layer tests: `cd apple && xcodebuild test -workspace Cabalmail.xcworkspace -scheme CabalmailMac -destination 'platform=macOS' -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""` — XCTest suite for the app target's view models (`apple/CabalmailTests/`, e.g. bulk-selection/move flows against a `FakeImapClient`). `swift test` does **not** compile or run these, and `apple.yml` runs them only on push to a named branch, not on PRs — so run them locally before merging a change to a shared protocol (e.g. `ImapClient`) or a view model.
 - iOS build sanity check: `cd apple && xcodebuild -workspace Cabalmail.xcworkspace -scheme Cabalmail -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO`
 - CI: `apple.yml` builds and tests on a macOS runner; does not deploy anything to AWS
 
@@ -187,7 +188,7 @@ Native SwiftUI clients for iOS (iPhone/iPad), macOS, and visionOS. The Xcode pro
 
 - **`Cabalmail/`** — iOS/visionOS app target (views, view models, app shell)
 - **`CabalmailMac/`** — native macOS app target (not Catalyst)
-- **`CabalmailKit/`** — Swift package shared by both targets; holds all networking, parsing, caching, auth, and IMAP/SMTP code. The test suite (`swift test` from `apple/CabalmailKit/`) is the only automated coverage for the Apple clients.
+- **`CabalmailKit/`** — Swift package shared by both targets; holds all networking, parsing, caching, auth, and IMAP/SMTP code. Its `swift test` suite (from `apple/CabalmailKit/`) carries the bulk of the Apple-side coverage. The app targets add a smaller XCTest suite in `apple/CabalmailTests/` (run via the `CabalmailMac` scheme — see Build/Lint/Test Commands) for view-model logic; that one is **not** part of `swift test` and CI runs it only on push to a named branch.
 
 **Mail traffic goes through the Lambda API, not direct IMAP.** `CabalmailKit/CabalmailClient.live(...)` wires the production `imapClient` to `ApiBackedImapClient`, which adapts the React-shaped Lambda endpoints (`/list_folders`, `/list_envelopes`, `/fetch_message`, `/set_flag`, `/move_messages`, `/send`, etc.) onto the `ImapClient` protocol. Issue #371 captures the switch: the hand-rolled IMAP stack (`LiveImapClient`, `ImapConnection`, `NetworkByteStream`) proved unreliable across network transitions, sleep/wake, and provider quirks, while the React client had been running off the same Lambda surface since 0.2.0 with no such trouble. **Before debugging anything that looks like an IMAP-level issue in the Apple clients, confirm which `ImapClient` is wired up — `LiveImapClient` still compiles and has its own tests, but production paths don't use it.** Errors that say "cancelled" in the UI typically come from `URLError.cancelled` (URLSession data task), not the `CabalmailError.cancelled` enum case.
 

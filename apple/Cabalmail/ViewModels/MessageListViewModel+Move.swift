@@ -101,19 +101,13 @@ extension MessageListViewModel {
 
         for (source, uids) in groups {
             do {
-                if markSeenFirst {
-                    do {
-                        try await client.imapClient.setFlags(
-                            folder: source, uids: uids,
-                            flags: [.seen], operation: .add
-                        )
-                    } catch CabalmailError.bulkPartialFailure {
-                        // Seen-marking is best-effort cosmetics on a
-                        // dispose; a partial miss must not abort the move.
-                    }
-                }
+                // Bulk archive folds the mark-seen into the move (server adds
+                // `\Seen` before relocating), so a large dispose is one round
+                // trip per source instead of a STORE plus a MOVE — the same
+                // background-window economy as the single-row swipe path.
                 try await client.imapClient.move(
-                    folder: source, uids: uids, destination: destination
+                    folder: source, uids: uids,
+                    destination: destination, markSeen: markSeenFirst
                 )
                 await pruneCachesAfter(move: source, uids: uids)
             } catch CabalmailError.bulkPartialFailure(let succeeded, let failed) {

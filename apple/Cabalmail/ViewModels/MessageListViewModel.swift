@@ -483,9 +483,10 @@ final class MessageListViewModel {
     /// immediately.
     ///
     /// Also matches the React webmail behavior by marking the message
-    /// `\Seen` before the move: archived == read. The seen flag is set
-    /// while the message is still in the current folder; post-move the UID
-    /// no longer exists here so `STORE` would reject it.
+    /// `\Seen` before the move: archived == read. The move carries
+    /// `markSeen`, so the server sets the flag while the UID still exists in
+    /// the source and moves it in the same call — one round trip instead of
+    /// a STORE followed by a MOVE.
     ///
     /// Optimistic UI: the row is removed from `envelopes` before the
     /// server round trip so the swipe feels instant. If the move fails the
@@ -512,18 +513,16 @@ final class MessageListViewModel {
         }
 
         do {
-            if !envelope.flags.contains(.seen) {
-                try await client.imapClient.setFlags(
-                    folder: source,
-                    uids: [envelope.uid],
-                    flags: [.seen],
-                    operation: .add
-                )
-            }
+            // Mark-seen + move in one round trip (the Lambda adds `\Seen`
+            // before moving). Collapsing the old STORE-then-MOVE pair matters
+            // when the swipe lands just as the app is being backgrounded:
+            // there's only a brief window to reach the network, so halving the
+            // calls makes the archive far likelier to commit in time.
             try await client.imapClient.move(
                 folder: source,
                 uids: [envelope.uid],
-                destination: destination
+                destination: destination,
+                markSeen: wasUnread
             )
             await pruneCachesAfter(move: source, uid: envelope.uid)
         } catch {

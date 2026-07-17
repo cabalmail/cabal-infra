@@ -336,6 +336,12 @@ final class AppState {
     /// `PreferencesSyncCoordinator` for the signed-in user. Idempotent.
     func usePreferences(_ preferences: Preferences) {
         self.preferences = preferences
+        // Pre-activate the persisted last session's account scope so the
+        // launch UI (theme especially) renders from that account's cached
+        // settings while `restoreIfPossible()` is still resolving over the
+        // network. `wireSession` re-activates with the confirmed username;
+        // for the normal restore path that's the same scope and a no-op.
+        preferences.activate(controlDomain: controlDomain, username: lastUsername)
     }
 
     /// Launch-time auto-restore. Looks at the UserDefaults-persisted
@@ -448,10 +454,7 @@ final class AppState {
     func stopInboxBadgePolling() {
         inboxBadgeTask?.cancel()
         inboxBadgeTask = nil
-        inboxUnreadCount = 0
-        Task {
-            try? await UNUserNotificationCenter.current().setBadgeCount(0)
-        }
+        setInboxUnread(0)
     }
 
     private func refreshInboxUnread() async {
@@ -459,8 +462,7 @@ final class AppState {
         do {
             try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: "INBOX")
-            inboxUnreadCount = max(0, status.unseen ?? 0)
-            try? await UNUserNotificationCenter.current().setBadgeCount(inboxUnreadCount)
+            setInboxUnread(status.unseen ?? 0)
         } catch {
             // Best-effort: if the STATUS call fails (transient network
             // blip, IMAP reconnection) the prior badge value stays put
@@ -529,6 +531,12 @@ extension AppState {
         self.client = newClient
         self.navCoordinator = NavStateCoordinator(client: newClient)
         if let preferences {
+            // Swap the local settings cache to this account's scoped keys
+            // before the server pull below: the previous account's values
+            // (default From address included) must never carry over, even
+            // when this account has no server copy yet or the pull fails
+            // offline. No-op when the same account signs back in.
+            preferences.activate(controlDomain: controlDomain, username: username)
             let coordinator = PreferencesSyncCoordinator(client: newClient, preferences: preferences)
             self.prefsCoordinator = coordinator
             // Non-blocking: the initial server pull (server wins on login)
@@ -644,6 +652,7 @@ extension AppState {
     func setFolderCounts(folderPath: String, unread: Int, total: Int) {
         folderUnreadCounts[folderPath] = max(0, unread)
         folderTotalCounts[folderPath] = max(0, total)
+        if Self.isInbox(folderPath) { setInboxUnread(unread) }
     }
 
     /// Replace the whole unread map. Used by the folder list view model
@@ -651,6 +660,9 @@ extension AppState {
     /// drop out.
     func setUnreadCounts(_ counts: [String: Int]) {
         folderUnreadCounts = counts.mapValues { max(0, $0) }
+        if let inbox = counts.first(where: { Self.isInbox($0.key) })?.value {
+            setInboxUnread(inbox)
+        }
     }
 
     /// Bump (or reduce) the count for one folder. Clamped at zero so a
@@ -658,6 +670,34 @@ extension AppState {
     func applyUnreadDelta(folderPath: String, delta: Int) {
         let current = folderUnreadCounts[folderPath] ?? 0
         folderUnreadCounts[folderPath] = max(0, current + delta)
+        // Keep the icon badge live. It reads `inboxUnreadCount`, which the
+        // 60s poller refreshes from server STATUS — but that poll can't run
+        // while the app is backgrounded, so an archive done just before
+        // backgrounding used to leave the badge showing the pre-archive
+        // count. Applying the same delta here updates the badge the instant
+        // the action lands; the poller stays the authority that reconciles
+        // any drift on the next foreground.
+        if Self.isInbox(folderPath) { setInboxUnread(inboxUnreadCount + delta) }
+    }
+
+    /// Canonical INBOX match — IMAP's INBOX name is case-insensitive
+    /// (RFC 3501), and folder paths reach these mutators verbatim from the
+    /// server, so compare case-insensitively rather than against a literal.
+    static func isInbox(_ folderPath: String) -> Bool {
+        folderPath.caseInsensitiveCompare("INBOX") == .orderedSame
+    }
+
+    /// Single chokepoint for the Inbox unread count and the system icon
+    /// badge. Every writer — the STATUS poller, optimistic archive/mark-read
+    /// deltas, and full STATUS walks — routes through here so the two never
+    /// diverge. The badge task re-reads `inboxUnreadCount` at execution time
+    /// rather than capturing `count`, so a burst of deltas can't land the
+    /// badge on a stale intermediate value if the tasks run out of order.
+    func setInboxUnread(_ count: Int) {
+        inboxUnreadCount = max(0, count)
+        Task {
+            try? await UNUserNotificationCenter.current().setBadgeCount(inboxUnreadCount)
+        }
     }
 }
 

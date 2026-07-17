@@ -272,18 +272,15 @@ final class MessageDetailViewModel {
         defer { onMoveInFlight?(false) }
         onSuccess?()
         do {
-            if !wasSeen {
-                try await client.imapClient.setFlags(
-                    folder: folder.path,
-                    uids: [envelope.uid],
-                    flags: [.seen],
-                    operation: .add
-                )
-            }
+            // Mark-seen + move in a single call (server adds `\Seen` before
+            // moving) so the archive commits in one round trip — see
+            // MessageListViewModel.dispose for why the reduced call count
+            // matters when disposing as the app backgrounds.
             try await client.imapClient.move(
                 folder: folder.path,
                 uids: [envelope.uid],
-                destination: destination
+                destination: destination,
+                markSeen: !wasSeen
             )
             let uidValidity = try? await currentUIDValidity()
             try? await client.envelopeCache.remove(

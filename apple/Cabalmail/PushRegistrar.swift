@@ -380,10 +380,14 @@ extension PushRegistrar {
                     CabalmailLog.warn("Push", "archive action skipped: no Archive folder")
                     return
                 }
+                // Archive == read, in one round trip (server marks `\Seen`
+                // before moving) — this runs on the notification action's
+                // brief background budget, so the fewer calls the better.
                 try await client.imapClient.move(
                     folder: ref.folder,
                     uids: [uid],
-                    destination: destination
+                    destination: destination,
+                    markSeen: true
                 )
             }
         case "OPEN", UNNotificationDefaultActionIdentifier:

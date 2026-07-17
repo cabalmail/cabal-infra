@@ -14,3 +14,4 @@ terraform/infra/backend.tf
 .claude/memory/
 .DS_Store
 .cache/
+.obsidian/
