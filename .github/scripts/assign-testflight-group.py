@@ -53,17 +53,23 @@ from asc_api import (
     warn,
 )
 
-# A known App Store Connect defect (observed 2026-07-17 on the Mac app
-# record, Apple support case pending): the build<->betaGroups relationship
-# service 404s the build id ("no resource of type 'builds'") even though
-# GET /v1/builds returns the same id as VALID, in both relationship
-# directions - and the ASC web UI's "Test a Build" dialog is equally
-# unable to select the build, so no attach path exists at all. When that
-# exact signature repeats this many times on a VALID build, the step
-# downgrades to a warning instead of burning the full poll window and
-# failing a release CI can do nothing about. Every other error keeps the
-# fail-loudly behavior, and once Apple fixes the service the attach
-# simply succeeds before the threshold is reached.
+# A known App Store Connect defect (observed since 2026-07-17, Apple
+# support case pending): builds can take 10+ hours - previously minutes -
+# to reach the hidden "Ready to Test" state that gates ALL distribution.
+# Until a build ripens, no attach path exists anywhere: the ASC web UI's
+# "Test a Build" dialog lists the build but cannot select it, and the API
+# either 404s the build id on both relationship directions ("no resource
+# of type 'builds'", even though GET /v1/builds reports it VALID - the
+# usual macOS shape) or doesn't surface the build in /v1/builds at all
+# (seen on iOS). The delay varies per build; macOS has been consistently
+# at the long end. When the 404-on-VALID signature repeats this many
+# times, the step downgrades to a warning instead of burning the full
+# poll window and failing a release CI can do nothing about - and a poll
+# that times out with the build never surfacing gets the same downgrade,
+# since altool has already verified the upload by then. Genuine failures
+# (FAILED/INVALID processing, missing group, any other persistent
+# refusal) still fail loudly, and for builds that ripen in time the
+# attach simply succeeds and none of this engages.
 KNOWN_DEFECT_ATTEMPTS = 10
 
 
@@ -171,9 +177,10 @@ def main():
                     warn(
                         f"Build {build_number} is VALID but App Store Connect "
                         f"404s it on every group-attach path ({defect_hits} "
-                        "attempts) - the known ASC-side attach defect. Not "
+                        "attempts) - the known delayed-readiness defect. Not "
                         f"failing the job; attach to {group_name!r} manually "
-                        "once Apple resolves it."
+                        'once the build reaches "Ready to Test" (hours, '
+                        "currently), or let the next push supersede it."
                     )
                     return 0
             else:
@@ -189,14 +196,24 @@ def main():
             f"(processingState {state})."
         )
         return 0
-    error(
-        f"Build {build_number} was not attached to {group_name!r} within "
-        f"{timeout}s. Last refusal: "
-        f"{last_refusal or 'the build never surfaced in the API'}. Attach it "
-        f"manually: App Store Connect -> TestFlight -> {group_name} -> "
-        "Builds -> +."
+    if last_refusal:
+        error(
+            f"Build {build_number} was not attached to {group_name!r} within "
+            f"{timeout}s. Last refusal: {last_refusal}. Attach it manually: "
+            f"App Store Connect -> TestFlight -> {group_name} -> Builds -> +."
+        )
+        return 1
+    # Never surfaced in /v1/builds at all. altool verified the upload
+    # before this step ran, so this is the delayed-readiness defect
+    # manifesting one API layer earlier (the iOS shape) - same downgrade.
+    warn(
+        f"Build {build_number} has not surfaced in the App Store Connect API "
+        f"after {timeout}s despite a verified upload - the known "
+        "delayed-readiness defect. Not failing the job; attach to "
+        f"{group_name!r} manually once it reaches \"Ready to Test\", or let "
+        "the next push supersede it."
     )
-    return 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -7,7 +7,10 @@ final class ContactsStoreTests: XCTestCase {
     // MARK: - NoopContactsStore
 
     func testNoopReturnsDenied() async {
-        let store = NoopContactsStore()
+        // Typed as the protocol so the `get async` requirement is what's
+        // exercised (on the concrete type the property is synchronous and
+        // the await would be spurious).
+        let store: any ContactsStore = NoopContactsStore()
         let status = await store.authorizationStatus
         XCTAssertEqual(status, .denied)
         XCTAssertFalse(status.isAccessible)

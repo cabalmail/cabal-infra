@@ -52,12 +52,14 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
         let state = self.state
-        // The Swift 5.10 region-isolation checker emits a spurious
-        // "pattern ... does not understand" warning for this Task even
-        // though every capture is Sendable (endpoint/token/query are value
-        // types; DeliveryState is @unchecked Sendable with lock-guarded
-        // state). Extraction and Task.detached were both tried and do not
-        // silence it; revisit when the toolchain moves past 5.10.
+        // The region-isolation checker emits a spurious "pattern ... does
+        // not understand" warning for this Task even though every capture
+        // is Sendable (endpoint/token/query are value types; DeliveryState
+        // is @unchecked Sendable with lock-guarded state). Extraction,
+        // Task.detached, and nonisolated(unsafe) on the local (Xcode 26.6
+        // toolchain - it warns "unnecessary" and changes nothing) all fail
+        // to silence it; accepted as noise until a toolchain fixes the
+        // checker or the Swift 6 language-mode migration forces the issue.
         Task {
             let envelope = await Self.fetchEnvelope(endpoint: endpoint, token: token, query: query)
             state.deliver(envelope)

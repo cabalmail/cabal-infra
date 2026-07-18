@@ -70,7 +70,13 @@ jobs:
         # already installed...` line that GitHub surfaces as a workflow
         # annotation. Filter to packages that aren't installed yet so the
         # step stays silent when there's nothing to do.
+        #
+        # The image also preinstalls the third-party aws/tap, which we
+        # never use; newer Homebrew distrusts it and emits a "taps are not
+        # trusted" warning annotation on every brew invocation. Untap it
+        # first (silently - the untap itself would warn too).
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen swiftlint xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -193,6 +199,7 @@ jobs:
 
       - name: Install XcodeGen + xcbeautify
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -288,6 +295,7 @@ jobs:
       - name: Install XcodeGen + xcbeautify
         # See the kit-test job for the rationale on the per-package check.
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -425,6 +433,7 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         # See the kit-test job for the rationale on the per-package check.
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -806,6 +815,7 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         # See the kit-test job for the rationale on the per-package check.
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
