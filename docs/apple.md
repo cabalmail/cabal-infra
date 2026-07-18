@@ -247,15 +247,22 @@ are expanded in the sections further down.
      Testing** → **+**.
    - Add your Apple ID (with an App Store Connect role) as a tester to
      the groups you want builds offered on.
-   - Leave **automatic distribution off** on both groups. CI attaches
-     each uploaded build to the group matching its branch (`stage`
-     pushes → `stage`, `main` → `prod`) via the App Store Connect API
-     (`assign-testflight-group.py`), and fails the upload job if the
-     attach doesn't succeed. Automatic distribution would re-add every
-     build to every group, erasing the branch routing — and it fires
-     only once per build with no retry, so a missed build strands
-     silently. The explicit attach exists to replace it, not to
-     supplement it.
+   - Leave **"Enable automatic distribution" unchecked** in the
+     creation dialog. CI attaches each uploaded build to the group
+     matching its branch (`stage` pushes → `stage`, `main` → `prod`)
+     via the App Store Connect API (`assign-testflight-group.py`), and
+     fails the upload job if the attach doesn't succeed. Automatic
+     distribution would give every group every build, erasing the
+     branch routing — and the API refuses explicit attaches to such
+     groups, so the assign step would fail. The explicit attach exists
+     to replace it, not to supplement it.
+   - The distribution mode is **immutable after creation** — the
+     checkbox exists only in the create dialog, and the group Settings
+     tab merely displays the resulting "Build Distribution" state. To
+     convert an existing automatic group: rename it aside (Settings →
+     Edit Name), create a fresh group under the canonical name with the
+     checkbox unchecked, re-add the testers, attach the latest build by
+     hand so access continues, then delete the renamed group.
    - Install the **TestFlight** app on the target device, sign in, and
      accept the invite.
 
