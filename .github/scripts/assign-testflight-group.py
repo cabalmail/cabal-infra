@@ -68,14 +68,18 @@ def find_group_id(app_id, group_name, token_factory):
 def attach(group_id, build_id, token_factory):
     """Add `build_id` to `group_id`; raises urllib.error.HTTPError on refusal.
 
-    Adding a build that is already in the group is a no-op success, so
-    retrying after a lost response is safe.
+    Uses the build -> betaGroups relationship direction. The reverse
+    (POST /v1/betaGroups/{id}/relationships/builds) 404s macOS build ids
+    ("no resource of type 'builds'") even after /v1/builds reports the
+    same build as VALID; this direction is the one fastlane exercises and
+    works for every platform. Adding a build to a group it is already in
+    is a no-op success, so retrying after a lost response is safe.
     """
     api_request(
         "POST",
-        f"/v1/betaGroups/{group_id}/relationships/builds",
+        f"/v1/builds/{build_id}/relationships/betaGroups",
         token_factory,
-        body={"data": [{"type": "builds", "id": build_id}]},
+        body={"data": [{"type": "betaGroups", "id": group_id}]},
     )
 
 
@@ -110,6 +114,7 @@ def main():
     print(f"Attaching build {build_number} of {bundle_id} to group {group_name!r}...")
 
     deadline = time.time() + timeout
+    last_refusal = ""
     while time.time() < deadline:
         build = find_build(app_id, build_number, token_factory)
         if build is None:
@@ -128,16 +133,14 @@ def main():
                 detail = err.read().decode()
             except Exception:  # pylint: disable=broad-except
                 pass
-            if state == "VALID":
-                # Fully processed and still refused: terminal.
-                error(
-                    f"Could not attach build {build_number} to {group_name!r}: "
-                    f"HTTP {err.code} {detail or err.reason}"
-                )
-                return 1
+            # ASC refuses attachment while the build is still processing,
+            # and is eventually consistent even afterwards (the TestFlight
+            # side once 404'd a build id /v1/builds was already reporting
+            # as VALID). No refusal is terminal; retry until the deadline.
+            last_refusal = f"HTTP {err.code} {detail or err.reason}"
             print(
-                f"Attach refused while processingState={state} "
-                f"(HTTP {err.code}); retrying in {interval}s."
+                f"Attach refused (processingState={state}): {last_refusal}; "
+                f"retrying in {interval}s."
             )
             time.sleep(interval)
             continue
@@ -148,8 +151,10 @@ def main():
         return 0
     error(
         f"Build {build_number} was not attached to {group_name!r} within "
-        f"{timeout}s. Attach it manually: App Store Connect -> TestFlight -> "
-        f"{group_name} -> Builds -> +."
+        f"{timeout}s. Last refusal: "
+        f"{last_refusal or 'the build never surfaced in the API'}. Attach it "
+        f"manually: App Store Connect -> TestFlight -> {group_name} -> "
+        "Builds -> +."
     )
     return 1
 
