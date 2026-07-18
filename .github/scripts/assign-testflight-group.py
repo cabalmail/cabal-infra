@@ -50,7 +50,21 @@ from asc_api import (
     make_token,
     notice,
     require_env,
+    warn,
 )
+
+# A known App Store Connect defect (observed 2026-07-17 on the Mac app
+# record, Apple support case pending): the build<->betaGroups relationship
+# service 404s the build id ("no resource of type 'builds'") even though
+# GET /v1/builds returns the same id as VALID, in both relationship
+# directions - and the ASC web UI's "Test a Build" dialog is equally
+# unable to select the build, so no attach path exists at all. When that
+# exact signature repeats this many times on a VALID build, the step
+# downgrades to a warning instead of burning the full poll window and
+# failing a release CI can do nothing about. Every other error keeps the
+# fail-loudly behavior, and once Apple fixes the service the attach
+# simply succeeds before the threshold is reached.
+KNOWN_DEFECT_ATTEMPTS = 10
 
 
 def find_group_id(app_id, group_name, token_factory):
@@ -126,6 +140,7 @@ def main():
 
     deadline = time.time() + timeout
     last_refusal = ""
+    defect_hits = 0
     while time.time() < deadline:
         build = find_build(app_id, build_number, token_factory)
         if build is None:
@@ -145,10 +160,24 @@ def main():
             except Exception:  # pylint: disable=broad-except
                 pass
             # ASC refuses attachment while the build is still processing,
-            # and is eventually consistent even afterwards (the TestFlight
-            # side once 404'd a build id /v1/builds was already reporting
-            # as VALID). No refusal is terminal; retry until the deadline.
+            # and is eventually consistent even afterwards. No refusal is
+            # terminal on its own; retry until the deadline - except the
+            # known-defect signature, which caps out early (see
+            # KNOWN_DEFECT_ATTEMPTS above).
             last_refusal = f"HTTP {err.code} {detail or err.reason}"
+            if err.code == 404 and state == "VALID" and "type 'builds'" in detail:
+                defect_hits += 1
+                if defect_hits >= KNOWN_DEFECT_ATTEMPTS:
+                    warn(
+                        f"Build {build_number} is VALID but App Store Connect "
+                        f"404s it on every group-attach path ({defect_hits} "
+                        "attempts) - the known ASC-side attach defect. Not "
+                        f"failing the job; attach to {group_name!r} manually "
+                        "once Apple resolves it."
+                    )
+                    return 0
+            else:
+                defect_hits = 0
             print(
                 f"Attach refused (processingState={state}): {last_refusal}; "
                 f"retrying in {interval}s."
