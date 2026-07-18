@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.6] - 2026-07-18
+
+### Added
+- **Deterministic TestFlight distribution.** The Apple upload jobs now
+  attach every uploaded build to the internal test group matching its
+  branch (`stage` pushes → the `stage` group, `main` → `prod`) via the
+  App Store Connect API, instead of relying on App Store Connect's
+  fire-once automatic distribution, and fail the job when a build cannot
+  be attached (downgraded to a warning for one known App Store Connect
+  server-side defect that leaves no attach path at all). Requires
+  internal groups named `stage` and `prod` on each app record, with
+  automatic distribution switched off.
+
 ## [0.11.5] - 2026-07-17
 
 ### Fixed

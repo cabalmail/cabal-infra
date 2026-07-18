@@ -312,7 +312,11 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
         webView.evaluateJavaScript(script, completionHandler: nil)
         Task { [weak webView] in
             try? await Task.sleep(for: .milliseconds(400))
-            webView?.evaluateJavaScript(script, completionHandler: nil)
+            // Deliberately NOT the async evaluateJavaScript variant: the
+            // restore script's IIFE returns undefined and the async
+            // refinement traps on nil results. The sync closure keeps the
+            // nil-safe completion-handler API out of the async context.
+            await MainActor.run { webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
     }
 

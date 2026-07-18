@@ -70,7 +70,13 @@ jobs:
         # already installed...` line that GitHub surfaces as a workflow
         # annotation. Filter to packages that aren't installed yet so the
         # step stays silent when there's nothing to do.
+        #
+        # The image also preinstalls the third-party aws/tap, which we
+        # never use; newer Homebrew distrusts it and emits a "taps are not
+        # trusted" warning annotation on every brew invocation. Untap it
+        # first (silently - the untap itself would warn too).
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen swiftlint xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -193,6 +199,7 @@ jobs:
 
       - name: Install XcodeGen + xcbeautify
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -288,6 +295,7 @@ jobs:
       - name: Install XcodeGen + xcbeautify
         # See the kit-test job for the rationale on the per-package check.
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -425,6 +433,7 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         # See the kit-test job for the rationale on the per-package check.
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -679,6 +688,32 @@ jobs:
             echo "- Track: App Store Connect → Cabalmail → TestFlight"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Assign build to TestFlight group
+        # Deterministic distribution: attach this build to the internal
+        # test group matching the branch instead of relying on App Store
+        # Connect's automatic distribution, which fires once per build and
+        # never retries — a misfire strands a fully-processed build outside
+        # every group with CI already green. Requires groups named exactly
+        # `stage` and `prod` on the app record, with automatic distribution
+        # switched off (see docs/apple.md). Fails the step if the build
+        # can't be attached, so a stranded build is visible for once.
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          BUNDLE_ID: com.cabalmail.Cabalmail
+          TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+        run: |
+          set -euo pipefail
+          # Isolated venv: the runner's Homebrew python is externally
+          # managed (PEP 668), so a bare `pip install` is refused. The
+          # notes step below reuses the venv when it runs.
+          if [ ! -d "$RUNNER_TEMP/ascvenv" ]; then
+            python3 -m venv "$RUNNER_TEMP/ascvenv"
+            "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          fi
+          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/assign-testflight-group.py"
+
       - name: Set TestFlight "What to Test" notes (prod only)
         # Prod releases only - the stage track is the developer's own and
         # ships no notes. Best-effort: the binary is already uploaded, so the
@@ -694,10 +729,12 @@ jobs:
           CHANGELOG_PATH: ${{ github.workspace }}/CHANGELOG.md
         run: |
           set -euo pipefail
-          # Isolated venv: the runner's Homebrew python is externally managed
-          # (PEP 668), so a bare `pip install` is refused.
-          python3 -m venv "$RUNNER_TEMP/ascvenv"
-          "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          # The venv usually exists already (group-assignment step above);
+          # create it only if that step was skipped.
+          if [ ! -d "$RUNNER_TEMP/ascvenv" ]; then
+            python3 -m venv "$RUNNER_TEMP/ascvenv"
+            "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          fi
           "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/set-testflight-notes.py"
 
       - name: Clean up keychain and API key
@@ -778,6 +815,7 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         # See the kit-test job for the rationale on the per-package check.
         run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
           for pkg in xcodegen xcbeautify; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
@@ -1124,8 +1162,29 @@ jobs:
           path: ${{ env.NOTARIZED_ZIP }}
           retention-days: 30
 
-      # Best-effort, so it runs last - after the notarized artifact is produced
-      # - and never blocks it on the up-to-20-minute processing poll.
+      # The ASC-polling steps run last - after the notarized artifact is
+      # produced - so an up-to-20-minute processing poll never blocks it.
+      - name: Assign build to TestFlight group
+        # See the iOS job for rationale. Unlike the notes step this is NOT
+        # best-effort: a build that can't be attached never reaches testers,
+        # so the failure must be visible.
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          BUNDLE_ID: com.cabalmail.CabalmailMac
+          TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+        run: |
+          set -euo pipefail
+          # Isolated venv: the runner's Homebrew python is externally
+          # managed (PEP 668), so a bare `pip install` is refused. The
+          # notes step below reuses the venv when it runs.
+          if [ ! -d "$RUNNER_TEMP/ascvenv" ]; then
+            python3 -m venv "$RUNNER_TEMP/ascvenv"
+            "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          fi
+          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/assign-testflight-group.py"
+
       - name: Set TestFlight "What to Test" notes (prod only)
         # Prod releases only. Best-effort - see the iOS job for rationale.
         if: github.ref_name == 'main' && steps.check.outputs.enabled == 'true'
@@ -1136,8 +1195,12 @@ jobs:
           CHANGELOG_PATH: ${{ github.workspace }}/CHANGELOG.md
         run: |
           set -euo pipefail
-          python3 -m venv "$RUNNER_TEMP/ascvenv"
-          "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          # The venv usually exists already (group-assignment step above);
+          # create it only if that step was skipped.
+          if [ ! -d "$RUNNER_TEMP/ascvenv" ]; then
+            python3 -m venv "$RUNNER_TEMP/ascvenv"
+            "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          fi
           "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/set-testflight-notes.py"
 
       - name: Clean up keychain and API key

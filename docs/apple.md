@@ -239,16 +239,30 @@ are expanded in the sections further down.
    aren't attached to anything visible and you cannot distribute the
    build.
 8. **Populate the GitHub secrets** listed in the next section.
-9. **Populate TestFlight when you want to install a build.** CI uploads
-   succeed without any TestFlight setup — builds land in each app
-   record's Builds list after ~5–30 minutes of Apple-side processing.
-   Before anyone (including you) can install one, you need a testing
-   group to attach it to:
+9. **Create the TestFlight internal groups CI distributes to.** On
+   **each** app record (iOS and macOS), create two internal testing
+   groups named exactly **`stage`** and **`prod`** (lowercase — the
+   upload jobs look the group up by name):
    - App Store Connect → your app → **TestFlight** tab → **Internal
-     Testing** → **+** to create a group (e.g. `Stage`, `Prod`).
-   - Add your Apple ID (with an App Store Connect role) as a tester.
-   - Attach the build manually the first time, or enable automatic
-     distribution on the group for future uploads.
+     Testing** → **+**.
+   - Add your Apple ID (with an App Store Connect role) as a tester to
+     the groups you want builds offered on.
+   - Leave **"Enable automatic distribution" unchecked** in the
+     creation dialog. CI attaches each uploaded build to the group
+     matching its branch (`stage` pushes → `stage`, `main` → `prod`)
+     via the App Store Connect API (`assign-testflight-group.py`), and
+     fails the upload job if the attach doesn't succeed. Automatic
+     distribution would give every group every build, erasing the
+     branch routing — and the API refuses explicit attaches to such
+     groups, so the assign step would fail. The explicit attach exists
+     to replace it, not to supplement it.
+   - The distribution mode is **immutable after creation** — the
+     checkbox exists only in the create dialog, and the group Settings
+     tab merely displays the resulting "Build Distribution" state. To
+     convert an existing automatic group: rename it aside (Settings →
+     Edit Name), create a fresh group under the canonical name with the
+     checkbox unchecked, re-add the testers, attach the latest build by
+     hand so access continues, then delete the renamed group.
    - Install the **TestFlight** app on the target device, sign in, and
      accept the invite.
 
@@ -545,8 +559,8 @@ TestFlight upload and skips the notarization steps.
 |---|---|---|
 | `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on CabalmailKit across macOS / iOS / visionOS destinations |
 | `app-build` | Same | Unsigned `xcodebuild build` for `Cabalmail` (iOS) and `CabalmailMac` (macOS) |
-| `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload |
-| `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact |
+| `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload → attach to the branch's internal test group |
+| `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
 
 `upload-ios` gracefully no-ops (with a workflow warning) when its
 required secrets are missing. `upload-mac` fails the workflow in the
@@ -568,19 +582,23 @@ and `CabalmailKit/Package.swift`.
 ## Installing a build from TestFlight
 
 After a successful CI upload and App Store Connect processing (5–30 min),
-the build appears in your app's **Builds** list. First-time attach:
+the build appears in your app's **Builds** list, and the upload job
+attaches it to the internal group matching the branch it was built from
+(`stage` pushes → the `stage` group, `main` → `prod`) — see the group
+setup in [Apple Developer account setup](#apple-developer-account-setup).
+To install one:
 
-1. App Store Connect → your app → **TestFlight** tab → pick the `Stage`
-   or `Prod` internal group → **Builds** section → **+** → attach the
-   just-processed build. Toggle **Automatically distribute builds** on
-   the group if you want future uploads attached without clicking.
-2. On your device, install the **TestFlight** app from the App Store.
-3. Sign in with the Apple ID that is a member of the group and accept
+1. On your device, install the **TestFlight** app from the App Store.
+2. Sign in with the Apple ID that is a member of the group and accept
    the invite from the TestFlight inbox. The build installs like any
    App Store app, with a small yellow dot marking it as a beta.
 
 macOS follows the same flow using the macOS TestFlight app (install
-from the Mac App Store).
+from the Mac App Store). If a build you expected never shows up, check
+the upload job's **Assign build to TestFlight group** step — it fails
+(with the build number in the error) when the build could not be
+attached, and the fallback is attaching that build by hand from the
+group's **Builds** tab.
 
 ## Setting Cabalmail as the default mail handler
 
