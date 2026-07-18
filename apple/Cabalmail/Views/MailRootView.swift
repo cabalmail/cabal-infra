@@ -40,23 +40,35 @@ struct MailRootView: View {
     /// message shows `.detail`, a selected folder `.content`, and navigating
     /// back drops the selection. Ignored on regular-width layouts.
     @State private var compactColumn: NavigationSplitViewColumn = .sidebar
-    /// Wide-layout (iPad-regular) sidebar visibility. Defaults to `.doubleColumn`
-    /// — the folder/address sidebar starts COLLAPSED — so the message list is the
-    /// leftmost tile of the split. That is the only configuration in which the
-    /// list rows' leading swipe (read/unread) reveals at a normal drag distance:
-    /// when the sidebar is tiled to the list's left (`twoBesideSecondary`), the
-    /// split view's interactive column gesture out-arbitrates the row's leading
-    /// swipe, so the blue action only appears after an unreasonably long drag.
-    /// Collapsing the sidebar and revealing it on demand as an overlay (see
-    /// `SplitOverlayConfigurator`) keeps both swipes live in the reading state.
-    /// macOS keeps the sidebar visible (`.all`): a NavigationSplitView there is
-    /// AppKit-backed with no UISplitViewController gesture conflict, and it's a
-    /// desktop multi-pane window. Ignored on compact iPhone (navigates via
-    /// `compactColumn`).
+    /// Wide-layout sidebar visibility. iOS pins this COLLAPSED (`.doubleColumn`,
+    /// via the constant `splitVisibility` binding): on regular-width iPad the
+    /// folder sidebar never tiles into the split — revealing folders floats
+    /// `folderPanelOverlay` OVER the message list instead, so the list never
+    /// moves and its leading swipe (read/unread) keeps its normal drag
+    /// distance. (When the sidebar tiled to the list's left,
+    /// `twoBesideSecondary`, the split view's interactive column gesture
+    /// out-arbitrated the row's leading swipe; and UIKit's `.overlay` split
+    /// behavior still composes the sidebar BESIDE the supplementary column, so
+    /// it, too, would shove the list rightward.) macOS keeps the sidebar
+    /// visible (`.all`): a NavigationSplitView there is AppKit-backed with no
+    /// gesture conflict, and it's a desktop multi-pane window. Ignored on
+    /// compact iPhone (navigates via `compactColumn`).
     #if os(macOS)
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    #else
-    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
+    #endif
+    private var splitVisibility: Binding<NavigationSplitViewVisibility> {
+        #if os(macOS)
+        $columnVisibility
+        #else
+        .constant(.doubleColumn)
+        #endif
+    }
+    #if os(iOS)
+    /// Whether the floating folder panel is showing (regular-width iPad only).
+    /// The panel replaces the split view's own sidebar reveal — see
+    /// `folderPanelOverlay`. Starts hidden every launch, like the collapsed
+    /// sidebar it replaced.
+    @State private var folderPanelPresented = false
     #endif
     /// Whether the right-hand addresses inspector is showing. Hidden by default
     /// (on every launch) — it's an occasional reference/management panel reached
@@ -179,8 +191,23 @@ struct MailRootView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
+        NavigationSplitView(columnVisibility: splitVisibility, preferredCompactColumn: $compactColumn) {
+            #if os(iOS)
+            if isWideSidebar {
+                // Regular-width iPad: the folder list lives in the floating
+                // panel (`folderPanelOverlay`), not in this column, which stays
+                // empty and permanently collapsed. Removing the system sidebar
+                // toggle keeps the content toolbar from offering to reveal the
+                // empty column — the custom button in `decoratedContentColumn`
+                // drives the panel instead.
+                Color.clear
+                    .toolbar(removing: .sidebarToggle)
+            } else {
+                sidebar
+            }
+            #else
             sidebar
+            #endif
         } content: {
             // Pin the list column to its persisted width and hang the drag
             // handle on its trailing edge (wide iPad/visionOS only); compact and
@@ -189,12 +216,18 @@ struct MailRootView: View {
         } detail: {
             detailColumn
         }
-        // Force the iPad split view to OVERLAY the sidebar rather than tile it,
-        // so revealing folders floats over the message list instead of pushing
-        // the list off the leading edge (which would re-break the leading swipe).
-        // Best-effort and harmless if the split controller isn't found.
+        // Revealing folders floats a panel OVER the message list rather than
+        // tiling the split's sidebar column, so the list never shifts and its
+        // leading swipe geometry is undisturbed. Regular-width iPad only —
+        // compact iPhone navigates the folder list as the stack root.
+        // The explicit `.leading` alignment matters: while the panel is closed
+        // the scrim is absent, the ZStack shrinks to the panel's own size, and
+        // a default (centered) overlay would park the slid-out panel half on
+        // screen instead of fully off the leading edge.
         #if os(iOS)
-        .background(SplitOverlayConfigurator())
+        .overlay(alignment: .leading) {
+            if isWideSidebar { folderPanelOverlay }
+        }
         #endif
         // Track the split view's overall width so the list column's max can be
         // clamped to leave the reading pane a floor (see `listColumnMaxWidth`).
@@ -215,12 +248,14 @@ struct MailRootView: View {
             // Picking a folder shows its list on compact (it's pushed natively
             // from the sidebar List, but keep the binding in step).
             compactColumn = folder == nil ? .sidebar : .content
-            #if !os(macOS)
-            // On iPad-regular, re-collapse the overlaid sidebar after a folder
-            // pick so the message list is the leftmost tile again and its
-            // leading swipe stays live. No-op on compact (visibility ignored)
-            // and already-collapsed launches (INBOX auto-select).
-            if folder != nil { columnVisibility = .doubleColumn }
+            #if os(iOS)
+            // On iPad-regular, slide the folder panel away after a pick so the
+            // message list is fully interactive again. No-op on compact (the
+            // panel is never presented there) and on launches (INBOX
+            // auto-select happens with the panel already closed).
+            if folder != nil {
+                withAnimation(folderPanelAnimation) { folderPanelPresented = false }
+            }
             #endif
             // Record the folder move for the cross-client cursor (highest-
             // priority field). Fires on user navigation and on restore alike;
@@ -611,39 +646,60 @@ extension MailRootView {
 }
 
 #if os(iOS)
-// MARK: - Split overlay behavior
+// MARK: - Floating folder panel
 
-/// Forces the enclosing `UISplitViewController` to OVERLAY its sidebar instead
-/// of tiling it. SwiftUI's `NavigationSplitView` exposes no native knob for
-/// split behavior, and on a wide iPad it tiles by default — which, when the
-/// folder sidebar is revealed, pushes the message list off the leading edge and
-/// re-breaks the list's leading swipe. Overlaying floats the sidebar above the
-/// list, so revealing folders never disturbs the list's swipe geometry.
+/// The floating folder panel that replaces the split view's own sidebar reveal
+/// on regular-width iPad.
 ///
-/// Best-effort: it walks the parent controller chain for the split controller
-/// and no-ops if none is found (the sidebar then re-tiles on reveal, which is
-/// still functional). Re-applied on every `updateUIViewController` so it
-/// survives the layout passes that can reset `preferredSplitBehavior`.
-private struct SplitOverlayConfigurator: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> Proxy { Proxy() }
-    func updateUIViewController(_ proxy: Proxy, context: Context) { proxy.applyOverlayBehavior() }
+/// SwiftUI's `NavigationSplitView` exposes no knob that reveals the sidebar
+/// over an unmoving content column: tiling and displacing both shove the
+/// message list rightward, and even UIKit's `.overlay` split behavior (the
+/// previous attempt here, `SplitOverlayConfigurator`) composes the sidebar
+/// BESIDE the supplementary column over the detail — the list still moves. So
+/// the split's sidebar column is pinned collapsed and the folder list floats
+/// here instead: a fixed-width panel slid in from the leading edge over the
+/// list, with a dimming scrim that dismisses on tap.
+///
+/// The panel stays MOUNTED while closed (slid offscreen, not removed) so
+/// `FolderListView` loads folders at launch and drives the INBOX landing /
+/// resume toast (`onFoldersLoaded`) exactly as the hidden sidebar column used
+/// to — and so its drop targets are live the moment the panel opens mid-drag.
+extension MailRootView {
+    /// Slide/scrim animation, shared by the toolbar toggle and the
+    /// folder-pick auto-dismiss so every path moves the panel the same way.
+    var folderPanelAnimation: Animation { .snappy(duration: 0.28) }
 
-    final class Proxy: UIViewController {
-        override func didMove(toParent parent: UIViewController?) {
-            super.didMove(toParent: parent)
-            applyOverlayBehavior()
-        }
+    /// Fixed panel width, matching the split view's own sidebar column.
+    private var folderPanelWidth: CGFloat { 320 }
 
-        func applyOverlayBehavior() {
-            var ancestor: UIViewController? = parent
-            while let current = ancestor {
-                if let split = current as? UISplitViewController {
-                    split.preferredSplitBehavior = .overlay
-                    return
-                }
-                ancestor = current.parent
+    @ViewBuilder
+    var folderPanelOverlay: some View {
+        ZStack(alignment: .leading) {
+            if folderPanelPresented {
+                Color.black.opacity(0.15)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(folderPanelAnimation) { folderPanelPresented = false }
+                    }
+                    .transition(.opacity)
+                    .accessibilityLabel("Dismiss folder list")
+                    .accessibilityAddTraits(.isButton)
             }
+            // Its own NavigationStack: the sidebar builder hangs toolbar items
+            // (the Cabalmail mark) and a navigation title, which need a
+            // navigation container now that the view no longer lives in the
+            // split's sidebar column.
+            NavigationStack { sidebar }
+                .frame(width: folderPanelWidth)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .shadow(color: .black.opacity(0.25), radius: 18, x: 4, y: 0)
+                .padding(.vertical, 10)
+                .padding(.leading, 10)
+                .offset(x: folderPanelPresented ? 0 : -(folderPanelWidth + 60))
+                .accessibilityHidden(!folderPanelPresented)
         }
+        .animation(folderPanelAnimation, value: folderPanelPresented)
     }
 }
 #endif
@@ -709,14 +765,24 @@ extension MailRootView {
                     }
                 }
             }
-            // App-level Settings gear, relocated next to the content column's
-            // sidebar toggle now that the sidebar — its former home — starts
-            // collapsed on iPad. Regular-width iPad only (compact keeps its
-            // Settings tab, macOS its Settings scene), matching where the gear
-            // appeared before.
-            #if !os(macOS)
+            // Folder-panel toggle (standing in for the removed system sidebar
+            // toggle, same leading slot) and the app-level Settings gear.
+            // Regular-width iPad only (compact keeps its Settings tab and
+            // navigates folders as the stack root; macOS has its Settings
+            // scene and a tiled sidebar).
+            #if os(iOS)
             .toolbar {
                 if showsSettingsGear {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            withAnimation(folderPanelAnimation) {
+                                folderPanelPresented.toggle()
+                            }
+                        } label: {
+                            Image(systemName: "sidebar.leading")
+                                .accessibilityLabel("Toggle folder list")
+                        }
+                    }
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
                             appState.requestSettings()
