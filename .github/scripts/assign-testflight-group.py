@@ -31,14 +31,16 @@
 #   BUILD_NUMBER      CFBundleVersion of the uploaded build
 #   TF_GROUP          Name of the internal test group to attach to
 # Optional env:
-#   ASC_POLL_TIMEOUT  Seconds to wait overall (default 1200)
+#   ASC_POLL_TIMEOUT  Seconds to wait overall (default 2400 - Apple-side
+#                     ingestion of a fresh upload has been observed to
+#                     exceed 20 minutes, so the ceiling errs high; the
+#                     usual attach lands in the first few minutes)
 #   ASC_POLL_INTERVAL Seconds between attempts (default 30)
 
 import os
 import sys
 import time
 import urllib.error
-import urllib.parse
 
 from asc_api import (
     api_request,
@@ -52,14 +54,22 @@ from asc_api import (
 
 
 def find_group_id(app_id, group_name, token_factory):
-    """Return the betaGroups id for `group_name` within `app_id`, or None."""
-    query = urllib.parse.urlencode(
-        {"filter[app]": app_id, "filter[name]": group_name, "limit": 5}
+    """Return the id of the app's own test group `group_name`, or None.
+
+    Looks up through the app's betaGroups relationship URL and matches the
+    name client-side, rather than /v1/betaGroups?filter[app]=&filter[name]=.
+    Group names are only unique per app — every app record carries a
+    `stage` and a `prod` — and a top-level filter that silently drops one
+    constraint (an ASC habit) can hand back another app's group. Attaching
+    a build to a group on the wrong app fails with a misleading NOT_FOUND
+    on the *build* ("no resource of type 'builds'"), because the
+    relationship validator scopes build lookup to the group's app. Scoping
+    the lookup URL to the app makes that structurally impossible.
+    """
+    result = api_request(
+        "GET", f"/v1/apps/{app_id}/betaGroups?limit=200", token_factory
     )
-    result = api_request("GET", f"/v1/betaGroups?{query}", token_factory)
     for group in result.get("data") or []:
-        # filter[name] is documented as exact-match; verify anyway so a
-        # surprise substring match can't route builds to the wrong group.
         if group.get("attributes", {}).get("name") == group_name:
             return group["id"]
     return None
@@ -90,7 +100,7 @@ def main():
     bundle_id = require_env("BUNDLE_ID")
     build_number = require_env("BUILD_NUMBER")
     group_name = require_env("TF_GROUP")
-    timeout = int(os.environ.get("ASC_POLL_TIMEOUT", "1200"))
+    timeout = int(os.environ.get("ASC_POLL_TIMEOUT", "2400"))
     interval = int(os.environ.get("ASC_POLL_INTERVAL", "30"))
 
     with open(key_path, encoding="utf-8") as handle:
@@ -111,6 +121,7 @@ def main():
             f"build {build_number} by hand."
         )
         return 1
+    print(f"Resolved app {bundle_id} -> {app_id}, group {group_name!r} -> {group_id}")
     print(f"Attaching build {build_number} of {bundle_id} to group {group_name!r}...")
 
     deadline = time.time() + timeout
