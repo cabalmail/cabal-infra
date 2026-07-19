@@ -98,6 +98,7 @@ Regenerated outputs (all committed; never hand-edit):
           apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack  (visionOS 3 layers)
           apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset   (watchOS single 1024)
           apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset
+          apple/CabalmailMac/Assets.xcassets/MenuBarMark.imageset      (menu-bar status item)
   React — react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}
           react/admin/src/assets/logo.svg
   Docs  — docs/logo.png, docs/mask.png
@@ -304,6 +305,15 @@ emit_derived() {
     printf '  <g fill="%s" transform="%s">\n' "${MASK_INK}" "${PLACEMENT}"; disc; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/AppIcon-glyph-mono.svg"
 
+  # 1c. Menu-bar mark — template ink glyph on the 2:1 brand tile (same frame
+  #     as the web logo), with a menu-bar-point intrinsic size (32x16) so the
+  #     macOS MenuBarExtra status item renders it at menu-bar scale. Template
+  #     rendering recolors it per menu-bar appearance; black is conventional
+  #     template ink.
+  { svg_open "0 80 400 200" ' width="32" height="16"'
+    printf '  <g fill="%s">\n' "${MASK_INK}"; disc; envelope
+    printf '  </g>\n</svg>\n'; } > "${DERIVED}/menu-bar-mark.svg"
+
   # 2. Light app-icon art — forest glyph on cream gradient, full-bleed 1024.
   #    Feeds watchOS (single slot), the React logo PNGs, and docs/logo.png.
   #    The macOS/iOS square icons are the Liquid Glass .icon instead, whose
@@ -368,7 +378,7 @@ emit_derived() {
     printf '  <g fill="%s" transform="translate(0 -80)">\n' "${MASK_INK}"; disc; envelope
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/mask.svg"
 
-  log "wrote 10 derived SVG treatments -> vector/derived/"
+  log "wrote 11 derived SVG treatments -> vector/derived/"
 }
 
 # --------------------------------------------------------------------------
@@ -485,6 +495,9 @@ generate_all() {
   # --- Apple: shared sidebar mark (template imageset, both catalogs) ---
   install -m 0644 "${d}/cabalmail-mark.svg" "${REPO_ROOT}/apple/Cabalmail/Assets.xcassets/CabalmailMark.imageset/cabalmail-mark.svg"
   install -m 0644 "${d}/cabalmail-mark.svg" "${REPO_ROOT}/apple/CabalmailMac/Assets.xcassets/CabalmailMark.imageset/cabalmail-mark.svg"
+
+  # --- Apple: macOS menu-bar status-item mark (template imageset) ---
+  install -m 0644 "${d}/menu-bar-mark.svg" "${REPO_ROOT}/apple/CabalmailMac/Assets.xcassets/MenuBarMark.imageset/menu-bar-mark.svg"
 
   # --- React client ---
   install -m 0644 "${d}/favicon.svg"  "${pub}/favicon.svg"
