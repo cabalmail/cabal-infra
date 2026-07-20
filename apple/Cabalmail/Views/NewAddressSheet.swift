@@ -31,6 +31,24 @@ struct NewAddressSheet: View {
     @State private var comment: String = ""
     @State private var isSubmitting = false
     @State private var errorMessage: String?
+    // nil = still loading; a set (possibly empty) once `/list_my_domains`
+    // has returned. Mirrors `react/admin/src/Addresses/Request.jsx`: on
+    // fetch failure we fall back to the unfiltered `domains` list so a
+    // transient error doesn't hide the picker; the `/new` Lambda still
+    // rejects any request to a denied apex.
+    @State private var allowedDomainNames: Set<String>?
+
+    /// Domains the caller is entitled to mint on: `domains` intersected with
+    /// the `/list_my_domains` allow list. While the allow list is loading
+    /// this reads as empty so the picker shows a "Loading…" placeholder
+    /// instead of transiently offering apexes the server would reject.
+    private var visibleDomains: [MailDomain] {
+        guard let allowed = allowedDomainNames else { return [] }
+        return domains.filter { allowed.contains($0.domain) }
+    }
+
+    private var isLoadingDomains: Bool { allowedDomainNames == nil }
+    private var noDomainsAvailable: Bool { !isLoadingDomains && visibleDomains.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -56,11 +74,7 @@ struct NewAddressSheet: View {
                         .disabled(!canSubmit || isSubmitting)
                     }
                 }
-                .onAppear {
-                    if domain.isEmpty, let first = domains.first?.domain {
-                        domain = first
-                    }
-                }
+                .task { await loadAllowedDomains() }
         }
         // Size the sheet as a form card instead of a full-height card.
         // `.form` is a fixed system size, so the short form leaves blank
@@ -128,7 +142,7 @@ struct NewAddressSheet: View {
             }
             HStack {
                 Button("Random", action: randomize)
-                    .disabled(domains.isEmpty)
+                    .disabled(visibleDomains.isEmpty)
                 Spacer()
             }
         }
@@ -159,7 +173,7 @@ struct NewAddressSheet: View {
             }
             Section {
                 Button("Random", action: randomize)
-                    .disabled(domains.isEmpty)
+                    .disabled(visibleDomains.isEmpty)
             }
         }
     }
@@ -186,12 +200,13 @@ struct NewAddressSheet: View {
             Text(".")
                 .foregroundStyle(.secondary)
             Picker("", selection: $domain) {
-                Text("domain").tag("")
-                ForEach(domains) { entry in
+                Text(domainPickerPlaceholder).tag("")
+                ForEach(visibleDomains) { entry in
                     Text(entry.domain).tag(entry.domain)
                 }
             }
             .labelsHidden()
+            .disabled(isLoadingDomains || noDomainsAvailable)
         }
     }
 
@@ -232,7 +247,31 @@ struct NewAddressSheet: View {
         let alphanum = "abcdefghijklmnopqrstuvwxyz0123456789"
         username = String((0..<8).map { _ in alphanum.randomElement() ?? "a" })
         subdomain = String((0..<8).map { _ in alphanum.randomElement() ?? "a" })
-        if domain.isEmpty, let first = domains.first?.domain {
+        if domain.isEmpty, let first = visibleDomains.first?.domain {
+            domain = first
+        }
+    }
+
+    private var domainPickerPlaceholder: String {
+        if isLoadingDomains { return "Loading domains…" }
+        if noDomainsAvailable { return "No domains available" }
+        return "domain"
+    }
+
+    /// Populates `allowedDomainNames` from the `/list_my_domains` Lambda,
+    /// then seeds the domain picker with the first entitled apex so the
+    /// form starts usable. On failure we fall back to the full configured
+    /// list (matching the React app) — the server still enforces
+    /// entitlement, so the user just loses the client-side filter.
+    private func loadAllowedDomains() async {
+        guard allowedDomainNames == nil, let client = appState.client else { return }
+        do {
+            let allowed = try await client.allowedDomains()
+            allowedDomainNames = Set(allowed)
+        } catch {
+            allowedDomainNames = Set(domains.map(\.domain))
+        }
+        if domain.isEmpty, let first = visibleDomains.first?.domain {
             domain = first
         }
     }

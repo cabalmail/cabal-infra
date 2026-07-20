@@ -30,7 +30,19 @@ final class WatchAppModel {
     /// picker in the new-address flow.
     private(set) var configuration: Configuration?
 
-    var domains: [MailDomain] { configuration?.domains ?? [] }
+    /// Apex domains the signed-in user is entitled to mint on, per the
+    /// `/list_my_domains` Lambda. Nil means "not yet fetched"; the
+    /// new-address view refreshes it on appear.
+    private(set) var allowedDomainNames: Set<String>?
+
+    /// Configured domains intersected with the caller's `/list_my_domains`
+    /// allow list — the picker in `NewAddressView` reads this so the wrist
+    /// never offers an apex the `/new` Lambda would then reject.
+    var domains: [MailDomain] {
+        let all = configuration?.domains ?? []
+        guard let allowed = allowedDomainNames else { return all }
+        return all.filter { allowed.contains($0.domain) }
+    }
 
     private let secureStore: any SecureStore
     private let defaults: UserDefaults
@@ -60,6 +72,19 @@ final class WatchAppModel {
 
     func refresh() async {
         await loadAddresses()
+    }
+
+    /// Populates `allowedDomainNames` from the API. Silent-fails to "trust
+    /// the configured list" so a transient error leaves the wrist usable —
+    /// the `/new` Lambda is the authoritative gate either way.
+    func loadAllowedDomains() async {
+        guard let apiClient else { return }
+        do {
+            let list = try await apiClient.listMyDomains()
+            allowedDomainNames = Set(list)
+        } catch {
+            allowedDomainNames = Set((configuration?.domains ?? []).map(\.domain))
+        }
     }
 
     // MARK: - Hand-off intake
