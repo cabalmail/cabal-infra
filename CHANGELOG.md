@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.7] - 2026-07-20
+
+### Changed
+- **IaC decay: Lambda reserved-concurrency gate reclassified.**
+  `CKV_AWS_115` (x9) moved from the scanner "decay" backlog to the
+  design-driven baseline with no code change. All Lambdas deliberately
+  share one account-wide concurrency pool; reserved concurrency both
+  guarantees and caps, so it would either throttle the user-facing
+  `api_call` hot path or carve burst capacity out from under it - the
+  same rationale the two newest Lambdas (`push_dispatch`,
+  `push_token_gc`) already carry as inline skips. Baseline entries stay
+  per resource, so a new Lambda is still caught.
+- Apple: **iPad folder list now floats over the message list.** On a
+  regular-width iPad, the sidebar button slides the folder panel in over
+  the message list with a dimming, tap-to-dismiss scrim, instead of
+  pushing the list and reading pane rightward. Picking a folder or
+  tapping outside slides it back out; the list never moves.
+- Apple: **Menu-bar icon is now the Cabalmail logo.** The macOS status item
+  previously used a generic SF Symbol envelope because the brand mark's canvas
+  was app-icon sized; the logo pipeline now emits a menu-bar-sized template
+  variant of the mark and the status item uses it, adapting to the menu bar's
+  light/dark appearance.
+- **Fuller SMS consent disclosures.** The signup consent checkbox and the
+  front-door Terms/Privacy pages now name the operator legal entity
+  alongside Cabalmail (rendered from the OPERATOR_NAME deployment
+  variable), state that message frequency varies and message and data
+  rates may apply, give HELP alongside STOP instructions, and list
+  `help@support.<control domain>` as the SMS support contact — matching
+  the wording used in the 10DLC campaign registration.
+- **10DLC origination number.** SMS delivery now rides a 10DLC phone
+  number tied to the account's approved campaign registration
+  (`ten_dlc_campaign_registration_id`), replacing the never-approved
+  toll-free number, whose deletion protection is lifted ahead of
+  removal. HELP/STOP/START keyword auto-responses are converged by a
+  post-apply step to match the campaign's registered messages. An
+  operator runbook for registering the brand and campaign in a new
+  account lives at docs/sms-10dlc.md.
+
+### Removed
+- **Toll-free phone number.** The AWS End User Messaging toll-free
+  number and its `use_eum_sms` feature flag are gone; the 10DLC number
+  (`ten_dlc_campaign_registration_id`) is now the only SMS origination
+  path. Applying this change releases the account's toll-free number,
+  which requires its verification registration to be deleted first.
+- **Toll-free verification pipeline.** The `register-tfv` workflow, its
+  submission script, and the TFV setup guide are gone along with the
+  `TFV_*` GitHub variables and secrets they consumed; 10DLC registration
+  (docs/sms-10dlc.md) replaces the toll-free path.
+
+### Fixed
+- **INBOX no longer presents as unsubscribed.** Dovecot's `namespace
+  inbox` block now pins `mailbox INBOX { auto = subscribe }`, matching
+  the pattern already used for `Archive`. Freshly-provisioned mailboxes
+  and existing accounts whose subscription list had drifted are
+  subscribed to INBOX on next access, so the Apple and web clients stop
+  drawing the "not kept up-to-date" banner over the inbox itself.
+
 ## [0.11.6] - 2026-07-18
 
 ### Added
