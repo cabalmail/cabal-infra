@@ -208,9 +208,11 @@ function SignUp({
             required
           />
           <span className="auth__consent-label">
-            I agree to receive transactional SMS (signup verification, password
-            reset, and sign-in codes) at the phone number above. Reply{' '}
-            <code>STOP</code> to opt out at any time; message and data rates may apply.
+            I agree to receive transactional SMS from Cabalmail (J C Carr, LLC)
+            &mdash; signup verification, password reset, and sign-in codes &mdash; at
+            the phone number above. Message frequency varies; message and data
+            rates may apply. Reply <code>HELP</code> for help or{' '}
+            <code>STOP</code> to opt out at any time.
           </span>
         </label>
         <button
