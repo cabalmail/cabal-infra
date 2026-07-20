@@ -19,8 +19,8 @@ output "admin_group_name" {
 }
 
 output "sms_phone_number" {
-  value       = var.ten_dlc_campaign_registration_id != "" ? aws_pinpointsmsvoicev2_phone_number.ten_dlc[0].phone_number : (var.use_eum_sms ? aws_pinpointsmsvoicev2_phone_number.sms[0].phone_number : "")
-  description = "AWS End User Messaging phone number for SMS verification (10DLC when a campaign registration id is set, else the legacy toll-free number). Empty string when neither is provisioned."
+  value       = var.ten_dlc_campaign_registration_id != "" ? aws_pinpointsmsvoicev2_phone_number.ten_dlc[0].phone_number : ""
+  description = "AWS End User Messaging 10DLC phone number for SMS verification. Empty string when no campaign registration id is set."
 }
 
 output "user_pool_domain" {

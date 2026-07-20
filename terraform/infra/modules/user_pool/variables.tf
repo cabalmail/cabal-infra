@@ -72,12 +72,6 @@ variable "healthcheck_ping_param" {
   default     = ""
 }
 
-variable "use_eum_sms" {
-  type        = bool
-  description = "Feature flag: when true, provision the AWS End User Messaging toll-free phone number that backs SNS-based SMS delivery. When false, no EUM phone number is created."
-  default     = false
-}
-
 variable "ten_dlc_campaign_registration_id" {
   type        = string
   description = "Registration id (registration-...) of this account's APPROVED 10DLC campaign in AWS End User Messaging. When set, a 10DLC phone number is provisioned against that campaign to back SNS-based SMS delivery. Empty string skips the number."

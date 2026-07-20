@@ -98,7 +98,6 @@ These variables gate the optional monitoring stack. See [monitoring.md](./monito
 | Variable | Example | Notes |
 | --- | --- | --- |
 | `TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID` | `registration-0123456789abcdef` | Registration id of this account's approved 10DLC campaign. When set, Terraform provisions a 10DLC phone number against the campaign and the post-apply step converges its HELP/STOP/START keywords. Leave unset until the campaign is approved. See [sms-10dlc.md](./sms-10dlc.md) for the registration runbook. |
-| `TF_VAR_USE_EUM_SMS` | `false` | Legacy toll-free number path, superseded by the 10DLC variable above. Default `false`. |
 
 ## Claude automation tool allowlist
 

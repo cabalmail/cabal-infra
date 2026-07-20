@@ -26,7 +26,7 @@ output "mail_domain_ds_records" {
 
 output "sms_phone_number" {
   value       = module.pool.sms_phone_number
-  description = "AWS End User Messaging phone number for SMS verification (10DLC when a campaign registration id is set, else the legacy toll-free number). Empty when neither is provisioned."
+  description = "AWS End User Messaging 10DLC phone number for SMS verification. Empty when no campaign registration id is set."
 }
 
 output "alert_sink_function_url" {
