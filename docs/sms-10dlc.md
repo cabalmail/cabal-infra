@@ -119,6 +119,7 @@ Field values that have passed carrier review, templated on
 | `campaignInfo.vertical` | `COMMUNICATION` |
 | `campaignInfo.privacyPolicyLink` | `https://www.<control domain>/privacy.html` |
 | `campaignInfo.termsAndConditionsLink` | `https://www.<control domain>/terms.html` |
+| `campaignInfo.campaignName` | Required. A description paragraph, not a short name — see below |
 
 `campaignInfo.campaignName` — despite the name, treat this as the
 campaign *description*. Say who the operator is, what Cabalmail is,
@@ -164,6 +165,20 @@ Then submit:
 
 ```sh
 aws pinpoint-sms-voice-v2 submit-registration-version --registration-id <id>
+```
+
+If the submit is refused with `ConflictException` /
+`SUBMIT_REGISTRATION_VERSION_NOT_ALLOWED` while the version is still
+`DRAFT`, a required field is missing. Find it by diffing the draft
+against the field definitions:
+
+```sh
+aws pinpoint-sms-voice-v2 describe-registration-field-definitions \
+  --registration-type US_TEN_DLC_CAMPAIGN_REGISTRATION \
+  --query 'RegistrationFieldDefinitions[?FieldRequirement==`REQUIRED`].FieldPath'
+aws pinpoint-sms-voice-v2 describe-registration-field-values \
+  --registration-id <id> --version-number <draft> \
+  --query 'RegistrationFieldValues[].FieldPath'
 ```
 
 Campaign review is typically fast (hours, not weeks). Poll with:
