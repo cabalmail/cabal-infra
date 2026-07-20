@@ -8,4 +8,4 @@
 # a per-tier sidecar. A daemon service produces one set of host metrics
 # per EC2, instead of three duplicates per host. See CHANGELOG for the
 # rationale.
-FROM prom/node-exporter:v1.12.0@sha256:9b0ade5e607f9dbedb0a8e11151b6011ae5bd79304c261804cfdd2cadf200a80
+FROM prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
