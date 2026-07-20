@@ -97,44 +97,8 @@ These variables gate the optional monitoring stack. See [monitoring.md](./monito
 
 | Variable | Example | Notes |
 | --- | --- | --- |
-| `TF_VAR_USE_EUM_SMS` | `false` | Provisions an AWS End User Messaging toll-free number for Cognito SMS via SNS. Default `false`. |
-
-### TFV registration
-
-These are used by the `register-tfv` workflow to submit a toll-free verification (TFV) registration to AWS End User Messaging. Only needed when `TF_VAR_USE_EUM_SMS=true`. See [sms-tfv-setup.md](./sms-tfv-setup.md) for the full runbook, including the IAM policy you must attach before the first run.
-
-**Variables** (non-sensitive; visible in workflow logs):
-
-| Variable | Example | Notes |
-| --- | --- | --- |
-| `TFV_COMPANY_NAME` | `Example Holdings LLC` | Legal entity name exactly as registered. Must match your EIN documentation. |
-| `TFV_COMPANY_WEBSITE` | `https://www.cabal-mail.net` | Live HTTPS URL for the front-door site. Must describe the service. |
-| `TFV_COMPANY_ADDRESS1` | `1234 Example Street` | Street address line 1. |
-| `TFV_COMPANY_ADDRESS2` | `Suite 200` | Optional; omit the variable if not applicable. |
-| `TFV_COMPANY_CITY` | `Wilmington` | |
-| `TFV_COMPANY_STATE` | `DE` | Two-letter US state code or two/three-letter province code. |
-| `TFV_COMPANY_ZIP` | `19801` | |
-| `TFV_COMPANY_COUNTRY` | `US` | ISO 3166-1 alpha-2. Defaults to `US` if unset. |
-| `TFV_CONTACT_FIRST_NAME` | `Jane` | Support contact first name. |
-| `TFV_CONTACT_LAST_NAME` | `Doe` | Support contact last name. |
-| `TFV_MONTHLY_VOLUME` | `10` | Optional. Choices: `10`, `100`, `1,000`, `10,000`, `100,000`, `250,000`, `500,000`, `750,000`, `1,000,000`, `5,000,000`, `10,000,000+`. Default `10` is right for a hobby or small instance. |
-| `TFV_USE_CASE_CATEGORY` | `ONE_TIME_PASSCODES` | Optional. Default `ONE_TIME_PASSCODES`. Must be one of the SCREAMING_SNAKE_CASE enum values AWS accepts; the workflow logs the authoritative list at startup. |
-| `TFV_BUSINESS_TYPE` | `PRIVATE_PROFIT` | Optional. Allowed: `PRIVATE_PROFIT`, `PUBLIC_PROFIT`, `NON_PROFIT`, `SOLE_PROPRIETOR`, `GOVERNMENT`. Default `PRIVATE_PROFIT`. |
-| `TFV_OPT_IN_TYPE` | `DIGITAL_FORM` | Optional. Allowed: `VERBAL`, `DIGITAL_FORM`, `PAPER_FORM`, `TEXT`, `QR_CODE`. Default `DIGITAL_FORM` matches the React signup form. |
-| `TFV_TAX_ID_AUTHORITY` | `EIN` | Optional. Only used when `TFV_TAX_ID` is set. Allowed: `EIN`, `CBN`, `CRN`, `PROVINCIAL_NUMBER`, `VAT`, `ACN`, `ABN`, `BRN`, `SIREN`, `SIRET`, `NZBN`, `USt-IdNr`, `CIF`, `NIF`, `CNPJ`, `UID`, `NEQ`, `OTHER`. Default `EIN`. |
-| `TFV_TAX_ID_COUNTRY` | `US` | Optional. Only used when `TFV_TAX_ID` is set. Two-letter ISO country code. Default `US`. |
-| `TFV_USE_CASE_DETAILS` | (free text) | Optional. Default supplied by the workflow. Override only if you need different wording. |
-| `TFV_OPT_IN_DESCRIPTION` | (free text) | Optional. Default supplied by the workflow. Override only if you need different wording. |
-| `TFV_SAMPLE_MESSAGE` | `Your Cabalmail verification code is 123456` | Optional. Default matches the Cognito `sms_verification_message` template. Update if you change that template. |
-| `TFV_PHONE_NUMBER_ID` | `phone-abcdef0123456789` | Optional. Auto-discovered when there is exactly one US toll-free number on the account. Set explicitly if you have more than one. |
-
-**Secrets** (sensitive; redacted in workflow logs):
-
-| Secret | Example | Notes |
-| --- | --- | --- |
-| `TFV_CONTACT_EMAIL` | `support@example.com` | Goes on the public TFV submission. Use an alias you do not mind appearing on a regulatory form. |
-| `TFV_CONTACT_PHONE` | `+15551234567` | E.164 format. Same caveat as email. |
-| `TFV_TAX_ID` | `12-3456789` | Business identification number (EIN for a US LLC). Leave unset for `SOLE_PROPRIETOR` entities -- carriers reject sole-proprietor submissions that include tax fields, and the workflow ignores `TFV_TAX_ID` when `TFV_BUSINESS_TYPE=SOLE_PROPRIETOR`. Stored as a secret to keep it out of workflow logs; it still appears on the public TFV submission to carriers. |
+| `TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID` | `registration-0123456789abcdef` | Registration id of this account's approved 10DLC campaign. When set, Terraform provisions a 10DLC phone number against the campaign and the post-apply step converges its HELP/STOP/START keywords. Leave unset until the campaign is approved. See [sms-10dlc.md](./sms-10dlc.md) for the registration runbook. |
+| `TF_VAR_USE_EUM_SMS` | `false` | Legacy toll-free number path, superseded by the 10DLC variable above. Default `false`. |
 
 ## Claude automation tool allowlist
 
