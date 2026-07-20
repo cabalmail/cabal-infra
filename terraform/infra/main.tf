@@ -139,6 +139,8 @@ module "pool" {
   healthcheck_ping_param = local.hc_ping_assign_osid
   use_eum_sms            = var.use_eum_sms
   invitation_code        = var.invitation_code
+
+  ten_dlc_campaign_registration_id = var.ten_dlc_campaign_registration_id
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront

@@ -50,23 +50,49 @@ resource "aws_cognito_user_pool" "users" {
   }
 }
 
-# AWS End User Messaging toll-free number used by the SNS SMS path.
-# Gated on var.use_eum_sms.
-#
-# Note: deletion_protection_enabled = true means flipping this flag
-# from true to false will fail apply until protection is disabled in
-# a prior apply. That's intentional - losing a TFV-approved number is
-# expensive.
+# AWS End User Messaging toll-free number, superseded by the 10DLC
+# number below and staged for release: deletion protection is disabled
+# here so a follow-up change can remove the resource (the provider's
+# destroy calls ReleasePhoneNumber directly and fails while protection
+# is on, so this must land in an apply of its own first).
 resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
   count                       = var.use_eum_sms ? 1 : 0
   iso_country_code            = "US"
   message_type                = "TRANSACTIONAL"
   number_capabilities         = ["SMS"]
   number_type                 = "TOLL_FREE"
-  deletion_protection_enabled = true
+  deletion_protection_enabled = false
 
   timeouts {
     create = "1m"
+  }
+}
+
+# AWS End User Messaging 10DLC number used by the SNS SMS path. Created
+# only once the account's 10DLC campaign registration is approved and
+# its id is supplied; requesting a number against an unapproved or
+# absent campaign fails.
+#
+# Create waits for the number to reach ACTIVE, which for 10DLC includes
+# the carrier-side campaign/number association; usually minutes, but if
+# it exceeds the timeout the apply fails with the number left tainted -
+# re-apply rather than releasing it by hand.
+#
+# The HELP/STOP/START keyword auto-responses on this number must match
+# the messages registered with the campaign; the provider has no keyword
+# resource, so a post-apply step (put-sms-keywords.sh in infra.yml)
+# owns them.
+resource "aws_pinpointsmsvoicev2_phone_number" "ten_dlc" {
+  count                       = var.ten_dlc_campaign_registration_id != "" ? 1 : 0
+  iso_country_code            = "US"
+  message_type                = "TRANSACTIONAL"
+  number_capabilities         = ["SMS"]
+  number_type                 = "TEN_DLC"
+  registration_id             = var.ten_dlc_campaign_registration_id
+  deletion_protection_enabled = true
+
+  timeouts {
+    create = "30m"
   }
 }
 

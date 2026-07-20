@@ -183,6 +183,12 @@ variable "use_eum_sms" {
   default     = false
 }
 
+variable "ten_dlc_campaign_registration_id" {
+  type        = string
+  description = "Registration id (registration-...) of this account's APPROVED 10DLC campaign in AWS End User Messaging. When set, a 10DLC phone number is provisioned against that campaign for Cognito SMS via SNS. Empty string skips the number (the account then relies on the toll-free number if use_eum_sms is true)."
+  default     = ""
+}
+
 variable "invitation_code" {
   type        = string
   description = "Shared secret that new users must supply on the signup form. Surfaced to the check_invite pre-signup Lambda as the INVITATION_CODE env var. Empty string disables the check and allows all signups."
