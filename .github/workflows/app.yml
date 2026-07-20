@@ -739,6 +739,10 @@ jobs:
     - name: build
       env:
         NODE_ENV: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+        # Operator legal name for the SMS consent copy (SignUp). Vite only
+        # exposes VITE_-prefixed vars to the bundle, hence the rename from
+        # the repo-level OPERATOR_NAME variable the front-door job uses.
+        VITE_OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
       run: cd react/admin && npm ci && npm run build
 
     - name: upload
