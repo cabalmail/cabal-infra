@@ -177,15 +177,9 @@ variable "lambda_pinned_hashes" {
   default     = {}
 }
 
-variable "use_eum_sms" {
-  type        = bool
-  description = "Feature flag: when true, provision the AWS End User Messaging toll-free phone number for Cognito SMS via SNS. When false, the EUM phone number is not created and Cognito's sms_configuration block falls through to the shared AWS SMS pool (which is sandboxed without registration)."
-  default     = false
-}
-
 variable "ten_dlc_campaign_registration_id" {
   type        = string
-  description = "Registration id (registration-...) of this account's APPROVED 10DLC campaign in AWS End User Messaging. When set, a 10DLC phone number is provisioned against that campaign for Cognito SMS via SNS. Empty string skips the number (the account then relies on the toll-free number if use_eum_sms is true)."
+  description = "Registration id (registration-...) of this account's APPROVED 10DLC campaign in AWS End User Messaging. When set, a 10DLC phone number is provisioned against that campaign for Cognito SMS via SNS. Empty string skips the number, and Cognito's sms_configuration block falls through to the shared AWS SMS pool (which is sandboxed without registration)."
   default     = ""
 }
 

@@ -50,24 +50,6 @@ resource "aws_cognito_user_pool" "users" {
   }
 }
 
-# AWS End User Messaging toll-free number, superseded by the 10DLC
-# number below and staged for release: deletion protection is disabled
-# here so a follow-up change can remove the resource (the provider's
-# destroy calls ReleasePhoneNumber directly and fails while protection
-# is on, so this must land in an apply of its own first).
-resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
-  count                       = var.use_eum_sms ? 1 : 0
-  iso_country_code            = "US"
-  message_type                = "TRANSACTIONAL"
-  number_capabilities         = ["SMS"]
-  number_type                 = "TOLL_FREE"
-  deletion_protection_enabled = false
-
-  timeouts {
-    create = "1m"
-  }
-}
-
 # AWS End User Messaging 10DLC number used by the SNS SMS path. Created
 # only once the account's 10DLC campaign registration is approved and
 # its id is supplied; requesting a number against an unapproved or

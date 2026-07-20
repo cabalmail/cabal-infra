@@ -656,7 +656,6 @@ jobs:
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
-        echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
         echo "ten_dlc_campaign_registration_id = \"${{ vars.TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID }}\"" >> terraform.tfvars
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
@@ -766,7 +765,6 @@ jobs:
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
-        echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
         echo "ten_dlc_campaign_registration_id = \"${{ vars.TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID }}\"" >> terraform.tfvars
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
@@ -797,7 +795,6 @@ jobs:
         if [ $TF_EXIT -ne 0 ]; then
           if grep -q 'aws_pinpointsmsvoicev2_phone_number' /tmp/tf-apply.log && grep -q "timeout while waiting for state to become 'ACTIVE'" /tmp/tf-apply.log; then
             echo "::warning::Phone number provisioning timed out. Untainting so the next run re-checks instead of re-leasing."
-            terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.sms[0]' 2>/dev/null || true
             terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.ten_dlc[0]' 2>/dev/null || true
             exit 0
           fi
