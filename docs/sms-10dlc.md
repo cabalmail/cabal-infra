@@ -7,6 +7,16 @@ and the message program must be registered and approved. Registration
 is per AWS account, so each environment that sends SMS repeats this
 process.
 
+**Start this early.** SMS delivery gates signup itself — Cognito
+verifies each new user's phone number by SMS at account creation, so
+no one can register on a new system until this process completes. The
+carrier reviews are the longest-lead items in a deployment, they can
+take multiple rounds, and nothing else in the setup depends on them —
+so begin as soon as the prerequisites below are satisfiable (in
+practice: right after the front-door site resolves), and run the SNS
+sandbox exit (see [setup.md](./setup.md)) in parallel rather than
+after.
+
 There are three layers:
 
 | Layer | What it establishes | How it's managed |
