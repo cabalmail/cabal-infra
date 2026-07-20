@@ -41,6 +41,11 @@ function SignUp({
   const frontDoorOrigin = control_domain ? `https://www.${control_domain}` : null;
   const termsHref = frontDoorOrigin ? `${frontDoorOrigin}/terms.html` : '#';
   const privacyHref = frontDoorOrigin ? `${frontDoorOrigin}/privacy.html` : '#';
+  // Operator legal name, baked in at build time from the OPERATOR_NAME
+  // GitHub Actions variable (react build step in app.yml). Local dev and
+  // test builds don't set it; the consent copy then names Cabalmail alone.
+  const operatorName = import.meta.env.VITE_OPERATOR_NAME;
+  const smsBrand = operatorName ? `Cabalmail (${operatorName})` : 'Cabalmail';
   const [showPassword, setShowPassword] = useState(false);
   const [confirm, setConfirm] = useState('');
   const [smsConsent, setSmsConsent] = useState(false);
@@ -208,9 +213,11 @@ function SignUp({
             required
           />
           <span className="auth__consent-label">
-            I agree to receive transactional SMS (signup verification, password
-            reset, and sign-in codes) at the phone number above. Reply{' '}
-            <code>STOP</code> to opt out at any time; message and data rates may apply.
+            I agree to receive transactional SMS from {smsBrand}
+            {' '}&mdash; signup verification, password reset, and sign-in codes &mdash; at
+            the phone number above. Message frequency varies; message and data
+            rates may apply. Reply <code>HELP</code> for help or{' '}
+            <code>STOP</code> to opt out at any time.
           </span>
         </label>
         <button

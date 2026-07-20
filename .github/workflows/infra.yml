@@ -58,6 +58,7 @@ on:
       - '.github/scripts/wait-for-app-deploy.sh'
       - '.github/scripts/record-lambda-hashes.sh'
       - '.github/scripts/post-apply-update-services.sh'
+      - '.github/scripts/put-sms-keywords.sh'
       - '.github/scripts/annotate-terraform-outputs.sh'
 
 permissions:
@@ -109,6 +110,7 @@ jobs:
             - '.github/scripts/wait-for-app-deploy.sh'
             - '.github/scripts/record-lambda-hashes.sh'
             - '.github/scripts/post-apply-update-services.sh'
+            - '.github/scripts/put-sms-keywords.sh'
             - '.github/scripts/annotate-terraform-outputs.sh'
 
   bootstrap_build:
@@ -150,7 +152,7 @@ jobs:
     - name: check-iam-resource-scope
       run: ./.github/scripts/check-iam-resource-scope.py terraform/dns
     - name: setup-python
-      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
       with:
         python-version: '3.12'
     - name: install-checkov
@@ -168,7 +170,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a  # v4.37.1
       with:
         sarif_file: results.sarif
         category: checkov-dns
@@ -210,7 +212,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a  # v4.37.1
       with:
         sarif_file: terraform/dns/tflint.sarif
         category: tflint-dns
@@ -242,7 +244,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a  # v4.37.1
       with:
         sarif_file: trivy-dns.sarif
         category: trivy-dns
@@ -436,7 +438,7 @@ jobs:
     - name: check-iam-resource-scope
       run: ./.github/scripts/check-iam-resource-scope.py terraform/infra
     - name: setup-python
-      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
       with:
         python-version: '3.12'
     - name: install-checkov
@@ -464,7 +466,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a  # v4.37.1
       with:
         sarif_file: results.sarif
         category: checkov-infra
@@ -510,7 +512,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a  # v4.37.1
       with:
         sarif_file: terraform/infra/tflint.sarif
         category: tflint-infra
@@ -542,7 +544,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a  # v4.37.1
       with:
         sarif_file: trivy-infra.sarif
         category: trivy-infra
@@ -654,7 +656,7 @@ jobs:
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
-        echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
+        echo "ten_dlc_campaign_registration_id = \"${{ vars.TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID }}\"" >> terraform.tfvars
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
         echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
@@ -763,7 +765,7 @@ jobs:
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
-        echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
+        echo "ten_dlc_campaign_registration_id = \"${{ vars.TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID }}\"" >> terraform.tfvars
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
         echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
@@ -791,9 +793,9 @@ jobs:
         TF_EXIT=${PIPESTATUS[0]}
         set -e
         if [ $TF_EXIT -ne 0 ]; then
-          if grep -q 'aws_pinpointsmsvoicev2_phone_number.sms' /tmp/tf-apply.log && grep -q "timeout while waiting for state to become 'ACTIVE'" /tmp/tf-apply.log; then
-            echo "::warning::Toll-free number provisioning timed out. Untainting resource for next run."
-            terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.sms[0]'
+          if grep -q 'aws_pinpointsmsvoicev2_phone_number' /tmp/tf-apply.log && grep -q "timeout while waiting for state to become 'ACTIVE'" /tmp/tf-apply.log; then
+            echo "::warning::Phone number provisioning timed out. Untainting so the next run re-checks instead of re-leasing."
+            terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.ten_dlc[0]' 2>/dev/null || true
             exit 0
           fi
           exit $TF_EXIT
@@ -827,3 +829,13 @@ jobs:
       # cabal-mail and update-service to the family head when it has
       # advanced. Steady-state no-op.
       run: ./.github/scripts/post-apply-update-services.sh
+    - name: set-sms-keywords
+      # The AWS provider has no keyword resource, so the HELP/STOP/START
+      # auto-responses on the 10DLC number are converged here instead.
+      # Their text must match the messages registered with the 10DLC
+      # campaign; the script composes them from the same variables the
+      # consent surfaces render from. No-op when no 10DLC number exists.
+      env:
+        OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
+        CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: ./.github/scripts/put-sms-keywords.sh

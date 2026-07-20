@@ -75,11 +75,14 @@ After signing up, perform the following steps:
                     "s3-object-lambda:*",
                     "scheduler:*",
                     "servicediscovery:*",
+                    "sms-voice:DescribeKeywords",
                     "sms-voice:DescribePhoneNumbers",
                     "sms-voice:ListTagsForResource",
+                    "sms-voice:PutKeyword",
                     "sms-voice:ReleasePhoneNumber",
                     "sms-voice:RequestPhoneNumber",
                     "sms-voice:TagResource",
+                    "sms-voice:UpdatePhoneNumber",
                     "sns:*",
                     "sqs:*",
                     "ssm:*",
@@ -94,7 +97,7 @@ After signing up, perform the following steps:
 
     (`kms:*` exists for DNSSEC signing (`TF_VAR_DNSSEC_ENABLED`, off by default). An enumerated grant was tried and abandoned: Terraform's key lifecycle touched new `kms:` actions on every apply stage - more than twenty in all - and chasing them one AccessDenied at a time is not worth it for a policy that already carries `iam:*`. If you don't intend to enable DNSSEC, you may shrink it to `kms:CreateGrant` and `kms:DescribeKey`, and omit the six `route53:` lines that mention `KeySigningKey` or `DNSSEC` - but not `route53:GetDNSSEC`, which Terraform reads unconditionally. See [DNSSEC](./dnssec.md).)
 
-    (If you don't intend to enable SMS verification through AWS End User Messaging (`TF_VAR_USE_EUM_SMS`, off by default), you may omit the five `sms-voice:` lines. If you do enable it, completing the toll-free verification registration requires an additional one-time policy; see [SMS toll-free verification setup](./sms-tfv-setup.md).)
+    (If you don't intend to enable SMS verification through AWS End User Messaging (`TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID`, unset by default), you may omit the eight `sms-voice:` lines. The 10DLC brand and campaign registration that precedes number provisioning is an operator-run CLI process with its own permissions, not part of this CI policy; see [10DLC SMS registration](./sms-10dlc.md).)
 
     (`imagebuilder:*` covers the EC2 Image Builder pipeline that bakes the custom NAT instance AMI. `scheduler:*` covers the EventBridge Scheduler schedules for certificate renewal and DMARC report processing.)
 
