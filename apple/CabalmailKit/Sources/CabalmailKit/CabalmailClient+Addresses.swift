@@ -17,6 +17,18 @@ extension CabalmailClient {
         return fresh
     }
 
+    /// Apex domains the signed-in user is entitled to mint addresses on.
+    ///
+    /// Mirrors the React app's `Addresses/Request.jsx` gate: `/list_my_domains`
+    /// returns the intersection of the deployment's configured mail domains
+    /// and the caller's allow rows in `cabal-user-domain-access`. Views
+    /// filter `configuration.domains` down to this set before showing the
+    /// domain picker so users can't select an apex the `/new` Lambda would
+    /// then reject with a 4xx.
+    public func allowedDomains() async throws -> [String] {
+        try await apiClient.listMyDomains()
+    }
+
     public func requestAddress(
         username: String,
         subdomain: String,

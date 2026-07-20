@@ -112,6 +112,21 @@ extension URLSessionApiClient {
         guard let raw = decoded?.url, !raw.isEmpty else { return nil }
         return URL(string: raw)
     }
+
+    public func listMyDomains() async throws -> [String] {
+        let request = try await get("/list_my_domains")
+        let data = try await send(request, expectedStatuses: 200..<300)
+        // Real Lambda wire shape (`lambda/api/list_my_domains/function.py`):
+        // `{"Domains": [<apex>...]}`. A missing or non-list key reads as
+        // "no allowed apexes" rather than an error, so a partially-migrated
+        // deployment surfaces an explicit empty picker instead of crashing.
+        struct Payload: Decodable {
+            // swiftlint:disable:next identifier_name
+            let Domains: [String]?
+        }
+        let decoded = try? JSONDecoder().decode(Payload.self, from: data)
+        return decoded?.Domains ?? []
+    }
 }
 
 // MARK: - Folders

@@ -32,7 +32,12 @@ struct NewAddressView: View {
             }
         }
         .navigationTitle("New Address")
-        .onAppear {
+        .task {
+            // Fetch the entitled apex list (silent-fails to the configured
+            // full list, matching the phone sheet) before seeding the
+            // picker, so we never hand the user an apex the `/new` Lambda
+            // will reject.
+            await model.loadAllowedDomains()
             if domain.isEmpty, let first = model.domains.first?.domain {
                 domain = first
             }
