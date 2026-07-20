@@ -111,6 +111,8 @@ The output contains the nameservers that AWS assigned to your mail domains. To w
 
 ## SMS verification (Required for phone verification)
 
+SMS delivery gates signup itself: Cognito verifies each new user's phone number by SMS at account creation, so no one can register until this section is complete. Both items below are independent of each other and of the remaining post-automation steps, and they carry the longest approval lead times in the whole setup -- start both as soon as the nameserver update has propagated and the front-door site resolves, and let them run while you work through the rest of this guide.
+
 Cognito sends verification SMS through AWS SNS. Delivery requires both of the following, in either order:
 
 - **A registered origination number.** US carriers only deliver from registered senders; follow the [10DLC SMS registration guide](./sms-10dlc.md) to register the brand and campaign and provision the number.
