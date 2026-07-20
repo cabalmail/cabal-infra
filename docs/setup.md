@@ -111,7 +111,10 @@ The output contains the nameservers that AWS assigned to your mail domains. To w
 
 ## SMS verification (Required for phone verification)
 
-Cognito sends verification SMS through AWS SNS. New AWS accounts are placed in the SNS SMS sandbox, which restricts delivery to manually verified phone numbers only. For production use, you must request production access.
+Cognito sends verification SMS through AWS SNS. Delivery requires both of the following, in either order:
+
+- **A registered origination number.** US carriers only deliver from registered senders; follow the [10DLC SMS registration guide](./sms-10dlc.md) to register the brand and campaign and provision the number.
+- **SNS production access.** New AWS accounts are placed in the SNS SMS sandbox, which restricts delivery to manually verified phone numbers only. For production use, you must request production access.
 
 1. Open the [Amazon SNS console](https://console.aws.amazon.com/sns/v3/home#/mobile/text-messaging) in your production account.
 2. In the left navigation, choose **Text messaging (SMS)**.
