@@ -52,6 +52,7 @@ yet, change the product first, redeploy, re-screenshot, then resubmit.
 4. **CLI permissions.** The commands below need `sms-voice:*` read
    plus `CreateRegistration`, `CreateRegistrationVersion`,
    `PutRegistrationFieldValue`, `DeleteRegistrationFieldValue`,
+   `CreateRegistrationAssociation`, `ListRegistrationAssociations`,
    `SubmitRegistrationVersion`, and `DiscardRegistrationVersion`. The
    AWS console works too if you prefer forms over field paths.
 
@@ -105,6 +106,18 @@ aws pinpoint-sms-voice-v2 create-registration \
   --registration-type US_TEN_DLC_CAMPAIGN_REGISTRATION
 ```
 
+**Associate the campaign with the brand before submitting.** The
+campaign's type definition declares the brand association as
+`ASSOCIATE_BEFORE_SUBMIT`; the console creates this link implicitly,
+the CLI does not, and an unassociated campaign is refused at
+submission with `SUBMIT_REGISTRATION_VERSION_NOT_ALLOWED`:
+
+```sh
+aws pinpoint-sms-voice-v2 create-registration-association \
+  --registration-id <campaign registration id> \
+  --resource-id <brand registration id>
+```
+
 Field values that have passed carrier review, templated on
 `<legal name>` (the registered brand) and `<control domain>`:
 
@@ -119,6 +132,7 @@ Field values that have passed carrier review, templated on
 | `campaignInfo.vertical` | `COMMUNICATION` |
 | `campaignInfo.privacyPolicyLink` | `https://www.<control domain>/privacy.html` |
 | `campaignInfo.termsAndConditionsLink` | `https://www.<control domain>/terms.html` |
+| `campaignInfo.campaignName` | Required. A description paragraph, not a short name — see below |
 
 `campaignInfo.campaignName` — despite the name, treat this as the
 campaign *description*. Say who the operator is, what Cabalmail is,
@@ -164,6 +178,22 @@ Then submit:
 
 ```sh
 aws pinpoint-sms-voice-v2 submit-registration-version --registration-id <id>
+```
+
+If the submit is refused with `ConflictException` /
+`SUBMIT_REGISTRATION_VERSION_NOT_ALLOWED` while the version is still
+`DRAFT`, either the brand association is missing (see above; check
+with `list-registration-associations`) or a required field is
+missing. Find a missing field by diffing the draft against the field
+definitions:
+
+```sh
+aws pinpoint-sms-voice-v2 describe-registration-field-definitions \
+  --registration-type US_TEN_DLC_CAMPAIGN_REGISTRATION \
+  --query 'RegistrationFieldDefinitions[?FieldRequirement==`REQUIRED`].FieldPath'
+aws pinpoint-sms-voice-v2 describe-registration-field-values \
+  --registration-id <id> --version-number <draft> \
+  --query 'RegistrationFieldValues[].FieldPath'
 ```
 
 Campaign review is typically fast (hours, not weeks). Poll with:
