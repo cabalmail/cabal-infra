@@ -67,44 +67,43 @@ Theoretically, it should also be safe to change any of the variables except the 
 
 # Post-Automation Steps<a name="PostAutomation"></a>
 
-Look at the output from Terraform at the end of apply/apply-terraform in GitHub Actions. It should look something like this:
-
-```json
-{
-  "IMPORTANT": [
-    "You must get permission from AWS to relay mail through the below IP addresses. See the section on Port 25 in docs/setup.md.",
-    "You must update your domain registrations with the name servers from the below domains. See the section on Nameservers in docs/setup.md"
-  ],
-  "domains": [
+1. Look at the output from Terraform at the end of apply/apply-terraform in GitHub Actions. It should look something like this:
+    ```json
     {
-      "domain": "example.com",
-      "name_servers": [
-        "ns-1111.awsdns-55.net",
-        "ns-2222.awsdns-66.org",
-        "ns-3333.awsdns-77.co.uk",
-        "ns-4444.awsdns-88.com"
+      "IMPORTANT": [
+        "You must get permission from AWS to relay mail through the below IP addresses. See the section on Port 25 in docs/setup.md.",
+        "You must update your domain registrations with the name servers from the below domains. See the section on Nameservers in docs/setup.md"
       ],
-      "zone_id": "Z0431XXXXXXXXXXXXXXX0"
-    },
-    {
-      "domain": "example.org",
-      "name_servers": [
-        "ns-1111.awsdns-55.org",
-        "ns-2222.awsdns-66.com",
-        "ns-3333.awsdns-77.net",
-        "ns-4444.awsdns-88.co.uk"
+      "domains": [
+        {
+          "domain": "example.com",
+          "name_servers": [
+            "ns-1111.awsdns-55.net",
+            "ns-2222.awsdns-66.org",
+            "ns-3333.awsdns-77.co.uk",
+            "ns-4444.awsdns-88.com"
+          ],
+          "zone_id": "Z0431XXXXXXXXXXXXXXX0"
+        },
+        {
+          "domain": "example.org",
+          "name_servers": [
+            "ns-1111.awsdns-55.org",
+            "ns-2222.awsdns-66.com",
+            "ns-3333.awsdns-77.net",
+            "ns-4444.awsdns-88.co.uk"
+          ],
+          "zone_id": "Z0431XXXXXXXXXXXXXXX1"
+        }
       ],
-      "zone_id": "Z0431XXXXXXXXXXXXXXX1"
+      "relay_ips": {
+        "addresses": [
+          "192.168.0.1"
+        ],
+        "domain": "smtp.example.net"
     }
-  ],
-  "relay_ips": {
-    "addresses": [
-      "192.168.0.1"
-    ],
-    "domain": "smtp.example.net"
-}
-```
-
+    ```
+2. Follow the steps in [docs/sms-10dlc.md](sms-t0dlc.md). 
 ## Nameservers (What to do with the `domains` output)
 
 The output contains the nameservers that AWS assigned to your mail domains. To work at all, you must [update your domain registrations with these nameservers](./registrar.md).
