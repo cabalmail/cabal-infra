@@ -38,6 +38,12 @@ final class PreferencesSyncCoordinator {
     /// Debounce window for pushes: a quick flurry of toggles collapses to one
     /// write. Matches `NavStateCoordinator`'s cursor-save cadence.
     private let saveDebounce: Duration = .seconds(1)
+    /// Set by `stop()`. `start()`/`reconcile()` run their server pull as a
+    /// detached task the caller doesn't hold, so sign-out can land while a
+    /// fetch is in flight; without this guard the late response would apply
+    /// the *previous* account's settings into whatever scope `Preferences`
+    /// has activated by then — the cross-account leak, resurrected.
+    private var stopped = false
 
     init(client: CabalmailClient, preferences: Preferences) {
         self.client = client
@@ -48,14 +54,19 @@ final class PreferencesSyncCoordinator {
     /// local edits. Safe to call once per wired session.
     func start() async {
         await pullFromServer()
+        // A sign-out during the pull above must not re-attach the observer
+        // (`stop()` already detached it for good).
+        guard !stopped else { return }
         preferences.onLocalChange = { [weak self] in
             self?.scheduleSave()
         }
     }
 
-    /// Detaches the local-edit observer and cancels any pending push. Called on
-    /// sign-out before the coordinator is released.
+    /// Detaches the local-edit observer, cancels any pending push, and marks
+    /// the coordinator dead so an in-flight server pull is discarded instead
+    /// of applied. Called on sign-out before the coordinator is released.
     func stop() {
+        stopped = true
         saveTask?.cancel()
         saveTask = nil
         preferences.onLocalChange = nil
@@ -73,6 +84,9 @@ final class PreferencesSyncCoordinator {
     /// user has never synced) leaves the local defaults in place.
     private func pullFromServer() async {
         guard let remote = try? await client.fetchAppPreferences(), !remote.isEmpty else { return }
+        // The fetch may have raced a sign-out; this account's values must
+        // not land in the next account's (already re-activated) scope.
+        guard !stopped else { return }
         preferences.applyRemote(remote)
         // Record the applied set so the value we just wrote in doesn't read as
         // a local edit and echo straight back out.
