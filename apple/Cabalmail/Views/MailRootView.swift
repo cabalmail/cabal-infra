@@ -199,9 +199,16 @@ struct MailRootView: View {
                 // empty and permanently collapsed. Removing the system sidebar
                 // toggle keeps the content toolbar from offering to reveal the
                 // empty column — the custom button in `decoratedContentColumn`
-                // drives the panel instead.
+                // drives the panel instead. The zero column width matters:
+                // `splitVisibility`'s pinned `.doubleColumn` only holds until
+                // a rotation or window resize, when UIKit's split controller
+                // re-expands the sidebar on its own and the constant binding
+                // can't push back — tiling this column in as a blank leading
+                // pane. At width 0 the re-expanded column has no footprint,
+                // so the pane can never appear.
                 Color.clear
                     .toolbar(removing: .sidebarToggle)
+                    .navigationSplitViewColumnWidth(0)
             } else {
                 sidebar
             }
