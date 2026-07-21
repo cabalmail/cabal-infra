@@ -226,22 +226,30 @@ export default class ApiClient {
 
   // Send
 
-  sendMessage(smtp_host, sender, to_list, cc_list, bcc_list, subject, other_headers, html_body, text_body, draft, attachments) {
+  sendMessage(smtp_host, sender, to_list, cc_list, bcc_list, subject, other_headers, html_body, text_body, draft, attachments, discard_draft) {
+    // discard_draft: { uid, uidvalidity } — coordinates of the Drafts copy
+    // this send supersedes. The server best-effort expunges it after a
+    // successful delivery (Drafts-scoped, UIDVALIDITY-guarded).
+    const body = {
+      smtp_host: smtp_host,
+      host: this.host,
+      sender: sender,
+      to_list: to_list,
+      cc_list: cc_list,
+      bcc_list: bcc_list,
+      subject: subject,
+      other_headers: other_headers,
+      html: html_body,
+      text: text_body,
+      draft: draft, // false == outbox, true == drafts
+      attachments: attachments || []
+    };
+    if (discard_draft && discard_draft.uid != null && discard_draft.uidvalidity != null) {
+      body.discard_draft_uid = discard_draft.uid;
+      body.discard_draft_uidvalidity = discard_draft.uidvalidity;
+    }
     const response = axios.put('/send',
-      JSON.stringify({
-        smtp_host: smtp_host,
-        host: this.host,
-        sender: sender,
-        to_list: to_list,
-        cc_list: cc_list,
-        bcc_list: bcc_list,
-        subject: subject,
-        other_headers: other_headers,
-        html: html_body,
-        text: text_body,
-        draft: draft, // false == outbox, true == drafts
-        attachments: attachments || []
-      }),
+      JSON.stringify(body),
       {
         baseURL: this.baseURL,
         headers: {
@@ -251,6 +259,49 @@ export default class ApiClient {
       }
     );
     return response;
+  }
+
+  // Draft lifecycle. /save_draft accepts the /send compose payload plus:
+  //   op:                     'save' (default) or 'discard'
+  //   replaces_uid,           the prior server copy this save supersedes,
+  //   replaces_uidvalidity    or the copy to remove on discard. Both or none.
+  //
+  // Every operation is pinned to the top-level Drafts folder server-side
+  // (see docs/draft-sync-and-threading.md); the worst outcome of any
+  // guarded failure mode is an extra draft copy, never a lost one.
+  saveDraft({
+    sender, to_list, cc_list, bcc_list, subject, other_headers,
+    html_body, text_body, attachments, op, replaces
+  }) {
+    const body = {
+      host: this.host,
+      sender: sender,
+      to_list: to_list,
+      cc_list: cc_list,
+      bcc_list: bcc_list,
+      subject: subject,
+      other_headers: other_headers,
+      html: html_body,
+      text: text_body,
+      attachments: attachments || [],
+      op: op || 'save'
+    };
+    if (replaces && replaces.uid != null && replaces.uidvalidity != null) {
+      body.replaces_uid = replaces.uid;
+      body.replaces_uidvalidity = replaces.uidvalidity;
+    }
+    return axios.put('/save_draft',
+      JSON.stringify(body),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        // Draft saves are IMAP writes; give them the same headroom as other
+        // bulk mutations so a slow-but-successful append doesn't false-fail.
+        timeout: MUTATION_TIMEOUT
+      }
+    );
   }
 
   // Attachment uploads
