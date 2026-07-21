@@ -12,6 +12,9 @@ const mockGetAttachmentUploadUrls = vi.fn();
 const mockUploadAttachmentToS3 = vi.fn().mockResolvedValue({});
 const mockGetAttachment = vi.fn();
 const mockDownloadAttachment = vi.fn();
+const mockSaveDraft = vi.fn().mockResolvedValue({
+  data: { status: 'saved', uid: 42, uidvalidity: 7, replaced: false }
+});
 
 const mockApi = {
   getAddresses: mockGetAddresses,
@@ -20,6 +23,7 @@ const mockApi = {
   uploadAttachmentToS3: mockUploadAttachmentToS3,
   getAttachment: mockGetAttachment,
   downloadAttachment: mockDownloadAttachment,
+  saveDraft: mockSaveDraft,
   newAddress: vi.fn().mockResolvedValue({ data: { address: 'new@test.com' } }),
 };
 
@@ -448,5 +452,212 @@ describe('ComposeOverlay', () => {
     } finally {
       unmount();
     }
+  });
+
+  describe('draft autosave (/save_draft)', () => {
+    it('shows "Draft not saved" on a fresh, un-typed compose (no timestamp label)', async () => {
+      const { container, unmount } = renderCompose();
+      try {
+        await waitFor(() => {
+          expect(mockGetAddresses).toHaveBeenCalled();
+        });
+        // The Saved indicator lives in .compose-saved. Regression guard for
+        // issue #718: the pre-fix stub set "Saved just now" on mount even
+        // with no content — that lie is what let closing feel safe.
+        const label = container.querySelector('.compose-saved');
+        expect(label.textContent).toMatch(/Draft not saved/i);
+        expect(label.textContent).not.toMatch(/Saved just now/);
+      } finally {
+        unmount();
+      }
+    });
+
+    it('does not autosave when nothing has been typed', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const { unmount } = renderCompose();
+        try {
+          await waitFor(() => {
+            expect(mockGetAddresses).toHaveBeenCalled();
+          });
+          // Advance far past the debounce; performServerSave's hasContent
+          // gate should keep /save_draft from ever firing.
+          await act(async () => {
+            vi.advanceTimersByTime(60000);
+            await Promise.resolve();
+          });
+          expect(mockSaveDraft).not.toHaveBeenCalled();
+        } finally {
+          unmount();
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('fires /save_draft after a typing pause and marks the draft saved', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const { container, unmount } = renderCompose();
+        try {
+          await waitFor(() => {
+            expect(mockGetAddresses).toHaveBeenCalled();
+          });
+          // Pick a From (server rejects unauthorized senders, so autosave
+          // gates on this too).
+          fireEvent.click(screen.getByLabelText('From'));
+          fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+          fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'hello' } });
+
+          // Drive the 3s debounce past the fire point.
+          await act(async () => {
+            vi.advanceTimersByTime(4000);
+            await Promise.resolve();
+          });
+
+          await waitFor(() => {
+            expect(mockSaveDraft).toHaveBeenCalled();
+          });
+          const args = mockSaveDraft.mock.calls[0][0];
+          expect(args.sender).toBe('user@test.com');
+          expect(args.subject).toBe('hello');
+          expect(args.op).toBe('save');
+          // First save: no prior copy to replace.
+          expect(args.replaces).toBeNull();
+
+          // Label flips to the truthful "Saved just now" once the save
+          // resolves.
+          await waitFor(() => {
+            expect(container.querySelector('.compose-saved').textContent)
+              .toMatch(/Saved just now/);
+          });
+        } finally {
+          unmount();
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('passes prior UIDPLUS coordinates as replaces_* on the next save', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        mockSaveDraft
+          .mockResolvedValueOnce({ data: { uid: 42, uidvalidity: 7 } })
+          .mockResolvedValueOnce({ data: { uid: 43, uidvalidity: 7, replaced: true } });
+        const { unmount } = renderCompose();
+        try {
+          await waitFor(() => {
+            expect(mockGetAddresses).toHaveBeenCalled();
+          });
+          fireEvent.click(screen.getByLabelText('From'));
+          fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+          fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'first' } });
+          await act(async () => {
+            vi.advanceTimersByTime(4000);
+            await Promise.resolve();
+          });
+          await waitFor(() => {
+            expect(mockSaveDraft).toHaveBeenCalledTimes(1);
+          });
+
+          fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'second' } });
+          await act(async () => {
+            vi.advanceTimersByTime(4000);
+            await Promise.resolve();
+          });
+          await waitFor(() => {
+            expect(mockSaveDraft).toHaveBeenCalledTimes(2);
+          });
+          const secondCall = mockSaveDraft.mock.calls[1][0];
+          expect(secondCall.replaces).toEqual({ uid: 42, uidvalidity: 7 });
+        } finally {
+          unmount();
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('flushes a pending draft on close-without-send', async () => {
+      const hide = vi.fn();
+      const { unmount } = renderCompose({ hide });
+      try {
+        await waitFor(() => {
+          expect(mockGetAddresses).toHaveBeenCalled();
+        });
+        fireEvent.click(screen.getByLabelText('From'));
+        fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+        fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'quick note' } });
+
+        // Close immediately — before the 3s debounce would have fired.
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        expect(hide).toHaveBeenCalled();
+        await waitFor(() => {
+          expect(mockSaveDraft).toHaveBeenCalled();
+        });
+        expect(mockSaveDraft.mock.calls[0][0].subject).toBe('quick note');
+      } finally {
+        unmount();
+      }
+    });
+
+    it('does not save on close when no content was entered', async () => {
+      const hide = vi.fn();
+      const { unmount } = renderCompose({ hide });
+      try {
+        await waitFor(() => {
+          expect(mockGetAddresses).toHaveBeenCalled();
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        expect(hide).toHaveBeenCalled();
+        // Give any spurious promise a tick to settle.
+        await act(async () => { await Promise.resolve(); });
+        expect(mockSaveDraft).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
+
+    it('passes discard_draft coordinates to /send after autosave wrote a copy', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        mockSaveDraft.mockResolvedValueOnce({ data: { uid: 99, uidvalidity: 5 } });
+        mockGetAttachmentUploadUrls.mockResolvedValueOnce({ data: { uploads: [] } });
+        const { unmount } = renderCompose();
+        try {
+          await waitFor(() => {
+            expect(mockGetAddresses).toHaveBeenCalled();
+          });
+          fireEvent.click(screen.getByLabelText('From'));
+          fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+          const toInput = screen.getByLabelText('Recipients');
+          fireEvent.change(toInput, { target: { value: 'dest@test.com' } });
+          fireEvent.keyDown(toInput, { key: 'Enter' });
+          fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'hi' } });
+
+          // Let autosave run to seed draftCoords.
+          await act(async () => {
+            vi.advanceTimersByTime(4000);
+            await Promise.resolve();
+          });
+          await waitFor(() => {
+            expect(mockSaveDraft).toHaveBeenCalled();
+          });
+
+          vi.useRealTimers();
+          fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+          await waitFor(() => {
+            expect(mockSendMessage).toHaveBeenCalled();
+          });
+          const discardArg = mockSendMessage.mock.calls[0][11];
+          expect(discardArg).toEqual({ uid: 99, uidvalidity: 5 });
+        } finally {
+          unmount();
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

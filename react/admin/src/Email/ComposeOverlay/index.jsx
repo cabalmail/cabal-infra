@@ -177,14 +177,32 @@ function ComposeOverlay({
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [windowState, setWindowState] = useState('normal'); // 'normal' | 'minimized' | 'expanded'
   const [sending, setSending] = useState(false);
+  // savedAt flips to a real timestamp only after a successful /save_draft
+  // round-trip; the "Saved just now" label is truthful (never set on a
+  // freshly opened, un-typed compose).
   const [savedAt, setSavedAt] = useState(null);
   const [, setSavedTick] = useState(0); // forces re-render for "Saved just now" label
+  const [editorRevision, setEditorRevision] = useState(0); // bumped by editor.onUpdate
   const [pendingImport, setPendingImport] = useState(null); // 'fromRich' | 'fromMarkdown' | null
   const [attachments, setAttachments] = useState([]); // [{ id, filename, mimeType, file (Blob), size }]
   const markdownRef = useRef(null);
   const rootRef = useRef(null);
   const autosaveRef = useRef(null);
   const fileInputRef = useRef(null);
+  // Server draft state: coordinates of the current Drafts copy (from the
+  // last successful /save_draft APPENDUID). Passed as replaces_* on the
+  // next save, and as discard_draft_* on /send so the stale copy is
+  // expunged after delivery.
+  const draftCoordsRef = useRef(null);
+  const saveInFlightRef = useRef(false);
+  // dirty = content has changed since the last successful server save.
+  // Guards the autosave debounce against no-op saves and lets the
+  // close-without-send handler decide whether to flush.
+  const dirtyRef = useRef(false);
+  // Debounce interval before the autosave fires. Small enough that a
+  // typing pause captures the draft on the server; not so small that
+  // heavy typing floods IMAP appends.
+  const AUTOSAVE_DEBOUNCE_MS = 3000;
 
   const addresses = useMemo(
     () => addressItems.map((a) => a.address),
@@ -394,19 +412,125 @@ function ComposeOverlay({
     return () => window.clearInterval(id);
   }, []);
 
-  // Autosave stub — §4e calls for every 2s of idleness. There is no server-
-  // side draft endpoint yet, so for now we debounce a local timestamp that
-  // powers the "Saved just now" label. When a draft API lands, hook into it
-  // here instead of the timestamp-only placeholder.
+  // The tiptap editor manages its own state, so state-driven effects don't
+  // see typing in the body. Bump a revision counter on every editor update
+  // so the autosave debounce and the isEditorEmpty gate re-evaluate.
   useEffect(() => {
+    if (!editor) return undefined;
+    const handler = () => setEditorRevision((r) => r + 1);
+    editor.on('update', handler);
+    return () => {
+      editor.off('update', handler);
+    };
+  }, [editor]);
+
+  const hasContent = useCallback(() => {
+    if (Subject.trim()) return true;
+    if (To.length > 0 || CC.length > 0 || BCC.length > 0) return true;
+    if (markdownContent.trim()) return true;
+    if (editor && !isEditorEmpty(editor)) return true;
+    return false;
+  // editorRevision drives editor-content changes since isEditorEmpty is not
+  // otherwise reactive.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Subject, To, CC, BCC, markdownContent, editor, editorRevision]);
+
+  // Same body-shape derivation handleSend uses: pick from tiptap HTML and
+  // the markdown textarea, prefer whichever pane has content, and produce
+  // both halves for the multipart/alternative MIME.
+  const buildComposeBodies = useCallback(() => {
+    const richEmpty = isEditorEmpty(editor);
+    const mdEmpty = !markdownContent.trim();
+    let htmlBody;
+    let textBody;
+    if (richEmpty && mdEmpty) {
+      htmlBody = '';
+      textBody = '';
+    } else if (!richEmpty && mdEmpty) {
+      htmlBody = editor.getHTML();
+      textBody = htmlToMarkdown(htmlBody);
+    } else if (richEmpty && !mdEmpty) {
+      textBody = markdownContent;
+      htmlBody = styleParagraphs(markdownToHtml(markdownContent));
+    } else {
+      htmlBody = editor.getHTML();
+      textBody = markdownContent;
+    }
+    return { htmlBody, textBody };
+  }, [editor, markdownContent]);
+
+  const buildComposeHeaders = useCallback(() => {
+    const oh = other_headers || {};
+    const irt = (oh.in_reply_to || []).map((s) => s.trim());
+    const mid = (oh.message_id || []).map((s) => s.trim());
+    const ref = [...new Set([
+      ...(oh.references || []),
+      ...(oh.message_id || []),
+      ...(oh.in_reply_to || []),
+    ])].map((s) => s.trim());
+    return { in_reply_to: irt, message_id: mid, references: ref };
+  }, [other_headers]);
+
+  // Save the current compose state to the server-side Drafts folder via
+  // /save_draft. Fire-and-forget: the caller doesn't await unless it wants
+  // to flush before close. Skipped when a prior save is in flight, when a
+  // send is running, when there is nothing to save, or when no From address
+  // has been picked (/save_draft rejects unauthorized senders).
+  //
+  // Attachments are deliberately omitted from draft saves: /send still
+  // uploads and includes them, but replaying an S3 upload on every debounce
+  // would re-charge bandwidth for large files. See PR notes for the trade-
+  // off; the React UI does not yet offer an "Edit Draft" flow that would
+  // surface the omission.
+  const performServerSave = useCallback(async () => {
+    if (saveInFlightRef.current) return;
+    if (sending) return;
+    if (!hasContent()) return;
+    if (!address) return;
+    const { htmlBody, textBody } = buildComposeBodies();
+    const headers = buildComposeHeaders();
+    saveInFlightRef.current = true;
+    try {
+      const resp = await api.saveDraft({
+        sender: address,
+        to_list: To,
+        cc_list: CC,
+        bcc_list: BCC,
+        subject: Subject,
+        other_headers: headers,
+        html_body: htmlBody,
+        text_body: textBody,
+        attachments: [],
+        op: 'save',
+        replaces: draftCoordsRef.current,
+      });
+      const data = (resp && resp.data) || {};
+      if (data.uid != null && data.uidvalidity != null) {
+        draftCoordsRef.current = { uid: data.uid, uidvalidity: data.uidvalidity };
+      }
+      setSavedAt(Date.now());
+      dirtyRef.current = false;
+    } catch (err) {
+      // Leave dirtyRef true so the next debounce or close-flush retries.
+      console.log('draft save failed', err);
+    } finally {
+      saveInFlightRef.current = false;
+    }
+  }, [sending, hasContent, address, To, CC, BCC, Subject, buildComposeBodies, buildComposeHeaders, api]);
+
+  // Autosave: debounce a server /save_draft after any change to a compose
+  // field or editor content. The effect fires on mount too (initial deps),
+  // but performServerSave's gates make that a no-op for empty composes.
+  useEffect(() => {
+    dirtyRef.current = true;
     if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
     autosaveRef.current = window.setTimeout(() => {
-      setSavedAt(Date.now());
-    }, 2000);
+      performServerSave();
+    }, AUTOSAVE_DEBOUNCE_MS);
     return () => {
       if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
     };
-  }, [To, CC, BCC, Subject, markdownContent, address]);
+  }, [To, CC, BCC, Subject, markdownContent, address, editorRevision, performServerSave]);
 
   const performImportFromRich = useCallback(() => {
     setMarkdownContent(htmlToMarkdown(editor.getHTML()));
@@ -574,7 +698,12 @@ function ComposeOverlay({
       }
       await api.sendMessage(
         effectiveSmtpHost, address, To, CC, BCC, Subject, headers,
-        htmlBody, textBody, false, wireAttachments
+        htmlBody, textBody, false, wireAttachments,
+        // If autosave wrote a Drafts copy, ask /send to expunge it after
+        // successful delivery so the stale draft doesn't linger. Best
+        // effort server-side; a miss becomes a manual cleanup, not a lost
+        // send.
+        draftCoordsRef.current
       );
     };
 
@@ -590,10 +719,21 @@ function ComposeOverlay({
   }, [other_headers, effectiveSmtpHost, recipient, To, CC, BCC, Subject, address, addresses,
       editor, markdownContent, attachments, api, hide, setMessage, addRecipient, randomString]);
 
+  // Close-without-send: match the Apple compose flow and always attempt a
+  // final /save_draft (fire-and-forget) so the draft survives the closing
+  // overlay. Empty / unauthenticated / in-flight composes fall through to
+  // performServerSave's gates and just hide.
   const handleDiscard = useCallback((e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (autosaveRef.current) {
+      window.clearTimeout(autosaveRef.current);
+      autosaveRef.current = null;
+    }
+    if (dirtyRef.current && !sending && hasContent()) {
+      performServerSave().catch(() => { /* logged in performServerSave */ });
+    }
     hide();
-  }, [hide]);
+  }, [hide, sending, hasContent, performServerSave]);
 
   // Attachments are uploaded directly to S3 via presigned PUT URLs, so
   // the only real ceiling is whatever the receiver SMTP server accepts.
