@@ -14,7 +14,7 @@
     "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
     "amazon-cognito-identity-js": "^5.2.3",
-    "axios": "^1.16.0",
+    "axios": "^1.18.0",
     "lucide-react": "^1.8.0",
     "marked": "^18.0.2",
     "prop-types": "^15.8.1",
