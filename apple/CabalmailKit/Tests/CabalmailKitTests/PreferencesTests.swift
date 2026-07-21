@@ -337,4 +337,5 @@ final class PreferencesTests: XCTestCase {
         preferences.applyRemote(["theme": "lunar-eclipse", "unknown_key": "x"])
         XCTAssertEqual(preferences.theme, .dark)
     }
+
 }

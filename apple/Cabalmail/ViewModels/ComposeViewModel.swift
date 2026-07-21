@@ -80,6 +80,13 @@ final class ComposeViewModel {
     /// active states.
     var richSelection: RichTextEditorController.Selection = .init()
 
+    /// True when `fromAddress` was pre-filled from the default-From
+    /// preference rather than the seed. `refreshAddresses` uses this to
+    /// drop a pre-fill the account can't actually send from (a revoked or
+    /// leaked-in default) without touching a reply seed's deliberate
+    /// "From = original addressee" choice.
+    private let fromSeededFromPreference: Bool
+
     /// Immutable compose-context bits; only set during init from a reply /
     /// forward / new-message seed, never mutated after. Access defaults to
     /// `internal` so `ComposeViewModel+Internals.swift` can read them.
@@ -133,6 +140,7 @@ final class ComposeViewModel {
         // requires replies to reuse the address the correspondent already
         // wrote to.
         self.fromAddress = seed.fromAddress ?? preferences.defaultFromAddress
+        self.fromSeededFromPreference = seed.fromAddress == nil && preferences.defaultFromAddress != nil
         self.toText = seed.to.joined(separator: ", ")
         self.ccText = seed.cc.joined(separator: ", ")
         self.bccText = seed.bcc.joined(separator: ", ")
@@ -201,6 +209,19 @@ final class ComposeViewModel {
             availableAddresses = try await client.addresses(forceRefresh: forceRefresh)
         } catch {
             errorMessage = "Couldn't load addresses: \(error)"
+            return
+        }
+        // The preference-seeded pre-fill is only trustworthy once the real
+        // address list confirms it. A default that isn't in the list — a
+        // revoked address, or one leaked in from another account before
+        // preferences were account-scoped — must not sit in the From field
+        // of a message the user is about to send. Reconciling the
+        // preference also pushes the cleared value to the server, healing
+        // the synced copy that keeps re-applying it at sign-in.
+        preferences.reconcileDefaultFromAddress(available: availableAddresses.map(\.address))
+        if fromSeededFromPreference, let current = fromAddress, !availableAddresses.isEmpty,
+           !availableAddresses.contains(where: { $0.address == current }) {
+            fromAddress = nil
         }
     }
 

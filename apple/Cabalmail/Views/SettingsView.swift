@@ -258,6 +258,12 @@ struct SettingsView: View {
         if let addresses = try? await client.addresses(forceRefresh: force) {
             availableAddresses = addresses
                 .sorted { $0.address.localizedCaseInsensitiveCompare($1.address) == .orderedAscending }
+            // Actually clear a dangling default (revoked, or leaked in from
+            // another account pre-scoping) rather than leaving the masked
+            // "None" the picker binding shows — the underlying value would
+            // otherwise keep pre-filling compose, and selecting "None" can't
+            // remove it because the picker already reads as "None".
+            preferences.reconcileDefaultFromAddress(available: addresses.map(\.address))
         }
     }
 
