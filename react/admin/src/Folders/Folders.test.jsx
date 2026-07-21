@@ -101,22 +101,73 @@ describe('Folders rail', () => {
     expect(onNewMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('can delete a custom folder via the row remove action', async () => {
-    mockDeleteFolder.mockResolvedValue({ data: { folders: [], sub_folders: [] } });
-    renderFolders();
-    await waitFor(() => expect(screen.getAllByText('Receipts').length).toBeGreaterThan(0));
-    // Receipts is subscribed so it renders in both sections; either remove
-    // button targets the same folder.
-    const btns = screen.getAllByRole('button', { name: /remove receipts/i });
-    await act(async () => { fireEvent.click(btns[0]); });
-    expect(mockDeleteFolder).toHaveBeenCalledWith('Receipts');
-  });
-
   it('never offers a remove action on permanent folders', async () => {
     renderFolders();
     await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /remove inbox/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /remove drafts/i })).not.toBeInTheDocument();
+  });
+
+  describe('delete folder', () => {
+    it('confirms before deleting a custom folder from the row remove action', async () => {
+      mockDeleteFolder.mockResolvedValue({ data: { folders: [], sub_folders: [] } });
+      renderFolders();
+      await waitFor(() => expect(screen.getAllByText('Receipts').length).toBeGreaterThan(0));
+      // Receipts is subscribed so it renders in both sections; either remove
+      // button targets the same folder.
+      const btns = screen.getAllByRole('button', { name: /remove receipts/i });
+      await act(async () => { fireEvent.click(btns[0]); });
+      // Nothing happens until the dialog is confirmed.
+      expect(mockDeleteFolder).not.toHaveBeenCalled();
+      const dialog = screen.getByRole('alertdialog');
+      expect(within(dialog).getByText(/Receipts/)).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: /delete folder/i }));
+      });
+      expect(mockDeleteFolder).toHaveBeenCalledWith('Receipts');
+    });
+
+    it('does nothing when the delete confirmation is cancelled', async () => {
+      renderFolders();
+      await waitFor(() => expect(screen.getAllByText('Receipts').length).toBeGreaterThan(0));
+      const btns = screen.getAllByRole('button', { name: /remove receipts/i });
+      await act(async () => { fireEvent.click(btns[0]); });
+      const dialog = screen.getByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mockDeleteFolder).not.toHaveBeenCalled();
+    });
+
+    it('surfaces an error message when the delete fails', async () => {
+      mockDeleteFolder.mockRejectedValue(new Error('boom'));
+      const setMessage = vi.fn();
+      renderFolders({ setMessage });
+      await waitFor(() => expect(screen.getAllByText('Receipts').length).toBeGreaterThan(0));
+      const btns = screen.getAllByRole('button', { name: /remove receipts/i });
+      await act(async () => { fireEvent.click(btns[0]); });
+      const dialog = screen.getByRole('alertdialog');
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: /delete folder/i }));
+      });
+      await waitFor(() =>
+        expect(setMessage).toHaveBeenCalledWith('Unable to delete folder.', true)
+      );
+    });
+
+    it('warns about subfolders when the target has children', async () => {
+      mockGetFolderList.mockResolvedValue({
+        data: {
+          folders: ['INBOX', 'Work', 'Work/Q1'],
+          sub_folders: [],
+        },
+      });
+      renderFolders({ folder: 'INBOX' });
+      await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument());
+      const removeBtn = screen.getByRole('button', { name: /remove work/i });
+      await act(async () => { fireEvent.click(removeBtn); });
+      const dialog = screen.getByRole('alertdialog');
+      expect(within(dialog).getByText(/subfolders/i)).toBeInTheDocument();
+    });
   });
 
   describe('empty trash', () => {
