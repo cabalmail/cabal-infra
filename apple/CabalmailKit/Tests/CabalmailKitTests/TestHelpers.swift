@@ -159,9 +159,16 @@ actor StubAuthService: AuthService {
         self.credentials = credentials
     }
 
-    func signIn(username: String, password: String) async throws {
+    func signIn(username: String, password: String) async throws -> SignInResult {
         credentials = ImapCredentials(username: username, password: password)
+        return .signedIn
     }
+
+    func submitMfaCode(_ code: String) async throws {}
+    func totpEnabled() async throws -> Bool { false }
+    func beginTotpEnrollment() async throws -> String { "STUBSECRET" }
+    func confirmTotpEnrollment(code: String) async throws {}
+    func disableTotp() async throws {}
 
     func signUp(username: String, password: String, email: String?, phone: String?) async throws {}
     func confirmSignUp(username: String, code: String) async throws {}
