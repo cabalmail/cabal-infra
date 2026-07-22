@@ -25,6 +25,15 @@ resource "aws_cognito_user_pool" "users" {
   sms_verification_message   = local.sms_enabled ? "Your Cabalmail verification code is {####}." : null
   sms_authentication_message = local.sms_enabled ? "Your Cabalmail verification code is {####}." : null
 
+  # Brand the emails Cognito sends (signup confirmation, attribute
+  # verification, password reset) to match the SMS template. The sender
+  # stays no-reply@verificationemail.com - that is fixed for the
+  # COGNITO_DEFAULT email service; only SES would change it.
+  verification_message_template {
+    email_subject = "Your Cabalmail verification code"
+    email_message = "Your Cabalmail verification code is {####}."
+  }
+
   dynamic "sms_configuration" {
     for_each = local.sms_enabled ? [1] : []
     content {
