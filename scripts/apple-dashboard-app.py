@@ -385,7 +385,7 @@ const LANES=["stage","prod","beta"];
 const CELL_LANES=["built","stage","prod","beta"];
 const LANE_LABEL={built:"Built", stage:"Stage", prod:"Prod", beta:"Beta"};
 const ROLE_ICON={good:"●", warning:"▲", serious:"◆", critical:"✕", neutral:"○", muted:"–"};
-const INTERVALS=[{s:0,label:"Off"},{s:10,label:"10 seconds"},{s:60,label:"1 minute"},{s:120,label:"2 minutes"},{s:300,label:"5 minutes"},{s:900,label:"15 minutes"}];
+const INTERVALS=[{s:0,label:"Off"},{s:10,label:"10 seconds"},{s:60,label:"1 minute"},{s:120,label:"2 minutes"},{s:300,label:"5 minutes"},{s:900,label:"15 minutes"},{s:3600,label:"1 hour"}];
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pill=(label,role)=>`<span class="pill ${role}"><span class="ic">${ROLE_ICON[role]||"○"}</span>${esc(label)}</span>`;
 
