@@ -389,13 +389,23 @@ function App() {
       (err, result) => {
         if (!err) {
           // Let Cognito say where the confirmation code went rather than
-          // assuming: SMS-wired pools send it to the phone, email-only
-          // pools to the email address.
+          // assuming. No delivery details means no code was sent at all:
+          // with SMS off, the check_invite pre-signup trigger auto-confirms
+          // the account (issue #712), so there is nothing to verify here -
+          // email verification happens at first sign-in instead.
           const details = result && result.codeDeliveryDetails;
-          const medium = details && details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
+          if (!details) {
+            setState({ view: "Login", inviteCode: null });
+            setMessage(
+              "Account created. It is pending admin approval; you'll be notified when it is ready.",
+              false
+            );
+            return;
+          }
+          const medium = details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
           setSignupDelivery({
             medium,
-            destination: (details && details.Destination) || null,
+            destination: details.Destination || null,
           });
           setState({ view: "Verify", inviteCode: null });
           setMessage(`Check your ${medium} for a verification code.`, false);
@@ -587,11 +597,20 @@ function App() {
     });
     user.authenticateUser(creds, {
       onSuccess: data => finishLogin(data, user),
-      onFailure: () => {
+      onFailure: (err) => {
         _token = null;
         _expires = Math.floor(new Date() / 1000) - 1;
         setState({ loggedIn: false, view: "Login" });
-        setMessage("Login failed", true);
+        // The require_admin_mfa pre-token-generation trigger (enforce
+        // mode) rejects un-enrolled admins; show its message rather than
+        // a generic failure so the reason is actionable.
+        const mfaBlocked = err && /require.*multi-factor|admin accounts require/i.test(err.message || '');
+        setMessage(
+          mfaBlocked
+            ? "Admin accounts require multi-factor authentication. Contact the operator to restore access."
+            : "Login failed",
+          true
+        );
       },
       // Second-factor challenges (identity plan Phase 1). The CognitoUser
       // carries the challenge session, so it is parked in a ref until the
