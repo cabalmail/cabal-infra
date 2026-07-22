@@ -13,9 +13,10 @@ locals {
 }
 
 resource "aws_cognito_user_pool" "users" {
-  name                     = "cabal"
-  auto_verified_attributes = local.sms_enabled ? ["phone_number"] : []
-  sms_verification_message = local.sms_enabled ? "Your Cabalmail verification code is {####}" : null
+  name                       = "cabal"
+  auto_verified_attributes   = local.sms_enabled ? ["phone_number"] : []
+  sms_verification_message   = local.sms_enabled ? "Your Cabalmail verification code is {####}." : null
+  sms_authentication_message = local.sms_enabled ? "Your Cabalmail verification code is {####}." : null
 
   dynamic "sms_configuration" {
     for_each = local.sms_enabled ? [1] : []
