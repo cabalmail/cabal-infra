@@ -310,6 +310,7 @@ PAGE = r"""<!DOCTYPE html>
   .grp.prod{border-color:color-mix(in srgb,var(--good) 45%,transparent)}
   .grp.beta{border-color:color-mix(in srgb,var(--mac) 45%,transparent)}
   .apppill{display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:12.5px}
+  .expnote{font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; margin-top:2px}
   .assign{font:inherit; font-size:12px; padding:3px 7px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--ink-2); max-width:140px; cursor:pointer}
   .assign:hover{color:var(--ink)}
   .assign:disabled{opacity:.5; cursor:default}
@@ -441,7 +442,8 @@ function renderAll(){
   renderFeatures(); renderLedger();
 
   document.getElementById('footer').innerHTML=
-    `<b>Built</b> = the first build that carried the feature (merged to the <code>stage</code> <i>branch</i>, uploaded to App Store Connect) — it can exist before Apple attaches it to any test group. <b>Stage/Prod/Beta</b> = the first build attached to that TestFlight <i>group</i>. Each cell is the earliest build whose number (a Unix timestamp, <code>date -u +%s</code>) is ≥ when the entry landed on <code>stage</code> (recovered from git); every build from there onward carries it. A feature's first stage build can sit under an earlier marketing version than the one it was cut into. Prod happens only when a version is cut to <code>main</code>; beta is assigned manually. (If a feature's true first build has aged out of TestFlight, the earliest build still in App Store Connect is shown.)`;
+    `<b>Built</b> = the first build that carried the feature (merged to the <code>stage</code> <i>branch</i>, uploaded to App Store Connect) — it can exist before Apple attaches it to any test group. <b>Stage/Prod/Beta</b> = the first build attached to that TestFlight <i>group</i>. Each cell is the earliest build whose number (a Unix timestamp, <code>date -u +%s</code>) is ≥ when the entry landed on <code>stage</code> (recovered from git); every build from there onward carries it. A feature's first stage build can sit under an earlier marketing version than the one it was cut into. Prod happens only when a version is cut to <code>main</code>; beta is assigned manually. (If a feature's true first build has aged out of TestFlight, the earliest build still in App Store Connect is shown.) `+
+    `<b>Apple status</b> mirrors the add-a-build dialog: <b>Ready to Test</b> / <b>Testing</b> mean the build can be (or is) in a test group; <b>Not yet testable</b> means it processed (Valid) but TestFlight hasn't surfaced it yet, so adding it to a group will fail until it flips to Ready to Test.`;
 }
 
 /* ---------- feature matrix (per-feature lanes) ---------- */
@@ -504,6 +506,12 @@ function renderLedger(){
 }
 function th(key,label){ const a=sortKey===key?(sortDir===1?' ▲':' ▼'):''; return `<th onclick="setSort('${key}')">${label}${a}</th>`; }
 function setSort(key){ if(sortKey===key) sortDir*=-1; else {sortKey=key; sortDir=1;} renderLedgerRows(); }
+function expNote(r){
+  if(r.expired || !r.expires) return '';
+  const days=Math.ceil((new Date(r.expires)-Date.now())/86400000);
+  if(!isFinite(days) || days<0) return '';
+  return `<div class="expnote">expires in ${days}d</div>`;
+}
 function renderLedgerRows(){
   if(!MODEL) return;
   const appF=document.getElementById('f-app').value, platF=document.getElementById('f-plat').value, laneF=document.getElementById('f-lane').value, q=document.getElementById('f-q').value.trim().toLowerCase();
@@ -523,7 +531,7 @@ function renderLedgerRows(){
     <td class="num mono">${esc(r.build_number)}</td>
     <td class="num mono" style="color:var(--ink-2)">${esc(r.build_date||'—')}</td>
     <td class="num mono" style="color:var(--ink-2)">${esc((r.uploaded||'').replace('T',' ').replace(/:\d\dZ?$/,'').replace('Z',''))||'—'}</td>
-    <td>${pill(r.status_label,r.status_role)}</td>
+    <td>${pill(r.status_label,r.status_role)}${expNote(r)}</td>
     <td>${r.lanes.length? r.lanes.map(l=>`<span class="grp ${l}">${LANE_LABEL[l]}</span>`).join('') : '<span class="lane-none">—</span>'}</td>
     <td>${assignSelect(r)}</td>
   </tr>`).join('');

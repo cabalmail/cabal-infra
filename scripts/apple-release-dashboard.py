@@ -383,7 +383,7 @@ def fetch_app(app, token_factory):
         f"/v1/builds?filter[app]={app_id}"
         "&sort=-uploadedDate&limit=200"
         "&include=preReleaseVersion,buildBetaDetail,betaGroups"
-        "&fields[builds]=version,uploadedDate,processingState,expired,"
+        "&fields[builds]=version,uploadedDate,processingState,expired,expirationDate,"
         "preReleaseVersion,buildBetaDetail,betaGroups"
         "&fields[preReleaseVersions]=version,platform"
         "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
@@ -427,6 +427,8 @@ def fetch_app(app, token_factory):
                 "uploaded": attrs.get("uploadedDate", ""),
                 "processing_state": attrs.get("processingState", ""),
                 "expired": bool(attrs.get("expired")),
+                "expiration": attrs.get("expirationDate", ""),
+                "beta_detail_missing": False,
                 "marketing_version": marketing,
                 "platform": platform,
                 "internal_state": internal_state,
@@ -435,7 +437,61 @@ def fetch_app(app, token_factory):
                 "lanes": lanes,
             }
         )
+    # The builds-list `include=buildBetaDetail` is unreliable: ASC often omits
+    # the detail resource / relationship linkage even for builds TestFlight
+    # already shows as Ready to Test. Query the details directly (batched) for
+    # whatever the include failed to cover. A build still absent after that
+    # genuinely has no beta detail yet - the "ripening" gap between
+    # processingState=VALID and Ready to Test - and cannot be added to a test
+    # group, which the status functions surface as "Not yet testable".
+    missing = [b for b in builds if not b["internal_state"] and not b["expired"]]
+    if missing:
+        details = fetch_beta_details_by_build([b["id"] for b in missing], token_factory)
+        recovered = 0
+        for b in missing:
+            if b["id"] in details:
+                b["internal_state"], b["external_state"] = details[b["id"]]
+                recovered += 1
+            else:
+                b["beta_detail_missing"] = True
+        sys.stderr.write(
+            f"  beta details: {recovered} recovered by direct query, "
+            f"{len(missing) - recovered} not yet surfaced by TestFlight\n"
+        )
     return {"found": True, "app_id": app_id, "groups": list(groups.values()), "builds": builds}
+
+
+def fetch_beta_details_by_build(build_ids, token_factory, chunk=50):
+    """Fetch buildBetaDetails directly, batched via filter[build].
+
+    Returns {build_id: (internal_state, external_state)}. A build with no
+    entry has no beta detail resource at all - TestFlight has not surfaced
+    it for testing yet. A buildBetaDetail shares its build's id, so the
+    result keys straight off det["id"].
+    """
+    out = {}
+    for i in range(0, len(build_ids), chunk):
+        ids = ",".join(build_ids[i:i + chunk])
+        q = (
+            f"/v1/buildBetaDetails?filter[build]={ids}"
+            "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
+            "&limit=200"
+        )
+        try:
+            data, _ = api_get_all(q, token_factory)
+        except urllib.error.HTTPError as err:
+            sys.stderr.write(
+                f"  buildBetaDetails query failed (HTTP {err.code}); "
+                "those statuses fall back to the processing state\n"
+            )
+            continue
+        for det in data:
+            attrs = det.get("attributes", {})
+            out[det["id"]] = (
+                attrs.get("internalBuildState", "") or "",
+                attrs.get("externalBuildState", "") or "",
+            )
+    return out
 
 
 def classify_lanes(group_ids, groups):
@@ -558,11 +614,24 @@ def _proc_status(build):
     )
 
 
+def _internal_or_processing(build):
+    """Internal beta state - what App Store Connect's add-a-build dialog shows
+    (Ready to Test / Testing / ...). A VALID build with no beta detail at all
+    is in TestFlight's hidden pre-Ready gap: it processed fine but cannot be
+    added to a test group yet."""
+    st = BETA_STATE.get(build["internal_state"])
+    if st:
+        return st
+    if build.get("beta_detail_missing") and build["processing_state"] == "VALID":
+        return ("Not yet testable", "warning")
+    return _proc_status(build)
+
+
 def internal_status(build):
     """Status as it applies to an internal group (stage/prod)."""
     if build["expired"]:
         return ("Expired", "muted")
-    return BETA_STATE.get(build["internal_state"]) or _proc_status(build)
+    return _internal_or_processing(build)
 
 
 def external_status(build):
@@ -579,7 +648,7 @@ def overall_status(build):
         return ("Expired", "muted")
     if build["external_state"] in MEANINGFUL_EXTERNAL:
         return BETA_STATE[build["external_state"]]
-    return BETA_STATE.get(build["internal_state"]) or _proc_status(build)
+    return _internal_or_processing(build)
 
 
 def lane_summary(builds, version, app_key):
@@ -831,6 +900,7 @@ def assemble(repo_versions, fragments, frag_dates, landings, tag_dates, asc):
                     "lanes": b["lanes"],
                     "groups": b["groups"],
                     "expired": b["expired"],
+                    "expires": b.get("expiration", ""),
                 }
             )
     ledger.sort(key=lambda x: x["uploaded"] or "", reverse=True)
@@ -1018,6 +1088,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .grp.prod{border-color:color-mix(in srgb,var(--good) 45%,transparent)}
   .grp.beta{border-color:color-mix(in srgb,var(--mac) 45%,transparent)}
   .apppill{display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:12.5px}
+  .expnote{font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; margin-top:2px}
   .empty{color:var(--muted); padding:30px 12px; text-align:center}
   .notfound{background:color-mix(in srgb,var(--critical) 10%,transparent); border:1px solid color-mix(in srgb,var(--critical) 35%,transparent); border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:13px}
   footer{margin-top:28px; color:var(--muted); font-size:12px; border-top:1px solid var(--grid); padding-top:14px}
@@ -1211,7 +1282,7 @@ function renderLedger(){
     <td class="num mono">${esc(r.build_number)}</td>
     <td class="num mono" style="color:var(--ink-2)">${esc(r.build_date||'—')}</td>
     <td class="num mono" style="color:var(--ink-2)">${esc((r.uploaded||'').replace('T',' ').replace(/:\d\dZ?$/,'').replace('Z',''))||'—'}</td>
-    <td>${pill(r.status_label,r.status_role)}</td>
+    <td>${pill(r.status_label,r.status_role)}${expNote(r)}</td>
     <td>${r.lanes.length? r.lanes.map(l=>`<span class="grp ${l}">${LANE_LABEL[l]}</span>`).join('') : '<span class="lane-none">—</span>'}</td>
   </tr>`).join('');
 
@@ -1228,6 +1299,12 @@ function th(key,label){
   return `<th onclick="setSort('${key}')">${label}${arrow}</th>`;
 }
 function setSort(key){ if(sortKey===key) sortDir*=-1; else {sortKey=key; sortDir=1;} renderLedger(); }
+function expNote(r){
+  if(r.expired || !r.expires) return '';
+  const days = Math.ceil((new Date(r.expires) - Date.now())/86400000);
+  if(!isFinite(days) || days < 0) return '';
+  return `<div class="expnote">expires in ${days}d</div>`;
+}
 
 /* ---------- tabs ---------- */
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
@@ -1246,7 +1323,8 @@ document.getElementById('footer').innerHTML =
   `Marketing version = <code>CFBundleShortVersionString</code> (from CHANGELOG.md). `+
   `Build # = <code>CFBundleVersion</code>, a Unix timestamp set by <code>apple.yml</code> (<code>date -u +%s</code>) — dereferenced to a date in the ledger. `+
   `Lanes: <b>Stage</b>/<b>Prod</b> are internal TestFlight groups (stage→stage, main→prod); <b>Beta</b> is an external group. `+
-  `Apple status is the App Store Connect build beta state at generation time.`;
+  `Apple status is the App Store Connect build beta state at generation time — what the add-a-build dialog shows. `+
+  `<b>Not yet testable</b> = the build processed (Valid) but TestFlight hasn't surfaced it for testing yet; it can't be added to a test group until it flips to Ready to Test.`;
 
 renderFeatures();
 renderLedger();
