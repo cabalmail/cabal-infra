@@ -106,8 +106,13 @@ function MenuBar({ editor, onImportMarkdown }) {
 
 function isEditorEmpty(editor) {
   if (!editor) return true;
+  if (typeof editor.isEmpty === 'boolean') return editor.isEmpty;
+  // Fallback: match either the vanilla or the paragraph-style-wrapped empty
+  // shape. Older TipTap builds (or a mocked editor in tests) may not surface
+  // the isEmpty property.
   const html = editor.getHTML();
-  return !html || html === '<p></p>';
+  if (!html) return true;
+  return html === '<p></p>' || /^<p\s+style="[^"]*"><\/p>$/.test(html);
 }
 
 // Mirror the editor's tight paragraph spacing on the wire so the recipient's
@@ -184,6 +189,7 @@ function ComposeOverlay({
   const [, setSavedTick] = useState(0); // forces re-render for "Saved just now" label
   const [editorRevision, setEditorRevision] = useState(0); // bumped by editor.onUpdate
   const [pendingImport, setPendingImport] = useState(null); // 'fromRich' | 'fromMarkdown' | null
+  const [pendingDiscard, setPendingDiscard] = useState(false);
   const [attachments, setAttachments] = useState([]); // [{ id, filename, mimeType, file (Blob), size }]
   const markdownRef = useRef(null);
   const rootRef = useRef(null);
@@ -723,8 +729,17 @@ function ComposeOverlay({
   // final /save_draft (fire-and-forget) so the draft survives the closing
   // overlay. Empty / unauthenticated / in-flight composes fall through to
   // performServerSave's gates and just hide.
+  //
+  // Special case: content typed before a From address is picked cannot be
+  // autosaved (/save_draft rejects unauthorized senders), so a silent close
+  // would drop it. Intercept that path with a confirm dialog — the user
+  // either goes back and picks a From, or explicitly discards.
   const handleDiscard = useCallback((e) => {
     if (e) e.preventDefault();
+    if (!sending && hasContent() && !address) {
+      setPendingDiscard(true);
+      return;
+    }
     if (autosaveRef.current) {
       window.clearTimeout(autosaveRef.current);
       autosaveRef.current = null;
@@ -733,7 +748,20 @@ function ComposeOverlay({
       performServerSave().catch(() => { /* logged in performServerSave */ });
     }
     hide();
-  }, [hide, sending, hasContent, performServerSave]);
+  }, [hide, sending, hasContent, address, performServerSave]);
+
+  const cancelDiscard = useCallback(() => {
+    setPendingDiscard(false);
+  }, []);
+
+  const confirmDiscard = useCallback(() => {
+    setPendingDiscard(false);
+    if (autosaveRef.current) {
+      window.clearTimeout(autosaveRef.current);
+      autosaveRef.current = null;
+    }
+    hide();
+  }, [hide]);
 
   // Attachments are uploaded directly to S3 via presigned PUT URLs, so
   // the only real ceiling is whatever the receiver SMTP server accepts.
@@ -1115,6 +1143,17 @@ function ComposeOverlay({
         cancelLabel="Cancel"
         onConfirm={confirmImport}
         onCancel={cancelImport}
+      />
+
+      <ConfirmDialog
+        open={pendingDiscard}
+        title="Discard this draft?"
+        message="You haven't picked a From address, so this draft can't be saved. Closing will discard what you've typed."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        destructive
+        onConfirm={confirmDiscard}
+        onCancel={cancelDiscard}
       />
     </form>
   );

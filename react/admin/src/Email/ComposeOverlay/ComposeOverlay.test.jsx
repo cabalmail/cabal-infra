@@ -619,6 +619,67 @@ describe('ComposeOverlay', () => {
       }
     });
 
+    it('warns before discarding typed content when no From address is picked', async () => {
+      const hide = vi.fn();
+      const { unmount } = renderCompose({ hide });
+      try {
+        await waitFor(() => {
+          expect(mockGetAddresses).toHaveBeenCalled();
+        });
+        // Type without picking a From. Autosave can't fire (server rejects
+        // unauthorized senders), so a silent close would drop this content.
+        fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'lost otherwise' } });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+        // Overlay stays open — a confirm dialog appears instead.
+        expect(hide).not.toHaveBeenCalled();
+        expect(await screen.findByText(/Discard this draft/i)).toBeInTheDocument();
+        expect(mockSaveDraft).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
+
+    it('keeps the overlay open when the discard-confirm is cancelled', async () => {
+      const hide = vi.fn();
+      const { unmount } = renderCompose({ hide });
+      try {
+        await waitFor(() => {
+          expect(mockGetAddresses).toHaveBeenCalled();
+        });
+        fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'still writing' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+        expect(hide).not.toHaveBeenCalled();
+        // Content survives — Subject is still there.
+        expect(screen.getByLabelText('Subject').value).toBe('still writing');
+      } finally {
+        unmount();
+      }
+    });
+
+    it('hides the overlay when the discard-confirm is confirmed', async () => {
+      const hide = vi.fn();
+      const { unmount } = renderCompose({ hide });
+      try {
+        await waitFor(() => {
+          expect(mockGetAddresses).toHaveBeenCalled();
+        });
+        fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'goodbye' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+
+        expect(hide).toHaveBeenCalled();
+        // No draft save was attempted — the address gate blocks it either way.
+        await act(async () => { await Promise.resolve(); });
+        expect(mockSaveDraft).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
+
     it('passes discard_draft coordinates to /send after autosave wrote a copy', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       try {
