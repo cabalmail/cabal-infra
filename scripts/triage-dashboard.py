@@ -339,7 +339,7 @@ PAGE = r"""<!DOCTYPE html>
   }
   *{box-sizing:border-box} html,body{margin:0}
   body{background:var(--page); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased}
-  .wrap{max-width:1220px; margin:0 auto; padding:24px 20px 64px}
+  .wrap{max-width:80%; margin:0 auto; padding:24px 20px 64px}
   header.top{display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:4px}
   h1{font-size:20px; margin:0; font-weight:650; letter-spacing:-0.01em}
   .sub{color:var(--ink-2); font-size:13px; margin:2px 0 0}
