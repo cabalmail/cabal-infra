@@ -24,10 +24,12 @@ function strengthScore(pw) {
 function SignUp({
   onSubmit,
   onUsernameChange,
+  onEmailChange,
   onPhoneChange,
   onPasswordChange,
   onInviteCodeChange,
   username,
+  email,
   phone,
   password,
   inviteCode,
@@ -52,6 +54,10 @@ function SignUp({
   const score = useMemo(() => strengthScore(password), [password]);
   const usernameValid = /^[a-z0-9-]{3,32}$/.test(username || '') &&
     !/^-/.test(username || '') && !/-$/.test(username || '');
+  // Recovery email is always collected (identity plan Phase 1): it is the
+  // recovery channel that survives a lost or rotated phone, and with SMS
+  // off it is the only verification channel at all.
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || '');
   // When SMS is off (no 10DLC campaign registration id is configured on the
   // pool), the phone field is not rendered and its value is not required.
   // See issue #712 and docs/sms-10dlc.md.
@@ -62,8 +68,8 @@ function SignUp({
   // SMS consent is a mandatory, affirmative opt-in whenever the phone field
   // is rendered; with SMS off there is no phone collection to consent to.
   const consentValid = !sms_enabled || smsConsent;
-  const valid = usernameValid && phoneValid && passwordValid && confirmValid &&
-    inviteCodeValid && consentValid;
+  const valid = usernameValid && emailValid && phoneValid && passwordValid &&
+    confirmValid && inviteCodeValid && consentValid;
 
   const handleSubmit = (e) => {
     if (!valid) { e.preventDefault(); return; }
@@ -80,8 +86,8 @@ function SignUp({
       <h1 className="auth__title">Create your Cabalmail account.</h1>
       <p className="auth__subtitle">
         {sms_enabled
-          ? "Pick a username and password. Your phone number is used only for recovery."
-          : "Pick a username and password."}
+          ? "Pick a username and password. Your email and phone number are used only for verification and recovery."
+          : "Pick a username and password. Your email is used only for verification and recovery."}
       </p>
       <form className="auth__form" onSubmit={handleSubmit} noValidate>
         <div className="auth__field">
@@ -104,6 +110,30 @@ function SignUp({
           />
           <p className="auth__field-help">
             3&ndash;32 characters. Lowercase letters, numbers, hyphens.
+          </p>
+        </div>
+        <div className="auth__field">
+          <div className="auth__field-header">
+            <label className="auth__field-label" htmlFor="email">Email address</label>
+            <span className="auth__field-hint">For verification and recovery</span>
+          </div>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            className="mono"
+            autoComplete="email"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck="false"
+            placeholder="you@example.com"
+            onChange={onEmailChange}
+            value={email || ''}
+            required
+          />
+          <p className="auth__field-help">
+            An existing address outside Cabalmail, so you can recover access
+            if you lose your phone.
           </p>
         </div>
         {sms_enabled ? (

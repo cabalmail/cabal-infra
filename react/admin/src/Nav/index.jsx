@@ -9,6 +9,7 @@ const NAV_VIEWS = [
   { id: 'users',     name: 'Users',     label: 'Users',     requiresAdmin: true  },
   { id: 'dmarc',     name: 'DMARC',     label: 'DMARC',     requiresAdmin: true  },
   { id: 'caa',       name: 'CAA',       label: 'CAA',       requiresAdmin: true  },
+  { id: 'security',  name: 'Security',  label: 'Security',  requiresAdmin: false },
   { id: 'about',     name: 'About',     label: 'About',     requiresAdmin: false },
 ];
 

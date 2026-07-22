@@ -17,6 +17,12 @@ function Verify({
   resendInFlight = false,
   resendLocked = false,
   resendLockoutRemaining = 0,
+  // Where Cognito sent the confirmation code. Comes from the signUp
+  // result's codeDeliveryDetails: "phone" when SMS is wired, "email"
+  // otherwise (issue #712 / identity plan Phase 1). destination is the
+  // masked address/number Cognito reports, when available.
+  medium = 'phone',
+  destination = null,
 }) {
   const headerRight = onBackToSignIn ? (
     <span><a href="#" onClick={onBackToSignIn}>Back to sign in</a></span>
@@ -49,8 +55,9 @@ function Verify({
       <p className="auth__eyebrow">Verify</p>
       <h1 className="auth__title">Enter your code.</h1>
       <p className="auth__subtitle">
-        A verification code has been sent to your phone. Enter it below to
-        complete registration.
+        A verification code has been sent to{' '}
+        {destination || `your ${medium}`}. Enter it below to complete
+        registration.
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
         <div className="auth__field">

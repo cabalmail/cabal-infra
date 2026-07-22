@@ -13,6 +13,11 @@ function ForgotPassword({
   onBackToSignIn,
   submitted,
   onProceed,
+  // Where Cognito actually sent the reset code, from the forgotPassword
+  // callback's CodeDeliveryDetails. Recovery is email-first now (identity
+  // plan Phase 1): users with a verified email get the code there; others
+  // fall through to SMS.
+  deliveryMedium = null,
 }) {
   const headerRight = onBackToSignIn ? (
     <span>
@@ -31,7 +36,11 @@ function ForgotPassword({
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </span>
-          <h1 className="auth__success-title">Check your phone</h1>
+          <h1 className="auth__success-title">
+            {deliveryMedium === 'email' ? 'Check your email'
+              : deliveryMedium === 'phone' ? 'Check your phone'
+                : 'Check your email or phone'}
+          </h1>
           <p className="auth__success-body">
             If an account exists for <strong>{username}</strong>,
             you&rsquo;ll receive a reset code shortly.
@@ -56,8 +65,9 @@ function ForgotPassword({
       <p className="auth__eyebrow">Reset</p>
       <h1 className="auth__title">Forgot your password?</h1>
       <p className="auth__subtitle">
-        Enter your username and we&rsquo;ll send a reset code to the phone
-        number on file.
+        Enter your username and we&rsquo;ll send a reset code to the
+        verified email address on file, or your phone if you haven&rsquo;t
+        added one.
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
         <div className="auth__field">
