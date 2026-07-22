@@ -247,24 +247,52 @@ Once the campaign shows `RegistrationStatus: COMPLETE`:
    target environment.
 2. Ensure the CI deploy role has `sms-voice` permissions including
    `RequestPhoneNumber`, `ReleasePhoneNumber`, `UpdatePhoneNumber`,
-   `DescribePhoneNumbers`, `PutKeyword`, and `DescribeKeywords`
-   (the per-account Terraform policy is hand-managed; see
-   [aws.md](./aws.md)).
+   `DescribePhoneNumbers`, `PutKeyword`, `DescribeKeywords`, and
+   `PutResourcePolicy` (the per-account Terraform policy is
+   hand-managed; see [aws.md](./aws.md)).
 3. Run `infra.yml` (any push touching `terraform/infra/**`, or a
    `workflow_dispatch`). Terraform requests the number against the
    campaign and waits for it to reach `ACTIVE`; the post-apply
    `set-sms-keywords` step then writes the HELP/STOP/START keyword
-   responses so they match the registered texts.
+   responses so they match the registered texts, and
+   `set-sms-resource-policy` shares the number with Amazon SNS.
+
+**The resource policy is load-bearing.** Cognito sends SMS via SNS,
+and SNS can only originate from an End User Messaging number whose
+resource policy grants `sns.amazonaws.com` the
+`sms-voice:SendTextMessage` action — *even within the owning account*.
+The console's number-request wizard writes this policy when its "share
+with Amazon SNS" box is checked, but numbers provisioned through the
+`RequestPhoneNumber` API (as Terraform does) start with no policy.
+Without it, every Cognito/SNS send fails with no error to the caller:
+`sns:Publish` succeeds, nothing is billed or delivered, and only the
+SNS delivery-status log (if enabled) records the reason —
+`No origination identity available to send to destination number`.
+Confusingly, the sandbox verification OTPs still arrive, because both
+verification services send outside the SNS publish path — receiving an
+OTP does not prove the path works.
 
 Verify:
 
 ```sh
 aws pinpoint-sms-voice-v2 describe-phone-numbers
 aws pinpoint-sms-voice-v2 describe-keywords --origination-identity <phone number id>
+aws pinpoint-sms-voice-v2 get-resource-policy --resource-arn <phone number ARN>
 aws pinpoint-sms-voice-v2 send-text-message \
   --destination-phone-number <your mobile> \
   --message-body "Cabalmail smoke test" \
   --origination-identity <phone number id>
+```
+
+`get-resource-policy` must show the `sns.amazonaws.com` statement
+described above. Note `send-text-message` exercises the End User
+Messaging path only; it delivers even when the SNS path is broken. To
+verify what Cognito actually uses, publish through SNS as well:
+
+```sh
+aws sns publish --phone-number <your mobile> \
+  --message "Cabalmail SNS-path smoke test" \
+  --message-attributes '{"AWS.SNS.SMS.SMSType":{"DataType":"String","StringValue":"Transactional"}}'
 ```
 
 Text STOP and then START to the number to confirm the keyword

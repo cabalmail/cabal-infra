@@ -59,6 +59,7 @@ on:
       - '.github/scripts/record-lambda-hashes.sh'
       - '.github/scripts/post-apply-update-services.sh'
       - '.github/scripts/put-sms-keywords.sh'
+      - '.github/scripts/put-sms-resource-policy.sh'
       - '.github/scripts/annotate-terraform-outputs.sh'
 
 permissions:
@@ -111,6 +112,7 @@ jobs:
             - '.github/scripts/record-lambda-hashes.sh'
             - '.github/scripts/post-apply-update-services.sh'
             - '.github/scripts/put-sms-keywords.sh'
+            - '.github/scripts/put-sms-resource-policy.sh'
             - '.github/scripts/annotate-terraform-outputs.sh'
 
   bootstrap_build:
@@ -839,3 +841,11 @@ jobs:
         OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
         CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: ./.github/scripts/put-sms-keywords.sh
+    - name: set-sms-resource-policy
+      # Share the 10DLC number with Amazon SNS via an EUM resource
+      # policy - required for Cognito's SNS-path SMS even within the
+      # same account, and not expressible in Terraform (the provider
+      # has no EUM resource-policy resource). Without it every SNS
+      # publish is silently dropped with "No origination identity
+      # available". No-op when no 10DLC number exists.
+      run: ./.github/scripts/put-sms-resource-policy.sh
