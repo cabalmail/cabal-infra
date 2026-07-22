@@ -16,6 +16,14 @@ configFiles:
   Release: Base.xcconfig
 
 options:
+  # Materialize the gitignored marked + turndown bundles before generating.
+  # A project generated without them still builds, but the app's rich-text
+  # bridge throws on load and never reports ready, which used to leave the
+  # compose From picker permanently empty (#734). CI also runs the script
+  # explicitly; here it covers local and agent-driven builds, where the
+  # generate step is the one universal entry point. Needs node/npm on the
+  # first run (the script skips `npm ci` once the sources are present).
+  preGenCommand: scripts/sync-vendored.sh
   bundleIdPrefix: com.cabalmail
   deploymentTarget:
     iOS: "18.0"

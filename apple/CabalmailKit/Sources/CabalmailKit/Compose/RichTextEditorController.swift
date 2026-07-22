@@ -129,6 +129,12 @@ public final class RichTextEditorController: NSObject {
     public var onSelectionChanged: (@MainActor (Selection) -> Void)?
     /// Fires once after the editor finishes bootstrapping.
     public var onReady: (@MainActor () -> Void)?
+    /// Fires when the editor page reports a script error — most notably a
+    /// failure while loading or evaluating marked / turndown /
+    /// editor-bridge.js, after which the bridge never posts `ready` and
+    /// every editor await stays parked. Hosts should surface this to the
+    /// user; the controller only records and forwards it.
+    public var onBridgeError: (@MainActor (String) -> Void)?
 
     private var pendingReadyContinuations: [CheckedContinuation<Void, Never>] = []
 
@@ -269,6 +275,12 @@ public final class RichTextEditorController: NSObject {
             pendingReadyContinuations.removeAll()
             for continuation in waiters { continuation.resume() }
             onReady?()
+        case "error":
+            let message = payload["message"] as? String ?? "unknown script error"
+            let source = payload["source"] as? String ?? ""
+            let described = source.isEmpty ? message : "\(message) (\(source))"
+            NSLog("[RichTextEditor] bridge script error: %@", described)
+            onBridgeError?(described)
         case "input":
             onContentChanged?()
         case "selection":
