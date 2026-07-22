@@ -13,8 +13,15 @@ locals {
 }
 
 resource "aws_cognito_user_pool" "users" {
-  name                       = "cabal"
-  auto_verified_attributes   = local.sms_enabled ? ["phone_number"] : []
+  name = "cabal"
+  # Email joins phone (identity-iam-hardening plan Phase 1): a verified email
+  # is the recovery fallback that survives a lost or rotated phone, and it is
+  # SMS-independent, so it is collected and verified even before a 10DLC
+  # campaign exists. Auto-verify only applies when the attribute is present
+  # at signup, so email-less signups keep working unchanged. Verification
+  # emails go out via Cognito's default sender (COGNITO_DEFAULT, 50/day) -
+  # plenty at invite-gated scale and avoids taking on SES.
+  auto_verified_attributes   = local.sms_enabled ? ["email", "phone_number"] : ["email"]
   sms_verification_message   = local.sms_enabled ? "Your Cabalmail verification code is {####}." : null
   sms_authentication_message = local.sms_enabled ? "Your Cabalmail verification code is {####}." : null
 
@@ -26,14 +33,35 @@ resource "aws_cognito_user_pool" "users" {
     }
   }
 
-  # With SMS off there is no self-serve recovery channel (no email attribute
-  # is collected either); admin_only leaves recovery to the operator via
-  # AdminSetUserPassword. Once a 10DLC campaign lands, this flips back to
-  # verified_phone_number automatically.
+  # TOTP second factor, opt-in (Phase 1). OPTIONAL means no challenge fires
+  # until a user enrolls, so this is inert until the clients grow enrollment
+  # UX and SOFTWARE_TOKEN_MFA challenge handling - do not flip to ON/required
+  # (or add the require_admin_mfa trigger) before both clients handle the
+  # challenge, or the first enrollee locks themselves out of the apps. TOTP
+  # is SMS-independent, so it is available regardless of local.sms_enabled.
+  mfa_configuration = "OPTIONAL"
+  software_token_mfa_configuration {
+    enabled = true
+  }
+
+  # Email first, phone second (Phase 1): a SIM swap alone can no longer take
+  # over an account whose email is verified, and a lost phone is no longer a
+  # permanent lockout. The phone mechanism exists only when SMS is on. With
+  # SMS off this replaces the previous admin_only setting: operationally
+  # equivalent while users have no verified email (the operator resets via
+  # AdminSetUserPassword either way), and self-serve recovery starts working
+  # by itself as users verify email addresses.
   account_recovery_setting {
     recovery_mechanism {
-      name     = local.sms_enabled ? "verified_phone_number" : "admin_only"
+      name     = "verified_email"
       priority = 1
+    }
+    dynamic "recovery_mechanism" {
+      for_each = local.sms_enabled ? [1] : []
+      content {
+        name     = "verified_phone_number"
+        priority = 2
+      }
     }
   }
 
