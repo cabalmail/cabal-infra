@@ -3,8 +3,13 @@ import { describe, it, expect, vi } from 'vitest';
 import SignUp from './index';
 import AuthContext from '../contexts/AuthContext';
 
-const withAuth = (ui, { invitation_required = false } = {}) => (
-  <AuthContext.Provider value={{ control_domain: 'example.com', invitation_required }}>
+const withAuth = (
+  ui,
+  { invitation_required = false, sms_enabled = true } = {}
+) => (
+  <AuthContext.Provider
+    value={{ control_domain: 'example.com', invitation_required, sms_enabled }}
+  >
     {ui}
   </AuthContext.Provider>
 );
@@ -121,5 +126,33 @@ describe('SignUp', () => {
       target: { value: validProps.password },
     });
     expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+  });
+
+  describe('with sms_enabled=false', () => {
+    it('hides the phone-number field and SMS consent checkbox', () => {
+      render(withAuth(<SignUp {...defaultProps} />, { sms_enabled: false }));
+      expect(screen.queryByLabelText('Phone number')).toBeNull();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+    });
+
+    it('submits without a phone number or consent when SMS is off', () => {
+      const onSubmit = vi.fn(e => e.preventDefault());
+      render(withAuth(
+        <SignUp
+          {...defaultProps}
+          {...validProps}
+          phone=""
+          inviteCode=""
+          onSubmit={onSubmit}
+        />,
+        { sms_enabled: false }
+      ));
+      fireEvent.change(screen.getByLabelText('Confirm password'), {
+        target: { value: validProps.password },
+      });
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -7,15 +7,32 @@ and the message program must be registered and approved. Registration
 is per AWS account, so each environment that sends SMS repeats this
 process.
 
-**Start this early.** SMS delivery gates signup itself — Cognito
-verifies each new user's phone number by SMS at account creation, so
-no one can register on a new system until this process completes. The
-carrier reviews are the longest-lead items in a deployment, they can
-take multiple rounds, and nothing else in the setup depends on them —
-so begin as soon as the prerequisites below are satisfiable (in
-practice: right after the front-door site resolves), and run the SNS
-sandbox exit (see [setup.md](./setup.md)) in parallel rather than
-after.
+**SMS is opt-in.** Until `TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID`
+is set the pool is provisioned without an SMS channel: the signup
+form omits the phone-number field and consent checkbox, the
+pre-signup Lambda auto-confirms new accounts, and account recovery
+falls to admin-only (operator-driven `AdminSetUserPassword`). This
+keeps a fresh deploy usable — signup works from day one and does not
+fall through to the sandboxed shared SNS pool.
+
+**Start this early anyway.** The carrier reviews are the longest-lead
+items in a deployment, they can take multiple rounds, and nothing
+else in the setup depends on them — so begin as soon as the
+prerequisites below are satisfiable (in practice: right after the
+front-door site resolves), and run the SNS sandbox exit (see
+[setup.md](./setup.md)) in parallel rather than after. Once the
+campaign is approved and the id is applied, the signup form starts
+collecting phone numbers, Cognito requires verified-phone
+confirmation, and self-serve password recovery via SMS turns on.
+
+**Toggling the flag on an existing pool is data-plane-adjacent.** It
+mutates `auto_verified_attributes`, `sms_configuration`, and the
+recovery mechanism on a live `aws_cognito_user_pool`. The safe
+direction is off → on: setting the id for the first time only adds
+capabilities. Going on → off after users have signed up with
+verified phone numbers is possible but leaves those users with a
+recovery mechanism (`admin_only`) that ignores their verified phone —
+flip it back only if you have to.
 
 There are three layers:
 

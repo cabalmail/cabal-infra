@@ -108,9 +108,11 @@ Theoretically, it should also be safe to change any of the variables except the 
 
 The output contains the nameservers that AWS assigned to your mail domains. To work at all, you must [update your domain registrations with these nameservers](./registrar.md).
 
-## SMS verification (Required for phone verification)
+## SMS verification (Optional; recommended)
 
-SMS delivery gates signup itself: Cognito verifies each new user's phone number by SMS at account creation, so no one can register until this section is complete. Both items below are independent of each other and of the remaining post-automation steps, and they carry the longest approval lead times in the whole setup -- start both as soon as the nameserver update has propagated and the front-door site resolves, and let them run while you work through the rest of this guide.
+SMS verification is opt-in. Until `TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID` is set the pool is provisioned without an SMS channel: signup collects a username and password only, the pre-signup Lambda auto-confirms new accounts, and account recovery is admin-only (operator-driven `AdminSetUserPassword`). This is what lets a fresh deploy be usable from day one — without it Cognito would fall through to the sandboxed shared SNS pool and every signup would fail with no user-visible remediation.
+
+Once you register the brand and campaign and set the id, the signup form starts collecting phone numbers, Cognito requires verified-phone confirmation, and users can self-serve password recovery. Both items below are independent of each other and of the remaining post-automation steps, and they carry the longest approval lead times in the whole setup -- start both as soon as the nameserver update has propagated and the front-door site resolves, and let them run while you work through the rest of this guide.
 
 Cognito sends verification SMS through AWS SNS. Delivery requires both of the following, in either order:
 
