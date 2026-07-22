@@ -15,4 +15,5 @@ terraform/infra/backend.tf
 .DS_Store
 .cache/
 .obsidian/
-scripts/.venv
+scripts/.venv/
+scripts/__pycache__/
