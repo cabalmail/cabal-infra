@@ -63,9 +63,11 @@ struct VisionSectionView: View {
         .task { await landOnInboxIfNeeded() }
         // A folder pick in the Folders tab jumps to Mail. Guarded on the current
         // tab so the launch / resume folder changes (which target Mail
-        // themselves) don't trigger a redundant switch.
-        .onChange(of: selectedFolder) { _, folder in
-            if folder != nil, selection == .folders { selection = .mail }
+        // themselves) don't trigger a redundant switch, and on the path so the
+        // launch landing's same-folder metadata reconcile (see
+        // `landOnInboxIfNeeded`) doesn't yank the user out of Folders.
+        .onChange(of: selectedFolder) { old, folder in
+            if folder != nil, old?.path != folder?.path, selection == .folders { selection = .mail }
         }
         // ⌘, opens Settings — its own tab here, rather than the iPad sheet.
         .onChange(of: appState.settingsRequestTick) { _, _ in
@@ -111,31 +113,45 @@ struct VisionSectionView: View {
         }
     }
 
-    /// Loads the folder list once at launch — independent of the lazily-created
-    /// Folders tab — and lands on INBOX, offering a resume toast if the saved
-    /// cursor is still reachable. Mirrors `MailRootView.landOnInboxAndOfferResume`,
-    /// but sources its own folder list because there's no always-mounted sidebar
-    /// to hand one over.
+    /// Lands on INBOX at launch, offering a resume toast if the saved cursor
+    /// is still reachable. Mirrors `MailRootView`'s provisional landing: a
+    /// synthetic `Folder(path: "INBOX")` is selected immediately so the Mail
+    /// tab's message list starts loading without waiting on `/list_folders`
+    /// (the message machinery only needs the path; seeded as subscribed so
+    /// the list doesn't flash the unsubscribed-folder banner). The fetched
+    /// INBOX is swapped in once the list arrives — sourced from its own
+    /// `FolderListViewModel` because there's no always-mounted sidebar to
+    /// hand one over.
     private func landOnInboxIfNeeded() async {
         guard !didLand, selectedFolder == nil, let client = appState.client else { return }
+        didLand = true
+        appState.navCoordinator?.armProvisionalLanding()
+        selectedFolder = Folder(path: "INBOX", isSubscribed: true)
         let model = FolderListViewModel(client: client, appState: appState)
         await model.loadFolderList()
         let folders = model.folders
-        guard !didLand, !folders.isEmpty else { return }
-        didLand = true
+        guard !folders.isEmpty else { return }
         let inbox = folders.first { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame } ?? folders.first
-        appState.navCoordinator?.armProvisionalLanding()
-        selectedFolder = inbox
+        // Swap the fetched INBOX into the provisional selection so the Folders
+        // tab's row highlight matches (`Folder` equality spans attributes /
+        // subscription). Same path — the mounted message list survives, and
+        // `VisionMailPane`'s same-path guard keeps the swap from clearing the
+        // open message. Skipped if the user already navigated elsewhere.
+        if let current = selectedFolder,
+           current.path.caseInsensitiveCompare("INBOX") == .orderedSame,
+           let inbox {
+            selectedFolder = inbox
+        }
         let candidate = await appState.navCoordinator?.launchResumeCandidate(folders: folders)
         // If the user already navigated off INBOX while the probe ran, leave
         // them be rather than surfacing a now-stale prompt.
-        guard selectedFolder?.path == inbox?.path else { return }
+        guard let inbox, selectedFolder?.path == inbox.path else { return }
         if let candidate {
             appState.showToast(
                 .resumeNavigation(folderName: Folder(path: candidate.folder).name, cursor: candidate),
                 duration: 10
             )
-        } else if let inbox {
+        } else {
             // Nothing to resume: materialize the INBOX landing we suppressed.
             appState.navCoordinator?.recordFolder(inbox.path)
         }
@@ -162,8 +178,11 @@ private struct VisionMailPane: View {
         }
         // Switching folders clears the open message and any multi-selection so
         // the reader can't briefly show an old message against the new mailbox,
-        // then records the folder move for the cross-client cursor.
-        .onChange(of: selectedFolder) { _, folder in
+        // then records the folder move for the cross-client cursor. A same-path
+        // change is the launch landing's metadata reconcile — same mailbox, so
+        // keep the open message and don't re-record the cursor.
+        .onChange(of: selectedFolder) { old, folder in
+            guard old?.path != folder?.path else { return }
             selectedEnvelope = nil
             listSelectionCount = 0
             if let path = folder?.path {

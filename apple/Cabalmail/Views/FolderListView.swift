@@ -28,9 +28,10 @@ struct FolderListView: View {
     /// view's own `.searchable` query.
     var activeFilterText: String { externalFilter?.wrappedValue ?? filterQuery }
     /// Called exactly once, the first time the folder list successfully
-    /// loads. `MailRootView` uses it to seed a default `selection` so the
-    /// signed-in user doesn't land on an empty "select a folder" screen
-    /// (which would also hide the compose entry point on the message list).
+    /// loads. `MailRootView` uses it to complete the launch INBOX landing:
+    /// the fetched INBOX replaces the provisional `Folder(path: "INBOX")`
+    /// its launch task pre-selected (so the message list never waited on
+    /// this fetch), and the saved-position resume probe runs.
     var onFoldersLoaded: ([Folder]) -> Void = { _ in }
 
     // Section expand/collapse state - persisted so the sidebar comes up the
@@ -183,9 +184,9 @@ struct FolderListView: View {
                 model = newModel
                 // Race the inbox STATUS against the folder list so the
                 // inbox badge is correct by the time the user's eyes
-                // reach it — the message list itself starts loading the
-                // moment `onFoldersLoaded` fires below, so anything we
-                // can finish before then is free.
+                // reach it — the INBOX message list is already loading
+                // (the parent lands on it before this list returns), so
+                // anything finished before the sidebar draws is free.
                 async let inbox: () = newModel.refreshInboxCount()
                 await newModel.loadFolderList()
                 _ = await inbox

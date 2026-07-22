@@ -19,6 +19,14 @@ struct MailRootView: View {
     @State private var selectedFolder: Folder?
     @State private var selectedEnvelope: Envelope?
     @State private var selectedAddress: Address?
+    /// Whether the launch `.task` has already landed on the provisional
+    /// INBOX (see there). Never reset — a later re-appearance with a
+    /// deliberately cleared selection must not yank the user back to INBOX.
+    @State private var didProvisionalLand = false
+    /// Set alongside the provisional landing and consumed by the sidebar's
+    /// first `onFoldersLoaded`, which swaps the fetched INBOX into the
+    /// selection and probes the resume cursor (`finishInboxLanding`).
+    @State private var awaitingLaunchReconcile = false
     /// Override for the message detail's folder context when the selected
     /// envelope is a cross-folder search result. `MessageListView` reports
     /// the source folder via `onSearchResultSelected`; we wrap it in a
@@ -247,7 +255,12 @@ struct MailRootView: View {
         // the folder changes keeps the detail column from briefly rendering
         // an old message against the new mailbox, and matches the plan's
         // "switching folders clears the filter" rule.
-        .onChange(of: selectedFolder) { _, folder in
+        .onChange(of: selectedFolder) { old, folder in
+            // A same-path change is a metadata reconcile — the launch landing
+            // swapping its provisional `Folder(path: "INBOX")` for the fetched
+            // one (`finishInboxLanding`). Same mailbox, so keep the user's
+            // message selection and don't re-record the cursor.
+            guard old?.path != folder?.path else { return }
             selectedEnvelope = nil
             selectedAddress = nil
             crossFolderDetail = nil
@@ -339,8 +352,8 @@ struct MailRootView: View {
             // cold launch from a tapped push notification routes as soon as
             // the session is wired, which precedes the first render, so the
             // `.onChange` above never fires for it. Draining it here also
-            // pre-empts the sidebar's INBOX landing (`onFoldersLoaded`
-            // guards on `selectedFolder == nil`).
+            // pre-empts the provisional INBOX landing below (and with it
+            // the sidebar's launch reconcile).
             if let coordinator = appState.navCoordinator,
                let request = coordinator.navigateRequest {
                 coordinator.navigateRequest = nil
@@ -348,6 +361,22 @@ struct MailRootView: View {
                 if selectedFolder?.path != request.folder {
                     selectedFolder = Folder(path: request.folder)
                 }
+            }
+            // Land on a provisional INBOX immediately — before the folder
+            // list returns — so the message list (and its on-disk envelope
+            // cache) starts loading without waiting on `/list_folders`. The
+            // message machinery only needs the path; the sidebar's first
+            // `onFoldersLoaded` swaps in the fetched folder and probes the
+            // resume cursor (`finishInboxLanding`). Seeded as subscribed so
+            // the list doesn't flash the unsubscribed-folder banner before
+            // the real subscription state arrives; gated on a wired client
+            // because the list's one-shot `.task` can't create its model
+            // without one. INBOX itself is guaranteed to exist (RFC 3501).
+            if !didProvisionalLand, selectedFolder == nil, appState.client != nil {
+                didProvisionalLand = true
+                awaitingLaunchReconcile = true
+                appState.navCoordinator?.armProvisionalLanding()
+                selectedFolder = Folder(path: "INBOX", isSubscribed: true)
             }
             if searchModel == nil, let client = appState.client {
                 searchModel = MessageListViewModel(
@@ -417,32 +446,50 @@ struct MailRootView: View {
 // SwiftLint's `type_body_length` cap, matching the pattern used by
 // `MessageListView` and its `+Filter` / `+Search` siblings.
 extension MailRootView {
-    /// First-load folder selection: always land on INBOX, then — in the
-    /// background — check whether the saved cursor is still a usable resume
-    /// target (folder present, recorded message still in the folder's initial
-    /// window) and, if so, offer a "pick up where you left off" toast rather
-    /// than jumping there. Tapping it drives the same `navigateRequest` path as
-    /// the cross-client resume. The INBOX landing's own cursor write is held
-    /// back (`armProvisionalLanding`) so a still-valid saved position survives
-    /// until the user resumes or navigates on their own; if there's nothing to
-    /// resume, INBOX is recorded normally once the probe returns.
-    private func landOnInboxAndOfferResume(from folders: [Folder]) {
+    /// Completes the launch INBOX landing once the folder list arrives. The
+    /// launch `.task` has usually already selected a provisional
+    /// `Folder(path: "INBOX")` so the message list didn't wait on
+    /// `/list_folders`; here the fetched INBOX is swapped into the selection —
+    /// `Folder` equality spans attributes/subscription, and the sidebar's row
+    /// highlight only matches once the tag values agree. Same path, so the
+    /// mounted list (`.id(selectedFolder.path)`) survives untouched and the
+    /// same-path guard on `.onChange` keeps the swap from clearing state.
+    /// Then — in the background — check whether the saved cursor is still a
+    /// usable resume target (folder present, recorded message still in the
+    /// folder's initial window) and, if so, offer a "pick up where you left
+    /// off" toast rather than jumping there. Tapping it drives the same
+    /// `navigateRequest` path as the cross-client resume. The INBOX landing's
+    /// own cursor write is held back (`armProvisionalLanding`) so a
+    /// still-valid saved position survives until the user resumes or navigates
+    /// on their own; if there's nothing to resume, INBOX is recorded normally
+    /// once the probe returns.
+    private func finishInboxLanding(from folders: [Folder]) {
         let inbox = folders.first { folder in
             folder.path.caseInsensitiveCompare("INBOX") == .orderedSame
         } ?? folders.first
-        appState.navCoordinator?.armProvisionalLanding()
-        selectedFolder = inbox
+        if let current = selectedFolder {
+            // Provisional landing already on screen. If a navigate request
+            // (push-notification launch) has moved the selection elsewhere,
+            // leave it be — the probe below still runs but its post-guard
+            // keeps it silent.
+            if current.path.caseInsensitiveCompare("INBOX") == .orderedSame, let inbox { selectedFolder = inbox }
+        } else {
+            // The client wasn't wired when the launch task ran, so there was
+            // no provisional landing: land now, as before.
+            appState.navCoordinator?.armProvisionalLanding()
+            selectedFolder = inbox
+        }
         Task {
             let candidate = await appState.navCoordinator?.launchResumeCandidate(folders: folders)
             // If the user already navigated off INBOX while the probe ran, leave
             // them be rather than surfacing a now-stale prompt.
-            guard selectedFolder?.path == inbox?.path else { return }
+            guard let inbox, selectedFolder?.path == inbox.path else { return }
             if let candidate {
                 appState.showToast(
                     .resumeNavigation(folderName: Folder(path: candidate.folder).name, cursor: candidate),
                     duration: 10
                 )
-            } else if let inbox {
+            } else {
                 // Nothing to resume: materialize the INBOX landing we suppressed.
                 appState.navCoordinator?.recordFolder(inbox.path)
             }
@@ -590,15 +637,17 @@ extension MailRootView {
                 selection: $selectedFolder,
                 externalFilter: isWideSidebar ? $folderListFilter : nil,
                 onFoldersLoaded: { folders in
-                    // First load: land on INBOX and, if a saved position is
+                    // First load: swap the fetched INBOX into the launch
+                    // task's provisional landing and, if a saved position is
                     // still reachable, offer a resume toast (see
-                    // `landOnInboxAndOfferResume`). The Compose button lives
-                    // on the message-list toolbar, so a nil-selection state
-                    // would leave the user no way to start a new message;
-                    // INBOX is always present
-                    // (`FolderListViewModel.sortForSidebar` pins it first).
-                    guard selectedFolder == nil else { return }
-                    landOnInboxAndOfferResume(from: folders)
+                    // `finishInboxLanding`). Guarded so a later re-fire (the
+                    // sidebar remounts on an iPad layout swap) can't re-seed
+                    // the selection out from under the user; the nil check
+                    // covers a launch whose client wasn't wired in time for
+                    // the provisional landing.
+                    guard awaitingLaunchReconcile || selectedFolder == nil else { return }
+                    awaitingLaunchReconcile = false
+                    finishInboxLanding(from: folders)
                 }
             )
         }
