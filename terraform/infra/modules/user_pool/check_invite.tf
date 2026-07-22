@@ -120,6 +120,10 @@ resource "aws_lambda_function" "check_invite" {
   environment {
     variables = {
       INVITATION_CODE = var.invitation_code
+      # When SMS is off (no 10DLC campaign registration id), the trigger
+      # sets autoConfirmUser=true so users don't sit UNCONFIRMED waiting
+      # for a verification code the pool can't deliver. See issue #712.
+      SMS_ENABLED = local.sms_enabled ? "true" : "false"
     }
   }
 

@@ -217,6 +217,7 @@ module "admin" {
   dmarc_healthcheck_ping_param = local.hc_ping_dmarc
 
   invitation_required = module.pool.invitation_required
+  sms_enabled         = module.pool.sms_enabled
   monitoring          = var.monitoring
   imap_pool_enabled   = var.imap_pool_enabled
   access_logs_bucket  = module.s3_access_logs.bucket

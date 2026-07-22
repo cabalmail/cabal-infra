@@ -18,6 +18,7 @@ resource "aws_s3_object" "website_config" {
     domains             = var.domains,
     control_domain      = var.control_domain,
     invitation_required = var.invitation_required,
+    sms_enabled         = var.sms_enabled,
     monitoring          = var.monitoring
   })
   etag = md5(templatefile("${path.module}/templates/config.js.tftpl", {
@@ -28,6 +29,7 @@ resource "aws_s3_object" "website_config" {
     domains             = var.domains,
     control_domain      = var.control_domain,
     invitation_required = var.invitation_required,
+    sms_enabled         = var.sms_enabled,
     monitoring          = var.monitoring
     })
   )
@@ -51,6 +53,7 @@ resource "aws_s3_object" "website_config_json" {
     domains             = var.domains,
     control_domain      = var.control_domain,
     invitation_required = var.invitation_required,
+    sms_enabled         = var.sms_enabled,
     monitoring          = var.monitoring
   })
   etag = md5(templatefile("${path.module}/templates/config.js.tftpl", {
@@ -61,6 +64,7 @@ resource "aws_s3_object" "website_config_json" {
     domains             = var.domains,
     control_domain      = var.control_domain,
     invitation_required = var.invitation_required,
+    sms_enabled         = var.sms_enabled,
     monitoring          = var.monitoring
     })
   )
