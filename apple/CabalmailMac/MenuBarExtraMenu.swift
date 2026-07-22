@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import CabalmailKit
 
 /// UserDefaults key backing the "Show in menu bar" toggle (default on).
@@ -31,7 +32,15 @@ struct MenuBarExtraMenu: View {
         Text(statusLine)
         Divider()
         Button("Open Cabalmail") {
-            openWindow(id: mainWindowID)
+            // Calling `openWindow(id:)` on a `WindowGroup` unconditionally
+            // spawns a fresh window even when one is already open, which
+            // is not what the user expects from a "bring to front" menu
+            // item. Prefer the existing window and only fall back to
+            // opening a new one when none is present (e.g. the user has
+            // closed the last main window).
+            if !bringMainWindowToFront() {
+                openWindow(id: mainWindowID)
+            }
             NSApp.activate()
         }
         Button("New Message") {
@@ -54,5 +63,22 @@ struct MenuBarExtraMenu: View {
         case 1: return "1 unread message"
         case let count: return "\(count) unread messages"
         }
+    }
+
+    /// Look for an already-open main window and, if found, deminiaturize
+    /// (if needed) and bring it forward. SwiftUI names WindowGroup
+    /// windows with a `<id>-AppWindow-<n>` identifier — matched here by
+    /// the group-id prefix, with an exact match as a defensive fallback
+    /// in case the naming convention changes in a future SDK.
+    private func bringMainWindowToFront() -> Bool {
+        for window in NSApp.windows {
+            guard let identifier = window.identifier?.rawValue else { continue }
+            guard identifier == mainWindowID
+                || identifier.hasPrefix("\(mainWindowID)-") else { continue }
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil)
+            return true
+        }
+        return false
     }
 }

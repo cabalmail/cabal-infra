@@ -34,6 +34,13 @@ public protocol ApiClient: Sendable {
     /// `{"url": "..."}`; a 404 / missing key maps to nil.
     func fetchBimiURL(senderDomain: String) async throws -> URL?
 
+    /// Returns the apex domains the caller is entitled to mint addresses on.
+    /// Backed by the `/list_my_domains` Lambda, which intersects the
+    /// deployment's configured domain list with the caller's rows in
+    /// `cabal-user-domain-access`. Used by the address-creation picker so it
+    /// can offer only the apexes the server would actually accept.
+    func listMyDomains() async throws -> [String]
+
     // MARK: Folders
     func listFolders(host: String) async throws -> ApiFolderList
     func createFolder(host: String, parent: String, name: String) async throws

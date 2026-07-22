@@ -345,6 +345,26 @@ public final class Preferences {
         return Value(rawValue: raw) ?? fallback
     }
 
+    // MARK: - Reconciliation
+
+    /// Clears the default From address when it isn't one of the account's
+    /// own addresses. Callers pass the freshly fetched address list; an
+    /// empty list is treated as inconclusive (a transient fetch hiccup must
+    /// not wipe a valid default), so nothing is cleared.
+    ///
+    /// A dangling default reaches this state two ways: the address was
+    /// revoked from another device, or the value predates per-account
+    /// scoping and leaked in from a different account — possibly laundered
+    /// through the server's per-user preferences row, which "server wins on
+    /// login" then re-applies on every sign-in. Clearing here goes through
+    /// the normal persistence hooks, so the sync coordinator pushes the
+    /// cleared value back to the server and the bad row heals durably.
+    public func reconcileDefaultFromAddress(available: [String]) {
+        guard let current = defaultFromAddress, !available.isEmpty else { return }
+        guard !available.contains(current) else { return }
+        defaultFromAddress = nil
+    }
+
     // MARK: - Server sync marshalling
 
     /// Wire keys for the server-synced `app` map (the `set_preferences` Lambda

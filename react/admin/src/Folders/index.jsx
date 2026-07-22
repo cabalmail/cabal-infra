@@ -275,15 +275,34 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
     });
   }, [api, subscribed, refresh]);
 
-  const removeFolder = useCallback((e, name) => {
+  // Deleting a folder destroys it and every message inside it server-side, so
+  // it stages the folder id, confirms via dialog, and only then calls the API.
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  const requestRemoveFolder = useCallback((e, name) => {
     e.stopPropagation();
+    setPendingDelete(name);
+  }, []);
+
+  const confirmRemoveFolder = useCallback(() => {
+    const name = pendingDelete;
+    setPendingDelete(null);
+    if (!name) return;
     api.deleteFolder(name).then(() => {
       localStorage.removeItem(FOLDER_LIST);
       refresh();
     }).catch(() => {
       setMessage && setMessage('Unable to delete folder.', true);
     });
-  }, [api, refresh, setMessage]);
+  }, [api, pendingDelete, refresh, setMessage]);
+
+  const cancelRemoveFolder = useCallback(() => setPendingDelete(null), []);
+
+  const pendingDeleteHasChildren = useMemo(() => {
+    if (!pendingDelete) return false;
+    const meta = items.find((f) => f.id === pendingDelete);
+    return Boolean(meta && meta.hasChildren);
+  }, [items, pendingDelete]);
 
   // Emptying the trash stages the folder id, confirms via dialog, then
   // permanently deletes everything in it server-side.
@@ -399,7 +418,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
                   canDelete={!PERMANENT_FOLDERS.includes(f.id)}
                   onSelect={handleSelect}
                   onToggleSubscribe={toggleSubscribe}
-                  onRemove={removeFolder}
+                  onRemove={requestRemoveFolder}
                   onEmptyTrash={requestEmptyTrash}
                   showFullPath
                 />
@@ -463,7 +482,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
                   canDelete={!PERMANENT_FOLDERS.includes(f.id)}
                   onSelect={handleSelect}
                   onToggleSubscribe={toggleSubscribe}
-                  onRemove={removeFolder}
+                  onRemove={requestRemoveFolder}
                   onEmptyTrash={requestEmptyTrash}
                   onAddChild={startAddChild}
                   depth={f.depth}
@@ -519,6 +538,24 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
         destructive
         onConfirm={confirmEmptyTrash}
         onCancel={cancelEmptyTrash}
+      />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete folder?"
+        message={
+          <>
+            <strong>{pendingDelete}</strong> and every message inside it will
+            {' '}be permanently deleted
+            {pendingDeleteHasChildren ? ', along with its subfolders' : ''}.
+            {' '}This can&rsquo;t be undone.
+          </>
+        }
+        confirmLabel="Delete folder"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmRemoveFolder}
+        onCancel={cancelRemoveFolder}
       />
     </section>
   );
