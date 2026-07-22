@@ -102,10 +102,17 @@ resource "aws_iam_role_policy" "require_admin_mfa" {
 
 resource "aws_cloudwatch_log_group" "require_admin_mfa" {
   name              = "/aws/lambda/require_admin_mfa"
-  retention_in_days = 14
+  retention_in_days = 365
 }
 
+#tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "require_admin_mfa" {
+  # Same posture as push_dispatch / push_token_gc:
+  #checkov:skip=CKV_AWS_115: sign-in-rate Cognito trigger; a per-function reserve could throttle token issuance while starving the shared pool
+  #checkov:skip=CKV_AWS_116: Cognito invokes its triggers synchronously; DLQs apply only to async invocation, so there is nothing to queue
+  #checkov:skip=CKV_AWS_117: touches only the cognito-idp API; a VPC placement would add a NAT dependency for zero data-plane gain
+  #checkov:skip=CKV_AWS_272: code-signing is not part of this repo's Lambda supply chain (zips are hash-pinned at build; see build-counter.sh)
+  #checkov:skip=CKV_AWS_50: X-Ray tracing is not used anywhere in this stack (see the tfsec ignore above)
   s3_bucket        = aws_s3_object.require_admin_mfa_zip.bucket
   s3_key           = aws_s3_object.require_admin_mfa_zip.key
   source_code_hash = data.archive_file.require_admin_mfa_placeholder.output_base64sha256
