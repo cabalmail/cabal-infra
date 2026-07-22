@@ -64,7 +64,7 @@ FALLBACK_COLORS = {
 QUERY = """
 query($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
-    labels(first: 100) { nodes { name color } }
+    labels(first: 100) { totalCount nodes { name color } }
     issues(states: OPEN, first: 100, after: $cursor,
            orderBy: {field: CREATED_AT, direction: DESC}) {
       totalCount
@@ -180,12 +180,15 @@ def build_model():
     """Fetch open issues and shape the triage model served at /api/data."""
     owner, name = REPO_SLUG.split("/", 1)
     label_colors = dict(FALLBACK_COLORS)
+    repo_labels, all_labels_seen = set(), True
     nodes, cursor, total = [], None, 0
     while True:
         data = graphql({"owner": owner, "name": name, "cursor": cursor})
         repo = data["repository"]
         for lab in repo["labels"]["nodes"]:
             label_colors[lab["name"]] = lab["color"]
+            repo_labels.add(lab["name"])
+        all_labels_seen = repo["labels"]["totalCount"] <= len(repo["labels"]["nodes"])
         issues = repo["issues"]
         total = issues["totalCount"]
         nodes.extend(issues["nodes"])
@@ -231,6 +234,8 @@ def build_model():
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "stages": [{"key": s, "color": label_colors.get(s, "8b8a86")} for s in STAGES],
         "accept_label": ACCEPT_LABEL,
+        "missing_labels": [s for s in dict.fromkeys(STAGES + [ACCEPT_LABEL])
+                           if s not in repo_labels] if all_labels_seen else [],
         "issues": rows,
         "open_total": total,
         "counts": counts,
@@ -363,6 +368,7 @@ PAGE = r"""<!DOCTYPE html>
   .rmenu-item[aria-selected="true"]{font-weight:600}
   .banner{border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:13px}
   .banner.err{background:color-mix(in srgb,var(--critical) 12%,transparent); border:1px solid color-mix(in srgb,var(--critical) 40%,transparent); color:var(--critical)}
+  .banner.warn{background:color-mix(in srgb,var(--warning) 16%,transparent); border:1px solid color-mix(in srgb,var(--warning) 45%,transparent)}
   .stats{display:flex; gap:10px; flex-wrap:wrap; margin:18px 0 18px}
   .stat{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; min-width:130px; font:inherit; color:var(--ink); text-align:left; cursor:pointer}
   .stat:hover{background:var(--surface-2)}
@@ -445,6 +451,7 @@ PAGE = r"""<!DOCTYPE html>
   </header>
 
   <div id="error"></div>
+  <div id="warn"></div>
   <div class="stats" id="stats"></div>
 
   <div class="controls">
@@ -520,6 +527,13 @@ function clearError(){ document.getElementById('error').innerHTML=''; }
 function renderAll(){
   if(!MODEL) return;
   document.getElementById('sub').textContent=`${MODEL.repo} · ${MODEL.issues.length} of ${MODEL.open_total} open issues are in the tester/fixer cycle · data ${MODEL.generated}`;
+  const miss=MODEL.missing_labels||[], one=miss.length===1;
+  document.getElementById('warn').innerHTML=miss.length?
+    `<div class="banner warn"><b>Label${one?'':'s'} missing from ${esc(MODEL.repo)}:</b> `+
+    miss.map(m=>`<code>${esc(m)}</code>`).join(', ')+
+    `. No issue can carry ${one?'this label, so its column stays':'these labels, so their columns stay'} empty`+
+    (miss.includes(MODEL.accept_label)?`, and Accept can't queue anything until <code>${esc(MODEL.accept_label)}</code> exists`:'')+
+    `. Create ${one?'it':'them'} under Issues → Labels on GitHub, or point <code>--stages</code>/<code>--accept-label</code> at labels this repo has.</div>`:'';
   renderStats(); renderRows();
 }
 

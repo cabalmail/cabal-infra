@@ -25,8 +25,9 @@ reach api.appstoreconnect.apple.com:
     export ASC_KEY_ID=XXXXXXXXXX
     export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     export ASC_KEY_PATH=~/AuthKey_XXXXXXXXXX.p8
-    python3 scripts/apple-release-dashboard.py --repo . \
-        --out apple-dashboard.html && open apple-dashboard.html   # from the repo root
+    python3 scripts/apple-release-dashboard.py \
+        --out apple-dashboard.html && open apple-dashboard.html
+    # --repo defaults to the checkout containing the script
 
 `--mock <file.json>` renders from a captured/synthetic ASC payload instead
 of calling the API - useful for previewing the layout or running offline.
@@ -1363,7 +1364,8 @@ renderLedger();
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--repo", default=".", help="Path to the cabal-infra repo root (default: cwd)")
+    ap.add_argument("--repo", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    help="Path to the cabal-infra repo root (default: the checkout containing this script)")
     ap.add_argument("--out", default="apple-dashboard.html", help="Output HTML path")
     ap.add_argument("--mock", help="Render from a captured/synthetic ASC JSON file instead of the API")
     ap.add_argument("--dump-asc", help="Write the normalized ASC payload to this JSON path")

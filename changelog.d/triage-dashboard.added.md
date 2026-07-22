@@ -6,6 +6,8 @@
   events, and new-tab links to each issue and PR. Closed and non-cycle
   issues are omitted. Per-row triage actions: Accept adds the `accepted`
   label (queuing the nightly fixer), and Close posts a required comment
-  before closing the issue as not-planned or completed. Data comes live
-  from the GitHub GraphQL API through `gh` (or a `GITHUB_TOKEN`), with the
-  same refresh/auto-refresh/theme chrome as the Apple dashboard.
+  before closing the issue as not-planned or completed. A banner warns
+  when a configured lifecycle label doesn't exist in the repo (fresh forks
+  don't inherit labels). Data comes live from the GitHub GraphQL API
+  through `gh` (or a `GITHUB_TOKEN`), with the same
+  refresh/auto-refresh/theme chrome as the Apple dashboard.
