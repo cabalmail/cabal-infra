@@ -5,7 +5,15 @@
 resource "aws_cognito_user_pool" "users" {
   name                     = "cabal"
   auto_verified_attributes = ["phone_number"]
-  sms_verification_message = "Your Cabalmail verification code is {####}"
+
+  # Both templates must match messageSample1 registered with the 10DLC
+  # campaign (docs/sms-10dlc.md) - carriers vet live traffic against the
+  # registered samples, including the trailing period. The authentication
+  # message is unused until SMS MFA is enabled, but is set now so enabling
+  # MFA can never fall back to Cognito's unbranded default text, which
+  # matches no registered sample.
+  sms_verification_message   = "Your Cabalmail verification code is {####}."
+  sms_authentication_message = "Your Cabalmail verification code is {####}."
 
   sms_configuration {
     sns_caller_arn = aws_iam_role.users.arn
