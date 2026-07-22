@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.8] - 2026-07-22
+
+### Added
+- **Apple release dashboard (`scripts/apple-dashboard-app.py`).** A local
+  Flask app - with data engine `scripts/apple-release-dashboard.py` - that
+  tracks each Apple `changelog.d` entry through the stage, prod, and beta
+  TestFlight groups. It recovers from git when an entry landed on `stage`,
+  resolves the first build carrying it in each lane (and whether a build
+  exists at all before App Store Connect attaches it to a group),
+  dereferences marketing and build (`CFBundleVersion`) versions, and reads
+  each build's App Store Connect status. The status mirrors the add-a-build
+  dialog's TestFlight beta state (Ready to Test / Testing / Not yet
+  testable, plus days until expiry), queried directly per build since the
+  builds-list `include=buildBetaDetail` is unreliable. Tracks the branch
+  from `origin/stage`, and can attach a build to a TestFlight group from
+  the build ledger; the control is disabled while a build is in a state
+  the attach API can't act on (not yet testable, expired, processing or
+  compliance holds).
+
+### Changed
+- Apple: **INBOX loads first at launch.** The app now lands on INBOX
+  immediately and starts loading its messages (including the instant
+  cached-envelope paint on a warm reopen) without waiting for the folder
+  list to arrive; the sidebar fills in alongside instead of gating the
+  first screen of mail.
+
+### Fixed
+- Apple: **Address-picker no longer offers apex domains you can't mint on.**
+  The macOS, iOS, visionOS, and watchOS new-address sheets now consult
+  `/list_my_domains` and intersect the deployment's configured apexes with
+  the caller's entitlement rows before populating the domain picker,
+  matching the React admin app. Picking an unentitled apex and hitting
+  Create used to surface an ugly HTTP 4xx from the `/new` Lambda; the
+  unentitled apexes are now simply absent from the dropdown. The Lambda
+  remains authoritative — a fetch failure falls back to showing every
+  configured apex rather than an empty picker.
+- Apple: **Compose no longer pre-fills a From address the account can't
+  send from.** A default From address that isn't in the account's own
+  address list — one revoked from another device, or one that leaked in
+  from a different account before settings were account-scoped and then
+  kept re-applying at sign-in via the server-synced copy — is now cleared
+  when the address list loads (in compose and in Settings), and the
+  cleared value is pushed to the server so the synced copy heals too.
+  Settings previously masked the dangling value as "None" while compose
+  kept using it, with no way to remove it from the UI. Also hardened the
+  sign-out path so a preference fetch still in flight for the previous
+  account is discarded instead of being applied to the next account.
+- **Confirm before deleting a folder.** Clicking the row's remove
+  action in the folder rail in the webmail client now stages the
+  deletion and asks for confirmation, matching the guard already in
+  place for Empty trash. A single stray click on the 12&nbsp;px `×`
+  no longer destroys the folder and its messages with no undo; the
+  dialog also calls out subfolders when the target has children.
+- Apple: **No more blank leading pane on iPad.** In landscape and resized
+  windows, the split view re-expanded its intentionally empty sidebar column
+  as a blank bar beside the message list. That column is now pinned to zero
+  width, so the floating folder panel is the only sidebar surface.
+- Apple: **Menu-bar "Open Cabalmail" brings the existing window forward (macOS).**
+  Choosing "Open Cabalmail" from the status-item menu used to spawn a
+  second main window alongside the one already open. The action now
+  finds the running main window and brings it to the foreground,
+  falling back to opening a new window only when none is present.
+- **React compose autosave writes real drafts.** The compose overlay's
+  autosave was a placeholder that debounced a local timestamp instead of
+  calling the server, so the "Saved just now" label appeared while nothing
+  was actually saved and closing the overlay silently dropped the draft
+  (issue #718). The autosave now calls `/save_draft`, tracks the returned
+  UIDPLUS coordinates as `replaces_*` on subsequent saves, and always
+  flushes a final save on close-without-send. `/send` passes the current
+  draft coordinates as `discard_draft_*` so the stale copy is expunged
+  after delivery. The label stays as "Draft not saved" until a real
+  round-trip succeeds. Attachments are still uploaded and included only on
+  Send in this pass; draft copies omit them to avoid re-uploading blobs on
+  every debounce.
+
+### Security
+- **Axios 1.18.0.** Bumped the admin app's `axios` dependency from 1.16.1 to
+  1.18.0, resolving a Node HTTP adapter issue where a proxy setting could be
+  inherited after interceptor config cloning.
+
 ## [0.11.7] - 2026-07-20
 
 ### Changed
