@@ -85,8 +85,9 @@ resource "aws_cognito_user_pool" "users" {
     }
   }
   lambda_config {
-    post_confirmation = aws_lambda_function.assign_osid.arn
-    pre_sign_up       = aws_lambda_function.check_invite.arn
+    post_confirmation    = aws_lambda_function.assign_osid.arn
+    pre_sign_up          = aws_lambda_function.check_invite.arn
+    pre_token_generation = aws_lambda_function.require_admin_mfa.arn
   }
 
   # Threat protection requires the Plus feature plan; on the default
