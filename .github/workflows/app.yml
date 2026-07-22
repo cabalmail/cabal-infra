@@ -717,6 +717,7 @@ jobs:
         BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
         ./.github/scripts/deploy-lambda-zip.sh assign_osid "${BUCKET}"
         ./.github/scripts/deploy-lambda-zip.sh check_invite "${BUCKET}"
+        ./.github/scripts/deploy-lambda-zip.sh require_admin_mfa "${BUCKET}"
 
   react:
     needs: [setup, approval]

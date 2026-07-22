@@ -140,6 +140,7 @@ module "pool" {
   invitation_code        = var.invitation_code
 
   ten_dlc_campaign_registration_id = var.ten_dlc_campaign_registration_id
+  enforce_admin_mfa                = var.enforce_admin_mfa
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront

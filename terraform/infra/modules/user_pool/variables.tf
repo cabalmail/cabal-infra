@@ -84,3 +84,8 @@ variable "invitation_code" {
   sensitive   = true
   default     = ""
 }
+variable "enforce_admin_mfa" {
+  type        = bool
+  description = "When true, the require_admin_mfa pre-token-generation trigger refuses tokens to admin-group members with no MFA factor. Default false = audit mode (log-only). Flip only after every admin has enrolled TOTP; see require_admin_mfa.tf."
+  default     = false
+}

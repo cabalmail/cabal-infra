@@ -195,3 +195,9 @@ variable "deploy_role_arn" {
   description = "ARN of the CI/CD deploy role (GitHub Actions OIDC, vars.AWS_DEPLOY_ROLE_ARN). It is granted pull on the ECR repositories so the deploy and nightly image-scan workflows are not locked out by the Phase 5 pull-restriction policy. Defaults to empty so terraform validate and destroy_terraform.yml (which omit it) still parse; a real apply sets it from CI, and an empty value only drops the CI grant from the ECR allow lists."
   default     = ""
 }
+
+variable "enforce_admin_mfa" {
+  type        = bool
+  description = "Enforce MFA enrollment for admin-group sign-ins via the require_admin_mfa pre-token-generation trigger. Defaults to false (audit mode: un-enrolled admins are logged, not blocked). Enable per-environment via TF_VAR_ENFORCE_ADMIN_MFA once every admin has enrolled TOTP."
+  default     = false
+}
