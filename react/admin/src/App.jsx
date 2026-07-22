@@ -75,6 +75,7 @@ function loadSavedState() {
     domains: {},
     api_url: null,
     invitation_required: false,
+    sms_enabled: false,
     monitoring: false,
   };
   const saved = JSON.parse(window.localStorage.getItem('state'));
@@ -247,7 +248,14 @@ function App() {
   // Returning visits keep working from the loadSavedState snapshot.
   useEffect(() => {
     axios.get('/config.js').then(({ data }) => {
-      const { control_domain, domains, cognitoConfig, invitation_required, monitoring } = data;
+      const {
+        control_domain,
+        domains,
+        cognitoConfig,
+        invitation_required,
+        sms_enabled,
+        monitoring,
+      } = data;
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
       setState({
         poolData: cognitoConfig.poolData,
@@ -258,6 +266,10 @@ function App() {
         domains,
         api_url: "https://admin." + control_domain + "/prod",
         invitation_required: invitation_required === true,
+        // Default true so an older /config.js (pre-712, no `sms_enabled` key)
+        // keeps rendering the phone field and consent checkbox rather than
+        // silently dropping them on a pool that still requires SMS.
+        sms_enabled: sms_enabled !== false,
         monitoring: monitoring === true
       });
       const cognitoUser = UserPool.getCurrentUser();
@@ -316,14 +328,21 @@ function App() {
 
   const doRegister = useCallback((e) => {
     e.preventDefault();
-    const attributeUsername = new CognitoUserAttribute({
-      Name: 'preferred_username',
-      Value: state.userName
-    });
-    const attributePhone = new CognitoUserAttribute({
-      Name: 'phone_number',
-      Value: state.phone
-    });
+    const attributes = [
+      new CognitoUserAttribute({
+        Name: 'preferred_username',
+        Value: state.userName
+      }),
+    ];
+    // Phone number is only collected when the pool is wired for SMS
+    // (a 10DLC campaign registration id is configured). See issue #712
+    // and terraform/infra/modules/user_pool/main.tf.
+    if (state.sms_enabled && state.phone) {
+      attributes.push(new CognitoUserAttribute({
+        Name: 'phone_number',
+        Value: state.phone
+      }));
+    }
     // Shared-secret invitation code, validated by the check_invite
     // Cognito pre-signup Lambda. Passed via validationData so it never
     // lands on the user record. Key must match the Python handler.
@@ -334,12 +353,17 @@ function App() {
     UserPool.signUp(
       state.userName,
       state.password,
-      [attributeUsername, attributePhone],
+      attributes,
       validationData,
       (err, _result) => {
         if (!err) {
-          setState({ view: "Verify", inviteCode: null });
-          setMessage("Check your phone for a verification code.", false);
+          setState({ view: state.sms_enabled ? "Verify" : "Login", inviteCode: null });
+          setMessage(
+            state.sms_enabled
+              ? "Check your phone for a verification code."
+              : "Account created. It is pending admin approval; you'll be notified when it is ready.",
+            false
+          );
         } else {
           setState({ view: "SignUp" });
           const msg = /invitation code/i.test(err.message || '')
@@ -349,7 +373,7 @@ function App() {
         }
       }
     );
-  }, [state.userName, state.password, state.phone, state.inviteCode, setState, setMessage]);
+  }, [state.userName, state.password, state.phone, state.inviteCode, state.sms_enabled, setState, setMessage]);
 
   const doVerify = useCallback((e) => {
     e.preventDefault();
@@ -681,7 +705,8 @@ function App() {
     smtp_host: `smtp-out.${state.control_domain}`,
     control_domain: state.control_domain,
     domains: state.domains,
-    invitation_required: state.invitation_required
+    invitation_required: state.invitation_required,
+    sms_enabled: state.sms_enabled
   };
 
   const isPreLoginView = configUnavailable

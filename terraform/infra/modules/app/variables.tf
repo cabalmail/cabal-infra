@@ -118,6 +118,12 @@ variable "invitation_required" {
   default     = false
 }
 
+variable "sms_enabled" {
+  type        = bool
+  description = "Mirror of the user_pool module's sms_enabled output (true iff a 10DLC campaign registration id is configured). Plumbed into /config.js so the React signup form can hide the phone-number field and consent checkbox when the pool is not wired for SMS. See docs/sms-10dlc.md and issue #712."
+  default     = false
+}
+
 variable "monitoring" {
   type        = bool
   description = "Mirror of the top-level var.monitoring. When true, /config.js advertises the monitoring stack so the admin app's Nav can surface Uptime Kuma, Healthchecks, and Grafana entries (which target uptime/heartbeat/metrics.<control-domain>)."

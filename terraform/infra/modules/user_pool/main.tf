@@ -2,19 +2,36 @@
 * Creates a Cognito User Pool for authentication against the management application and for authentication at the OS level (providing IMAP and SMTP authentication).
 */
 
+locals {
+  # SMS is on only when a 10DLC campaign registration id has been supplied.
+  # A brand-new deploy has no such id (an approved campaign is a
+  # weeks-of-carrier-review post-bootstrap step), so SMS starts off and the
+  # pool must not require phone verification - otherwise Cognito falls
+  # through to the shared SNS sandbox and signup fails with no user-facing
+  # remediation. See issue #712 and docs/sms-10dlc.md.
+  sms_enabled = var.ten_dlc_campaign_registration_id != ""
+}
+
 resource "aws_cognito_user_pool" "users" {
   name                     = "cabal"
-  auto_verified_attributes = ["phone_number"]
-  sms_verification_message = "Your Cabalmail verification code is {####}"
+  auto_verified_attributes = local.sms_enabled ? ["phone_number"] : []
+  sms_verification_message = local.sms_enabled ? "Your Cabalmail verification code is {####}" : null
 
-  sms_configuration {
-    sns_caller_arn = aws_iam_role.users.arn
-    external_id    = "cabal-cognito-sms"
+  dynamic "sms_configuration" {
+    for_each = local.sms_enabled ? [1] : []
+    content {
+      sns_caller_arn = aws_iam_role.users.arn
+      external_id    = "cabal-cognito-sms"
+    }
   }
 
+  # With SMS off there is no self-serve recovery channel (no email attribute
+  # is collected either); admin_only leaves recovery to the operator via
+  # AdminSetUserPassword. Once a 10DLC campaign lands, this flips back to
+  # verified_phone_number automatically.
   account_recovery_setting {
     recovery_mechanism {
-      name     = "verified_phone_number"
+      name     = local.sms_enabled ? "verified_phone_number" : "admin_only"
       priority = 1
     }
   }
