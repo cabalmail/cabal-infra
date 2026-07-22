@@ -10,4 +10,6 @@
   testable, plus days until expiry), queried directly per build since the
   builds-list `include=buildBetaDetail` is unreliable. Tracks the branch
   from `origin/stage`, and can attach a build to a TestFlight group from
-  the build ledger.
+  the build ledger; the control is disabled while a build is in a state
+  the attach API can't act on (not yet testable, expired, processing or
+  compliance holds).

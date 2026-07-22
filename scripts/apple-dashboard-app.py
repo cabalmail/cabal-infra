@@ -544,6 +544,8 @@ function assignSelect(r){
   const groups=(MODEL.groups&&MODEL.groups[r.app_key])||[];
   const avail=groups.filter(g=>g.id && !r.groups.includes(g.name));
   if(!avail.length) return '<span class="lane-none">—</span>';
+  if(r.attachable===false)
+    return `<select class="assign" disabled title="Can’t be added to a test group right now: ${esc(r.status_label)}"><option>＋ add to…</option></select>`;
   return `<select class="assign" data-build="${esc(r.id)}" onchange="assignBuild(this)" title="Add this build to a TestFlight group">`+
     `<option value="">＋ add to…</option>`+
     avail.map(g=>`<option value="${esc(g.id)}" data-name="${esc(g.name)}">${esc(g.name)}${g.internal?'':' · external'}</option>`).join('')+
