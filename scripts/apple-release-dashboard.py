@@ -711,6 +711,32 @@ def first_build_any_after(builds, ts):
     return min(cand, key=lambda b: _int_build(b["build_number"]) or 0)
 
 
+# Internal states under which adding the build to a test group can't work:
+# the delivery is broken, or TestFlight still owes a step (processing, export
+# compliance) that the plain build->betaGroups POST cannot complete. External
+# review states are NOT here - a build waiting on / rejected from external
+# review is still fully attachable to internal groups.
+UNATTACHABLE_INTERNAL = {
+    "PROCESSING", "PROCESSING_EXCEPTION", "MISSING_EXPORT_COMPLIANCE",
+    "IN_EXPORT_COMPLIANCE_REVIEW", "EXPIRED",
+}
+
+
+def attachable(build):
+    """Whether attaching this build to a TestFlight group can succeed.
+
+    Unknown states (no beta detail recovered, but not confirmed missing)
+    stay attachable - a failed attempt surfaces its own error, which beats
+    falsely locking the control."""
+    if build["expired"]:
+        return False
+    if build["processing_state"] and build["processing_state"] != "VALID":
+        return False
+    if build.get("beta_detail_missing"):
+        return False
+    return build["internal_state"] not in UNATTACHABLE_INTERNAL
+
+
 def built_status(build):
     """Status for the 'Built' cell: the build exists, independent of groups."""
     if build["expired"]:
@@ -901,6 +927,7 @@ def assemble(repo_versions, fragments, frag_dates, landings, tag_dates, asc):
                     "groups": b["groups"],
                     "expired": b["expired"],
                     "expires": b.get("expiration", ""),
+                    "attachable": attachable(b),
                 }
             )
     ledger.sort(key=lambda x: x["uploaded"] or "", reverse=True)
