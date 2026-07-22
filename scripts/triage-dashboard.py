@@ -14,6 +14,10 @@ native Issues UI:
   * related PRs (discovered via cross-reference events, since the fixer does
     not use closing keywords) are shown per row with their open/merged/closed
     state, linked directly - no drilling into the issue to find them
+  * triage actions per row (these make real changes on GitHub): Accept adds
+    the `accepted` label so the nightly fixer picks the issue up; Close...
+    posts a required comment and then closes the issue as not-planned or
+    completed
 
 All GitHub data is fetched live on each refresh through `gh api graphql`
 (uses your existing gh login); set GITHUB_TOKEN or GH_TOKEN to bypass the gh
@@ -42,7 +46,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 try:
-    from flask import Flask, jsonify, Response
+    from flask import Flask, jsonify, Response, request
 except ImportError:
     sys.exit("Flask is not installed. Run: pip install flask")
 
@@ -85,6 +89,7 @@ query($owner: String!, $name: String!, $cursor: String) {
 
 REPO_SLUG = None
 STAGES = DEFAULT_STAGES
+ACCEPT_LABEL = "accepted"
 
 
 def detect_repo_slug(repo_path):
@@ -134,6 +139,41 @@ def graphql(variables):
         raise RuntimeError("GraphQL error: " + "; ".join(
             e.get("message", str(e)) for e in payload["errors"]))
     return payload["data"]
+
+
+def rest(method, path, payload):
+    """Call a GitHub REST endpoint (mutations), via token or the gh CLI."""
+    token = os.environ.get("GITHUB_TOKEN", "").strip() or os.environ.get("GH_TOKEN", "").strip()
+    if token:
+        req = urllib.request.Request(
+            "https://api.github.com" + path,
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"bearer {token}",
+                     "Content-Type": "application/json",
+                     "Accept": "application/vnd.github+json"},
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                resp.read()
+        except urllib.error.HTTPError as err:
+            try:
+                detail = json.load(err).get("message", "")
+            except Exception:  # pylint: disable=broad-except
+                detail = ""
+            raise RuntimeError(f"GitHub returned HTTP {err.code}: {detail or err.reason}") from err
+        return
+    if not shutil.which("gh"):
+        raise RuntimeError(
+            "Neither GITHUB_TOKEN/GH_TOKEN is set nor is the `gh` CLI on PATH. "
+            "Install gh and run `gh auth login`, or export a token."
+        )
+    proc = subprocess.run(
+        ["gh", "api", "--method", method, path.lstrip("/"), "--input", "-"],
+        input=json.dumps(payload), capture_output=True, text=True, check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"gh api failed: {proc.stderr.strip() or proc.stdout.strip()}")
 
 
 def build_model():
@@ -190,6 +230,7 @@ def build_model():
         "repo": REPO_SLUG,
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "stages": [{"key": s, "color": label_colors.get(s, "8b8a86")} for s in STAGES],
+        "accept_label": ACCEPT_LABEL,
         "issues": rows,
         "open_total": total,
         "counts": counts,
@@ -215,6 +256,45 @@ def api_data():
         return jsonify(build_model())
     except Exception as exc:  # pylint: disable=broad-except
         sys.stderr.write("api/data error:\n" + traceback.format_exc())
+        return jsonify({"error": str(exc)}), 200
+
+
+@app.route("/api/accept", methods=["POST"])
+def api_accept():
+    """Add the accept label to an issue (a real GitHub change)."""
+    data = request.get_json(force=True, silent=True) or {}
+    number = data.get("number")
+    if not isinstance(number, int):
+        return jsonify({"error": "number is required."}), 200
+    try:
+        rest("POST", f"/repos/{REPO_SLUG}/issues/{number}/labels",
+             {"labels": [ACCEPT_LABEL]})
+        return jsonify({"ok": True})
+    except Exception as exc:  # pylint: disable=broad-except
+        sys.stderr.write("api/accept error:\n" + traceback.format_exc())
+        return jsonify({"error": str(exc)}), 200
+
+
+@app.route("/api/close", methods=["POST"])
+def api_close():
+    """Post a comment on an issue, then close it (a real GitHub change)."""
+    data = request.get_json(force=True, silent=True) or {}
+    number = data.get("number")
+    comment = (data.get("comment") or "").strip()
+    reason = data.get("reason")
+    if not isinstance(number, int):
+        return jsonify({"error": "number is required."}), 200
+    if not comment:
+        return jsonify({"error": "A comment is required to close from here."}), 200
+    if reason not in ("not_planned", "completed"):
+        return jsonify({"error": "reason must be not_planned or completed."}), 200
+    try:
+        rest("POST", f"/repos/{REPO_SLUG}/issues/{number}/comments", {"body": comment})
+        rest("PATCH", f"/repos/{REPO_SLUG}/issues/{number}",
+             {"state": "closed", "state_reason": reason})
+        return jsonify({"ok": True})
+    except Exception as exc:  # pylint: disable=broad-except
+        sys.stderr.write("api/close error:\n" + traceback.format_exc())
         return jsonify({"error": str(exc)}), 200
 
 
@@ -299,6 +379,7 @@ PAGE = r"""<!DOCTYPE html>
   th.sortable{cursor:pointer}
   th.sortable:hover{color:var(--ink-2)}
   th.stagecol, td.stagecol{text-align:center}
+  td.titlecol{min-width:260px}
   tbody tr:hover{background:var(--surface-2)}
   tbody tr:last-child td{border-bottom:none}
   td.num{font-variant-numeric:tabular-nums; white-space:nowrap}
@@ -318,6 +399,22 @@ PAGE = r"""<!DOCTYPE html>
   .prline + .prline{margin-top:4px}
   .prnum{font-variant-numeric:tabular-nums}
   .none{color:var(--muted)}
+  .abtn{font:inherit; font-size:12px; padding:4px 10px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--ink-2); cursor:pointer; white-space:nowrap}
+  .abtn:hover:not(:disabled){color:var(--ink); background:var(--surface-2)}
+  .abtn:disabled{opacity:.45; cursor:default}
+  .abtn.accept:not(:disabled){color:var(--good-ink); border-color:color-mix(in srgb,var(--good) 40%,var(--border))}
+  .abtn.danger:hover:not(:disabled){color:var(--critical); border-color:color-mix(in srgb,var(--critical) 45%,var(--border)); background:var(--surface)}
+  .actcell{display:flex; gap:6px}
+  .modal{position:fixed; inset:0; background:rgba(0,0,0,.42); display:flex; align-items:center; justify-content:center; z-index:90}
+  .modal[hidden]{display:none}
+  .mbox{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.3); padding:18px 20px; width:520px; max-width:92vw}
+  .mbox h3{margin:0 0 4px; font-size:15px}
+  .mtitle{color:var(--ink-2); font-size:13px; margin:0 0 12px}
+  .mbox textarea{width:100%; min-height:90px; font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--page); color:var(--ink); resize:vertical}
+  .mrow{display:flex; gap:8px; margin-top:12px; align-items:center; flex-wrap:wrap}
+  .toast{position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f1f1f; color:#fff; padding:10px 16px; border-radius:9px; font-size:13px; z-index:100; box-shadow:0 8px 28px rgba(0,0,0,.32); max-width:560px}
+  .toast.bad{background:var(--critical)}
+  .toast[hidden]{display:none}
   .empty{color:var(--muted); padding:30px 12px; text-align:center}
   footer{margin-top:28px; color:var(--muted); font-size:12px; border-top:1px solid var(--grid); padding-top:14px}
   code{background:var(--surface-2); padding:1px 5px; border-radius:5px; font-size:12px}
@@ -364,8 +461,25 @@ PAGE = r"""<!DOCTYPE html>
     fixer links issues without closing keywords, so GitHub's "linked PR" field stays empty);
     a PR that merely mentions the issue also appears here. Click a stat tile to filter to
     that stage; click it again to clear. All links open in a new tab.
+    <b>Accept</b> adds the <code>accepted</code> label (the nightly fixer picks it up);
+    <b>Close…</b> posts your comment and then closes the issue — both are real GitHub changes.
   </footer>
 </div>
+
+<div id="closemodal" class="modal" hidden>
+  <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="cm-head">
+    <h3 id="cm-head">Close</h3>
+    <p class="mtitle" id="cm-title"></p>
+    <textarea id="cm-comment" placeholder="Why is this being closed? Posted as an issue comment before closing (required)."></textarea>
+    <div class="mrow">
+      <button class="abtn" id="cm-cancel" type="button">Cancel</button>
+      <span class="spacer" style="flex:1"></span>
+      <button class="abtn danger" id="cm-notplanned" type="button">Close as not planned</button>
+      <button class="abtn" id="cm-completed" type="button">Close as completed</button>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
 
 <script>
 const PR_ROLE={open:'open', merged:'merged', closed:'closed', draft:'draft'};
@@ -436,6 +550,15 @@ function prCell(r){
     `<span class="pill ${PR_ROLE[p.state]||'draft'}"><span class="ic">${PR_ICON[p.state]||'○'}</span>${esc(p.state)}</span>`+
     `</div>`).join('');
 }
+function actCell(r){
+  const accepted=r.stages.includes(MODEL.accept_label);
+  return `<div class="actcell">`+
+    `<button class="abtn accept" type="button" ${accepted
+      ?'disabled title="Already accepted"'
+      :`onclick="acceptIssue(${r.number},this)" title="Add the ${esc(MODEL.accept_label)} label — queues the nightly fixer"`}>Accept</button>`+
+    `<button class="abtn danger" type="button" onclick="openCloseModal(${r.number})" title="Comment on and close this issue">Close…</button>`+
+    `</div>`;
+}
 function renderRows(){
   if(!MODEL) return;
   const q=document.getElementById('f-q').value.trim().toLowerCase();
@@ -450,20 +573,70 @@ function renderRows(){
   document.getElementById('f-count').textContent=`${rows.length} issue${rows.length!==1?'s':''}`;
   const head=`<tr>${th('number','#','')}${th('title','Title','')}${th('created','Age','')}${th('updated','Updated','')}`+
     MODEL.stages.map(s=>th(null,s.key,'stagecol')).join('')+
-    `<th>Labels</th><th>PRs</th></tr>`;
+    `<th>Labels</th><th>PRs</th><th>Actions</th></tr>`;
   const body=rows.map(r=>`<tr>
     <td class="num"><a href="${esc(r.url)}" target="_blank" rel="noopener">#${r.number}</a></td>
-    <td><a class="ititle" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></td>
+    <td class="titlecol"><a class="ititle" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></td>
     <td class="num" title="opened ${esc(r.created)}">${ago(r.created)}</td>
     <td class="num" title="${esc(r.updated)}">${ago(r.updated)}</td>
     ${MODEL.stages.map(s=>`<td class="stagecol">${r.stages.includes(s.key)?`<span class="stagemark" style="color:color-mix(in srgb,#${esc(s.color)} 55%,var(--ink))" title="${esc(s.key)}">✓</span>`:''}</td>`).join('')}
     <td>${r.other_labels.map(l=>`<span class="ghlabel" style="border-color:#${esc(l.color)}; background:color-mix(in srgb,#${esc(l.color)} 18%,transparent)">${esc(l.name)}</span>`).join('')||'<span class="none">—</span>'}</td>
     <td>${prCell(r)}</td>
+    <td>${actCell(r)}</td>
   </tr>`).join('');
-  const cols=6+MODEL.stages.length;
+  const cols=7+MODEL.stages.length;
   document.getElementById('issue-table').innerHTML=`<table><thead>${head}</thead><tbody>`+
     (rows.length?body:`<tr><td colspan="${cols}" class="empty">No open issues match.</td></tr>`)+`</tbody></table>`;
 }
+
+/* ---------- triage actions ---------- */
+let toastTimer=null, closeTarget=null;
+function toast(msg, bad){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.toggle('bad', !!bad); t.hidden=false;
+  if(toastTimer) clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ t.hidden=true; }, bad?7000:3500);
+}
+function postJSON(url, payload){
+  return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(r=>r.json()).catch(e=>({error:String(e)}));
+}
+async function acceptIssue(n, btn){
+  btn.disabled=true;
+  const d=await postJSON('/api/accept',{number:n});
+  if(d && d.ok){ toast(`Accepted #${n} — queued for the fixer.`); await fetchData(); }
+  else { toast('Accept failed: '+((d&&d.error)||'unknown error'), true); btn.disabled=false; }
+}
+function openCloseModal(n){
+  closeTarget=n;
+  const r=MODEL.issues.find(i=>i.number===n);
+  document.getElementById('cm-head').textContent=`Close #${n}`;
+  document.getElementById('cm-title').textContent=r?r.title:'';
+  const ta=document.getElementById('cm-comment'); ta.value='';
+  updateCloseButtons();
+  document.getElementById('closemodal').hidden=false;
+  ta.focus();
+}
+function hideCloseModal(){ document.getElementById('closemodal').hidden=true; closeTarget=null; }
+function updateCloseButtons(){
+  const has=document.getElementById('cm-comment').value.trim().length>0;
+  document.getElementById('cm-notplanned').disabled=!has;
+  document.getElementById('cm-completed').disabled=!has;
+}
+async function submitClose(reason){
+  const n=closeTarget, comment=document.getElementById('cm-comment').value.trim();
+  if(n==null || !comment) return;
+  const btns=[document.getElementById('cm-notplanned'),document.getElementById('cm-completed'),document.getElementById('cm-cancel')];
+  btns.forEach(b=>b.disabled=true);
+  const d=await postJSON('/api/close',{number:n, comment, reason});
+  btns.forEach(b=>b.disabled=false); updateCloseButtons();
+  if(d && d.ok){ hideCloseModal(); toast(`Closed #${n} as ${reason==='not_planned'?'not planned':'completed'}.`); await fetchData(); }
+  else { toast('Close failed: '+((d&&d.error)||'unknown error'), true); }
+}
+document.getElementById('cm-comment').addEventListener('input', updateCloseButtons);
+document.getElementById('cm-cancel').addEventListener('click', hideCloseModal);
+document.getElementById('cm-notplanned').addEventListener('click',()=>submitClose('not_planned'));
+document.getElementById('cm-completed').addEventListener('click',()=>submitClose('completed'));
+document.getElementById('closemodal').addEventListener('click',e=>{ if(e.target===e.currentTarget) hideCloseModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !document.getElementById('closemodal').hidden) hideCloseModal(); });
 
 /* ---------- theme ---------- */
 const tb=document.getElementById('themebtn'); const modes=['auto','light','dark'];
@@ -495,7 +668,7 @@ renderIntervalMenu(); fetchData();
 
 
 def main():
-    global REPO_SLUG, STAGES
+    global REPO_SLUG, STAGES, ACCEPT_LABEL
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     help="Path to a checkout whose origin remote names the GitHub repo "
@@ -504,6 +677,8 @@ def main():
     ap.add_argument("--stages", default=",".join(DEFAULT_STAGES),
                     help="Comma-separated lifecycle labels, in column order "
                          f"(default: {','.join(DEFAULT_STAGES)})")
+    ap.add_argument("--accept-label", default=ACCEPT_LABEL,
+                    help=f"Label the Accept button adds (default: {ACCEPT_LABEL})")
     ap.add_argument("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
     ap.add_argument("--port", type=int, default=5058,
                     help="Bind port (default 5058; the Apple dashboard uses 5057)")
@@ -513,6 +688,7 @@ def main():
     if not REPO_SLUG:
         sys.exit("Could not determine the GitHub repo from the origin remote; pass --repo-slug owner/name.")
     STAGES = [s.strip() for s in args.stages.split(",") if s.strip()]
+    ACCEPT_LABEL = args.accept_label
 
     sys.stderr.write(f"Serving Cabalmail triage dashboard on http://{args.host}:{args.port}  (repo: {REPO_SLUG})\n")
     sys.stderr.write(f"Lifecycle columns: {', '.join(STAGES)}\n")
