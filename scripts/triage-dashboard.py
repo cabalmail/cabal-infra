@@ -490,7 +490,7 @@ PAGE = r"""<!DOCTYPE html>
 
 <script>
 const PR_ROLE={open:'open', merged:'merged', closed:'closed', draft:'draft'};
-const PR_ICON={open:'●', merged:'⇗', closed:'✕', draft:'○'};
+const PR_ICON={open:'●', merged:'⛙', closed:'✕', draft:'○'};
 const INTERVALS=[{s:0,label:'Off'},{s:60,label:'1 minute'},{s:300,label:'5 minutes'},{s:900,label:'15 minutes'},{s:3600,label:'1 hour'}];
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
