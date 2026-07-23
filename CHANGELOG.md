@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.10] - 2026-07-23
+
+### Fixed
+- Apple: **First visit to a folder no longer shows a red network("cancelled")
+  error.** The message list's initial fetch ran inside a SwiftUI task that
+  can be cancelled mid-push transition, painting the error over an empty
+  list with nothing left to reload it; the first load now runs on a
+  model-owned task that survives the transition. The HTTP transport also
+  retries a spurious URLSession cancellation once, restoring the recovery
+  the body fetch lost when transport-level error normalization landed.
+- Apple: **Unread/Flagged filter-pill counts update instantly.** Flagging or
+  reading a message (row swipe, reader toolbar, mark-as-read on open) updated
+  the row's own indicators but left the All/Unread/Flagged pill counts stale
+  until the next server refetch; the counts now follow every optimistic flag
+  change (including bulk operations and error rollbacks) and still reconcile
+  to server truth on refresh.
+
+### Security
+- **Hardened HTML comment stripping when quoting a message for reply/forward.**
+  The reply/forward body prep used a regex loop to strip `<!-- -->` markers
+  before splicing the quoted body into the compose editor; CodeQL flagged it
+  as an incomplete multi-character sanitization, since regex removal of one
+  comment marker can reassemble surrounding text into a new one. It now
+  parses the quoted body with the browser's HTML parser and removes actual
+  comment nodes instead.
+
 ## [0.11.9] - 2026-07-23
 
 ### Added
