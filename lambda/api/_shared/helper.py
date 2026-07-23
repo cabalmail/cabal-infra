@@ -786,8 +786,14 @@ def subscribe_folder(folder, host, user):
     return return_value
 
 def unsubscribe_folder(folder, host, user):
-    '''Unsubscribes the user from an IMAP folder.'''
-    client = get_imap_client(host, user, folder)
+    '''Unsubscribes the user from an IMAP folder.
+
+    Selects INBOX rather than the target folder: UNSUBSCRIBE does not require
+    the mailbox to be selected, and it must keep working after the mailbox is
+    deleted -- Dovecot keeps LSUB entries for deleted mailboxes, and clearing
+    such an entry is the only way to stop the folder haunting clients'
+    Subscribed list.'''
+    client = get_imap_client(host, user, 'INBOX')
     return_value = client.unsubscribe_folder(folder)
     client.logout()
     return return_value
