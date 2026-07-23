@@ -1,16 +1,18 @@
 import XCTest
 @testable import CabalmailKit
 
-final class AuthServiceTests: XCTestCase {
-    private func makeConfiguration() -> Configuration {
-        Configuration(
-            controlDomain: "cabalmail.example",
-            domains: [MailDomain(domain: "cabalmail.example")],
-            invokeUrl: URL(string: "https://api.cabalmail.example/prod")!,
-            cognito: .init(region: "us-east-1", userPoolId: "us-east-1_ABC", clientId: "clientX")
-        )
-    }
+// Shared by both test classes below (split to satisfy SwiftLint's
+// type_body_length cap).
+private func makeConfiguration() -> Configuration {
+    Configuration(
+        controlDomain: "cabalmail.example",
+        domains: [MailDomain(domain: "cabalmail.example")],
+        invokeUrl: URL(string: "https://api.cabalmail.example/prod")!,
+        cognito: .init(region: "us-east-1", userPoolId: "us-east-1_ABC", clientId: "clientX")
+    )
+}
 
+final class AuthServiceTests: XCTestCase {
     func testSignInStoresTokensAndCredentials() async throws {
         let authResult = """
         {
@@ -31,7 +33,8 @@ final class AuthServiceTests: XCTestCase {
             secureStore: store
         )
 
-        try await service.signIn(username: "alice", password: "hunter2")
+        let result = try await service.signIn(username: "alice", password: "hunter2")
+        XCTAssertEqual(result, .signedIn)
 
         let requests = await http.requests
         XCTAssertEqual(requests.count, 1)
@@ -86,7 +89,7 @@ final class AuthServiceTests: XCTestCase {
             clock: { clockRef.value }
         )
 
-        try await service.signIn(username: "alice", password: "hunter2")
+        _ = try await service.signIn(username: "alice", password: "hunter2")
         clockRef.value = Date(timeIntervalSince1970: 1_100)
 
         let token = try await service.currentIdToken()
@@ -110,7 +113,7 @@ final class AuthServiceTests: XCTestCase {
             secureStore: InMemorySecureStore()
         )
         do {
-            try await service.signIn(username: "alice", password: "wrong")
+            _ = try await service.signIn(username: "alice", password: "wrong")
             XCTFail("Expected invalid credentials error")
         } catch let error as CabalmailError {
             XCTAssertEqual(error, .invalidCredentials)
@@ -128,7 +131,7 @@ final class AuthServiceTests: XCTestCase {
             transport: http,
             secureStore: store
         )
-        try await service.signIn(username: "alice", password: "hunter2")
+        _ = try await service.signIn(username: "alice", password: "hunter2")
         try await service.signOut()
         do {
             _ = try await service.currentIdToken()
@@ -136,6 +139,172 @@ final class AuthServiceTests: XCTestCase {
         } catch let error as CabalmailError {
             XCTAssertEqual(error, .notSignedIn)
         }
+    }
+}
+
+/// MFA challenge and TOTP enrollment coverage (identity plan Phase 1).
+final class AuthServiceMfaTests: XCTestCase {
+    func testTotpChallengeThenSubmitCodeSignsIn() async throws {
+        let challenge = """
+        {"ChallengeName":"SOFTWARE_TOKEN_MFA","Session":"sess-1","ChallengeParameters":{}}
+        """
+        let authResult = """
+        {"AuthenticationResult":{"IdToken":"I","AccessToken":"A","RefreshToken":"R","ExpiresIn":3600}}
+        """
+        let http = RecordingHTTPTransport(responses: [
+            (Data(challenge.utf8), 200),
+            (Data(authResult.utf8), 200),
+        ])
+        let store = InMemorySecureStore()
+        let service = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: http,
+            secureStore: store
+        )
+
+        let result = try await service.signIn(username: "alice", password: "hunter2")
+        XCTAssertEqual(result, .mfaCodeRequired(.totp))
+        // No tokens or credentials may exist until the challenge passes.
+        do {
+            _ = try await service.currentIdToken()
+            XCTFail("Expected notSignedIn before the challenge completes")
+        } catch let error as CabalmailError {
+            XCTAssertEqual(error, .notSignedIn)
+        }
+
+        try await service.submitMfaCode("123456")
+
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(
+            requests[1].value(forHTTPHeaderField: "X-Amz-Target"),
+            "AWSCognitoIdentityProviderService.RespondToAuthChallenge"
+        )
+        let body = try JSONSerialization.jsonObject(with: requests[1].httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(body?["ChallengeName"] as? String, "SOFTWARE_TOKEN_MFA")
+        XCTAssertEqual(body?["Session"] as? String, "sess-1")
+        let responses = body?["ChallengeResponses"] as? [String: String]
+        XCTAssertEqual(responses?["USERNAME"], "alice")
+        XCTAssertEqual(responses?["SOFTWARE_TOKEN_MFA_CODE"], "123456")
+
+        let token = try await service.currentIdToken()
+        XCTAssertEqual(token, "I")
+        let creds = try await service.currentImapCredentials()
+        XCTAssertEqual(creds.username, "alice")
+        XCTAssertEqual(creds.password, "hunter2")
+    }
+
+    func testSubmitMfaCodeWithoutChallengeThrows() async throws {
+        let service = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: RecordingHTTPTransport(responses: []),
+            secureStore: InMemorySecureStore()
+        )
+        do {
+            try await service.submitMfaCode("123456")
+            XCTFail("Expected notSignedIn")
+        } catch let error as CabalmailError {
+            XCTAssertEqual(error, .notSignedIn)
+        }
+    }
+
+    func testUnknownChallengeStillThrows() async throws {
+        let challenge = """
+        {"ChallengeName":"NEW_PASSWORD_REQUIRED","Session":"sess-1"}
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(challenge.utf8), 200)])
+        let service = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: http,
+            secureStore: InMemorySecureStore()
+        )
+        do {
+            _ = try await service.signIn(username: "alice", password: "hunter2")
+            XCTFail("Expected protocolError")
+        } catch let error as CabalmailError {
+            guard case .protocolError(let text) = error else {
+                return XCTFail("Expected protocolError, got \(error)")
+            }
+            XCTAssertTrue(text.contains("NEW_PASSWORD_REQUIRED"))
+        }
+    }
+
+    func testTotpEnrollmentFlow() async throws {
+        let authResult = """
+        {"AuthenticationResult":{"IdToken":"I","AccessToken":"ACCESS","RefreshToken":"R","ExpiresIn":3600}}
+        """
+        let associate = """
+        {"SecretCode":"SECRETKEY234567"}
+        """
+        let verify = """
+        {"Status":"SUCCESS"}
+        """
+        let http = RecordingHTTPTransport(responses: [
+            (Data(authResult.utf8), 200),
+            (Data(associate.utf8), 200),
+            (Data(verify.utf8), 200),
+            (Data("{}".utf8), 200),
+        ])
+        let service = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: http,
+            secureStore: InMemorySecureStore()
+        )
+        _ = try await service.signIn(username: "alice", password: "hunter2")
+
+        let secret = try await service.beginTotpEnrollment()
+        XCTAssertEqual(secret, "SECRETKEY234567")
+
+        try await service.confirmTotpEnrollment(code: "654321")
+
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 4)
+        XCTAssertEqual(
+            requests[1].value(forHTTPHeaderField: "X-Amz-Target"),
+            "AWSCognitoIdentityProviderService.AssociateSoftwareToken"
+        )
+        XCTAssertEqual(
+            requests[2].value(forHTTPHeaderField: "X-Amz-Target"),
+            "AWSCognitoIdentityProviderService.VerifySoftwareToken"
+        )
+        let verifyBody = try JSONSerialization.jsonObject(with: requests[2].httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(verifyBody?["AccessToken"] as? String, "ACCESS")
+        XCTAssertEqual(verifyBody?["UserCode"] as? String, "654321")
+        XCTAssertEqual(
+            requests[3].value(forHTTPHeaderField: "X-Amz-Target"),
+            "AWSCognitoIdentityProviderService.SetUserMFAPreference"
+        )
+        let prefBody = try JSONSerialization.jsonObject(with: requests[3].httpBody ?? Data()) as? [String: Any]
+        let settings = prefBody?["SoftwareTokenMfaSettings"] as? [String: Bool]
+        XCTAssertEqual(settings?["Enabled"], true)
+        XCTAssertEqual(settings?["PreferredMfa"], true)
+    }
+
+    func testTotpEnabledReadsGetUser() async throws {
+        let authResult = """
+        {"AuthenticationResult":{"IdToken":"I","AccessToken":"ACCESS","RefreshToken":"R","ExpiresIn":3600}}
+        """
+        let getUser = """
+        {"Username":"alice","UserMFASettingList":["SOFTWARE_TOKEN_MFA"]}
+        """
+        let http = RecordingHTTPTransport(responses: [
+            (Data(authResult.utf8), 200),
+            (Data(getUser.utf8), 200),
+        ])
+        let service = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: http,
+            secureStore: InMemorySecureStore()
+        )
+        _ = try await service.signIn(username: "alice", password: "hunter2")
+
+        let enabled = try await service.totpEnabled()
+        XCTAssertTrue(enabled)
+        let requests = await http.requests
+        XCTAssertEqual(
+            requests[1].value(forHTTPHeaderField: "X-Amz-Target"),
+            "AWSCognitoIdentityProviderService.GetUser"
+        )
     }
 }
 

@@ -169,6 +169,12 @@ final class ComposeViewModel {
         self.editorController.onContentChanged = { [weak self] in
             self?.richMirrorsMarkdown = false
         }
+        // A bridge that dies while bootstrapping never posts `ready`, so
+        // the rich pane (and send-time conversion) is out of commission
+        // for this compose. Say so instead of failing silently (#734).
+        self.editorController.onBridgeError = { [weak self] message in
+            self?.errorMessage = "Rich-text editor failed to load: \(message)"
+        }
     }
 
     /// Cancel the autosave loops. Called from the view's `onDisappear` and
@@ -200,8 +206,15 @@ final class ComposeViewModel {
                 await self?.autosaveToServer()
             }
         }
+        // Load the address list concurrently with the editor seed rather
+        // than after it. The seed blocks on the WebKit bridge bootstrap,
+        // and a bridge that never comes up (broken editor-bridge.js, a
+        // killed content process) would otherwise park `start()` before
+        // the address load, leaving the From picker permanently empty and
+        // compose unusable (#734).
+        async let addressLoad: Void = refreshAddresses()
         await seedRichFromMarkdown()
-        await refreshAddresses()
+        await addressLoad
     }
 
     func refreshAddresses(forceRefresh: Bool = false) async {

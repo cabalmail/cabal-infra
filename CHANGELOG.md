@@ -5,6 +5,134 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.9] - 2026-07-23
+
+### Added
+- **Nightly code-scanning alert monitor.** A scheduled workflow
+  (`code-scanning-alerts.yml`) draws down open high and critical
+  Security-tab code scanning alerts in bounded batches (five per night
+  by default, overridable via `workflow_dispatch`): source findings
+  from CodeQL get code fixes, Trivy image CVEs get a base-image digest
+  bump to force a rebuild, and each batch ships as a single PR. An
+  in-flight guard skips runs while a previous batch is open or freshly
+  merged, so the backlog drains without duplicate PRs.
+- **Tester/fixer triage dashboard.** `scripts/triage-dashboard.py` serves a
+  local table (port 5058, alongside the Apple release dashboard on 5057) of
+  the open issues in the tester/fixer cycle: one fixed column per lifecycle
+  label (`tester-found` / `accepted` / `fix-in-review` / `needs-retest`),
+  related PRs with open/merged/closed state discovered via cross-reference
+  events, and new-tab links to each issue and PR. Closed and non-cycle
+  issues are omitted. Per-row triage actions: Accept adds the `accepted`
+  label (queuing the nightly fixer), and Close posts a required comment
+  before closing the issue as not-planned or completed. A banner warns
+  when a configured lifecycle label doesn't exist in the repo (fresh forks
+  don't inherit labels). Data comes live from the GitHub GraphQL API
+  through `gh` (or a `GITHUB_TOKEN`), with the same
+  refresh/auto-refresh/theme chrome as the Apple dashboard.
+
+### Changed
+- **Self-pointing `--repo` for the Apple release dashboards.**
+  `apple-dashboard-app.py` and `apple-release-dashboard.py` now default
+  `--repo` to the checkout containing the script (matching the triage
+  dashboard) instead of the current directory, so they work from any
+  working directory without flags.
+
+### Fixed
+- **Cognito user pool honors the SMS feature flag.** With no
+  `ten_dlc_campaign_registration_id` set, the pool is provisioned
+  without `auto_verified_attributes = ["phone_number"]`, the
+  `sms_configuration` block, or the `verified_phone_number` recovery
+  mechanism; the pre-signup Lambda auto-confirms new accounts, the
+  signup form drops the phone-number field and SMS consent checkbox,
+  and account recovery falls to `admin_only`. Previously the pool
+  required SMS unconditionally, so a fresh deploy with no approved
+  10DLC campaign left signup impossible (Cognito fell through to the
+  sandboxed shared SNS pool).
+- **Cognito SMS templates aligned with the registered 10DLC campaign
+  texts.** The verification message now carries the trailing period of
+  the registered sample, and an authentication (MFA) template is set so
+  that enabling SMS MFA later sends the registered brand text rather
+  than Cognito's unbranded default, which matches no registered sample.
+- Apple: **Compose From picker no longer blocked by the rich-text
+  editor.** The compose sheet loaded its address list only after the
+  WebKit editor bridge finished bootstrapping, so a bridge that failed to
+  come up left the From menu permanently empty — composing was impossible
+  without minting a new address per message. The address list now loads
+  concurrently with the editor seed, and a bridge script failure is
+  reported in the compose error banner instead of hanging silently.
+  `xcodegen generate` also materializes the vendored marked/turndown
+  bundles automatically, removing the broken-local-build shape that
+  triggered the hang.
+- Apple: **"After delay (2s)" mark-as-read now actually fires on
+  iPhone.** The 2-second delayed `\Seen` STORE was silently cancelled
+  every time by a phantom `.onDisappear` — the same iPhone-only SwiftUI
+  double-fire that #403 exempted body-fetch from — so a message opened
+  under the "After delay (2s)" setting stayed unread no matter how long
+  the user read it. `MessageDetailViewModel.onDisappear()` no longer
+  cancels the pending task; the manual toggle and dispose paths still
+  supersede it. `.onOpen` was unaffected.
+- **Compose no longer silently drops content typed before a From address
+  is picked.** The autosave path is gated by an address (the server
+  rejects `/save_draft` from unauthorized senders), so a compose opened
+  fresh — which starts with no From — could accumulate typed content
+  that autosave couldn't persist and close-flush couldn't rescue. Close
+  now shows a confirm dialog when there is unsaveable content, so the
+  user can go back and pick a From (which lets autosave take over) or
+  explicitly discard.
+- **Cognito verification SMS never delivered.** The 10DLC phone number
+  lacked the End User Messaging resource policy that shares it with
+  Amazon SNS (required even within the owning account), so every
+  Cognito-originated send was silently dropped with "No origination
+  identity available to send to destination number". A new post-apply
+  step (`put-sms-resource-policy.sh`) now converges the policy on the
+  10DLC number, and `docs/sms-10dlc.md` documents the requirement, the
+  silent-failure signature, and an SNS-path smoke test. The CI role
+  needs one new grant: `sms-voice:PutResourcePolicy` (docs/aws.md).
+- **Terraform `fmt` drift in `modules/ecs/target_groups.tf`.** The
+  `preserve_client_ip` assignment on the `aws_lb_target_group.tier`
+  resource kept the extra spaces that had aligned it with the block
+  above the intervening comment, which `terraform fmt` collapses to a
+  single space now that the comment breaks the alignment group.
+
+### Security
+- **Patched high-severity `react/admin` dependencies.** Bumped
+  `linkify-it` to 5.0.2 (CVE-2026-59887, quadratic-complexity DoS in the
+  `mailto:` validator), `js-yaml` to 4.3.0 (CVE-2026-59869, quadratic CPU
+  consumption via YAML merge-key chains), and `brace-expansion` to 1.1.16
+  (CVE-2026-13149, exponential-time brace expansion). The latter two are
+  transitive dev-tooling dependencies with no production runtime impact.
+- Apple: **Two-factor sign-in.** Signing in to an account with two-factor
+  authentication enrolled now prompts for the authenticator (or SMS) code
+  and completes the login, instead of failing with an "Unhandled
+  challenge" error. A wrong code can be retried in place; cancelling
+  returns to the password form. Enrolling a new authenticator still
+  happens in the web admin app's Security page for now.
+- The Cognito user pool now permits TOTP as an opt-in second factor
+  (`mfa_configuration = "OPTIONAL"` with software-token MFA enabled), verifies
+  email addresses supplied at signup, and offers account recovery by verified
+  email ahead of SMS - a SIM swap alone can no longer take over an account
+  with a verified email, and a lost phone is no longer a permanent lockout.
+  Enrollment UX and sign-in challenge handling in the React and Apple clients
+  ship separately; until then no user is enrolled and sign-in is unchanged.
+- The admin app now supports the pool's opt-in two-factor authentication
+  end to end: a Security view (account menu) enrolls an authenticator app
+  via QR code or manual key, and sign-in answers Cognito's TOTP (or SMS)
+  challenge with a dedicated code screen. Signup collects a recovery email
+  address alongside the phone number and follows Cognito's reported
+  delivery channel for the confirmation code, and after sign-in users
+  without a verified email are offered a skippable add-and-verify flow, so
+  existing SMS-only accounts gain the email recovery fallback without
+  being locked out. Password-reset copy now names the channel the code
+  was actually sent to (email first, phone fallback).
+- Admin sign-ins are now checked for MFA enrollment by a pre-token-generation
+  trigger (`require_admin_mfa`). It ships in audit mode: an admin with no MFA
+  factor is logged (a `would_block` line in the Lambda's log group) but not
+  blocked. Setting `TF_VAR_ENFORCE_ADMIN_MFA=true` flips it to refuse token
+  issuance for un-enrolled admins - only do this after every admin has
+  enrolled an authenticator, since enrollment itself requires signing in.
+  Non-admin sign-ins pass through untouched, and the trigger fails open on
+  lookup errors so a Cognito hiccup cannot lock admins out of mail.
+
 ## [0.11.8] - 2026-07-22
 
 ### Added

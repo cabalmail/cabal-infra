@@ -26,7 +26,7 @@ Run:
     export ASC_KEY_ID=XXXXXXXXXX
     export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     export ASC_KEY_PATH=~/AuthKey_XXXXXXXXXX.p8
-    python3 scripts/apple-dashboard-app.py --repo .   # from the repo root
+    python3 scripts/apple-dashboard-app.py   # --repo defaults to this checkout
     # then open http://127.0.0.1:5057
 
 --mock <file.json> serves a captured/synthetic ASC payload (offline preview).
@@ -606,7 +606,8 @@ renderIntervalMenu(); fetchData();
 def main():
     global ENGINE, REPO_ROOT, MOCK_PATH, REF, FETCH
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--repo", default=".", help="Path to the cabal-infra repo root (default: cwd)")
+    ap.add_argument("--repo", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    help="Path to the cabal-infra repo root (default: the checkout containing this script)")
     ap.add_argument("--engine", help="Path to apple-release-dashboard.py (default: next to this file)")
     ap.add_argument("--mock", help="Serve a captured/synthetic ASC JSON file instead of calling the API")
     ap.add_argument("--ref", default="origin/stage",

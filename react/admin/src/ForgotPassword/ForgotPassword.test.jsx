@@ -27,7 +27,19 @@ describe('ForgotPassword', () => {
 
   it('renders the success view when submitted', () => {
     render(withAuth(<ForgotPassword {...defaultProps} submitted username="alice" />));
-    expect(screen.getByText('Check your phone')).toBeInTheDocument();
+    // Without CodeDeliveryDetails the copy hedges across both channels.
+    expect(screen.getByText('Check your email or phone')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enter reset code' })).toBeInTheDocument();
+  });
+
+  it('names the channel the reset code actually went to', () => {
+    const { rerender } = render(withAuth(
+      <ForgotPassword {...defaultProps} submitted username="alice" deliveryMedium="email" />
+    ));
+    expect(screen.getByText('Check your email')).toBeInTheDocument();
+    rerender(withAuth(
+      <ForgotPassword {...defaultProps} submitted username="alice" deliveryMedium="phone" />
+    ));
+    expect(screen.getByText('Check your phone')).toBeInTheDocument();
   });
 });

@@ -17,11 +17,14 @@ const Users = React.lazy(() => import('./Users'));
 const Dmarc = React.lazy(() => import('./Dmarc'));
 const Caa = React.lazy(() => import('./Caa'));
 const About = React.lazy(() => import('./About'));
+const Security = React.lazy(() => import('./Security'));
 
 // Pre-login Components
 import SignUp from './SignUp';
 import Login from './Login';
 import Verify from './Verify';
+import MfaChallenge from './MfaChallenge';
+import VerifyEmail from './VerifyEmail';
 import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
 import AuthShell from './Login/AuthShell';
@@ -65,6 +68,7 @@ function loadSavedState() {
     loggedIn: false,
     userName: null,
     password: null,
+    email: null,
     phone: null,
     inviteCode: null,
     verificationCode: null,
@@ -75,6 +79,7 @@ function loadSavedState() {
     domains: {},
     api_url: null,
     invitation_required: false,
+    sms_enabled: false,
     monitoring: false,
   };
   const saved = JSON.parse(window.localStorage.getItem('state'));
@@ -145,6 +150,23 @@ function App() {
   // `forgotPassword` success; cleared when the user leaves the screen.
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
 
+  // Identity plan Phase 1. Where the signup confirmation code actually
+  // went ({medium, destination} from Cognito's CodeDeliveryDetails):
+  // phone when SMS is wired, email otherwise. Drives Verify's wording.
+  const [signupDelivery, setSignupDelivery] = useState(null);
+  // Where the password-reset code went ('email' | 'phone'), same source.
+  const [forgotDelivery, setForgotDelivery] = useState(null);
+  // Pending second-factor login: the CognitoUser mid-challenge (kept in a
+  // ref - it is a stateful SDK object, not render state) and which
+  // challenge Cognito issued ('totp' | 'sms').
+  const pendingMfaUserRef = useRef(null);
+  const [mfaChallengeType, setMfaChallengeType] = useState('totp');
+  // Post-login email gate: null when passed/skipped, else
+  // { mode: 'add' | 'verify', address }. Not persisted - it is
+  // re-derived from user attributes at each login.
+  const [emailGate, setEmailGate] = useState(null);
+  const [emailSendInFlight, setEmailSendInFlight] = useState(false);
+
   // "Resend code" state for Verify (signup) and ResetPassword. The
   // hook only holds the lockout signalled by Cognito's
   // LimitExceededException; the in-flight booleans here disable the
@@ -180,9 +202,11 @@ function App() {
     setAppState(prev => {
       const updates = {};
       // About is reachable when logged out via the auth-shell footer link,
-      // so it must not be bounced back to Login here.
+      // so it must not be bounced back to Login here. MfaChallenge sits
+      // mid-login (no token yet), so it must survive this check too.
       const allowedWhenLoggedOut = [
-        "Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword", "About"
+        "Login", "SignUp", "Verify", "MfaChallenge", "ForgotPassword",
+        "ResetPassword", "About"
       ];
       if (!allowedWhenLoggedOut.includes(prev.view)) {
         updates.view = "Login";
@@ -247,7 +271,14 @@ function App() {
   // Returning visits keep working from the loadSavedState snapshot.
   useEffect(() => {
     axios.get('/config.js').then(({ data }) => {
-      const { control_domain, domains, cognitoConfig, invitation_required, monitoring } = data;
+      const {
+        control_domain,
+        domains,
+        cognitoConfig,
+        invitation_required,
+        sms_enabled,
+        monitoring,
+      } = data;
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
       setState({
         poolData: cognitoConfig.poolData,
@@ -258,6 +289,10 @@ function App() {
         domains,
         api_url: "https://admin." + control_domain + "/prod",
         invitation_required: invitation_required === true,
+        // Default true so an older /config.js (pre-712, no `sms_enabled` key)
+        // keeps rendering the phone field and consent checkbox rather than
+        // silently dropping them on a pool that still requires SMS.
+        sms_enabled: sms_enabled !== false,
         monitoring: monitoring === true
       });
       const cognitoUser = UserPool.getCurrentUser();
@@ -316,14 +351,29 @@ function App() {
 
   const doRegister = useCallback((e) => {
     e.preventDefault();
-    const attributeUsername = new CognitoUserAttribute({
-      Name: 'preferred_username',
-      Value: state.userName
-    });
-    const attributePhone = new CognitoUserAttribute({
-      Name: 'phone_number',
-      Value: state.phone
-    });
+    const attributes = [
+      new CognitoUserAttribute({
+        Name: 'preferred_username',
+        Value: state.userName
+      }),
+      // Recovery email (identity plan Phase 1). Always collected; the
+      // pool auto-verifies it, so Cognito emails a code either at signup
+      // (SMS off - email is the only channel) or via the post-login
+      // VerifyEmail gate (SMS on - the signup code goes to the phone).
+      new CognitoUserAttribute({
+        Name: 'email',
+        Value: state.email
+      }),
+    ];
+    // Phone number is only collected when the pool is wired for SMS
+    // (a 10DLC campaign registration id is configured). See issue #712
+    // and terraform/infra/modules/user_pool/main.tf.
+    if (state.sms_enabled && state.phone) {
+      attributes.push(new CognitoUserAttribute({
+        Name: 'phone_number',
+        Value: state.phone
+      }));
+    }
     // Shared-secret invitation code, validated by the check_invite
     // Cognito pre-signup Lambda. Passed via validationData so it never
     // lands on the user record. Key must match the Python handler.
@@ -334,12 +384,31 @@ function App() {
     UserPool.signUp(
       state.userName,
       state.password,
-      [attributeUsername, attributePhone],
+      attributes,
       validationData,
-      (err, _result) => {
+      (err, result) => {
         if (!err) {
+          // Let Cognito say where the confirmation code went rather than
+          // assuming. No delivery details means no code was sent at all:
+          // with SMS off, the check_invite pre-signup trigger auto-confirms
+          // the account (issue #712), so there is nothing to verify here -
+          // email verification happens at first sign-in instead.
+          const details = result && result.codeDeliveryDetails;
+          if (!details) {
+            setState({ view: "Login", inviteCode: null });
+            setMessage(
+              "Account created. It is pending admin approval; you'll be notified when it is ready.",
+              false
+            );
+            return;
+          }
+          const medium = details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
+          setSignupDelivery({
+            medium,
+            destination: details.Destination || null,
+          });
           setState({ view: "Verify", inviteCode: null });
-          setMessage("Check your phone for a verification code.", false);
+          setMessage(`Check your ${medium} for a verification code.`, false);
         } else {
           setState({ view: "SignUp" });
           const msg = /invitation code/i.test(err.message || '')
@@ -349,7 +418,7 @@ function App() {
         }
       }
     );
-  }, [state.userName, state.password, state.phone, state.inviteCode, setState, setMessage]);
+  }, [state.userName, state.password, state.email, state.phone, state.inviteCode, state.sms_enabled, setState, setMessage]);
 
   const doVerify = useCallback((e) => {
     e.preventDefault();
@@ -360,13 +429,14 @@ function App() {
     cognitoUser.confirmRegistration(state.verificationCode, true, (err, _result) => {
       if (!err) {
         signupResend.reset();
+        const which = signupDelivery && signupDelivery.medium === 'email' ? 'Email' : 'Phone';
         setState({ view: "Login", verificationCode: null });
-        setMessage("Phone verified. Your account is pending admin approval.", false);
+        setMessage(`${which} verified. Your account is pending admin approval.`, false);
       } else {
         setMessage("Verification failed. Please check your code and try again.", true);
       }
     });
-  }, [state.userName, state.verificationCode, setState, setMessage, signupResend]);
+  }, [state.userName, state.verificationCode, signupDelivery, setState, setMessage, signupResend]);
 
   const doResendVerification = useCallback(() => {
     if (signupResend.locked || signupResendInFlight || !state.userName) return;
@@ -375,10 +445,12 @@ function App() {
       Username: state.userName,
       Pool: UserPool
     });
-    cognitoUser.resendConfirmationCode((err) => {
+    cognitoUser.resendConfirmationCode((err, result) => {
       setSignupResendInFlight(false);
       if (!err) {
-        setMessage("A new verification code has been sent to your phone.", false);
+        const details = result && result.CodeDeliveryDetails;
+        const medium = details && details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
+        setMessage(`A new verification code has been sent to your ${medium}.`, false);
         return;
       }
       // Cognito hit its per-user resend limit. Mirror the lockout in
@@ -400,18 +472,21 @@ function App() {
       Username: state.userName,
       Pool: UserPool
     });
+    // Recovery is email-first now (identity plan Phase 1); read where
+    // Cognito actually sent the code instead of hardcoding "phone".
+    const sentTo = (data) => {
+      const details = data && data.CodeDeliveryDetails;
+      const medium = details && details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
+      setForgotDelivery(medium);
+      setForgotPasswordSent(true);
+      setMessage(`A reset code has been sent to your ${medium}.`, false);
+    };
     cognitoUser.forgotPassword({
-      onSuccess: () => {
-        setForgotPasswordSent(true);
-        setMessage("A reset code has been sent to your phone.", false);
-      },
+      onSuccess: sentTo,
       onFailure: () => {
         setMessage("Failed to send reset code. Please try again.", true);
       },
-      inputVerificationCode: () => {
-        setForgotPasswordSent(true);
-        setMessage("A reset code has been sent to your phone.", false);
-      }
+      inputVerificationCode: sentTo
     });
   }, [state.userName, setMessage]);
 
@@ -422,11 +497,15 @@ function App() {
       Username: state.userName,
       Pool: UserPool
     });
+    const sentTo = (data) => {
+      const details = data && data.CodeDeliveryDetails;
+      const medium = details && details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
+      setForgotDelivery(medium);
+      setResetResendInFlight(false);
+      setMessage(`A new reset code has been sent to your ${medium}.`, false);
+    };
     cognitoUser.forgotPassword({
-      onSuccess: () => {
-        setResetResendInFlight(false);
-        setMessage("A new reset code has been sent to your phone.", false);
-      },
+      onSuccess: sentTo,
       onFailure: (err) => {
         setResetResendInFlight(false);
         if (err && (err.code === 'LimitExceededException' || err.name === 'LimitExceededException')) {
@@ -436,10 +515,7 @@ function App() {
           setMessage("Could not resend code. Please try again later.", true);
         }
       },
-      inputVerificationCode: () => {
-        setResetResendInFlight(false);
-        setMessage("A new reset code has been sent to your phone.", false);
-      }
+      inputVerificationCode: sentTo
     });
   }, [state.userName, resetResend, resetResendInFlight, setMessage]);
 
@@ -461,6 +537,54 @@ function App() {
     });
   }, [state.userName, state.verificationCode, state.password, setState, setMessage, resetResend]);
 
+  // Run a callback against the signed-in CognitoUser with a fresh
+  // session attached. The SDK requires getSession before any
+  // user-attribute or MFA API call.
+  const withCurrentUser = useCallback((fn, onUnavailable) => {
+    const cognitoUser = UserPool && UserPool.getCurrentUser();
+    if (!cognitoUser) {
+      if (onUnavailable) onUnavailable();
+      return;
+    }
+    cognitoUser.getSession((err, session) => {
+      if (err || !session || !session.isValid()) {
+        if (onUnavailable) onUnavailable();
+        return;
+      }
+      fn(cognitoUser);
+    });
+  }, []);
+
+  // Shared tail of every successful authentication (password-only or
+  // after an MFA challenge). Lands on the Email view unless the account
+  // is missing a verified recovery email, in which case the VerifyEmail
+  // gate runs first (identity plan Phase 1). The gate is advisory: an
+  // attribute-read failure must never block an otherwise-good login.
+  const finishLogin = useCallback((data, user) => {
+    _token = data.getIdToken().getJwtToken();
+    _expires = data.getIdToken().getExpiration();
+    const payload = JSON.parse(atob(_token.split('.')[1]));
+    const groups = payload['cognito:groups'] || [];
+    setIsAdmin(groups.includes('admin'));
+    pendingMfaUserRef.current = null;
+    user.getUserAttributes((err, attrs) => {
+      let next = { loggedIn: true, view: "Email" };
+      if (!err && attrs) {
+        const byName = {};
+        attrs.forEach((a) => { byName[a.getName()] = a.getValue(); });
+        if (!byName.email) {
+          setEmailGate({ mode: 'add', address: null });
+          next = { loggedIn: true, view: "VerifyEmail", email: null };
+        } else if (byName.email_verified !== 'true') {
+          setEmailGate({ mode: 'verify', address: byName.email });
+          next = { loggedIn: true, view: "VerifyEmail", verificationCode: null };
+        }
+      }
+      setState(next);
+      setMessage("Login succeeded", false);
+    });
+  }, [setState, setMessage]);
+
   const doLogin = useCallback((e) => {
     e.preventDefault();
     const user = new CognitoUser({
@@ -472,23 +596,167 @@ function App() {
       Password: state.password
     });
     user.authenticateUser(creds, {
-      onSuccess: data => {
-        _token = data.getIdToken().getJwtToken();
-        _expires = data.getIdToken().getExpiration();
-        const payload = JSON.parse(atob(_token.split('.')[1]));
-        const groups = payload['cognito:groups'] || [];
-        setIsAdmin(groups.includes('admin'));
-        setState({ loggedIn: true, view: "Email" });
-        setMessage("Login succeeded", false);
-      },
-      onFailure: () => {
+      onSuccess: data => finishLogin(data, user),
+      onFailure: (err) => {
         _token = null;
         _expires = Math.floor(new Date() / 1000) - 1;
         setState({ loggedIn: false, view: "Login" });
-        setMessage("Login failed", true);
+        // The require_admin_mfa pre-token-generation trigger (enforce
+        // mode) rejects un-enrolled admins; show its message rather than
+        // a generic failure so the reason is actionable.
+        const mfaBlocked = err && /require.*multi-factor|admin accounts require/i.test(err.message || '');
+        setMessage(
+          mfaBlocked
+            ? "Admin accounts require multi-factor authentication. Contact the operator to restore access."
+            : "Login failed",
+          true
+        );
+      },
+      // Second-factor challenges (identity plan Phase 1). The CognitoUser
+      // carries the challenge session, so it is parked in a ref until the
+      // MfaChallenge screen submits the code.
+      totpRequired: () => {
+        pendingMfaUserRef.current = user;
+        setMfaChallengeType('totp');
+        setState({ view: "MfaChallenge", verificationCode: null });
+      },
+      mfaRequired: () => {
+        pendingMfaUserRef.current = user;
+        setMfaChallengeType('sms');
+        setState({ view: "MfaChallenge", verificationCode: null });
       }
     });
-  }, [state.userName, state.password, setState, setMessage]);
+  }, [state.userName, state.password, finishLogin, setState, setMessage]);
+
+  const doSubmitMfaCode = useCallback((e) => {
+    e.preventDefault();
+    const user = pendingMfaUserRef.current;
+    if (!user) {
+      // The challenge session lives only in memory; a reload mid-challenge
+      // loses it and the login must restart.
+      setState({ view: "Login", verificationCode: null });
+      setMessage("Your sign-in session expired. Please log in again.", true);
+      return;
+    }
+    user.sendMFACode(
+      state.verificationCode,
+      {
+        onSuccess: (data) => finishLogin(data, user),
+        onFailure: () => {
+          setMessage("That code did not match. Please try again.", true);
+        }
+      },
+      mfaChallengeType === 'totp' ? 'SOFTWARE_TOKEN_MFA' : 'SMS_MFA'
+    );
+  }, [state.verificationCode, mfaChallengeType, finishLogin, setState, setMessage]);
+
+  // --- VerifyEmail gate handlers (identity plan Phase 1) ---
+
+  // "add" mode: save the address. The pool auto-verifies email, so
+  // updateAttributes makes Cognito send the verification code itself.
+  const doSaveRecoveryEmail = useCallback((e) => {
+    e.preventDefault();
+    const address = state.email;
+    if (!address) return;
+    withCurrentUser((user) => {
+      const attr = new CognitoUserAttribute({ Name: 'email', Value: address });
+      user.updateAttributes([attr], (err) => {
+        if (err) {
+          setMessage("Could not save that address. Please try again.", true);
+          return;
+        }
+        setEmailGate({ mode: 'verify', address });
+        setState({ verificationCode: null });
+        setMessage(`A verification code has been sent to ${address}.`, false);
+      });
+    }, () => setMessage("Your session expired. Please log in again.", true));
+  }, [state.email, withCurrentUser, setState, setMessage]);
+
+  const doSendEmailCode = useCallback(() => {
+    if (emailSendInFlight) return;
+    setEmailSendInFlight(true);
+    withCurrentUser((user) => {
+      user.getAttributeVerificationCode('email', {
+        inputVerificationCode: () => {
+          setEmailSendInFlight(false);
+          setMessage("A verification code has been sent to your email.", false);
+        },
+        onFailure: (err) => {
+          setEmailSendInFlight(false);
+          const limited = err && (err.code === 'LimitExceededException' || err.name === 'LimitExceededException');
+          setMessage(
+            limited
+              ? "Too many attempts. Please try again later."
+              : "Could not send a code. Please try again later.",
+            true
+          );
+        }
+      });
+    }, () => {
+      setEmailSendInFlight(false);
+      setMessage("Your session expired. Please log in again.", true);
+    });
+  }, [emailSendInFlight, withCurrentUser, setMessage]);
+
+  const doVerifyEmailCode = useCallback((e) => {
+    e.preventDefault();
+    withCurrentUser((user) => {
+      user.verifyAttribute('email', state.verificationCode, {
+        onSuccess: () => {
+          setEmailGate(null);
+          setState({ view: "Email", verificationCode: null });
+          setMessage("Email verified. It can now be used for account recovery.", false);
+        },
+        onFailure: () => {
+          setMessage("Verification failed. Please check your code and try again.", true);
+        }
+      });
+    }, () => setMessage("Your session expired. Please log in again.", true));
+  }, [state.verificationCode, withCurrentUser, setState, setMessage]);
+
+  const skipEmailGate = useCallback((e) => {
+    e.preventDefault();
+    setEmailGate(null);
+    setState({ view: "Email" });
+  }, [setState]);
+
+  // TOTP enrollment surface for the Security view. Thin wrappers so the
+  // Cognito SDK stays in App (where UserPool lives) and the view can be
+  // tested with a mock.
+  const mfaApi = useMemo(() => ({
+    getStatus: (cb) => withCurrentUser(
+      (user) => user.getUserData((err, data) => {
+        if (err) { cb(err); return; }
+        cb(null, (data.UserMFASettingList || []).includes('SOFTWARE_TOKEN_MFA'));
+      }, { bypassCache: true }),
+      () => cb(new Error('no session'))
+    ),
+    beginEnroll: (callbacks) => withCurrentUser(
+      (user) => user.associateSoftwareToken(callbacks),
+      () => callbacks.onFailure(new Error('no session'))
+    ),
+    confirmEnroll: (code, callbacks) => withCurrentUser(
+      (user) => user.verifySoftwareToken(code, 'Cabalmail', {
+        onSuccess: () => {
+          user.setUserMfaPreference(
+            null,
+            { PreferredMfa: true, Enabled: true },
+            (err) => err ? callbacks.onFailure(err) : callbacks.onSuccess()
+          );
+        },
+        onFailure: callbacks.onFailure,
+      }),
+      () => callbacks.onFailure(new Error('no session'))
+    ),
+    disable: (cb) => withCurrentUser(
+      (user) => user.setUserMfaPreference(
+        null,
+        { PreferredMfa: false, Enabled: false },
+        cb
+      ),
+      () => cb(new Error('no session'))
+    ),
+  }), [withCurrentUser]);
 
   const doLogout = useCallback((e) => {
     e.preventDefault();
@@ -501,6 +769,9 @@ function App() {
     localStorage.removeItem(ADDRESS_LIST);
     localStorage.removeItem(FOLDER_LIST);
     setIsAdmin(false);
+    pendingMfaUserRef.current = null;
+    setEmailGate(null);
+    setSignupDelivery(null);
     setState({ loggedIn: false, userName: null, password: null, view: "Login" });
   }, [setState]);
 
@@ -576,7 +847,54 @@ function App() {
             resendInFlight={signupResendInFlight}
             resendLocked={signupResend.locked}
             resendLockoutRemaining={signupResend.lockoutRemaining}
+            medium={(signupDelivery && signupDelivery.medium) || 'phone'}
+            destination={signupDelivery && signupDelivery.destination}
           />
+        );
+      case "MfaChallenge":
+        return (
+          <MfaChallenge
+            onSubmit={doSubmitMfaCode}
+            onCodeChange={doInputChange}
+            code={state.verificationCode}
+            mfaType={mfaChallengeType}
+            onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login", verificationCode: null }); }}
+          />
+        );
+      case "VerifyEmail":
+        // The gate is memory-only; a reload lands here with no gate
+        // context. The mount-time session restore redirects to Email, so
+        // just render nothing for that frame.
+        if (!emailGate) return null;
+        return (
+          <VerifyEmail
+            mode={emailGate.mode}
+            address={emailGate.address}
+            email={state.email}
+            onEmailChange={doInputChange}
+            onSaveEmail={doSaveRecoveryEmail}
+            onSubmit={doVerifyEmailCode}
+            onCodeChange={doInputChange}
+            code={state.verificationCode}
+            onSendCode={doSendEmailCode}
+            sendInFlight={emailSendInFlight}
+            onChangeEmail={(e) => {
+              e.preventDefault();
+              setEmailGate({ mode: 'add', address: null });
+              setState({ email: null });
+            }}
+            onSkip={skipEmailGate}
+          />
+        );
+      case "Security":
+        return (
+          <ErrorBoundary name="Security">
+            <Security
+              userName={state.userName}
+              mfaApi={mfaApi}
+              setMessage={setMessage}
+            />
+          </ErrorBoundary>
         );
       case "ForgotPassword":
         return (
@@ -585,6 +903,7 @@ function App() {
             onUsernameChange={doInputChange}
             username={state.userName}
             submitted={forgotPasswordSent}
+            deliveryMedium={forgotDelivery}
             onBackToSignIn={(e) => {
               e.preventDefault();
               setForgotPasswordSent(false);
@@ -617,11 +936,13 @@ function App() {
           <SignUp
             onSubmit={doRegister}
             onUsernameChange={doInputChange}
+            onEmailChange={doInputChange}
             onPhoneChange={doInputChange}
             onPasswordChange={doInputChange}
             onInviteCodeChange={doInputChange}
             username={state.userName}
             password={state.password}
+            email={state.email}
             phone={state.phone}
             inviteCode={state.inviteCode}
             onSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
@@ -681,11 +1002,15 @@ function App() {
     smtp_host: `smtp-out.${state.control_domain}`,
     control_domain: state.control_domain,
     domains: state.domains,
-    invitation_required: state.invitation_required
+    invitation_required: state.invitation_required,
+    sms_enabled: state.sms_enabled
   };
 
+  // VerifyEmail is post-login but renders as a focused AuthShell gate
+  // (no Nav), so it lives in this list alongside the true pre-login views.
   const isPreLoginView = configUnavailable
-    || ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"].includes(state.view);
+    || ["Login", "SignUp", "Verify", "MfaChallenge", "VerifyEmail",
+      "ForgotPassword", "ResetPassword"].includes(state.view);
 
   const shortcutCallbacks = useMemo(() => ({
     onToggleHelp: () => setHelpOpen(prev => !prev),

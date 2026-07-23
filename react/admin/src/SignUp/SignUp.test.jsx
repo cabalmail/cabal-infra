@@ -3,8 +3,13 @@ import { describe, it, expect, vi } from 'vitest';
 import SignUp from './index';
 import AuthContext from '../contexts/AuthContext';
 
-const withAuth = (ui, { invitation_required = false } = {}) => (
-  <AuthContext.Provider value={{ control_domain: 'example.com', invitation_required }}>
+const withAuth = (
+  ui,
+  { invitation_required = false, sms_enabled = true } = {}
+) => (
+  <AuthContext.Provider
+    value={{ control_domain: 'example.com', invitation_required, sms_enabled }}
+  >
     {ui}
   </AuthContext.Provider>
 );
@@ -13,10 +18,12 @@ describe('SignUp', () => {
   const defaultProps = {
     onSubmit: vi.fn(),
     onUsernameChange: vi.fn(),
+    onEmailChange: vi.fn(),
     onPasswordChange: vi.fn(),
     onPhoneChange: vi.fn(),
     onInviteCodeChange: vi.fn(),
     username: '',
+    email: '',
     password: '',
     phone: '',
     inviteCode: ''
@@ -24,17 +31,42 @@ describe('SignUp', () => {
 
   const validProps = {
     username: 'alice',
+    email: 'alice@example.net',
     phone: '+12125551234',
     password: 'correct-horse-battery-staple',
     inviteCode: 'shared-secret',
   };
 
-  it('renders username, phone, and password fields', () => {
+  it('renders username, email, phone, and password fields', () => {
     render(withAuth(<SignUp {...defaultProps} />));
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
     expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByLabelText('Confirm password')).toBeInTheDocument();
+  });
+
+  it('calls onEmailChange when email input changes', () => {
+    const onEmailChange = vi.fn();
+    render(withAuth(<SignUp {...defaultProps} onEmailChange={onEmailChange} />));
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: 'a@b.co' },
+    });
+    expect(onEmailChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps submit disabled when the email is invalid', () => {
+    render(withAuth(<SignUp {...defaultProps} {...validProps} email="not-an-email" inviteCode="" />));
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: validProps.password },
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+  });
+
+  it('renders the email field even when SMS is off', () => {
+    render(withAuth(<SignUp {...defaultProps} />, { sms_enabled: false }));
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
   });
 
   it('hides the invitation code field when not required', () => {
@@ -121,5 +153,33 @@ describe('SignUp', () => {
       target: { value: validProps.password },
     });
     expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+  });
+
+  describe('with sms_enabled=false', () => {
+    it('hides the phone-number field and SMS consent checkbox', () => {
+      render(withAuth(<SignUp {...defaultProps} />, { sms_enabled: false }));
+      expect(screen.queryByLabelText('Phone number')).toBeNull();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+    });
+
+    it('submits without a phone number or consent when SMS is off', () => {
+      const onSubmit = vi.fn(e => e.preventDefault());
+      render(withAuth(
+        <SignUp
+          {...defaultProps}
+          {...validProps}
+          phone=""
+          inviteCode=""
+          onSubmit={onSubmit}
+        />,
+        { sms_enabled: false }
+      ));
+      fireEvent.change(screen.getByLabelText('Confirm password'), {
+        target: { value: validProps.password },
+      });
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
   });
 });

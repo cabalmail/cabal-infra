@@ -14,11 +14,36 @@ struct SignInView: View {
     @State private var controlDomain: String = ""
     @State private var username: String = ""
     @State private var password: String = ""
+    @State private var mfaCode: String = ""
+
+    /// The pending second factor when Cognito challenged the password
+    /// sign-in, nil otherwise. Drives the swap between the credential
+    /// form and the code form.
+    private var mfaMethod: MfaMethod? {
+        if case .mfaCodeRequired(let method) = appState.status { return method }
+        return nil
+    }
 
     var body: some View {
         @Bindable var appState = appState
         NavigationStack {
-            Form {
+            Group {
+                if let method = mfaMethod {
+                    mfaForm(method: method)
+                } else {
+                    credentialForm
+                }
+            }
+            .navigationTitle("Cabalmail")
+        }
+        .onAppear {
+            controlDomain = appState.controlDomain
+            username = appState.lastUsername
+        }
+    }
+
+    private var credentialForm: some View {
+        Form {
                 Section("Server") {
                     TextField("Control domain (e.g. mail.example.com)", text: $controlDomain)
                         .textContentType(.URL)
@@ -58,12 +83,43 @@ struct SignInView: View {
                     }
                     .disabled(!isFormValid || appState.status == .signingIn)
                 }
-            }
-            .navigationTitle("Cabalmail")
         }
-        .onAppear {
-            controlDomain = appState.controlDomain
-            username = appState.lastUsername
+    }
+
+    /// Second-factor step (identity plan Phase 1): the password was
+    /// accepted and Cognito wants a TOTP (or SMS) code before it issues
+    /// tokens. `AppState` holds the mid-challenge client.
+    private func mfaForm(method: MfaMethod) -> some View {
+        Form {
+            Section("Two-factor code") {
+                Text(method == .totp
+                    ? "Enter the 6-digit code from your authenticator app."
+                    : "Enter the code we just sent to your phone.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                TextField("123456", text: $mfaCode)
+                    .textContentType(.oneTimeCode)
+                    .autocorrectionDisabled()
+                    #if os(iOS) || os(visionOS)
+                    .keyboardType(.numberPad)
+                    #endif
+            }
+            if let mfaError = appState.mfaError {
+                Section {
+                    Label(mfaError, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
+            }
+            Section {
+                Button("Verify") {
+                    Task { await submitMfa() }
+                }
+                .disabled(mfaCode.count < 6)
+                Button("Back to sign in", role: .cancel) {
+                    mfaCode = ""
+                    appState.cancelMfaChallenge()
+                }
+            }
         }
     }
 
@@ -79,6 +135,14 @@ struct SignInView: View {
         )
         if appState.status == .signedIn {
             password = ""
+        }
+    }
+
+    private func submitMfa() async {
+        await appState.submitMfaCode(mfaCode)
+        if appState.status == .signedIn {
+            password = ""
+            mfaCode = ""
         }
     }
 }

@@ -32,3 +32,8 @@ output "invitation_required" {
   value       = var.invitation_code != ""
   description = "True when the check_invite pre-signup Lambda enforces an invitation code. Consumed by the app module so the React signup form can hide the field when no code is configured."
 }
+
+output "sms_enabled" {
+  value       = local.sms_enabled
+  description = "True when a 10DLC campaign registration id is configured and the pool is wired for SMS-based phone verification. Consumed by the app module so /config.js can tell clients to hide the phone-number field and consent checkbox when off. See docs/sms-10dlc.md."
+}

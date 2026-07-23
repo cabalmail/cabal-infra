@@ -7,15 +7,32 @@ and the message program must be registered and approved. Registration
 is per AWS account, so each environment that sends SMS repeats this
 process.
 
-**Start this early.** SMS delivery gates signup itself — Cognito
-verifies each new user's phone number by SMS at account creation, so
-no one can register on a new system until this process completes. The
-carrier reviews are the longest-lead items in a deployment, they can
-take multiple rounds, and nothing else in the setup depends on them —
-so begin as soon as the prerequisites below are satisfiable (in
-practice: right after the front-door site resolves), and run the SNS
-sandbox exit (see [setup.md](./setup.md)) in parallel rather than
-after.
+**SMS is opt-in.** Until `TF_VAR_TEN_DLC_CAMPAIGN_REGISTRATION_ID`
+is set the pool is provisioned without an SMS channel: the signup
+form omits the phone-number field and consent checkbox, the
+pre-signup Lambda auto-confirms new accounts, and account recovery
+falls to admin-only (operator-driven `AdminSetUserPassword`). This
+keeps a fresh deploy usable — signup works from day one and does not
+fall through to the sandboxed shared SNS pool.
+
+**Start this early anyway.** The carrier reviews are the longest-lead
+items in a deployment, they can take multiple rounds, and nothing
+else in the setup depends on them — so begin as soon as the
+prerequisites below are satisfiable (in practice: right after the
+front-door site resolves), and run the SNS sandbox exit (see
+[setup.md](./setup.md)) in parallel rather than after. Once the
+campaign is approved and the id is applied, the signup form starts
+collecting phone numbers, Cognito requires verified-phone
+confirmation, and self-serve password recovery via SMS turns on.
+
+**Toggling the flag on an existing pool is data-plane-adjacent.** It
+mutates `auto_verified_attributes`, `sms_configuration`, and the
+recovery mechanism on a live `aws_cognito_user_pool`. The safe
+direction is off → on: setting the id for the first time only adds
+capabilities. Going on → off after users have signed up with
+verified phone numbers is possible but leaves those users with a
+recovery mechanism (`admin_only`) that ignores their verified phone —
+flip it back only if you have to.
 
 There are three layers:
 
@@ -247,24 +264,52 @@ Once the campaign shows `RegistrationStatus: COMPLETE`:
    target environment.
 2. Ensure the CI deploy role has `sms-voice` permissions including
    `RequestPhoneNumber`, `ReleasePhoneNumber`, `UpdatePhoneNumber`,
-   `DescribePhoneNumbers`, `PutKeyword`, and `DescribeKeywords`
-   (the per-account Terraform policy is hand-managed; see
-   [aws.md](./aws.md)).
+   `DescribePhoneNumbers`, `PutKeyword`, `DescribeKeywords`, and
+   `PutResourcePolicy` (the per-account Terraform policy is
+   hand-managed; see [aws.md](./aws.md)).
 3. Run `infra.yml` (any push touching `terraform/infra/**`, or a
    `workflow_dispatch`). Terraform requests the number against the
    campaign and waits for it to reach `ACTIVE`; the post-apply
    `set-sms-keywords` step then writes the HELP/STOP/START keyword
-   responses so they match the registered texts.
+   responses so they match the registered texts, and
+   `set-sms-resource-policy` shares the number with Amazon SNS.
+
+**The resource policy is load-bearing.** Cognito sends SMS via SNS,
+and SNS can only originate from an End User Messaging number whose
+resource policy grants `sns.amazonaws.com` the
+`sms-voice:SendTextMessage` action — *even within the owning account*.
+The console's number-request wizard writes this policy when its "share
+with Amazon SNS" box is checked, but numbers provisioned through the
+`RequestPhoneNumber` API (as Terraform does) start with no policy.
+Without it, every Cognito/SNS send fails with no error to the caller:
+`sns:Publish` succeeds, nothing is billed or delivered, and only the
+SNS delivery-status log (if enabled) records the reason —
+`No origination identity available to send to destination number`.
+Confusingly, the sandbox verification OTPs still arrive, because both
+verification services send outside the SNS publish path — receiving an
+OTP does not prove the path works.
 
 Verify:
 
 ```sh
 aws pinpoint-sms-voice-v2 describe-phone-numbers
 aws pinpoint-sms-voice-v2 describe-keywords --origination-identity <phone number id>
+aws pinpoint-sms-voice-v2 get-resource-policy --resource-arn <phone number ARN>
 aws pinpoint-sms-voice-v2 send-text-message \
   --destination-phone-number <your mobile> \
   --message-body "Cabalmail smoke test" \
   --origination-identity <phone number id>
+```
+
+`get-resource-policy` must show the `sns.amazonaws.com` statement
+described above. Note `send-text-message` exercises the End User
+Messaging path only; it delivers even when the SNS path is broken. To
+verify what Cognito actually uses, publish through SNS as well:
+
+```sh
+aws sns publish --phone-number <your mobile> \
+  --message "Cabalmail SNS-path smoke test" \
+  --message-attributes '{"AWS.SNS.SMS.SMSType":{"DataType":"String","StringValue":"Transactional"}}'
 ```
 
 Text STOP and then START to the number to confirm the keyword

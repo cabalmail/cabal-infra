@@ -140,6 +140,7 @@ module "pool" {
   invitation_code        = var.invitation_code
 
   ten_dlc_campaign_registration_id = var.ten_dlc_campaign_registration_id
+  enforce_admin_mfa                = var.enforce_admin_mfa
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
@@ -217,6 +218,7 @@ module "admin" {
   dmarc_healthcheck_ping_param = local.hc_ping_dmarc
 
   invitation_required = module.pool.invitation_required
+  sms_enabled         = module.pool.sms_enabled
   monitoring          = var.monitoring
   imap_pool_enabled   = var.imap_pool_enabled
   access_logs_bucket  = module.s3_access_logs.bucket

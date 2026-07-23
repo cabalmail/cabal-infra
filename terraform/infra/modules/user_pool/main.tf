@@ -2,20 +2,75 @@
 * Creates a Cognito User Pool for authentication against the management application and for authentication at the OS level (providing IMAP and SMTP authentication).
 */
 
-resource "aws_cognito_user_pool" "users" {
-  name                     = "cabal"
-  auto_verified_attributes = ["phone_number"]
-  sms_verification_message = "Your Cabalmail verification code is {####}"
+locals {
+  # SMS is on only when a 10DLC campaign registration id has been supplied.
+  # A brand-new deploy has no such id (an approved campaign is a
+  # weeks-of-carrier-review post-bootstrap step), so SMS starts off and the
+  # pool must not require phone verification - otherwise Cognito falls
+  # through to the shared SNS sandbox and signup fails with no user-facing
+  # remediation. See issue #712 and docs/sms-10dlc.md.
+  sms_enabled = var.ten_dlc_campaign_registration_id != ""
+}
 
-  sms_configuration {
-    sns_caller_arn = aws_iam_role.users.arn
-    external_id    = "cabal-cognito-sms"
+resource "aws_cognito_user_pool" "users" {
+  name = "cabal"
+  # Email joins phone (identity-iam-hardening plan Phase 1): a verified email
+  # is the recovery fallback that survives a lost or rotated phone, and it is
+  # SMS-independent, so it is collected and verified even before a 10DLC
+  # campaign exists. Auto-verify only applies when the attribute is present
+  # at signup, so email-less signups keep working unchanged. Verification
+  # emails go out via Cognito's default sender (COGNITO_DEFAULT, 50/day) -
+  # plenty at invite-gated scale and avoids taking on SES.
+  auto_verified_attributes   = local.sms_enabled ? ["email", "phone_number"] : ["email"]
+  sms_verification_message   = local.sms_enabled ? "Your Cabalmail verification code is {####}." : null
+  sms_authentication_message = local.sms_enabled ? "Your Cabalmail verification code is {####}." : null
+
+  # Brand the emails Cognito sends (signup confirmation, attribute
+  # verification, password reset) to match the SMS template. The sender
+  # stays no-reply@verificationemail.com - that is fixed for the
+  # COGNITO_DEFAULT email service; only SES would change it.
+  verification_message_template {
+    email_subject = "Your Cabalmail verification code"
+    email_message = "Your Cabalmail verification code is {####}."
   }
 
+  dynamic "sms_configuration" {
+    for_each = local.sms_enabled ? [1] : []
+    content {
+      sns_caller_arn = aws_iam_role.users.arn
+      external_id    = "cabal-cognito-sms"
+    }
+  }
+
+  # TOTP second factor, opt-in (Phase 1). OPTIONAL means no challenge fires
+  # until a user enrolls, so this is inert until the clients grow enrollment
+  # UX and SOFTWARE_TOKEN_MFA challenge handling - do not flip to ON/required
+  # (or add the require_admin_mfa trigger) before both clients handle the
+  # challenge, or the first enrollee locks themselves out of the apps. TOTP
+  # is SMS-independent, so it is available regardless of local.sms_enabled.
+  mfa_configuration = "OPTIONAL"
+  software_token_mfa_configuration {
+    enabled = true
+  }
+
+  # Email first, phone second (Phase 1): a SIM swap alone can no longer take
+  # over an account whose email is verified, and a lost phone is no longer a
+  # permanent lockout. The phone mechanism exists only when SMS is on. With
+  # SMS off this replaces the previous admin_only setting: operationally
+  # equivalent while users have no verified email (the operator resets via
+  # AdminSetUserPassword either way), and self-serve recovery starts working
+  # by itself as users verify email addresses.
   account_recovery_setting {
     recovery_mechanism {
-      name     = "verified_phone_number"
+      name     = "verified_email"
       priority = 1
+    }
+    dynamic "recovery_mechanism" {
+      for_each = local.sms_enabled ? [1] : []
+      content {
+        name     = "verified_phone_number"
+        priority = 2
+      }
     }
   }
 
@@ -30,8 +85,9 @@ resource "aws_cognito_user_pool" "users" {
     }
   }
   lambda_config {
-    post_confirmation = aws_lambda_function.assign_osid.arn
-    pre_sign_up       = aws_lambda_function.check_invite.arn
+    post_confirmation    = aws_lambda_function.assign_osid.arn
+    pre_sign_up          = aws_lambda_function.check_invite.arn
+    pre_token_generation = aws_lambda_function.require_admin_mfa.arn
   }
 
   # Threat protection requires the Plus feature plan; on the default

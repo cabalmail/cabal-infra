@@ -80,7 +80,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - Local test: `cd lambda/api/[function_dir] && python -m function`
 
 ### Apple Clients (`apple/`)
-- Generate Xcode project: `cd apple && xcodegen generate` (regenerates `Cabalmail.xcodeproj` from `project.yml`; not committed)
+- Generate Xcode project: `cd apple && xcodegen generate` (regenerates `Cabalmail.xcodeproj` from `project.yml`; not committed. Also materializes the gitignored marked/turndown web assets via `scripts/sync-vendored.sh` — needs node/npm the first time. Building from a checkout without those assets produces an app whose rich-text bridge never boots; run `swift test` setups through the same script.)
 - Kit tests: `cd apple/CabalmailKit && swift test` (the bulk of the Apple-side coverage — networking, parsing, caching, auth)
 - App-layer tests: `cd apple && xcodebuild test -workspace Cabalmail.xcworkspace -scheme CabalmailMac -destination 'platform=macOS' -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""` — XCTest suite for the app target's view models (`apple/CabalmailTests/`, e.g. bulk-selection/move flows against a `FakeImapClient`). `swift test` does **not** compile or run these, and `apple.yml` runs them only on push to a named branch, not on PRs — so run them locally before merging a change to a shared protocol (e.g. `ImapClient`) or a view model.
 - iOS build sanity check: `cd apple && xcodebuild -workspace Cabalmail.xcworkspace -scheme Cabalmail -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO`

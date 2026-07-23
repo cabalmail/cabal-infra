@@ -16,6 +16,10 @@ final class AppState {
     enum Status: Sendable, Equatable {
         case signedOut
         case signingIn
+        /// Password accepted; Cognito wants a second factor (identity plan
+        /// Phase 1). `ContentView`'s default branch keeps rendering
+        /// `SignInView`, which swaps in the code form for this status.
+        case mfaCodeRequired(MfaMethod)
         /// Launched with stored credentials; we're resolving whether they
         /// still work. The UI shows a splash rather than the sign-in form
         /// so the user doesn't see it flash for half a second on every
@@ -26,6 +30,16 @@ final class AppState {
     }
 
     var status: Status = .signedOut
+
+    /// Inline error for the second-factor form (wrong code, expired
+    /// challenge). Kept separate from `Status.error` so a mistyped code
+    /// doesn't bounce the user back to the password form.
+    var mfaError: String?
+
+    /// The client whose sign-in is paused at an MFA challenge, plus the
+    /// context needed to finish it. Memory-only: a relaunch mid-challenge
+    /// restarts the sign-in from the password form.
+    private var pendingMfa: PendingMfaSignIn?
 
     /// Ephemeral user-facing status message. Views render this as a floating
     /// banner and the owner clears it after a short interval. Phase 7's
@@ -280,6 +294,8 @@ final class AppState {
 
     func signIn(controlDomain: String, username: String, password: String) async {
         status = .signingIn
+        mfaError = nil
+        pendingMfa = nil
         do {
             let configuration = try await ConfigLoader.load(controlDomain: controlDomain)
             let cacheDirectory = try Self.makeCacheDirectory()
@@ -288,17 +304,19 @@ final class AppState {
                 secureStore: Self.makeSecureStore(),
                 cacheDirectory: cacheDirectory
             )
-            try await newClient.authService.signIn(username: username, password: password)
-            // Defense in depth for the force-kill path: a clean sign-out wipes
-            // the shared on-disk cache, but a hard quit doesn't. If a different
-            // account just signed in on this device, clear the prior user's
-            // cached mail before the new session populates it.
-            if !lastUsername.isEmpty, lastUsername != username {
-                await newClient.clearLocalData()
+            let result = try await newClient.authService.signIn(username: username, password: password)
+            if case .mfaCodeRequired(let method) = result {
+                // Password accepted; tokens arrive only after the code.
+                // Park the client and surface the code form.
+                pendingMfa = PendingMfaSignIn(
+                    client: newClient, controlDomain: controlDomain, username: username
+                )
+                status = .mfaCodeRequired(method)
+                return
             }
-            self.controlDomain = controlDomain
-            self.lastUsername = username
-            await wireSession(client: newClient, username: username)
+            await completeInteractiveSignIn(
+                client: newClient, controlDomain: controlDomain, username: username
+            )
         } catch let error as CabalmailError {
             status = .error(message(for: error))
         } catch {
@@ -792,5 +810,76 @@ extension AppState {
             items: items,
             tick: moveRequestTick
         )
+    }
+}
+
+/// Sign-in paused at a second-factor challenge (identity plan Phase 1).
+/// Promoted out of `AppState` like `Toast`, and a struct rather than a
+/// tuple to satisfy SwiftLint's `large_tuple` cap.
+private struct PendingMfaSignIn {
+    let client: CabalmailClient
+    let controlDomain: String
+    let username: String
+}
+
+// MARK: - Second-factor sign-in
+
+extension AppState {
+    /// Finishes the second-factor step started by `signIn`. Success runs the
+    /// same session wiring as a challenge-free sign-in; a wrong code stays
+    /// on the code form (Cognito allows a bounded number of retries against
+    /// the same challenge session); an expired challenge falls back to the
+    /// password form.
+    func submitMfaCode(_ code: String) async {
+        guard case .mfaCodeRequired(let method) = status, let pending = pendingMfa else {
+            status = .signedOut
+            return
+        }
+        mfaError = nil
+        do {
+            try await pending.client.authService.submitMfaCode(code)
+            let ctx = pending
+            pendingMfa = nil
+            await completeInteractiveSignIn(
+                client: ctx.client, controlDomain: ctx.controlDomain, username: ctx.username
+            )
+        } catch let error as CabalmailError {
+            if case .server(let code, _) = error, code == "CodeMismatchException" {
+                status = .mfaCodeRequired(method)
+                mfaError = "That code did not match. Please try again."
+                return
+            }
+            // Anything else (challenge session expired, throttled, ...)
+            // restarts from the password form with the standard message.
+            pendingMfa = nil
+            status = .error(message(for: error))
+        } catch {
+            pendingMfa = nil
+            status = .error(error.localizedDescription)
+        }
+    }
+
+    /// Abandons a pending second-factor challenge and returns to the
+    /// password form.
+    func cancelMfaChallenge() {
+        pendingMfa = nil
+        mfaError = nil
+        status = .signedOut
+    }
+
+    /// Shared tail of `signIn` and `submitMfaCode` once tokens exist.
+    func completeInteractiveSignIn(
+        client newClient: CabalmailClient, controlDomain: String, username: String
+    ) async {
+        // Defense in depth for the force-kill path: a clean sign-out wipes
+        // the shared on-disk cache, but a hard quit doesn't. If a different
+        // account just signed in on this device, clear the prior user's
+        // cached mail before the new session populates it.
+        if !lastUsername.isEmpty, lastUsername != username {
+            await newClient.clearLocalData()
+        }
+        self.controlDomain = controlDomain
+        self.lastUsername = username
+        await wireSession(client: newClient, username: username)
     }
 }

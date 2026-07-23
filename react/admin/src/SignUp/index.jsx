@@ -24,10 +24,12 @@ function strengthScore(pw) {
 function SignUp({
   onSubmit,
   onUsernameChange,
+  onEmailChange,
   onPhoneChange,
   onPasswordChange,
   onInviteCodeChange,
   username,
+  email,
   phone,
   password,
   inviteCode,
@@ -37,7 +39,7 @@ function SignUp({
   // control_domain is loaded asynchronously from /config.js by App.jsx;
   // if the signup screen renders before it resolves (rare in practice),
   // fall back to "#" so we don't navigate to https://www.null/...
-  const { control_domain, invitation_required } = useAuth();
+  const { control_domain, invitation_required, sms_enabled } = useAuth();
   const frontDoorOrigin = control_domain ? `https://www.${control_domain}` : null;
   const termsHref = frontDoorOrigin ? `${frontDoorOrigin}/terms.html` : '#';
   const privacyHref = frontDoorOrigin ? `${frontDoorOrigin}/privacy.html` : '#';
@@ -52,14 +54,22 @@ function SignUp({
   const score = useMemo(() => strengthScore(password), [password]);
   const usernameValid = /^[a-z0-9-]{3,32}$/.test(username || '') &&
     !/^-/.test(username || '') && !/-$/.test(username || '');
-  const phoneValid = /^\+?[0-9\s-]{7,}$/.test(phone || '');
+  // Recovery email is always collected (identity plan Phase 1): it is the
+  // recovery channel that survives a lost or rotated phone, and with SMS
+  // off it is the only verification channel at all.
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || '');
+  // When SMS is off (no 10DLC campaign registration id is configured on the
+  // pool), the phone field is not rendered and its value is not required.
+  // See issue #712 and docs/sms-10dlc.md.
+  const phoneValid = !sms_enabled || /^\+?[0-9\s-]{7,}$/.test(phone || '');
   const passwordValid = (password || '').length >= 12;
   const confirmValid = confirm.length > 0 && confirm === password;
   const inviteCodeValid = !invitation_required || (inviteCode || '').length > 0;
-  // SMS consent is a mandatory, affirmative opt-in: the form will not submit
-  // until the user explicitly checks it (it is never pre-checked).
-  const valid = usernameValid && phoneValid && passwordValid && confirmValid &&
-    inviteCodeValid && smsConsent;
+  // SMS consent is a mandatory, affirmative opt-in whenever the phone field
+  // is rendered; with SMS off there is no phone collection to consent to.
+  const consentValid = !sms_enabled || smsConsent;
+  const valid = usernameValid && emailValid && phoneValid && passwordValid &&
+    confirmValid && inviteCodeValid && consentValid;
 
   const handleSubmit = (e) => {
     if (!valid) { e.preventDefault(); return; }
@@ -75,7 +85,9 @@ function SignUp({
       <p className="auth__eyebrow">Sign up</p>
       <h1 className="auth__title">Create your Cabalmail account.</h1>
       <p className="auth__subtitle">
-        Pick a username and password. Your phone number is used only for recovery.
+        {sms_enabled
+          ? "Pick a username and password. Your email and phone number are used only for verification and recovery."
+          : "Pick a username and password. Your email is used only for verification and recovery."}
       </p>
       <form className="auth__form" onSubmit={handleSubmit} noValidate>
         <div className="auth__field">
@@ -102,21 +114,47 @@ function SignUp({
         </div>
         <div className="auth__field">
           <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="phone">Phone number</label>
-            <span className="auth__field-hint">For recovery only</span>
+            <label className="auth__field-label" htmlFor="email">Email address</label>
+            <span className="auth__field-hint">For verification and recovery</span>
           </div>
           <input
-            id="phone"
-            name="phone"
-            type="tel"
+            id="email"
+            name="email"
+            type="email"
             className="mono"
-            autoComplete="tel"
-            placeholder="+1 555 123 4567"
-            onChange={onPhoneChange}
-            value={phone || ''}
+            autoComplete="email"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck="false"
+            placeholder="you@example.com"
+            onChange={onEmailChange}
+            value={email || ''}
             required
           />
+          <p className="auth__field-help">
+            An existing address outside Cabalmail, so you can recover access
+            if you lose your phone.
+          </p>
         </div>
+        {sms_enabled ? (
+          <div className="auth__field">
+            <div className="auth__field-header">
+              <label className="auth__field-label" htmlFor="phone">Phone number</label>
+              <span className="auth__field-hint">For recovery only</span>
+            </div>
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              className="mono"
+              autoComplete="tel"
+              placeholder="+1 555 123 4567"
+              onChange={onPhoneChange}
+              value={phone || ''}
+              required
+            />
+          </div>
+        ) : null}
         {invitation_required ? (
           <div className="auth__field">
             <div className="auth__field-header">
@@ -204,22 +242,24 @@ function SignUp({
           {' '}and{' '}
           <a href={privacyHref} target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
         </p>
-        <label className="auth__consent">
-          <input
-            type="checkbox"
-            className="auth__consent-box"
-            checked={smsConsent}
-            onChange={(e) => setSmsConsent(e.target.checked)}
-            required
-          />
-          <span className="auth__consent-label">
-            I agree to receive transactional SMS from {smsBrand}
-            {' '}&mdash; signup verification, password reset, and sign-in codes &mdash; at
-            the phone number above. Message frequency varies; message and data
-            rates may apply. Reply <code>HELP</code> for help or{' '}
-            <code>STOP</code> to opt out at any time.
-          </span>
-        </label>
+        {sms_enabled ? (
+          <label className="auth__consent">
+            <input
+              type="checkbox"
+              className="auth__consent-box"
+              checked={smsConsent}
+              onChange={(e) => setSmsConsent(e.target.checked)}
+              required
+            />
+            <span className="auth__consent-label">
+              I agree to receive transactional SMS from {smsBrand}
+              {' '}&mdash; signup verification, password reset, and sign-in codes &mdash; at
+              the phone number above. Message frequency varies; message and data
+              rates may apply. Reply <code>HELP</code> for help or{' '}
+              <code>STOP</code> to opt out at any time.
+            </span>
+          </label>
+        ) : null}
         <button
           type="submit"
           className="auth__btn-primary"
