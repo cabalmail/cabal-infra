@@ -42,6 +42,16 @@ actor FakeImapClient: ImapClient {
         moveResults = results
     }
 
+    // Initial-load script (status + top page), used by the loadInitial
+    // tests. Unscripted, both members keep trapping.
+    private var statusResult: FolderStatus?
+    private var topEnvelopesResult: [Envelope]?
+
+    func scriptInitialLoad(status: FolderStatus, topEnvelopes: [Envelope]) {
+        statusResult = status
+        topEnvelopesResult = topEnvelopes
+    }
+
     func setFlags(
         folder: String,
         uids: [UInt32],
@@ -76,7 +86,14 @@ actor FakeImapClient: ImapClient {
     func deleteFolder(path: String) async throws { try trapVoid() }
     func subscribe(path: String) async throws { try trapVoid() }
     func unsubscribe(path: String) async throws { try trapVoid() }
-    func status(path: String, flagged: Bool) async throws -> FolderStatus { try trap() }
+    func status(path: String, flagged: Bool) async throws -> FolderStatus {
+        // Mirror the production transport: a URLSession data task whose
+        // surrounding Task is cancelled fails with `URLError.cancelled`,
+        // which `URLSessionHTTPTransport` normalizes to `network(...)`.
+        if Task.isCancelled { throw CabalmailError.network("cancelled") }
+        guard let statusResult else { return try trap() }
+        return statusResult
+    }
     func envelopes(
         folder: String, range: ClosedRange<UInt32>, sort: SortCriterion
     ) async throws -> [Envelope] { try trap() }
@@ -85,7 +102,12 @@ actor FakeImapClient: ImapClient {
     ) async throws -> [Envelope] { try trap() }
     func topEnvelopes(
         folder: String, limit: UInt32, totalMessages: UInt32, sort: SortCriterion
-    ) async throws -> [Envelope] { try trap() }
+    ) async throws -> [Envelope] {
+        // Cancellation-sensitive for the same reason as `status(path:flagged:)`.
+        if Task.isCancelled { throw CabalmailError.network("cancelled") }
+        guard let topEnvelopesResult else { return try trap() }
+        return topEnvelopesResult
+    }
     func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage { try trap() }
     func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data { try trap() }
     func append(folder: String, message: Data, flags: Set<Flag>) async throws { try trapVoid() }
