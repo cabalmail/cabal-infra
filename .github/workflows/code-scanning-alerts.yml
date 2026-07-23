@@ -181,6 +181,16 @@ jobs:
             ${{ steps.alerts.outputs.summary }}
             ]]></untrusted-alerts>
 
+            Alert numbers are code scanning alert IDs, unrelated to this
+            repository's issue and PR numbers. In everything you write
+            (PR body, commit messages, issue comments), refer to them as
+            "alert <n>" with a link to
+            https://github.com/${{ github.repository }}/security/code-scanning/<n>
+            and NEVER as a bare #<n>: GitHub autolinks #-numbers to
+            whatever issue or PR happens to have that number and
+            cross-posts a mention into its timeline, which misleads the
+            reviewer into thinking you worked the issue tracker.
+
             Do all work on a branch named
             code-scanning/batch-${{ github.run_id }}. The scheduled
             in-flight guard keys off the code-scanning/ prefix, so do
@@ -193,7 +203,7 @@ jobs:
                file present in this checkout): read the flagged code,
                fix the root cause minimally in place, and make one
                commit per alert:
-               "fix: resolve <rule> in <path> (alert #<n>)".
+               "fix: resolve <rule> in <path> (code scanning alert <n>)".
                Follow the repo's changelog convention: add a
                changelog.d/<slug>.security.md fragment (see
                changelog.d/README.md) describing the fix.
@@ -228,10 +238,13 @@ jobs:
 
             If you made at least one commit, open a single pull
             request with base ${{ github.ref_name }} titled
-            "fix: draw down high and critical code scanning alerts"
-            whose body lists every alert in the batch with its
-            disposition: fixed here, needs rebuild/redeploy, or needs
-            manual attention (and why).
+            "fix: draw down high and critical code scanning alerts".
+            Open the body with a provenance line — "Batch from the
+            Security -> Code scanning dashboard:
+            https://github.com/${{ github.repository }}/security/code-scanning" —
+            then list every alert in the batch with its disposition:
+            fixed here, needs rebuild/redeploy, or needs manual
+            attention (and why).
 
             If the batch produced no committable change, do not open
             an empty PR. Instead find an open issue titled
