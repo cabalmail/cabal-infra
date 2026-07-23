@@ -24,6 +24,10 @@ struct CabalmailApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // Lets a closing compose window re-activate this scene on
+                // iPadOS instead of dropping to the home screen (no-op on
+                // other platforms; see MainSceneActivation.swift).
+                .recordsMainSceneSession()
                 .environment(appState)
                 .environment(preferences)
                 .preferredColorScheme(colorScheme(for: preferences.theme))
