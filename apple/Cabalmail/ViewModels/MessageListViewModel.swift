@@ -237,8 +237,16 @@ final class MessageListViewModel {
 
     func loadInitial() async {
         guard envelopes.isEmpty else { return }
-        await hydrateFromCache()
-        await refresh()
+        // Unstructured, model-owned task, so a cancellation of the view's
+        // `.task` (SwiftUI fires it mid-push transition — same class as the
+        // detail view's #403) can't propagate into the first fetch. The view
+        // only runs this once per model, so a cancelled first load would
+        // paint `network("cancelled")` over an empty list with nothing left
+        // to retry it. Mirrors `refreshFromPull`.
+        await Task {
+            await self.hydrateFromCache()
+            await self.refresh()
+        }.value
         scheduleBottomPrefetch()
     }
 

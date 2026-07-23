@@ -25,9 +25,11 @@ public protocol HTTPTransport: Sendable {
 ///    (`-1005`) before the request can finish. The assertion buys roughly
 ///    30 seconds after backgrounding for the request to complete.
 /// 2. **Transient-error retry + normalization.** On
-///    `URLError.networkConnectionLost` or `URLError.timedOut`, retries
-///    once after a short backoff (Apple's own guidance for `-1005`). Any
-///    `URLError` that escapes is normalized into
+///    `URLError.networkConnectionLost`, `URLError.timedOut`, or a spurious
+///    `URLError.cancelled` (one that arrives while our own Task is NOT
+///    cancelled — URLSession drops data tasks on its own; see fe73f2f0),
+///    retries once after a short backoff (Apple's own guidance for `-1005`).
+///    Any `URLError` that escapes is normalized into
 ///    `CabalmailError.network(localizedDescription)` so callers and toast
 ///    UIs see a readable message instead of the verbose NSError dump.
 public struct URLSessionHTTPTransport: HTTPTransport {
@@ -74,6 +76,14 @@ public struct URLSessionHTTPTransport: HTTPTransport {
         switch err.code {
         case .networkConnectionLost, .timedOut:
             return true
+        case .cancelled:
+            // URLSession occasionally fails a data task with `.cancelled`
+            // that nobody asked for (the class fe73f2f0 recovered from on
+            // the body fetch — that recovery went dead when this transport
+            // started normalizing URLError before callers could see the
+            // code). Only a cancellation that didn't come from our own Task
+            // is transient; a cooperative cancel propagates immediately.
+            return !Task.isCancelled
         default:
             return false
         }
