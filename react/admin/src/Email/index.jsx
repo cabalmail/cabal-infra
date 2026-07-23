@@ -41,22 +41,32 @@ function Splitter({ split, ariaLabel }) {
   );
 }
 
+// Regex-based comment stripping can be reassembled: removing one match can
+// join surrounding text into a new "<!--"/"-->" pair the regex never
+// rechecks. Parse with the browser's own HTML parser instead, which tracks
+// comment state the same way the rendered DOM eventually will, and drop the
+// comment nodes it finds.
+function stripHtmlComments(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_COMMENT);
+  const comments = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    comments.push(node);
+  }
+  comments.forEach((comment) => comment.parentNode.removeChild(comment));
+  return doc.body.innerHTML;
+}
+
 function prepBody(body, envelope) {
-  let sanitizedBody = body;
-  let previousBody;
-  do {
-    previousBody = sanitizedBody;
-    sanitizedBody = sanitizedBody
-      .replace(/<!--[\s\S]*?-->/gm, "")
-      .replace(/&lt;!--[\s\S]*?--&gt;/gm, "");
-  } while (sanitizedBody !== previousBody);
+  const sanitizedBody = stripHtmlComments(body);
 
   return '<div><p>&#160;</p></div><div><hr /></div>' +
     `<div style="font-weight: bold;">From: ${envelope.from[0]}</div>` +
     `<div style="font-weight: bold;">To: ${envelope.to.join("; ")}</div>` +
     `<div style="font-weight: bold;">Date: ${envelope.date}</div>` +
     `<div style="font-weight: bold;">Subject: ${envelope.subject}</div><div><p>&#160;</p></div>` +
-    sanitizedBody.replace(/[\s\S]*<body>/m, "").replace(/<\/body>[\s\S]*/m, "");
+    sanitizedBody;
 }
 
 let composeIdSeq = 0;
