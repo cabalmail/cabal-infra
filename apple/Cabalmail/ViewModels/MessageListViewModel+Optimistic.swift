@@ -52,8 +52,24 @@ extension MessageListViewModel {
     func applyOptimisticFlag(uid: UInt32, flag: Flag, add: Bool) {
         guard let index = envelopes.firstIndex(where: { $0.uid == uid }) else { return }
         var flags = envelopes[index].flags
+        let flipped = flags.contains(flag) != add
         if add { flags.insert(flag) } else { flags.remove(flag) }
         envelopes[index] = rebuildEnvelope(envelopes[index], flags: flags)
+        // Keep the Unread/Flagged pill counts in step with the optimistic row
+        // state — STATUS only corrects them on the next refresh, so without
+        // this the pills lag every flag/read change until a server round trip.
+        // Every optimistic flag path (list toggle, detail-view signal, bulk,
+        // and their reverts) funnels through here, so adjusting on a real flip
+        // only can't double-count.
+        guard flipped else { return }
+        switch flag {
+        case .seen:
+            unseen = max(0, unseen + (add ? -1 : 1))
+        case .flagged:
+            flagged = max(0, flagged + (add ? 1 : -1))
+        default:
+            break
+        }
     }
 
     /// Reinsert an envelope previously removed by an optimistic dispose.
