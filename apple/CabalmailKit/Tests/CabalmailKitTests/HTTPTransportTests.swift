@@ -50,6 +50,31 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(ScriptedURLProtocol.callCount, 2)
     }
 
+    func testRetriesOnceOnSpuriousCancel() async throws {
+        // A `.cancelled` failure while our own Task is NOT cancelled is
+        // URLSession dropping the data task on its own — transient, retried.
+        ScriptedURLProtocol.script(
+            failures: [URLError(.cancelled)],
+            responses: [(Data("{}".utf8), 200)]
+        )
+        let transport = makeTransport()
+        let (_, response) = try await transport.perform(sampleRequest())
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(ScriptedURLProtocol.callCount, 2)
+    }
+
+    func testCancelledIsNotRetryableInsideCancelledTask() async {
+        // A cooperative cancel (our own Task was cancelled) must propagate,
+        // not spin a retry.
+        let task = Task { () -> Bool in
+            while !Task.isCancelled { await Task.yield() }
+            return URLSessionHTTPTransport.isRetryableTransportError(URLError(.cancelled))
+        }
+        task.cancel()
+        let retryable = await task.value
+        XCTAssertFalse(retryable)
+    }
+
     func testPersistentNetworkConnectionLostSurfacesAsCabalmailNetworkError() async throws {
         ScriptedURLProtocol.script(failures: [
             URLError(.networkConnectionLost),
