@@ -201,3 +201,9 @@ variable "enforce_admin_mfa" {
   description = "Enforce MFA enrollment for admin-group sign-ins via the require_admin_mfa pre-token-generation trigger. Defaults to false (audit mode: un-enrolled admins are logged, not blocked). Enable per-environment via TF_VAR_ENFORCE_ADMIN_MFA once every admin has enrolled TOTP."
   default     = false
 }
+
+variable "threat_protection_enforced" {
+  type        = bool
+  description = "Run Cognito threat protection in ENFORCED mode (risky sign-ins MFA-challenged or blocked) instead of AUDIT (score and log only). Identity plan Phase 2.5. Defaults to false; promote per-environment via TF_VAR_THREAT_PROTECTION_ENFORCED after the AccountTakeoverRisk metrics soak clean and TOTP enrollment is in place."
+  default     = false
+}

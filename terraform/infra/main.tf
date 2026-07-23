@@ -141,6 +141,7 @@ module "pool" {
 
   ten_dlc_campaign_registration_id = var.ten_dlc_campaign_registration_id
   enforce_admin_mfa                = var.enforce_admin_mfa
+  threat_protection_enforced       = var.threat_protection_enforced
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
@@ -213,7 +214,6 @@ module "admin" {
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
   push_queue_arn            = module.ecs.push_queue_arn
-  admin_group_name          = module.pool.admin_group_name
 
   dmarc_healthcheck_ping_param = local.hc_ping_dmarc
 
