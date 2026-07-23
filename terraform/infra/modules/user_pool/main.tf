@@ -97,12 +97,15 @@ resource "aws_cognito_user_pool" "users" {
   # line is where the pool starts costing money - a deliberate decision.
   user_pool_tier = "PLUS"
 
-  # Cognito threat protection in AUDIT mode: score sign-in risk (impossible
-  # travel, compromised credentials) and surface it in CloudWatch without
-  # blocking the user. Promotion to ENFORCED is a deliberate later step
-  # (plan Phase 2.5) after a soak period to calibrate false positives.
+  # Cognito threat protection (plan Phase 2.5): AUDIT scores sign-in risk
+  # (impossible travel, compromised credentials) and surfaces it in
+  # CloudWatch without blocking; ENFORCED lets Cognito act on it - MFA
+  # challenge for enrolled users, outright block for high-risk sign-ins
+  # with no second factor. Promote per environment only after (1) the
+  # AccountTakeoverRisk metrics have soaked clean and (2) TOTP enrollment
+  # is real there, or a false positive locks out an un-enrolled user.
   user_pool_add_ons {
-    advanced_security_mode = "AUDIT"
+    advanced_security_mode = var.threat_protection_enforced ? "ENFORCED" : "AUDIT"
   }
 }
 

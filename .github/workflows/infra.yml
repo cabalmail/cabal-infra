@@ -665,6 +665,7 @@ jobs:
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
         echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
         echo "enforce_admin_mfa = ${{ vars.TF_VAR_ENFORCE_ADMIN_MFA || 'false' }}" >> terraform.tfvars
+        echo "threat_protection_enforced = ${{ vars.TF_VAR_THREAT_PROTECTION_ENFORCED || 'false' }}" >> terraform.tfvars
         # deploy_role_arn reuses the existing AWS_DEPLOY_ROLE_ARN variable
         # (the OIDC role this job already assumes); it is granted ECR pull
         # by the Phase 5 repository policies so deploys and the nightly
@@ -775,6 +776,7 @@ jobs:
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
         echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
         echo "enforce_admin_mfa = ${{ vars.TF_VAR_ENFORCE_ADMIN_MFA || 'false' }}" >> terraform.tfvars
+        echo "threat_protection_enforced = ${{ vars.TF_VAR_THREAT_PROTECTION_ENFORCED || 'false' }}" >> terraform.tfvars
         # deploy_role_arn reuses the existing AWS_DEPLOY_ROLE_ARN variable
         # (the OIDC role this job already assumes); it is granted ECR pull
         # by the Phase 5 repository policies so deploys and the nightly

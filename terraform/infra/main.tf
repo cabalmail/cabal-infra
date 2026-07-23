@@ -141,6 +141,7 @@ module "pool" {
 
   ten_dlc_campaign_registration_id = var.ten_dlc_campaign_registration_id
   enforce_admin_mfa                = var.enforce_admin_mfa
+  threat_protection_enforced       = var.threat_protection_enforced
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
