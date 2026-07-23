@@ -1,5 +1,6 @@
 '''Delete a new folder and returns updated folder list'''
 import json
+import logging
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_folder_list # pylint: disable=import-error
 from helper import parse_json_body # pylint: disable=import-error
@@ -24,6 +25,14 @@ def handler(event, _context):
         }
     client = get_imap_client(None, user, 'INBOX')
     client.delete_folder(name)
+    try:
+        # Dovecot keeps LSUB entries for deleted mailboxes, so drop the
+        # subscription too or the folder lingers in clients' Subscribed list.
+        # Best-effort: the delete already succeeded, and a subscription
+        # hiccup must not turn that into an error response.
+        client.unsubscribe_folder(name)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning('could not unsubscribe deleted folder %r', name)
     response = get_folder_list(client)
     client.logout()
     return {
