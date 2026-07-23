@@ -261,7 +261,7 @@ def api_data():
         return jsonify(build_model())
     except Exception as exc:  # pylint: disable=broad-except
         sys.stderr.write("api/data error:\n" + traceback.format_exc())
-        return jsonify({"error": str(exc)}), 200
+        return jsonify({"error": "An internal error has occurred."}), 200
 
 
 @app.route("/api/accept", methods=["POST"])
@@ -277,7 +277,7 @@ def api_accept():
         return jsonify({"ok": True})
     except Exception as exc:  # pylint: disable=broad-except
         sys.stderr.write("api/accept error:\n" + traceback.format_exc())
-        return jsonify({"error": str(exc)}), 200
+        return jsonify({"error": "An internal error has occurred."}), 200
 
 
 @app.route("/api/close", methods=["POST"])
@@ -300,7 +300,7 @@ def api_close():
         return jsonify({"ok": True})
     except Exception as exc:  # pylint: disable=broad-except
         sys.stderr.write("api/close error:\n" + traceback.format_exc())
-        return jsonify({"error": str(exc)}), 200
+        return jsonify({"error": "An internal error has occurred."}), 200
 
 
 PAGE = r"""<!DOCTYPE html>
