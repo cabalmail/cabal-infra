@@ -4,21 +4,20 @@
 <dict>
     <!--
         This file is wired into the iOS target's signing via
-        `apple/project.yml` (CODE_SIGN_ENTITLEMENTS). One entitlement
-        remains absent on purpose: `com.apple.developer.mail-client`,
-        which Apple grants case-by-case via:
+        `apple/project.yml` (CODE_SIGN_ENTITLEMENTS).
+
+        `com.apple.developer.mail-client` is an Apple-managed
+        entitlement, granted per team case-by-case via:
 
           https://developer.apple.com/contact/request/default-mail-client
 
-        Once Apple approves the request and the matching provisioning
-        profile has been regenerated to carry the entitlement, add:
-
-          <key>com.apple.developer.mail-client</key>
-          <true/>
-
-        See the "Setting Cabalmail as the default mail handler" section
-        in apple/README.md for the full rollout.
+        Signed archives fail if the provisioning profile doesn't carry
+        it — a fork building before Apple approves its own request must
+        remove the key. See "Setting Cabalmail as the default mail
+        handler" in docs/apple.md for the request and rollout steps.
     -->
+    <key>com.apple.developer.mail-client</key>
+    <true/>
 
     <!--
         Push notifications (docs/0.11.0/push-notifications.md). The value
