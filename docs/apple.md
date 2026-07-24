@@ -632,29 +632,28 @@ appear in Settings → Apps → Mail → Default Mail App, even though
    the unit tests in `CabalmailKit/Tests/CabalmailKitTests/MailtoURLTests.swift`
    cover the parser. Apple reviews and grants the entitlement
    against your team.
-2. After approval, regenerate the iOS distribution provisioning
-   profile in App Store Connect (the profile must list the new
-   entitlement). Pull the regenerated profile into CI's
-   `IOS_APP_STORE_PROFILE_UUID` secret.
-3. Edit `apple/Cabalmail/Cabalmail.entitlements` (already wired into
-   the iOS target's `CODE_SIGN_ENTITLEMENTS` via `project.yml`) to
-   add the key:
+2. After approval, enable the **Default Mail App** capability on the
+   `com.cabalmail.Cabalmail` App ID (Identifiers → the App ID →
+   Capabilities). Editing the capabilities flips the App ID's
+   existing profiles to Invalid, so re-issue the iOS App Store
+   profile and refresh the `IOS_APP_STORE_PROFILE` secret — see
+   [Creating provisioning profiles](#creating-provisioning-profiles).
+3. `apple/Cabalmail/Cabalmail.entitlements` (wired into the iOS
+   target's `CODE_SIGN_ENTITLEMENTS` via `project.yml`) carries the
+   matching key:
 
    ```xml
    <key>com.apple.developer.mail-client</key>
    <true/>
    ```
 
-   The file ships empty so the path is set up from day one; only the
-   key needs to be added when approval lands.
+   Signed archives fail while the provisioning profile lacks the
+   entitlement, so a fork must remove this key until its own request
+   is approved and the profile regenerated.
 
-4. Regenerate the Xcode project (`xcodegen generate`) and ship a new
-   TestFlight build against the updated profile.
+4. Ship a new TestFlight build against the updated profile.
 
-Adding the `<true/>` value *before* Apple approves the entitlement
-will break CI signing — the profile won't carry it, and codesign will
-refuse. Apple's rules also forbid combining
-`com.apple.developer.mail-client` with
+Apple's rules forbid combining `com.apple.developer.mail-client` with
 `com.apple.developer.web-browser` in the same app — pick one.
 
 Once the entitlement lands and the user picks Cabalmail in Settings,
