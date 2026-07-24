@@ -84,6 +84,10 @@ struct CabalmailMacApp: App {
         // mail client. The Cabalmail iOS target installs the same
         // scene so the iPad path lights up automatically.
         ComposeWindowScene(appState: appState, preferences: preferences)
+        // Private browsing for links opened from the reader's link menu
+        // (ephemeral in-app web view — Safari has no API for opening its
+        // own private windows).
+        PrivateBrowserWindowScene()
         Settings {
             SettingsTabsView()
                 .environment(appState)

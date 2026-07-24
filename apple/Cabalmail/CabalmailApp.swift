@@ -102,6 +102,10 @@ struct CabalmailApp: App {
         // build keeps the scene available the moment a user moves to a
         // multi-scene device (Stage Manager, iPad).
         ComposeWindowScene(appState: appState, preferences: preferences)
+        // Private browsing for links opened from the reader's link menu.
+        // Same platform split as compose: real window on iPad / visionOS,
+        // sheet on iPhone (which ignores this group).
+        PrivateBrowserWindowScene()
     }
 
     /// Maps the theme preference onto SwiftUI's optional `ColorScheme`.

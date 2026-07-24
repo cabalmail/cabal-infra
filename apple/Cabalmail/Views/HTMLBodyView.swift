@@ -46,6 +46,24 @@ struct HTMLBodyView: View {
     /// the position survives across launches and devices.
     var onScrollCaptured: ((String) -> Void)?
 
+    /// Link the user primary-activated, driving the action popover; its
+    /// anchor rect is copied to `menuAnchor` first because
+    /// `popover(item:attachmentAnchor:)` takes the anchor as a modifier
+    /// argument, not per-item.
+    @State private var linkMenu: LinkMenuTarget?
+    @State private var menuAnchor: CGRect = .zero
+    /// Href under the pointer (trackpad / mouse), shown in the status pill.
+    @State private var hoveredHref: String?
+    /// iPhone-only: private browsing presented as a sheet (other
+    /// platforms open a real window — see PrivateBrowserView).
+    @State private var privateSheet: PrivateBrowserSheetTarget?
+    /// Deferred "open in private window" URL: presenting while the menu
+    /// popover is still animating out drops the presentation, so the
+    /// action stashes the URL here and the popover's `onDisappear` acts.
+    @State private var pendingPrivateURL: URL?
+    @Environment(\.openURL) private var openURL
+    @Environment(\.openWindow) private var openWindow
+
     init(
         html: String,
         inlineImages: [String: URL],
@@ -65,6 +83,26 @@ struct HTMLBodyView: View {
     }
 
     var body: some View {
+        platformView
+            .overlay(alignment: .bottomLeading) { hoverStatusPill }
+            .popover(
+                item: $linkMenu,
+                attachmentAnchor: .rect(.rect(menuAnchor))
+            ) { target in
+                LinkActionMenuView(target: target) { action in
+                    handleLinkMenuAction(action, for: target)
+                }
+                .presentationCompactAdaptation(.popover)
+                .onDisappear(perform: openPendingPrivateBrowser)
+            }
+            .sheet(item: $privateSheet) { target in
+                PrivateBrowserView(url: target.url)
+            }
+            .animation(.easeInOut(duration: 0.15), value: hoveredHref)
+    }
+
+    @ViewBuilder
+    private var platformView: some View {
         #if os(macOS)
         MacHTMLView(
             html: html,
@@ -73,7 +111,9 @@ struct HTMLBodyView: View {
             readerMode: readerMode,
             printRequestTick: printRequestTick,
             restoreAnchor: restoreAnchor,
-            onScrollCaptured: onScrollCaptured
+            onScrollCaptured: onScrollCaptured,
+            onLinkTap: presentLinkMenu,
+            onLinkHover: { hoveredHref = $0 }
         )
         #else
         MobileHTMLView(
@@ -83,9 +123,64 @@ struct HTMLBodyView: View {
             readerMode: readerMode,
             printRequestTick: printRequestTick,
             restoreAnchor: restoreAnchor,
-            onScrollCaptured: onScrollCaptured
+            onScrollCaptured: onScrollCaptured,
+            onLinkTap: presentLinkMenu,
+            onLinkHover: { hoveredHref = $0 }
         )
         #endif
+    }
+
+    /// Safari-style status pill: shows the hovered link's destination at
+    /// the bottom-leading edge. Hit-testing is off so it never steals
+    /// clicks from content beneath it.
+    @ViewBuilder
+    private var hoverStatusPill: some View {
+        if let hoveredHref {
+            Text(hoveredHref)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 440, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                .padding(8)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        }
+    }
+
+    private func presentLinkMenu(for target: LinkMenuTarget) {
+        hoveredHref = nil
+        menuAnchor = target.rect
+        linkMenu = target
+    }
+
+    private func handleLinkMenuAction(
+        _ action: LinkActionMenuView.Action,
+        for target: LinkMenuTarget
+    ) {
+        switch action {
+        case .copyText:
+            copyToPasteboard(target.text)
+        case .copyAddress:
+            copyToPasteboard(target.url.absoluteString)
+        case .open:
+            openURL(target.url)
+        case .openPrivate:
+            pendingPrivateURL = target.url
+        }
+        linkMenu = nil
+    }
+
+    private func openPendingPrivateBrowser() {
+        guard let url = pendingPrivateURL else { return }
+        pendingPrivateURL = nil
+        if privateBrowserOpensInWindow {
+            openWindow(id: privateBrowserWindowID, value: url)
+        } else {
+            privateSheet = PrivateBrowserSheetTarget(url: url)
+        }
     }
 }
 
@@ -100,6 +195,8 @@ private struct MobileHTMLView: UIViewRepresentable {
     let printRequestTick: Int
     let restoreAnchor: String?
     let onScrollCaptured: ((String) -> Void)?
+    let onLinkTap: (LinkMenuTarget) -> Void
+    let onLinkHover: (String?) -> Void
 
     func makeCoordinator() -> HTMLBodyCoordinator {
         HTMLBodyCoordinator(allowRemote: allowRemote)
@@ -111,6 +208,7 @@ private struct MobileHTMLView: UIViewRepresentable {
         let preferences = WKWebpagePreferences()
         preferences.allowsContentJavaScript = false
         configuration.defaultWebpagePreferences = preferences
+        context.coordinator.installLinkBridge(on: configuration.userContentController)
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         view.isOpaque = true
@@ -126,6 +224,8 @@ private struct MobileHTMLView: UIViewRepresentable {
         uiView.overrideUserInterfaceStyle = readerMode ? .unspecified : .light
         uiView.backgroundColor = readerMode ? nil : .white
         context.coordinator.onScrollCaptured = onScrollCaptured
+        context.coordinator.onLinkTap = onLinkTap
+        context.coordinator.onLinkHover = onLinkHover
         context.coordinator.render(
             html: html,
             inlineImages: inlineImages,
@@ -150,6 +250,8 @@ private struct MacHTMLView: NSViewRepresentable {
     let printRequestTick: Int
     let restoreAnchor: String?
     let onScrollCaptured: ((String) -> Void)?
+    let onLinkTap: (LinkMenuTarget) -> Void
+    let onLinkHover: (String?) -> Void
 
     func makeCoordinator() -> HTMLBodyCoordinator {
         HTMLBodyCoordinator(allowRemote: allowRemote)
@@ -161,6 +263,7 @@ private struct MacHTMLView: NSViewRepresentable {
         let preferences = WKWebpagePreferences()
         preferences.allowsContentJavaScript = false
         configuration.defaultWebpagePreferences = preferences
+        context.coordinator.installLinkBridge(on: configuration.userContentController)
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         return view
@@ -172,6 +275,8 @@ private struct MacHTMLView: NSViewRepresentable {
         // `prefers-color-scheme` stylesheet, so it tracks the system.
         nsView.appearance = readerMode ? nil : NSAppearance(named: .aqua)
         context.coordinator.onScrollCaptured = onScrollCaptured
+        context.coordinator.onLinkTap = onLinkTap
+        context.coordinator.onLinkHover = onLinkHover
         context.coordinator.render(
             html: html,
             inlineImages: inlineImages,
@@ -212,6 +317,13 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     /// Reports the current in-message scroll anchor to the reader. Set from
     /// `update*View`; invoked by the capture poll.
     var onScrollCaptured: ((String) -> Void)?
+    /// Presents the link action menu for a primary-activated link. Set
+    /// from `update*View`; invoked by the link bridge (see
+    /// `HTMLBodyView+LinkBridge`).
+    var onLinkTap: ((LinkMenuTarget) -> Void)?
+    /// Reports the href under the pointer (nil when it leaves a link) so
+    /// the host view can show / hide the status pill.
+    var onLinkHover: ((String?) -> Void)?
     /// Scroll anchor to reapply once the page has loaded, or nil for a normal
     /// open. Applied exactly once (`didApplyRestore`).
     private var restoreAnchor: String?
@@ -229,36 +341,6 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
 
     deinit {
         pollTask?.cancel()
-    }
-
-    /// Called from `update*View` with the current tick. Triggers the
-    /// platform print stack against `webView` when the tick has advanced
-    /// since our last invocation; no-op otherwise. The initial value (0
-    /// matching the view-model default) deliberately doesn't fire so the
-    /// first `update*View` after view creation isn't treated as a print
-    /// request.
-    func handlePrintTick(_ tick: Int, for webView: WKWebView) {
-        guard tick > lastPrintTick else {
-            // First time we see the view (lastPrintTick still 0) and the
-            // tick is also 0: nothing to do but record the baseline.
-            lastPrintTick = max(lastPrintTick, tick)
-            return
-        }
-        lastPrintTick = tick
-        triggerPrint(on: webView)
-    }
-
-    private func triggerPrint(on webView: WKWebView) {
-        #if canImport(UIKit)
-        let controller = UIPrintInteractionController.shared
-        controller.printFormatter = webView.viewPrintFormatter()
-        controller.present(animated: true, completionHandler: nil)
-        #elseif canImport(AppKit)
-        let info = NSPrintInfo.shared
-        let operation = webView.printOperation(with: info)
-        operation.view?.frame = webView.bounds
-        operation.run()
-        #endif
     }
 
     // Async variant of the protocol requirement. The completion-handler
@@ -280,7 +362,30 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
         if allowedSchemes.contains(url.scheme?.lowercased() ?? "") {
             return .allow
         }
+        // Link activations never navigate the reader in place: primary
+        // clicks are intercepted by the link bridge (which shows the
+        // action menu), so anything arriving here came from a path the
+        // bridge can't anchor a menu to — e.g. "Open Link" in the
+        // system context menu. Route web links to the default browser
+        // instead of replacing the message body.
+        if navigationAction.navigationType == .linkActivated {
+            let scheme = url.scheme?.lowercased()
+            if scheme == "http" || scheme == "https" {
+                Self.openExternally(url)
+            }
+            return .cancel
+        }
         return allowRemote ? .allow : .cancel
+    }
+
+    /// Environment-free external open for delegate callbacks (the SwiftUI
+    /// `openURL` action lives on the view, not the coordinator).
+    private static func openExternally(_ url: URL) {
+        #if canImport(UIKit)
+        UIApplication.shared.open(url)
+        #elseif canImport(AppKit)
+        NSWorkspace.shared.open(url)
+        #endif
     }
 
     // MARK: - In-message scroll capture / restore
@@ -335,88 +440,6 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
         let result = try? await webView.evaluateJavaScript(Self.captureScript)
         guard let anchor = result as? String, !anchor.isEmpty else { return }
         onScrollCaptured?(anchor)
-    }
-
-    /// Reads the top-most visible element and returns a compact anchor:
-    /// `"i<child.index.path>|<delta>"`, or a `"f<fraction>"` fallback when the
-    /// top of the viewport isn't over a concrete element. App-initiated (runs
-    /// even though page-content JS is disabled); reads geometry only.
-    private static let captureScript = """
-    (function(){
-      var se=document.scrollingElement||document.documentElement;
-      if(!se){return "";}
-      var el=document.elementFromPoint(4,4);
-      if(!el||el===document.documentElement||el===document.body){
-        var h=se.scrollHeight-se.clientHeight;
-        return "f"+(h>0?(se.scrollTop/h).toFixed(4):"0");
-      }
-      var top=Math.round(el.getBoundingClientRect().top);
-      var path=[];
-      var n=el;
-      while(n&&n.parentElement&&n!==document.body){
-        var p=n.parentElement;
-        path.unshift(Array.prototype.indexOf.call(p.children,n));
-        n=p;
-      }
-      return "i"+path.join(".")+"|"+top;
-    })();
-    """
-
-    /// Escapes an arbitrary string into a safe JS double-quoted string literal.
-    /// The anchor normally comes from our own `captureScript`, but a cursor row
-    /// written by another client is only length/control-char validated
-    /// server-side, so escape defensively rather than interpolate raw.
-    private static func jsStringLiteral(_ value: String) -> String {
-        var out = "\""
-        for scalar in value.unicodeScalars {
-            switch scalar {
-            case "\"": out += "\\\""
-            case "\\": out += "\\\\"
-            case "\n": out += "\\n"
-            case "\r": out += "\\r"
-            default:
-                if scalar.value < 0x20 {
-                    out += String(format: "\\u%04x", scalar.value)
-                } else {
-                    out.unicodeScalars.append(scalar)
-                }
-            }
-        }
-        return out + "\""
-    }
-
-    /// Restore counterpart to `captureScript`. The anchor is passed as an
-    /// escaped string literal (never interpolated into code), and the index
-    /// path is walked as numbers, so no untrusted content ever enters the
-    /// evaluated program.
-    private static func restoreScript(anchor: String) -> String {
-        let literal = jsStringLiteral(anchor)
-        return """
-        (function(a){
-          var se=document.scrollingElement||document.documentElement;
-          if(!a||!se){return;}
-          if(a.charAt(0)==="f"){
-            var frac=parseFloat(a.slice(1))||0;
-            var h=se.scrollHeight-se.clientHeight;
-            window.scrollTo(0,frac*(h>0?h:0));
-            return;
-          }
-          if(a.charAt(0)!=="i"){return;}
-          var rest=a.slice(1);
-          var bar=rest.indexOf("|");
-          var idxPart=bar>=0?rest.slice(0,bar):rest;
-          var delta=bar>=0?(parseInt(rest.slice(bar+1),10)||0):0;
-          var idxs=idxPart.length?idxPart.split(".").map(Number):[];
-          var node=document.body;
-          for(var k=0;k<idxs.length;k++){
-            if(!node||!node.children||idxs[k]>=node.children.length){node=null;break;}
-            node=node.children[idxs[k]];
-          }
-          if(!node){return;}
-          node.scrollIntoView(true);
-          window.scrollBy(0,-delta);
-        })(\(literal));
-        """
     }
 
     /// Renders `html` into `webView`, putting the remote-content blocker into
@@ -553,96 +576,122 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     }
 }
 
-/// Walks the HTML and rewrites `cid:` URLs (case-insensitive) to the
-/// `data:` URIs pulled from the inline-image map. Purely string-level so
-/// we never need to run a JS context. In `readerMode`, prepends a reset +
-/// typography stylesheet that overrides author CSS for a Safari Reader-
-/// style presentation.
-func rewrite(
-    html: String,
-    inlineImages: [String: URL],
-    readerMode: Bool = false
-) -> String {
-    var result = html
-    for (cid, url) in inlineImages {
-        let patterns = [
-            "cid:\(cid)",
-            "CID:\(cid)",
-            "cid:\(cid.lowercased())",
-        ]
-        for pattern in patterns {
-            result = result.replacingOccurrences(of: pattern, with: url.absoluteString)
+// MARK: - Printing
+
+extension HTMLBodyCoordinator {
+    /// Called from `update*View` with the current tick. Triggers the
+    /// platform print stack against `webView` when the tick has advanced
+    /// since our last invocation; no-op otherwise. The initial value (0
+    /// matching the view-model default) deliberately doesn't fire so the
+    /// first `update*View` after view creation isn't treated as a print
+    /// request.
+    func handlePrintTick(_ tick: Int, for webView: WKWebView) {
+        guard tick > lastPrintTick else {
+            // First time we see the view (lastPrintTick still 0) and the
+            // tick is also 0: nothing to do but record the baseline.
+            lastPrintTick = max(lastPrintTick, tick)
+            return
         }
+        lastPrintTick = tick
+        triggerPrint(on: webView)
     }
-    if readerMode {
-        result = readerStylesheet + result
+
+    private func triggerPrint(on webView: WKWebView) {
+        #if canImport(UIKit)
+        let controller = UIPrintInteractionController.shared
+        controller.printFormatter = webView.viewPrintFormatter()
+        controller.present(animated: true, completionHandler: nil)
+        #elseif canImport(AppKit)
+        let info = NSPrintInfo.shared
+        let operation = webView.printOperation(with: info)
+        operation.view?.frame = webView.bounds
+        operation.run()
+        #endif
     }
-    return result
 }
 
-/// Prepended in reader mode. Every rule uses `!important` because most
-/// author mail CSS ships as inline `style=` attributes, and we need to win
-/// the cascade against both inline styles and higher-specificity selectors.
-///
-/// Design goals: system font, capped reading width, transparent author
-/// backgrounds so colored wrappers don't clash with the system surface, and
-/// a `prefers-color-scheme: dark` branch so the page follows the user's
-/// system appearance (which is why `readerMode` also drops the `.light`
-/// WebKit override in the host view).
-private let readerStylesheet = """
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    color: #1c1c1e !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif !important;
-    font-size: 17px !important;
-    line-height: 1.6 !important;
-  }
-  body {
-    padding: 20px !important;
-    max-width: 680px !important;
-    margin: 0 auto !important;
-  }
-  *, *::before, *::after {
-    background-color: transparent !important;
-    background-image: none !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-  }
-  img, video { height: auto !important; }
-  a { color: #0a84ff !important; text-decoration: underline !important; }
-  blockquote {
-    margin: 1em 0 !important;
-    padding: 0 1em !important;
-    border-left: 3px solid rgba(127,127,127,0.35) !important;
-    color: inherit !important;
-  }
-  table { border-collapse: collapse !important; width: auto !important; }
-  td, th { padding: 4px 8px !important; border: none !important; }
-  pre, code {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace !important;
-    font-size: 0.9em !important;
-    background: rgba(127,127,127,0.12) !important;
-    border-radius: 4px !important;
-    padding: 2px 4px !important;
-  }
-  pre { padding: 12px !important; overflow-x: auto !important; }
-  h1, h2, h3, h4, h5, h6 { color: inherit !important; }
-  hr { border: none !important; border-top: 1px solid rgba(127,127,127,0.3) !important; }
-  @media (prefers-color-scheme: dark) {
-    html, body {
-      background: #1c1c1e !important;
-      color: #f2f2f7 !important;
+// MARK: - Scroll scripts
+
+extension HTMLBodyCoordinator {
+    /// Reads the top-most visible element and returns a compact anchor:
+    /// `"i<child.index.path>|<delta>"`, or a `"f<fraction>"` fallback when the
+    /// top of the viewport isn't over a concrete element. App-initiated (runs
+    /// even though page-content JS is disabled); reads geometry only.
+    static let captureScript = """
+    (function(){
+      var se=document.scrollingElement||document.documentElement;
+      if(!se){return "";}
+      var el=document.elementFromPoint(4,4);
+      if(!el||el===document.documentElement||el===document.body){
+        var h=se.scrollHeight-se.clientHeight;
+        return "f"+(h>0?(se.scrollTop/h).toFixed(4):"0");
+      }
+      var top=Math.round(el.getBoundingClientRect().top);
+      var path=[];
+      var n=el;
+      while(n&&n.parentElement&&n!==document.body){
+        var p=n.parentElement;
+        path.unshift(Array.prototype.indexOf.call(p.children,n));
+        n=p;
+      }
+      return "i"+path.join(".")+"|"+top;
+    })();
+    """
+
+    /// Escapes an arbitrary string into a safe JS double-quoted string literal.
+    /// The anchor normally comes from our own `captureScript`, but a cursor row
+    /// written by another client is only length/control-char validated
+    /// server-side, so escape defensively rather than interpolate raw.
+    private static func jsStringLiteral(_ value: String) -> String {
+        var out = "\""
+        for scalar in value.unicodeScalars {
+            switch scalar {
+            case "\"": out += "\\\""
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            default:
+                if scalar.value < 0x20 {
+                    out += String(format: "\\u%04x", scalar.value)
+                } else {
+                    out.unicodeScalars.append(scalar)
+                }
+            }
+        }
+        return out + "\""
     }
-    *, *::before, *::after {
-      background-color: #1c1c1e !important;
-      background-image: none !important;
-      color: #f2f2f7 !important;
+
+    /// Restore counterpart to `captureScript`. The anchor is passed as an
+    /// escaped string literal (never interpolated into code), and the index
+    /// path is walked as numbers, so no untrusted content ever enters the
+    /// evaluated program.
+    static func restoreScript(anchor: String) -> String {
+        let literal = jsStringLiteral(anchor)
+        return """
+        (function(a){
+          var se=document.scrollingElement||document.documentElement;
+          if(!a||!se){return;}
+          if(a.charAt(0)==="f"){
+            var frac=parseFloat(a.slice(1))||0;
+            var h=se.scrollHeight-se.clientHeight;
+            window.scrollTo(0,frac*(h>0?h:0));
+            return;
+          }
+          if(a.charAt(0)!=="i"){return;}
+          var rest=a.slice(1);
+          var bar=rest.indexOf("|");
+          var idxPart=bar>=0?rest.slice(0,bar):rest;
+          var delta=bar>=0?(parseInt(rest.slice(bar+1),10)||0):0;
+          var idxs=idxPart.length?idxPart.split(".").map(Number):[];
+          var node=document.body;
+          for(var k=0;k<idxs.length;k++){
+            if(!node||!node.children||idxs[k]>=node.children.length){node=null;break;}
+            node=node.children[idxs[k]];
+          }
+          if(!node){return;}
+          node.scrollIntoView(true);
+          window.scrollBy(0,-delta);
+        })(\(literal));
+        """
     }
-    a { color: #0a84ff !important; }
-  }
-</style>
-"""
+}
