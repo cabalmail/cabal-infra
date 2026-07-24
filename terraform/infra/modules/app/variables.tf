@@ -83,11 +83,6 @@ variable "address_changed_topic_arn" {
   description = "ARN of the SNS topic for address change notifications to ECS containers."
 }
 
-variable "admin_group_name" {
-  type        = string
-  description = "Name of the Cognito admin group."
-}
-
 variable "dmarc_healthcheck_ping_param" {
   type        = string
   description = "SSM Parameter Store name holding the Healthchecks ping URL for the process_dmarc Lambda. Empty string disables the heartbeat."

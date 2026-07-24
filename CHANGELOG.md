@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.11] - 2026-07-24
+
+### Added
+- Apple: **Cabalmail can be the default mail app on iOS and iPadOS.**
+  Apple granted the managed mail-client entitlement, so the app now
+  appears in Settings → Apps → Mail → Default Mail App. Pick it there
+  and mailto: links from Safari and other apps open a Cabalmail
+  compose window pre-filled from the link.
+- Apple: **Link menu and hover preview in the reader.** Clicking or
+  tapping a link in a message now opens a menu at the link showing the
+  destination URL, with actions to copy the link text or address, open
+  it in the default browser, or hand it to the system share sheet
+  (where browsers like Vivaldi expose private-tab actions). Hovering a
+  link with a pointer shows its URL in a status pill, Safari-style.
+  Right-click and long-press keep the system menus, and links no
+  longer navigate the reader pane in place.
+
+### Deprecated
+- **Third-party clients no longer supported.** The imminent 1.0.0
+  release will discontinue the practice of allowing IMAP connections
+  from standard mail user agents. Only Cabalmail clients are
+  supported for connecting to Cabalmail server-side infrastructure.
+
+### Fixed
+- **Phantom subscription after folder delete.** Deleting a folder now also
+  drops its IMAP subscription, so it no longer lingers in clients' Subscribed
+  list. Unsubscribing also no longer selects the target mailbox first, so a
+  stale subscription left behind by an earlier delete can be cleared instead
+  of failing with a 502.
+- Apple: **Send no longer exits the app on iPad.** Closing a compose window
+  (Send / Save Draft / Discard) re-activates the main mail scene before the
+  compose scene is dismissed, so the app returns to the mail split view
+  instead of dropping to the home screen with the send finishing as a
+  background task.
+
+### Security
+- The `master` service account (the identity the mail path uses for SMTP
+  submission and IMAP master login) is no longer a member of the Cognito
+  admin group. Nothing consumed that membership - submission auth is a bare
+  password check and master never calls the admin API - so it was standing
+  privilege, and as a headless account that can never enroll MFA it would
+  have blocked admin-MFA enforcement: the audit-mode trigger flagged it on
+  every outbound send. Least privilege and the enforcement flip both want it
+  gone.
+- MFA enrollment checking now covers every user, not only admins. The
+  pre-token-generation trigger gains a second, independently-flagged gate
+  (`TF_VAR_ENFORCE_USER_MFA`, audit-by-default like the admin gate) covering
+  non-admin sign-ins, with a 48-hour grace window from account creation so
+  new signups can enroll before it applies, and an explicit exemption for
+  the password-only service accounts (SMTP submission, report ingest). After
+  sign-in, users without an authenticator now see a skippable enrollment
+  prompt that leads to the Security page - the funnel that gets accounts
+  enrolled while the gate is still in audit.
+- Promoting Cognito threat protection from audit to enforced is now a
+  per-environment variable (`TF_VAR_THREAT_PROTECTION_ENFORCED`) instead of a
+  code change. The default remains audit: sign-in risk is scored and logged
+  but never acted on. In enforced mode Cognito challenges risky sign-ins for
+  MFA-enrolled users and blocks high-risk sign-ins outright, so flip it only
+  once the risk metrics have soaked clean and TOTP enrollment is in place in
+  that environment.
+
 ## [0.11.10] - 2026-07-23
 
 ### Fixed

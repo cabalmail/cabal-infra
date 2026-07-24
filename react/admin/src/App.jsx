@@ -25,6 +25,7 @@ import Login from './Login';
 import Verify from './Verify';
 import MfaChallenge from './MfaChallenge';
 import VerifyEmail from './VerifyEmail';
+import EnrollMfa from './EnrollMfa';
 import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
 import AuthShell from './Login/AuthShell';
@@ -557,10 +558,14 @@ function App() {
 
   // Shared tail of every successful authentication (password-only or
   // after an MFA challenge). Lands on the Email view unless the account
-  // is missing a verified recovery email, in which case the VerifyEmail
-  // gate runs first (identity plan Phase 1). The gate is advisory: an
-  // attribute-read failure must never block an otherwise-good login.
-  const finishLogin = useCallback((data, user) => {
+  // is missing a verified recovery email (VerifyEmail gate) or has no
+  // MFA factor (EnrollMfa nudge; the server-side user gate in
+  // require_admin_mfa will eventually enforce what this screen asks
+  // for). One gate per sign-in, email first. Both checks are advisory:
+  // a metadata-read failure must never block an otherwise-good login.
+  // mfaVerified skips the enrollment probe when the login itself just
+  // answered a TOTP challenge - that user is enrolled by definition.
+  const finishLogin = useCallback((data, user, mfaVerified = false) => {
     _token = data.getIdToken().getJwtToken();
     _expires = data.getIdToken().getExpiration();
     const payload = JSON.parse(atob(_token.split('.')[1]));
@@ -580,8 +585,21 @@ function App() {
           next = { loggedIn: true, view: "VerifyEmail", verificationCode: null };
         }
       }
-      setState(next);
-      setMessage("Login succeeded", false);
+      if (mfaVerified || next.view !== "Email") {
+        setState(next);
+        setMessage("Login succeeded", false);
+        return;
+      }
+      user.getUserData((mfaErr, userData) => {
+        const enrolled = !mfaErr &&
+          ((userData && userData.UserMFASettingList) || []).includes('SOFTWARE_TOKEN_MFA');
+        // Fail open on a read error: nudging is not worth blocking a
+        // login over.
+        setState(mfaErr || enrolled
+          ? next
+          : { loggedIn: true, view: "EnrollMfa" });
+        setMessage("Login succeeded", false);
+      }, { bypassCache: true });
     });
   }, [setState, setMessage]);
 
@@ -641,7 +659,7 @@ function App() {
     user.sendMFACode(
       state.verificationCode,
       {
-        onSuccess: (data) => finishLogin(data, user),
+        onSuccess: (data) => finishLogin(data, user, true),
         onFailure: () => {
           setMessage("That code did not match. Please try again.", true);
         }
@@ -886,6 +904,13 @@ function App() {
             onSkip={skipEmailGate}
           />
         );
+      case "EnrollMfa":
+        return (
+          <EnrollMfa
+            onSetUp={() => setState({ view: "Security" })}
+            onLater={(e) => { e.preventDefault(); setState({ view: "Email" }); }}
+          />
+        );
       case "Security":
         return (
           <ErrorBoundary name="Security">
@@ -1006,11 +1031,12 @@ function App() {
     sms_enabled: state.sms_enabled
   };
 
-  // VerifyEmail is post-login but renders as a focused AuthShell gate
-  // (no Nav), so it lives in this list alongside the true pre-login views.
+  // VerifyEmail and EnrollMfa are post-login but render as focused
+  // AuthShell gates (no Nav), so they live in this list alongside the
+  // true pre-login views.
   const isPreLoginView = configUnavailable
     || ["Login", "SignUp", "Verify", "MfaChallenge", "VerifyEmail",
-      "ForgotPassword", "ResetPassword"].includes(state.view);
+      "EnrollMfa", "ForgotPassword", "ResetPassword"].includes(state.view);
 
   const shortcutCallbacks = useMemo(() => ({
     onToggleHelp: () => setHelpOpen(prev => !prev),
