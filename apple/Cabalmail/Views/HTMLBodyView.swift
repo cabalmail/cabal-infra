@@ -54,15 +54,7 @@ struct HTMLBodyView: View {
     @State private var menuAnchor: CGRect = .zero
     /// Href under the pointer (trackpad / mouse), shown in the status pill.
     @State private var hoveredHref: String?
-    /// iPhone-only: private browsing presented as a sheet (other
-    /// platforms open a real window — see PrivateBrowserView).
-    @State private var privateSheet: PrivateBrowserSheetTarget?
-    /// Deferred "open in private window" URL: presenting while the menu
-    /// popover is still animating out drops the presentation, so the
-    /// action stashes the URL here and the popover's `onDisappear` acts.
-    @State private var pendingPrivateURL: URL?
     @Environment(\.openURL) private var openURL
-    @Environment(\.openWindow) private var openWindow
 
     init(
         html: String,
@@ -93,10 +85,6 @@ struct HTMLBodyView: View {
                     handleLinkMenuAction(action, for: target)
                 }
                 .presentationCompactAdaptation(.popover)
-                .onDisappear(perform: openPendingPrivateBrowser)
-            }
-            .sheet(item: $privateSheet) { target in
-                PrivateBrowserView(url: target.url)
             }
             .animation(.easeInOut(duration: 0.15), value: hoveredHref)
     }
@@ -167,20 +155,8 @@ struct HTMLBodyView: View {
             copyToPasteboard(target.url.absoluteString)
         case .open:
             openURL(target.url)
-        case .openPrivate:
-            pendingPrivateURL = target.url
         }
         linkMenu = nil
-    }
-
-    private func openPendingPrivateBrowser() {
-        guard let url = pendingPrivateURL else { return }
-        pendingPrivateURL = nil
-        if privateBrowserOpensInWindow {
-            openWindow(id: privateBrowserWindowID, value: url)
-        } else {
-            privateSheet = PrivateBrowserSheetTarget(url: url)
-        }
     }
 }
 

@@ -52,14 +52,17 @@ struct LinkMenuTarget: Identifiable, Equatable {
 
 /// Contents of the popover shown when the user primary-activates a link in
 /// the reader: the destination URL up top (so the user can vet it before
-/// acting), then the copy / open actions. Presentation and action routing
-/// stay with the owner (`HTMLBodyView`); this view only reports the choice.
+/// acting), then the copy / open / share actions. Presentation and action
+/// routing stay with the owner (`HTMLBodyView`); this view only reports
+/// the choice — except Share, which is a `ShareLink` presenting the
+/// system sheet itself (that's the point: browsers like Vivaldi expose
+/// "open in private tab" as share-sheet actions, so the system sheet is
+/// how private mode is reached without any Safari API existing for it).
 struct LinkActionMenuView: View {
     enum Action {
         case copyText
         case copyAddress
         case open
-        case openPrivate
     }
 
     let target: LinkMenuTarget
@@ -85,13 +88,10 @@ struct LinkActionMenuView: View {
                     systemImage: "safari",
                     action: .open
                 )
-                if target.isWebLink {
-                    actionRow(
-                        "Open in Private Window",
-                        systemImage: "hand.raised",
-                        action: .openPrivate
-                    )
+                ShareLink(item: target.url) {
+                    rowLabel("Share…", systemImage: "square.and.arrow.up")
                 }
+                .buttonStyle(.plain)
             }
             .padding(.vertical, 4)
         }
@@ -106,12 +106,16 @@ struct LinkActionMenuView: View {
         Button {
             onAction(action)
         } label: {
-            Label(title, systemImage: systemImage)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
+            rowLabel(title, systemImage: systemImage)
         }
         .buttonStyle(.plain)
+    }
+
+    private func rowLabel(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
     }
 }
