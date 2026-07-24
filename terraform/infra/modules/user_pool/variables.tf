@@ -90,6 +90,12 @@ variable "enforce_admin_mfa" {
   default     = false
 }
 
+variable "enforce_user_mfa" {
+  type        = bool
+  description = "When true, the require_admin_mfa trigger refuses tokens to any non-exempt, non-admin user with no MFA factor (admins are governed by enforce_admin_mfa). Default false = audit mode. Flip only after the user population has enrolled TOTP; see require_admin_mfa.tf."
+  default     = false
+}
+
 variable "threat_protection_enforced" {
   type        = bool
   description = "When true, Cognito threat protection runs in ENFORCED mode (risky sign-ins are MFA-challenged or blocked). Default false = AUDIT (score and log only). Promote per environment after the risk metrics soak clean and TOTP enrollment is in place; see the user_pool_add_ons comment in main.tf."

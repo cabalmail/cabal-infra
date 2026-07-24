@@ -1,12 +1,15 @@
 /**
-* Pre-token-generation Cognito trigger that gates admin-group tokens on
-* MFA enrollment (identity plan Phase 1). Audit-by-default:
-* var.enforce_admin_mfa (default false) drives the ENFORCE_ADMIN_MFA env
-* var - in audit mode un-enrolled admins are only logged ("would_block"
-* lines in the Lambda's log group). Flip to enforce ONLY after every
-* admin has enrolled TOTP: enrollment needs a signed-in session, so an
-* enforced un-enrolled admin cannot sign in to enroll and requires
-* operator intervention.
+* Pre-token-generation Cognito trigger that gates tokens on MFA
+* enrollment (identity plan Phase 1; extended to all human users
+* 2026-07). Two independently-flagged, audit-by-default gates:
+* var.enforce_admin_mfa for admin-group members and
+* var.enforce_user_mfa for everyone else (with a grace window from
+* account creation so new signups can enroll first). In audit mode
+* un-enrolled users are only logged ("would_block" lines in the
+* Lambda's log group). Flip a gate to enforce ONLY after its
+* population has enrolled TOTP: enrollment needs a signed-in session,
+* so an enforced un-enrolled user cannot sign in to enroll and
+* requires operator intervention.
 *
 * Bootstrap mirrors check_invite.tf: a placeholder zip is self-seeded on
 * first apply so Terraform does not chicken-and-egg against app.yml, and
@@ -133,6 +136,22 @@ resource "aws_lambda_function" "require_admin_mfa" {
   environment {
     variables = {
       ENFORCE_ADMIN_MFA = var.enforce_admin_mfa ? "true" : "false"
+      ENFORCE_USER_MFA  = var.enforce_user_mfa ? "true" : "false"
+      # Service and machine accounts that authenticate with a password
+      # and can never enroll an authenticator. Verified against six
+      # weeks of prod auth events (2026-07-23):
+      # - master: SMTP submission identity for /send; authenticates on
+      #   every outbound message.
+      # - dmarc:  report-ingest mailbox (dmarc_user.tf); never signs in
+      #   today, exempted defensively.
+      # A short-lived App Store review demo account ("apple") was also a
+      # candidate; it is deleted. Re-add a demo account here for the
+      # duration of any future App Review cycle - reviewers need static
+      # credentials and their sign-ins score high-risk.
+      EXEMPT_USERS = "master,dmarc"
+      # A new signup gets this long to sign in and enroll via the
+      # Security page before the user gate applies to them.
+      GRACE_HOURS = "48"
     }
   }
 
