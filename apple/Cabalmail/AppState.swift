@@ -515,6 +515,11 @@ final class AppState {
         // Planned IMAP redeploy: show the API's friendly copy verbatim, no
         // "Server error:" prefix.
         case .maintenance(let message): return message
+        // A Cognito trigger rejected the sign-in (e.g. the MFA-enrollment
+        // gate). The Kit has already stripped Cognito's trigger wrapper;
+        // what remains is the trigger's own user-facing copy, so show it
+        // verbatim like .maintenance above.
+        case .server(code: "UserLambdaValidationException", message: let message): return message
         default:                  return nil
         }
     }
