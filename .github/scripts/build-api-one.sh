@@ -69,6 +69,12 @@ fi
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+admin_limits' function.py 2>/dev/null; then
   cp ../_shared/admin_limits.py ./build/admin_limits.py
 fi
+# process_dmarc imports imap_session directly (login-only dmarc-user dial,
+# no helper.py); ship it plus its imap_pool dependency for any such handler.
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+imap_session' function.py 2>/dev/null; then
+  cp ../_shared/imap_session.py ./build/imap_session.py
+  cp ../_shared/imap_pool.py ./build/imap_pool.py
+fi
 # fetch_bimi rasterizes BIMI SVG logos to PNG with a bundled static resvg
 # binary (fetched + sha256-verified at build time, not committed). It ships
 # at the zip root so the handler can exec /var/task/resvg. resvg only has a

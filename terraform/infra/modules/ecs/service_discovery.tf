@@ -11,14 +11,24 @@
 * through the NLB.
 */
 
+# Name literals live in locals so outputs.tf can compose the imap
+# internal hostname without referencing these resources: checkov's graph
+# renderer chokes on an output edge into this file's lifecycle wiring
+# (replace_triggered_by below) and then stops evaluating count
+# expressions module-wide, resurrecting count=0 resources as findings.
+locals {
+  sd_namespace_name    = "cabal.internal"
+  sd_imap_service_name = "imap"
+}
+
 resource "aws_service_discovery_private_dns_namespace" "mail" {
-  name        = "cabal.internal"
+  name        = local.sd_namespace_name
   description = "Internal service discovery for ECS mail tiers"
   vpc         = var.vpc_id
 }
 
 resource "aws_service_discovery_service" "imap" {
-  name = "imap"
+  name = local.sd_imap_service_name
 
   dns_config {
     namespace_id = aws_service_discovery_private_dns_namespace.mail.id

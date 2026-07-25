@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 import zipfile
 import boto3  # pylint: disable=import-error
-import imapclient  # pylint: disable=import-error
+import imap_session  # pylint: disable=import-error
 import defusedxml.ElementTree as ET  # pylint: disable=import-error
 from defusedxml.common import DefusedXmlException  # pylint: disable=import-error
 
@@ -97,10 +97,14 @@ def get_master_password():
 
 
 def get_imap_client():
-    '''Connects to IMAP as the dmarc user via master-user authentication'''
+    '''Connects to IMAP as the dmarc user via master-user authentication.
+
+    imap_session.dial_imap routes over the Cloud Map internal name when
+    IMAP_INTERNAL_HOST is set (private-IMAP replumb), falling back to the
+    public IMAPS listener when it is not.'''
     host = f'imap.{control_domain}'
     mpw = get_master_password()
-    client = imapclient.IMAPClient(host, ssl=True)
+    client = imap_session.dial_imap(host)
     client.login(f'{dmarc_user}*admin', mpw)
     return client
 

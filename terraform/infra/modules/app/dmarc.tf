@@ -127,6 +127,22 @@ resource "aws_iam_role_policy" "process_dmarc" {
           "logs:PutLogEvents"
         ]
         Resource = "${aws_cloudwatch_log_group.process_dmarc.arn}:*"
+      },
+      {
+        # iam-wildcard-ok: EC2 ENI actions for VPC-attached Lambda networking
+        # (private-IMAP replumb). Lambda-created interface ARNs only exist at
+        # runtime and Describe* has no resource-level scoping; mirrors the
+        # AWSLambdaVPCAccessExecutionRole managed policy.
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses",
+        ]
+        # iam-wildcard-ok: Lambda-managed ENI ARNs only exist at runtime; Describe* has no resource-level scoping
+        Resource = "*"
       }
     ]
   })
@@ -162,9 +178,16 @@ resource "aws_lambda_function" "process_dmarc" {
     log_group  = aws_cloudwatch_log_group.process_dmarc.name
   }
 
+  # Private-IMAP replumb: same VPC posture as the call-module endpoints.
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
   environment {
     variables = {
       CONTROL_DOMAIN         = var.control_domain
+      IMAP_INTERNAL_HOST     = var.imap_internal_host
       DMARC_TABLE_NAME       = aws_dynamodb_table.dmarc_reports.name
       CAA_TABLE_NAME         = aws_dynamodb_table.caa_reports.name
       DMARC_USER             = "dmarc"
