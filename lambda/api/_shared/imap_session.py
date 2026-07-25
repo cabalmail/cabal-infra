@@ -20,8 +20,18 @@ only the on/off flag has to be wired through Terraform.'''
 import os
 import time
 from imapclient import IMAPClient, SocketTimeout  # pylint: disable=import-error
+from imapclient import imap4  # pylint: disable=import-error
 from imapclient.exceptions import IMAPClientError  # pylint: disable=import-error
 from imap_pool import ImapConnectionPool  # pylint: disable=import-error
+
+# Private-IMAP replumb: Cloud Map name of the imap task (imap.cabal.internal),
+# set by Terraform on every IMAP-consuming function now that they run inside
+# the VPC. When present, connections dial it on 143 and upgrade with STARTTLS
+# instead of using the public NLB's IMAPS listener (993), which is slated for
+# removal. Unset (e.g. local `python -m function` runs), the public path is
+# byte-for-byte what it always was.
+INTERNAL_HOST = os.environ.get('IMAP_INTERNAL_HOST', '')
+INTERNAL_PORT = 143
 
 POOL_ENABLED = os.environ.get('IMAP_POOL_ENABLED', 'false').lower() == 'true'
 POOL_MAX_SIZE = int(os.environ.get('IMAP_POOL_MAX_SIZE', '8'))
@@ -33,9 +43,52 @@ POOL_SOCKET_TIMEOUT = SocketTimeout(connect=10, read=27)
 _imap_pool = ImapConnectionPool(POOL_MAX_SIZE, POOL_IDLE_SECONDS, time.monotonic)
 
 
+class _InternalRouteImapClient(IMAPClient):  # pylint: disable=too-few-public-methods
+    '''IMAPClient whose TCP connection goes to the Cloud Map internal name
+    while TLS verification keeps using the public IMAP hostname.
+
+    The imap container serves the wildcard *.<control-domain> Let's Encrypt
+    certificate, so the STARTTLS handshake must be verified against
+    imap.<control-domain> - but that name resolves to the NLB, which is the
+    path this class exists to avoid. Overriding _create_IMAP4 splits the two
+    concerns: the socket dials INTERNAL_HOST (the task's private IP via Cloud
+    Map, no NLB), while self.host stays the public name, which starttls()
+    passes as server_hostname, so certificate verification is the real thing.
+    Dovecot's disable_plaintext_auth is satisfied because LOGIN only happens
+    after the TLS upgrade - no login_trusted_networks widening needed. Note
+    this is end-to-end TLS into Dovecot, strictly better than the public
+    path, where the NLB terminates TLS and forwards cleartext to 143.
+
+    _create_IMAP4 is internal imapclient API; imapclient is pinned (2.3.1)
+    in every consumer's requirements.txt, so it cannot drift underneath us.'''
+
+    def _create_IMAP4(self):  # pylint: disable=invalid-name
+        # Name is fixed by the parent class - this is the override point.
+        connect_timeout = getattr(self._timeout, 'connect', None)
+        return imap4.IMAP4WithTimeout(INTERNAL_HOST, self.port, connect_timeout)
+
+
+def dial_imap(host, timeout=None):
+    '''Returns a connected (not yet authenticated) IMAPClient.
+
+    Internal path (IMAP_INTERNAL_HOST set): plain TCP to the Cloud Map name
+    on 143, upgraded with STARTTLS before any credentials are sent.
+    Public path (unset): implicit TLS to host:993 via the NLB listener.
+
+    Public because process_dmarc dials its own (login-only, dmarc-user)
+    session rather than going through open_imap_client's login+select.'''
+    if INTERNAL_HOST:
+        client = _InternalRouteImapClient(
+            host=host, port=INTERNAL_PORT, use_uid=True, ssl=False,
+            timeout=timeout)
+        client.starttls()
+        return client
+    return IMAPClient(host=host, use_uid=True, ssl=True, timeout=timeout)
+
+
 def _new_imap_client(host, user, mpw, timeout=None):
     '''Connects and authenticates a fresh master-user IMAP session.'''
-    client = IMAPClient(host=host, use_uid=True, ssl=True, timeout=timeout)
+    client = dial_imap(host, timeout)
     client.login(f"{user}*admin", mpw)
     return client
 
@@ -114,8 +167,7 @@ def open_imap_client(host, user, folder, read_only, mpw):
     warm invocation. Callers reach this through helper.get_imap_client, which
     applies the maintenance gate first.'''
     if not POOL_ENABLED:
-        client = IMAPClient(host=host, use_uid=True, ssl=True)
-        client.login(f"{user}*admin", mpw)
+        client = _new_imap_client(host, user, mpw)
         client.select_folder(folder, read_only)
         return client
     return _get_pooled_imap_client(host, user, folder, read_only, mpw)

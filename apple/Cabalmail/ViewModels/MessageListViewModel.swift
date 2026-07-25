@@ -211,8 +211,10 @@ final class MessageListViewModel {
     // write paths in the sibling extensions (`+Optimistic`, `+Move`, `+Bulk`)
     // and the merge in `+Refresh` can reach them.
 
-    /// UIDs optimistically removed from `envelopes` (dispose or move) whose
-    /// server-side move is still in flight. Besides the merge shield this
+    /// UIDs on their way out of `envelopes` (dispose or move) whose
+    /// server-side move is still in flight — including, on the dispose path,
+    /// the few hundred milliseconds where the row is still present but
+    /// animating out (`rowDisposalPhases`). Besides the merge shield this
     /// doubles as `dispose(_:)`'s re-entrance guard: a duplicate rapid-swipe
     /// tap whose UID is already enqueued short-circuits, preventing
     /// re-entrant `ForEach(model.envelopes)` diffing while several in-flight
@@ -226,6 +228,12 @@ final class MessageListViewModel {
     /// `AppState.pendingFlagWriteUIDs` (its write lifecycle lives in the detail
     /// view model); `shieldFetched` consults both.
     var pendingFlagUIDs: Set<UInt32> = []
+
+    /// Rows mid-disposal animation, keyed by UID. A disposed row stays in
+    /// `envelopes` while it fades and then collapses (see `beginRowDisposal`
+    /// in `+Optimistic`), so the list closes the gap visibly instead of
+    /// instantaneously. Empty except during those ~300ms.
+    var rowDisposalPhases: [UInt32: RowDisposalPhase] = [:]
 
     init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, appState: AppState) {
         self.scope = scope
@@ -496,20 +504,29 @@ final class MessageListViewModel {
     /// the source and moves it in the same call — one round trip instead of
     /// a STORE followed by a MOVE.
     ///
-    /// Optimistic UI: the row is removed from `envelopes` before the
-    /// server round trip so the swipe feels instant. If the move fails the
-    /// envelope is reinserted at its prior index. Cache pruning still waits
-    /// for server confirmation — without that gate, a transient failure
-    /// would leave the persistent snapshot disagreeing with the server.
+    /// Optimistic UI: the row is disposed of locally before the server round
+    /// trip so the swipe feels instant, but it leaves the list on the two-leg
+    /// fade-then-collapse animation rather than blinking out (see
+    /// `beginRowDisposal`). If the move fails the row simply comes back — it
+    /// never left `envelopes`. Cache pruning still waits for server
+    /// confirmation — without that gate, a transient failure would leave the
+    /// persistent snapshot disagreeing with the server.
     func dispose(_ envelope: Envelope) async {
         guard pendingRemovedUIDs.insert(envelope.uid).inserted else { return }
         defer { pendingRemovedUIDs.remove(envelope.uid) }
 
         let destination = preferences.disposeAction.destinationFolder
         let source = sourceFolder(for: envelope)
-        let originalIndex = envelopes.firstIndex { $0.uid == envelope.uid }
         let wasUnread = !envelope.flags.contains(.seen)
-        envelopes.removeAll { $0.uid == envelope.uid }
+        // Start the row animation but deliberately DON'T await it before the
+        // move: a swipe landing just as the app is backgrounded has only a
+        // brief window to reach the network, so the request goes out first and
+        // the animation plays alongside it. The envelope leaves `envelopes`
+        // once both have settled. Until then the row renders transparent /
+        // collapsed and takes no hits, so it can't be swiped twice, and
+        // holding it in place keeps every absolute row index stable — the
+        // index-addressed list would otherwise shift the rows below instantly.
+        let disposal = beginRowDisposal(uid: envelope.uid)
         // Optimistic count drop for the source folder: the dispose path
         // marks the message `\Seen` before moving, so an unread message
         // both loses its unread state AND leaves the folder. One -1 covers
@@ -532,9 +549,20 @@ final class MessageListViewModel {
                 destination: destination,
                 markSeen: wasUnread
             )
+            // Both mutations in one synchronous step so the list sees a single
+            // update: the envelope is gone AND the phase is cleared, which
+            // leaves the vacated slot rendering the next envelope at full
+            // height with nothing left to animate.
+            await disposal.value
+            envelopes.removeAll { $0.uid == envelope.uid }
+            endRowDisposal(uid: envelope.uid)
             await pruneCachesAfter(move: source, uid: envelope.uid)
         } catch {
-            restoreEnvelope(envelope, at: originalIndex)
+            // The row never left `envelopes`, so clearing the phase is the
+            // whole revert. Cancel the animation first: a failure during the
+            // fade would otherwise still collapse the row we're restoring.
+            disposal.cancel()
+            endRowDisposal(uid: envelope.uid)
             if wasUnread {
                 appState.applyUnreadDelta(folderPath: source, delta: 1)
             }

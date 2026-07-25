@@ -197,21 +197,22 @@ module "domains" {
 
 # Infrastructure and code for the administrative web site
 module "admin" {
-  source              = "./modules/app"
-  control_domain      = var.control_domain
-  user_pool_id        = module.pool.user_pool_id
-  user_pool_client_id = module.pool.user_pool_client_id
-  region              = var.aws_region
-  cert_arn            = module.cert.cert_arn
-  zone_id             = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  private_zone_id     = module.vpc.private_zone.zone_id
-  domains             = module.domains.domains
-  bucket              = module.bucket.bucket
-  bucket_arn          = module.bucket.bucket_arn
-  bucket_domain_name  = module.bucket.domain_name
-  oai_iam_arn         = module.bucket.oai_iam_arn
-  relay_ips           = module.vpc.relay_ips
-  dev_mode            = var.prod ? false : true
+  source               = "./modules/app"
+  control_domain       = var.control_domain
+  user_pool_id         = module.pool.user_pool_id
+  user_pool_client_id  = module.pool.user_pool_client_id
+  mfa_enroll_client_id = module.pool.mfa_enroll_client_id
+  region               = var.aws_region
+  cert_arn             = module.cert.cert_arn
+  zone_id              = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  private_zone_id      = module.vpc.private_zone.zone_id
+  domains              = module.domains.domains
+  bucket               = module.bucket.bucket
+  bucket_arn           = module.bucket.bucket_arn
+  bucket_domain_name   = module.bucket.domain_name
+  oai_iam_arn          = module.bucket.oai_iam_arn
+  relay_ips            = module.vpc.relay_ips
+  dev_mode             = var.prod ? false : true
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
   push_queue_arn            = module.ecs.push_queue_arn
@@ -223,6 +224,12 @@ module "admin" {
   monitoring          = var.monitoring
   imap_pool_enabled   = var.imap_pool_enabled
   access_logs_bucket  = module.s3_access_logs.bucket
+
+  # Private-IMAP replumb: the API Lambdas attach to the VPC and dial the imap
+  # task over its Cloud Map name instead of the public IMAPS listener.
+  vpc_id             = module.vpc.vpc.id
+  private_subnet_ids = module.vpc.private_subnets[*].id
+  imap_internal_host = module.ecs.imap_internal_host
 }
 
 # Creates a DynamoDB table for storing address data

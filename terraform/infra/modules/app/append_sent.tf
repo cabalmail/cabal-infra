@@ -50,6 +50,8 @@ resource "aws_iam_role" "append_sent" {
 }
 
 resource "aws_iam_role_policy" "append_sent" {
+  #checkov:skip=CKV_AWS_290:the only unconstrained write actions are the EC2 ENI trio for VPC-attached Lambda networking - Lambda-managed interface ARNs only exist at runtime (mirrors AWSLambdaVPCAccessExecutionRole)
+  #checkov:skip=CKV_AWS_355:same statement - ec2:Describe* has no resource-level scoping and the ENI create/delete targets are runtime values
   name = "append_sent_policy"
   role = aws_iam_role.append_sent.id
 
@@ -88,6 +90,22 @@ resource "aws_iam_role_policy" "append_sent" {
           "logs:PutLogEvents",
         ]
         Resource = "${aws_cloudwatch_log_group.append_sent.arn}:*"
+      },
+      {
+        # iam-wildcard-ok: EC2 ENI actions for VPC-attached Lambda networking
+        # (private-IMAP replumb). Lambda-created interface ARNs only exist at
+        # runtime and Describe* has no resource-level scoping; mirrors the
+        # AWSLambdaVPCAccessExecutionRole managed policy.
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses",
+        ]
+        # iam-wildcard-ok: Lambda-managed ENI ARNs only exist at runtime; Describe* has no resource-level scoping
+        Resource = "*"
       }
     ]
   })
@@ -123,13 +141,20 @@ resource "aws_lambda_function" "append_sent" {
     log_group  = aws_cloudwatch_log_group.append_sent.name
   }
 
+  # Private-IMAP replumb: same VPC posture as the call-module endpoints.
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
   # helper.py derives IMAP_HOST as imap.<CONTROL_DOMAIN>; without this the
   # consumer dials the garbage name "imap." and every append fails. The
   # endpoint lambdas get this from the call module's shared environment block;
   # this function is defined outside that factory, so it must carry its own.
   environment {
     variables = {
-      CONTROL_DOMAIN = var.control_domain
+      CONTROL_DOMAIN     = var.control_domain
+      IMAP_INTERNAL_HOST = var.imap_internal_host
     }
   }
 

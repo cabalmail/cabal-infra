@@ -208,10 +208,18 @@ extension MessageListView {
     /// the virtualized and filtered paths.
     @ViewBuilder
     private func messageRow(_ envelope: Envelope, model: MessageListViewModel, visible: [Envelope]) -> some View {
-        if scenePhase == .background {
-            placeholderRow()
-        } else {
-            activeMessageRow(envelope, model: model, visible: visible)
+        // The disposal transition is a wrapper VIEW, not modifiers applied
+        // here: reading `rowDisposalPhases` in this body would register the
+        // dependency on `MessageListView` itself, so each of a dispose's two
+        // phase flips would re-run the whole list body -- `filteredEnvelopes`
+        // (O(loaded rows)) and every visible row with it. Inside the wrapper
+        // the invalidation stops at the already-built rows.
+        DisposingRow(model: model, uid: envelope.uid, rowHeight: rowHeight) {
+            if scenePhase == .background {
+                placeholderRow()
+            } else {
+                activeMessageRow(envelope, model: model, visible: visible)
+            }
         }
     }
 

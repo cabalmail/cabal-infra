@@ -17,6 +17,46 @@
 * the real code ships out-of-band).
 */
 
+locals {
+  # SSM parameter carrying the enrollment client's id. A literal shared
+  # by the parameter and the trigger's environment: the trigger cannot
+  # reference the client resource directly (pool -> trigger -> client ->
+  # pool would be a Terraform cycle), so it resolves the id at runtime.
+  mfa_enroll_client_param = "/cabal/mfa_enroll_client_id"
+}
+
+# Self-service escape hatch for the gates above: a dedicated app client
+# for the web app's locked-out TOTP setup flow. The trigger passes
+# sign-ins through this client only for users with NO MFA factor; the
+# short-lived tokens exist to carry AssociateSoftwareToken /
+# VerifySoftwareToken / SetUserMFAPreference. Enrolled users still get
+# Cognito's own TOTP challenge on this client (per-user preference, not
+# per-client), so it cannot sidestep an existing second factor.
+resource "aws_cognito_user_pool_client" "mfa_enroll" {
+  name                = "cabal_mfa_enroll_client"
+  user_pool_id        = aws_cognito_user_pool.users.id
+  explicit_auth_flows = ["USER_PASSWORD_AUTH"]
+
+  access_token_validity  = 5
+  id_token_validity      = 5
+  refresh_token_validity = 60 # Cognito's floor
+  token_validity_units {
+    access_token  = "minutes"
+    id_token      = "minutes"
+    refresh_token = "minutes"
+  }
+
+  enable_token_revocation = true
+}
+
+resource "aws_ssm_parameter" "mfa_enroll_client_id" {
+  #checkov:skip=CKV2_AWS_34: an app client id is public configuration (it ships in config.js), not a secret; plaintext String is deliberate
+  name        = local.mfa_enroll_client_param
+  description = "App client id the require_admin_mfa trigger passes for self-service TOTP enrollment"
+  type        = "String"
+  value       = aws_cognito_user_pool_client.mfa_enroll.id
+}
+
 data "archive_file" "require_admin_mfa_placeholder" {
   type        = "zip"
   output_path = "${path.module}/.terraform/require_admin_mfa_placeholder.zip"
@@ -79,6 +119,13 @@ resource "aws_iam_role_policy" "require_admin_mfa" {
         Effect   = "Allow"
         Action   = "cognito-idp:AdminGetUser"
         Resource = aws_cognito_user_pool.users.arn
+      },
+      {
+        # Runtime lookup of the enrollment client id (cycle note on the
+        # locals block above).
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
+        Resource = "arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${local.mfa_enroll_client_param}"
       },
       {
         # Bare group ARN, no ":*" suffix: the log-group resource grammar
@@ -152,6 +199,10 @@ resource "aws_lambda_function" "require_admin_mfa" {
       # A new signup gets this long to sign in and enroll via the
       # Security page before the user gate applies to them.
       GRACE_HOURS = "48"
+      # Where to find the enrollment client's id at runtime (cycle note
+      # on the locals block above). Unset or unreadable disables the
+      # escape hatch; blocked sign-ins then behave as before.
+      MFA_ENROLL_CLIENT_PARAM = local.mfa_enroll_client_param
     }
   }
 

@@ -329,6 +329,15 @@ public actor CognitoAuthService: AuthService {
             if code == "NotAuthorizedException" {
                 throw CabalmailError.invalidCredentials
             }
+            if code == "UserLambdaValidationException" {
+                // A pool trigger (require_admin_mfa, check_invite, ...)
+                // rejected the call; the trigger's own message is the
+                // user-facing part, not Cognito's wrapper around it.
+                throw CabalmailError.server(
+                    code: code,
+                    message: Self.stripLambdaTriggerWrapper(from: message)
+                )
+            }
             throw CabalmailError.server(code: code, message: message)
         }
         return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
@@ -464,5 +473,28 @@ extension CognitoAuthService {
         let refreshed = try await refresh(using: tokens)
         try persist(tokens: refreshed)
         return refreshed.accessToken
+    }
+}
+
+extension CognitoAuthService {
+    /// Cognito reports a Lambda-trigger rejection as
+    /// "<TriggerName> failed with error <trigger message>." — the wrapper
+    /// leaks the trigger's name and, when the trigger message has its own
+    /// terminal period, produces a doubled one. Return just the trigger's
+    /// message. Internal (not private) for direct unit coverage.
+    static func stripLambdaTriggerWrapper(from message: String) -> String {
+        var text = message
+        if let range = text.range(of: " failed with error ") {
+            // Only strip when the lead-in is a bare trigger name; a space
+            // means the phrase occurs mid-sentence in a real message.
+            let lead = text[..<range.lowerBound]
+            if !lead.isEmpty && !lead.contains(" ") {
+                text = String(text[range.upperBound...])
+            }
+        }
+        while text.hasSuffix("..") {
+            text.removeLast()
+        }
+        return text
     }
 }

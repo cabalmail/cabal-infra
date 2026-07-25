@@ -56,6 +56,13 @@ module "cabal_method" {
   # cardinality (large-mailbox hardening plan, Layer 4.3).
   alarm_on_latency  = contains(["list_messages", "list_envelopes"], each.key)
   imap_pool_enabled = var.imap_pool_enabled
+
+  # Private-IMAP replumb: every endpoint runs inside the VPC (uniform posture;
+  # the DynamoDB-only functions ride along) and IMAP consumers dial the imap
+  # task via Cloud Map instead of the public IMAPS listener.
+  subnet_ids         = var.private_subnet_ids
+  security_group_ids = [aws_security_group.lambda.id]
+  imap_internal_host = var.imap_internal_host
   # fetch_bimi bundles a static resvg binary that ships only for linux-x86_64,
   # so it runs x86_64 while the rest of the API fleet stays arm64.
   architecture = each.key == "fetch_bimi" ? "x86_64" : "arm64"

@@ -64,3 +64,10 @@ output "tier_log_group_names" {
   value       = { for k, v in aws_cloudwatch_log_group.tier : k => v.name }
   description = "Map of mail-tier CloudWatch log group names keyed by tier (imap | smtp-in | smtp-out). Phase 4 section 2 metric filters target these."
 }
+
+output "imap_internal_host" {
+  # Composed from the service_discovery.tf locals rather than the resource
+  # attributes - see the comment there (checkov graph workaround).
+  value       = "${local.sd_imap_service_name}.${local.sd_namespace_name}"
+  description = "Cloud Map DNS name that resolves to the imap task's private IP directly (no NLB). VPC-attached Lambdas dial this on 143 + STARTTLS instead of the public IMAPS listener."
+}

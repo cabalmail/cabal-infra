@@ -12,6 +12,11 @@ variable "user_pool_client_id" {
   description = "Client ID for authenticating with the Cognito user pool."
 }
 
+variable "mfa_enroll_client_id" {
+  type        = string
+  description = "Client ID for the locked-out MFA setup flow."
+}
+
 variable "region" {
   type        = string
   description = "The AWS region."
@@ -139,4 +144,19 @@ variable "access_logs_bucket" {
 variable "push_queue_arn" {
   type        = string
   description = "ARN of the push wake-signal SQS queue (modules/ecs). Event source for the push_dispatch Lambda."
+}
+
+variable "vpc_id" {
+  type        = string
+  description = "ID of the VPC the API Lambdas attach to (private-IMAP replumb). Owns the Lambda security group."
+}
+
+variable "private_subnet_ids" {
+  type        = list(string)
+  description = "Private subnet IDs the API Lambdas attach to. Egress to AWS APIs and the internet rides the NAT path plus the S3/DynamoDB gateway endpoints."
+}
+
+variable "imap_internal_host" {
+  type        = string
+  description = "Cloud Map DNS name of the imap task (modules/ecs service discovery). IMAP-consuming Lambdas dial this on 143 + STARTTLS instead of the public IMAPS listener."
 }

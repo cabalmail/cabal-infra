@@ -120,6 +120,49 @@ final class AuthServiceTests: XCTestCase {
         }
     }
 
+    func testLambdaTriggerRejectionStripsWrapperAndDoubledPeriod() async throws {
+        let errorType = "com.amazonaws.cognito.identity.model#UserLambdaValidationException"
+        let wrapped = "PreTokenGeneration failed with error This account requires "
+            + "multi-factor authentication. Enroll an authenticator app under Security.."
+        let body = "{\"__type\":\"\(errorType)\",\"message\":\"\(wrapped)\"}"
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 400)])
+        let service = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: http,
+            secureStore: InMemorySecureStore()
+        )
+        do {
+            _ = try await service.signIn(username: "alice", password: "hunter2")
+            XCTFail("Expected a server error")
+        } catch let error as CabalmailError {
+            XCTAssertEqual(error, .server(
+                code: "UserLambdaValidationException",
+                message: "This account requires multi-factor authentication. "
+                    + "Enroll an authenticator app under Security."
+            ))
+        }
+    }
+
+    func testStripLambdaTriggerWrapperLeavesOrdinaryMessagesAlone() {
+        // No wrapper at all.
+        XCTAssertEqual(
+            CognitoAuthService.stripLambdaTriggerWrapper(from: "Invitation code required"),
+            "Invitation code required"
+        )
+        // A mid-sentence occurrence (the lead-in contains spaces) is a
+        // real message, not Cognito's wrapper.
+        XCTAssertEqual(
+            CognitoAuthService.stripLambdaTriggerWrapper(from: "The last attempt failed with error 42"),
+            "The last attempt failed with error 42"
+        )
+        // A trigger message with a single terminal period keeps it.
+        let singlePeriod = "PreSignUp_SignUp failed with error Signups are closed."
+        XCTAssertEqual(
+            CognitoAuthService.stripLambdaTriggerWrapper(from: singlePeriod),
+            "Signups are closed."
+        )
+    }
+
     func testSignOutClearsStore() async throws {
         let authResult = """
         {"AuthenticationResult":{"IdToken":"I","AccessToken":"A","RefreshToken":"R","ExpiresIn":3600}}

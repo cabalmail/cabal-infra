@@ -1,0 +1,20 @@
+/* Locked-out TOTP setup. The QR sits on a white card regardless of
+   theme so camera apps can read it. */
+.mfa-setup__qr {
+  display: inline-block;
+  padding: 8px;
+  background: #fff;
+  border-radius: 8px;
+  line-height: 0;
+  margin: 0 0 12px;
+}
+
+.mfa-setup__manual {
+  font-size: 0.85rem;
+  margin: 0 0 16px;
+  overflow-wrap: anywhere;
+}
+
+.mfa-setup__secret {
+  user-select: all;
+}

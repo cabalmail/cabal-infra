@@ -390,7 +390,13 @@ extension MessageListViewModel {
         let disappeared: [UInt32]
         if !fetched.isEmpty, windowFitsTopPage || fetchSpansFolder {
             let fetchedUIDs = Set(fetched.map(\.uid))
-            disappeared = envelopes.map(\.uid).filter { !fetchedUIDs.contains($0) }
+            // A row we're removing ourselves is exempt: a refresh landing in
+            // the moment between a dispose's move committing and the row
+            // finishing its fade-then-collapse would otherwise see it absent
+            // from the fetch and yank it out instantly -- the very jump the
+            // animation exists to avoid. `dispose(_:)` removes it either way.
+            disappeared = envelopes.map(\.uid)
+                .filter { !fetchedUIDs.contains($0) && !pendingRemovedUIDs.contains($0) }
         } else {
             disappeared = []
         }

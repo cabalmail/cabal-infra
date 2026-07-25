@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.12] - 2026-07-25
+
+### Added
+- **Self-service MFA enrollment for locked-out accounts.** When the
+  `require_admin_mfa` gate is enforcing and rejects a password sign-in
+  because the account holds no MFA factor, the web app now offers a
+  "Set up authenticator app" flow instead of a dead end: it
+  re-authenticates through a dedicated enrollment app client that the
+  gate passes for factorless users only, shows the TOTP QR code, and
+  confirms the first code, after which the normal sign-in proceeds
+  with a TOTP challenge. The gate's rejection message now points at
+  the web app rather than a Security page the blocked user cannot
+  reach.
+
+### Changed
+- **API Lambdas reach IMAP privately.** The IMAP-consuming Lambdas (every
+  API endpoint plus append_sent and process_dmarc) now run inside the VPC
+  and dial the imap container directly over its Cloud Map name - STARTTLS
+  on 143, verifying the tier certificate end-to-end - instead of the
+  public IMAPS listener. New S3 and DynamoDB gateway endpoints keep the
+  message cache and address-table traffic off the NAT path. First step
+  toward closing public IMAP access entirely.
+- Apple: **Swipe-to-dispose now fades and collapses the row.** Archiving or
+  trashing a message from a swipe used to remove its row instantly, which the
+  eye can read as nothing having happened — and invites a second swipe on
+  whatever slid up into the vacated spot. The row now fades out over 150ms at
+  full height, then collapses to zero height over another 150ms, and only then
+  leaves the list. A failed move puts the row straight back.
+
+### Fixed
+- **Stale "Admin accounts" copy on the MFA sign-in block.** The
+  `require_admin_mfa` gate has covered all human users since the
+  all-users extension, but the React sign-in banner still claimed
+  "Admin accounts require multi-factor authentication". The fallback
+  banner (shown when no enrollment client is configured) now matches
+  the gate's actual scope.
+- Apple: **Readable message when the MFA gate blocks sign-in.** A
+  sign-in rejected by the server's MFA-enrollment gate surfaced the raw
+  Cognito wrapper ("Server error: PreTokenGeneration failed with error
+  …", doubled period included). CabalmailKit now strips Cognito's
+  Lambda-trigger wrapper from such rejections and the sign-in screen
+  shows the trigger's own message verbatim, without the "Server
+  error:" prefix.
+
 ## [0.11.11] - 2026-07-24
 
 ### Added
