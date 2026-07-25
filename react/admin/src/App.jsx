@@ -24,6 +24,7 @@ import SignUp from './SignUp';
 import Login from './Login';
 import Verify from './Verify';
 import MfaChallenge from './MfaChallenge';
+import MfaSetup from './MfaSetup';
 import VerifyEmail from './VerifyEmail';
 import EnrollMfa from './EnrollMfa';
 import ForgotPassword from './ForgotPassword';
@@ -75,6 +76,7 @@ function loadSavedState() {
     verificationCode: null,
     view: "Login",
     poolData: null,
+    enroll_client_id: null,
     control_domain: null,
     imap_host: null,
     domains: {},
@@ -162,6 +164,13 @@ function App() {
   // challenge Cognito issued ('totp' | 'sms').
   const pendingMfaUserRef = useRef(null);
   const [mfaChallengeType, setMfaChallengeType] = useState('totp');
+  // Locked-out TOTP setup (#768): the CognitoUser authenticated through
+  // the enrollment app client (a stateful SDK object, so a ref) and the
+  // pending TOTP secret. The secret deliberately lives outside the
+  // persisted state bag so it never reaches localStorage.
+  const mfaSetupUserRef = useRef(null);
+  const [mfaSetupSecret, setMfaSetupSecret] = useState(null);
+  const [mfaSetupBusy, setMfaSetupBusy] = useState(false);
   // Post-login email gate: null when passed/skipped, else
   // { mode: 'add' | 'verify', address }. Not persisted - it is
   // re-derived from user attributes at each login.
@@ -283,6 +292,9 @@ function App() {
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
       setState({
         poolData: cognitoConfig.poolData,
+        // Absent from a pre-#768 /config.js; the locked-out MFA setup
+        // flow feature-detects on it and falls back to a plain banner.
+        enroll_client_id: cognitoConfig.enrollClientId || null,
         control_domain,
         imap_host: control_domain.match(/^dev\./)
           ? control_domain.replace("dev.", "imap.")
@@ -618,14 +630,20 @@ function App() {
       onFailure: (err) => {
         _token = null;
         _expires = Math.floor(new Date() / 1000) - 1;
-        setState({ loggedIn: false, view: "Login" });
         // The require_admin_mfa pre-token-generation trigger (enforce
-        // mode) rejects un-enrolled admins; show its message rather than
-        // a generic failure so the reason is actionable.
+        // mode) rejects any un-enrolled account. Route to the
+        // self-service setup flow (#768) when the enrollment client is
+        // configured; otherwise surface an actionable banner.
         const mfaBlocked = err && /require.*multi-factor|admin accounts require/i.test(err.message || '');
+        if (mfaBlocked && state.enroll_client_id) {
+          setMfaSetupSecret(null);
+          setState({ loggedIn: false, view: "MfaSetup" });
+          return;
+        }
+        setState({ loggedIn: false, view: "Login" });
         setMessage(
           mfaBlocked
-            ? "Admin accounts require multi-factor authentication. Contact the operator to restore access."
+            ? "This account requires multi-factor authentication. Contact the operator to restore access."
             : "Login failed",
           true
         );
@@ -644,7 +662,7 @@ function App() {
         setState({ view: "MfaChallenge", verificationCode: null });
       }
     });
-  }, [state.userName, state.password, finishLogin, setState, setMessage]);
+  }, [state.userName, state.password, state.enroll_client_id, finishLogin, setState, setMessage]);
 
   const doSubmitMfaCode = useCallback((e) => {
     e.preventDefault();
@@ -667,6 +685,114 @@ function App() {
       mfaChallengeType === 'totp' ? 'SOFTWARE_TOKEN_MFA' : 'SMS_MFA'
     );
   }, [state.verificationCode, mfaChallengeType, finishLogin, setState, setMessage]);
+
+  // --- Locked-out TOTP setup handlers (#768) ---
+  //
+  // The gate rejects password logins for un-enrolled accounts, so the
+  // normal client can never yield a session to enroll with. These
+  // re-authenticate through the dedicated enrollment app client
+  // (enrollClientId from /config.js), which the gate passes for
+  // factorless users only, then run the same associate/verify/prefer
+  // sequence as the Security view against that short-lived session.
+
+  const beginMfaSetup = useCallback(() => {
+    if (!state.poolData || !state.enroll_client_id || !state.userName || !state.password) {
+      // The password never survives a reload (persistState strips it),
+      // so a revisit of this view has to restart from Login.
+      setState({ view: "Login" });
+      setMessage("Please enter your password again to continue.", true);
+      return;
+    }
+    const pool = new CognitoUserPool({
+      UserPoolId: state.poolData.UserPoolId,
+      ClientId: state.enroll_client_id,
+    });
+    const user = new CognitoUser({ Username: state.userName, Pool: pool });
+    const creds = new AuthenticationDetails({
+      Username: state.userName,
+      Password: state.password,
+    });
+    // Only an already-enrolled account draws a second-factor challenge
+    // here; normal sign-in is the right path for it.
+    const alreadyEnrolled = () => {
+      setMfaSetupBusy(false);
+      setState({ view: "Login" });
+      setMessage("This account already has an authenticator. Sign in normally.", true);
+    };
+    setMfaSetupBusy(true);
+    user.authenticateUser(creds, {
+      onSuccess: () => {
+        user.associateSoftwareToken({
+          associateSecretCode: (secret) => {
+            setMfaSetupBusy(false);
+            mfaSetupUserRef.current = user;
+            setMfaSetupSecret(secret);
+            setState({ verificationCode: null });
+          },
+          onFailure: () => {
+            setMfaSetupBusy(false);
+            setMessage("Could not start two-factor setup. Please try again.", true);
+          },
+        });
+      },
+      onFailure: () => {
+        setMfaSetupBusy(false);
+        setMessage("Could not start two-factor setup. Please try again.", true);
+      },
+      totpRequired: alreadyEnrolled,
+      mfaRequired: alreadyEnrolled,
+    });
+  }, [state.poolData, state.enroll_client_id, state.userName, state.password, setState, setMessage]);
+
+  const doConfirmMfaSetup = useCallback((e) => {
+    e.preventDefault();
+    const user = mfaSetupUserRef.current;
+    if (!user) {
+      // The enrollment session lives only in memory; a reload mid-setup
+      // loses it and the flow must restart.
+      setMfaSetupSecret(null);
+      setState({ view: "Login", verificationCode: null });
+      setMessage("Your setup session expired. Please log in again.", true);
+      return;
+    }
+    setMfaSetupBusy(true);
+    user.verifySoftwareToken(state.verificationCode, 'Cabalmail', {
+      onSuccess: () => {
+        user.setUserMfaPreference(
+          null,
+          { PreferredMfa: true, Enabled: true },
+          (err) => {
+            setMfaSetupBusy(false);
+            if (err) {
+              setMessage("Could not turn on two-factor authentication. Please try again.", true);
+              return;
+            }
+            // Drop the enrollment-client session; the normal sign-in
+            // (which now issues a TOTP challenge) is what counts.
+            mfaSetupUserRef.current = null;
+            user.signOut();
+            setMfaSetupSecret(null);
+            setState({ view: "Login", verificationCode: null });
+            setMessage("Two-factor authentication is on. Sign in again with a code from your app.", false);
+          }
+        );
+      },
+      onFailure: () => {
+        setMfaSetupBusy(false);
+        setMessage("That code did not match. Check your authenticator app and try again.", true);
+      },
+    });
+  }, [state.verificationCode, setState, setMessage]);
+
+  const cancelMfaSetup = useCallback((e) => {
+    e.preventDefault();
+    const user = mfaSetupUserRef.current;
+    if (user) user.signOut();
+    mfaSetupUserRef.current = null;
+    setMfaSetupSecret(null);
+    setMfaSetupBusy(false);
+    setState({ view: "Login", verificationCode: null });
+  }, [setState]);
 
   // --- VerifyEmail gate handlers (identity plan Phase 1) ---
 
@@ -904,6 +1030,19 @@ function App() {
             onSkip={skipEmailGate}
           />
         );
+      case "MfaSetup":
+        return (
+          <MfaSetup
+            userName={state.userName}
+            secret={mfaSetupSecret}
+            busy={mfaSetupBusy}
+            code={state.verificationCode}
+            onBegin={beginMfaSetup}
+            onCodeChange={doInputChange}
+            onSubmit={doConfirmMfaSetup}
+            onCancel={cancelMfaSetup}
+          />
+        );
       case "EnrollMfa":
         return (
           <EnrollMfa
@@ -1035,7 +1174,7 @@ function App() {
   // AuthShell gates (no Nav), so they live in this list alongside the
   // true pre-login views.
   const isPreLoginView = configUnavailable
-    || ["Login", "SignUp", "Verify", "MfaChallenge", "VerifyEmail",
+    || ["Login", "SignUp", "Verify", "MfaChallenge", "MfaSetup", "VerifyEmail",
       "EnrollMfa", "ForgotPassword", "ResetPassword"].includes(state.view);
 
   const shortcutCallbacks = useMemo(() => ({

@@ -12,6 +12,11 @@ variable "user_pool_client_id" {
   description = "Client ID for authenticating with the Cognito user pool."
 }
 
+variable "mfa_enroll_client_id" {
+  type        = string
+  description = "Client ID for the locked-out MFA setup flow."
+}
+
 variable "region" {
   type        = string
   description = "The AWS region."

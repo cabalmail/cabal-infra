@@ -13,6 +13,7 @@ resource "aws_s3_object" "website_config" {
   content = templatefile("${path.module}/templates/config.js.tftpl", {
     pool_id             = var.user_pool_id,
     pool_client_id      = var.user_pool_client_id,
+    enroll_client_id    = var.mfa_enroll_client_id,
     region              = var.region,
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
@@ -24,6 +25,7 @@ resource "aws_s3_object" "website_config" {
   etag = md5(templatefile("${path.module}/templates/config.js.tftpl", {
     pool_id             = var.user_pool_id,
     pool_client_id      = var.user_pool_client_id,
+    enroll_client_id    = var.mfa_enroll_client_id,
     region              = var.region,
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
@@ -48,6 +50,7 @@ resource "aws_s3_object" "website_config_json" {
   content = templatefile("${path.module}/templates/config.js.tftpl", {
     pool_id             = var.user_pool_id,
     pool_client_id      = var.user_pool_client_id,
+    enroll_client_id    = var.mfa_enroll_client_id,
     region              = var.region,
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
@@ -59,6 +62,7 @@ resource "aws_s3_object" "website_config_json" {
   etag = md5(templatefile("${path.module}/templates/config.js.tftpl", {
     pool_id             = var.user_pool_id,
     pool_client_id      = var.user_pool_client_id,
+    enroll_client_id    = var.mfa_enroll_client_id,
     region              = var.region,
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
