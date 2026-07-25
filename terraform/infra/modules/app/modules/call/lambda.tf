@@ -44,10 +44,15 @@ ROLEPOLICY
 resource "aws_iam_role_policy" "lambda" {
   name = "${var.name}_policy"
   role = aws_iam_role.lambda.id
-  # iam-wildcard-ok: heredoc JSON cannot carry inline comments, so this
-  # directive covers both wildcards in the document below - S3 object keys
-  # under the per-user cache prefix and log-stream names are runtime values
-  # with no enumerable ARN. Every other statement names specific resources.
+  # Heredoc JSON cannot carry inline comments, so one directive covers every
+  # wildcard in the document below: S3 object keys under the per-user cache
+  # prefix and log-stream names are runtime values with no enumerable ARN,
+  # and the EC2 ENI actions (VPC-attached Lambda networking) manage
+  # Lambda-created interfaces whose ARNs likewise only exist at runtime,
+  # with no resource-level scoping on Describe* at all (the statement
+  # mirrors the AWSLambdaVPCAccessExecutionRole managed policy). Every
+  # other statement names specific resources.
+  # iam-wildcard-ok: runtime-only ARNs (cache object keys, log streams, Lambda-managed ENIs) - see above
   policy = <<RUNPOLICY
 {
     "Version": "2012-10-17",
@@ -159,6 +164,17 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": [
+                "ec2:CreateNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DeleteNetworkInterface",
+                "ec2:AssignPrivateIpAddresses",
+                "ec2:UnassignPrivateIpAddresses"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
                 "cognito-idp:ListUsers",
                 "cognito-idp:AdminGetUser",
                 "cognito-idp:AdminConfirmSignUp",
@@ -198,6 +214,15 @@ resource "aws_lambda_function" "api_call" {
   # on invisibly past it (and a real timeout becomes an alarmable signal).
   timeout     = 29
   memory_size = var.memory
+
+  # Private-IMAP replumb: run inside the VPC so IMAP consumers can reach the
+  # imap task over its Cloud Map name. AWS-API and internet egress rides the
+  # NAT path plus the S3/DynamoDB gateway endpoints (modules/vpc/endpoints.tf).
+  vpc_config {
+    subnet_ids         = var.subnet_ids
+    security_group_ids = var.security_group_ids
+  }
+
   logging_config {
     log_format = "Text"
     log_group  = aws_cloudwatch_log_group.lambda_log.name
@@ -213,6 +238,7 @@ resource "aws_lambda_function" "api_call" {
       USER_PREFERENCES_TABLE_NAME = "cabal-user-preferences"
       PUSH_TOKENS_TABLE_NAME      = "cabal-push-tokens"
       IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
+      IMAP_INTERNAL_HOST          = var.imap_internal_host
     }
   }
   depends_on = [

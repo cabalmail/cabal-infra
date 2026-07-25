@@ -79,3 +79,17 @@ variable "architecture" {
     error_message = "architecture must be arm64 or x86_64."
   }
 }
+variable "subnet_ids" {
+  type        = list(string)
+  description = "Private subnet IDs for the function's vpc_config (private-IMAP replumb)."
+}
+
+variable "security_group_ids" {
+  type        = list(string)
+  description = "Security group IDs for the function's vpc_config (the app module's shared Lambda group)."
+}
+
+variable "imap_internal_host" {
+  type        = string
+  description = "Cloud Map DNS name of the imap task. When set, imap_session dials it on 143 + STARTTLS instead of the public IMAPS listener."
+}

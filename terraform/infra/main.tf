@@ -224,6 +224,12 @@ module "admin" {
   monitoring          = var.monitoring
   imap_pool_enabled   = var.imap_pool_enabled
   access_logs_bucket  = module.s3_access_logs.bucket
+
+  # Private-IMAP replumb: the API Lambdas attach to the VPC and dial the imap
+  # task over its Cloud Map name instead of the public IMAPS listener.
+  vpc_id             = module.vpc.vpc.id
+  private_subnet_ids = module.vpc.private_subnets[*].id
+  imap_internal_host = module.ecs.imap_internal_host
 }
 
 # Creates a DynamoDB table for storing address data
