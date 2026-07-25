@@ -72,10 +72,60 @@ extension MessageListViewModel {
         }
     }
 
-    /// Reinsert an envelope previously removed by an optimistic dispose.
-    /// Tries to restore the original index; falls back to UID-sorted
-    /// insertion if the list has shifted (e.g. a refresh fired during the
-    /// in-flight move).
+    /// Leg of the two-stage row-disposal animation a row is currently in.
+    /// `nil` (absent from `rowDisposalPhases`) is the normal, settled state.
+    enum RowDisposalPhase: Equatable {
+        /// Full height, fading to transparent. Nothing moves yet.
+        case fading
+        /// Transparent, collapsing from `rowHeight` to zero. This is the leg
+        /// that closes the gap and shifts the rows below up.
+        case collapsing
+    }
+
+    /// Duration of each leg of the row-disposal animation, in seconds. Fast
+    /// enough not to slow triage down, long enough for the eye to register
+    /// that something left the list.
+    static let rowFadeDuration: TimeInterval = 0.15
+    static let rowCollapseDuration: TimeInterval = 0.15
+
+    /// Starts the two-stage disposal animation for a row and hands back the
+    /// task driving it, so the caller can keep the envelope in `envelopes`
+    /// until both legs have played out — or cancel it if the write fails and
+    /// the row has to come back.
+    ///
+    /// Fade first, collapse second, deliberately sequential: the row goes
+    /// transparent at full height (nothing moves, so the eye catches the
+    /// change), and only then does the gap close. Removing the envelope
+    /// outright reads as though nothing happened — under the index-addressed
+    /// list it isn't even a row removal, just every slot below re-pointing at
+    /// the next envelope, with no transition of any kind — which invites a
+    /// second swipe on whatever slid into the vacated position.
+    func beginRowDisposal(uid: UInt32) -> Task<Void, Never> {
+        rowDisposalPhases[uid] = .fading
+        return Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.rowFadeDuration))
+            // A cancellation here means the write failed and the caller is
+            // restoring the row, so the collapse must not fire. `endRowDisposal`
+            // owns clearing the phase.
+            guard !Task.isCancelled, let self else { return }
+            rowDisposalPhases[uid] = .collapsing
+            try? await Task.sleep(for: .seconds(Self.rowCollapseDuration))
+        }
+    }
+
+    /// Clears a row's disposal phase. Called once the envelope has actually
+    /// left `envelopes` (housekeeping — the row is gone) and on the failure
+    /// path, where it's the whole revert: the envelope never left, so dropping
+    /// the phase snaps the row back to full height and opacity.
+    func endRowDisposal(uid: UInt32) {
+        rowDisposalPhases[uid] = nil
+    }
+
+    /// Reinsert an envelope previously removed by an optimistic move (the
+    /// dispose path never removes it until the move has landed, so it has
+    /// nothing to reinsert). Tries to restore the original index; falls back
+    /// to UID-sorted insertion if the list has shifted (e.g. a refresh fired
+    /// during the in-flight move).
     func restoreEnvelope(_ envelope: Envelope, at originalIndex: Int?) {
         guard !envelopes.contains(where: { $0.uid == envelope.uid }) else { return }
         if let originalIndex, originalIndex <= envelopes.count {
