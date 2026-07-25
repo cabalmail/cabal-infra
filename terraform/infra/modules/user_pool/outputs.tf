@@ -13,6 +13,11 @@ output "user_pool_client_id" {
   description = "ID for the client application of the Cognito user pool"
 }
 
+output "mfa_enroll_client_id" {
+  value       = aws_cognito_user_pool_client.mfa_enroll.id
+  description = "ID of the app client used by the locked-out MFA setup flow"
+}
+
 output "admin_group_name" {
   value       = aws_cognito_user_group.admin.name
   description = "Name of the Cognito admin group"

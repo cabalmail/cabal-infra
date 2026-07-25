@@ -12,10 +12,19 @@ factor before tokens are issued. Two independently-flagged gates:
   enroll before the gate hardens behind them.
 
 Each gate is audit-by-default (anything but "true" logs would_block and
-issues tokens); flip only after the affected population has enrolled,
-because enrollment requires a signed-in session - an enforced,
-un-enrolled user cannot sign in to enroll and needs operator rescue
-(flip the flag off, or aws cognito-idp admin-set-user-mfa-preference).
+issues tokens); enrollment requires a signed-in session, so an
+enforced, un-enrolled user cannot sign in through the normal app
+client. The self-service escape hatch is a dedicated enrollment app
+client (user_pool module, `mfa_enroll`): sign-ins through it are
+passed for users with NO factor - short-lived tokens whose only
+intended use is AssociateSoftwareToken / VerifySoftwareToken /
+SetUserMFAPreference from the web app's locked-out setup flow. Users
+who already hold a factor never reach the pass (they return early
+above it), and Cognito itself still demands their TOTP during the auth
+flow, so the enrollment client cannot be used to sidestep an enrolled
+second factor. The client's id is read from SSM (MFA_ENROLL_CLIENT_PARAM)
+rather than the environment because the pool -> trigger -> client ->
+pool reference chain would otherwise be a Terraform cycle.
 
 EXEMPT_USERS names the service and machine accounts that authenticate
 with a password and can never enroll (see require_admin_mfa.tf for the
@@ -41,8 +50,33 @@ exempt_users = {
     if name.strip()
 }
 grace_hours = int(os.environ.get('GRACE_HOURS', '48'))
+enroll_client_param = os.environ.get('MFA_ENROLL_CLIENT_PARAM', '')
 
 cognito = boto3.client('cognito-idp')
+ssm = boto3.client('ssm')
+
+# Lazily resolved id of the enrollment app client. Only successful
+# lookups are cached (for the container lifetime); a transient SSM
+# failure is retried on the next invocation instead of pinning the
+# escape hatch shut.
+_enroll_client = {'id': None}
+
+
+def _enroll_client_id():
+    '''Id of the enrollment app client, or '' when unconfigured or the
+    SSM read fails (the sign-in then blocks exactly as before).'''
+    if _enroll_client['id'] is not None:
+        return _enroll_client['id']
+    if not enroll_client_param:
+        return ''
+    try:
+        value = ssm.get_parameter(
+            Name=enroll_client_param
+        )['Parameter']['Value']
+    except Exception:  # pylint: disable=broad-exception-caught
+        return ''
+    _enroll_client['id'] = value
+    return value
 
 
 class AdminMfaRequired(Exception):
@@ -100,11 +134,21 @@ def handler(event, _context):
         return event
     enforced = enforce_admin if gate == 'admin' else enforce_user
     if enforced:
+        # Self-service escape hatch: a factorless sign-in through the
+        # dedicated enrollment client passes, so the web app's
+        # locked-out setup flow can associate and verify a TOTP.
+        # Enrolled users returned above and never reach this pass.
+        client_id = (event.get('callerContext') or {}).get('clientId', '')
+        if client_id and client_id == _enroll_client_id():
+            _log('enroll_pass', event, gate)
+            return event
         _log('blocked', event, gate)
+        # No trailing period: Cognito appends its own when it wraps
+        # this in "PreTokenGeneration failed with error ...".
         raise AdminMfaRequired(
             'This account requires multi-factor authentication. '
-            'Ask the operator to re-enable access, then enroll an '
-            'authenticator app under Security.'
+            'Sign in on the web app to set up an authenticator, '
+            'then try again'
         )
     _log('would_block', event, gate)
     return event
