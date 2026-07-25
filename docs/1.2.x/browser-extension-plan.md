@@ -4,10 +4,11 @@
 
 Cabalmail's signature user behavior is per-vendor (or per-purpose) email addresses: spin one up before signing up for a new service, burn it when it goes bad. Today that flow lives in the React admin app (`react/admin/src/Addresses/Request.jsx`) and the native clients (`apple/`, the planned `android/`). The user must context-switch to a Cabalmail surface, generate or hand-craft an address, copy it, switch back to the signup tab, and paste.
 
-This version introduces a browser extension that collapses that flow into the sign-up form itself, in the same way 1Password's "Suggest strong password" UI collapses password generation into the sign-up form. The extension has two responsibilities:
+This version introduces a browser extension that collapses that flow into the sign-up form itself, in the same way 1Password's "Suggest strong password" UI collapses password generation into the sign-up form. The extension has three responsibilities:
 
 1. **Suggest.** When the user lands on a sign-up form, detect the email field and offer a one-click insert of a freshly generated Cabalmail address on an apex domain the user is entitled to use. The address is created eagerly when the user commits to it (clicks "Use this address" in the popover) so that DNS and the sendmail tier have runway to converge before any verification mail arrives; addresses the user abandons without submitting are revoked by a TTL reaper, with the procmail-based clear-on-receive hook as the high-confidence "address really is in use" signal in between.
 2. **Adopt.** If the user manually types an address that parses as `<local>@<subdomain>.<apex>` where `<apex>` is one of the user's authorized apex domains and the full address is not already in their list, offer to create the address before they submit the form. The address is created at the moment the user accepts the offer (same eager-create model as Suggest). The only path that blocks submission is the typed-and-ignored case where the user dismisses the offer banner *and* hits submit -- there we hold the submit and surface a modal warning, since otherwise the destination service would receive a not-yet-deliverable address.
+3. **Open privately.** Act as the private-window bridge for links coming from the Cabalmail clients. The reader's link menu (shipped in the 0.11.x/1.x Apple clients) can copy a link or hand it to the share sheet, but no OS API lets a mail app open a Safari private window directly -- the WebExtensions API inside the browser is the only sanctioned route. The extension intercepts a redirector URL the mail app opens and re-opens the target in a private window. Desktop only; see [Opening links in private windows](#opening-links-in-private-windows) for the findings and Phase 7 for the design.
 
 Out of scope for 1.2.x:
 - Saving site-to-address mappings, breach alerts, "show me what I gave this site," vault sync. Those are future work; the MVP is *generate and insert*, not a relationship store.
@@ -17,7 +18,7 @@ Out of scope for 1.2.x:
 
 ## Approach
 
-Seven phases: shared core; CI/CD (early, so every subsequent phase runs through it); auth and API; form detection; suggest flow; adopt flow; platform targets and distribution.
+Eight phases: shared core; CI/CD (early, so every subsequent phase runs through it); auth and API; form detection; suggest flow; adopt flow; private-link handoff; platform targets and distribution.
 
 ### Guiding principles
 
@@ -58,6 +59,17 @@ References worth reading before implementing the detector:
 **Our detector.** A scoring engine, not a tree of `if`s. Each form on the page gets a numeric score from each signal above, weighted by reliability (the table is a starting point for weights, not the final numbers -- we tune empirically). Total score above an upper threshold -> sign-up (offer suggest); below a lower threshold -> sign-in (do nothing); between the thresholds -> ambiguous (show a passive badge on the field that the user can click to open the popup, but no automatic action). The thresholds and per-signal weights live in a config file, are unit-tested against a corpus of captured form HTML from real sign-up and sign-in pages (Phase 4), and are tunable without a release.
 
 The corpus itself is the durable asset. Phase 4 builds a snapshot tool (a separate extension build that dumps form HTML on demand) and seeds it with 50+ sign-up and 50+ sign-in pages from a representative set: top SaaS apps, e-commerce, news sites, gov forms, banking, region-localized sites. Subsequent tuning, both in 1.2.x and beyond, regresses against this corpus.
+
+### Opening links in private windows
+
+Findings from the reader link-menu work in the Apple clients (July 2026), recorded here because they set the boundaries for Phase 7:
+
+- **No OS-level API opens a Safari private window.** Verified against Safari 26.5.2's scripting dictionary (`sdef /Applications/Safari.app`): the only occurrence of "private" in the entire dictionary is an internal sync access-group identifier. The AppleScript recipes in circulation are System Events GUI scripting -- clicking File -> New Private Window by menu title, or synthesizing Cmd-Shift-N -- which requires an Accessibility grant, breaks under localization and remapped shortcuts, and is viable neither in the App Sandbox nor past App Review. Investigated and rejected for the mail clients.
+- **The share sheet is what the mail clients ship today.** The reader link menu's "Share..." row reaches private mode only through third-party browsers that register private-tab share actions (Vivaldi, Firefox Focus); Safari registers none.
+- **The WebExtensions API is the one sanctioned route.** `browser.windows.create({ incognito: true })` is supported by Safari since version 14 on macOS and by Chrome ([MDN: windows.create](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/windows/create), [mdn/browser-compat-data](https://github.com/mdn/browser-compat-data/blob/main/webextensions/api/windows.json)). It belongs to exactly the extension this plan builds.
+- **Safari on iOS cannot.** The compat data records `windows.create` as unsupported on iOS Safari (`version_added: false`) even though the `windows` namespace exists there since 15. The handoff is therefore desktop-only; iOS and iPadOS keep the share sheet as their private-mode mechanism.
+- **Private-mode access is a per-extension user opt-in.** Safari 17+ disables extensions in Private Browsing until the user toggles "Allow in Private Browsing" in Safari's extension settings ([Apple Developer Forums](https://developer.apple.com/forums/thread/650294)); Chrome's analog is "Allow in Incognito" on `chrome://extensions`. One-time setup, and it must be surfaced in onboarding and handled gracefully when absent.
+- **"Window," not "tab."** Desktop WebExtensions model privacy per window (`incognito` is a window property), so the deliverable is a private window; a "private tab" is not an addressable unit through the API.
 
 ### Stack decisions
 
@@ -612,7 +624,43 @@ When the user types `local@existing-subdomain.apex`, we should not blindly creat
 
 ---
 
-## Phase 7: Platform Targets & Distribution
+## Phase 7: Private-Link Handoff
+
+The adopted goal: links chosen in the Cabalmail clients can open in a private browser window, brokered by this extension. An extension cannot be invoked by another app directly -- it wakes on browser events -- so the handoff rides a navigation. Desktop only (see [Opening links in private windows](#opening-links-in-private-windows)); iOS keeps the share sheet.
+
+### 1. Redirector page
+
+A static page at `https://<control-domain>/private-link`, served from the same S3/CloudFront origin as the admin app and `config.js` (no new DNS, no new Lambda). The target URL travels in the URL fragment (`#<url-encoded target>`), which never leaves the client -- fragments are not sent to the server or CDN, so the target is never logged upstream.
+
+The page doubles as the graceful-degradation path: its own JavaScript reads the fragment and renders the target with "the Cabalmail extension isn't active in this browser" messaging, an explicit "Open normally" anchor, a copy button, and enable-the-extension instructions. A user who lands here without the extension still gets their link; nothing dead-ends.
+
+### 2. Extension interception
+
+The background script listens on `webNavigation.onCommitted` filtered to the redirector URL (the extension already holds host permission for the control domain for `config.js`):
+
+1. Parse the fragment and validate the target: `http`/`https` only, rejecting `javascript:`, `data:`, `file:`, `about:`, `blob:`, `vbscript:` -- the same blocklist the reader link menu applies on the app side.
+2. `browser.windows.create({ incognito: true, url: target })`.
+3. `tabs.remove()` the redirector tab.
+4. `browser.history.deleteUrl()` for the redirector entry, so the target (visible in the fragment) doesn't linger in normal-window history -- leaving it there would defeat the point of opening privately. Verify Safari's support for the `history` API at implementation time; if it's missing there, fall back to an opaque-token variant (the app writes a token -> URL row into a shared App Group container; the extension resolves it via `sendNativeMessage`) at the cost of a fallback page that can no longer offer the link itself.
+
+If `windows.create({ incognito: true })` throws because the user hasn't granted private-browsing access, open a setup page in a normal tab explaining the "Allow in Private Browsing" / "Allow in Incognito" toggle. Never fail silently.
+
+### 3. App side (Cabalmail clients)
+
+The macOS reader link menu regains an "Open in Private Window" row alongside "Share...". It does nothing but open `https://<control-domain>/private-link#<target>` in the target browser via `NSWorkspace` -- no state, no IPC. Discoverability of whether the extension is actually there to catch it depends on Open Question 9: if the Safari extension is embedded in the Cabalmail mail app itself, the app can query enablement (`SFSafariExtensionManager.getStateOfSafariExtension`) and show the row only when it will work; if the extension ships in the standalone host app, the mail app cannot see its state and the row is gated behind an explicit app preference instead (which is also the only option for Chrome, which offers no outside query at all). Either way the redirector's fallback page catches the misconfigured case.
+
+### Phase 7 verification
+
+1. Safari macOS: reader link menu -> "Open in Private Window" -> target loads in a new private window, the redirector tab is gone, and neither the redirector nor the target appears in normal-window history.
+2. Same flow in Chrome with "Allow in Incognito" granted.
+3. Extension enabled but private-browsing access not granted: the setup page appears; nothing opens privately; no silent failure.
+4. Extension absent or disabled: direct visit to the redirector shows the fallback page with a working "Open normally" link and copy button.
+5. Fragment targets with `javascript:`/`data:` schemes are rejected by the extension, and the fallback page refuses to render them as anchors.
+6. iOS/iPadOS: no "Open in Private Window" row in the reader menu; the share sheet path is unchanged.
+
+---
+
+## Phase 8: Platform Targets & Distribution
 
 ### 1. Chrome on macOS, Linux, and Windows
 
@@ -656,7 +704,7 @@ This is *not* a quiet drop of the user's stated platform target -- it's a flag t
 
 ### 5. Cross-platform parity testing
 
-Once both Chrome and Safari builds exist, run the Phase 4-6 verification matrices on:
+Once both Chrome and Safari builds exist, run the Phase 4-6 verification matrices (plus the Phase 7 handoff flow on the desktop rows) on:
 - macOS Sequoia: Safari 18+, Chrome stable
 - iOS 18: Safari
 - iPadOS 18: Safari
@@ -665,7 +713,7 @@ Once both Chrome and Safari builds exist, run the Phase 4-6 verification matrice
 
 Document any per-platform divergences (popover positioning bugs, scroll behavior on iOS, etc.) and fix in this phase.
 
-### Phase 7 verification
+### Phase 8 verification
 
 1. Install Chrome build from the Web Store trusted-tester track on macOS, complete the suggest and adopt flows end-to-end on three corpus sites.
 2. Install Safari macOS build from TestFlight, repeat the same flows.
@@ -678,7 +726,7 @@ Document any per-platform divergences (popover positioning bugs, scroll behavior
 
 ## Out of Scope for 1.2.0
 
-- **Chrome on Android stable.** Platform limitation; tracked as a follow-up. See Phase 7.
+- **Chrome on Android stable.** Platform limitation; tracked as a follow-up. See Phase 8.
 - **Saved site-to-address mappings.** Knowing which address you gave Stripe is the natural next feature, but introducing a new persistent store (whether server-side or browser-storage-only) is its own design exercise.
 - **Fill existing addresses on sign-in.** Requires the mapping store above; sign-in autofill is the obvious follow-up once it exists.
 - **Reset-password forms.** Distinct heuristics, low immediate value (user already has an address on file with that site). Re-evaluate after 1.2.x ships.
@@ -705,7 +753,7 @@ Document any per-platform divergences (popover positioning bugs, scroll behavior
 
 ## Open Questions
 
-1. **Chrome on Android: ship now in a degraded form, defer, or pivot to Firefox for Android?** Recommend defer + Firefox-as-bonus per Phase 7. Decision point before Phase 7 starts.
+1. **Chrome on Android: ship now in a degraded form, defer, or pivot to Firefox for Android?** Recommend defer + Firefox-as-bonus per Phase 8. Decision point before Phase 8 starts.
 2. **Embedded SRP vs Hosted UI as the production auth mode.** Hosted UI is the right answer for trust and UX; Embedded SRP is faster to ship. Decision: ship Hosted UI for production, keep Embedded SRP as a dev-only build flag. Reconsider only if Hosted UI provisioning hits unexpected friction.
 3. **Single Cognito App Client for all platforms vs one per platform.** The Apple, React, and (planned) Android clients use distinct App Clients today. One per browser target (one Chrome, one Safari) is the same pattern. Default: one per target.
 4. **`manifest.json` per platform vs single shared with build-time post-processing.** Vite plugin can synthesize per-platform manifests from a base. Default: shared base + per-platform overrides in `extensions/{chrome,safari}/manifest.json`, with the build script merging. The overlap is high enough (>90%) that a shared base is worth the cost.
@@ -713,6 +761,7 @@ Document any per-platform divergences (popover positioning bugs, scroll behavior
 6. **Corpus refresh cadence.** Sites change their sign-up forms frequently. The corpus drifts; the detector regresses against drift. Suggestion: a scheduled job (monthly) that re-snapshots the corpus URLs and surfaces fixtures whose HTML has changed for re-classification. Out of scope for 1.2.x but should be on the roadmap.
 7. **What happens when `listMyDomains()` returns an empty array?** The user has no authorized apex domains. The popover should explain this and link to the admin app where domains are assigned. The extension is not the right place to handle the empty-state case beyond a clear explanation.
 8. **Visibility of `pending` addresses in the admin app.** A `pending=true` address showing up in the user's address list in the admin app could be confusing -- "I never created this." Options: hide pending addresses from the list entirely, show them with a "pending" badge, or expose a filter. Recommend showing with a badge so the user has a way to manually clean up an orphan if needed. Coordinate with the existing admin app UI in a small follow-up PR.
+9. **Where does the Safari extension live -- the standalone host app (Phase 8) or embedded in the existing Cabalmail apps?** The private-link handoff (Phase 7) nudges toward embedding: an app can only query enablement (`SFSafariExtensionManager.getStateOfSafariExtension`) for an extension in its own bundle, one install covers both mail and extension, and the opaque-token fallback (if the fragment approach fails) needs a shared App Group anyway -- trivially available when the extension and mail app are one bundle. The costs are release coupling (extension updates ride mail-app releases and vice versa) and a larger review surface on every mail release. Default remains the standalone host with a preference-gated menu row; decide before Phase 7 implementation starts.
 
 ## Settled design decisions worth noting
 
