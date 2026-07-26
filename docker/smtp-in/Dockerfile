@@ -50,7 +50,12 @@ RUN dnf install -y \
     && pip install supervisor \
     && dnf clean all \
     && sed -i 's/^UID_MAX.*/UID_MAX                 2147483647/' /etc/login.defs \
-    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs
+    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs \
+    # The sendmail RPM's %post scriptlet generates a throwaway self-signed
+    # cert/key here on every install; entrypoint.sh always overwrites the
+    # real TLS_CERT/TLS_KEY under different filenames, so this baked-in
+    # key is unused and would flag as a leaked private key.
+    && rm -f /etc/pki/tls/private/sendmail.key /etc/pki/tls/certs/sendmail.pem
 
 # OpenDMARC binary + library from the builder stage (opendmarc-check and
 # the perl reporting tools are deliberately not copied), plus a service
