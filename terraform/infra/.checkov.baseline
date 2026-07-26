@@ -34,8 +34,7 @@
                         "CKV2_AWS_32",
                         "CKV2_AWS_47",
                         "CKV_AWS_310",
-                        "CKV_AWS_68",
-                        "CKV_AWS_86"
+                        "CKV_AWS_68"
                     ]
                 },
                 {
@@ -223,8 +222,7 @@
                         "CKV2_AWS_47",
                         "CKV_AWS_310",
                         "CKV_AWS_374",
-                        "CKV_AWS_68",
-                        "CKV_AWS_86"
+                        "CKV_AWS_68"
                     ]
                 },
                 {
