@@ -22,6 +22,7 @@ from helper import upload_object # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
 from helper import CACHE_BUCKET, SMTP_HOST # pylint: disable=import-error
 from helper import MaintenanceError, maintenance_response # pylint: disable=import-error
+import smtp_session # pylint: disable=import-error
 
 # Sending is SMTP-first: outbound delivery never blocks on IMAP. The Bcc-free
 # Sent copy is staged to S3 and queued, and the append_sent consumer Lambda
@@ -257,7 +258,10 @@ def send(msg, smtp_host, from_addr, to_addrs):
     mail or what envelope sender the relay sees. smtplib still strips Bcc from
     the transmitted DATA, so blind recipients stay blind on the wire.
     """
-    smtp_client = smtplib.SMTP_SSL(smtp_host)
+    # smtp_session routes over the Cloud Map internal name when
+    # SMTP_INTERNAL_HOST is set (private-submission cutover), falling back
+    # to the public listener when it is not set or does not answer.
+    smtp_client = smtp_session.dial_smtp(smtp_host)
     status_code = 200
     body = {
         "status": "submitted"

@@ -145,6 +145,15 @@ resource "aws_ecs_service" "smtp_out" {
     container_port   = 587
   }
 
+  # Private-submission cutover: registers the task's ENI IP at
+  # smtp-out.cabal.internal so the send Lambda can dial it directly.
+  # In-place update on this service; the terraform_data bracket in
+  # service_discovery.tf forces the redeploy that actually registers
+  # the running task.
+  service_registries {
+    registry_arn = aws_service_discovery_service.smtp_out.arn
+  }
+
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
 
   # See aws_ecs_service.imap for rationale.
