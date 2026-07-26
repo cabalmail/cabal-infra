@@ -75,6 +75,10 @@ if grep -qE '^[[:space:]]*(from|import)[[:space:]]+imap_session' function.py 2>/
   cp ../_shared/imap_session.py ./build/imap_session.py
   cp ../_shared/imap_pool.py ./build/imap_pool.py
 fi
+# send imports smtp_session (private-submission dial); stdlib-only module.
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+smtp_session' function.py 2>/dev/null; then
+  cp ../_shared/smtp_session.py ./build/smtp_session.py
+fi
 # fetch_bimi rasterizes BIMI SVG logos to PNG with a bundled static resvg
 # binary (fetched + sha256-verified at build time, not committed). It ships
 # at the zip root so the handler can exec /var/task/resvg. resvg only has a

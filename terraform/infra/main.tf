@@ -230,6 +230,7 @@ module "admin" {
   vpc_id             = module.vpc.vpc.id
   private_subnet_ids = module.vpc.private_subnets[*].id
   imap_internal_host = module.ecs.imap_internal_host
+  smtp_internal_host = module.ecs.smtp_internal_host
 }
 
 # Creates a DynamoDB table for storing address data

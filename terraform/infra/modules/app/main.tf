@@ -63,6 +63,7 @@ module "cabal_method" {
   subnet_ids         = var.private_subnet_ids
   security_group_ids = [aws_security_group.lambda.id]
   imap_internal_host = var.imap_internal_host
+  smtp_internal_host = var.smtp_internal_host
   # fetch_bimi bundles a static resvg binary that ships only for linux-x86_64,
   # so it runs x86_64 while the rest of the API fleet stays arm64.
   architecture = each.key == "fetch_bimi" ? "x86_64" : "arm64"

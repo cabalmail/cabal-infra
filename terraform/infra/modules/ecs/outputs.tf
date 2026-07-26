@@ -71,3 +71,10 @@ output "imap_internal_host" {
   value       = "${local.sd_imap_service_name}.${local.sd_namespace_name}"
   description = "Cloud Map DNS name that resolves to the imap task's private IP directly (no NLB). VPC-attached Lambdas dial this on 143 + STARTTLS instead of the public IMAPS listener."
 }
+
+output "smtp_internal_host" {
+  # Composed from the service_discovery.tf locals rather than the resource
+  # attributes - see the comment there (checkov graph workaround).
+  value       = "${local.sd_smtp_out_service_name}.${local.sd_namespace_name}"
+  description = "Cloud Map DNS name that resolves to the smtp-out task's private IP directly (no NLB). The send Lambda dials this on 465 instead of the public submission listener."
+}
