@@ -26,6 +26,8 @@ AWS-0320  # S3 bucket names not DNS-compliant: names are stable identifiers; ren
 AWS-0178  # VPC flow logs disabled: deliberate cost choice, consistent with monitoring being off in every environment
 AWS-0190  # API Gateway response caching disabled: caching is undesirable for this mailbox API
 AWS-0090  # S3 versioning: the durable buckets (modules/s3, modules/front_door) now version; this id remains only for cache.<control_domain>, a transient cache whose objects expire after two days (Trivy ignores by id, not per resource)
+AWS-0066  # Lambda X-Ray tracing off: deliberate cost choice, consistent with monitoring being disabled everywhere (BASELINE.md section 3)
+AWS-0003  # API Gateway X-Ray tracing off: same cost rationale as AWS-0066
 
 # --- Must-fix in Phase 2.5 (all cleared) -------------------------------
 # AWS-0031 (ECR mutable) fixed in the safe batch; AWS-0095 (SNS unencrypted),
@@ -43,6 +45,11 @@ AWS-0090  # S3 versioning: the durable buckets (modules/s3, modules/front_door) 
 # buckets (admin/www/cache.<control_domain>) now deliver server access
 # logs to the shared modules/s3_access_logs bucket; the two log buckets
 # that would self-recurse carry an inline #trivy:ignore:AVD-AWS-0089.
-AWS-0066  # Lambda X-Ray tracing
-AWS-0124  # Security group rule missing description
-AWS-0003  # API Gateway X-Ray tracing
+# AWS-0124 (security group rule descriptions) cleared in Phase 4: the
+# three flagged rules (nat_egress, nat_ingress_vpc, imagebuilder_egress)
+# now carry descriptions.
+# AWS-0066 / AWS-0003 (X-Ray tracing) were never decay - they are the
+# same deliberate cost choice as the rest of the tracing/monitoring
+# posture, and moved to the design-driven section above.
+#
+# This section is now empty.
