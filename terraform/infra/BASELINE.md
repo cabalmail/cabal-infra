@@ -9,7 +9,7 @@ Measured against commit `371dc6a1` (see [`docs/0.10.x/iac-baseline-snapshot.md`]
 | File | Purpose |
 | ---- | ------- |
 | [`.checkov.yaml`](.checkov.yaml) | Global, design-driven `skip-check` of the CMK class (11 ids). Policy only. |
-| [`.checkov.baseline`](.checkov.baseline) | Per-resource grandfather of the 110 residual Checkov findings (38 ids). New findings fail. |
+| [`.checkov.baseline`](.checkov.baseline) | Per-resource grandfather of the 108 residual Checkov findings (37 ids). New findings fail. |
 | [`.trivyignore`](.trivyignore) | Rule-id ignore list: the CMK class + design-driven (11 ids). The must-fix and decay sections are both empty. |
 
 ## Counts
@@ -18,7 +18,7 @@ Counts reflect **pip checkov** (what CI runs). See the [graph-check note](#graph
 
 | Tool | Total | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
 | ---- | ----- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 243 | 76 (12 ids) | 110 (38 ids) | 14 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356, 2_18, 21 inline) | 0 |
+| Checkov | 243 | 76 (12 ids) | 108 (37 ids) | 14 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356, 2_18, 21 inline) | 0 |
 | Trivy   | 41  | 29 (4 ids)  | 12 (7 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
@@ -56,6 +56,7 @@ The weekly decay task walks the grandfathered findings down one at a time:
 - **CKV_AWS_135** (EC2 EBS-optimized) - **reclassified to design-driven** via inline skip, no behavior change. The flagged instance is a `t3.micro` NAT instance; t3 is Nitro-based, so EBS optimization is already on and cannot be turned off. The check describes a gap that does not exist in AWS, and the one-line "fix" would be a no-op that only quiets the scanner. Moved to section 3 with a co-located `#checkov:skip`; baseline entry removed.
 - **CKV_AWS_91** (ALB access logging) and **CKV_AWS_237** (API Gateway create-before-destroy) - **reclassified to design-driven**, no code change, baseline entries kept (per resource, so a new load balancer or REST API is still caught). CKV_AWS_91's only remaining instance is the monitoring ALB, which is count-gated off in every environment; CKV_AWS_237's lifecycle block does not address the actual replacement risk (a new `execute-api` id). Full rationales in section 3.
 - **X-Ray ids realigned** (`AWS-0066`, `AWS-0003`) - documentation only. Both sat under the `# --- Decay:` heading in `.trivyignore` while section 3 of this file classified them (with `CKV_AWS_50` / `CKV_AWS_73`) as design-driven, won't-fix on cost grounds. The two files disagreed; `.trivyignore` now matches this one. With `AWS-0124` cleared, its decay section is empty.
+- **CKV_AWS_86** (CloudFront access logging, x2) - **fixed in substance, suppressed inline**, and the last row of the decay table. Both distributions now deliver access logs, but through CloudWatch vended-log delivery (CloudFront "standard logging (v2)", new `modules/cloudfront_logs`) rather than the distribution's `logging_config` block. The check only recognizes the latter - it inspects `logging_config/[0]/bucket` and nothing else - so both distributions carry a co-located `#checkov:skip=CKV_AWS_86` explaining that logging is on by a mechanism the rule predates. Baseline entries removed. The legacy block was rejected deliberately: it delivers through a bucket ACL grant to the log-delivery group, and every bucket in this stack is `BucketOwnerEnforced` (ACLs disabled), so satisfying the check literally would have meant re-enabling ACLs on a log bucket - trading a real posture for a green rule, and tripping `CKV2_AWS_65` in the process. The v2 path authorizes delivery with a bucket *policy* grant to `delivery.logs.amazonaws.com` and needs no ACLs, so the logs land in the existing shared `modules/s3_access_logs` bucket alongside the S3 server access logs, inheriting its 180-day lifecycle. The delivery resources live in us-east-1 (CloudFront is global and its delivery configuration is only accepted there; the root passes the module the `use1` provider as its default `aws`), while the destination bucket stays in the stack region - cross-Region delivery is explicitly supported. **Watch item:** delivery is authorized only for the `AWSLogs/<account-id>/CloudFront/*` subtree, so a future change to the module's `suffix_path` that escapes that prefix will stop delivery silently; the bucket policy and the suffix path have to move together.
 
 ### NAT-mode refactor re-key (0.10.x)
 
@@ -135,9 +136,7 @@ Accepted as intentional architecture. Baselined **per resource** (not globally s
 
 Low-value hygiene. Each release should clear or re-justify entries whose target version has arrived (Phase 4).
 
-| Checkov | Trivy | Item | Target |
-| ------- | ----- | ---- | ------ |
-| CKV_AWS_86 (x2) | - | CloudFront access logging on both distributions (`module.admin.aws_cloudfront_distribution.cdn`, `module.front_door.aws_cloudfront_distribution.this`). **Not hygiene** - admin-app access logs have real audit value, and this is the only decay row left with a genuine open decision. The obvious target, the shared `modules/s3_access_logs` bucket, does not work as-is: legacy CloudFront standard logging delivers via bucket ACL, and that bucket sets no `aws_s3_bucket_ownership_controls`, so it defaults to BucketOwnerEnforced (ACLs disabled). The three options are a separate ACL-enabled bucket, relaxing ownership on the shared one, or CloudFront v2 logging (delivery sources) - and v2 would *not* clear this check, which looks specifically for a `logging_config` block. Decide the target before scheduling the work. | 1.0.0 |
+**This table is empty.** Every finding the decay process was tracking has been fixed or reclassified; see "Decay clears (Phase 4)" above for the walk-down. What remains in the baseline is design-driven (section 3), which is won't-fix by intent rather than deferred work. Add a row here only if a new finding arrives that is worth fixing but not worth fixing now - and give it a target version, or it will rot.
 
 ## Notes / known limitations
 
