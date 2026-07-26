@@ -4,7 +4,7 @@ import Foundation
 /// `data:` URIs pulled from the inline-image map. Purely string-level so
 /// we never need to run a JS context. In `readerMode`, prepends a reset +
 /// typography stylesheet that overrides author CSS for a Safari Reader-
-/// style presentation.
+/// style presentation. Both modes get a default viewport meta.
 func rewrite(
     html: String,
     inlineImages: [String: URL],
@@ -24,7 +24,39 @@ func rewrite(
     if readerMode {
         result = readerStylesheet + result
     }
-    return result
+    return insertingViewportMeta(into: result)
+}
+
+/// Injected on both render paths. Without it WebKit lays the document out
+/// at its 980pt desktop viewport and scales the result down to the pane
+/// width — about 40% on a phone — so any message that ships no viewport of
+/// its own (including the HTML alternative our own `/send` generates) is
+/// unreadable without pinch-zoom. Unlike the reader stylesheet this is
+/// presentation-neutral: it sets the layout viewport, it doesn't override
+/// author CSS.
+private let viewportMeta =
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+
+/// Places `viewportMeta` at the *start* of the document head, so a sender
+/// that declares its own viewport still wins (WebKit takes the last
+/// declaration in document order). The insertion point matters: prepending
+/// ahead of a `<!DOCTYPE>` would push the author's page into quirks mode
+/// and change how their CSS renders, which is exactly what "Original" mode
+/// must not do.
+private func insertingViewportMeta(into html: String) -> String {
+    // `<head>` first, then `<html>`, then the doctype; a bare fragment has
+    // none of them and can simply be prefixed (the parser synthesizes the
+    // head around it).
+    for tag in ["<head", "<html", "<!doctype"] {
+        guard let open = html.range(of: tag, options: .caseInsensitive),
+              let close = html.range(of: ">", range: open.upperBound..<html.endIndex)
+        else { continue }
+        return html.replacingCharacters(
+            in: close,
+            with: ">" + viewportMeta
+        )
+    }
+    return viewportMeta + html
 }
 
 /// Prepended in reader mode. Every rule uses `!important` because most
@@ -37,7 +69,6 @@ func rewrite(
 /// system appearance (which is why `readerMode` also drops the `.light`
 /// WebKit override in the host view).
 private let readerStylesheet = """
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   html, body {
     margin: 0 !important;
