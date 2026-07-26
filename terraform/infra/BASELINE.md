@@ -1,8 +1,12 @@
 # terraform/infra - scanner baseline
 
-Phase 2 of [`docs/0.10.x/iac-quality-gates-plan.md`](../../docs/0.10.x/iac-quality-gates-plan.md). This file is the reviewed record behind the machine-readable suppression and baseline files in this directory. Every accepted finding is here with a rationale; decay candidates carry a target version.
+Phase 2 of [`docs/0.10.x/iac-quality-gates-plan.md`](../../docs/0.10.x/iac-quality-gates-plan.md). This file is the reviewed record behind the machine-readable suppression and baseline files in this directory. Every accepted finding is here with a rationale.
 
-Measured against commit `371dc6a1` (see [`docs/0.10.x/iac-baseline-snapshot.md`](../../docs/0.10.x/iac-baseline-snapshot.md) for the Phase 0 inventory). Gate posture: **fail on all Trivy severities** (Checkov is severity-blind, so it fails on any finding). The gate is still soft-fail until Phase 3.
+Measured against commit `371dc6a1` (see [`docs/0.10.x/iac-baseline-snapshot.md`](../../docs/0.10.x/iac-baseline-snapshot.md) for the Phase 0 inventory). Gate posture: **fail on all Trivy severities** (Checkov is severity-blind, so it fails on any finding).
+
+**The gate is live and blocking (Phase 3).** In [`infra.yml`](../../.github/workflows/infra.yml) the `chekov` / `tflint` / `trivy` jobs are both listed in `approval`'s `needs:` and asserted `result == 'success'` in its `if:`, and `apply` runs only behind `approval` - so a scanner failure blocks the apply rather than annotating it. The bootstrap stage mirrors this with `checkov_dns` / `tflint_dns` / `trivy_dns`. Each scanner job also runs [`baseline-diff.py`](../../.github/scripts/baseline-diff.py) as a second gating step, failing on a *stale* entry so a fixed finding cannot keep its grandfather. The only `continue-on-error` in those jobs is on the SARIF upload steps, deliberately: a code-scanning upload hiccup must not decide a gate whose verdict is the scan step itself.
+
+**Decay is complete.** Section 4 is empty - every finding the weekly decay process tracked has been fixed or reclassified (see "Decay clears (Phase 4)"). What remains baselined is design-driven (section 3): won't-fix by intent, not deferred work. A finding that is worth fixing but not now goes in section 4 *with a target version*; without one it rots, which is how several rows here outlived their own accuracy.
 
 ## Files in this directory
 
