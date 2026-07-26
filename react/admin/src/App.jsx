@@ -56,6 +56,7 @@ import useResendThrottle from './hooks/useResendThrottle';
 import './AppLight.css';
 import './AppDark.css';
 import { ADDRESS_LIST, FOLDER_LIST, DATE, DESC } from './constants';
+import { viewWhenLoggedOut } from './authViews';
 import './App.css';
 
 // Module-level token storage (never persisted to localStorage)
@@ -211,15 +212,9 @@ function App() {
     }
     setAppState(prev => {
       const updates = {};
-      // About is reachable when logged out via the auth-shell footer link,
-      // so it must not be bounced back to Login here. MfaChallenge sits
-      // mid-login (no token yet), so it must survive this check too.
-      const allowedWhenLoggedOut = [
-        "Login", "SignUp", "Verify", "MfaChallenge", "ForgotPassword",
-        "ResetPassword", "About"
-      ];
-      if (!allowedWhenLoggedOut.includes(prev.view)) {
-        updates.view = "Login";
+      const view = viewWhenLoggedOut(prev.view, !!prev.password);
+      if (view !== prev.view) {
+        updates.view = view;
       }
       if (prev.loggedIn !== false) {
         updates.loggedIn = false;
