@@ -294,6 +294,46 @@ describe('Folders rail', () => {
         true,
       );
     });
+
+    it('surfaces the API message when the name is already taken', async () => {
+      // 409 from new_folder — the name collision is the user's to fix, so
+      // the toast has to say which folder rather than "Unable to create".
+      mockNewFolder.mockRejectedValue({
+        response: { status: 409, data: { status: 'A folder called qa0726 already exists' } },
+      });
+      const setMessage = vi.fn();
+      renderFolders({ setMessage });
+      await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
+      const addBtns = screen.getAllByRole('button', { name: /^new folder$/i });
+      await act(async () => { fireEvent.click(addBtns[0]); });
+      const input = screen.getByPlaceholderText('New folder name');
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'qa0726' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+      });
+      await waitFor(() => expect(setMessage).toHaveBeenCalledWith(
+        'A folder called qa0726 already exists',
+        true,
+      ));
+    });
+
+    it('falls back to the generic message when the failure carries no body', async () => {
+      mockNewFolder.mockRejectedValue(new Error('Network Error'));
+      const setMessage = vi.fn();
+      renderFolders({ setMessage });
+      await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
+      const addBtns = screen.getAllByRole('button', { name: /^new folder$/i });
+      await act(async () => { fireEvent.click(addBtns[0]); });
+      const input = screen.getByPlaceholderText('New folder name');
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'qa0726' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+      });
+      await waitFor(() => expect(setMessage).toHaveBeenCalledWith(
+        'Unable to create folder.',
+        true,
+      ));
+    });
   });
 
   it('toggles subscription from a folder row', async () => {
