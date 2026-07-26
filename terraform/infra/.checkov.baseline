@@ -128,12 +128,6 @@
                         "CKV2_AWS_62",
                         "CKV_AWS_144"
                     ]
-                },
-                {
-                    "resource": "module.admin.aws_s3_bucket_lifecycle_configuration.expire_attachments",
-                    "check_ids": [
-                        "CKV_AWS_300"
-                    ]
                 }
             ]
         },
