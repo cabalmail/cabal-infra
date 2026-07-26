@@ -13,17 +13,14 @@ variable "control_domain" {
   description = "The control domain"
 }
 
-variable "cert_arn" {
-  type        = string
-  description = "ARN of AWS Certificate Manager certificate."
-}
-
 # -- ECS target group ARNs ------------------------------------
-
-variable "ecs_imap_target_group_arn" {
-  type        = string
-  description = "ARN of the ECS IMAP target group."
-}
+#
+# There is deliberately no imap target group variable: mailbox access
+# is Cabalmail-client-only (via the Lambda API, which reaches the imap
+# task over Cloud Map inside the VPC), so this load balancer carries no
+# IMAP listener. The imap target group itself lives on in the ecs
+# module - the service registers with it and its health checks drive
+# task replacement - it just has no listener in front of it.
 
 variable "ecs_relay_target_group_arn" {
   type        = string
