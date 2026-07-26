@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.13] - 2026-07-26
+
+### Changed
+- **The send Lambda submits mail privately.** Outbound submission from
+  /send now dials the smtp-out task directly over its new Cloud Map name
+  (TLS on 465, verified against the tier certificate) instead of
+  hairpinning through NAT to the public submission listener, with an
+  automatic fallback to the public path if the internal name does not
+  answer. Public submission (465/587) itself is unchanged and remains
+  open to standard mail clients.
+
 ## [0.11.12] - 2026-07-25
 
 ### Added
