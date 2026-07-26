@@ -9,8 +9,8 @@ Measured against commit `371dc6a1` (see [`docs/0.10.x/iac-baseline-snapshot.md`]
 | File | Purpose |
 | ---- | ------- |
 | [`.checkov.yaml`](.checkov.yaml) | Global, design-driven `skip-check` of the CMK class (11 ids). Policy only. |
-| [`.checkov.baseline`](.checkov.baseline) | Per-resource grandfather of the 114 residual Checkov findings (40 ids). New findings fail. |
-| [`.trivyignore`](.trivyignore) | Rule-id ignore list: the CMK class + design-driven + must-fix + decay (17 ids). |
+| [`.checkov.baseline`](.checkov.baseline) | Per-resource grandfather of the 110 residual Checkov findings (38 ids). New findings fail. |
+| [`.trivyignore`](.trivyignore) | Rule-id ignore list: the CMK class + design-driven (11 ids). The must-fix and decay sections are both empty. |
 
 ## Counts
 
@@ -18,11 +18,13 @@ Counts reflect **pip checkov** (what CI runs). See the [graph-check note](#graph
 
 | Tool | Total | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
 | ---- | ----- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 243 | 76 (12 ids) | 114 (40 ids) | 14 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356, 2_18, 21 inline) | 0 |
-| Trivy   | 50  | 26 (5 ids)  | 19 (9 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
+| Checkov | 243 | 76 (12 ids) | 110 (38 ids) | 14 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356, 2_18, 21 inline) | 0 |
+| Trivy   | 41  | 29 (4 ids)  | 12 (7 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
 Verified (pip checkov): `checkov -d terraform/infra --config-file .checkov.yaml --baseline .checkov.baseline` exits 0; `trivy config terraform/infra --ignorefile .trivyignore` reports 0 misconfigurations.
+
+The **Baselined** and **Residual** columns are re-measured whenever a decay item lands. The Checkov **Total** and **CMK** columns are the original Phase 2 measurement at commit `371dc6a1` and are *not* re-measured, so they will not reconcile against the current rows - do not treat them as live. (The Checkov baselined count drifted to a stale "118" this way before being re-measured in Phase 4; the Trivy row has now been re-measured too.)
 
 ### Graph-check cohort (brew-to-pip fix)
 
@@ -50,6 +52,10 @@ The weekly decay task walks the grandfathered findings down one at a time:
 - **CKV_AWS_115** (Lambda reserved concurrency, x9) - reclassified to design-driven (no code change), moved from the decay table to section 3. All Lambdas deliberately share one account-wide concurrency pool; reserved concurrency both guarantees and caps, so setting it on `api_call` throttles the user-facing hot path, and setting it on the peripheral functions carves capacity out of the pool `api_call` draws from. This is the identical rationale the two most-recently-added Lambdas (`push_dispatch`, `push_token_gc`) already carry as inline `#checkov:skip=CKV_AWS_115` ("shared-pool concurrency is the point; a per-function reserve would starve the API lambdas") - the older nine simply had not been walked down yet. The baseline entries stay (per resource, so a new Lambda is still caught); counts are unchanged (118 findings / 41 ids). Same shared-pool reasoning as the CKV_AWS_116 DLQ reclassification: on a single-operator, low-volume system with no second tenant, the runaway blast-radius the check guards against is negligible.
 - **CKV_AWS_338** (CloudWatch log-group retention, x23) - **fixed**. Every `aws_cloudwatch_log_group` in the stack already set an explicit `retention_in_days`, but at 14 or 30 days - below the one-year floor CKV_AWS_338 enforces - so all 23 were flagged (the "caps cost vs. never-expire" framing in the old decay row was inaccurate; none were never-expiring). Raised them all to `365`: the API-Gateway/Lambda/mail-tier/Cognito groups in `modules/app`, `modules/ecs`, `modules/user_pool`, and `modules/certbot_renewal`, plus the dormant `modules/monitoring` groups. The incremental storage cost on this low-volume single-operator system is negligible (CloudWatch Logs storage is ~$0.03/GB-month; the monitoring groups are count-gated on `var.monitoring`, off everywhere, so they cost nothing regardless), and a year of retention has real operational/forensic value for a mail system - so this is a near-free hardening rather than a cost trade-off like X-Ray or detailed monitoring. All 23 baseline entries removed; the id is fully cleared from the gate (141 -> 118 findings, 42 -> 41 ids). No data-plane impact.
 - **CKV_AWS_300** (S3 lifecycle: abort incomplete multipart uploads) - **fixed**. The `cache.<control_domain>` bucket (`module.admin.aws_s3_bucket_lifecycle_configuration.expire_attachments`, `modules/app/s3.tf`) was the only one of the stack's three lifecycle configurations without an abort rule; the two access-log buckets (`modules/s3_access_logs`, `modules/elb`) already had one. Added a second, unfiltered rule (`abort_incomplete_uploads`, `days_after_initiation = 7`, matching those two) rather than extending the existing `expire_attachments` rule, because that rule carries a `filter { prefix = "/" }` and the check only passes on a rule whose filter is empty - an abort rule should be bucket-wide anyway. Orphaned multipart parts are billed but invisible in an object listing, and this bucket takes presigned attachment-staging PUTs from the admin client plus Lambda-side uploads, both of which use multipart above boto3's threshold. Baseline entry removed; the id is fully cleared from the gate (115 -> 114 findings, 41 -> 40 ids; the counts table's previous "118" was stale - re-measured against the regenerated file). No data-plane impact: the new rule only reclaims never-completed uploads and does not touch any committed object.
+- **CKV_AWS_23 / AWS-0124** (security group rule descriptions, x3) - **fixed**. All three flagged rules now carry a `description`: `nat_egress` and `nat_ingress_vpc` (`modules/vpc/nat.tf`, the masquerade path for the private subnets) and `imagebuilder_egress` (`modules/vpc/nat_ami.tf`, the NAT AMI build/test instances). Worth recording that the row's "(x3)" had gone stale in membership even though the tally still matched: `imagebuilder_egress` did not exist when the decay list was written - it arrived with the NAT AMI builder - so the count matching was coincidence, not currency. Baseline entries removed and `AWS-0124` removed from `.trivyignore`; both ids fully cleared.
+- **CKV_AWS_135** (EC2 EBS-optimized) - **reclassified to design-driven** via inline skip, no behavior change. The flagged instance is a `t3.micro` NAT instance; t3 is Nitro-based, so EBS optimization is already on and cannot be turned off. The check describes a gap that does not exist in AWS, and the one-line "fix" would be a no-op that only quiets the scanner. Moved to section 3 with a co-located `#checkov:skip`; baseline entry removed.
+- **CKV_AWS_91** (ALB access logging) and **CKV_AWS_237** (API Gateway create-before-destroy) - **reclassified to design-driven**, no code change, baseline entries kept (per resource, so a new load balancer or REST API is still caught). CKV_AWS_91's only remaining instance is the monitoring ALB, which is count-gated off in every environment; CKV_AWS_237's lifecycle block does not address the actual replacement risk (a new `execute-api` id). Full rationales in section 3.
+- **X-Ray ids realigned** (`AWS-0066`, `AWS-0003`) - documentation only. Both sat under the `# --- Decay:` heading in `.trivyignore` while section 3 of this file classified them (with `CKV_AWS_50` / `CKV_AWS_73`) as design-driven, won't-fix on cost grounds. The two files disagreed; `.trivyignore` now matches this one. With `AWS-0124` cleared, its decay section is empty.
 
 ### NAT-mode refactor re-key (0.10.x)
 
@@ -119,8 +125,11 @@ Accepted as intentional architecture. Baselined **per resource** (not globally s
 | CKV_AWS_330 | - | EFS access point user identity - mailstore needs specific uid/gid; revisit |
 | CKV2_AWS_34 (x4) | - | SSM parameters holding deploy metadata (per-tier image tags, CloudFront distribution ids, sinkhole mode) are plaintext String by design - they are not secrets |
 | CKV2_AWS_19 | - | NAT EIPs attach to whichever NAT mode is active (instance association or gateway allocation); kept unattached while quiesced for stable relay IPs |
+| CKV_AWS_91 | - | ALB access logging on `module.monitoring.aws_lb.uptime` - the monitoring module is count-gated on `var.monitoring`, false in every environment, so this load balancer does not exist. Same dormant-tier rationale as the `CKV_AWS_258` / `CKV_AWS_301` row. The mail NLB, which *is* real, logs (cleared in 0.10.x). Revisit only if the monitoring tier is ever enabled. |
+| CKV_AWS_237 | - | API Gateway `create_before_destroy` on `module.admin.aws_api_gateway_rest_api.gateway` - the lifecycle meta-argument does not mitigate the risk that matters here. Replacing the REST API mints a new `execute-api` id, and that id is baked into `config.js` and into every client's stored API URL, so a replacement is disruptive with or without create-before-destroy ordering. Terraform regenerates `config.js` in the same apply (the object depends on the gateway id), which is the real mitigation. |
 | - | AWS-0320 | S3 bucket names not DNS-compliant - names are stable identifiers; renaming is a data migration |
 | - | AWS-0178 | VPC flow logs off - deliberate cost choice |
+| CKV_AWS_135 (inline skip) | - | EC2 EBS-optimized on `module.vpc.aws_instance.nat` - the default `nat_instance_type` (`t3.micro`), like every current-generation alternative, is Nitro-based, where EBS optimization is on by default and cannot be disabled. AWS already reports the instance as EBS-optimized, so `ebs_optimized = true` would change nothing but the scanner's opinion. Carried as a co-located `#checkov:skip` rather than a baseline entry, so the rationale sits next to the resource. |
 
 ## 4. Decay - walk down over time
 
@@ -128,10 +137,7 @@ Low-value hygiene. Each release should clear or re-justify entries whose target 
 
 | Checkov | Trivy | Item | Target |
 | ------- | ----- | ---- | ------ |
-| CKV_AWS_86, CKV_AWS_91 | - | CloudFront access logging (CKV_AWS_91 on the mail NLB cleared in 0.10.x - resilience plan Phase 3; the remaining CKV_AWS_91 is the dormant monitoring ALB). S3 access logging (AWS-0089 / CKV_AWS_18) cleared in Phase 4 - see "Decay clears" | 1.0.0 |
-| CKV_AWS_23 (x3) | AWS-0124 | Security group rule descriptions | 0.11.x |
-| CKV_AWS_135 | - | EC2 EBS-optimized | 1.0.0 |
-| CKV_AWS_237 | - | API Gateway create-before-destroy lifecycle | 1.0.0 |
+| CKV_AWS_86 (x2) | - | CloudFront access logging on both distributions (`module.admin.aws_cloudfront_distribution.cdn`, `module.front_door.aws_cloudfront_distribution.this`). **Not hygiene** - admin-app access logs have real audit value, and this is the only decay row left with a genuine open decision. The obvious target, the shared `modules/s3_access_logs` bucket, does not work as-is: legacy CloudFront standard logging delivers via bucket ACL, and that bucket sets no `aws_s3_bucket_ownership_controls`, so it defaults to BucketOwnerEnforced (ACLs disabled). The three options are a separate ACL-enabled bucket, relaxing ownership on the shared one, or CloudFront v2 logging (delivery sources) - and v2 would *not* clear this check, which looks specifically for a `logging_config` block. Decide the target before scheduling the work. | 1.0.0 |
 
 ## Notes / known limitations
 

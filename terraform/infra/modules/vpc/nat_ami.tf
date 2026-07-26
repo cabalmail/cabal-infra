@@ -71,6 +71,7 @@ resource "aws_security_group" "imagebuilder" {
 
 resource "aws_security_group_rule" "imagebuilder_egress" {
   count             = var.build_nat_ami ? 1 : 0
+  description       = "Egress for the Image Builder build/test instances (package installs, SSM agent)"
   type              = "egress"
   protocol          = "-1"
   from_port         = 0

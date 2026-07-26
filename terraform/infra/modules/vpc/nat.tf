@@ -64,6 +64,7 @@ resource "aws_security_group" "nat" {
 
 resource "aws_security_group_rule" "nat_egress" {
   count             = var.use_nat_instance ? 1 : 0
+  description       = "Masqueraded egress to the internet on behalf of the private subnets (image pulls, DNS, SMTP delivery)"
   type              = "egress"
   protocol          = "-1"
   from_port         = 0
@@ -74,6 +75,7 @@ resource "aws_security_group_rule" "nat_egress" {
 
 resource "aws_security_group_rule" "nat_ingress_vpc" {
   count             = var.use_nat_instance ? 1 : 0
+  description       = "Traffic from inside the VPC CIDR that this instance forwards and masquerades"
   type              = "ingress"
   protocol          = "-1"
   from_port         = 0
@@ -108,6 +110,7 @@ resource "aws_iam_instance_profile" "nat" {
 }
 
 resource "aws_instance" "nat" {
+  #checkov:skip=CKV_AWS_135:The default nat_instance_type (t3.micro), like every current-generation alternative, is Nitro-based - EBS optimization is on by default and cannot be disabled, so AWS already reports this instance as EBS-optimized. Setting the attribute would satisfy the scanner without changing anything.
   count                  = var.use_nat_instance && !var.quiesced ? length(var.az_list) : 0
   ami                    = one(data.aws_ami.custom_nat[*].id)
   instance_type          = var.nat_instance_type
