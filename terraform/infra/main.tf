@@ -260,10 +260,8 @@ module "load_balancer" {
   control_domain    = var.control_domain
   cert_arn          = module.cert.cert_arn
 
-  ecs_imap_target_group_arn       = module.ecs.imap_target_group_arn
-  ecs_relay_target_group_arn      = module.ecs.relay_target_group_arn
-  ecs_submission_target_group_arn = module.ecs.submission_target_group_arn
-  ecs_starttls_target_group_arn   = module.ecs.starttls_target_group_arn
+  ecs_imap_target_group_arn  = module.ecs.imap_target_group_arn
+  ecs_relay_target_group_arn = module.ecs.relay_target_group_arn
 }
 
 # Creates an elastic file system for the mailstore

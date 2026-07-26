@@ -59,9 +59,13 @@ resource "aws_route53_record" "private" {
 
 resource "aws_route53_record" "srv" {
   for_each = {
+    # Submission is not publicly offered (sending goes through the
+    # Cabalmail clients via the Lambda API); port 0 / host "." is RFC
+    # 6186's way of saying so, which stops autodiscovering clients from
+    # probing a dead endpoint.
     "_submission._tcp" = {
-      port = 587
-      host = "smtp-out.${var.control_domain}"
+      port = 0
+      host = "."
     },
     "_imaps._tcp" = {
       port = 993
