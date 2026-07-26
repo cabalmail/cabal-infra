@@ -239,6 +239,7 @@ resource "aws_lambda_function" "api_call" {
       PUSH_TOKENS_TABLE_NAME      = "cabal-push-tokens"
       IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
       IMAP_INTERNAL_HOST          = var.imap_internal_host
+      SMTP_INTERNAL_HOST          = var.smtp_internal_host
     }
   }
   depends_on = [

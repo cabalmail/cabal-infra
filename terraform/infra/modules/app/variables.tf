@@ -160,3 +160,8 @@ variable "imap_internal_host" {
   type        = string
   description = "Cloud Map DNS name of the imap task (modules/ecs service discovery). IMAP-consuming Lambdas dial this on 143 + STARTTLS instead of the public IMAPS listener."
 }
+
+variable "smtp_internal_host" {
+  type        = string
+  description = "Cloud Map DNS name of the smtp-out task (modules/ecs service discovery). The send Lambda dials it on 465 instead of the public submission listener, falling back to the public path if the name does not resolve."
+}
