@@ -21,8 +21,8 @@ from helper import parse_json_body # pylint: disable=import-error
 from helper import upload_object # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
 from helper import CACHE_BUCKET, SMTP_HOST # pylint: disable=import-error
-import smtp_session # pylint: disable=import-error
 from helper import MaintenanceError, maintenance_response # pylint: disable=import-error
+import smtp_session # pylint: disable=import-error
 
 # Sending is SMTP-first: outbound delivery never blocks on IMAP. The Bcc-free
 # Sent copy is staged to S3 and queued, and the append_sent consumer Lambda
