@@ -34,8 +34,7 @@
                         "CKV2_AWS_32",
                         "CKV2_AWS_47",
                         "CKV_AWS_310",
-                        "CKV_AWS_68",
-                        "CKV_AWS_86"
+                        "CKV_AWS_68"
                     ]
                 },
                 {
@@ -127,12 +126,6 @@
                     "check_ids": [
                         "CKV2_AWS_62",
                         "CKV_AWS_144"
-                    ]
-                },
-                {
-                    "resource": "module.admin.aws_s3_bucket_lifecycle_configuration.expire_attachments",
-                    "check_ids": [
-                        "CKV_AWS_300"
                     ]
                 }
             ]
@@ -229,8 +222,7 @@
                         "CKV2_AWS_47",
                         "CKV_AWS_310",
                         "CKV_AWS_374",
-                        "CKV_AWS_68",
-                        "CKV_AWS_86"
+                        "CKV_AWS_68"
                     ]
                 },
                 {
@@ -537,8 +529,7 @@
                 {
                     "resource": "module.vpc.aws_instance.nat",
                     "check_ids": [
-                        "CKV_AWS_126",
-                        "CKV_AWS_135"
+                        "CKV_AWS_126"
                     ]
                 },
                 {
@@ -550,14 +541,7 @@
                 {
                     "resource": "module.vpc.aws_security_group_rule.nat_egress",
                     "check_ids": [
-                        "CKV_AWS_23",
                         "CKV_AWS_382"
-                    ]
-                },
-                {
-                    "resource": "module.vpc.aws_security_group_rule.nat_ingress_vpc",
-                    "check_ids": [
-                        "CKV_AWS_23"
                     ]
                 }
             ]
@@ -574,7 +558,6 @@
                 {
                     "resource": "module.vpc.aws_security_group_rule.imagebuilder_egress[0]",
                     "check_ids": [
-                        "CKV_AWS_23",
                         "CKV_AWS_382"
                     ]
                 }

@@ -291,8 +291,12 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
     api.deleteFolder(name).then(() => {
       localStorage.removeItem(FOLDER_LIST);
       refresh();
-    }).catch(() => {
-      setMessage && setMessage('Unable to delete folder.', true);
+    }).catch((err) => {
+      // Show the API's own explanation when it sent one (a 404 for a folder
+      // another client already removed names the folder); the generic line
+      // is the fallback for transport failures that carry no body.
+      const detail = err?.response?.data?.status;
+      setMessage && setMessage(detail || 'Unable to delete folder.', true);
     });
   }, [api, pendingDelete, refresh, setMessage]);
 
@@ -340,8 +344,12 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
       setNewName('');
       localStorage.removeItem(FOLDER_LIST);
       refresh();
-    }).catch(() => {
-      setMessage && setMessage('Unable to create folder.', true);
+    }).catch((err) => {
+      // The API describes what went wrong when it can — a name collision
+      // comes back as a 409 naming the folder. Fall back to the generic
+      // line for transport failures, which carry no response body.
+      const detail = err?.response?.data?.status;
+      setMessage && setMessage(detail || 'Unable to create folder.', true);
     });
   }, [addingParent, api, newName, refresh, setMessage]);
 

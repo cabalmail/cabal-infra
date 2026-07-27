@@ -7,15 +7,22 @@ Issues instead of App Store Connect. It fixes the triage deficiencies of the
 native Issues UI:
 
   * shows only open issues that are part of the tester/fixer cycle (bearing at
-    least one lifecycle label: tester-found / accepted / fix-in-review /
-    needs-retest) - closed and unrelated issues are omitted
-  * each lifecycle label gets its own fixed column, so a label reads in the
-    same place on every row instead of wrapping through an inline label list
+    least one lifecycle label: needs-verification / tester-found / verified /
+    verify-blocked / accepted / fix-in-review / needs-retest) - closed and
+    unrelated issues are omitted
+  * each pipeline state gets its own fixed column, so a state reads in the
+    same place on every row instead of wrapping through an inline label list.
+    Labels that mean the same thing to a triager share a column: the pre-triage
+    four (needs-verification, tester-found, verified, verify-blocked) all mean
+    "in the cycle, waiting on you", and accepted/needs-retest - mutually
+    exclusive, since the fixer's reconcile swaps one for the other - both mean
+    "queued for an agent, nothing to triage"; the row names which one applies
   * related PRs (discovered via cross-reference events, since the fixer does
     not use closing keywords) are shown per row with their open/merged/closed
     state, linked directly - no drilling into the issue to find them
   * triage actions per row (these make real changes on GitHub): Accept adds
-    the `accepted` label so the nightly fixer picks the issue up; Close...
+    the `accepted` label so the nightly fixer picks the issue up (disabled
+    while the issue is already accepted or awaiting retest); Close...
     posts a required comment and then closes the issue as not-planned or
     completed
 
@@ -51,11 +58,42 @@ except ImportError:
     sys.exit("Flask is not installed. Run: pip install flask")
 
 
-# Lifecycle labels, in pipeline order. Each one becomes a column.
-DEFAULT_STAGES = ["tester-found", "accepted", "fix-in-review", "needs-retest"]
+# Pipeline states, in column order. Each state becomes one column and is satisfied
+# by ANY of its labels - several labels can mean the same thing to a triager, and a
+# column per label makes the table too wide to reach the action buttons.
+#
+# Issues enter the cycle two ways: the tester files its own findings
+# (`tester-found`), while anything the human or one of their agents files enters by
+# being labelled `needs-verification`, which the tester adopts and resolves to
+# `verified` (reproduced) or `verify-blocked` (couldn't confirm - back to the human).
+# All four mean the same thing to a triager - the finding is in the cycle, pre-triage
+# - so they share one column and the row's pill shows where verification stands.
+# Only the human applies `accepted`, which is what queues the fixer.
+#
+# `accepted` and `needs-retest` are mutually exclusive - the fixer's reconcile step
+# removes `accepted` when it adds `needs-retest` (fix live on stage), and a failed
+# retest goes back the other way - and both mean "queued for an agent" (the fixer,
+# or the tester's retest), so they share the `queued` column.
+DEFAULT_STAGES = [
+    ("triage", ["needs-verification", "tester-found", "verified", "verify-blocked"]),
+    ("queued", ["accepted", "needs-retest"]),
+    ("fix-in-review", ["fix-in-review"]),
+]
+# Compact names for labels sharing a column, where the header can't name them.
+SHORT_NAMES = {
+    "needs-verification": "verifying",
+    "tester-found": "found",
+    "verified": "verified",
+    "verify-blocked": "blocked",
+    "accepted": "accepted",
+    "needs-retest": "retest",
+}
 # Fallback colors (GitHub label colors) if the repo query can't supply one.
 FALLBACK_COLORS = {
     "tester-found": "fbca04",
+    "needs-verification": "1D76DB",
+    "verified": "C2E0C6",
+    "verify-blocked": "F9D0C4",
     "accepted": "5319e7",
     "fix-in-review": "e99695",
     "needs-retest": "0e8a16",
@@ -90,6 +128,31 @@ query($owner: String!, $name: String!, $cursor: String) {
 REPO_SLUG = None
 STAGES = DEFAULT_STAGES
 ACCEPT_LABEL = "accepted"
+# Labels besides ACCEPT_LABEL itself that grey out the Accept button: an issue
+# awaiting retest already has its fix live, so there is nothing to queue.
+ACCEPT_BLOCK_LABELS = ["needs-retest"]
+
+
+def format_stages(stages):
+    """Render stage definitions back into --stages syntax (for help text)."""
+    return ",".join(labs[0] if [key] == labs else f"{key}={'|'.join(labs)}"
+                    for key, labs in stages)
+
+
+def parse_stages(spec):
+    """Parse --stages: 'label' for a column of its own, 'name=a|b' to group."""
+    stages = []
+    for chunk in spec.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        key, sep, labels = chunk.partition("=")
+        key = key.strip()
+        labs = [l.strip() for l in labels.split("|") if l.strip()] if sep else [key]
+        if not key or not labs:
+            sys.exit(f"--stages: could not read {chunk!r}; use 'label' or 'name=label|label'.")
+        stages.append((key, labs))
+    return stages
 
 
 def detect_repo_slug(repo_path):
@@ -196,11 +259,15 @@ def build_model():
             break
         cursor = issues["pageInfo"]["endCursor"]
 
+    stage_labels = [lab for _, labs in STAGES for lab in labs]
     rows = []
     for node in nodes:
         labels = [(l["name"], l["color"]) for l in node["labels"]["nodes"]]
         names = [n for n, _ in labels]
-        stages = [s for s in STAGES if s in names]
+        # Per stage, which of its labels this issue actually carries - the row shows
+        # them so grouping labels into one column doesn't hide which one it is.
+        marks = {key: [lab for lab in labs if lab in names] for key, labs in STAGES}
+        stages = [key for key, _ in STAGES if marks[key]]
         if not stages:
             continue
         prs, seen = [], set()
@@ -223,19 +290,31 @@ def build_model():
             "created": node["createdAt"],
             "updated": node["updatedAt"],
             "stages": stages,
+            "marks": {key: [{"name": lab,
+                             "short": SHORT_NAMES.get(lab, lab),
+                             "color": label_colors.get(lab, "8b8a86")}
+                            for lab in labs]
+                      for key, labs in marks.items() if labs},
+            "accept_blocked": next(
+                (lab for lab in [ACCEPT_LABEL] + ACCEPT_BLOCK_LABELS if lab in names),
+                None),
             "other_labels": [{"name": n, "color": c} for n, c in labels
-                             if n not in STAGES],
+                             if n not in stage_labels],
             "prs": prs,
         })
 
-    counts = {s: sum(1 for r in rows if s in r["stages"]) for s in STAGES}
+    counts = {key: sum(1 for r in rows if key in r["stages"]) for key, _ in STAGES}
     return {
         "repo": REPO_SLUG,
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "stages": [{"key": s, "color": label_colors.get(s, "8b8a86")} for s in STAGES],
+        "stages": [{"key": key,
+                    # A grouped column can't be one colour; its rows carry their own.
+                    "color": label_colors.get(labs[0], "8b8a86"),
+                    "multi": len(labs) > 1}
+                   for key, labs in STAGES],
         "accept_label": ACCEPT_LABEL,
-        "missing_labels": [s for s in dict.fromkeys(STAGES + [ACCEPT_LABEL])
-                           if s not in repo_labels] if all_labels_seen else [],
+        "missing_labels": [lab for lab in dict.fromkeys(stage_labels + [ACCEPT_LABEL])
+                           if lab not in repo_labels] if all_labels_seen else [],
         "issues": rows,
         "open_total": total,
         "counts": counts,
@@ -461,14 +540,21 @@ PAGE = r"""<!DOCTYPE html>
   <div id="issue-table"></div>
 
   <footer>
-    Open issues bearing at least one lifecycle label — <code>tester-found</code> →
-    <code>accepted</code> → <code>fix-in-review</code> → <code>needs-retest</code> — with one
-    column per label so each reads in a fixed position. Other open issues (and everything
+    Open issues bearing at least one lifecycle label, one column per pipeline state so each
+    reads in a fixed position. The <b>triage</b> column is everything pre-triage, and its
+    pill says where verification stands: what you and your agents file enters as
+    <code>needs-verification</code> (<i>verifying</i>) and the tester resolves it to
+    <i>verified</i> or <i>blocked</i>; the tester's own findings arrive pre-verified as
+    <i>found</i>. The <b>queued</b> column holds the issue whenever an agent owes it work —
+    <code>accepted</code> (waiting on the fixer) or <code>needs-retest</code> (fix live,
+    waiting on the tester's retest), never both, since the fixer's reconcile swaps one for
+    the other around <code>fix-in-review</code>. Other open issues (and everything
     closed) are omitted. <b>PRs</b> are discovered from GitHub cross-reference events (the
     fixer links issues without closing keywords, so GitHub's "linked PR" field stays empty);
     a PR that merely mentions the issue also appears here. Click a stat tile to filter to
     that stage; click it again to clear. All links open in a new tab.
-    <b>Accept</b> adds the <code>accepted</code> label (the nightly fixer picks it up);
+    <b>Accept</b> adds the <code>accepted</code> label (the nightly fixer picks it up) and is
+    disabled while the issue is already accepted or awaiting retest;
     <b>Close…</b> posts your comment and then closes the issue — both are real GitHub changes.
   </footer>
 </div>
@@ -564,11 +650,22 @@ function prCell(r){
     `<span class="pill ${PR_ROLE[p.state]||'draft'}"><span class="ic">${PR_ICON[p.state]||'○'}</span>${esc(p.state)}</span>`+
     `</div>`).join('');
 }
+function stageCell(r,s){
+  const marks=r.marks[s.key];
+  if(!marks) return '';
+  // A column standing for one label just gets a check; a grouped column names the
+  // label that put the issue there, so the grouping never hides which one it is.
+  if(!s.multi) return `<span class="stagemark" style="color:color-mix(in srgb,#${esc(s.color)} 55%,var(--ink))" title="${esc(marks[0].name)}">✓</span>`;
+  return marks.map(m=>`<span class="ghlabel" style="border-color:#${esc(m.color)}; background:color-mix(in srgb,#${esc(m.color)} 18%,transparent)" title="${esc(m.name)}">${esc(m.short)}</span>`).join('');
+}
 function actCell(r){
-  const accepted=r.stages.includes(MODEL.accept_label);
+  const blocked=r.accept_blocked;
+  const why=blocked===MODEL.accept_label?'Already accepted'
+    :blocked==='needs-retest'?'Fix live — awaiting retest'
+    :'Blocked by '+blocked;
   return `<div class="actcell">`+
-    `<button class="abtn accept" type="button" ${accepted
-      ?'disabled title="Already accepted"'
+    `<button class="abtn accept" type="button" ${blocked
+      ?`disabled title="${esc(why)}"`
       :`onclick="acceptIssue(${r.number},this)" title="Add the ${esc(MODEL.accept_label)} label — queues the nightly fixer"`}>Accept</button>`+
     `<button class="abtn danger" type="button" onclick="openCloseModal(${r.number})" title="Comment on and close this issue">Close…</button>`+
     `</div>`;
@@ -580,6 +677,7 @@ function renderRows(){
   if(activeStage) rows=rows.filter(r=>r.stages.includes(activeStage));
   if(q) rows=rows.filter(r=>(
     '#'+r.number+' '+r.title+' '+r.stages.join(' ')+' '+
+    Object.values(r.marks).flat().map(m=>m.name).join(' ')+' '+
     r.other_labels.map(l=>l.name).join(' ')+' '+
     r.prs.map(p=>'#'+p.number+' '+p.title+' '+p.state).join(' ')
   ).toLowerCase().includes(q));
@@ -593,7 +691,7 @@ function renderRows(){
     <td class="titlecol"><a class="ititle" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></td>
     <td class="num" title="opened ${esc(r.created)}">${ago(r.created)}</td>
     <td class="num" title="${esc(r.updated)}">${ago(r.updated)}</td>
-    ${MODEL.stages.map(s=>`<td class="stagecol">${r.stages.includes(s.key)?`<span class="stagemark" style="color:color-mix(in srgb,#${esc(s.color)} 55%,var(--ink))" title="${esc(s.key)}">✓</span>`:''}</td>`).join('')}
+    ${MODEL.stages.map(s=>`<td class="stagecol">${stageCell(r,s)}</td>`).join('')}
     <td>${r.other_labels.map(l=>`<span class="ghlabel" style="border-color:#${esc(l.color)}; background:color-mix(in srgb,#${esc(l.color)} 18%,transparent)">${esc(l.name)}</span>`).join('')||'<span class="none">—</span>'}</td>
     <td>${prCell(r)}</td>
     <td>${actCell(r)}</td>
@@ -682,17 +780,23 @@ renderIntervalMenu(); fetchData();
 
 
 def main():
-    global REPO_SLUG, STAGES, ACCEPT_LABEL
+    global REPO_SLUG, STAGES, ACCEPT_LABEL, ACCEPT_BLOCK_LABELS
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     help="Path to a checkout whose origin remote names the GitHub repo "
                          "(default: this script's repo)")
     ap.add_argument("--repo-slug", help="GitHub owner/name (overrides --repo detection)")
-    ap.add_argument("--stages", default=",".join(DEFAULT_STAGES),
-                    help="Comma-separated lifecycle labels, in column order "
-                         f"(default: {','.join(DEFAULT_STAGES)})")
+    ap.add_argument("--stages", default=format_stages(DEFAULT_STAGES),
+                    help="Comma-separated pipeline states, in column order. A state is "
+                         "either a bare label, or 'column name=label|label' when several "
+                         "labels should share one column "
+                         f"(default: {format_stages(DEFAULT_STAGES)})")
     ap.add_argument("--accept-label", default=ACCEPT_LABEL,
                     help=f"Label the Accept button adds (default: {ACCEPT_LABEL})")
+    ap.add_argument("--accept-block-labels", default=",".join(ACCEPT_BLOCK_LABELS),
+                    help="Comma-separated labels besides the accept label itself that "
+                         "disable the Accept button "
+                         f"(default: {','.join(ACCEPT_BLOCK_LABELS)})")
     ap.add_argument("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
     ap.add_argument("--port", type=int, default=5058,
                     help="Bind port (default 5058; the Apple dashboard uses 5057)")
@@ -701,11 +805,16 @@ def main():
     REPO_SLUG = args.repo_slug or detect_repo_slug(args.repo)
     if not REPO_SLUG:
         sys.exit("Could not determine the GitHub repo from the origin remote; pass --repo-slug owner/name.")
-    STAGES = [s.strip() for s in args.stages.split(",") if s.strip()]
+    STAGES = parse_stages(args.stages)
+    if not STAGES:
+        sys.exit("--stages named no labels; pass at least one.")
     ACCEPT_LABEL = args.accept_label
+    ACCEPT_BLOCK_LABELS = [s.strip() for s in args.accept_block_labels.split(",")
+                           if s.strip()]
 
     sys.stderr.write(f"Serving Cabalmail triage dashboard on http://{args.host}:{args.port}  (repo: {REPO_SLUG})\n")
-    sys.stderr.write(f"Lifecycle columns: {', '.join(STAGES)}\n")
+    sys.stderr.write("Pipeline columns: "
+                     + "; ".join(f"{k} ({', '.join(v)})" for k, v in STAGES) + "\n")
     app.run(host=args.host, port=args.port, debug=False)
 
 

@@ -179,14 +179,7 @@ private struct MobileHTMLView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
-        let preferences = WKWebpagePreferences()
-        preferences.allowsContentJavaScript = false
-        configuration.defaultWebpagePreferences = preferences
-        context.coordinator.installLinkBridge(on: configuration.userContentController)
-        let view = WKWebView(frame: .zero, configuration: configuration)
-        view.navigationDelegate = context.coordinator
+        let view = makeReaderWebView(coordinator: context.coordinator)
         view.isOpaque = true
         return view
     }
@@ -234,15 +227,7 @@ private struct MacHTMLView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
-        let preferences = WKWebpagePreferences()
-        preferences.allowsContentJavaScript = false
-        configuration.defaultWebpagePreferences = preferences
-        context.coordinator.installLinkBridge(on: configuration.userContentController)
-        let view = WKWebView(frame: .zero, configuration: configuration)
-        view.navigationDelegate = context.coordinator
-        return view
+        makeReaderWebView(coordinator: context.coordinator)
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
@@ -267,6 +252,30 @@ private struct MacHTMLView: NSViewRepresentable {
 #endif
 
 // MARK: - Shared helpers
+
+/// Builds the reader's web view with the privacy posture both platforms
+/// share: no persistent website data, no page JavaScript, the link bridge
+/// installed, and link preview off.
+///
+/// `allowsLinkPreview` defaults to true, which makes a long-press **fetch
+/// the target page** to render the preview — a silent third-party request
+/// from a reader whose whole point is that it blocks remote content, and a
+/// read receipt for anyone who sends a uniquely-keyed link. The useful
+/// actions are already covered by our own link menu on primary activation
+/// (see `HTMLBodyView+LinkBridge`), so nothing is lost by turning it off.
+@MainActor
+func makeReaderWebView(coordinator: HTMLBodyCoordinator) -> WKWebView {
+    let configuration = WKWebViewConfiguration()
+    configuration.websiteDataStore = .nonPersistent()
+    let preferences = WKWebpagePreferences()
+    preferences.allowsContentJavaScript = false
+    configuration.defaultWebpagePreferences = preferences
+    coordinator.installLinkBridge(on: configuration.userContentController)
+    let view = WKWebView(frame: .zero, configuration: configuration)
+    view.navigationDelegate = coordinator
+    view.allowsLinkPreview = false
+    return view
+}
 
 /// Navigation-level + content-blocker coordination for the embedded web
 /// view. The content rule list does the heavy lifting against subresources

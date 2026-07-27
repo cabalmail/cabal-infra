@@ -19,13 +19,31 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # --- fake helper -------------------------------------------------------------
 
 
+class _FakeIMAPClientError(Exception):
+    pass
+
+
+# imapclient isn't vendored into the test environment; function.py only needs
+# the exception type, so a stub module pair is enough (both `imapclient` and
+# `imapclient.exceptions` must be present for the `from ... import` to work).
+_imapclient = types.ModuleType("imapclient")
+_exceptions = types.ModuleType("imapclient.exceptions")
+_exceptions.IMAPClientError = _FakeIMAPClientError
+_imapclient.exceptions = _exceptions
+sys.modules['imapclient'] = _imapclient
+sys.modules['imapclient.exceptions'] = _exceptions
+
+
 class _FakeImapClient:
     def __init__(self):
         self.ops = []
+        self.delete_error = None
         self.unsubscribe_error = None
         self.logged_out = False
 
     def delete_folder(self, name):
+        if self.delete_error is not None:
+            raise self.delete_error
         self.ops.append(f'delete:{name}')
 
     def unsubscribe_folder(self, name):
@@ -78,6 +96,7 @@ class DeleteFolderTest(unittest.TestCase):
 
     def setUp(self):
         CLIENT.ops.clear()
+        CLIENT.delete_error = None
         CLIENT.unsubscribe_error = None
         CLIENT.logged_out = False
 
@@ -94,6 +113,39 @@ class DeleteFolderTest(unittest.TestCase):
         response = function.handler(_event('QA0723'), None)
         self.assertEqual(response['statusCode'], 200)
         self.assertEqual(CLIENT.ops, ['delete:QA0723'])
+        self.assertTrue(CLIENT.logged_out)
+
+    def test_deleting_a_missing_folder_is_a_404_not_a_502(self):
+        # Dovecot answers [NONEXISTENT] when the mailbox is already gone.
+        # Unhandled, that escaped the handler and API Gateway rendered it as
+        # a bodiless 502 the client could say nothing about (#796).
+        CLIENT.delete_error = _FakeIMAPClientError(
+            "delete failed: [NONEXISTENT] Mailbox doesn't exist: QA0723 "
+            "(0.047 + 0.000 + 0.046 secs)."
+        )
+        response = function.handler(_event('QA0723'), None)
+        self.assertEqual(response['statusCode'], 404)
+        self.assertIn('QA0723', json.loads(response['body'])['status'])
+        self.assertEqual(CLIENT.ops, [])
+        self.assertTrue(CLIENT.logged_out)
+
+    def test_nested_folder_404_names_only_the_leaf(self):
+        CLIENT.delete_error = _FakeIMAPClientError('[NONEXISTENT] Mailbox doesn\'t exist')
+        response = function.handler(_event('Archive/QA0723'), None)
+        self.assertEqual(response['statusCode'], 404)
+        self.assertEqual(
+            json.loads(response['body'])['status'],
+            'There is no folder called QA0723'
+        )
+
+    def test_other_imap_failures_are_a_describable_500(self):
+        CLIENT.delete_error = _FakeIMAPClientError('delete failed: [SERVERBUG] oh no')
+        response = function.handler(_event('QA0723'), None)
+        self.assertEqual(response['statusCode'], 500)
+        self.assertEqual(
+            json.loads(response['body'])['status'],
+            'Unable to delete folder'
+        )
         self.assertTrue(CLIENT.logged_out)
 
 

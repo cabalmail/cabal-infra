@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import formatDate, { extractName, extractEmail, domainFor } from './formatDate';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import formatDate, {
+  extractName,
+  extractEmail,
+  domainFor,
+  parseDate,
+  formatReaderTimestamp,
+} from './formatDate';
 
 describe('formatDate', () => {
   const now = new Date('2026-04-20T14:00:00');
@@ -86,5 +92,58 @@ describe('domainFor', () => {
   it('returns empty string when there is no @', () => {
     expect(domainFor('Mailer Daemon')).toBe('');
     expect(domainFor('')).toBe('');
+  });
+});
+
+/* The API sends envelope dates as naive UTC ("2026-07-26 01:16:27"), which
+   JS otherwise parses as local time. Pin a non-UTC zone so these assertions
+   are meaningful on a UTC CI runner too. */
+describe('naive-UTC envelope dates', () => {
+  const original = process.env.TZ;
+  beforeAll(() => { process.env.TZ = 'America/New_York'; });
+  afterAll(() => { process.env.TZ = original; });
+
+  it('runs against a non-UTC zone', () => {
+    expect(new Date('2026-07-26T01:16:27Z').getHours()).toBe(21);
+  });
+
+  it('reads a naive date-time as UTC, not local', () => {
+    expect(parseDate('2026-07-26 01:16:27').getTime())
+      .toBe(Date.parse('2026-07-26T01:16:27Z'));
+  });
+
+  it('leaves a zoned date-time alone', () => {
+    expect(parseDate('2026-07-26T01:16:27Z').getTime())
+      .toBe(Date.parse('2026-07-26T01:16:27Z'));
+    expect(parseDate('2026-07-25T21:16:27-04:00').getTime())
+      .toBe(Date.parse('2026-07-26T01:16:27Z'));
+  });
+
+  it('returns null for missing or unparseable input', () => {
+    expect(parseDate('')).toBeNull();
+    expect(parseDate(null)).toBeNull();
+    expect(parseDate('not-a-date')).toBeNull();
+  });
+
+  it('renders the reader timestamp in local time', () => {
+    // Sent 2026-07-25 21:16 EDT; the naive value is its UTC equivalent.
+    expect(formatReaderTimestamp('2026-07-26 01:16:27'))
+      .toBe('Saturday, Jul 25 · 9:16 PM');
+  });
+
+  it('never dates a just-sent message into the future', () => {
+    // 06:21 EDT today, i.e. 10:21 UTC — was rendering as "10:21 AM".
+    const now = new Date('2026-07-26T10:26:00Z');
+    expect(formatDate('2026-07-26 10:21:00', now)).toBe('5m');
+    expect(formatReaderTimestamp('2026-07-26 10:21:00'))
+      .toBe('Sunday, Jul 26 · 6:21 AM');
+  });
+
+  it('ages a message by its true elapsed time', () => {
+    // Sent 2026-07-25 21:16 EDT, read 2026-07-26 06:20 EDT — the previous
+    // local day, so "Yesterday". The shifted parse put it at 01:16 *today*
+    // and the row read "5h".
+    const now = new Date('2026-07-26T10:20:00Z');
+    expect(formatDate('2026-07-26 01:16:27', now)).toBe('Yesterday');
   });
 });
