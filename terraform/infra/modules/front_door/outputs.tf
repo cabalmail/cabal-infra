@@ -22,3 +22,8 @@ output "terms_url" {
   value       = "https://${local.site_host}/terms.html"
   description = "Public URL of the terms of service page."
 }
+
+output "cloudfront_distribution_arn" {
+  value       = aws_cloudfront_distribution.this.arn
+  description = "ARN of the front door CloudFront distribution. Used as the access-log delivery source (modules/cloudfront_logs)."
+}

@@ -340,8 +340,12 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
       setNewName('');
       localStorage.removeItem(FOLDER_LIST);
       refresh();
-    }).catch(() => {
-      setMessage && setMessage('Unable to create folder.', true);
+    }).catch((err) => {
+      // The API describes what went wrong when it can — a name collision
+      // comes back as a 409 naming the folder. Fall back to the generic
+      // line for transport failures, which carry no response body.
+      const detail = err?.response?.data?.status;
+      setMessage && setMessage(detail || 'Unable to create folder.', true);
     });
   }, [addingParent, api, newName, refresh, setMessage]);
 

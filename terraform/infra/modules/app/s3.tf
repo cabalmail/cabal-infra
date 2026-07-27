@@ -105,7 +105,15 @@ resource "aws_s3_bucket" "cache" {
   bucket = "cache.${var.control_domain}"
 }
 
-# Expire objects after two days
+# Expire objects after two days.
+#
+# The second rule reclaims storage from multipart uploads that never
+# completed - the attachment-staging PUTs (presigned, from the admin
+# client) and Lambda-side uploads both use multipart above boto3's
+# threshold, and orphaned parts are billed while invisible in an object
+# listing. Seven days matches the two access-log buckets
+# (modules/s3_access_logs, modules/elb). It carries no filter on purpose:
+# the abort applies bucket-wide.
 resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
   bucket = aws_s3_bucket.cache.bucket
   rule {
@@ -115,6 +123,14 @@ resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
     }
     expiration {
       days = 2
+    }
+    status = "Enabled"
+  }
+  rule {
+    id = "abort_incomplete_uploads"
+    filter {}
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
     status = "Enabled"
   }
