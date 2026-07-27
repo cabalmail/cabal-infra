@@ -154,6 +154,26 @@ describe('Folders rail', () => {
       );
     });
 
+    it('surfaces the API message when the folder is already gone', async () => {
+      // 404 from delete_folder — another client removed it first, so the
+      // toast has to say which folder rather than "Unable to delete" (#796).
+      mockDeleteFolder.mockRejectedValue({
+        response: { status: 404, data: { status: 'There is no folder called Receipts' } },
+      });
+      const setMessage = vi.fn();
+      renderFolders({ setMessage });
+      await waitFor(() => expect(screen.getAllByText('Receipts').length).toBeGreaterThan(0));
+      const btns = screen.getAllByRole('button', { name: /remove receipts/i });
+      await act(async () => { fireEvent.click(btns[0]); });
+      const dialog = screen.getByRole('alertdialog');
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: /delete folder/i }));
+      });
+      await waitFor(() =>
+        expect(setMessage).toHaveBeenCalledWith('There is no folder called Receipts', true)
+      );
+    });
+
     it('warns about subfolders when the target has children', async () => {
       mockGetFolderList.mockResolvedValue({
         data: {
