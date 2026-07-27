@@ -305,6 +305,18 @@ extension ComposeView {
     private var composeForm: some View {
         @Bindable var model = model
         return Form {
+            // First section on purpose. As the last one it sat below the
+            // body editor, off the bottom of an iPhone screen, and the
+            // WKWebView swallows the pan that would scroll down to it — so
+            // a send-blocking error was invisible and Send looked dead
+            // (#812). macOS pins the same text to the window bottom, which
+            // is always on screen there.
+            if let errorMessage = model.errorMessage {
+                Section {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
+            }
             Section("From") {
                 FromPicker(
                     model: model,
@@ -348,12 +360,6 @@ extension ComposeView {
                     if model.attachmentTotalExceedsWarning {
                         attachmentSizeWarning
                     }
-                }
-            }
-            if let errorMessage = model.errorMessage {
-                Section {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
                 }
             }
         }
