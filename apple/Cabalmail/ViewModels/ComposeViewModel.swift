@@ -328,6 +328,15 @@ final class ComposeViewModel {
         defer { isSending = false }
         do {
             let message = await buildOutgoingMessage(from: fromEmail)
+            // Body assembly runs through the WebKit bridge, which answers
+            // "" for every conversion once it is dead. Sending that would
+            // deliver an empty message the user had written text into, so
+            // refuse and leave the window open (#745).
+            if let failure = editorController.bridgeFailure {
+                errorMessage = "Can't prepare the message body — \(failure). "
+                    + "Copy anything you still need before closing this window."
+                return false
+            }
             // Send-from-draft cleans up the server copy after delivery
             // (best-effort, server-side). A queued send drops the ref; the
             // stale copy survives, which beats discarding a draft for a
@@ -372,6 +381,15 @@ final class ComposeViewModel {
             return true
         }
         let message = await buildOutgoingMessage(from: fromEmail)
+        // A dead bridge converts every body to "" (#745). Pushing that to
+        // the server would replace a good Drafts copy with an empty one, so
+        // keep the local draft (already flushed above) and let the window
+        // close — trapping the user in a compose they can't fix is worse.
+        if editorController.bridgeFailure != nil {
+            stop()
+            onClose()
+            return true
+        }
         guard hasDraftContent(message) else {
             if let ref = serverDraftRef {
                 _ = try? await client.discardDraft(ref)
