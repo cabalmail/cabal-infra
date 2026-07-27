@@ -36,12 +36,18 @@ class _FakeImapClient:
     def __init__(self):
         self.ops = []
         self.create_error = None
+        self.subscribe_error = None
         self.logged_out = False
 
     def create_folder(self, name):
         if self.create_error is not None:
             raise self.create_error
         self.ops.append(f'create:{name}')
+
+    def subscribe_folder(self, name):
+        if self.subscribe_error is not None:
+            raise self.subscribe_error
+        self.ops.append(f'subscribe:{name}')
 
     def logout(self):
         self.logged_out = True
@@ -92,18 +98,40 @@ class NewFolderTest(unittest.TestCase):
     def setUp(self):
         CLIENT.ops.clear()
         CLIENT.create_error = None
+        CLIENT.subscribe_error = None
         CLIENT.logged_out = False
 
     def test_creates_a_top_level_folder(self):
+        # Dovecot doesn't subscribe on create, so the handler does it -- an
+        # unsubscribed folder is never fetched proactively by the clients
+        # (#797).
         response = function.handler(_event('qa0726'), None)
         self.assertEqual(response['statusCode'], 201)
-        self.assertEqual(CLIENT.ops, ['create:qa0726'])
+        self.assertEqual(CLIENT.ops, ['create:qa0726', 'subscribe:qa0726'])
         self.assertTrue(CLIENT.logged_out)
 
     def test_creates_a_child_folder_under_its_parent(self):
         response = function.handler(_event('qa0726', parent='Archive/2026'), None)
         self.assertEqual(response['statusCode'], 201)
-        self.assertEqual(CLIENT.ops, ['create:Archive.2026.qa0726'])
+        self.assertEqual(
+            CLIENT.ops,
+            ['create:Archive.2026.qa0726', 'subscribe:Archive.2026.qa0726']
+        )
+
+    def test_subscribe_failure_does_not_fail_the_create(self):
+        # The folder exists either way; a subscription hiccup must not turn a
+        # successful create into an error the user can't act on.
+        CLIENT.subscribe_error = RuntimeError('SUBSCRIBE rejected')
+        response = function.handler(_event('qa0726'), None)
+        self.assertEqual(response['statusCode'], 201)
+        self.assertEqual(CLIENT.ops, ['create:qa0726'])
+        self.assertTrue(CLIENT.logged_out)
+
+    def test_failed_create_is_never_subscribed(self):
+        CLIENT.create_error = ALREADY_EXISTS
+        response = function.handler(_event('qa0726'), None)
+        self.assertEqual(response['statusCode'], 409)
+        self.assertEqual(CLIENT.ops, [])
 
     def test_existing_folder_returns_409_naming_the_folder(self):
         CLIENT.create_error = ALREADY_EXISTS
