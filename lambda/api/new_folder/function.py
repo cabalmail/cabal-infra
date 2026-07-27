@@ -57,6 +57,18 @@ def handler(event, _context):
     except IMAPClientError as err:
         client.logout()
         return _create_failed(path, err)
+    try:
+        # Dovecot doesn't subscribe on create, and an unsubscribed folder is
+        # never fetched proactively by the clients -- so a folder created here
+        # was invisible to everything that lists subscriptions unless the
+        # client remembered to subscribe it separately (the Apple app does,
+        # React didn't). Subscribing server-side makes every client agree and
+        # pairs with delete_folder, which unsubscribes what it deletes.
+        # Best-effort: the folder exists either way, and a subscription
+        # hiccup must not turn a successful create into an error response.
+        client.subscribe_folder(path)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning('could not subscribe new folder %r', path)
     response = get_folder_list(client)
     client.logout()
     return {
