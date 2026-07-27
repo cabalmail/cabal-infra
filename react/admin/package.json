@@ -46,7 +46,8 @@
     "linkify-it": "5.0.2",
     "ws": "8.21.0",
     "js-yaml": "4.3.0",
-    "brace-expansion": "1.1.16"
+    "brace-expansion": "1.1.16",
+    "postcss": "8.5.18"
   },
   "scripts": {
     "dev": "vite",
