@@ -5,6 +5,140 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.14] - 2026-07-27
+
+### Added
+- **CloudFront access logs for both distributions.** The admin app and
+  the public front door now deliver access logs to the shared
+  `cabal-s3-access-logs-<account>` bucket, alongside the S3 server access
+  logs and under the same 180-day lifecycle. Delivery uses CloudWatch
+  vended-log delivery (CloudFront standard logging v2, new
+  `modules/cloudfront_logs`) rather than the distribution's legacy
+  `logging_config` block: the legacy path authorizes delivery with a
+  bucket ACL grant, and every bucket in the stack has ACLs disabled, so
+  it would have meant re-enabling ACLs on a log bucket. The v2 path
+  authorizes with a bucket policy instead and needs none. Delivery
+  resources live in us-east-1, which CloudFront requires, while the
+  destination bucket stays in the stack region.
+- **Multipart-upload cleanup on the cache bucket.** The
+  `cache.<control_domain>` lifecycle configuration now aborts multipart
+  uploads that have not completed after seven days, matching the two
+  access-log buckets. Attachment staging (presigned PUTs from the admin
+  client) and Lambda-side uploads both use multipart above boto3's
+  threshold, and parts left behind by an interrupted upload are billed
+  while remaining invisible in an object listing. Clears `CKV_AWS_300`
+  from the scanner baseline.
+
+### Changed
+- **Inverted logo on the web app's auth screens.** The sign-in, sign-up,
+  and other pre-login gates now render the logo mark in the accent color
+  directly on the page background, matching the inverted treatment the
+  top bar already uses.
+- **Inverted web-app top-bar logo.** The logo mark in the admin app's top
+  bar now renders in the user's chosen accent color directly on the bar
+  background, instead of surface-colored glyphs on an accent-filled tile —
+  matching the logo treatment in the Apple clients.
+- **Security-group rule descriptions, and an audit of the scanner decay
+  backlog.** The three rules that lacked one now describe what they carry:
+  the NAT instance's masquerade egress and VPC ingress, and the NAT AMI
+  Image Builder's egress. Re-checked the rest of the decay list against
+  what the scanners actually report and reclassified three entries that no
+  longer described real gaps - EBS optimization on the NAT instance (t3 is
+  Nitro-based, so it is already on and cannot be disabled), ALB access
+  logging (only instance is the monitoring tier, disabled in every
+  environment), and API Gateway create-before-destroy (does not mitigate
+  the `execute-api` id change that makes a replacement disruptive).
+  CloudFront access logging remains open and now records the bucket-ACL
+  constraint that blocks the obvious fix. Clears `CKV_AWS_23`,
+  `AWS-0124`, and `CKV_AWS_135` from the gate.
+- **Triage dashboard: `accepted` and `needs-retest` share one column.** The
+  fixer's reconcile step swaps one label for the other when a fix goes live,
+  so the two are mutually exclusive; they now render as a single "queued"
+  column whose pill names the active label, the same grouping the pre-triage
+  labels use. The Accept button is disabled while either label is present
+  (previously only `accepted`), with `--accept-block-labels` to repoint the
+  extra blockers.
+- **Triage dashboard covers the verification flow.** Issues filed by the human
+  or a coding agent enter the tester/fixer cycle via a `needs-verification`
+  label, which the daily tester resolves to `verified` or `verify-blocked`;
+  the dashboard previously keyed only on `tester-found` and missed them.
+  Columns now represent pipeline states rather than single labels: the four
+  pre-triage labels share one "triage" column whose pill (verifying / found /
+  verified / blocked) shows where verification stands, and `--stages` accepts
+  `name=label|label` groupings.
+
+### Fixed
+- **Stale gate status in the scanner baseline record.**
+  `terraform/infra/BASELINE.md` still said the IaC gate was "soft-fail
+  until Phase 3" long after Phase 3 shipped - the workflow jobs it
+  describes are commented `GATING (Phase 3)` and genuinely block the
+  apply. It now states the real posture, names the mechanism (scanner
+  jobs in `approval`'s `needs:` and `if:`, `apply` behind `approval`,
+  plus the baseline-drift step), and records that the decay backlog is
+  complete, so the header matches the now-empty decay table.
+- Apple: **Compose no longer hangs or sends an empty body when the rich-text
+  editor dies.** The WebKit bridge that assembles the message body now reports
+  its own death — a `ready` handshake that never arrives, a failed boot script,
+  or a web content process that stops after boot — instead of leaving Send
+  spinning forever or converting the message to an empty string. Send refuses
+  with an explanatory banner, and draft pushes to the server are skipped rather
+  than replacing a good copy with an empty one.
+- **Describable answer when a folder can't be deleted.** Deleting a folder
+  that is already gone (removed by another client, or never there) returned a
+  bodiless 502 the client could say nothing about. The API now answers 404
+  naming the folder, maps any other IMAP-level failure to a 500 with a real
+  message, and the folder rail shows what the API said instead of its generic
+  line.
+- **Unreachable MFA setup screen for locked-out admins.** The session
+  check ran on every render and bounced any logged-out view that was not
+  on its allowlist back to the login form, and `MfaSetup` was missing
+  from it — so an admin blocked by the MFA gate never saw the
+  self-service enrollment screen the gate routes them to. Reloading that
+  screen still returns to login, since the password it re-authenticates
+  with is deliberately never persisted.
+- **Creating a folder that already exists.** The API turned the server's
+  rejection into an unhandled exception, so the request failed as a 502 with a
+  traceback and the web app had nothing it could show. It now answers 409 and
+  names the folder ("A folder called qa0726 already exists"), any other
+  IMAP-level create failure answers a describable 500, and the folder rail
+  surfaces whichever message the API sent instead of a generic line.
+- **Message timestamps in the web app.** Envelope dates arrive from the API as
+  naive UTC, and the browser was parsing them as local time, so every reader
+  header and every relative age in the message list was off by the viewer's UTC
+  offset — a message sent moments ago could read as hours in the future, and
+  yesterday evening's mail showed today's date. Naive date-times are now pinned
+  to UTC before formatting; values that carry a zone are untouched.
+- Apple: **Readable HTML bodies in "Original" mode.** The reader now injects a
+  `width=device-width` viewport meta on both render paths, not just in Reader
+  mode. Without it WebKit laid messages out at its 980pt desktop viewport and
+  scaled the result down to the pane — about 40% on a phone — so any message
+  that ships no viewport of its own was legible only by pinch-zoom. A sender's
+  own viewport still wins, and the injection never displaces a `<!DOCTYPE>`, so
+  author CSS renders exactly as before.
+- **New folders are subscribed when they are created.** Dovecot does not
+  subscribe on create, so a folder created from the web app never appeared in
+  any client's subscribed list and was never fetched proactively — the native
+  clients only avoided it by subscribing themselves afterwards. The API now
+  subscribes what it creates, which pairs with folder deletion already
+  unsubscribing what it removes.
+
+### Security
+- **Patched `postcss` in `react/admin`.** Bumped the build-tooling `postcss`
+  dependency (pulled in transitively by Vite) from 8.5.15 to 8.5.23, past the
+  8.5.18 fix for a path-traversal bug in previous-source-map auto-loading that
+  could disclose arbitrary `.map` files.
+- Apple: **No silent fetch when long-pressing a link in the reader.** WebKit's
+  stock link preview is disabled, so a long-press no longer loads the target
+  page — a third-party request the remote-content gate one button away in the
+  same toolbar is meant to prevent, and a read receipt for anyone sending a
+  uniquely-keyed link. Copy Link Text / Copy Link Address / Open in Browser /
+  Share are unaffected; they hang off a primary tap.
+- **Dropped the sendmail package's throwaway self-signed cert/key from the
+  `imap`, `smtp-in`, and `smtp-out` images.** The `sendmail` RPM generates a
+  self-signed `/etc/pki/tls/private/sendmail.key` during install; it was
+  never read (the real cert/key are injected at runtime under a different
+  filename) but still shipped in the image and tripped secret scanners.
+
 ## [0.11.13] - 2026-07-26
 
 ### Changed
