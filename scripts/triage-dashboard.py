@@ -14,12 +14,15 @@ native Issues UI:
     same place on every row instead of wrapping through an inline label list.
     Labels that mean the same thing to a triager share a column: the pre-triage
     four (needs-verification, tester-found, verified, verify-blocked) all mean
-    "in the cycle, waiting on you", and the row names which one applies
+    "in the cycle, waiting on you", and accepted/needs-retest - mutually
+    exclusive, since the fixer's reconcile swaps one for the other - both mean
+    "queued for an agent, nothing to triage"; the row names which one applies
   * related PRs (discovered via cross-reference events, since the fixer does
     not use closing keywords) are shown per row with their open/merged/closed
     state, linked directly - no drilling into the issue to find them
   * triage actions per row (these make real changes on GitHub): Accept adds
-    the `accepted` label so the nightly fixer picks the issue up; Close...
+    the `accepted` label so the nightly fixer picks the issue up (disabled
+    while the issue is already accepted or awaiting retest); Close...
     posts a required comment and then closes the issue as not-planned or
     completed
 
@@ -66,11 +69,15 @@ except ImportError:
 # All four mean the same thing to a triager - the finding is in the cycle, pre-triage
 # - so they share one column and the row's pill shows where verification stands.
 # Only the human applies `accepted`, which is what queues the fixer.
+#
+# `accepted` and `needs-retest` are mutually exclusive - the fixer's reconcile step
+# removes `accepted` when it adds `needs-retest` (fix live on stage), and a failed
+# retest goes back the other way - and both mean "queued for an agent" (the fixer,
+# or the tester's retest), so they share the `queued` column.
 DEFAULT_STAGES = [
     ("triage", ["needs-verification", "tester-found", "verified", "verify-blocked"]),
-    ("accepted", ["accepted"]),
+    ("queued", ["accepted", "needs-retest"]),
     ("fix-in-review", ["fix-in-review"]),
-    ("needs-retest", ["needs-retest"]),
 ]
 # Compact names for labels sharing a column, where the header can't name them.
 SHORT_NAMES = {
@@ -78,6 +85,8 @@ SHORT_NAMES = {
     "tester-found": "found",
     "verified": "verified",
     "verify-blocked": "blocked",
+    "accepted": "accepted",
+    "needs-retest": "retest",
 }
 # Fallback colors (GitHub label colors) if the repo query can't supply one.
 FALLBACK_COLORS = {
@@ -119,6 +128,9 @@ query($owner: String!, $name: String!, $cursor: String) {
 REPO_SLUG = None
 STAGES = DEFAULT_STAGES
 ACCEPT_LABEL = "accepted"
+# Labels besides ACCEPT_LABEL itself that grey out the Accept button: an issue
+# awaiting retest already has its fix live, so there is nothing to queue.
+ACCEPT_BLOCK_LABELS = ["needs-retest"]
 
 
 def format_stages(stages):
@@ -283,7 +295,9 @@ def build_model():
                              "color": label_colors.get(lab, "8b8a86")}
                             for lab in labs]
                       for key, labs in marks.items() if labs},
-            "accepted": ACCEPT_LABEL in names,
+            "accept_blocked": next(
+                (lab for lab in [ACCEPT_LABEL] + ACCEPT_BLOCK_LABELS if lab in names),
+                None),
             "other_labels": [{"name": n, "color": c} for n, c in labels
                              if n not in stage_labels],
             "prs": prs,
@@ -531,13 +545,16 @@ PAGE = r"""<!DOCTYPE html>
     pill says where verification stands: what you and your agents file enters as
     <code>needs-verification</code> (<i>verifying</i>) and the tester resolves it to
     <i>verified</i> or <i>blocked</i>; the tester's own findings arrive pre-verified as
-    <i>found</i>. From there: <code>accepted</code> → <code>fix-in-review</code> →
-    <code>needs-retest</code>. Other open issues (and everything
+    <i>found</i>. The <b>queued</b> column holds the issue whenever an agent owes it work —
+    <code>accepted</code> (waiting on the fixer) or <code>needs-retest</code> (fix live,
+    waiting on the tester's retest), never both, since the fixer's reconcile swaps one for
+    the other around <code>fix-in-review</code>. Other open issues (and everything
     closed) are omitted. <b>PRs</b> are discovered from GitHub cross-reference events (the
     fixer links issues without closing keywords, so GitHub's "linked PR" field stays empty);
     a PR that merely mentions the issue also appears here. Click a stat tile to filter to
     that stage; click it again to clear. All links open in a new tab.
-    <b>Accept</b> adds the <code>accepted</code> label (the nightly fixer picks it up);
+    <b>Accept</b> adds the <code>accepted</code> label (the nightly fixer picks it up) and is
+    disabled while the issue is already accepted or awaiting retest;
     <b>Close…</b> posts your comment and then closes the issue — both are real GitHub changes.
   </footer>
 </div>
@@ -642,10 +659,13 @@ function stageCell(r,s){
   return marks.map(m=>`<span class="ghlabel" style="border-color:#${esc(m.color)}; background:color-mix(in srgb,#${esc(m.color)} 18%,transparent)" title="${esc(m.name)}">${esc(m.short)}</span>`).join('');
 }
 function actCell(r){
-  const accepted=r.accepted;
+  const blocked=r.accept_blocked;
+  const why=blocked===MODEL.accept_label?'Already accepted'
+    :blocked==='needs-retest'?'Fix live — awaiting retest'
+    :'Blocked by '+blocked;
   return `<div class="actcell">`+
-    `<button class="abtn accept" type="button" ${accepted
-      ?'disabled title="Already accepted"'
+    `<button class="abtn accept" type="button" ${blocked
+      ?`disabled title="${esc(why)}"`
       :`onclick="acceptIssue(${r.number},this)" title="Add the ${esc(MODEL.accept_label)} label — queues the nightly fixer"`}>Accept</button>`+
     `<button class="abtn danger" type="button" onclick="openCloseModal(${r.number})" title="Comment on and close this issue">Close…</button>`+
     `</div>`;
@@ -760,7 +780,7 @@ renderIntervalMenu(); fetchData();
 
 
 def main():
-    global REPO_SLUG, STAGES, ACCEPT_LABEL
+    global REPO_SLUG, STAGES, ACCEPT_LABEL, ACCEPT_BLOCK_LABELS
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     help="Path to a checkout whose origin remote names the GitHub repo "
@@ -773,6 +793,10 @@ def main():
                          f"(default: {format_stages(DEFAULT_STAGES)})")
     ap.add_argument("--accept-label", default=ACCEPT_LABEL,
                     help=f"Label the Accept button adds (default: {ACCEPT_LABEL})")
+    ap.add_argument("--accept-block-labels", default=",".join(ACCEPT_BLOCK_LABELS),
+                    help="Comma-separated labels besides the accept label itself that "
+                         "disable the Accept button "
+                         f"(default: {','.join(ACCEPT_BLOCK_LABELS)})")
     ap.add_argument("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
     ap.add_argument("--port", type=int, default=5058,
                     help="Bind port (default 5058; the Apple dashboard uses 5057)")
@@ -785,6 +809,8 @@ def main():
     if not STAGES:
         sys.exit("--stages named no labels; pass at least one.")
     ACCEPT_LABEL = args.accept_label
+    ACCEPT_BLOCK_LABELS = [s.strip() for s in args.accept_block_labels.split(",")
+                           if s.strip()]
 
     sys.stderr.write(f"Serving Cabalmail triage dashboard on http://{args.host}:{args.port}  (repo: {REPO_SLUG})\n")
     sys.stderr.write("Pipeline columns: "
