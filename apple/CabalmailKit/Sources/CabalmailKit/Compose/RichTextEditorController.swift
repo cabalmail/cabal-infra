@@ -120,6 +120,13 @@ public final class RichTextEditorController: NSObject {
     /// True once `editor-bridge.js` has finished bootstrapping and is safe
     /// to call. Drives `waitUntilReady()` so callers don't race the load.
     public private(set) var isReady: Bool = false
+    /// Non-nil once the bridge is known to be unusable: the boot script
+    /// failed, `ready` never arrived within `readyTimeout`, or the web
+    /// content process died after boot. Every bridge call answers with its
+    /// empty / identity fallback from that point on, so a caller about to
+    /// *send* or *persist* a converted body must check this and refuse
+    /// rather than treat `""` as "the user wrote nothing" (#745).
+    public private(set) var bridgeFailure: String?
 
     /// Fires after every `input` event from the editor (typing, paste,
     /// formatting). Use it to invalidate cached HTML.
@@ -129,16 +136,24 @@ public final class RichTextEditorController: NSObject {
     public var onSelectionChanged: (@MainActor (Selection) -> Void)?
     /// Fires once after the editor finishes bootstrapping.
     public var onReady: (@MainActor () -> Void)?
-    /// Fires when the editor page reports a script error — most notably a
-    /// failure while loading or evaluating marked / turndown /
-    /// editor-bridge.js, after which the bridge never posts `ready` and
-    /// every editor await stays parked. Hosts should surface this to the
-    /// user; the controller only records and forwards it.
+    /// Fires when the bridge reports trouble: a script error from the editor
+    /// page (most notably while loading or evaluating marked / turndown /
+    /// editor-bridge.js), a `ready` handshake that never arrived, or a dead
+    /// web content process. Hosts should surface it to the user; whether the
+    /// bridge is still usable afterwards is recorded in `bridgeFailure`.
     public var onBridgeError: (@MainActor (String) -> Void)?
 
     private var pendingReadyContinuations: [CheckedContinuation<Void, Never>] = []
+    private var readyTimeoutTask: Task<Void, Never>?
+    private let readyTimeout: TimeInterval
 
-    public init(placeholder: String? = nil) {
+    /// `readyTimeout` bounds how long the first `waitUntilReady()` parks
+    /// before the bridge is declared dead. Ten seconds is far longer than a
+    /// local `file://` load needs even on a cold, loaded device, and a
+    /// late `ready` still recovers the bridge — so a slow boot costs a
+    /// transient banner, never a stuck Send.
+    public init(placeholder: String? = nil, readyTimeout: TimeInterval = 10) {
+        self.readyTimeout = readyTimeout
         let config = WKWebViewConfiguration()
         let controller = WKUserContentController()
         config.userContentController = controller
@@ -182,10 +197,15 @@ public final class RichTextEditorController: NSObject {
         }
     }
 
-    /// Suspends the caller until the bridge has posted its `ready` message.
-    /// Cheap to call repeatedly — returns immediately once ready.
+    /// Suspends the caller until the bridge posts `ready`, fails, or
+    /// `readyTimeout` elapses — whichever comes first. Cheap to call
+    /// repeatedly. It never parks forever: a bridge that dies while
+    /// bootstrapping used to leave Send spinning with no error and no
+    /// timeout (#745), so the wait is bounded and callers that care about
+    /// the result check `bridgeFailure` afterwards.
     public func waitUntilReady() async {
-        if isReady { return }
+        if isReady || bridgeFailure != nil { return }
+        startReadyTimeout()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             pendingReadyContinuations.append(continuation)
         }
@@ -265,12 +285,20 @@ public final class RichTextEditorController: NSObject {
 
     // MARK: - Bridge plumbing
 
-    fileprivate func handleBridgeMessage(_ payload: [String: Any]) {
+    // Internal rather than fileprivate so the bridge-liveness tests can
+    // drive the handshake without an app host to run editor.html in.
+    func handleBridgeMessage(_ payload: [String: Any]) {
         guard let type = payload["type"] as? String else { return }
         switch type {
         case "ready":
             guard !isReady else { return }
             isReady = true
+            // A `ready` that arrives after the timeout fired means the boot
+            // was merely slow, not dead — clear the failure so the compose
+            // can go on using the bridge.
+            bridgeFailure = nil
+            readyTimeoutTask?.cancel()
+            readyTimeoutTask = nil
             let waiters = pendingReadyContinuations
             pendingReadyContinuations.removeAll()
             for continuation in waiters { continuation.resume() }
@@ -280,7 +308,14 @@ public final class RichTextEditorController: NSObject {
             let source = payload["source"] as? String ?? ""
             let described = source.isEmpty ? message : "\(message) (\(source))"
             NSLog("[RichTextEditor] bridge script error: %@", described)
-            onBridgeError?(described)
+            // A script error before `ready` is terminal — the handshake
+            // never comes. After `ready` the bridge is live and a stray
+            // page error is not worth disabling the composer for.
+            if isReady {
+                onBridgeError?(described)
+            } else {
+                failBridge(described)
+            }
         case "input":
             onContentChanged?()
         case "selection":
@@ -291,6 +326,35 @@ public final class RichTextEditorController: NSObject {
         default:
             break
         }
+    }
+
+    /// Arms the one-shot deadline behind `waitUntilReady()`. Started on the
+    /// first wait rather than in `init` so a controller nobody awaits never
+    /// arms a timer.
+    private func startReadyTimeout() {
+        guard readyTimeoutTask == nil else { return }
+        let timeout = readyTimeout
+        readyTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.failBridge("the editor did not finish loading")
+        }
+    }
+
+    /// Records a bridge failure, releases everyone parked in
+    /// `waitUntilReady()`, and tells the host. Idempotent — the first cause
+    /// wins, and a later `ready` clears it.
+    private func failBridge(_ reason: String) {
+        guard bridgeFailure == nil else { return }
+        bridgeFailure = reason
+        isReady = false
+        readyTimeoutTask?.cancel()
+        readyTimeoutTask = nil
+        let waiters = pendingReadyContinuations
+        pendingReadyContinuations.removeAll()
+        for continuation in waiters { continuation.resume() }
+        NSLog("[RichTextEditor] bridge unusable: %@", reason)
+        onBridgeError?(reason)
     }
 
     // The WKWebView async/await API can throw on otherwise-benign navigations
@@ -344,6 +408,15 @@ extension RichTextEditorController: WKNavigationDelegate {
             return
         }
         decisionHandler(.cancel)
+    }
+
+    /// The web content process can be jetsammed or crash *after* the bridge
+    /// reported ready, and nothing else tells us: `isReady` would stay true,
+    /// every `evaluateJavaScript` would fail, and `getHTML()`'s `?? ""`
+    /// fallback would hand the send path an empty body for a message the
+    /// user did write — which then leaves on the wire (#745).
+    public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        failBridge("the editor's web content process stopped")
     }
 }
 

@@ -134,6 +134,10 @@ extension ComposeViewModel {
     /// plan calls for without a second persistent queue.
     func autosaveToServer() async {
         guard !isSending, !serverSaveInFlight else { return }
+        // Same reasoning as `cancel()`: with the bridge dead every body
+        // converts to "", and a debounced push of that would overwrite the
+        // server copy with an empty draft (#745).
+        guard editorController.bridgeFailure == nil else { return }
         guard let fromEmail = currentFromEmail() else { return }
         let message = await buildOutgoingMessage(from: fromEmail)
         guard hasDraftContent(message) else { return }
