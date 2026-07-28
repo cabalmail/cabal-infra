@@ -51,7 +51,6 @@ domains = {}
 for item in items:
     # DynamoDB JSON uses typed wrappers; unwrap them
     tld = item.get("tld", {}).get("S", "")
-    zone_id = item.get("zone-id", {}).get("S", "")
     username = item.get("username", {}).get("S", "")
     user = item.get("user", {}).get("S", "")
     subdomain = item.get("subdomain", {}).get("S", "") if "subdomain" in item else None
@@ -71,7 +70,6 @@ for item in items:
 
     if tld not in domains:
         domains[tld] = {
-            "zone-id": zone_id,
             "addresses": {},
             "subdomains": {},
         }
