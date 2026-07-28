@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.16] - 2026-07-28
+
+### Changed
+- Apple: **Address swipe gestures reorganized.** Swiping an address row
+  left-to-right now reveals suspend/reinstate and revoke, with
+  suspend/reinstate as the full-swipe default (revoke still asks for
+  confirmation); favorite/unfavorite moved to its own right-to-left
+  swipe. Splitting the actions across the two edges also keeps them
+  from overflowing a narrow address pane.
+
+### Fixed
+- **`suspend_address` / `reinstate_address` import failure.** Both new
+  Lambdas shipped with an empty `requirements.txt`, so the build bundled
+  `helper.py` (whose `imap_session` dependency imports `imapclient`) without
+  the pinned third-party packages, and every invocation died with
+  `Runtime.ImportModuleError: No module named 'imapclient'`. They now pin
+  the same hashed dependency set as the other helper-importing endpoints.
+
 ## [0.11.15] - 2026-07-28
 
 ### Added
