@@ -93,7 +93,8 @@ resource "aws_iam_role_policy" "lambda" {
             "Effect": "Allow",
             "Action": [
               "route53:ChangeResourceRecordSets",
-              "route53:GetHostedZone"
+              "route53:GetHostedZone",
+              "route53:ListResourceRecordSets"
             ],
             "Resource": [
               ${local.hosted_zone_arns}

@@ -9,6 +9,11 @@ struct ContentView: View {
     /// Row awaiting revoke confirmation (drives the dialog).
     @State private var pendingRevoke: Address?
 
+    /// Row awaiting suspend confirmation. Reinstating is harmless (it
+    /// republishes DNS records) and fires directly, so only suspend is
+    /// staged here.
+    @State private var pendingSuspend: Address?
+
     /// Screenshot scaffolding: pushes the new-address flow (or the first
     /// address's large-type detail) on launch when the matching
     /// CABAL_WATCH_PREVIEW seed is active (see WatchAppModel).
@@ -76,23 +81,7 @@ struct ContentView: View {
     }
 
     private func list(_ addresses: [Address]) -> some View {
-        List {
-            if addresses.isEmpty {
-                Text("No addresses yet. Tap + to mint one.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(addresses, id: \.address) { address in
-                row(address)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            pendingRevoke = address
-                        } label: {
-                            Label("Revoke", systemImage: "xmark.bin")
-                        }
-                    }
-            }
-        }
+        rows(addresses)
         .refreshable {
             await model.refresh()
         }
@@ -119,12 +108,70 @@ struct ContentView: View {
         } message: { _ in
             Text("Mail sent to it will stop being delivered.")
         }
+        .confirmationDialog(
+            "Suspend \(pendingSuspend?.address ?? "address")?",
+            isPresented: suspendDialogBinding,
+            titleVisibility: .visible,
+            presenting: pendingSuspend
+        ) { address in
+            Button("Suspend") {
+                Task { await model.setSuspended(address, to: true) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Inbound mail stops until it is reinstated.")
+        }
+    }
+
+    private func rows(_ addresses: [Address]) -> some View {
+        List {
+            if addresses.isEmpty {
+                Text("No addresses yet. Tap + to mint one.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(addresses, id: \.address) { address in
+                row(address)
+                    .swipeActions(edge: .trailing) {
+                        swipeButtons(for: address)
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func swipeButtons(for address: Address) -> some View {
+        Button(role: .destructive) {
+            pendingRevoke = address
+        } label: {
+            Label("Revoke", systemImage: "xmark.bin")
+        }
+        Button {
+            if address.suspended {
+                Task { await model.setSuspended(address, to: false) }
+            } else {
+                pendingSuspend = address
+            }
+        } label: {
+            Label(
+                address.suspended ? "Reinstate" : "Suspend",
+                systemImage: address.suspended ? "play.circle" : "pause.circle"
+            )
+        }
+        .tint(.orange)
     }
 
     private var revokeDialogBinding: Binding<Bool> {
         Binding(
             get: { pendingRevoke != nil },
             set: { if !$0 { pendingRevoke = nil } }
+        )
+    }
+
+    private var suspendDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingSuspend != nil },
+            set: { if !$0 { pendingSuspend = nil } }
         )
     }
 
@@ -141,9 +188,15 @@ struct ContentView: View {
                             .font(.caption2)
                             .foregroundStyle(.yellow)
                     }
+                    if address.suspended {
+                        Image(systemName: "pause.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
                     Text(address.address)
                         .font(.footnote)
                         .lineLimit(2)
+                        .foregroundStyle(address.suspended ? .secondary : .primary)
                 }
                 if let comment = address.comment, !comment.isEmpty {
                     Text(comment)

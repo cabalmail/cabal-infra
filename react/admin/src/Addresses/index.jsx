@@ -227,6 +227,9 @@ function AdminAddresses({ domains, setMessage }) {
                   <span className="admin-addresses__address">
                     {a.address.replace(/([.@])/g, '$&\u200B')}
                   </span>
+                  {a.suspended && (
+                    <span className="admin-addresses__suspended">suspended</span>
+                  )}
                   {a.comment && (
                     <span className="admin-addresses__comment">{a.comment}</span>
                   )}

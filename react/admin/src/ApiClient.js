@@ -115,6 +115,40 @@ export default class ApiClient {
     return response;
   }
 
+  suspendAddress(address) {
+    localStorage.removeItem(ADDRESS_LIST);
+    const response = axios.put('/suspend_address',
+      JSON.stringify({
+        address: address
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  reinstateAddress(address) {
+    localStorage.removeItem(ADDRESS_LIST);
+    const response = axios.put('/reinstate_address',
+      JSON.stringify({
+        address: address
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
   // BIMI
 
   // Resolve a sender domain's BIMI logo. The Lambda returns a rasterized PNG

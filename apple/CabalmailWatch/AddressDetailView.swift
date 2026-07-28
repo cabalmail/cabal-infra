@@ -24,6 +24,11 @@ struct AddressDetailView: View {
                         .font(.caption2)
                         .foregroundStyle(.yellow)
                 }
+                if address.suspended {
+                    Label("Suspended", systemImage: "pause.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
