@@ -6,6 +6,11 @@ import XCTest
 /// that predates it.
 final class HTMLRewriteTests: XCTestCase {
     private let viewport = "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+    /// Injected alongside the viewport meta by `insertingHeadDefaults`; kept
+    /// in step with `defaultLinkStyle` / `brandLinkColorLight` in
+    /// `HTMLRewrite.swift`.
+    private let linkStyle = "<style>a { color: #2b633a; }</style>"
+    private var headDefaults: String { viewport + linkStyle }
 
     // MARK: - Viewport injection
 
@@ -23,7 +28,7 @@ final class HTMLRewriteTests: XCTestCase {
     func testViewportLandsInsideHead() {
         let html = "<html><head><title>hi</title></head><body>hi</body></html>"
         let result = rewrite(html: html, inlineImages: [:], readerMode: false)
-        XCTAssertEqual(result, "<html><head>\(viewport)<title>hi</title></head><body>hi</body></html>")
+        XCTAssertEqual(result, "<html><head>\(headDefaults)<title>hi</title></head><body>hi</body></html>")
     }
 
     /// A doctype has to stay first or the author's page renders in quirks
@@ -37,14 +42,14 @@ final class HTMLRewriteTests: XCTestCase {
     func testViewportGoesAfterHtmlTagWhenThereIsNoHead() {
         let html = "<html><body>hi</body></html>"
         let result = rewrite(html: html, inlineImages: [:], readerMode: false)
-        XCTAssertEqual(result, "<html>\(viewport)<body>hi</body></html>")
+        XCTAssertEqual(result, "<html>\(headDefaults)<body>hi</body></html>")
     }
 
     /// The HTML alternative our own `/send` Lambda generates is a bare
     /// fragment — the shape the tester hit in #787.
     func testBareFragmentIsPrefixed() {
         let result = rewrite(html: "<p>two words</p>", inlineImages: [:], readerMode: false)
-        XCTAssertEqual(result, "\(viewport)<p>two words</p>")
+        XCTAssertEqual(result, "\(headDefaults)<p>two words</p>")
     }
 
     /// Ours is a default, not an override: a sender's own viewport must come
