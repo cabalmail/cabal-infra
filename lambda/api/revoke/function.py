@@ -41,7 +41,13 @@ def handler(event, _context):
     item = table.get_item(Key={'address': address}).get('Item') or {}
     subdomain = item.get('subdomain')
     tld = item.get('tld')
-    zone_id = item.get('zone-id') or domains.get(tld)
+    # The zone is resolved from DOMAINS, never from the zone-id cached on the
+    # row: that value is a snapshot from address-creation time that goes stale
+    # if a hosted zone is ever recreated (legacy rows pointed at zones that no
+    # longer exist, failing Route 53 calls with NoSuchHostedZone). For a tld no
+    # longer in DOMAINS this resolves to None and the DNS step is skipped --
+    # the Lambda role's Route 53 grant only covers managed zones anyway.
+    zone_id = domains.get(tld)
     try:
         # Only ACTIVE (non-suspended) co-tenants keep the records alive: a
         # suspended address's contract is already "DNS absent", so it must not
