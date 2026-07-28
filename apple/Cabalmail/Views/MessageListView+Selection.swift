@@ -475,28 +475,19 @@ extension MessageListView {
 
     /// The bottom bulk-action bar shows whenever a real multi-selection exists
     /// (two or more) - a single selection uses the reading pane and its own
-    /// toolbar. On iPad / visionOS it also shows while the Select edit mode is
-    /// active so the bar is reachable before any row is picked. Compact iPhone
-    /// keeps the explicit `bulkMode` gate.
+    /// toolbar. Touch layouts also show it while the Select mode is active so
+    /// the bar is reachable before any row is picked.
     func showsBulkActionBar(model: MessageListViewModel) -> Bool {
-        guard isWideLayout else { return model.bulkMode }
-        #if os(macOS)
-        return model.selectedUIDs.count >= 2
-        #else
-        return model.selectedUIDs.count >= 2 || editMode == .active
-        #endif
+        if model.bulkMode { return true }
+        return isWideLayout && model.selectedUIDs.count >= 2
     }
 
     /// Esc clears the selection and exits any touch edit mode. Returns
     /// `.ignored` when there's nothing to clear so the key can do other things.
     func escapePressed(model: MessageListViewModel) -> KeyPress.Result {
         let hadSelection = !model.selectedUIDs.isEmpty
-        #if !os(macOS)
-        let wasEditing = editMode == .active
-        editMode = .inactive
-        #else
-        let wasEditing = false
-        #endif
+        let wasEditing = model.bulkMode
+        model.leaveBulkMode()
         guard hadSelection || wasEditing else { return .ignored }
         model.selectedUIDs.removeAll()
         model.selectionAnchor = nil

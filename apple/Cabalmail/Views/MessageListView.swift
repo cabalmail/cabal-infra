@@ -126,15 +126,6 @@ struct MessageListView: View {
     /// keys from the search field. Set true when a row is clicked. Non-private
     /// so the `+Selection` extension can drive it.
     @FocusState var listFocused: Bool
-    #if !os(macOS)
-    /// Drives the native multi-select edit mode on wide touch layouts (iPad,
-    /// visionOS): the Select button toggles it, and while active the system
-    /// draws selection circles and taps toggle membership in `selectedUIDs`.
-    /// Non-private so the `+Bulk` extension's `selectButton` can flip it.
-    /// macOS has no `EditMode` (pointer shift/command-clicks cover multi-
-    /// select), so this is compiled out there.
-    @State var editMode: EditMode = .inactive
-    #endif
 
     // `body` was a single ~200-line modifier chain; once the sheets, the
     // purge confirmation, and the signal observers were all attached,
