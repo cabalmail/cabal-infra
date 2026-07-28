@@ -56,6 +56,7 @@ resource "aws_s3_bucket_policy" "admin_bucket" {
 #tfsec:ignore:aws-cloudfront-enable-logging
 #tfsec:ignore:aws-cloudfront-enable-waf
 resource "aws_cloudfront_distribution" "cdn" {
+  #checkov:skip=CKV_AWS_86:Access logging is enabled, via CloudWatch vended-log delivery (standard logging v2, modules/cloudfront_logs). The check only recognizes the legacy `logging_config` block, whose ACL-based delivery is incompatible with this stack's ACLs-disabled buckets.
   origin {
     domain_name              = var.bucket_domain_name
     origin_id                = "cabal_admin_s3"

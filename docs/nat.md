@@ -17,7 +17,9 @@ break at once, even though the instances keep "running":
 - The `/send` Lambda hangs and times out (its submission to `smtp-out` blocks on
   `smtp-out`'s now-unreachable outbound delivery).
 - Container logs stop shipping to CloudWatch (the `awslogs` driver cannot reach
-  the Logs endpoint), so the tiers go silent in CloudWatch.
+  the Logs endpoint), so the tiers go silent in CloudWatch. They resume and
+  backfill on their own once egress returns, but not immediately - see
+  [After egress returns](#after-egress-returns-logs-lag-they-dont-stop).
 - The live-reconfigure path, DMARC ingest, and anything else touching a service
   API begins to fail.
 
@@ -272,3 +274,39 @@ API calls hang.
    culprit, flip the environment to gateway mode (`TF_VAR_USE_NAT_INSTANCE =
    false`) and apply: managed gateways restore egress on the same EIPs with no
    AMI in the path. Rebuild or fix the AMI, then flip back in a window.
+
+### After egress returns: logs lag, they don't stop
+
+Log shipping recovers by itself, but not instantly and not at the same speed
+for every tier. The `awslogs` driver batches every 5 s over a long-lived HTTPS
+connection to the Logs endpoint. A NAT that goes away mid-flight *blackholes*
+that connection rather than resetting it, so the driver sits on a socket the
+kernel keeps retransmitting into until it exhausts its retry budget
+(`net.ipv4.tcp_retries2`, ~15 min at the default of 15) and only then
+reconnects. A tier that happened to be between batches at the cut reconnects as
+soon as the route is repointed; a busier tier with a request in flight can stay
+silent for up to ~16 minutes after egress is otherwise healthy. The tier that
+looks worst is simply the one that logs the most.
+
+**Nothing is lost.** The driver buffers in memory (a few thousand messages)
+while it retries and flushes the entire backlog on reconnect, carrying the
+original event timestamps - so the gap fills in retroactively and the recovered
+events sort back into place. Note that `describe-log-streams` metadata
+(`lastEventTimestamp` / `lastIngestionTime`) can itself lag by hours and is not
+evidence of anything; query the events.
+
+To tell a lagging shipper from a genuinely dead one, compare ingestion time
+against event time in Logs Insights:
+
+```
+fields @timestamp, @ingestionTime | sort @timestamp asc | limit 10000
+```
+
+A stall-and-drain shows the lag jump to ~900 s at the moment of the cut and
+then decay by 60 s per minute of event time back to the normal 0-5 s, because
+every buffered event landed at the same wall-clock instant. A steady 0-5 s lag
+with no recent events means the tier really has stopped logging.
+
+Do not roll a tier to "revive" its log shipper before checking this - the wait
+is usually shorter than the roll, and rolling discards whatever the driver is
+still holding.

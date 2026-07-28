@@ -46,17 +46,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  color: var(--surface);
+  background: transparent;
+  color: var(--accent);
   height: 37px;
   width: 72px;
-  border-radius: var(--radius-sm);
   overflow: hidden;
   padding: 4px;
-}
-
-@media (prefers-color-scheme: dark) {
-  .auth__brand-tile { color: #0b0b0b; }
 }
 
 .auth__brand-tile svg {

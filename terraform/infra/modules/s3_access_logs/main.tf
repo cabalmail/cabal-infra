@@ -117,6 +117,40 @@ data "aws_iam_policy_document" "access_logs" {
       values   = local.source_bucket_arns
     }
   }
+
+  # CloudFront access logs arrive by a different route: CloudWatch vended
+  # log delivery (standard logging v2, see modules/cloudfront_logs), which
+  # writes as delivery.logs.amazonaws.com rather than the S3 logging
+  # principal. Shape and conditions come from the AWS docs ("Configure
+  # standard logging (v2)" - the destination bucket policy). Scoped to the
+  # default CloudFront prefix, so a delivery whose suffix_path escapes it
+  # is denied rather than scattering objects outside the granted subtree.
+  # The delivery-source ARNs are us-east-1 regardless of the stack region:
+  # CloudFront's delivery configuration is only accepted there.
+  statement {
+    sid     = "AWSLogsDeliveryWrite"
+    actions = ["s3:PutObject"]
+    principals {
+      type        = "Service"
+      identifiers = ["delivery.logs.amazonaws.com"]
+    }
+    resources = ["${aws_s3_bucket.access_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/CloudFront/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:delivery-source:*"]
+    }
+  }
 }
 
 resource "aws_s3_bucket_policy" "access_logs" {
