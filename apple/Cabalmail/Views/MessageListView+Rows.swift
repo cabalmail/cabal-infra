@@ -37,14 +37,11 @@ extension MessageListView {
         let isChecked = model.selectedUIDs.contains(envelope.uid)
         withRowContextMenu(for: envelope, model: model) {
             Group {
-                if isWideLayout {
-                    wideRow(
-                        for: envelope,
-                        isSelected: isSelected,
-                        model: model,
-                        orderedVisible: orderedVisible
-                    )
-                } else if bulkMode {
+                // Selection mode first, on every touch layout: the checkbox
+                // row is what makes multi-select visible, and the wide row
+                // can't draw it (it leans on a native list's selection
+                // circles, which the virtualized `LazyVStack` doesn't have).
+                if bulkMode {
                     // No .tag() while in bulk mode — the list's selection
                     // binding drives the detail pane, and we don't want a
                     // checkbox tap to also pop the reader.
@@ -54,6 +51,13 @@ extension MessageListView {
                         MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
                     }
                     .buttonStyle(.plain)
+                } else if isWideLayout {
+                    wideRow(
+                        for: envelope,
+                        isSelected: isSelected,
+                        model: model,
+                        orderedVisible: orderedVisible
+                    )
                 } else {
                     MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
                         .tag(envelope)
@@ -91,9 +95,9 @@ extension MessageListView {
         }
     }
 
-    /// The wide-layout (native multi-select) row: a UID-tagged `MessageRow` so
-    /// the list's `Set<UInt32>` binding owns selection and the system draws the
-    /// highlight (and selection circles in iPad edit mode). `isSelected` is set
+    /// The wide-layout single-selection row: a UID-tagged `MessageRow` whose
+    /// highlight follows `selectedUIDs`. Multi-select does NOT come through
+    /// here — `bulkMode` takes the checkbox branch above. `isSelected` is set
     /// membership, used only to keep the unread dot legible. On iOS it also
     /// carries the hardware-keyboard shift / command-click handling SwiftUI
     /// doesn't wire into the native list there; plain taps fall through to the
@@ -412,15 +416,17 @@ private struct MessageRow: View {
         .task(id: senderKey) { await hydrateContactName() }
     }
 
-    // Read/unread indicator. We deliberately avoid `Color.accentColor` here:
-    // on iOS the accent is system blue, which is also the row-selection
-    // highlight, so the dot becomes invisible the moment the user picks the
-    // message. A fixed `.blue` keeps the conventional look against the list
-    // background, and switching to `.white` when the row is selected keeps
-    // the dot legible against the highlight on every platform.
+    // Read/unread indicator, painted in the brand forest green rather than
+    // the platform blue. The asset-catalog color is pinned explicitly rather
+    // than taken from `Color.accentColor`, which macOS repaints with the
+    // user's system accent whenever that isn't "multicolor" (same reasoning
+    // as `iconForeground` in FolderListView+Helpers.swift). The dot would
+    // disappear into the row-selection highlight, which is drawn in that
+    // same accent, so it switches to `.white` when the row is selected --
+    // legible against the highlight on every platform.
     private var unreadDotColor: Color {
         guard !envelope.flags.contains(.seen) else { return .clear }
-        return isSelected ? .white : .blue
+        return isSelected ? .white : Color("AccentColor")
     }
 
     /// The row's first line: `source -> destination`. The destination is the

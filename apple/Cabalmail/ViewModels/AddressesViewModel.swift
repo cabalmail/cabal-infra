@@ -87,14 +87,28 @@ final class AddressesViewModel {
 
     private func applyFavorite(addressId: String, to favorite: Bool) {
         guard let index = addresses.firstIndex(where: { $0.id == addressId }) else { return }
-        let previous = addresses[index]
-        addresses[index] = Address(
-            address: previous.address,
-            subdomain: previous.subdomain,
-            tld: previous.tld,
-            comment: previous.comment,
-            publicKey: previous.publicKey,
-            favorite: favorite
-        )
+        addresses[index].favorite = favorite
+    }
+
+    /// Suspend or reinstate `address` via the API and flip the row's flag on
+    /// success. Not optimistic (unlike favorites): the call withdraws or
+    /// republishes DNS records server-side, so the row only changes state
+    /// once the server confirms.
+    func setSuspended(_ address: Address, to suspended: Bool) async {
+        do {
+            if suspended {
+                try await client.suspendAddress(address: address.address)
+            } else {
+                try await client.reinstateAddress(address: address.address)
+            }
+            if let index = addresses.firstIndex(where: { $0.id == address.id }) {
+                addresses[index].suspended = suspended
+            }
+            errorMessage = nil
+        } catch let error as CabalmailError {
+            errorMessage = String(describing: error)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

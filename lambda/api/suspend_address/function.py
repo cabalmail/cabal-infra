@@ -1,4 +1,6 @@
-'''Revokes an email address'''
+'''Suspends an email address: removes its DNS records while keeping the
+address in DynamoDB and the mail-tier runtime configuration, so it can be
+reinstated later'''
 # pylint: disable=duplicate-code
 import json
 import os
@@ -10,15 +12,13 @@ from helper import user_authorized_for_sender  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
-address_changed_topic_arn = os.environ.get('ADDRESS_CHANGED_TOPIC_ARN', '')
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
-sns = boto3.client('sns')
 
 
 def handler(event, _context):
-    '''Revokes an email address'''
+    '''Suspends an email address'''
     body, error = parse_json_body(event)
     if error:
         return error
@@ -31,28 +31,32 @@ def handler(event, _context):
                 'Error': 'Address not associated with authenticated user'
             })
         }
-    # Take subdomain/tld/zone from the STORED row for `address`, never from the
-    # request body. Authorization above is on `address` only, so honoring a
+    # Like revoke, take subdomain/tld/zone from the STORED row, never from the
+    # request body: authorization above is on `address` only, so honoring a
     # client-supplied subdomain/tld would let a caller who owns any one address
-    # delete another user's DNS records: delete_dns_records targets
-    # `{subdomain}.{tld}`, and the co-tenant guard (other_addresses_on_subdomain)
-    # returns False for a single-tenant victim subdomain, so the DELETE would
-    # proceed. The caller owns `address`, so its row is the authoritative source.
+    # delete another user's DNS records.
     item = table.get_item(Key={'address': address}).get('Item') or {}
+    if item.get('suspended'):
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'status': 'success',
+                'address': address,
+                'suspended': True
+            })
+        }
     subdomain = item.get('subdomain')
     tld = item.get('tld')
     zone_id = item.get('zone-id') or domains.get(tld)
     try:
-        # Only ACTIVE (non-suspended) co-tenants keep the records alive: a
-        # suspended address's contract is already "DNS absent", so it must not
-        # block the delete (reinstate republishes the records if it comes back).
+        # DNS records are shared by every address on the subdomain, so only
+        # remove them when no other ACTIVE (non-suspended) address needs them.
         if subdomain and tld and zone_id and \
                 not active_addresses_on_subdomain(subdomain, tld, address):
             delete_address_dns_records(zone_id, subdomain, tld, control_domain)
-        revoke_address(address)
-        notify_containers()
+        mark_suspended(address)
     except Exception as err:  # pylint: disable=broad-exception-caught
-        print(f"Error revoking address {address}: {err}")
+        print(f"Error suspending address {address}: {err}")
         return {
             'statusCode': 500,
             'body': json.dumps({
@@ -60,10 +64,11 @@ def handler(event, _context):
             })
         }
     return {
-        'statusCode': 202,
+        'statusCode': 200,
         'body': json.dumps({
             'status': 'success',
-            'address': address
+            'address': address,
+            'suspended': True
         })
     }
 
@@ -94,20 +99,14 @@ def active_addresses_on_subdomain(subdomain, tld, address):
     return False
 
 
-def revoke_address(address):
-    '''Deletes the address from DynamoDB'''
-    table.delete_item(Key={'address': address})
-
-
-def notify_containers():
-    '''Publishes an address change event to SNS'''
-    if not address_changed_topic_arn:
-        print('ADDRESS_CHANGED_TOPIC_ARN not set, skipping SNS publish')
-        return
-    sns.publish(
-        TopicArn=address_changed_topic_arn,
-        Message=json.dumps({
-            'event': 'address_changed',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        })
+def mark_suspended(address):
+    '''Marks the address suspended in DynamoDB'''
+    table.update_item(
+        Key={'address': address},
+        UpdateExpression='SET #s = :true, SuspendTime = :now',
+        ExpressionAttributeNames={'#s': 'suspended'},
+        ExpressionAttributeValues={
+            ':true': True,
+            ':now': datetime.now(timezone.utc).isoformat()
+        }
     )

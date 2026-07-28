@@ -166,6 +166,32 @@ final class WatchAppModel {
         }
     }
 
+    /// Suspends or reinstates an address. The row is updated locally only
+    /// after the call succeeds (same rationale as revoke): a failed suspend
+    /// must not make the address look paused while it still delivers.
+    func setSuspended(_ address: Address, to suspended: Bool) async {
+        guard let apiClient else { return }
+        do {
+            if suspended {
+                try await apiClient.suspendAddress(address: address.address)
+            } else {
+                try await apiClient.reinstateAddress(address: address.address)
+            }
+            if case .ready(let addresses) = phase {
+                phase = .ready(addresses.map {
+                    var updated = $0
+                    if updated.address == address.address {
+                        updated.suspended = suspended
+                    }
+                    return updated
+                })
+            }
+        } catch {
+            // Re-sync with the server rather than guessing at state.
+            await loadAddresses()
+        }
+    }
+
     // MARK: - Internals
 
     private func activateSessionIfPossible() {

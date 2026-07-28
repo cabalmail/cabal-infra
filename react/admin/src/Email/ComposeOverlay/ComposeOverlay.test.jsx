@@ -224,6 +224,90 @@ describe('ComposeOverlay', () => {
     }
   });
 
+  // Regression: the recipient input is committed to a chip by the same click
+  // that fires Send, so validating (and sending) the To/CC/BCC state read
+  // pre-flush — the first click was rejected as recipient-less while the
+  // address was on screen, and a second uncommitted address was dropped.
+  describe('uncommitted recipient text', () => {
+    async function fillAndPickFrom() {
+      await waitFor(() => {
+        expect(mockGetAddresses).toHaveBeenCalled();
+      });
+      fireEvent.click(screen.getByLabelText('From'));
+      fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+      fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'hi' } });
+    }
+
+    it('sends on the first click when the address was never committed with Enter', async () => {
+      const { unmount } = renderCompose();
+      try {
+        await fillAndPickFrom();
+        // Typed, then left alone — no Enter, no comma.
+        fireEvent.change(screen.getByLabelText('Recipients'), {
+          target: { value: 'dest@test.com' }
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+        await waitFor(() => {
+          expect(mockSendMessage).toHaveBeenCalled();
+        });
+        expect(mockSendMessage.mock.calls[0][2]).toEqual(['dest@test.com']);
+        expect(setMessage).not.toHaveBeenCalledWith(
+          'Please specify at least one recipient.', true
+        );
+      } finally {
+        unmount();
+      }
+    });
+
+    it('keeps an uncommitted second recipient in the sent message', async () => {
+      const { unmount } = renderCompose();
+      try {
+        await fillAndPickFrom();
+        const toInput = screen.getByLabelText('Recipients');
+        fireEvent.change(toInput, { target: { value: 'first@test.com' } });
+        fireEvent.keyDown(toInput, { key: 'Enter' });
+        fireEvent.change(toInput, { target: { value: 'second@test.com' } });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+        await waitFor(() => {
+          expect(mockSendMessage).toHaveBeenCalled();
+        });
+        expect(mockSendMessage.mock.calls[0][2]).toEqual(['first@test.com', 'second@test.com']);
+      } finally {
+        unmount();
+      }
+    });
+
+    it('commits uncommitted Bcc text to Bcc, not To', async () => {
+      const { unmount } = renderCompose();
+      try {
+        await fillAndPickFrom();
+        const toInput = screen.getByLabelText('Recipients');
+        fireEvent.change(toInput, { target: { value: 'dest@test.com' } });
+        fireEvent.keyDown(toInput, { key: 'Enter' });
+
+        fireEvent.click(screen.getByRole('button', { name: /Cc Bcc/ }));
+        fireEvent.change(screen.getByLabelText('Bcc'), {
+          target: { value: 'blind@test.com' }
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+        await waitFor(() => {
+          expect(mockSendMessage).toHaveBeenCalled();
+        });
+        const args = mockSendMessage.mock.calls[0];
+        expect(args[2]).toEqual(['dest@test.com']);
+        expect(args[4]).toEqual(['blind@test.com']);
+      } finally {
+        unmount();
+      }
+    });
+  });
+
   it('offsets the second compose window by stackIndex', async () => {
     const { container, unmount } = renderCompose({ stackIndex: 1 });
     try {

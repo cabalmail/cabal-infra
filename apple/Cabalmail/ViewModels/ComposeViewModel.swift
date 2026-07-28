@@ -66,6 +66,15 @@ final class ComposeViewModel {
     var availableAddresses: [Address] = []
     var isSending = false
     var errorMessage: String?
+    /// Non-nil while the WebKit editor bridge is known to be unusable,
+    /// mirroring `RichTextEditorController.bridgeFailure` — the controller
+    /// is a plain `NSObject`, so SwiftUI can't observe its state directly.
+    /// Every body conversion answers `""` from that point on, so nothing can
+    /// be sent: this keeps Send disabled and the banner up (#812). Mutated
+    /// only by the `noteEditorUnavailable` / `noteEditorRecovered` pair in
+    /// `ComposeViewModel+Internals.swift`, which a `private(set)` here
+    /// would put out of reach.
+    var editorUnavailable: String?
     /// Set to `.queued` when the most recent send dropped the message into
     /// the outbox instead of delivering it. `ComposeView` reads this to
     /// decide whether the dismiss toast should say "Sent" or "Queued — will
@@ -173,7 +182,13 @@ final class ComposeViewModel {
         // the rich pane (and send-time conversion) is out of commission
         // for this compose. Say so instead of failing silently (#734).
         self.editorController.onBridgeError = { [weak self] message in
-            self?.errorMessage = "Rich-text editor failed to load: \(message)"
+            self?.noteEditorUnavailable(message)
+        }
+        // A `ready` that lands after the failure means the boot was merely
+        // slow; the controller has already cleared its own failure, so drop
+        // the banner and re-enable Send rather than stranding the compose.
+        self.editorController.onReady = { [weak self] in
+            self?.noteEditorRecovered()
         }
     }
 
@@ -254,8 +269,11 @@ final class ComposeViewModel {
         composeIntent == .reply || composeIntent == .replyAll
     }
 
-    /// Is the form complete enough to enable the Send button?
+    /// Is the form complete enough to enable the Send button? A dead editor
+    /// bridge disables it too: the body can't be assembled, so the send
+    /// would only be refused (#745) — better not to offer the tap (#812).
     var canSend: Bool {
+        guard editorUnavailable == nil else { return false }
         guard fromAddress != nil, !subject.isEmpty else { return false }
         return !parseRecipients(toText).isEmpty
             || !parseRecipients(ccText).isEmpty
@@ -320,6 +338,13 @@ final class ComposeViewModel {
     }
 
     func send() async -> Bool {
+        // Checked ahead of `canSend` so a tap that races the bridge dying
+        // gets the real reason instead of the generic form complaint —
+        // silence here is what made a dead bridge look like a dead button.
+        if let reason = editorUnavailable {
+            errorMessage = Self.editorUnavailableMessage(reason)
+            return false
+        }
         guard canSend, let fromEmail = currentFromEmail() else {
             if fromAddress != nil { errorMessage = "Invalid From address." }
             return false
@@ -333,8 +358,7 @@ final class ComposeViewModel {
             // deliver an empty message the user had written text into, so
             // refuse and leave the window open (#745).
             if let failure = editorController.bridgeFailure {
-                errorMessage = "Can't prepare the message body — \(failure). "
-                    + "Copy anything you still need before closing this window."
+                noteEditorUnavailable(failure)
                 return false
             }
             // Send-from-draft cleans up the server copy after delivery

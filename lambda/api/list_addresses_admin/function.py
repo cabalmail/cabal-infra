@@ -20,13 +20,16 @@ def handler(event, _context):
         scan_kwargs = {
             'ExpressionAttributeNames': {
                 '#user': 'user',
-                '#c': 'comment'
+                '#c': 'comment',
+                '#s': 'suspended'
             },
-            'ProjectionExpression': 'subdomain, #c, tld, address, username, #user'
+            'ProjectionExpression': 'subdomain, #c, tld, address, username, #user, #s'
         }
         while True:
             response = table.scan(**scan_kwargs)
-            items.extend(response.get('Items', []))
+            for item in response.get('Items', []):
+                item['suspended'] = bool(item.get('suspended'))
+                items.append(item)
             if 'LastEvaluatedKey' not in response:
                 break
             scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']

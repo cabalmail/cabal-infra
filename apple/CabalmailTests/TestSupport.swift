@@ -212,6 +212,22 @@ enum TestFixtures {
         return model
     }
 
+    /// Compose model over the fake transport, with a scratch draft store.
+    /// A real `RichTextEditorController` (and its WKWebView) comes up inside
+    /// it; the bridge-health tests drive the failure hooks directly rather
+    /// than depending on whether `editor.html` loads in the test host.
+    @MainActor
+    static func makeComposeModel(imap: FakeImapClient = FakeImapClient()) throws -> ComposeViewModel {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cabalmail-compose-tests-\(UUID().uuidString)")
+        return ComposeViewModel(
+            client: try makeClient(imap: imap),
+            draftStore: try DraftStore(directory: tmp),
+            preferences: Preferences(store: InMemoryPreferenceStore()),
+            onClose: {}
+        )
+    }
+
     static func makeEnvelope(uid: UInt32, flags: Set<Flag> = []) -> Envelope {
         Envelope(
             uid: uid,

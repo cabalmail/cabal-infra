@@ -4,7 +4,8 @@ import Foundation
 /// `data:` URIs pulled from the inline-image map. Purely string-level so
 /// we never need to run a JS context. In `readerMode`, prepends a reset +
 /// typography stylesheet that overrides author CSS for a Safari Reader-
-/// style presentation. Both modes get a default viewport meta.
+/// style presentation. Both modes get a default viewport meta and a default
+/// (author-overridable) brand link color.
 func rewrite(
     html: String,
     inlineImages: [String: URL],
@@ -24,7 +25,7 @@ func rewrite(
     if readerMode {
         result = readerStylesheet + result
     }
-    return insertingViewportMeta(into: result)
+    return insertingHeadDefaults(into: result)
 }
 
 /// Injected on both render paths. Without it WebKit lays the document out
@@ -37,13 +38,28 @@ func rewrite(
 private let viewportMeta =
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
 
-/// Places `viewportMeta` at the *start* of the document head, so a sender
+/// Also injected on both paths, and for the same reason: it replaces a
+/// WebKit default rather than overriding the author. A message that ships no
+/// link CSS of its own would otherwise render the browser's blue, which is
+/// the one bit of chrome in an untouched message that reads as "web page"
+/// instead of "Cabalmail". The selector is deliberately bare `a` and carries
+/// no `!important`, so any author declaration — a later `a { color: ... }`,
+/// a higher-specificity selector, or an inline `style=` — still wins, and
+/// author fidelity in "Original" mode is preserved. Only the light variant
+/// is stated because Original mode pins the web view to a light appearance;
+/// in reader mode the reader stylesheet's `!important` rules supersede this
+/// in both appearances.
+private let defaultLinkStyle =
+    "<style>a { color: \(brandLinkColorLight); }</style>"
+
+/// Places the head defaults at the *start* of the document head, so a sender
 /// that declares its own viewport still wins (WebKit takes the last
 /// declaration in document order). The insertion point matters: prepending
 /// ahead of a `<!DOCTYPE>` would push the author's page into quirks mode
 /// and change how their CSS renders, which is exactly what "Original" mode
 /// must not do.
-private func insertingViewportMeta(into html: String) -> String {
+private func insertingHeadDefaults(into html: String) -> String {
+    let headDefaults = viewportMeta + defaultLinkStyle
     // `<head>` first, then `<html>`, then the doctype; a bare fragment has
     // none of them and can simply be prefixed (the parser synthesizes the
     // head around it).
@@ -53,11 +69,21 @@ private func insertingViewportMeta(into html: String) -> String {
         else { continue }
         return html.replacingCharacters(
             in: close,
-            with: ">" + viewportMeta
+            with: ">" + headDefaults
         )
     }
-    return viewportMeta + html
+    return headDefaults + html
 }
+
+/// Link color in reader mode: the brand forest green rather than the
+/// platform link blue, so the reader reads as part of the app instead of a
+/// generic web view. These are the light and dark components of the
+/// `AccentColor` colorset, restated as hex because the stylesheet is CSS —
+/// WebKit resolves the light/dark split from `prefers-color-scheme`, not
+/// from the asset catalog. Keep them in step with
+/// `Assets.xcassets/AccentColor.colorset` in both app targets.
+private let brandLinkColorLight = "#2b633a"
+private let brandLinkColorDark = "#79c289"
 
 /// Prepended in reader mode. Every rule uses `!important` because most
 /// author mail CSS ships as inline `style=` attributes, and we need to win
@@ -91,7 +117,7 @@ private let readerStylesheet = """
     box-sizing: border-box !important;
   }
   img, video { height: auto !important; }
-  a { color: #0a84ff !important; text-decoration: underline !important; }
+  a { color: \(brandLinkColorLight) !important; text-decoration: underline !important; }
   blockquote {
     margin: 1em 0 !important;
     padding: 0 1em !important;
@@ -120,7 +146,7 @@ private let readerStylesheet = """
       background-image: none !important;
       color: #f2f2f7 !important;
     }
-    a { color: #0a84ff !important; }
+    a { color: \(brandLinkColorDark) !important; }
   }
 </style>
 """

@@ -6,73 +6,46 @@ import CabalmailKit
 // destination sheet. Lives in a sibling extension so MessageListView's
 // primary body stays under SwiftLint's `type_body_length` cap.
 extension MessageListView {
-    /// Toolbar item that flips edit mode. Reads "Select" when off and
-    /// "Done" while on, matching every other iOS list-edit affordance.
+    /// Toolbar item that flips the multi-select mode. Reads "Select" when off
+    /// and "Done" while on, matching every other iOS list-edit affordance.
     ///
     /// macOS multi-selects via pointer modifier-clicks (shift / command)
-    /// directly in the list, so it shows no button. iPad / visionOS toggle the
-    /// native list EditMode so touch users can multi-select without a keyboard;
-    /// compact iPhone keeps the legacy `bulkMode` checkbox flow.
+    /// directly in the list, so it shows no button. Every touch layout —
+    /// compact iPhone and wide iPad / visionOS alike — drives the view model's
+    /// `bulkMode`: the rows are a hand-rolled `LazyVStack`, so there is no
+    /// native list EditMode to enter, and view-local `@State` would not
+    /// survive the split view rebuilding its content column.
     @ViewBuilder
     var selectButton: some View {
         #if os(macOS)
         EmptyView()
         #else
         if let model {
-            if isWideLayout {
-                Button {
-                    toggleSelectionEditMode(model: model)
-                } label: {
-                    if editMode == .active {
-                        Text("Done")
-                    } else {
-                        Image(systemName: "checkmark.circle")
-                            .accessibilityLabel("Select")
-                    }
-                }
-            } else {
-                Button {
-                    model.toggleBulkMode()
-                } label: {
-                    if model.bulkMode {
-                        Text("Done")
-                    } else {
-                        Image(systemName: "checkmark.circle")
-                            .accessibilityLabel("Select")
-                    }
+            Button {
+                model.toggleBulkMode()
+            } label: {
+                if model.bulkMode {
+                    Text("Done")
+                } else {
+                    Image(systemName: "checkmark.circle")
+                        .accessibilityLabel("Select")
                 }
             }
         }
         #endif
     }
 
-    #if !os(macOS)
-    /// Enter / leave the native multi-select EditMode on wide touch layouts.
-    /// Leaving clears the selection so re-entering starts fresh, mirroring
-    /// `toggleBulkMode()`'s contract on compact.
-    private func toggleSelectionEditMode(model: MessageListViewModel) {
-        if editMode == .active {
-            editMode = .inactive
-            model.selectedUIDs.removeAll()
-        } else {
-            editMode = .active
-        }
-    }
-    #endif
-
     /// Called when a bulk move / dispose commits — the actions that remove
-    /// the selected rows. The action itself clears `selectedUIDs` (via
-    /// `exitBulkMode()`); this additionally drops any touch EditMode so the
-    /// action bar dismisses on iPad / visionOS. No-op on macOS, which has no
-    /// EditMode. The read/unread and flag buttons deliberately skip it:
-    /// their rows stay on screen, and keeping the selection lets the user
-    /// chain another action onto the same messages. Internal (not private)
-    /// so `commitDispose` in `+Actions.swift` can drop the mode after a
-    /// confirmed large dispose.
+    /// the selected rows. Drops the mode so the action bar dismisses; the
+    /// action itself clears `selectedUIDs` once its async body has read them
+    /// (`leaveBulkMode` deliberately leaves the set alone, since this runs
+    /// before the `Task` that does the moving). The read/unread and flag
+    /// buttons deliberately skip it: their rows stay on screen, and keeping
+    /// the selection lets the user chain another action onto the same
+    /// messages. Internal (not private) so `commitDispose` in
+    /// `+Actions.swift` can drop the mode after a confirmed large dispose.
     func endSelectionMode() {
-        #if !os(macOS)
-        editMode = .inactive
-        #endif
+        model?.leaveBulkMode()
     }
 
     /// Bottom action bar rendered in `safeAreaInset` while bulkMode is

@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.15] - 2026-07-28
+
+### Added
+- **Address suspend and reinstate.** New `/suspend_address` and
+  `/reinstate_address` endpoints withdraw an address's DNS records (MX, SPF,
+  DKIM, DMARC, BIMI) while keeping the address in DynamoDB and the mail-tier
+  runtime configuration, and republish them to reverse the suspension. DNS
+  records shared with an active co-tenant address on the same subdomain are
+  left alone. The React rail exposes a pause/play row action (suspend behind a
+  confirmation dialog, reinstate immediate) with suspended rows dimmed, the
+  admin address list shows a suspended marker, and `/list` and
+  `/list_addresses_admin` now return a `suspended` flag on each row.
+- Apple: **Suspend and reinstate addresses.** The address list's swipe
+  actions and context menu can now suspend an address (its DNS records are
+  withdrawn so inbound mail stops, behind a confirmation dialog) and
+  reinstate it later (immediate). Suspended rows are dimmed with an orange
+  "Suspended" caption. The watch app gets the same swipe action and shows
+  the suspended state in its list and large-type detail view.
+
+### Changed
+- Apple: **Brand color for message links and unread dots.** Links in the
+  message reader and the unread indicator in the message list now use the
+  Cabalmail forest green instead of the platform blue. In "Original" render
+  mode the green is only a default — any link color the sender's own CSS
+  declares still wins, so author fidelity is unchanged.
+
+### Fixed
+- Apple: **Silent Send when the message editor fails to load.** Compose now
+  announces a dead editor bridge the moment the window opens and stops
+  offering Send, instead of leaving an enabled button whose taps did nothing
+  — the send was already being refused, just invisibly. On iPhone the compose
+  error banner also moved to the top of the form, where it can no longer hide
+  below the body editor.
+- **First Send click with an uncommitted recipient in the React composer.**
+  Typing an address and clicking Send without first pressing Enter was
+  rejected with "Please specify at least one recipient." even though the
+  address was visibly in the field, and an uncommitted second address was
+  dropped from the message entirely. Send now folds the pending input text
+  into the recipient lists before validating and sending, and commits it to
+  the row it was typed in rather than always to To.
+- Apple: **Multi-select on iPad and Vision Pro.** The message list's Select
+  button did nothing on wide layouts, leaving bulk Archive / Move / Mark
+  read-unread / Flag unreachable there — it drove a view-local `EditMode`
+  that the virtualized list has no way to render. Every touch layout now
+  shares the checkbox selection mode iPhone already used.
+- **Orphaned BIMI record on revoke.** Revoking a subdomain's last address
+  deleted its MX/SPF/DKIM/DMARC records but left the `default._bimi` TXT
+  record behind (published since the BIMI Phase C rollout). Revoke now
+  removes the full record set, and builds deletes from the records actually
+  live in the zone, so addresses predating BIMI (or partially-removed sets)
+  no longer risk failing the whole change batch.
+- **Untracked committed `__pycache__/*.pyc` bytecode files.** Two stale
+  handler artifacts (`lambda/api/delete_folder/` and
+  `lambda/api/new_folder/`) were on `stage`; `.gitignore` now covers
+  `__pycache__/` repo-wide so locally exercising a handler with
+  `python -m function` cannot re-add them.
+
+### Security
+- **Bumped `postcss` (transitive, via `vite`) to 8.5.23 in `react/admin`.**
+  Pins a fix for a path-traversal issue in previous-source-map auto-loading
+  that could disclose arbitrary `.map` files.
+
 ## [0.11.14] - 2026-07-27
 
 ### Added

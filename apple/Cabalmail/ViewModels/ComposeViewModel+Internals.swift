@@ -6,6 +6,35 @@ import CabalmailKit
 /// to keep the type body under the SwiftLint length ceiling. Everything
 /// here is `@MainActor` by inheritance from the host class.
 extension ComposeViewModel {
+    // MARK: - Editor bridge health
+
+    /// Banner copy for a dead editor bridge. One phrasing for both the
+    /// compose-open announcement and the send refusal, so recovery can
+    /// recognize (and clear) the message it put up.
+    static func editorUnavailableMessage(_ reason: String) -> String {
+        "The message editor didn't load (\(reason)). Nothing can be sent from this "
+            + "window — copy anything you still need, close it, and compose again."
+    }
+
+    /// The bridge reported itself unusable. Raise the banner now, at
+    /// compose-open, rather than leaving the user to discover it by
+    /// pressing Send and watching nothing happen (#812).
+    func noteEditorUnavailable(_ reason: String) {
+        editorUnavailable = reason
+        errorMessage = Self.editorUnavailableMessage(reason)
+    }
+
+    /// The bridge came up after all. Clears the banner, but only the one
+    /// this failure raised — a send or address error reported since then is
+    /// still the more useful message to leave on screen.
+    func noteEditorRecovered() {
+        guard let reason = editorUnavailable else { return }
+        editorUnavailable = nil
+        if errorMessage == Self.editorUnavailableMessage(reason) {
+            errorMessage = nil
+        }
+    }
+
     // MARK: - Attachments
 
     /// Add an already-loaded file (raw bytes + mime type) as an attachment.
