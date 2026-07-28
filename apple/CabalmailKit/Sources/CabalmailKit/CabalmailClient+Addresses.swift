@@ -56,6 +56,20 @@ extension CabalmailClient {
         await addressCache.invalidate()
     }
 
+    /// Suspends an address (withdraws its DNS records; the address itself is
+    /// kept and can be reinstated). Invalidates the address cache so the next
+    /// `addresses(...)` call sees the new state.
+    public func suspendAddress(address: String) async throws {
+        try await apiClient.suspendAddress(address: address)
+        await addressCache.invalidate()
+    }
+
+    /// Reverses a suspension by republishing the address's DNS records.
+    public func reinstateAddress(address: String) async throws {
+        try await apiClient.reinstateAddress(address: address)
+        await addressCache.invalidate()
+    }
+
     /// Toggles the caller's favorite flag on an address. Invalidates the
     /// address cache so the next `addresses(...)` call sees the new state.
     public func setFavorite(address: String, favorite: Bool) async throws {

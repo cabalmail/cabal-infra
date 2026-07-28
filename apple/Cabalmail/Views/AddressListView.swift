@@ -19,6 +19,9 @@ struct AddressListView: View {
     // Address staged for revocation by a row's swipe / context menu,
     // confirmed before the (irreversible) API call.
     @State private var pendingRevoke: Address?
+    // Address staged for suspension. Reinstating is harmless (it republishes
+    // DNS records) and fires directly, so only suspend is staged here.
+    @State private var pendingSuspend: Address?
     @Binding var selection: Address?
     /// When set, the parent (the wide macOS / iPad-regular sidebar) owns the
     /// filter field — rendered below the section tabs — and this view filters by
@@ -118,6 +121,14 @@ struct AddressListView: View {
             actions: revokeDialogActions,
             message: revokeDialogMessage
         )
+        .confirmationDialog(
+            suspendDialogTitle,
+            isPresented: suspendDialogBinding,
+            titleVisibility: .visible,
+            presenting: pendingSuspend,
+            actions: suspendDialogActions,
+            message: suspendDialogMessage
+        )
         .task {
             if model == nil, let client = appState.client {
                 let newModel = AddressesViewModel(client: client)
@@ -139,6 +150,28 @@ struct AddressListView: View {
         .environment(appState)
     }
 
+    private func manualRefresh() async {
+        guard let model, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await model.refresh(force: true)
+    }
+
+    private func filteredAddresses(_ addresses: [Address]) -> [Address] {
+        let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return addresses }
+        return addresses.filter { address in
+            address.address.lowercased().contains(needle)
+                || (address.comment?.lowercased().contains(needle) ?? false)
+        }
+    }
+}
+
+// Row construction and the confirmation-dialog plumbing live in a same-file
+// extension so the primary struct body stays under SwiftLint's
+// type_body_length cap (same split as MessageListView and its +Rows/+Bulk
+// files, kept in-file here so the `private` state remains reachable).
+extension AddressListView {
     // MARK: - Revoke confirmation plumbing
 
     private var revokeDialogTitle: String {
@@ -174,19 +207,58 @@ struct AddressListView: View {
         Text("Mail sent to \(address.address) will be rejected. This can't be undone.")
     }
 
-    private func manualRefresh() async {
-        guard let model, !isRefreshing else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
-        await model.refresh(force: true)
+    // MARK: - Suspend confirmation plumbing
+
+    private var suspendDialogTitle: String {
+        if let address = pendingSuspend {
+            return "Suspend \(address.address)?"
+        }
+        return "Suspend address?"
     }
 
-    private func filteredAddresses(_ addresses: [Address]) -> [Address] {
-        let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return addresses }
-        return addresses.filter { address in
-            address.address.lowercased().contains(needle)
-                || (address.comment?.lowercased().contains(needle) ?? false)
+    private var suspendDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingSuspend != nil },
+            set: { isPresented in
+                if !isPresented { pendingSuspend = nil }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func suspendDialogActions(for address: Address) -> some View {
+        Button("Suspend") {
+            let target = address
+            pendingSuspend = nil
+            Task { await model?.setSuspended(target, to: true) }
+        }
+        Button("Cancel", role: .cancel) {
+            pendingSuspend = nil
+        }
+    }
+
+    @ViewBuilder
+    private func suspendDialogMessage(for address: Address) -> some View {
+        Text("""
+        The DNS records for \(address.address) will be removed and inbound mail \
+        will stop being deliverable. The address is kept and can be reinstated \
+        at any time.
+        """)
+    }
+
+    @ViewBuilder
+    private func suspendToggleButton(_ address: Address, model: AddressesViewModel) -> some View {
+        Button {
+            if address.suspended {
+                Task { await model.setSuspended(address, to: false) }
+            } else {
+                pendingSuspend = address
+            }
+        } label: {
+            Label(
+                address.suspended ? "Reinstate" : "Suspend",
+                systemImage: address.suspended ? "play.circle" : "pause.circle"
+            )
         }
     }
 
@@ -209,6 +281,8 @@ struct AddressListView: View {
                     )
                 }
                 .tint(address.favorite ? .gray : .yellow)
+                suspendToggleButton(address, model: model)
+                    .tint(.orange)
             }
             .contextMenu {
                 Button {
@@ -225,6 +299,7 @@ struct AddressListView: View {
                         systemImage: address.favorite ? "star.slash" : "star.fill"
                     )
                 }
+                suspendToggleButton(address, model: model)
                 Button(role: .destructive) {
                     pendingRevoke = address
                 } label: {
@@ -244,6 +319,12 @@ struct AddressListView: View {
                 .foregroundStyle(address.favorite ? Color.yellow : Color("AccentColor"))
             VStack(alignment: .leading, spacing: 2) {
                 Text(address.address)
+                    .foregroundStyle(address.suspended ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                if address.suspended {
+                    Text("Suspended")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
                 if let comment = address.comment, !comment.isEmpty {
                     Text(comment)
                         .font(.caption2)

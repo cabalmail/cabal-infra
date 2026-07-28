@@ -708,6 +708,71 @@ def assert_zone_owns_apex(zone_id, apex):
         raise ZoneMismatchError(f'zone-mismatch: zone {zone_id} does not own {apex}')
 
 
+def address_dns_records(subdomain, tld, control_domain):
+    '''Canonical DNS record set for an address subdomain, as (name, type, value)
+    tuples. Must stay in lockstep with the records the `new` handler publishes:
+    suspend/revoke delete exactly these names and reinstate republishes them.'''
+    return (
+        (f'{subdomain}.{tld}', 'MX', f'10 smtp-in.{control_domain}'),
+        (f'{subdomain}.{tld}', 'TXT', f'"v=spf1 include:{control_domain} ~all"'),
+        (f'cabal._domainkey.{subdomain}.{tld}', 'CNAME',
+         f'cabal._domainkey.{control_domain}'),
+        (f'_dmarc.{subdomain}.{tld}', 'CNAME', f'_dmarc.{control_domain}'),
+        (f'default._bimi.{subdomain}.{tld}', 'TXT',
+         f'"v=BIMI1; l=https://www.{control_domain}/assets/bimi/cabalmail.svg"'),
+    )
+
+
+def _find_rrset(zone_id, name, rtype):
+    '''Returns the live resource record set at (name, rtype) in the zone, or
+    None if absent. Exact-match on name and type; Route 53 returns names with a
+    trailing dot.'''
+    resp = _route53().list_resource_record_sets(
+        HostedZoneId=zone_id,
+        StartRecordName=name,
+        StartRecordType=rtype,
+        MaxItems='1'
+    )
+    for rrset in resp.get('ResourceRecordSets', []):
+        if rrset['Name'].rstrip('.').lower() == name.rstrip('.').lower() \
+                and rrset['Type'] == rtype:
+            return rrset
+    return None
+
+
+def publish_address_dns_records(zone_id, subdomain, tld, control_domain):
+    '''UPSERTs the canonical DNS record set for an address subdomain.'''
+    assert_zone_owns_apex(zone_id, tld)
+    changes = [{
+        'Action': 'UPSERT',
+        'ResourceRecordSet': {
+            'Name': name,
+            'Type': rtype,
+            'TTL': 3600,
+            'ResourceRecords': [{'Value': value}]
+        }
+    } for name, rtype, value in address_dns_records(subdomain, tld, control_domain)]
+    _route53().change_resource_record_sets(
+        HostedZoneId=zone_id, ChangeBatch={'Changes': changes})
+
+
+def delete_address_dns_records(zone_id, subdomain, tld, control_domain):
+    '''Deletes the canonical DNS record set for an address subdomain. Deletes
+    are built from the records actually live in the zone rather than blind
+    expected values, so a partially absent set (an address predating the BIMI
+    record, or a re-run after an earlier partial delete) cannot fail the whole
+    change batch with InvalidChangeBatch.'''
+    assert_zone_owns_apex(zone_id, tld)
+    changes = []
+    for name, rtype, _value in address_dns_records(subdomain, tld, control_domain):
+        rrset = _find_rrset(zone_id, name, rtype)
+        if rrset:
+            changes.append({'Action': 'DELETE', 'ResourceRecordSet': rrset})
+    if changes:
+        _route53().change_resource_record_sets(
+            HostedZoneId=zone_id, ChangeBatch={'Changes': changes})
+
+
 # Folder-size observability (Layer 4.1 of the large-mailbox hardening plan).
 # Each list handler emits one key=value log line tagging the request with a
 # coarse folder-size bucket so CloudWatch Logs Insights can correlate request
