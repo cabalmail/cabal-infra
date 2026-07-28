@@ -16,4 +16,6 @@ terraform/infra/backend.tf
 .cache/
 .obsidian/
 scripts/.venv/
-scripts/__pycache__/
+__pycache__/
+*.py[cod]
+*$py.class
