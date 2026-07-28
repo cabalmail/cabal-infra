@@ -266,12 +266,19 @@ extension AddressListView {
     private func addressRow(_ address: Address, model: AddressesViewModel) -> some View {
         row(for: address)
             .tag(address)
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // Two edges so neither side outgrows a narrow sidebar pane, and
+            // the full-swipe default is the reversible action (suspend /
+            // reinstate), not revoke. First button listed = full-swipe action.
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                suspendToggleButton(address, model: model)
+                    .tint(.orange)
                 Button(role: .destructive) {
                     pendingRevoke = address
                 } label: {
                     Label("Revoke", systemImage: "xmark.bin")
                 }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button {
                     Task { await model.toggleFavorite(address) }
                 } label: {
@@ -281,8 +288,6 @@ extension AddressListView {
                     )
                 }
                 .tint(address.favorite ? .gray : .yellow)
-                suspendToggleButton(address, model: model)
-                    .tint(.orange)
             }
             .contextMenu {
                 Button {
