@@ -47,7 +47,12 @@ def handler(event, _context):
         }
     subdomain = item.get('subdomain')
     tld = item.get('tld')
-    zone_id = item.get('zone-id') or domains.get(tld)
+    # DOMAINS wins over the row's cached zone-id: the row value is a snapshot
+    # from address-creation time and goes stale if a hosted zone is ever
+    # recreated (legacy rows point at zones that no longer exist, which fails
+    # Route 53 calls with NoSuchHostedZone). The cached value remains only as
+    # a fallback for a tld that has since been dropped from DOMAINS.
+    zone_id = domains.get(tld) or item.get('zone-id')
     try:
         # DNS records are shared by every address on the subdomain, so only
         # remove them when no other ACTIVE (non-suspended) address needs them.
