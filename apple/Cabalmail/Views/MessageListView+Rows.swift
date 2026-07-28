@@ -412,15 +412,17 @@ private struct MessageRow: View {
         .task(id: senderKey) { await hydrateContactName() }
     }
 
-    // Read/unread indicator. We deliberately avoid `Color.accentColor` here:
-    // on iOS the accent is system blue, which is also the row-selection
-    // highlight, so the dot becomes invisible the moment the user picks the
-    // message. A fixed `.blue` keeps the conventional look against the list
-    // background, and switching to `.white` when the row is selected keeps
-    // the dot legible against the highlight on every platform.
+    // Read/unread indicator, painted in the brand forest green rather than
+    // the platform blue. The asset-catalog color is pinned explicitly rather
+    // than taken from `Color.accentColor`, which macOS repaints with the
+    // user's system accent whenever that isn't "multicolor" (same reasoning
+    // as `iconForeground` in FolderListView+Helpers.swift). The dot would
+    // disappear into the row-selection highlight, which is drawn in that
+    // same accent, so it switches to `.white` when the row is selected --
+    // legible against the highlight on every platform.
     private var unreadDotColor: Color {
         guard !envelope.flags.contains(.seen) else { return .clear }
-        return isSelected ? .white : .blue
+        return isSelected ? .white : Color("AccentColor")
     }
 
     /// The row's first line: `source -> destination`. The destination is the
