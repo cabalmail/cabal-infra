@@ -41,12 +41,13 @@ def handler(event, _context):
         }
     subdomain = item.get('subdomain')
     tld = item.get('tld')
-    # DOMAINS wins over the row's cached zone-id: the row value is a snapshot
-    # from address-creation time and goes stale if a hosted zone is ever
-    # recreated (legacy rows point at zones that no longer exist, which fails
-    # Route 53 calls with NoSuchHostedZone). The cached value remains only as
-    # a fallback for a tld that has since been dropped from DOMAINS.
-    zone_id = domains.get(tld) or item.get('zone-id')
+    # The zone is resolved from DOMAINS, never from the zone-id cached on the
+    # row: that value is a snapshot from address-creation time that goes stale
+    # if a hosted zone is ever recreated (legacy rows pointed at zones that no
+    # longer exist, failing Route 53 calls with NoSuchHostedZone). For a tld no
+    # longer in DOMAINS this stays None and the handler returns the explicit
+    # cannot-determine-zone error below.
+    zone_id = domains.get(tld)
     if not (subdomain and tld and zone_id):
         # Without the stored routing fields the DNS records cannot be
         # republished, and clearing the flag anyway would report an address as

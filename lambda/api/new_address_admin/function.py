@@ -158,7 +158,6 @@ def record_address(usernames, body, address):
         'tld': body['tld'],
         'user': '/'.join(usernames),
         'username': body['username'],
-        'zone-id': domains[body['tld']],
         'subdomain': body['subdomain'],
         'comment': body.get('comment', ''),
         'RequestTime': datetime.now(timezone.utc).isoformat()

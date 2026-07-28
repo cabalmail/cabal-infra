@@ -1,6 +1,7 @@
 - **Suspend/revoke/reinstate no longer 500 on pre-rebuild addresses.** The
-  handlers preferred the zone ID cached on the DynamoDB row at
-  address-creation time over the current `DOMAINS` mapping, so rows created
-  before a hosted zone was recreated pointed Route 53 calls at a zone that no
-  longer exists (`NoSuchHostedZone`). The live mapping now wins; the cached
-  value is only a fallback for domains dropped from `DOMAINS`.
+  handlers used the zone ID cached on the DynamoDB row at address-creation
+  time, so rows created before a hosted zone was recreated pointed Route 53
+  calls at a zone that no longer exists (`NoSuchHostedZone`). The zone is now
+  always resolved from the live `DOMAINS` mapping, and the vestigial
+  `zone-id` attribute is no longer written or read anywhere; leftover values
+  on existing rows are inert.

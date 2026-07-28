@@ -27,7 +27,6 @@ resource "aws_dynamodb_table_item" "dmarc_address" {
     user      = { S = "dmarc" }
     username  = { S = "dmarc-reports" }
     subdomain = { S = "mail-admin" }
-    "zone-id" = { S = var.domains[0].zone_id }
     comment   = { S = "System address for DMARC aggregate reports" }
   })
 
@@ -47,7 +46,6 @@ resource "aws_dynamodb_table_item" "caa_address" {
     user      = { S = "dmarc" }
     username  = { S = "caa-reports" }
     subdomain = { S = "mail-admin" }
-    "zone-id" = { S = var.domains[0].zone_id }
     comment   = { S = "System address for CAA iodef violation reports" }
   })
 
