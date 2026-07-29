@@ -146,36 +146,51 @@ struct ComposeView: View {
                 "Discard draft?",
                 isPresented: $showDiscardConfirm
             ) {
-                Button("Discard Draft", role: .destructive) {
-                    Task {
-                        #if os(macOS)
-                        // Pre-approve the close so the dismissWindow call
-                        // inside discard() doesn't get re-intercepted by
-                        // the NSWindowDelegate.
-                        closeCoordinator.allowsClose = true
-                        #endif
-                        await model.discard()
-                    }
-                }
-                Button("Save Draft", role: .cancel) {
-                    Task {
-                        #if os(macOS)
-                        closeCoordinator.allowsClose = true
-                        #endif
-                        let didClose = await model.cancel()
-                        #if os(macOS)
-                        // IMAP save failed: keep the user in the window so
-                        // they can see the error banner and retry.
-                        if !didClose {
-                            closeCoordinator.allowsClose = false
-                        }
-                        #endif
-                    }
+                ForEach(ComposeCancelChoice.allCases, id: \.self) { choice in
+                    Button(choice.title, role: choice.role) { perform(choice) }
                 }
             } message: {
-                Text("Keep a copy of the draft for later, or discard it now.")
+                Text("Keep a copy of the draft for later, discard it now, or go back to editing.")
             }
             .toastOverlay($composeToast)
+        }
+    }
+
+    // MARK: - Cancel dialog
+
+    /// Runs the outcome the user picked in the cancel-compose dialog. Stays
+    /// in this file (rather than the `+Subviews` extension) because it
+    /// touches the `private` close coordinator.
+    private func perform(_ choice: ComposeCancelChoice) {
+        switch choice {
+        case .discard:
+            Task {
+                #if os(macOS)
+                // Pre-approve the close so the dismissWindow call inside
+                // discard() doesn't get re-intercepted by the
+                // NSWindowDelegate.
+                closeCoordinator.allowsClose = true
+                #endif
+                await model.discard()
+            }
+        case .saveDraft:
+            Task {
+                #if os(macOS)
+                closeCoordinator.allowsClose = true
+                #endif
+                let didClose = await model.cancel()
+                #if os(macOS)
+                // IMAP save failed: keep the user in the window so they can
+                // see the error banner and retry.
+                if !didClose {
+                    closeCoordinator.allowsClose = false
+                }
+                #endif
+            }
+        case .keepEditing:
+            // No-op by design — the dialog dismisses and the composer, with
+            // everything typed so far, is still there.
+            break
         }
     }
 
