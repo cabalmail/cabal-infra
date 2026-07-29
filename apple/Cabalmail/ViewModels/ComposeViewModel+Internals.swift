@@ -200,6 +200,21 @@ extension ComposeViewModel {
         "\(address.mailbox)@\(address.host)"
     }
 
+    /// UID of the server-side Drafts copy that a completed send has just
+    /// superseded, or nil when there's nothing for the Drafts list to
+    /// prune. `/send` discards that copy server-side as part of delivery,
+    /// so the row the user is looking at is stale the moment this returns
+    /// a value — the compose surface signals the list rather than leaving
+    /// it to the next background reconcile a minute later.
+    ///
+    /// A queued send keeps its draft on purpose (the outbox hasn't
+    /// delivered anything yet, and the ref is dropped rather than
+    /// discarded), so it reports nothing.
+    var supersededDraftUID: UInt32? {
+        guard lastSendOutcome == .sent else { return nil }
+        return serverDraftRef?.uid
+    }
+
     func describe(_ error: CabalmailError) -> String {
         switch error {
         case .invalidCredentials: return "Send failed: your credentials were rejected."
