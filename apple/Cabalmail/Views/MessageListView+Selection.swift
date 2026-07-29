@@ -239,7 +239,7 @@ extension MessageListView {
         let background = selected ? Color.accentColor.opacity(0.15) : Color.clear
         Group {
             if model.bulkMode {
-                row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+                row(for: envelope, model: model, orderedVisible: visible)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: rowHeight, alignment: .center)
                     .background(background)
@@ -256,7 +256,7 @@ extension MessageListView {
                         trailing: disposeSwipe(for: envelope, model: model),
                         onSelect: { selectRow(envelope, model: model, ordered: visible) },
                         content: {
-                            row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+                            row(for: envelope, model: model, orderedVisible: visible)
                         }
                     )
                 }
