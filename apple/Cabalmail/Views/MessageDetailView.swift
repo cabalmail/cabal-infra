@@ -265,19 +265,22 @@ struct MessageDetailView: View {
         }
     }
 
-    // The detail view exposes six action buttons. On macOS they live in the
+    // The detail view exposes seven action buttons. On macOS they live in the
     // top toolbar; on iOS/visionOS they would crowd the inline title and hide
     // the subject, so we route them to a bottom bar where they're also easier
-    // to reach with a thumb.
+    // to reach with a thumb. Seven is the ceiling that fits an iPhone bottom
+    // bar, which sizes to its content and neither scrolls nor compacts — so
+    // the Drafts affordance swaps into the leading slot instead of adding an
+    // eighth item. Anything new belongs in the overflow menu.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         #if os(iOS) || os(visionOS)
         ToolbarItemGroup(placement: .bottomBar) {
-            if model?.isDraftsFolder == true {
+            if model?.leadingToolbarAction == .editDraft {
                 editDraftButton
-                Spacer()
+            } else {
+                replyButton
             }
-            replyButton
             Spacer()
             seenButton
             Spacer()
@@ -292,10 +295,11 @@ struct MessageDetailView: View {
             overflowMenuButton
         }
         #else
-        if model?.isDraftsFolder == true {
+        if model?.leadingToolbarAction == .editDraft {
             ToolbarItem { editDraftButton }
+        } else {
+            ToolbarItem { replyButton }
         }
-        ToolbarItem { replyButton }
         ToolbarItem { seenButton }
         ToolbarItem { flagButton }
         ToolbarItem { remoteContentButton }
