@@ -211,6 +211,17 @@ struct ComposeView: View {
                     if !sent { closeCoordinator.allowsClose = false }
                     #endif
                     guard sent else { return }
+                    // Sending from a draft discards the server copy, so the
+                    // Drafts list is showing a message that no longer
+                    // exists. Prune it through the same signal the reader's
+                    // archive/move actions use instead of waiting for the
+                    // next background reconcile (the folder is unsubscribed
+                    // by default, so that took over a minute). "Drafts" is
+                    // the mailbox `/save_draft` pins every draft to; see
+                    // `MessageDetailViewModel.isDraftsFolder`.
+                    if let uid = model.supersededDraftUID {
+                        appState.signalDisposed(folderPath: "Drafts", uid: uid)
+                    }
                     // Surface the outcome as a toast on the shared AppState
                     // so the user sees confirmation after the sheet dismisses.
                     // `.queued` means the message is in the outbox and
