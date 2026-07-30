@@ -20,6 +20,9 @@ native Issues UI:
   * related PRs (discovered via cross-reference events, since the fixer does
     not use closing keywords) are shown per row with their open/merged/closed
     state, linked directly - no drilling into the issue to find them
+  * a route column shows which pipeline owns each issue - the baseline
+    tester/fixer pair (Mini) or the 27.x-beta pair (Studio, `os27` label) -
+    and its pill toggles the label, re-routing the issue at triage time
   * triage actions per row (these make real changes on GitHub): Accept adds
     the `accepted` label so the nightly fixer picks the issue up (disabled
     while the issue is already accepted or awaiting retest); Close...
@@ -49,6 +52,7 @@ import shutil
 import subprocess
 import sys
 import traceback
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
@@ -97,6 +101,7 @@ FALLBACK_COLORS = {
     "accepted": "5319e7",
     "fix-in-review": "e99695",
     "needs-retest": "0e8a16",
+    "os27": "006b75",
 }
 
 QUERY = """
@@ -131,6 +136,10 @@ ACCEPT_LABEL = "accepted"
 # Labels besides ACCEPT_LABEL itself that grey out the Accept button: an issue
 # awaiting retest already has its fix live, so there is nothing to queue.
 ACCEPT_BLOCK_LABELS = ["needs-retest"]
+# Pipeline-routing label: issues carrying it belong to the 27.x-beta tester/fixer
+# pair (Mac Studio); issues without it belong to the baseline pair (Mac Mini). The
+# route column's pill toggles it. Empty disables the column and the endpoint.
+ROUTE_LABEL = "os27"
 
 
 def format_stages(stages):
@@ -204,13 +213,13 @@ def graphql(variables):
     return payload["data"]
 
 
-def rest(method, path, payload):
+def rest(method, path, payload=None):
     """Call a GitHub REST endpoint (mutations), via token or the gh CLI."""
     token = os.environ.get("GITHUB_TOKEN", "").strip() or os.environ.get("GH_TOKEN", "").strip()
     if token:
         req = urllib.request.Request(
             "https://api.github.com" + path,
-            data=json.dumps(payload).encode(),
+            data=json.dumps(payload).encode() if payload is not None else None,
             headers={"Authorization": f"bearer {token}",
                      "Content-Type": "application/json",
                      "Accept": "application/vnd.github+json"},
@@ -231,9 +240,12 @@ def rest(method, path, payload):
             "Neither GITHUB_TOKEN/GH_TOKEN is set nor is the `gh` CLI on PATH. "
             "Install gh and run `gh auth login`, or export a token."
         )
+    cmd = ["gh", "api", "--method", method, path.lstrip("/")]
+    if payload is not None:
+        cmd += ["--input", "-"]
     proc = subprocess.run(
-        ["gh", "api", "--method", method, path.lstrip("/"), "--input", "-"],
-        input=json.dumps(payload), capture_output=True, text=True, check=False,
+        cmd, input=json.dumps(payload) if payload is not None else None,
+        capture_output=True, text=True, check=False,
     )
     if proc.returncode != 0:
         raise RuntimeError(f"gh api failed: {proc.stderr.strip() or proc.stdout.strip()}")
@@ -298,8 +310,9 @@ def build_model():
             "accept_blocked": next(
                 (lab for lab in [ACCEPT_LABEL] + ACCEPT_BLOCK_LABELS if lab in names),
                 None),
+            "routed": bool(ROUTE_LABEL and ROUTE_LABEL in names),
             "other_labels": [{"name": n, "color": c} for n, c in labels
-                             if n not in stage_labels],
+                             if n not in stage_labels and n != ROUTE_LABEL],
             "prs": prs,
         })
 
@@ -313,7 +326,12 @@ def build_model():
                     "multi": len(labs) > 1}
                    for key, labs in STAGES],
         "accept_label": ACCEPT_LABEL,
-        "missing_labels": [lab for lab in dict.fromkeys(stage_labels + [ACCEPT_LABEL])
+        "route": {"label": ROUTE_LABEL,
+                  "color": label_colors.get(ROUTE_LABEL, "8b8a86"),
+                  "count": sum(1 for r in rows if r["routed"])} if ROUTE_LABEL else None,
+        "missing_labels": [lab for lab in dict.fromkeys(
+                               stage_labels + [ACCEPT_LABEL]
+                               + ([ROUTE_LABEL] if ROUTE_LABEL else []))
                            if lab not in repo_labels] if all_labels_seen else [],
         "issues": rows,
         "open_total": total,
@@ -356,6 +374,34 @@ def api_accept():
         return jsonify({"ok": True})
     except Exception as exc:  # pylint: disable=broad-except
         sys.stderr.write("api/accept error:\n" + traceback.format_exc())
+        return jsonify({"error": "An internal error has occurred."}), 200
+
+
+@app.route("/api/route", methods=["POST"])
+def api_route():
+    """Add or remove the pipeline-routing label on an issue (a real GitHub change)."""
+    data = request.get_json(force=True, silent=True) or {}
+    number = data.get("number")
+    routed = data.get("routed")
+    if not ROUTE_LABEL:
+        return jsonify({"error": "No route label is configured."}), 200
+    if not isinstance(number, int) or not isinstance(routed, bool):
+        return jsonify({"error": "number and routed are required."}), 200
+    try:
+        if routed:
+            rest("POST", f"/repos/{REPO_SLUG}/issues/{number}/labels",
+                 {"labels": [ROUTE_LABEL]})
+        else:
+            try:
+                rest("DELETE", f"/repos/{REPO_SLUG}/issues/{number}/labels/"
+                     + urllib.parse.quote(ROUTE_LABEL, safe=""))
+            except RuntimeError as err:
+                # Label already gone (stale row) - the desired state holds.
+                if "404" not in str(err):
+                    raise
+        return jsonify({"ok": True})
+    except Exception as exc:  # pylint: disable=broad-except
+        sys.stderr.write("api/route error:\n" + traceback.format_exc())
         return jsonify({"error": "An internal error has occurred."}), 200
 
 
@@ -489,6 +535,8 @@ PAGE = r"""<!DOCTYPE html>
   .abtn:disabled{opacity:.45; cursor:default}
   .abtn.accept:not(:disabled){color:var(--good-ink); border-color:color-mix(in srgb,var(--good) 40%,var(--border))}
   .abtn.danger:hover:not(:disabled){color:var(--critical); border-color:color-mix(in srgb,var(--critical) 45%,var(--border)); background:var(--surface)}
+  .abtn.route{min-width:56px; text-align:center; font-weight:600}
+  .abtn.route:not(.on){color:var(--muted)}
   .actcell{display:flex; gap:6px}
   .modal{position:fixed; inset:0; background:rgba(0,0,0,.42); display:flex; align-items:center; justify-content:center; z-index:90}
   .modal[hidden]{display:none}
@@ -553,9 +601,14 @@ PAGE = r"""<!DOCTYPE html>
     fixer links issues without closing keywords, so GitHub's "linked PR" field stays empty);
     a PR that merely mentions the issue also appears here. Click a stat tile to filter to
     that stage; click it again to clear. All links open in a new tab.
-    <b>Accept</b> adds the <code>accepted</code> label (the nightly fixer picks it up) and is
-    disabled while the issue is already accepted or awaiting retest;
-    <b>Close…</b> posts your comment and then closes the issue — both are real GitHub changes.
+    The <b>pipeline</b> column shows which tester/fixer pair owns the issue — <i>base</i>
+    (the Mini, current-OS) or the route label (the Studio, 27.x-beta) — and clicking the
+    pill toggles the label to re-route it: retests, verification, and the fixer queues all
+    follow that label.
+    <b>Accept</b> adds the <code>accepted</code> label (the owning pipeline's fixer picks it
+    up) and is disabled while the issue is already accepted or awaiting retest;
+    <b>Close…</b> posts your comment and then closes the issue — the pill, Accept, and
+    Close are all real GitHub changes.
   </footer>
 </div>
 
@@ -580,7 +633,7 @@ const PR_ICON={open:'●', merged:'⛙', closed:'✕', draft:'○'};
 const INTERVALS=[{s:0,label:'Off'},{s:60,label:'1 minute'},{s:300,label:'5 minutes'},{s:900,label:'15 minutes'},{s:3600,label:'1 hour'}];
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-let MODEL=null, activeStage=null, sortKey='updated', sortDir=-1, inFlight=false, intervalSec=0, timer=null;
+let MODEL=null, activeStage=null, activeRoute=false, sortKey='updated', sortDir=-1, inFlight=false, intervalSec=0, timer=null;
 
 function ago(iso){
   const ms=Date.now()-new Date(iso).getTime();
@@ -627,11 +680,13 @@ function renderStats(){
   const tiles=[`<button class="stat" data-stage="" aria-pressed="${activeStage===null}"><div class="n">${MODEL.issues.length}</div><div class="l">All in cycle</div></button>`]
     .concat(MODEL.stages.map(s=>`<button class="stat" data-stage="${esc(s.key)}" aria-pressed="${activeStage===s.key}">`+
       `<div class="n">${MODEL.counts[s.key]||0}</div><div class="l"><span class="dot" style="background:#${esc(s.color)}"></span>${esc(s.key)}</div></button>`));
+  if(MODEL.route) tiles.push(`<button class="stat" data-route="1" aria-pressed="${activeRoute}" title="Issues routed to the 27.x pipeline — click to filter">`+
+    `<div class="n">${MODEL.route.count}</div><div class="l"><span class="dot" style="background:#${esc(MODEL.route.color)}"></span>${esc(MODEL.route.label)}</div></button>`);
   const el=document.getElementById('stats');
   el.innerHTML=tiles.join('');
   el.querySelectorAll('.stat').forEach(b=>b.addEventListener('click',()=>{
-    const s=b.dataset.stage||null;
-    activeStage=(s===activeStage)?null:s;
+    if(b.dataset.route){ activeRoute=!activeRoute; }
+    else { const s=b.dataset.stage||null; activeStage=(s===activeStage)?null:s; }
     renderStats(); renderRows();
   }));
 }
@@ -658,6 +713,15 @@ function stageCell(r,s){
   if(!s.multi) return `<span class="stagemark" style="color:color-mix(in srgb,#${esc(s.color)} 55%,var(--ink))" title="${esc(marks[0].name)}">✓</span>`;
   return marks.map(m=>`<span class="ghlabel" style="border-color:#${esc(m.color)}; background:color-mix(in srgb,#${esc(m.color)} 18%,transparent)" title="${esc(m.name)}">${esc(m.short)}</span>`).join('');
 }
+function routeCell(r){
+  // Same footprint routed or not, so the toggle never shifts under the pointer.
+  const lab=MODEL.route.label, c=MODEL.route.color;
+  const title=r.routed
+    ?`Owned by the 27.x pipeline (Studio) — click to return to the baseline pipeline (removes ${lab})`
+    :`Owned by the baseline pipeline (Mini) — click to route to the 27.x pipeline (adds ${lab})`;
+  const style=r.routed?` style="border-color:#${esc(c)}; background:color-mix(in srgb,#${esc(c)} 22%,transparent); color:var(--ink)"`:'';
+  return `<button class="abtn route${r.routed?' on':''}" type="button"${style} title="${esc(title)}" onclick="routeIssue(${r.number},${!r.routed},this)">${r.routed?esc(lab):'base'}</button>`;
+}
 function actCell(r){
   const blocked=r.accept_blocked;
   const why=blocked===MODEL.accept_label?'Already accepted'
@@ -675,9 +739,11 @@ function renderRows(){
   const q=document.getElementById('f-q').value.trim().toLowerCase();
   let rows=MODEL.issues.slice();
   if(activeStage) rows=rows.filter(r=>r.stages.includes(activeStage));
+  if(activeRoute) rows=rows.filter(r=>r.routed);
   if(q) rows=rows.filter(r=>(
     '#'+r.number+' '+r.title+' '+r.stages.join(' ')+' '+
     Object.values(r.marks).flat().map(m=>m.name).join(' ')+' '+
+    (r.routed&&MODEL.route?MODEL.route.label+' ':'')+
     r.other_labels.map(l=>l.name).join(' ')+' '+
     r.prs.map(p=>'#'+p.number+' '+p.title+' '+p.state).join(' ')
   ).toLowerCase().includes(q));
@@ -685,6 +751,7 @@ function renderRows(){
   document.getElementById('f-count').textContent=`${rows.length} issue${rows.length!==1?'s':''}`;
   const head=`<tr>${th('number','#','')}${th('title','Title','')}${th('created','Age','')}${th('updated','Updated','')}`+
     MODEL.stages.map(s=>th(null,s.key,'stagecol')).join('')+
+    (MODEL.route?th(null,'pipeline','stagecol'):'')+
     `<th>Labels</th><th>PRs</th><th>Actions</th></tr>`;
   const body=rows.map(r=>`<tr>
     <td class="num"><a href="${esc(r.url)}" target="_blank" rel="noopener">#${r.number}</a></td>
@@ -692,11 +759,12 @@ function renderRows(){
     <td class="num" title="opened ${esc(r.created)}">${ago(r.created)}</td>
     <td class="num" title="${esc(r.updated)}">${ago(r.updated)}</td>
     ${MODEL.stages.map(s=>`<td class="stagecol">${stageCell(r,s)}</td>`).join('')}
+    ${MODEL.route?`<td class="stagecol">${routeCell(r)}</td>`:''}
     <td>${r.other_labels.map(l=>`<span class="ghlabel" style="border-color:#${esc(l.color)}; background:color-mix(in srgb,#${esc(l.color)} 18%,transparent)">${esc(l.name)}</span>`).join('')||'<span class="none">—</span>'}</td>
     <td>${prCell(r)}</td>
     <td>${actCell(r)}</td>
   </tr>`).join('');
-  const cols=7+MODEL.stages.length;
+  const cols=7+MODEL.stages.length+(MODEL.route?1:0);
   document.getElementById('issue-table').innerHTML=`<table><thead>${head}</thead><tbody>`+
     (rows.length?body:`<tr><td colspan="${cols}" class="empty">No open issues match.</td></tr>`)+`</tbody></table>`;
 }
@@ -716,6 +784,12 @@ async function acceptIssue(n, btn){
   const d=await postJSON('/api/accept',{number:n});
   if(d && d.ok){ toast(`Accepted #${n} — queued for the fixer.`); await fetchData(); }
   else { toast('Accept failed: '+((d&&d.error)||'unknown error'), true); btn.disabled=false; }
+}
+async function routeIssue(n, routed, btn){
+  btn.disabled=true;
+  const d=await postJSON('/api/route',{number:n, routed});
+  if(d && d.ok){ toast(routed?`Routed #${n} to the ${MODEL.route.label} pipeline.`:`Returned #${n} to the baseline pipeline.`); await fetchData(); }
+  else { toast('Route change failed: '+((d&&d.error)||'unknown error'), true); btn.disabled=false; }
 }
 function openCloseModal(n){
   closeTarget=n;
@@ -780,7 +854,7 @@ renderIntervalMenu(); fetchData();
 
 
 def main():
-    global REPO_SLUG, STAGES, ACCEPT_LABEL, ACCEPT_BLOCK_LABELS
+    global REPO_SLUG, STAGES, ACCEPT_LABEL, ACCEPT_BLOCK_LABELS, ROUTE_LABEL
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     help="Path to a checkout whose origin remote names the GitHub repo "
@@ -797,6 +871,10 @@ def main():
                     help="Comma-separated labels besides the accept label itself that "
                          "disable the Accept button "
                          f"(default: {','.join(ACCEPT_BLOCK_LABELS)})")
+    ap.add_argument("--route-label", default=ROUTE_LABEL,
+                    help="Label that routes an issue to the 27.x pipeline; shown as a "
+                         "per-row toggle pill in its own column. Pass an empty string "
+                         f"to hide the column (default: {ROUTE_LABEL})")
     ap.add_argument("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
     ap.add_argument("--port", type=int, default=5058,
                     help="Bind port (default 5058; the Apple dashboard uses 5057)")
@@ -811,10 +889,12 @@ def main():
     ACCEPT_LABEL = args.accept_label
     ACCEPT_BLOCK_LABELS = [s.strip() for s in args.accept_block_labels.split(",")
                            if s.strip()]
+    ROUTE_LABEL = args.route_label.strip()
 
     sys.stderr.write(f"Serving Cabalmail triage dashboard on http://{args.host}:{args.port}  (repo: {REPO_SLUG})\n")
     sys.stderr.write("Pipeline columns: "
-                     + "; ".join(f"{k} ({', '.join(v)})" for k, v in STAGES) + "\n")
+                     + "; ".join(f"{k} ({', '.join(v)})" for k, v in STAGES)
+                     + (f"; route label: {ROUTE_LABEL}" if ROUTE_LABEL else "") + "\n")
     app.run(host=args.host, port=args.port, debug=False)
 
 
