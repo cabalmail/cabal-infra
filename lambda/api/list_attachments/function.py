@@ -3,9 +3,11 @@ import json
 from helper import get_message # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
+from helper import message_gone_guard # pylint: disable=import-error
 
 
 @maintenance_guard
+@message_gone_guard
 def handler(event, _context):
     '''Retrieves list of attachments from a message given a folder and ID'''
     query_string = event['queryStringParameters']
