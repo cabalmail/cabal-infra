@@ -1054,11 +1054,10 @@ spinning up the full view model.
 - **Account.** Signed-in username + control domain (both read-only), plus
   the single sign-out button. Account is the canonical place for
   sign-out.
-- **Reading.** `Mark as read` (manual / on open / after delay) and
-  `Load remote content` (off / ask / always). `MessageDetailViewModel`
-  schedules a cancellable 2-second task for `.afterDelay` that the view
-  cancels on disappear so we don't mark read a message the user only
-  previewed.
+- **Reading.** `Mark as read` (manual / on open) and
+  `Load remote content` (off / ask / always). The manual default matches
+  the React app, where the user always explicitly marks messages read
+  via the swipe action, toolbar button, or context menu.
 - **Composing.** `Default From address` (None / one of the user's
   addresses — revoked addresses fall back to None so a stale preference
   can't persist an address that doesn't exist any more) and a plain-text
