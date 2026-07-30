@@ -284,11 +284,13 @@ struct MailRootView: View {
                 appState.navCoordinator?.recordFolder(path)
             }
         }
-        // Compact navigation: a selected message pushes the reader; navigating
-        // back out (the binding falls off `.detail`) clears the selection so
-        // the same row can be reopened. No-ops on regular width / iPad.
+        // Compact navigation: a selected message pushes the reader, and losing
+        // the selection while the reader is up pops back to the list (see
+        // `CompactColumnPolicy`); navigating back out by hand (the binding
+        // falls off `.detail`) clears the selection so the same row can be
+        // reopened. No-ops on regular width / iPad.
         .onChange(of: selectedEnvelope) { _, envelope in
-            if envelope != nil { compactColumn = .detail }
+            compactColumn = CompactColumnPolicy.column(hasSelectedMessage: envelope != nil, current: compactColumn)
             // Record the open message (or its absence) for the cursor. Skipped
             // while searching — the search surface has no single folder to
             // anchor the cursor to.
