@@ -555,6 +555,7 @@ final class MessageListViewModel {
             // height with nothing left to animate.
             await disposal.value
             envelopes.removeAll { $0.uid == envelope.uid }
+            adjustTotalMessages(by: -1)
             endRowDisposal(uid: envelope.uid)
             await pruneCachesAfter(move: source, uid: envelope.uid)
         } catch {
@@ -625,7 +626,11 @@ extension MessageListViewModel {
     /// touches the list's in-memory copy so the row disappears immediately
     /// without a server round trip.
     func pruneEnvelope(uid: UInt32) {
+        let loadedBefore = envelopes.count
         envelopes.removeAll { $0.uid == uid }
+        // Only adjust when a row really left the window: a signal for a UID
+        // we never had loaded says nothing reliable about the folder total.
+        adjustTotalMessages(by: envelopes.count - loadedBefore)
         // The folder lost a row (detail-view dispose, no cache-prune round
         // trip), so a staged bottom window may no longer line up -- drop it.
         invalidateBottomPrefetch()

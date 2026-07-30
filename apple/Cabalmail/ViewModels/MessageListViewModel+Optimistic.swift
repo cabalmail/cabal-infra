@@ -72,6 +72,22 @@ extension MessageListViewModel {
         }
     }
 
+    /// Keep the server-sourced folder total in step with an optimistic prune
+    /// (or its revert). The index-addressed list renders
+    /// `max(totalMessages, loaded rows)` slots and the All filter pill reads
+    /// `totalMessages` straight through, so a row removed locally leaves a
+    /// loading skeleton behind in its slot — a placeholder that can never
+    /// resolve, because the message it points at is gone — plus an inflated
+    /// pill, until the next STATUS corrects the count. Unsubscribed folders
+    /// (Drafts) get no proactive poll, so that wait runs to minutes rather
+    /// than the ~10s STATUS lag elsewhere. Clamped at zero, and skipped in
+    /// search mode, where the row count comes from the results rather than
+    /// STATUS.
+    func adjustTotalMessages(by delta: Int) {
+        guard !isSearchActive, delta != 0 else { return }
+        totalMessages = UInt32(max(0, Int(totalMessages) + delta))
+    }
+
     /// Leg of the two-stage row-disposal animation a row is currently in.
     /// `nil` (absent from `rowDisposalPhases`) is the normal, settled state.
     enum RowDisposalPhase: Equatable {
@@ -134,6 +150,9 @@ extension MessageListViewModel {
             envelopes.append(envelope)
             envelopes.sort { $0.uid > $1.uid }
         }
+        // The row is back, so hand the folder total back the slot the
+        // optimistic prune took off it.
+        adjustTotalMessages(by: 1)
     }
 
     /// Rebuilds an `Envelope` value with a different flag set. `Envelope`

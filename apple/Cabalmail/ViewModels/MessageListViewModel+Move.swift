@@ -18,7 +18,12 @@ extension MessageListViewModel {
         guard source != destination else { return }
         let originalIndex = envelopes.firstIndex { $0.uid == envelope.uid }
         let wasUnread = !envelope.flags.contains(.seen)
+        let loadedBefore = envelopes.count
         envelopes.removeAll { $0.uid == envelope.uid }
+        // Drop the vacated slot from the folder total too, or the index-
+        // addressed list keeps rendering an unresolvable skeleton row in it
+        // (and the All pill keeps counting it) until the next STATUS.
+        adjustTotalMessages(by: envelopes.count - loadedBefore)
         // Shield the removal from a concurrent refresh: until the move lands
         // the source folder still returns this UID, and an unshielded merge
         // would resurrect the row.
@@ -89,7 +94,9 @@ extension MessageListViewModel {
         // Shield every moving UID from a concurrent refresh until the whole
         // batch settles - the source folders keep returning them until their
         // move lands, and an unshielded merge would resurrect the rows.
+        let loadedBefore = envelopes.count
         envelopes.removeAll { movingUIDs.contains($0.uid) }
+        adjustTotalMessages(by: envelopes.count - loadedBefore)
         pendingRemovedUIDs.formUnion(movingUIDs)
         defer { pendingRemovedUIDs.subtract(movingUIDs) }
         for (source, count) in unreadBySource {
@@ -141,6 +148,7 @@ extension MessageListViewModel {
         let restored = snapshot.filter { sourceFolder(for: $0) == source }
         envelopes.append(contentsOf: restored)
         envelopes.sort(by: envelopeOrder)
+        adjustTotalMessages(by: restored.count)
         appState.applyUnreadDelta(folderPath: source, delta: unread)
         if !markSeenFirst {
             appState.applyUnreadDelta(folderPath: destination, delta: -unread)
@@ -165,6 +173,7 @@ extension MessageListViewModel {
         }
         envelopes.append(contentsOf: restored)
         envelopes.sort(by: envelopeOrder)
+        adjustTotalMessages(by: restored.count)
         if markSeenFirst {
             for envelope in restored {
                 applyOptimisticFlag(uid: envelope.uid, flag: .seen, add: true)
