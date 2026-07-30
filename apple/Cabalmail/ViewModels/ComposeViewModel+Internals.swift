@@ -6,6 +6,17 @@ import CabalmailKit
 /// to keep the type body under the SwiftLint length ceiling. Everything
 /// here is `@MainActor` by inheritance from the host class.
 extension ComposeViewModel {
+    // MARK: - Presentation
+
+    /// Title for the compose surface (the sheet's navigation bar on iPhone,
+    /// the window title elsewhere). "New Message" is a lie when the user
+    /// tapped Edit Draft on a saved draft: the form comes up populated, and
+    /// sending replaces that draft rather than adding a second one. Replies
+    /// and forwards keep the generic title — they really are new messages.
+    var navigationTitle: String {
+        isResumedServerDraft ? "Draft" : "New Message"
+    }
+
     // MARK: - Editor bridge health
 
     /// Banner copy for a dead editor bridge. One phrasing for both the

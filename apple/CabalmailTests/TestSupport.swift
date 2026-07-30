@@ -235,10 +235,14 @@ enum TestFixtures {
     /// it; the bridge-health tests drive the failure hooks directly rather
     /// than depending on whether `editor.html` loads in the test host.
     @MainActor
-    static func makeComposeModel(imap: FakeImapClient = FakeImapClient()) throws -> ComposeViewModel {
+    static func makeComposeModel(
+        seed: Draft = Draft(),
+        imap: FakeImapClient = FakeImapClient()
+    ) throws -> ComposeViewModel {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("cabalmail-compose-tests-\(UUID().uuidString)")
         return ComposeViewModel(
+            seed: seed,
             client: try makeClient(imap: imap),
             draftStore: try DraftStore(directory: tmp),
             preferences: Preferences(store: InMemoryPreferenceStore()),

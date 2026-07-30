@@ -61,7 +61,7 @@ struct ComposeView: View {
     var body: some View {
         NavigationStack {
             composeContent
-            .navigationTitle("New Message")
+            .navigationTitle(model.navigationTitle)
             #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
