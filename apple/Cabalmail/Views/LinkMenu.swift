@@ -26,6 +26,18 @@ struct LinkMenuTarget: Identifiable, Equatable {
         return scheme == "http" || scheme == "https"
     }
 
+    /// A link activated in a plain-text body, where there is no web view to
+    /// report a bounding box — the menu anchors to the body instead.
+    init?(url: URL, text: String) {
+        guard
+            let scheme = url.scheme?.lowercased(),
+            !Self.blockedSchemes.contains(scheme)
+        else { return nil }
+        self.url = url
+        self.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.rect = .zero
+    }
+
     init?(bridgePayload payload: [String: Any]) {
         guard
             let href = payload["href"] as? String,
