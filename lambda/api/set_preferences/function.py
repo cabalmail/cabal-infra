@@ -26,7 +26,7 @@ MAX_NAME_LENGTH = 100
 # apple/CabalmailKit/Sources/CabalmailKit/Settings/Preferences.swift); the two
 # free-text keys reuse the display-name/signature validators below.
 APP_ALLOWED = {
-    'mark_as_read':             {'manual', 'on_open', 'after_delay'},
+    'mark_as_read':             {'manual', 'on_open'},
     'load_remote_content':      {'off', 'ask', 'always'},
     'dispose_action':           {'archive', 'trash'},
     'theme':                    {'system', 'light', 'dark'},

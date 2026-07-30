@@ -126,7 +126,6 @@ struct SettingsView: View {
             Picker("Mark as read", selection: $preferences.markAsRead) {
                 Text("Manual").tag(MarkAsReadBehavior.manual)
                 Text("On open").tag(MarkAsReadBehavior.onOpen)
-                Text("After delay (2s)").tag(MarkAsReadBehavior.afterDelay)
             }
             Picker("Load remote content", selection: $preferences.loadRemoteContent) {
                 Text("Off").tag(LoadRemoteContentPolicy.off)

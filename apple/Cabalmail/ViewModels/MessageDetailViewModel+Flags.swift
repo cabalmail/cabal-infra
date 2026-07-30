@@ -14,9 +14,7 @@ import CabalmailKit
 @MainActor
 extension MessageDetailViewModel {
     /// Toggles the server's `\Seen` flag. Drives both the toolbar button's
-    /// manual path and the `.onOpen` / `.afterDelay` mark-as-read
-    /// preferences — a successful flip cancels any still-pending delayed
-    /// task so the two paths can't race.
+    /// manual path and the `.onOpen` mark-as-read preference.
     func toggleSeen() async {
         await setSeen(!isSeen)
     }
@@ -24,14 +22,10 @@ extension MessageDetailViewModel {
     func setSeen(_ shouldBeSeen: Bool) async {
         // Optimistic flip: update the toolbar icon and signal the list
         // before the server round trip so the user sees the change land
-        // instantly. The pending delayed-mark-as-read task is cancelled
-        // because either path supersedes it. On STORE failure we revert
-        // the flag and the cross-view signal so the row goes back to its
-        // truthful state.
+        // instantly. On STORE failure we revert the flag and the cross-
+        // view signal so the row goes back to its truthful state.
         let previous = isSeen
         isSeen = shouldBeSeen
-        pendingMarkAsReadTask?.cancel()
-        pendingMarkAsReadTask = nil
         onFlagChanged?(.seen, shouldBeSeen)
         onFlagWriteInFlight?(true)
         defer { onFlagWriteInFlight?(false) }
@@ -56,14 +50,6 @@ extension MessageDetailViewModel {
             return
         case .onOpen:
             Task { await setSeen(true) }
-        case .afterDelay:
-            pendingMarkAsReadTask?.cancel()
-            pendingMarkAsReadTask = Task { [weak self] in
-                let delay = Self.markAsReadDelay
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                await self?.setSeen(true)
-            }
         }
     }
 
