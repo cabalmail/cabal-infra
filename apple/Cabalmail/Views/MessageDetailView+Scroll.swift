@@ -66,12 +66,7 @@ extension MessageDetailView {
     @ViewBuilder
     private func plainBodyView(_ plain: String) -> some View {
         ScrollView {
-            Text(plain)
-                .font(.body)
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
+            PlainTextBodyView(plain: plain)
         }
         .scrollPosition($plainScrollPosition)
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
