@@ -6,6 +6,17 @@ import CabalmailKit
 /// to keep the type body under the SwiftLint length ceiling. Everything
 /// here is `@MainActor` by inheritance from the host class.
 extension ComposeViewModel {
+    // MARK: - Presentation
+
+    /// Title for the compose surface (the sheet's navigation bar on iPhone,
+    /// the window title elsewhere). "New Message" is a lie when the user
+    /// tapped Edit Draft on a saved draft: the form comes up populated, and
+    /// sending replaces that draft rather than adding a second one. Replies
+    /// and forwards keep the generic title — they really are new messages.
+    var navigationTitle: String {
+        isResumedServerDraft ? "Draft" : "New Message"
+    }
+
     // MARK: - Editor bridge health
 
     /// Banner copy for a dead editor bridge. One phrasing for both the
@@ -198,6 +209,21 @@ extension ComposeViewModel {
 
     func formatAddress(_ address: EmailAddress) -> String {
         "\(address.mailbox)@\(address.host)"
+    }
+
+    /// UID of the server-side Drafts copy that a completed send has just
+    /// superseded, or nil when there's nothing for the Drafts list to
+    /// prune. `/send` discards that copy server-side as part of delivery,
+    /// so the row the user is looking at is stale the moment this returns
+    /// a value — the compose surface signals the list rather than leaving
+    /// it to the next background reconcile a minute later.
+    ///
+    /// A queued send keeps its draft on purpose (the outbox hasn't
+    /// delivered anything yet, and the ref is dropped rather than
+    /// discarded), so it reports nothing.
+    var supersededDraftUID: UInt32? {
+        guard lastSendOutcome == .sent else { return nil }
+        return serverDraftRef?.uid
     }
 
     func describe(_ error: CabalmailError) -> String {

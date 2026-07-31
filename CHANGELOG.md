@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.19] - 2026-07-31
+
+### Changed
+- **Pipeline routing in the triage dashboard.** Each row now shows which
+  tester/fixer pipeline owns the issue — baseline or `os27` (the 27.x-beta
+  pair) — as a fixed-footprint pill that toggles the `os27` label on GitHub,
+  plus a stat tile that filters to routed issues. `--route-label` renames the
+  label; an empty value hides the column.
+
+### Removed
+- Apple: **"After delay (2s)" mark-as-read option.** The Reading setting
+  now offers only Manual and On open. The delay-based path never
+  survived iPhone's phantom `.onDisappear` (issue #735); dropping the
+  option removes the surface rather than papering over it.
+
+### Fixed
+- Apple: **iPhone reader stranded on the empty-selection placeholder.**
+  Sending a draft — or archiving or moving the last message — from inside the
+  reader removed the message being read but left the reader on screen, showing
+  a full-screen "No message selected / Pick a message from the list to read it."
+  under the folder's title bar, with no list to pick from. The reader now pops
+  back to the message list when the message it was showing goes away.
+- Apple: **Cancelling a compose offers all three outcomes.** The confirmation showed
+  only "Discard Draft" under a message promising a keep option, and an accidental tap
+  outside it saved the draft and closed the composer with no way back. It now lists
+  "Discard Draft", "Save Draft" and "Keep Editing", and dismissing it leaves the
+  composer exactly as it was.
+- Apple: **Draft reader toolbar no longer overflows the iPhone screen.** Opening a
+  message in Drafts added "Edit Draft" as an eighth bottom-bar item, which pushed the
+  row wider than the screen and clipped both "Edit Draft" and "More actions" to ~5pt
+  slivers at the edges. Drafts now show "Edit Draft" in place of "Reply" — replying to
+  your own unsent draft was never a meaningful action — keeping the toolbar at seven
+  items in every folder.
+- Apple: **Sending a draft clears it from the Drafts list right away.** The row stayed
+  on screen for a minute or more after the send completed, even though the server copy
+  was already gone, because nothing invalidated the folder the app had just acted on.
+  The compose surface now prunes the row the moment the send lands, the same way the
+  reader's archive and move actions do.
+- Apple: **Composer titled "New Message" when editing a saved draft.** Opening
+  a draft for editing put up a populated form under a "New Message" title,
+  though sending it replaces that draft rather than creating a second one. The
+  composer now reads "Draft" when it opened on a saved draft; new messages,
+  replies and forwards are unchanged.
+- **Clean 404 when a message is no longer in the folder.** Requesting a message
+  whose UID has been expunged (moved, deleted, or emptied from Trash by another
+  client) and whose body was never cached raised a `KeyError` inside the shared
+  message loader, which API Gateway turned into a bodiless 502. `fetch_message`,
+  `fetch_attachment`, `list_attachments`, and `fetch_inline_image` now return a
+  404 naming the folder, so clients can tell "this message is gone, refresh the
+  folder" from "the server is broken".
+- Apple: **Unresolvable skeleton row left behind by a locally-removed
+  message.** Archiving, moving, permanently deleting or sending a draft pruned
+  the row but left the folder's message total at its last server-reported
+  value, so the vacated slot went on rendering a loading placeholder that could
+  never resolve — and the `All` filter pill went on counting it — until the next
+  folder-status poll corrected the count, up to a couple of minutes in an
+  unsubscribed folder such as Drafts. Every optimistic removal now takes the
+  slot off the total with the row, and hands it back if the server write fails.
+- Apple: **Tappable links in plain-text bodies.** URLs and email addresses in a
+  `text/plain` message body rendered as inert text — none of the reader's link
+  handling reached them, because the plain path drew a bare `Text`. They are now
+  detected, styled as links, and activate the same link menu (copy text / copy
+  address / open / share) the HTML path offers.
+- Apple: **Unread dot color on selected rows.** The unread indicator no
+  longer switches to white when its row is selected — white was nearly
+  invisible against the light-mode selection highlight. It now stays the
+  brand color everywhere, which reads fine against the highlight since the
+  dot itself stopped using the selection accent.
+
 ## [0.11.18] - 2026-07-28
 
 ### Changed

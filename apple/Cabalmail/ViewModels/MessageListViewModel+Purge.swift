@@ -34,6 +34,7 @@ extension MessageListViewModel {
         let unreadCount = condemned.filter { !$0.flags.contains(.seen) }.count
 
         envelopes.removeAll { condemnedUIDs.contains($0.uid) }
+        adjustTotalMessages(by: -condemned.count)
         pendingRemovedUIDs.formUnion(condemnedUIDs)
         defer { pendingRemovedUIDs.subtract(condemnedUIDs) }
         if unreadCount > 0 {
@@ -49,6 +50,7 @@ extension MessageListViewModel {
         } catch {
             envelopes.append(contentsOf: condemned)
             envelopes.sort(by: envelopeOrder)
+            adjustTotalMessages(by: condemned.count)
             if unreadCount > 0 {
                 appState.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: unreadCount)
             }
