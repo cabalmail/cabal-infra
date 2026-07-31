@@ -12,7 +12,9 @@ name: Lint
 #                (from infra.yml), using the same pinned tool versions,
 #                shared tflint config, per-stack checkov/trivy configs, and
 #                baseline/ignore drift checks.
-#   - Python:    pylint over lambda/api and lambda/counter (from app.yml).
+#   - Python:    pylint over lambda/api and lambda/counter (from app.yml),
+#                plus the lambda/api/_shared unittest suites (new for the PR
+#                gate; no deploy workflow runs them).
 #   - Swift:     swiftlint --strict (from apple.yml).
 #   - React:     eslint (new for the PR gate; the deploy path only builds).
 #
@@ -199,6 +201,12 @@ jobs:
       run: cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py
     - name: pylint-counter
       run: pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
+    - name: unittest-shared
+      # The _shared suites fake their third-party deps (imapclient, boto3) via
+      # sys.modules, so they run on a bare interpreter — no pip install needed.
+      # Same invocation as the docstring in each test file; suites are
+      # import-order independent since #863.
+      run: python3 -m unittest discover -s lambda/api/_shared/tests -p "test_*.py"
 
   # ---------------------------------------------------------------------------
   # Swift. swiftlint --strict, the same gate apple.yml runs on its macOS leg.
