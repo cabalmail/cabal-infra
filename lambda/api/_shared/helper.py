@@ -809,6 +809,36 @@ def delete_address_dns_records(zone_id, subdomain, tld, control_domain):
             HostedZoneId=zone_id, ChangeBatch={'Changes': changes})
 
 
+def active_addresses_on_subdomain(subdomain, tld, address):
+    '''Checks if other non-suspended addresses share the same subdomain and TLD.
+    The DNS records of a subdomain are shared by every address on it, so
+    suspend/revoke only delete them once this returns False. Suspended
+    co-tenants do not count: their contract is already "DNS absent", and
+    reinstate republishes the records if one comes back.'''
+    scan_kwargs = {
+        'FilterExpression': (
+            'subdomain = :sub AND tld = :tld AND address <> :addr '
+            'AND (attribute_not_exists(#s) OR #s = :false)'
+        ),
+        'ExpressionAttributeNames': {'#s': 'suspended'},
+        'ExpressionAttributeValues': {
+            ':sub': subdomain,
+            ':tld': tld,
+            ':addr': address,
+            ':false': False
+        },
+        'ProjectionExpression': 'address'
+    }
+    while True:
+        response = ddb_table.scan(**scan_kwargs)
+        if response.get('Items'):
+            return True
+        if 'LastEvaluatedKey' not in response:
+            break
+        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+    return False
+
+
 # Folder-size observability (Layer 4.1 of the large-mailbox hardening plan).
 # Each list handler emits one key=value log line tagging the request with a
 # coarse folder-size bucket so CloudWatch Logs Insights can correlate request
