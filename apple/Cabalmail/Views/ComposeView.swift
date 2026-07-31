@@ -329,55 +329,41 @@ extension ComposeView {
 
     #if !os(macOS)
     private var composeForm: some View {
+        Form {
+            ForEach(ComposeFormSection.allCases, id: \.self) { section in
+                formSection(section)
+            }
+        }
+    }
+
+    /// Renders one section of `composeForm`. The order lives in
+    /// `ComposeFormSection`, which documents why nothing actionable may
+    /// follow `.message`.
+    @ViewBuilder
+    private func formSection(_ section: ComposeFormSection) -> some View {
         @Bindable var model = model
-        return Form {
-            // First section on purpose. As the last one it sat below the
-            // body editor, off the bottom of an iPhone screen, and the
-            // WKWebView swallows the pan that would scroll down to it — so
-            // a send-blocking error was invisible and Send looked dead
-            // (#812). macOS pins the same text to the window bottom, which
-            // is always on screen there.
+        switch section {
+        case .error:
             if let errorMessage = model.errorMessage {
                 Section {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.red)
                 }
             }
+        case .from:
             Section("From") {
                 FromPicker(
                     model: model,
                     onCreateAddress: { showNewAddressSheet = true }
                 )
             }
-            Section("Recipients") {
-                RecipientFieldWithSuggestions(
-                    label: "To",
-                    text: $model.toText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.to
-                )
-                RecipientFieldWithSuggestions(
-                    label: "Cc",
-                    text: $model.ccText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.cc
-                )
-                RecipientFieldWithSuggestions(
-                    label: "Bcc",
-                    text: $model.bccText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.bcc
-                )
-            }
+        case .recipients:
+            recipientsSection
+        case .subject:
             Section("Subject") {
                 TextField("Subject", text: $model.subject)
             }
-            Section("Message") {
-                ComposerBody(model: model)
-            }
+        case .attachments:
             if !model.attachments.isEmpty {
                 Section("Attachments") {
                     ForEach(model.attachments) { attachment in
@@ -388,6 +374,37 @@ extension ComposeView {
                     }
                 }
             }
+        case .message:
+            Section("Message") {
+                ComposerBody(model: model)
+            }
+        }
+    }
+
+    private var recipientsSection: some View {
+        @Bindable var model = model
+        return Section("Recipients") {
+            RecipientFieldWithSuggestions(
+                label: "To",
+                text: $model.toText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.to
+            )
+            RecipientFieldWithSuggestions(
+                label: "Cc",
+                text: $model.ccText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.cc
+            )
+            RecipientFieldWithSuggestions(
+                label: "Bcc",
+                text: $model.bccText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.bcc
+            )
         }
     }
     #endif
