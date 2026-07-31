@@ -324,6 +324,7 @@ _FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 _KEYWORD_RE = re.compile(r'^[A-Za-z0-9_\-]+$')
 _CONTROL_CHARS_RE = re.compile(r'[\x00-\x1f\x7f]')
 _CONTENT_ID_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f\s/\\]')
+_ATTACHMENT_NAME_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f/\\]')
 
 # Lowercased wire form -> canonical form. Only these five system flags are
 # client-settable; \Recent and friends are server-managed and never accepted.
@@ -602,6 +603,45 @@ def validate_content_id(value):
         raise ValueError('content-id must be a bracketed token')
     if _CONTENT_ID_FORBIDDEN_RE.search(value):
         raise ValueError('content-id contains illegal characters')
+    return value
+
+
+def validate_part_index(value):
+    '''Validates a MIME part serial number, returning an int >= 0.
+
+    A part index is a position in `message.walk()`, not a UID: part 0 is the
+    message itself and is a legal value, so validate_uid's [1, 2**32-1] range
+    doesn't apply. Booleans are rejected for the same reason as in
+    validate_uid_list.
+    '''
+    if isinstance(value, bool):
+        raise ValueError(f'invalid attachment index: {value!r}')
+    try:
+        index = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'invalid attachment index: {value!r}') from exc
+    if index < 0:
+        raise ValueError(f'attachment index out of range: {index}')
+    return index
+
+
+def validate_attachment_filename(value):
+    '''Validates the filename an attachment is cached under, returning it
+    unchanged.
+
+    The value becomes the last component of an S3 key, so path separators,
+    control bytes, and the traversal names are rejected. Otherwise it stays
+    permissive: this is a real MIME filename taken from the message, and
+    spaces, non-ASCII, and punctuation all occur in the wild.
+    '''
+    if not isinstance(value, str) or not value:
+        raise ValueError('filename is required')
+    if len(value.encode('utf-8')) > MAX_FOLDER_NAME_BYTES:
+        raise ValueError('filename is too long')
+    if _ATTACHMENT_NAME_FORBIDDEN_RE.search(value):
+        raise ValueError('filename contains illegal characters')
+    if value in ('.', '..'):
+        raise ValueError(f'invalid filename: {value!r}')
     return value
 
 
