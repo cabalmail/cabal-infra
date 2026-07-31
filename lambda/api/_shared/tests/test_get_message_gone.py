@@ -10,6 +10,7 @@ sys.modules before import, so the suite needs no AWS access and never dials an
 IMAP server. The fake client mirrors the behavior under test: like a real
 server, an IMAP UID FETCH for a UID that has been expunged succeeds and returns
 an empty dict rather than failing.'''
+import importlib.util
 import os
 import sys
 import types
@@ -20,7 +21,6 @@ os.environ.setdefault('CONTROL_DOMAIN', 'test.example.com')
 
 _SHARED = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _SHARED)
-sys.path.insert(0, os.path.join(os.path.dirname(_SHARED), 'fetch_message'))
 
 # --- fake boto3 / botocore ---------------------------------------------------
 
@@ -98,9 +98,45 @@ sys.modules['imap_session'] = _imap_session
 
 import helper  # noqa: E402  pylint: disable=wrong-import-position
 
-# fetch_message's handler imports `helper` by name, exactly as it does inside
-# its deployed zip, so the real module above is what it binds to.
-import function as fetch_message  # noqa: E402  pylint: disable=wrong-import-position
+
+def _load_handler(name):
+    '''Imports lambda/api/<name>/function.py under a unique module name.
+
+    Every deployed zip names its handler module `function`, so a plain
+    `import function` lets whichever suite runs first win the `sys.modules`
+    slot and hands every later suite the wrong handler (#860). The handler
+    still imports `helper` by name, exactly as it does inside its zip, so the
+    real module above is what it binds to.
+    '''
+    path = os.path.join(os.path.dirname(_SHARED), name, 'function.py')
+    spec = importlib.util.spec_from_file_location(f'function_{name}', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+fetch_message = _load_handler('fetch_message')
+
+_SAVED = {}
+
+
+def setUpModule():
+    '''Binds this suite's fake into `helper`.
+
+    The `sys.modules` fake above only takes effect if this file is what first
+    imports `helper`. Under a directory-wide `discover` run it usually isn't:
+    `helper` is already imported, still holding a sibling suite's fake (whose
+    client has no `fetch`), and the `import helper` above is a no-op.
+    Rebinding here runs whatever the import order turns out to be (#860).
+    '''
+    _SAVED['open_imap_client'] = helper.open_imap_client
+    helper.open_imap_client = _open_imap_client
+
+
+def tearDownModule():
+    helper.open_imap_client = _SAVED['open_imap_client']
+
 
 UPLOADED = []
 
@@ -144,6 +180,19 @@ class GetMessageGoneTest(unittest.TestCase):
         message = helper.get_message(None, 'testuser', 'INBOX', 28)
         self.assertEqual(message.get('Subject'), 'still here')
         self.assertEqual(UPLOADED, ['testuser/INBOX/28/raw'])
+
+
+class SuiteIsolationTest(unittest.TestCase):
+    '''Guards the two ways a sibling suite used to hijack this one under a
+    directory-wide `discover` run (#860): `helper` already imported with
+    another suite's fake bound in, and another suite's handler sitting in the
+    `function` slot of sys.modules.'''
+
+    def test_this_suites_fake_is_what_helper_calls(self):
+        self.assertIs(helper.open_imap_client, _open_imap_client)
+
+    def test_the_handler_under_test_is_fetch_messages(self):
+        self.assertTrue(fetch_message.__file__.endswith('fetch_message/function.py'))
 
 
 class MessageGoneResponseTest(unittest.TestCase):

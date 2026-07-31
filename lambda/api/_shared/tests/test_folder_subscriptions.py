@@ -99,6 +99,25 @@ sys.modules['imap_session'] = _imap_session
 
 import helper  # noqa: E402  pylint: disable=wrong-import-position
 
+_SAVED = {}
+
+
+def setUpModule():
+    '''Binds this suite's fake into `helper`.
+
+    The `sys.modules` fake above only takes effect if this file is what first
+    imports `helper`. Under a directory-wide `discover` run it usually isn't:
+    `helper` is already imported, still holding a sibling suite's fake, and the
+    `import helper` above is a no-op. Rebinding here runs whatever the import
+    order turns out to be (#860).
+    '''
+    _SAVED['open_imap_client'] = helper.open_imap_client
+    helper.open_imap_client = _open_imap_client
+
+
+def tearDownModule():
+    helper.open_imap_client = _SAVED['open_imap_client']
+
 
 class UnsubscribeFolderTest(unittest.TestCase):
 
