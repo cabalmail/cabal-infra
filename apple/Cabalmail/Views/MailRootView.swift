@@ -61,14 +61,15 @@ struct MailRootView: View {
     /// visible (`.all`): a NavigationSplitView there is AppKit-backed with no
     /// gesture conflict, and it's a desktop multi-pane window. Ignored on
     /// compact iPhone (navigates via `compactColumn`).
-    #if os(macOS)
+    /// Live on macOS always; on iOS only the OS 27 prototype
+    /// (`SwipeProto.tiledSidebar`) binds it, to tile the real folder sidebar
+    /// persistently — the layout the embedded-List swipe could never win.
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    #endif
     private var splitVisibility: Binding<NavigationSplitViewVisibility> {
         #if os(macOS)
         $columnVisibility
         #else
-        .constant(.doubleColumn)
+        SwipeProto.tiledSidebar ? $columnVisibility : .constant(.doubleColumn)
         #endif
     }
     #if os(iOS)
@@ -201,7 +202,9 @@ struct MailRootView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: splitVisibility, preferredCompactColumn: $compactColumn) {
             #if os(iOS)
-            if isWideSidebar {
+            // OS 27 prototype: with the tiled-sidebar flag, skip the
+            // zero-width placeholder and tile the real folder sidebar.
+            if isWideSidebar, !SwipeProto.tiledSidebar {
                 // Regular-width iPad: the folder list lives in the floating
                 // panel (`folderPanelOverlay`), not in this column, which stays
                 // empty and permanently collapsed. Removing the system sidebar
@@ -241,7 +244,8 @@ struct MailRootView: View {
         // screen instead of fully off the leading edge.
         #if os(iOS)
         .overlay(alignment: .leading) {
-            if isWideSidebar { folderPanelOverlay }
+            // OS 27 prototype: the tiled sidebar replaces the floating panel.
+            if isWideSidebar, !SwipeProto.tiledSidebar { folderPanelOverlay }
         }
         #endif
         // Track the split view's overall width so the list column's max can be

@@ -34,31 +34,54 @@ extension MessageListView {
         let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
         ScrollViewReader { proxy in
             keyboardScoped(
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        if let errorMessage = model.errorMessage {
-                            Label(errorMessage, systemImage: "exclamationmark.triangle")
-                                .foregroundStyle(.red)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding()
-                        }
-                        if virtualize {
-                            ForEach(0..<rowCount, id: \.self) { index in
-                                indexedRow(index, model: model, visible: visible)
-                            }
-                        } else {
-                            ForEach(visible) { envelope in
-                                messageRow(envelope, model: model, visible: visible)
-                            }
-                        }
-                    }
-                },
+                protoSwipeContainer(scrollContent(model: model, visible: visible,
+                                                  virtualize: virtualize, rowCount: rowCount)),
                 model: model, visible: visible, proxy: proxy
             )
         }
         .overlay {
             if model.isLoading && model.envelopes.isEmpty {
                 ProgressView("Fetching messages…")
+            }
+        }
+    }
+
+    /// OS 27 prototype: mark the virtualized ScrollView as a swipe-action
+    /// container so rows can attach `.swipeActions` directly (see
+    /// `SwipeProto.containerSwipe` in SwipeActionRow.swift). No-op otherwise.
+    @ViewBuilder
+    private func protoSwipeContainer(_ content: some View) -> some View {
+        if SwipeProto.containerSwipe,
+           #available(iOS 27.0, macOS 27.0, visionOS 27.0, *) {
+            content.swipeActionsContainer()
+        } else {
+            content
+        }
+    }
+
+    private func scrollContent(
+        model: MessageListViewModel,
+        visible: [Envelope],
+        virtualize: Bool,
+        rowCount: Int
+    ) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if let errorMessage = model.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                if virtualize {
+                    ForEach(0..<rowCount, id: \.self) { index in
+                        indexedRow(index, model: model, visible: visible)
+                    }
+                } else {
+                    ForEach(visible) { envelope in
+                        messageRow(envelope, model: model, visible: visible)
+                    }
+                }
             }
         }
     }

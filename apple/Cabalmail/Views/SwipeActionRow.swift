@@ -20,6 +20,22 @@ import SwiftUI
 // placeholder rows. Inset/separator/background are zeroed so the content
 // fills that height rather than sitting inside List padding.
 
+/// OS 27 PROTOTYPE FLAGS — spike only, not for merge. Both read launch
+/// environment variables so one build can A/B every combination in the
+/// simulator (`SIMCTL_CHILD_CABAL_PROTO_…=1 simctl launch …`).
+enum SwipeProto {
+    /// Rows drop the embedded per-row `List` and attach `.swipeActions`
+    /// directly, relying on the outer ScrollView being marked
+    /// `.swipeActionsContainer()` (new in the 27 SDKs).
+    static let containerSwipe =
+        ProcessInfo.processInfo.environment["CABAL_PROTO_SWIPE_CONTAINER"] != nil
+    /// iPad: tile the real folder sidebar persistently on the left
+    /// (`.all`) instead of the collapsed-column + floating-panel layout —
+    /// the configuration the embedded-List swipe could never win.
+    static let tiledSidebar =
+        ProcessInfo.processInfo.environment["CABAL_PROTO_TILED_SIDEBAR"] != nil
+}
+
 /// One swipe action (leading or trailing). `tint` is the revealed
 /// background; `perform` runs on tap / full-swipe.
 struct SwipeActionSpec {
@@ -55,6 +71,39 @@ struct SwipeActionRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        if SwipeProto.containerSwipe,
+           #available(iOS 27.0, macOS 27.0, visionOS 27.0, *) {
+            containerSwipeBody
+        } else {
+            legacyListBody
+        }
+    }
+
+    /// OS 27 prototype path: no embedded `List` — the row is plain content
+    /// with `.swipeActions` attached directly, which the 27 SDKs honor in
+    /// any container marked `.swipeActionsContainer()` (applied to the
+    /// outer virtualized ScrollView in `MessageListView+Selection`).
+    /// Geometry mirrors the legacy path: 16pt horizontal content insets,
+    /// full-width selection background, fixed `height` footprint.
+    @available(iOS 27.0, macOS 27.0, visionOS 27.0, *)
+    private var containerSwipeBody: some View {
+        content()
+            .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
+            .padding(.horizontal, 16)
+            .frame(height: height)
+            .background(rowBackground)
+            .clipped()
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onSelect)
+            .swipeActions(edge: .trailing) {
+                if let trailing { swipeButton(trailing) }
+            }
+            .swipeActions(edge: .leading) {
+                if let leading { swipeButton(leading) }
+            }
+    }
+
+    private var legacyListBody: some View {
         List {
             rowContent
         }
