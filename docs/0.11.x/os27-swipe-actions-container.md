@@ -27,28 +27,83 @@ Removing the embedded `List` unwinds all three.
 
 ## Machine and toolchain constraint
 
-**This work must be done on the Mac Studio.** It is the only machine with
-the Xcode 27 beta toolchain and the iOS/iPadOS 27 simulator runtimes; the
-Mac mini and CI
-([.github/workflows/apple.yml](../../.github/workflows/apple.yml)) run
+**Local work must be done on the Mac Studio.** It is the only machine
+with the Xcode 27 beta toolchain and the iOS/iPadOS 27 simulator
+runtimes, so all interactive investigation — reduction-harness runs,
+simulator driving, screenshots — happens there. The Mac mini runs
 Xcode 26.
 
-The constraint is stricter than "wait for the GM toolchain": **Xcode 26
-cannot compile the iOS 27 SDK even behind `#available`**, because the
-availability check needs the SDK to declare the symbols. So a branch
-containing OS 27 API calls will not build in the normal pipeline at all,
-gated or not.
+The compile rule that drives everything else: **Xcode 26 cannot compile
+the iOS 27 SDK even behind `#available`**, because the availability check
+needs the SDK to declare the symbols. Gating the *code* does not make it
+buildable on an older SDK.
 
-Consequences:
+### CI can build it today, on a preview image
 
-- Keep this work on spike branches until **Xcode 27 GM reaches CI**. Do
-  not merge OS 27 API calls to `stage` before then; it would break the
-  Apple CI job and the Mini's daily pipelines.
-- **Re-validate at GM.** APIs move between betas, and the measurements
-  below were taken against beta 27A5228h.
-- App Store Connect currently accepts beta-built binaries for internal and
-  external TestFlight testing, so a spike *can* reach testers from the
-  Studio ahead of GM. Release submission still requires GM.
+GitHub ships a dedicated **`xcode-27` runner image**, announced
+[actions/runner-images#14404](https://github.com/actions/runner-images/issues/14404)
+on 2026-07-16 (`runs-on: xcode-27`, also `xcode-27-xlarge`). As of the
+2026-07-28 image refresh it carries Xcode **27.0 beta 4, build
+`27A5228h`** — the same build the measurements below were taken on — the
+full 27.0 SDK set, and iOS/tvOS/watchOS/visionOS 27.0 simulator runtimes.
+
+So "CI cannot build OS 27 code" is **no longer true**. Three properties
+of that image shape how it can be used:
+
+- **It is a preview.** GitHub warns that software may be unstable and
+  that capacity is still being balanced, so queueing delays are expected.
+- **It ships exactly one Xcode** (the 27 beta), with `Xcode.app` pointed
+  at it. The workflow's shared `XCODE_VERSION: 'latest-stable'` has
+  nothing to resolve to there, so jobs on this image must skip the
+  `setup-xcode` step.
+- **It ships only 27.0 simulator runtimes.** With a deployment target of
+  iOS 18.0, a job on this image cannot exercise a 26.x runtime without a
+  slow runtime download — so genuine 26.x coverage has to stay on the
+  `macos-26` jobs.
+
+**GA is not announced.** The only notices in the runner-images repo are
+the preview announcement and routine image refreshes. Last year's
+precedent is the best available estimate: Xcode 26 betas rode along on
+the `macos-15` image through the summer and
+[#13024, "Update Xcode 26 to 26.0 Release"](https://github.com/actions/runner-images/issues/13024),
+landed **2025-09-15**, within days of Apple's GM. Expect the 27.0 release
+build on the image around mid-September 2026, tracking Apple. Treat that
+as inference, not a commitment.
+
+### Forward-compatibility check (already in place)
+
+[apple.yml](../../.github/workflows/apple.yml) carries temporary
+`kit-test-next` and `app-test-next` jobs that mirror `kit-test` and
+`app-test` onto `xcode-27`, so code produced against the current stable
+toolchain gets compiled and tested against next year's SDK before being
+promoted to `main`. They are deliberately **advisory**:
+`continue-on-error: true` so preview instability cannot fail a run or
+block promotion, and absent from `approval`'s `needs` so the TestFlight
+upload jobs can never depend on a preview runner. A failure raises a
+warning annotation rather than a red run.
+
+Remove them, or promote them to required by dropping
+`continue-on-error`, once Xcode 27 is GA on the runner images.
+
+### What still gates the merge
+
+Not the toolchain — a **risk judgment**. Once app-target sources contain
+OS 27 API calls, those targets can only compile against the 27 SDK, so
+`app-build`, `app-test`, and both TestFlight upload jobs would have to
+move to the preview image wholesale. That would make the Apple CI path
+the Mini's daily pipelines and the release uploads depend on a preview
+runner.
+
+Recommended sequencing:
+
+- Prove the CI shape on a spike branch against `xcode-27` first.
+- Hold the merge to `stage` until the image is GA, unless there is a
+  reason to accept preview-runner risk on the release path.
+- **Re-validate at GM.** APIs move between betas; the measurements below
+  were taken against beta `27A5228h`.
+- App Store Connect currently accepts beta-built binaries for internal
+  and external TestFlight testing, so a spike *can* reach testers from
+  the Studio ahead of GM. Release submission still requires GM.
 
 ## What was measured
 
@@ -185,8 +240,11 @@ Depends on Phase A. Each item is independently verifiable and each
 
 | Step | Depends on | Where |
 | --- | --- | --- |
-| A — Container swipe | Phase 1 of the testability plan, for real-app verification only | Studio |
+| A — Container swipe | Phase 1 of the testability plan, for real-app verification only | Studio locally; `xcode-27` image in CI |
 | B — Simplifications | A | Studio; item 2 needs a real device |
 
-Merge to `stage` only once Xcode 27 GM is the toolchain in CI, and
-re-validate the measurements against GM before doing so.
+Merge to `stage` once the `xcode-27` image is GA (estimated mid-September
+2026, not announced), re-validating the measurements against the GM
+toolchain first. Merging earlier is possible but puts the release path on
+a preview runner — see
+[What still gates the merge](#what-still-gates-the-merge).
