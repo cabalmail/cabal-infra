@@ -5,7 +5,7 @@
  */
 
 import React, {
-  useCallback, useEffect, useMemo, useState,
+  useCallback, useEffect, useMemo, useRef, useState,
 } from 'react';
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   Archive, FolderInput, Trash2, Flag, MailOpen, X,
 } from 'lucide-react';
 import ReaderBody from './ReaderBody';
+import FolderPicker from '../Messages/Folders';
 import Attachments from './Attachments';
 import OverflowMenu from './OverflowMenu';
 import ViewSourceModal from './ViewSourceModal';
@@ -70,6 +71,10 @@ function MessageOverlay({
   // Confirmation for permanent deletion out of Trash.
   const [confirmPurge, setConfirmPurge] = useState(false);
 
+  // Folder chooser hanging off the Move button.
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
+  const moveRootRef = useRef(null);
+
   const envelopeId = envelope && envelope.id;
   const seen = envelope && envelope.flags
     ? envelope.flags.includes('\\Seen')
@@ -88,6 +93,7 @@ function MessageOverlay({
     setRawText('');
     setRawError(false);
     setSourceOpen(false);
+    setMovePickerOpen(false);
 
     api.getMessage(folder, envelopeId, seen).then((data) => {
       setMessageBodyPlain(data.data.message_body_plain || '');
@@ -160,6 +166,41 @@ function MessageOverlay({
         console.log(err);
       });
   }, [api, folder, envelopeId, hide, setMessage]);
+
+  const doMove = useCallback((target) => {
+    setMovePickerOpen(false);
+    // Selecting the folder the message already lives in is a no-op, not a
+    // round trip.
+    if (!envelopeId || !target || target === folder) return;
+    api.moveMessages(folder, target, [envelopeId], '', ARRIVAL.imap)
+      .then(() => hide())
+      .catch((err) => {
+        setMessage(`Unable to move message to ${target}.`, true);
+        console.log(err);
+      });
+  }, [api, folder, envelopeId, hide, setMessage]);
+
+  // Dismiss the folder chooser on an outside click or Escape, matching the
+  // overflow menu.
+  useEffect(() => {
+    if (!movePickerOpen) return undefined;
+    const onDocClick = (e) => {
+      if (!moveRootRef.current) return;
+      if (!moveRootRef.current.contains(e.target)) setMovePickerOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMovePickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [movePickerOpen]);
 
   // In Trash, "Delete" purges the message for good (after confirmation)
   // instead of moving it into Trash again.
@@ -444,16 +485,29 @@ function MessageOverlay({
         >
           <Archive size={16} aria-hidden="true" />
         </button>
-        <button
-          type="button"
-          className="reader-btn icon-only"
-          onClick={() => setMessage('Move is coming in a later phase.', false)}
-          title="Move"
-          aria-label="Move"
-          disabled
-        >
-          <FolderInput size={16} aria-hidden="true" />
-        </button>
+        <div className="reader-move" ref={moveRootRef}>
+          <button
+            type="button"
+            className="reader-btn icon-only"
+            onClick={() => setMovePickerOpen((v) => !v)}
+            title="Move"
+            aria-label="Move"
+            aria-haspopup="true"
+            aria-expanded={movePickerOpen}
+          >
+            <FolderInput size={16} aria-hidden="true" />
+          </button>
+          {movePickerOpen && (
+            <div className="reader-move-picker">
+              <FolderPicker
+                folder={folder}
+                setFolder={doMove}
+                setMessage={setMessage}
+                label="Move to"
+              />
+            </div>
+          )}
+        </div>
         <button
           type="button"
           className="reader-btn icon-only"
