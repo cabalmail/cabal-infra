@@ -325,8 +325,26 @@ def shape_run(run):
 
 
 def runs_for_sha(sha):
+    """The repo's own workflow runs that the push of `sha` triggered.
+
+    Two filters, both on properties GitHub reports rather than a hand-kept
+    workflow list (which would drift as workflows are added):
+
+      * event == push: a head_sha match alone is not enough - issue-event
+        runs (claude.yml) execute against the default branch tip, so they
+        carry main's head SHA without being part of the release.
+      * an in-house path: GitHub-managed workflows (pages, default-setup
+        CodeQL) live under dynamic/, not .github/workflows/, and are noise
+        next to the release's own deploys.
+
+    Everything that survives is one of the push-to-main workflows (app.yml /
+    apple.yml / infra.yml / logo-assets.yml / release.yml), and only when the
+    release's diff matched its path filter.
+    """
     data = rest("GET", f"/repos/{REPO_SLUG}/actions/runs?head_sha={sha}&per_page=100")
-    runs = [shape_run(r) for r in (data or {}).get("workflow_runs") or []]
+    runs = [shape_run(r) for r in (data or {}).get("workflow_runs") or []
+            if r.get("event") == "push"
+            and (r.get("path") or "").startswith(".github/workflows/")]
     runs.sort(key=lambda r: r["name"].lower())
     return runs
 
@@ -763,7 +781,9 @@ PAGE = r"""<!DOCTYPE html>
     the merge actually triggered — path filtering happens on GitHub's side, so a release
     that changed nothing under <code>apple/</code> simply has no <code>apple.yml</code>
     run here — until every run concludes and <code>release.yml</code> has published the
-    GitHub release. Promote, Merge, and Approve are real changes (a push to stage, a
+    GitHub release. Only the repo's own push-triggered workflows count: GitHub-managed
+    runs (pages, default-setup CodeQL) and issue-triggered automation on the same
+    commit are excluded. Promote, Merge, and Approve are real changes (a push to stage, a
     merge to main, a prod deploy) and each asks for confirmation; everything else is
     read-only. While something is in flight the page re-polls itself every few seconds
     regardless of the refresh-interval setting.
