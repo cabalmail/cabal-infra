@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.20] - 2026-08-01
+
+### Fixed
+- **Clean 400 from `fetch_attachment` for a malformed request.** A missing or
+  non-integer `filename`/`index`/`folder`/`id` used to escape the handler as an
+  unhandled exception and reach the client as a bodiless 502 reading "Internal
+  server error", so a caller could not tell a bad request from a broken server.
+  The handler now validates its query string the way its `fetch_inline_image`
+  sibling already did.
+- Apple: **Staged attachments are visible in the iPhone composer.** The
+  "Attachments" list rendered after the body editor, which is greedy, so it
+  started below the fold — and the editor's web view swallows the pan that
+  would scroll down to it. A picked photo left no trace on screen and could
+  not be removed, and repeat picks piled up silently. The list now sits
+  above the editor, beside the send-error banner.
+
+### Security
+- **Refreshed the pinned `amazonlinux:2023` base image digest** used by the
+  imap, smtp-in, smtp-out, and sinkhole tiers, picking up upstream OS package
+  fixes including patched `python3`/`python3-libs` builds.
+
 ## [0.11.19] - 2026-07-31
 
 ### Changed
