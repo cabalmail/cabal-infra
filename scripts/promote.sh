@@ -9,30 +9,35 @@
 # not by CI. CI never calls it.
 #
 # Usage:
-#   promote.sh <version|patch|minor|major> [--yes] [--no-push] [--date YYYY-MM-DD]
+#   promote.sh <version|patch|minor|major> [--yes] [--no-push] [--no-watch]
+#              [--date YYYY-MM-DD]
 #
 #   <version>   explicit semver (e.g. 0.10.14), or a bump keyword
 #               (patch/minor/major) computed from the latest git tag
 #   --yes       skip the confirmation prompt before committing/pushing
 #   --no-push   collate + commit locally only; do not push or open a PR
+#   --no-watch  stop once the PR is open; do not wait on or watch PR checks
+#               (for callers that monitor the PR themselves, e.g. the release
+#               dashboard)
 #   --date      release date override (default: today, UTC)
 
 set -euo pipefail
 
-usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -ge 1 ] || { usage; exit 1; }
 
-SPEC=""; ASSUME_YES=0; NO_PUSH=0; DATE=""
+SPEC=""; ASSUME_YES=0; NO_PUSH=0; NO_WATCH=0; DATE=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --yes)     ASSUME_YES=1 ;;
-    --no-push) NO_PUSH=1 ;;
-    --date)    DATE="${2:?--date needs a value}"; shift ;;
-    -h|--help) usage; exit 0 ;;
-    -*)        echo "[promote] ERROR: unknown flag $1" >&2; usage; exit 1 ;;
-    *)         [ -z "${SPEC}" ] || { echo "[promote] ERROR: unexpected argument '$1'" >&2; exit 1; }
-               SPEC="$1" ;;
+    --yes)      ASSUME_YES=1 ;;
+    --no-push)  NO_PUSH=1 ;;
+    --no-watch) NO_WATCH=1 ;;
+    --date)     DATE="${2:?--date needs a value}"; shift ;;
+    -h|--help)  usage; exit 0 ;;
+    -*)         echo "[promote] ERROR: unknown flag $1" >&2; usage; exit 1 ;;
+    *)          [ -z "${SPEC}" ] || { echo "[promote] ERROR: unexpected argument '$1'" >&2; exit 1; }
+                SPEC="$1" ;;
   esac
   shift
 done
@@ -150,6 +155,11 @@ else
     --body "Promote stage to prod for ${VERSION}. See CHANGELOG.md.")" \
     || die "gh pr create failed"
   log "opened PR: ${pr_url}"
+fi
+
+if [ "${NO_WATCH}" -eq 1 ]; then
+  log "not watching checks (--no-watch). Review and merge to promote to prod: ${pr_url}"
+  exit 0
 fi
 
 # Wait for checks, then report the real outcome. A just-created PR usually has
