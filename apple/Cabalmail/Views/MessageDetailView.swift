@@ -58,21 +58,37 @@ struct MessageDetailView: View {
     // `nil` until the first scroll report — a sentinel `Int.min` would overflow
     // the `offset - lastReportedPlainOffset` delta on the first callback.
     @State var lastReportedPlainOffset: Int?
+    // Measured height of `headerBlock`, so the header sizes to its content
+    // instead of to a fixed slice of the pane. See
+    // `ReaderHeaderHeightPolicy`.
+    @State var headerContentHeight: CGFloat = 0
 
     var body: some View {
         GeometryReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
                 // Subject is shown in full in the pane (the list truncates
                 // it) and the header is allowed to grow with a wrapping
-                // subject. Cap at 15% of the pane's height and let the
-                // header scroll when a very long subject or sprawling
-                // recipient list would otherwise eat the reading area.
+                // subject. The block takes the height its content actually
+                // needs, and only scrolls once that would claim more of the
+                // pane than `ReaderHeaderHeightPolicy` allows. A ScrollView
+                // is greedy along its scroll axis, so this has to be an
+                // explicit height rather than a `maxHeight` — a cap alone
+                // makes the block exactly that tall whatever it holds, which
+                // is what pushed the authentication line out of view.
                 ScrollView(.vertical) {
                     headerBlock
                         .padding(.horizontal)
                         .padding(.vertical, 8)
+                        .onGeometryChange(for: CGFloat.self) { headerProxy in
+                            headerProxy.size.height
+                        } action: { newHeight in
+                            headerContentHeight = newHeight
+                        }
                 }
-                .frame(maxHeight: proxy.size.height * 0.15)
+                .frame(height: ReaderHeaderHeightPolicy.height(
+                    contentHeight: headerContentHeight,
+                    paneHeight: proxy.size.height
+                ))
                 if let attachments = model?.attachments, !attachments.isEmpty {
                     AttachmentStrip(attachments: attachments)
                         .padding(.vertical, 8)
