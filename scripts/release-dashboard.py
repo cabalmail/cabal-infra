@@ -690,8 +690,13 @@ PAGE = r"""<!DOCTYPE html>
   .abtn.big{font-size:13px; padding:8px 14px; font-weight:600}
   .fragcat{margin:0 0 12px}
   .fragcat h3{font-size:12px; margin:0 0 6px; text-transform:capitalize; display:flex; align-items:center; gap:8px}
-  .frag{border-left:3px solid var(--grid); padding:2px 0 2px 12px; margin:0 0 8px; white-space:pre-wrap; font-size:13px; color:var(--ink-2)}
+  .frag{border-left:3px solid var(--grid); padding:2px 0 2px 12px; margin:0 0 8px; font-size:13px; color:var(--ink-2)}
   .frag .slug{color:var(--muted); font-size:11px; display:block; margin-bottom:1px}
+  .frag ul{margin:0; padding-left:18px}
+  .frag ul ul{margin-top:2px}
+  .frag li{margin:0 0 3px}
+  .frag li:last-child{margin-bottom:0}
+  .frag b{color:var(--ink)}
   .promoterow{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px; padding-top:12px; border-top:1px solid var(--grid)}
   .promoterow .hint{color:var(--muted); font-size:12px}
   .logbox{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.55; background:var(--page); border:1px solid var(--border); border-radius:8px; padding:10px 12px; max-height:340px; overflow:auto; white-space:pre-wrap; word-break:break-word}
@@ -784,6 +789,39 @@ const CATS=['added','changed','deprecated','removed','fixed','security'];
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 let MODEL=null, inFlight=false, intervalSec=0, timer=null, autoTimer=null;
+
+/* Minimal Markdown for changelog fragments - the house style only uses
+   bullets (with two-space continuation lines and one sub-bullet level),
+   **bold**, *italic*, `code`, and [links](https://...), so a full renderer
+   would be a dependency for nothing. Everything is HTML-escaped first. */
+function mdInline(s){
+  s=esc(s);
+  const codes=[];
+  s=s.replace(/`([^`]+)`/g,(_,c)=>{ codes.push(c); return '\u0000'+(codes.length-1)+'\u0000'; });
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  s=s.replace(/\*([^*]+)\*/g,'<i>$1</i>');
+  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return s.replace(/\u0000(\d+)\u0000/g,(_,i)=>'<code>'+codes[+i]+'</code>');
+}
+function mdFragment(body){
+  // "- " at column 0 starts an item, indented "- " a sub-item; any other line
+  // is a hard-wrap continuation of whatever item came last.
+  const items=[];
+  for(const raw of body.split('\n')){
+    const m=raw.match(/^(\s*)- (.*)$/);
+    if(m && !m[1].length){ items.push({text:m[2], subs:[]}); }
+    else if(m && items.length){ items[items.length-1].subs.push(m[2]); }
+    else if(items.length){
+      const it=items[items.length-1];
+      if(it.subs.length) it.subs[it.subs.length-1]+=' '+raw.trim();
+      else it.text+=' '+raw.trim();
+    }
+    else items.push({text:raw, subs:[]});
+  }
+  return '<ul>'+items.map(it=>'<li>'+mdInline(it.text)+
+    (it.subs.length?'<ul>'+it.subs.map(s=>'<li>'+mdInline(s)+'</li>').join('')+'</ul>':'')+
+    '</li>').join('')+'</ul>';
+}
 
 function ago(iso){
   const ms=Date.now()-new Date(iso).getTime();
@@ -960,7 +998,7 @@ function renderFlight(){
     const frags=m.fragments||[], nxt=m.next||null;
     const byCat=CATS.map(c=>[c,frags.filter(f=>f.category===c)]).filter(([,fs])=>fs.length);
     const fragHtml=byCat.length?byCat.map(([c,fs])=>`<div class="fragcat"><h3>${esc(c)} <span class="pill neutral">${fs.length}</span></h3>`+
-        fs.map(f=>`<div class="frag"><span class="slug">${esc(f.file)}</span>${esc(f.body)}</div>`).join('')+`</div>`).join('')
+        fs.map(f=>`<div class="frag"><span class="slug">${esc(f.file)}</span>${mdFragment(f.body)}</div>`).join('')+`</div>`).join('')
       :`<div class="empty">No pending fragments on origin/stage — nothing to release.</div>`;
     const canPromote=frags.length>0;
     const btn=(spec)=>`<button class="abtn go big" type="button" ${canPromote?`onclick="askPromote('${spec}')"`:'disabled title="No pending fragments — nothing to release"'}>${spec[0].toUpperCase()+spec.slice(1)}${nxt?` → ${esc(nxt[spec])}`:''}</button>`;
