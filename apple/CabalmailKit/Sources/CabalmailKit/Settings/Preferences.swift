@@ -22,12 +22,10 @@ import Observation
 ///
 /// Defaults to `.manual` per the plan — a behavior that matches the React
 /// app, where the user always explicitly marks messages read via the swipe
-/// action, toolbar button, or context menu. The `.afterDelay` case is a
-/// plain 2-second wait mirroring Mail.app's equivalent option.
+/// action, toolbar button, or context menu.
 public enum MarkAsReadBehavior: String, Codable, Sendable, CaseIterable, Identifiable {
     case manual
     case onOpen = "on_open"
-    case afterDelay = "after_delay"
 
     public var id: String { rawValue }
 }

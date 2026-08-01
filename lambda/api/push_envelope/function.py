@@ -22,6 +22,7 @@ from helper import get_message  # pylint: disable=import-error
 from helper import get_object  # pylint: disable=import-error
 from helper import key_exists  # pylint: disable=import-error
 from helper import maintenance_guard  # pylint: disable=import-error
+from helper import MessageGoneError  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import upload_object  # pylint: disable=import-error
 from helper import validate_content_id  # pylint: disable=import-error
@@ -150,7 +151,7 @@ def handler(event, _context):
     else:
         try:
             message = get_message(None, user, folder, uid)
-        except KeyError:
+        except MessageGoneError:
             message = None
     if uid is None or message is None:
         # No UID resolvable, expunged, or a stale hint.

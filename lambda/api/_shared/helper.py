@@ -110,6 +110,15 @@ class MaintenanceError(Exception):
         super().__init__('IMAP is in planned maintenance')
 
 
+class MessageGoneError(Exception):
+    '''Raised by get_message when the requested UID is no longer in the folder.
+    message_gone_guard translates it into a 404 the clients can act on.'''
+    def __init__(self, folder, msg_id):
+        self.folder = folder
+        self.msg_id = msg_id
+        super().__init__(f'no message with UID {msg_id} in {folder}')
+
+
 def _read_maintenance_param():
     '''Returns the parsed maintenance flag dict, or None. TTL-cached per warm
     container. Fails open to None on any read/parse error.'''
@@ -175,6 +184,33 @@ def maintenance_response(state):
             "retry_after": retry_after,
         })
     }
+
+
+def message_gone_response(folder, msg_id):
+    '''Builds the 404 served when a requested UID is no longer in the folder.'''
+    return {
+        "statusCode": 404,
+        "body": json.dumps({
+            "status": f"That message is no longer in {folder.split('.')[-1]}",
+            "folder": folder,
+            "id": msg_id,
+        })
+    }
+
+
+def message_gone_guard(handler):
+    '''Decorator: turns a MessageGoneError raised anywhere inside a handler
+    that loads a message body into a 404. Left unhandled it escaped as a
+    KeyError, and API Gateway turned that into a bodiless 502 -- clients could
+    not tell "this message is gone" (refresh the folder) from "the server is
+    broken" (retry later).'''
+    @functools.wraps(handler)
+    def wrapper(event, context):
+        try:
+            return handler(event, context)
+        except MessageGoneError as err:
+            return message_gone_response(err.folder, err.msg_id)
+    return wrapper
 
 
 def maintenance_guard(handler):
@@ -288,6 +324,7 @@ _FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 _KEYWORD_RE = re.compile(r'^[A-Za-z0-9_\-]+$')
 _CONTROL_CHARS_RE = re.compile(r'[\x00-\x1f\x7f]')
 _CONTENT_ID_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f\s/\\]')
+_ATTACHMENT_NAME_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f/\\]')
 
 # Lowercased wire form -> canonical form. Only these five system flags are
 # client-settable; \Recent and friends are server-managed and never accepted.
@@ -569,6 +606,45 @@ def validate_content_id(value):
     return value
 
 
+def validate_part_index(value):
+    '''Validates a MIME part serial number, returning an int >= 0.
+
+    A part index is a position in `message.walk()`, not a UID: part 0 is the
+    message itself and is a legal value, so validate_uid's [1, 2**32-1] range
+    doesn't apply. Booleans are rejected for the same reason as in
+    validate_uid_list.
+    '''
+    if isinstance(value, bool):
+        raise ValueError(f'invalid attachment index: {value!r}')
+    try:
+        index = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'invalid attachment index: {value!r}') from exc
+    if index < 0:
+        raise ValueError(f'attachment index out of range: {index}')
+    return index
+
+
+def validate_attachment_filename(value):
+    '''Validates the filename an attachment is cached under, returning it
+    unchanged.
+
+    The value becomes the last component of an S3 key, so path separators,
+    control bytes, and the traversal names are rejected. Otherwise it stays
+    permissive: this is a real MIME filename taken from the message, and
+    spaces, non-ASCII, and punctuation all occur in the wild.
+    '''
+    if not isinstance(value, str) or not value:
+        raise ValueError('filename is required')
+    if len(value.encode('utf-8')) > MAX_FOLDER_NAME_BYTES:
+        raise ValueError('filename is too long')
+    if _ATTACHMENT_NAME_FORBIDDEN_RE.search(value):
+        raise ValueError('filename contains illegal characters')
+    if value in ('.', '..'):
+        raise ValueError(f'invalid filename: {value!r}')
+    return value
+
+
 def validate_search_text(value):
     '''Bounds one structured-search free-text field (text/from/to/subject).
 
@@ -773,6 +849,36 @@ def delete_address_dns_records(zone_id, subdomain, tld, control_domain):
             HostedZoneId=zone_id, ChangeBatch={'Changes': changes})
 
 
+def active_addresses_on_subdomain(subdomain, tld, address):
+    '''Checks if other non-suspended addresses share the same subdomain and TLD.
+    The DNS records of a subdomain are shared by every address on it, so
+    suspend/revoke only delete them once this returns False. Suspended
+    co-tenants do not count: their contract is already "DNS absent", and
+    reinstate republishes the records if one comes back.'''
+    scan_kwargs = {
+        'FilterExpression': (
+            'subdomain = :sub AND tld = :tld AND address <> :addr '
+            'AND (attribute_not_exists(#s) OR #s = :false)'
+        ),
+        'ExpressionAttributeNames': {'#s': 'suspended'},
+        'ExpressionAttributeValues': {
+            ':sub': subdomain,
+            ':tld': tld,
+            ':addr': address,
+            ':false': False
+        },
+        'ProjectionExpression': 'address'
+    }
+    while True:
+        response = ddb_table.scan(**scan_kwargs)
+        if response.get('Items'):
+            return True
+        if 'LastEvaluatedKey' not in response:
+            break
+        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+    return False
+
+
 # Folder-size observability (Layer 4.1 of the large-mailbox hardening plan).
 # Each list handler emits one key=value log line tagging the request with a
 # coarse folder-size bucket so CloudWatch Logs Insights can correlate request
@@ -876,8 +982,12 @@ def get_message(_host, user, folder, msg_id):
     else:
         client = get_imap_client(IMAP_HOST, user, folder, True)
         message = client.fetch([msg_id],['RFC822'])
-        email_body_raw = message[msg_id][b'RFC822']
         client.logout()
+        # A UID FETCH for a UID that is no longer in the mailbox succeeds and
+        # returns an empty dict, so the subscript below is not guaranteed.
+        if msg_id not in message:
+            raise MessageGoneError(folder, msg_id)
+        email_body_raw = message[msg_id][b'RFC822']
         upload_object(bucket, key, "text/plain", email_body_raw)
     message = email.message_from_bytes(email_body_raw, policy=default_policy)
     return message

@@ -107,6 +107,12 @@ final class ComposeViewModel {
     /// discards). Seeded from the draft when resuming; updated after every
     /// successful `/save_draft` round trip.
     var serverDraftRef: DraftServerRef?
+    /// Whether this surface opened on a draft that already exists in the
+    /// server Drafts folder (Edit Draft), rather than on a new message, reply
+    /// or forward. Captured at init rather than read off `serverDraftRef`,
+    /// which also becomes non-nil once a fresh compose autosaves: the title
+    /// describes what the user opened, not what has since been saved.
+    let isResumedServerDraft: Bool
     /// Serializes server saves so the debounce loop and an in-progress
     /// close-without-send can't append racing copies.
     var serverSaveInFlight = false
@@ -158,6 +164,7 @@ final class ComposeViewModel {
         self.references = seed.references
         self.composeIntent = seed.composeIntent ?? .new
         self.serverDraftRef = seed.serverRef
+        self.isResumedServerDraft = seed.serverRef != nil
         // Append the preference signature to the seeded body, but only once.
         // Replies / forwards seed with an attribution + quoted body; the
         // signature goes *above* that block so the user's reply text lands

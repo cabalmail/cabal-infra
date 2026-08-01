@@ -6,6 +6,7 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from helper import active_addresses_on_subdomain  # pylint: disable=import-error
 from helper import delete_address_dns_records  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_sender  # pylint: disable=import-error
@@ -77,32 +78,6 @@ def handler(event, _context):
             'suspended': True
         })
     }
-
-
-def active_addresses_on_subdomain(subdomain, tld, address):
-    '''Checks if other non-suspended addresses share the same subdomain and TLD'''
-    scan_kwargs = {
-        'FilterExpression': (
-            'subdomain = :sub AND tld = :tld AND address <> :addr '
-            'AND (attribute_not_exists(#s) OR #s = :false)'
-        ),
-        'ExpressionAttributeNames': {'#s': 'suspended'},
-        'ExpressionAttributeValues': {
-            ':sub': subdomain,
-            ':tld': tld,
-            ':addr': address,
-            ':false': False
-        },
-        'ProjectionExpression': 'address'
-    }
-    while True:
-        response = table.scan(**scan_kwargs)
-        if response.get('Items'):
-            return True
-        if 'LastEvaluatedKey' not in response:
-            break
-        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
-    return False
 
 
 def mark_suspended(address):

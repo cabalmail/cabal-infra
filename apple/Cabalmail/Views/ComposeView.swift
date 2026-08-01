@@ -61,7 +61,7 @@ struct ComposeView: View {
     var body: some View {
         NavigationStack {
             composeContent
-            .navigationTitle("New Message")
+            .navigationTitle(model.navigationTitle)
             #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -146,36 +146,51 @@ struct ComposeView: View {
                 "Discard draft?",
                 isPresented: $showDiscardConfirm
             ) {
-                Button("Discard Draft", role: .destructive) {
-                    Task {
-                        #if os(macOS)
-                        // Pre-approve the close so the dismissWindow call
-                        // inside discard() doesn't get re-intercepted by
-                        // the NSWindowDelegate.
-                        closeCoordinator.allowsClose = true
-                        #endif
-                        await model.discard()
-                    }
-                }
-                Button("Save Draft", role: .cancel) {
-                    Task {
-                        #if os(macOS)
-                        closeCoordinator.allowsClose = true
-                        #endif
-                        let didClose = await model.cancel()
-                        #if os(macOS)
-                        // IMAP save failed: keep the user in the window so
-                        // they can see the error banner and retry.
-                        if !didClose {
-                            closeCoordinator.allowsClose = false
-                        }
-                        #endif
-                    }
+                ForEach(ComposeCancelChoice.allCases, id: \.self) { choice in
+                    Button(choice.title, role: choice.role) { perform(choice) }
                 }
             } message: {
-                Text("Keep a copy of the draft for later, or discard it now.")
+                Text("Keep a copy of the draft for later, discard it now, or go back to editing.")
             }
             .toastOverlay($composeToast)
+        }
+    }
+
+    // MARK: - Cancel dialog
+
+    /// Runs the outcome the user picked in the cancel-compose dialog. Stays
+    /// in this file (rather than the `+Subviews` extension) because it
+    /// touches the `private` close coordinator.
+    private func perform(_ choice: ComposeCancelChoice) {
+        switch choice {
+        case .discard:
+            Task {
+                #if os(macOS)
+                // Pre-approve the close so the dismissWindow call inside
+                // discard() doesn't get re-intercepted by the
+                // NSWindowDelegate.
+                closeCoordinator.allowsClose = true
+                #endif
+                await model.discard()
+            }
+        case .saveDraft:
+            Task {
+                #if os(macOS)
+                closeCoordinator.allowsClose = true
+                #endif
+                let didClose = await model.cancel()
+                #if os(macOS)
+                // IMAP save failed: keep the user in the window so they can
+                // see the error banner and retry.
+                if !didClose {
+                    closeCoordinator.allowsClose = false
+                }
+                #endif
+            }
+        case .keepEditing:
+            // No-op by design — the dialog dismisses and the composer, with
+            // everything typed so far, is still there.
+            break
         }
     }
 
@@ -211,6 +226,17 @@ struct ComposeView: View {
                     if !sent { closeCoordinator.allowsClose = false }
                     #endif
                     guard sent else { return }
+                    // Sending from a draft discards the server copy, so the
+                    // Drafts list is showing a message that no longer
+                    // exists. Prune it through the same signal the reader's
+                    // archive/move actions use instead of waiting for the
+                    // next background reconcile (the folder is unsubscribed
+                    // by default, so that took over a minute). "Drafts" is
+                    // the mailbox `/save_draft` pins every draft to; see
+                    // `MessageDetailViewModel.isDraftsFolder`.
+                    if let uid = model.supersededDraftUID {
+                        appState.signalDisposed(folderPath: "Drafts", uid: uid)
+                    }
                     // Surface the outcome as a toast on the shared AppState
                     // so the user sees confirmation after the sheet dismisses.
                     // `.queued` means the message is in the outbox and
@@ -303,55 +329,41 @@ extension ComposeView {
 
     #if !os(macOS)
     private var composeForm: some View {
+        Form {
+            ForEach(ComposeFormSection.allCases, id: \.self) { section in
+                formSection(section)
+            }
+        }
+    }
+
+    /// Renders one section of `composeForm`. The order lives in
+    /// `ComposeFormSection`, which documents why nothing actionable may
+    /// follow `.message`.
+    @ViewBuilder
+    private func formSection(_ section: ComposeFormSection) -> some View {
         @Bindable var model = model
-        return Form {
-            // First section on purpose. As the last one it sat below the
-            // body editor, off the bottom of an iPhone screen, and the
-            // WKWebView swallows the pan that would scroll down to it — so
-            // a send-blocking error was invisible and Send looked dead
-            // (#812). macOS pins the same text to the window bottom, which
-            // is always on screen there.
+        switch section {
+        case .error:
             if let errorMessage = model.errorMessage {
                 Section {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.red)
                 }
             }
+        case .from:
             Section("From") {
                 FromPicker(
                     model: model,
                     onCreateAddress: { showNewAddressSheet = true }
                 )
             }
-            Section("Recipients") {
-                RecipientFieldWithSuggestions(
-                    label: "To",
-                    text: $model.toText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.to
-                )
-                RecipientFieldWithSuggestions(
-                    label: "Cc",
-                    text: $model.ccText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.cc
-                )
-                RecipientFieldWithSuggestions(
-                    label: "Bcc",
-                    text: $model.bccText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.bcc
-                )
-            }
+        case .recipients:
+            recipientsSection
+        case .subject:
             Section("Subject") {
                 TextField("Subject", text: $model.subject)
             }
-            Section("Message") {
-                ComposerBody(model: model)
-            }
+        case .attachments:
             if !model.attachments.isEmpty {
                 Section("Attachments") {
                     ForEach(model.attachments) { attachment in
@@ -362,6 +374,37 @@ extension ComposeView {
                     }
                 }
             }
+        case .message:
+            Section("Message") {
+                ComposerBody(model: model)
+            }
+        }
+    }
+
+    private var recipientsSection: some View {
+        @Bindable var model = model
+        return Section("Recipients") {
+            RecipientFieldWithSuggestions(
+                label: "To",
+                text: $model.toText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.to
+            )
+            RecipientFieldWithSuggestions(
+                label: "Cc",
+                text: $model.ccText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.cc
+            )
+            RecipientFieldWithSuggestions(
+                label: "Bcc",
+                text: $model.bccText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.bcc
+            )
         }
     }
     #endif

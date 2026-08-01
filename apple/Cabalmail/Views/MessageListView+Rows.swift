@@ -4,7 +4,7 @@ import CabalmailKit
 // Row rendering and per-row affordances for `MessageListView`. Lives in
 // a same-module extension so the primary view body stays under
 // SwiftLint's `type_body_length` cap. Holds:
-//   - `row(for:model:isSelected:)` — list-row content (drag + tag)
+//   - `row(for:model:orderedVisible:)` — list-row content (drag + tag)
 //   - `rowContextMenu` — the per-row long-press / right-click menu
 //   - `disposeSwipe` / `toggleReadSwipe` — `SwipeActionSpec`s the
 //     `SwipeActionRow` wrapper reveals on a trailing / leading swipe
@@ -30,7 +30,6 @@ extension MessageListView {
     func row(
         for envelope: Envelope,
         model: MessageListViewModel,
-        isSelected: Bool,
         orderedVisible: [Envelope]
     ) -> some View {
         let bulkMode = model.bulkMode
@@ -48,18 +47,17 @@ extension MessageListView {
                     Button {
                         model.toggleSelection(envelope)
                     } label: {
-                        MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+                        MessageRow(envelope: envelope, isChecked: isChecked, bulkMode: true)
                     }
                     .buttonStyle(.plain)
                 } else if isWideLayout {
                     wideRow(
                         for: envelope,
-                        isSelected: isSelected,
                         model: model,
                         orderedVisible: orderedVisible
                     )
                 } else {
-                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                    MessageRow(envelope: envelope, isChecked: false, bulkMode: false)
                         .tag(envelope)
                 }
             }
@@ -97,8 +95,7 @@ extension MessageListView {
 
     /// The wide-layout single-selection row: a UID-tagged `MessageRow` whose
     /// highlight follows `selectedUIDs`. Multi-select does NOT come through
-    /// here — `bulkMode` takes the checkbox branch above. `isSelected` is set
-    /// membership, used only to keep the unread dot legible. On iOS it also
+    /// here — `bulkMode` takes the checkbox branch above. On iOS it also
     /// carries the hardware-keyboard shift / command-click handling SwiftUI
     /// doesn't wire into the native list there; plain taps fall through to the
     /// list. Kept beside `MessageRow` (which is file-private) and out of
@@ -106,11 +103,10 @@ extension MessageListView {
     @ViewBuilder
     func wideRow(
         for envelope: Envelope,
-        isSelected: Bool,
         model: MessageListViewModel,
         orderedVisible: [Envelope]
     ) -> some View {
-        MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+        MessageRow(envelope: envelope, isChecked: false, bulkMode: false)
             .tag(envelope.uid)
             #if os(iOS)
             .gesture(ModifierClickGesture { kind in
@@ -333,7 +329,6 @@ extension MessageListView {
 
 private struct MessageRow: View {
     let envelope: Envelope
-    let isSelected: Bool
     let isChecked: Bool
     let bulkMode: Bool
 
@@ -420,13 +415,9 @@ private struct MessageRow: View {
     // the platform blue. The asset-catalog color is pinned explicitly rather
     // than taken from `Color.accentColor`, which macOS repaints with the
     // user's system accent whenever that isn't "multicolor" (same reasoning
-    // as `iconForeground` in FolderListView+Helpers.swift). The dot would
-    // disappear into the row-selection highlight, which is drawn in that
-    // same accent, so it switches to `.white` when the row is selected --
-    // legible against the highlight on every platform.
+    // as `iconForeground` in FolderListView+Helpers.swift).
     private var unreadDotColor: Color {
-        guard !envelope.flags.contains(.seen) else { return .clear }
-        return isSelected ? .white : Color("AccentColor")
+        envelope.flags.contains(.seen) ? .clear : Color("AccentColor")
     }
 
     /// The row's first line: `source -> destination`. The destination is the

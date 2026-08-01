@@ -6,21 +6,25 @@ There is no pytest harness in this repo, so this runs under the stdlib:
     python3 lambda/api/_shared/tests/test_smtp_session_dial.py
 
 smtp_session is stdlib-only, so the module imports for real; the tests
-patch smtplib internals at the class level so nothing dials a network.
-The assertions pin the contract the cutover depends on:
+stub the transport - the TCP connect and the TLS wrap - and let the rest
+of smtplib run, so the assertions see the values smtplib itself computes.
+Stubbing any higher (SMTP.connect, say) would hide the very code that
+picks the TLS server_hostname. The assertions pin the contract the
+cutover depends on:
 
   - with SMTP_INTERNAL_HOST set, the TCP dial goes to the internal name
-    while self._host keeps the public name (which SMTP_SSL passes as
-    server_hostname, so the wildcard-certificate check is unchanged);
+    while TLS is negotiated for the public name (which is what the
+    wildcard certificate carries, so verification is unchanged);
   - a failed internal dial (gaierror et al.) falls back to the public
     listener, but an ssl.SSLError - despite subclassing OSError - does
     NOT fall back;
   - with the env var unset, a plain smtplib.SMTP_SSL(host) is built.
 '''
 import importlib
+import io
 import os
-import smtplib
 import socket
+import smtplib
 import ssl
 import sys
 import unittest
@@ -30,6 +34,7 @@ sys.path.insert(0, _SHARED_DIR)
 
 PUBLIC_HOST = 'smtp-out.control.example'
 INTERNAL = 'smtp-out.cabal.internal'
+SUBMISSION_PORT = 465
 
 
 def _import_smtp_session(internal_host):
@@ -43,27 +48,66 @@ def _import_smtp_session(internal_host):
     return importlib.import_module('smtp_session')
 
 
-class _RecordingConnects(unittest.TestCase):
-    '''Base: patches smtplib.SMTP.connect to record its host argument and
-    skip the network. connect() is what __init__ calls, and it is also the
-    only caller of _get_socket, so recording here captures the TCP target
-    each dial variant would use.'''
+class _FakeSocket:
+    '''The slice of the socket surface smtplib.connect uses: a greeting
+    to read back, and a close.'''
+
+    def makefile(self, *args, **kwargs):
+        del args, kwargs
+        return io.BytesIO(b'220 smtp-out.test ESMTP ready\r\n')
+
+    def close(self):
+        pass
+
+
+class _StubbedTransport(unittest.TestCase):
+    '''Base: replaces socket.create_connection (the TCP dial) and
+    SSLContext.wrap_socket (the TLS handshake), recording what each was
+    asked for, so a dial runs the real smtplib code path without a
+    network. Also pins socket.getfqdn - smtplib calls it to build the
+    EHLO name, and a unit test has no business consulting the resolver.
+
+    Subclasses may set self.dial_error (a callable taking the dial host
+    and returning an exception to raise, or None) and self.tls_error (an
+    exception to raise from the handshake) to inject failures.'''
 
     def setUp(self):
-        self.connects = []
+        self.dials = []       # (host, port) the TCP layer was asked for
+        self.tls_names = []   # server_hostname each handshake verified
+        self.dial_error = None
+        self.tls_error = None
         tests = self
 
-        def fake_connect(client, host='localhost', port=0, source_address=None):
-            del source_address
-            tests.connects.append((client, host, port))
-            return (220, b'ok')
+        def fake_create_connection(address, timeout=None,
+                                   source_address=None):
+            del timeout, source_address
+            host, port = address
+            tests.dials.append((host, port))
+            if tests.dial_error is not None:
+                err = tests.dial_error(host)
+                if err is not None:
+                    raise err
+            return _FakeSocket()
 
-        self._orig_connect = smtplib.SMTP.connect
-        smtplib.SMTP.connect = fake_connect
-        self.addCleanup(setattr, smtplib.SMTP, 'connect', self._orig_connect)
+        def fake_wrap_socket(context, sock, *args, server_hostname=None,
+                             **kwargs):
+            del context, args, kwargs
+            tests.tls_names.append(server_hostname)
+            if tests.tls_error is not None:
+                raise tests.tls_error
+            return sock
+
+        self._patch(socket, 'create_connection', fake_create_connection)
+        self._patch(ssl.SSLContext, 'wrap_socket', fake_wrap_socket)
+        self._patch(socket, 'getfqdn', lambda name='': 'lambda.test.invalid')
+
+    def _patch(self, target, name, replacement):
+        original = getattr(target, name)
+        setattr(target, name, replacement)
+        self.addCleanup(setattr, target, name, original)
 
 
-class PublicPathTest(_RecordingConnects):
+class PublicPathTest(_StubbedTransport):
 
     def setUp(self):
         super().setUp()
@@ -72,65 +116,44 @@ class PublicPathTest(_RecordingConnects):
     def test_plain_smtp_ssl_to_public_host(self):
         client = self.session.dial_smtp(PUBLIC_HOST)
         self.assertIs(type(client), smtplib.SMTP_SSL)
-        self.assertEqual(self.connects[-1][1], PUBLIC_HOST)
+        self.assertEqual(self.dials, [(PUBLIC_HOST, SUBMISSION_PORT)])
+        self.assertEqual(self.tls_names, [PUBLIC_HOST])
 
 
-class InternalPathTest(_RecordingConnects):
+class InternalPathTest(_StubbedTransport):
 
     def setUp(self):
         super().setUp()
         self.session = _import_smtp_session(INTERNAL)
 
     def test_host_stays_public_for_tls_verification(self):
-        client = self.session.dial_smtp(PUBLIC_HOST)
-        # smtplib.SMTP.__init__ stores the constructor host in _host and
-        # SMTP_SSL wraps sockets with server_hostname=self._host; the
-        # public name there is what keeps certificate verification real.
-        self.assertEqual(client._host, PUBLIC_HOST)  # pylint: disable=protected-access
+        self.session.dial_smtp(PUBLIC_HOST)
+        # SMTP_SSL hands the handshake server_hostname=self._host, the
+        # host the client was constructed with; the public name there is
+        # what keeps certificate verification real against the wildcard.
+        self.assertEqual(self.tls_names, [PUBLIC_HOST])
 
     def test_socket_override_dials_internal_name(self):
-        client = self.session.dial_smtp(PUBLIC_HOST)
-        wrapped = []
-
-        def fake_parent_get_socket(instance, host, port, timeout):
-            del instance, timeout
-            wrapped.append((host, port))
-            return 'sentinel-socket'
-
-        orig = smtplib.SMTP_SSL._get_socket
-        smtplib.SMTP_SSL._get_socket = fake_parent_get_socket
-        try:
-            result = client._get_socket(PUBLIC_HOST, 465, None)  # pylint: disable=protected-access
-        finally:
-            smtplib.SMTP_SSL._get_socket = orig
+        self.session.dial_smtp(PUBLIC_HOST)
         # The override swaps the public name for the internal one before
         # delegating to the parent (which does the TLS wrap).
-        self.assertEqual(result, 'sentinel-socket')
-        self.assertEqual(wrapped, [(INTERNAL, 465)])
+        self.assertEqual(self.dials, [(INTERNAL, SUBMISSION_PORT)])
 
     def test_gaierror_falls_back_to_public(self):
-        def failing_connect(client, host='localhost', port=0,
-                            source_address=None):
-            del source_address
-            if isinstance(client, self.session._InternalRouteSMTPSSL):  # pylint: disable=protected-access
-                raise socket.gaierror(8, 'name not yet registered')
-            self.connects.append((client, host, port))
-            return (220, b'ok')
-
-        smtplib.SMTP.connect = failing_connect
+        self.dial_error = lambda host: (
+            socket.gaierror(8, 'name not yet registered')
+            if host == INTERNAL else None)
         client = self.session.dial_smtp(PUBLIC_HOST)
         self.assertIs(type(client), smtplib.SMTP_SSL)
-        self.assertEqual(self.connects[-1][1], PUBLIC_HOST)
+        self.assertEqual(self.dials, [(INTERNAL, SUBMISSION_PORT),
+                                      (PUBLIC_HOST, SUBMISSION_PORT)])
 
     def test_ssl_error_does_not_fall_back(self):
-        def failing_connect(client, host='localhost', port=0,
-                            source_address=None):
-            del client, host, port, source_address
-            raise ssl.SSLError('certificate verify failed')
-
-        smtplib.SMTP.connect = failing_connect
+        self.tls_error = ssl.SSLError('certificate verify failed')
         with self.assertRaises(ssl.SSLError):
             self.session.dial_smtp(PUBLIC_HOST)
+        # No second dial: the public listener would fail the same way.
+        self.assertEqual(self.dials, [(INTERNAL, SUBMISSION_PORT)])
 
 
 if __name__ == '__main__':
