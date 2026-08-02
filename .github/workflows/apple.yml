@@ -77,7 +77,7 @@ jobs:
         # first (silently - the untap itself would warn too).
         run: |
           brew untap aws/tap >/dev/null 2>&1 || true
-          for pkg in xcodegen swiftlint xcbeautify; do
+          for pkg in xcodegen swiftlint xcbeautify coreutils; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
 
@@ -163,9 +163,22 @@ jobs:
         # stderr of crashing subtools (an actool crash once surfaced as a bare
         # "CompileAssetCatalogVariant failed" across two runs), so on failure
         # a later step dumps the raw log.
+        #
+        # gtimeout (brew coreutils) bounds the test run INSIDE the step, so a
+        # wedged xcodebuild becomes an ordinary step FAILURE: the raw-log dump
+        # below runs, and (in the forward-compat mirror jobs) job-level
+        # continue-on-error absorbs it. `timeout-minutes` alone cannot do
+        # this — a job-level timeout CANCELS the job, `if: failure()` steps
+        # are skipped, and continue-on-error does not absorb a cancellation,
+        # so the whole run concludes cancelled (measured 2026-08-01: a
+        # visionOS-27 hang after ImapParserTests wedged xcodebuild for 57
+        # silent minutes, run 30715777188). TERM first, KILL 2m later if the
+        # toolchain ignores TERM; the whole kit suite normally finishes in
+        # 1-5 minutes, so 30m is pure headroom.
         run: |
           set -o pipefail
-          xcodebuild test \
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
             -scheme CabalmailKit \
             -destination '${{ steps.dest.outputs.destination }}' \
             -skipPackagePluginValidation \
@@ -200,7 +213,7 @@ jobs:
       - name: Install XcodeGen + xcbeautify
         run: |
           brew untap aws/tap >/dev/null 2>&1 || true
-          for pkg in xcodegen xcbeautify; do
+          for pkg in xcodegen xcbeautify coreutils; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
 
@@ -230,7 +243,8 @@ jobs:
         # the raw output.
         run: |
           set -o pipefail
-          xcodebuild test \
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
             -workspace Cabalmail.xcworkspace \
             -scheme CabalmailMac \
             -destination 'platform=macOS' \
@@ -255,11 +269,18 @@ jobs:
   # and tested against next year's SDK before it is promoted to `main`.
   #
   # Both jobs are ADVISORY:
-  #   - `continue-on-error: true`, so a preview-image failure never fails
+  #   - `continue-on-error: true`, so a preview-image FAILURE never fails
   #     the run. GitHub explicitly warns the image can be unstable and
   #     that capacity is still being balanced, so a hard gate here would
   #     block promotion on someone else's infrastructure. A failure still
   #     shows on the job and raises a warning annotation.
+  #   - continue-on-error does NOT absorb a CANCELLATION, and a job killed
+  #     by `timeout-minutes` is cancelled — the whole run then concludes
+  #     cancelled and `if: failure()` steps are skipped (measured
+  #     2026-08-01, run 30715777188). That's why the test steps bound the
+  #     xcodebuild inside the step with gtimeout: a hang becomes a step
+  #     failure, which the bullets above DO handle. `timeout-minutes`
+  #     stays only as the outer backstop.
   #   - deliberately NOT in `approval`'s `needs`, so the TestFlight upload
   #     jobs can never depend on a preview runner.
   #
@@ -301,7 +322,7 @@ jobs:
         # independent and already enforced by the stable kit-test leg.
         run: |
           brew untap aws/tap >/dev/null 2>&1 || true
-          for pkg in xcodegen xcbeautify; do
+          for pkg in xcodegen xcbeautify coreutils; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
 
@@ -373,7 +394,8 @@ jobs:
         working-directory: apple/CabalmailKit
         run: |
           set -o pipefail
-          xcodebuild test \
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
             -scheme CabalmailKit \
             -destination '${{ steps.dest.outputs.destination }}' \
             -skipPackagePluginValidation \
@@ -407,7 +429,7 @@ jobs:
       - name: Install XcodeGen + xcbeautify
         run: |
           brew untap aws/tap >/dev/null 2>&1 || true
-          for pkg in xcodegen xcbeautify; do
+          for pkg in xcodegen xcbeautify coreutils; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
 
@@ -434,7 +456,8 @@ jobs:
         working-directory: apple
         run: |
           set -o pipefail
-          xcodebuild test \
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
             -workspace Cabalmail.xcworkspace \
             -scheme CabalmailMac \
             -destination 'platform=macOS' \

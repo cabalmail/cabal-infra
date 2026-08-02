@@ -82,6 +82,18 @@ block promotion, and absent from `approval`'s `needs` so the TestFlight
 upload jobs can never depend on a preview runner. A failure raises a
 warning annotation rather than a red run.
 
+One containment subtlety, learned the hard way (2026-08-01, run
+30715777188, a visionOS-27 simulator hang): `continue-on-error` absorbs
+step *failures* but **not cancellations**, and a job killed by
+`timeout-minutes` is cancelled — the whole run then concludes cancelled
+and `if: failure()` diagnostic steps are skipped. The test steps
+therefore bound `xcodebuild` *inside* the step (`gtimeout`, brew
+coreutils), turning a hang into an ordinary step failure that the
+advisory machinery handles; `timeout-minutes` remains only as the outer
+backstop. The same wrapper is on the stable test jobs, where a hang
+should fail the run — loudly and with the raw log dumped, rather than as
+an opaque hour-long cancellation.
+
 Remove them, or promote them to required by dropping
 `continue-on-error`, once Xcode 27 is GA on the runner images.
 
