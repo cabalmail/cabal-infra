@@ -50,6 +50,34 @@ public enum FolderTree {
         return out
     }
 
+    /// The canonical folder order used by every list that shows folders -
+    /// the sidebar, the "Move to folder…" sheet and the notification-scope
+    /// picker: INBOX first, then user folders as a `/`-delimited tree via
+    /// `sortUserTree`, then the remaining system folders alphabetically.
+    /// Anything not in `input` is not fabricated, and nothing is dropped
+    /// except as `dropNoselectUserFolders` asks.
+    ///
+    /// - Parameter dropNoselectUserFolders: when true, `\Noselect` container
+    ///   folders are omitted from the user-folder section. INBOX and the
+    ///   system folders are unaffected either way - callers that need those
+    ///   filtered too (the move sheet) pre-filter `input` themselves.
+    public static func sidebarOrder(
+        _ input: [Folder],
+        dropNoselectUserFolders: Bool = false
+    ) -> [Folder] {
+        let systemNames = systemPaths.subtracting(["INBOX"])
+        let inbox = input.filter { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame }
+        let system = input
+            .filter { systemNames.contains($0.path) }
+            .sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
+        let userFolders = input.filter { folder in
+            !inbox.contains(folder)
+                && !system.contains(folder)
+                && !(dropNoselectUserFolders && folder.attributes.contains("\\Noselect"))
+        }
+        return inbox + sortUserTree(userFolders) + system
+    }
+
     /// Indentation depth for the "All folders" section - system folders
     /// (Inbox + Sent/Drafts/etc.) sit at depth 0 regardless of any `/` in
     /// the name; user folders indent one step per path segment past the
