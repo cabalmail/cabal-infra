@@ -9,8 +9,16 @@ import CabalmailKit
 /// `/config.json`, constructs a `CabalmailClient`, and authenticates.
 /// Phase 6 replaces this with the real sign-up / reset-password flows.
 struct SignInView: View {
+    /// Return-key focus chain: Return advances through the credential
+    /// fields and submits from the last one, so sign-in is completable
+    /// by keyboard alone.
+    private enum Field: Hashable {
+        case controlDomain, username, password, mfaCode
+    }
+
     @Environment(AppState.self) private var appState
 
+    @FocusState private var focusedField: Field?
     @State private var controlDomain: String = ""
     @State private var username: String = ""
     @State private var password: String = ""
@@ -57,6 +65,9 @@ struct SignInView: View {
                         .keyboardType(.URL)
                         #endif
                         .accessibilityIdentifier("signin.controlDomain")
+                        .focused($focusedField, equals: .controlDomain)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .username }
                 }
                 Section("Account") {
                     TextField("Username", text: $username)
@@ -66,9 +77,18 @@ struct SignInView: View {
                         .textInputAutocapitalization(.never)
                         #endif
                         .accessibilityIdentifier("signin.username")
+                        .focused($focusedField, equals: .username)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .password }
                     SecureField("Password", text: $password)
                         .textContentType(.password)
                         .accessibilityIdentifier("signin.password")
+                        .focused($focusedField, equals: .password)
+                        .submitLabel(.go)
+                        .onSubmit {
+                            guard isFormValid, appState.status != .signingIn else { return }
+                            Task { await submit() }
+                        }
                 }
                 if case .error(let message) = appState.status {
                     Section {
@@ -112,6 +132,16 @@ struct SignInView: View {
                     .keyboardType(.numberPad)
                     #endif
                     .accessibilityIdentifier("mfa.code")
+                    .focused($focusedField, equals: .mfaCode)
+                    // The on-screen number pad has no Return key; this is
+                    // for hardware keyboards, where Return completes MFA
+                    // without reaching for Verify (the auto-submit below
+                    // usually beats it to the punch on the sixth digit).
+                    .submitLabel(.go)
+                    .onSubmit {
+                        guard mfaCode.count == 6, !isSubmittingMfa else { return }
+                        Task { await submitMfa() }
+                    }
                     .onChange(of: mfaCode) { _, newValue in
                         normalizeAndAutoSubmit(newValue)
                     }
