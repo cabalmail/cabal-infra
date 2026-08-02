@@ -264,19 +264,10 @@ final class FolderListViewModel {
 
     /// Inbox first, then user folders arranged as a `/`-delimited tree
     /// (peers alphabetical, children directly under their parent), then
-    /// system folders grouped at the bottom.
+    /// system folders grouped at the bottom. `\Noselect` containers can't be
+    /// opened, so they're dropped from the user section.
     private func sortForSidebar(_ input: [Folder]) -> [Folder] {
-        let systemNames: Set<String> = ["Sent", "Drafts", "Trash", "Junk", "Archive"]
-        let inbox = input.filter { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame }
-        let system = input
-            .filter { systemNames.contains($0.path) }
-            .sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
-        let userFolders = input.filter { folder in
-            !inbox.contains(folder)
-                && !system.contains(folder)
-                && !folder.attributes.contains("\\Noselect")
-        }
-        return inbox + FolderTree.sortUserTree(userFolders) + system
+        FolderTree.sidebarOrder(input, dropNoselectUserFolders: true)
     }
 
     /// Indentation depth - delegates to `FolderTree.depth(for:)`.

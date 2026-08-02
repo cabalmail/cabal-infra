@@ -42,6 +42,9 @@ const mockApi = {
   setFlag: vi.fn().mockResolvedValue({}),
   moveMessages: vi.fn().mockResolvedValue({}),
   purgeMessages: vi.fn().mockResolvedValue({}),
+  getFolderList: vi.fn().mockResolvedValue({
+    data: { folders: ['INBOX', 'Archive', 'qamove', 'Trash'], sub_folders: ['INBOX', 'Archive', 'qamove'] },
+  }),
 };
 
 vi.mock('../../hooks/useApi', () => ({
@@ -266,6 +269,79 @@ describe('MessageOverlay (Reader)', () => {
     } finally {
       unmount();
     }
+  });
+
+  describe('the Move button', () => {
+    const pickerIn = (container) => container.querySelector('.reader-move-picker select');
+
+    it('is enabled and opens a folder chooser', async () => {
+      const { container, unmount } = renderOverlay();
+      try {
+        await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+        const moveButton = screen.getByLabelText('Move');
+        expect(moveButton).not.toBeDisabled();
+        fireEvent.click(moveButton);
+        await waitFor(() => expect(pickerIn(container)).toBeTruthy());
+        expect(within(pickerIn(container)).getByText('qamove')).toBeInTheDocument();
+      } finally {
+        unmount();
+      }
+    });
+
+    it('moves the open message to the chosen folder and hides the reader', async () => {
+      const hide = vi.fn();
+      const { container, unmount } = renderOverlay({ hide });
+      try {
+        await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+        fireEvent.click(screen.getByLabelText('Move'));
+        await waitFor(() => expect(pickerIn(container)).toBeTruthy());
+        fireEvent.change(pickerIn(container), { target: { value: 'qamove' } });
+        await waitFor(() => {
+          expect(mockApi.moveMessages).toHaveBeenCalledWith(
+            'INBOX', 'qamove', [1], '', expect.anything(),
+          );
+        });
+        await waitFor(() => expect(hide).toHaveBeenCalled());
+        expect(pickerIn(container)).toBeNull();
+      } finally {
+        unmount();
+      }
+    });
+
+    it("does nothing when the message's own folder is chosen", async () => {
+      const hide = vi.fn();
+      const { container, unmount } = renderOverlay({ hide });
+      try {
+        await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+        fireEvent.click(screen.getByLabelText('Move'));
+        await waitFor(() => expect(pickerIn(container)).toBeTruthy());
+        fireEvent.change(pickerIn(container), { target: { value: 'INBOX' } });
+        expect(mockApi.moveMessages).not.toHaveBeenCalled();
+        expect(hide).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
+
+    it('reports a failed move and keeps the reader open', async () => {
+      const hide = vi.fn();
+      mockApi.moveMessages.mockRejectedValueOnce(new Error('nope'));
+      const { container, unmount } = renderOverlay({ hide });
+      try {
+        await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+        fireEvent.click(screen.getByLabelText('Move'));
+        await waitFor(() => expect(pickerIn(container)).toBeTruthy());
+        fireEvent.change(pickerIn(container), { target: { value: 'qamove' } });
+        await waitFor(() => {
+          expect(setMessage).toHaveBeenCalledWith(
+            expect.stringContaining('Unable to move message'), true,
+          );
+        });
+        expect(hide).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
   });
 
   describe('deleting from Trash', () => {
