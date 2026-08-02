@@ -33,6 +33,69 @@ final class FolderTreeTests: XCTestCase {
         XCTAssertEqual(ordered, ["Other", "Projects/Alpha"])
     }
 
+    // MARK: sidebarOrder
+
+    func testSidebarOrderPinsInboxFirstAndSystemFoldersLast() {
+        let input = folders([
+            "Trash",
+            "Projects/Zeta",
+            "INBOX",
+            "Archive",
+            "Newsletters",
+            "Projects",
+            "Sent",
+        ])
+        XCTAssertEqual(FolderTree.sidebarOrder(input).map(\.path), [
+            "INBOX",
+            "Newsletters",
+            "Projects",
+            "Projects/Zeta",
+            "Archive",
+            "Sent",
+            "Trash",
+        ])
+    }
+
+    func testSidebarOrderMatchesInboxCaseInsensitively() {
+        let input = folders(["Work", "inbox"])
+        XCTAssertEqual(FolderTree.sidebarOrder(input).map(\.path), ["inbox", "Work"])
+    }
+
+    func testSidebarOrderKeepsNoselectUserFoldersByDefault() {
+        let input = [
+            Folder(path: "INBOX"),
+            Folder(path: "Containers", attributes: ["\\Noselect"]),
+            Folder(path: "Containers/Real"),
+        ]
+        XCTAssertEqual(FolderTree.sidebarOrder(input).map(\.path), [
+            "INBOX",
+            "Containers",
+            "Containers/Real",
+        ])
+    }
+
+    func testSidebarOrderDropsNoselectUserFoldersWhenAsked() {
+        let input = [
+            Folder(path: "INBOX"),
+            Folder(path: "Containers", attributes: ["\\Noselect"]),
+            Folder(path: "Containers/Real"),
+        ]
+        let ordered = FolderTree.sidebarOrder(input, dropNoselectUserFolders: true)
+        XCTAssertEqual(ordered.map(\.path), ["INBOX", "Containers/Real"])
+    }
+
+    /// The drop flag is scoped to the user section: a `\Noselect` system
+    /// folder still shows. Callers that want those gone (the move sheet)
+    /// filter before calling.
+    func testSidebarOrderKeepsNoselectSystemFoldersEvenWhenDropping() {
+        let input = [
+            Folder(path: "INBOX", attributes: ["\\Noselect"]),
+            Folder(path: "Archive", attributes: ["\\Noselect"]),
+        ]
+        let ordered = FolderTree.sidebarOrder(input, dropNoselectUserFolders: true)
+        XCTAssertEqual(ordered.map(\.path), ["INBOX", "Archive"])
+    }
+
     // MARK: depth
 
     func testDepthIsZeroForSystemFoldersRegardlessOfSlashes() {

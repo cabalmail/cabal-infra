@@ -370,17 +370,7 @@ struct NotificationFolderPickerView: View {
     /// pinned first, user folders in tree order, system folders last — but
     /// nothing is filtered out: any folder can be a notification source.
     private func sortForPicker(_ input: [Folder]) -> [Folder] {
-        let systemNames: Set<String> = ["Sent", "Drafts", "Trash", "Junk", "Archive"]
-        let inbox = input.filter { folder in
-            folder.path.caseInsensitiveCompare("INBOX") == .orderedSame
-        }
-        let system = input
-            .filter { systemNames.contains($0.path) }
-            .sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
-        let userFolders = input.filter { folder in
-            !inbox.contains(folder) && !system.contains(folder)
-        }
-        return inbox + FolderTree.sortUserTree(userFolders) + system
+        FolderTree.sidebarOrder(input)
     }
 }
 #endif
