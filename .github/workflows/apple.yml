@@ -407,8 +407,24 @@ jobs:
 
       - name: Test CabalmailKit on ${{ matrix.platform }}
         working-directory: apple/CabalmailKit
+        # visionOS carve-out: WKWebView construction wedges the visionOS 27.0
+        # beta SIMULATOR before the first test case even starts — reproduced
+        # 8/8 attempts across runs 30715777188 / 30727238138 / 30728284861.
+        # XCTest's execution allowance can't name a pre-test wedge: it
+        # restarts the runner batch (6x observed), then reports the suite as
+        # "Executed 0 tests, with 0 failures" — a silent vanish, green if
+        # xcodebuild manages to exit. So the one WebKit-backed suite is
+        # skipped EXPLICITLY (and loudly, via the notice annotation) on this
+        # leg only. Stable visionOS (macos-26) still runs it. Apple-beta
+        # bug, not our forward-compat signal; re-test each new 27 beta and
+        # drop the carve-out when it boots.
         run: |
           set -o pipefail
+          SKIP_ARGS=""
+          if [ "${{ matrix.platform }}" = "visionOS" ]; then
+            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests"
+            echo "::notice title=visionOS 27 carve-out::Skipping RichTextEditorBridgeHealthTests: WKWebView creation wedges the visionOS 27.0 beta simulator (see workflow comment). Covered by the stable visionOS leg."
+          fi
           gtimeout -v --kill-after=2m 30m \
             xcodebuild test \
             -scheme CabalmailKit \
@@ -416,6 +432,7 @@ jobs:
             -skipPackagePluginValidation \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 180 \
+            $SKIP_ARGS \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
