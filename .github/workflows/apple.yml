@@ -77,7 +77,7 @@ jobs:
         # first (silently - the untap itself would warn too).
         run: |
           brew untap aws/tap >/dev/null 2>&1 || true
-          for pkg in xcodegen swiftlint xcbeautify; do
+          for pkg in xcodegen swiftlint xcbeautify coreutils; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
 
@@ -163,12 +163,38 @@ jobs:
         # stderr of crashing subtools (an actool crash once surfaced as a bare
         # "CompileAssetCatalogVariant failed" across two runs), so on failure
         # a later step dumps the raw log.
+        #
+        # gtimeout (brew coreutils) bounds the test run INSIDE the step, so a
+        # wedged xcodebuild becomes an ordinary step FAILURE: the raw-log dump
+        # below runs, and (in the forward-compat mirror jobs) job-level
+        # continue-on-error absorbs it. `timeout-minutes` alone cannot do
+        # this — a job-level timeout CANCELS the job, `if: failure()` steps
+        # are skipped, and continue-on-error does not absorb a cancellation,
+        # so the whole run concludes cancelled (measured 2026-08-01: a
+        # visionOS-27 hang after ImapParserTests wedged xcodebuild for 57
+        # silent minutes, run 30715777188). TERM first, KILL 2m later if the
+        # toolchain ignores TERM; the whole kit suite normally finishes in
+        # 1-5 minutes, so 30m is pure headroom.
+        #
+        # -test-timeouts-enabled turns on XCTest's per-test execution
+        # allowance (off by default), capped here at 180s per test. It is
+        # enforced by the test runner from OUTSIDE the test, so it catches
+        # even a test wedged on a blocked main thread (which no in-test
+        # deadline can preempt) and fails it BY NAME in minutes — the
+        # validation rerun of the visionOS-27 hang stalled inside
+        # RichTextEditorBridgeHealthTests with output pipeline buffering
+        # hiding the location; the allowance is what turns "57 silent
+        # minutes" into a named failure. gtimeout remains the outer guard
+        # for anything outside a test's body (build, sim boot, teardown).
         run: |
           set -o pipefail
-          xcodebuild test \
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
             -scheme CabalmailKit \
             -destination '${{ steps.dest.outputs.destination }}' \
             -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -200,7 +226,7 @@ jobs:
       - name: Install XcodeGen + xcbeautify
         run: |
           brew untap aws/tap >/dev/null 2>&1 || true
-          for pkg in xcodegen xcbeautify; do
+          for pkg in xcodegen xcbeautify coreutils; do
             brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
           done
 
@@ -230,11 +256,14 @@ jobs:
         # the raw output.
         run: |
           set -o pipefail
-          xcodebuild test \
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
             -workspace Cabalmail.xcworkspace \
             -scheme CabalmailMac \
             -destination 'platform=macOS' \
             -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -244,6 +273,245 @@ jobs:
       - name: Surface raw xcodebuild output on failure
         if: failure()
         run: .github/scripts/dump-xcodebuild-raw.sh
+
+  # =======================================================================
+  # TEMPORARY: forward-compatibility check against the next OS generation.
+  #
+  # Mirrors kit-test and app-test onto GitHub's `xcode-27` PREVIEW image
+  # (announced actions/runner-images#14404, 2026-07-16), which carries the
+  # Xcode 27 beta and the 27.0 SDKs. The point is early warning: code the
+  # Mac mini produces against the current stable toolchain gets compiled
+  # and tested against next year's SDK before it is promoted to `main`.
+  #
+  # Both jobs are ADVISORY:
+  #   - `continue-on-error: true`, so a preview-image FAILURE never fails
+  #     the run. GitHub explicitly warns the image can be unstable and
+  #     that capacity is still being balanced, so a hard gate here would
+  #     block promotion on someone else's infrastructure. A failure still
+  #     shows on the job and raises a warning annotation.
+  #   - continue-on-error does NOT absorb a CANCELLATION, and a job killed
+  #     by `timeout-minutes` is cancelled — the whole run then concludes
+  #     cancelled and `if: failure()` steps are skipped (measured
+  #     2026-08-01, run 30715777188). That's why the test steps bound the
+  #     xcodebuild inside the step with gtimeout: a hang becomes a step
+  #     failure, which the bullets above DO handle. `timeout-minutes`
+  #     stays only as the outer backstop.
+  #   - deliberately NOT in `approval`'s `needs`, so the TestFlight upload
+  #     jobs can never depend on a preview runner.
+  #
+  # They do not replace the stable legs: the `xcode-27` image ships ONLY
+  # 27.0 simulator runtimes, so real 26.x runtime coverage has to stay on
+  # the `macos-26` jobs above.
+  #
+  # Remove (or promote to required, dropping continue-on-error) once
+  # Xcode 27 is GA on the runner images. See
+  # docs/0.11.x/os27-swipe-actions-container.md.
+  # =======================================================================
+  kit-test-next:
+    name: 'Forward-compat: CabalmailKit (${{ matrix.platform }}, Xcode 27 preview)'
+    runs-on: xcode-27
+    continue-on-error: true
+    # Preview capacity is still being balanced; bound a queue/hang instead
+    # of letting an advisory job burn the default 6-hour ceiling.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macOS, iOS, visionOS]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # No `Select Xcode` step: this image ships exactly one Xcode (the 27
+      # beta) and already points Xcode.app at it, so the shared
+      # XCODE_VERSION ('latest-stable') has nothing to resolve to here.
+
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version || true
+          xcrun simctl list runtimes
+
+      - name: Install XcodeGen + xcbeautify
+        # SwiftLint is intentionally absent: linting is toolchain-
+        # independent and already enforced by the stable kit-test leg.
+        run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
+          for pkg in xcodegen xcbeautify coreutils; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
+      - name: Resolve test destination for ${{ matrix.platform }}
+        id: dest
+        # Same approach as the stable leg: pick the newest installed
+        # runtime for the platform and create a device against it. On this
+        # image that resolves to the 27.0 runtimes.
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.platform }}" = "macOS" ]; then
+            echo "destination=platform=macOS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          FAMILY='${{ matrix.platform }}'
+          case "$FAMILY" in
+            iOS)       DEVICE_PREFIX="iPhone" ;;
+            visionOS)  DEVICE_PREFIX="Apple Vision" ;;
+          esac
+          RUNTIME_ID=$(xcrun simctl list runtimes --json | \
+            jq -r --arg fam "$FAMILY" '
+              .runtimes
+              | map(select(.isAvailable and (.name | startswith($fam + " "))))
+              | sort_by(.version | split(".") | map(tonumber))
+              | reverse | .[0].identifier // empty
+            ')
+          if [ -z "$RUNTIME_ID" ]; then
+            echo "::error::No installed $FAMILY runtime."
+            xcrun simctl list runtimes
+            exit 1
+          fi
+          DEVICE_TYPE_ID=$(xcrun simctl list devicetypes --json | \
+            jq -r --arg pfx "$DEVICE_PREFIX" '
+              .devicetypes
+              | map(select(.name | startswith($pfx)))
+              | .[0].identifier // empty
+            ')
+          if [ -z "$DEVICE_TYPE_ID" ]; then
+            echo "::error::No device type matching '$DEVICE_PREFIX'."
+            xcrun simctl list devicetypes
+            exit 1
+          fi
+          UDID=$(xcrun simctl create "ci-$FAMILY" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
+          echo "Created $FAMILY simulator $UDID"
+          echo "destination=platform=$FAMILY Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          # `xc27-` namespace: a cache built by the beta toolchain must not
+          # be restored into the stable jobs (or vice versa).
+          key: spm-xc27-${{ runner.os }}-${{ matrix.platform }}-${{ hashFiles('apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            spm-xc27-${{ runner.os }}-${{ matrix.platform }}-
+            spm-xc27-${{ runner.os }}-
+
+      - name: Test CabalmailKit on ${{ matrix.platform }}
+        working-directory: apple/CabalmailKit
+        # visionOS carve-out: WKWebView construction wedges the visionOS 27.0
+        # beta SIMULATOR before the first test case even starts — reproduced
+        # 8/8 attempts across runs 30715777188 / 30727238138 / 30728284861.
+        # XCTest's execution allowance can't name a pre-test wedge: it
+        # restarts the runner batch (6x observed), then reports the suite as
+        # "Executed 0 tests, with 0 failures" — a silent vanish, green if
+        # xcodebuild manages to exit. So the one WebKit-backed suite is
+        # skipped EXPLICITLY (and loudly, via the notice annotation) on this
+        # leg only. Stable visionOS (macos-26) still runs it. Apple-beta
+        # bug, not our forward-compat signal; re-test each new 27 beta and
+        # drop the carve-out when it boots.
+        run: |
+          set -o pipefail
+          SKIP_ARGS=""
+          if [ "${{ matrix.platform }}" = "visionOS" ]; then
+            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests"
+            echo "::notice title=visionOS 27 carve-out::Skipping RichTextEditorBridgeHealthTests: WKWebView creation wedges the visionOS 27.0 beta simulator (see workflow comment). Covered by the stable visionOS leg."
+          fi
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
+            -scheme CabalmailKit \
+            -destination '${{ steps.dest.outputs.destination }}' \
+            -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
+            $SKIP_ARGS \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-test.log" \
+            | xcbeautify --renderer github-actions
+
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh
+
+      - name: Flag forward-compatibility failure
+        if: failure()
+        run: |
+          echo "::warning title=Xcode 27 forward-compat::CabalmailKit (${{ matrix.platform }}) failed on the xcode-27 preview image. Advisory only - this did not fail the run. Could be our code or preview-image instability; check the raw log above."
+
+  app-test-next:
+    name: 'Forward-compat: app layer (macOS, Xcode 27 preview)'
+    runs-on: xcode-27
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Report toolchain
+        run: xcodebuild -version
+
+      - name: Install XcodeGen + xcbeautify
+        run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
+          for pkg in xcodegen xcbeautify coreutils; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-xc27-${{ runner.os }}-macOS-${{ hashFiles('apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            spm-xc27-${{ runner.os }}-macOS-
+            spm-xc27-${{ runner.os }}-
+
+      - name: Test CabalmailMac scheme (app-layer unit tests)
+        working-directory: apple
+        run: |
+          set -o pipefail
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
+            -workspace Cabalmail.xcworkspace \
+            -scheme CabalmailMac \
+            -destination 'platform=macOS' \
+            -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-test.log" \
+            | xcbeautify --renderer github-actions
+
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh
+
+      - name: Flag forward-compatibility failure
+        if: failure()
+        run: |
+          echo "::warning title=Xcode 27 forward-compat::App-layer tests failed on the xcode-27 preview image. Advisory only - this did not fail the run. Could be our code or preview-image instability; check the raw log above."
 
   # -----------------------------------------------------------------------
   # Build the app targets for the three product platforms. Unsigned — this
