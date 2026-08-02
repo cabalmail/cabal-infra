@@ -110,6 +110,17 @@ final class FolderTreeTests: XCTestCase {
         XCTAssertEqual(FolderTree.depth(for: Folder(path: "Work/Q1/Archive")), 2)
     }
 
+    func testDepthInAListCountsOnlyThePresentAncestors() {
+        let full = folders(["Work", "Work/Q1", "Work/Q1/Archive"])
+        XCTAssertEqual(FolderTree.depth(for: Folder(path: "Work/Q1/Archive"), in: full), 2)
+        // A list that omits an ancestor -- the subscribed subset, or a
+        // filtered list -- must not indent under a row it isn't drawing.
+        let sparse = folders(["Work", "Work/Q1/Archive"])
+        XCTAssertEqual(FolderTree.depth(for: Folder(path: "Work/Q1/Archive"), in: sparse), 1)
+        XCTAssertEqual(FolderTree.depth(for: Folder(path: "Work/Q1/Archive"), in: []), 0)
+        XCTAssertEqual(FolderTree.depth(for: Folder(path: "INBOX"), in: full), 0)
+    }
+
     // MARK: hasChildren
 
     func testHasChildrenIsTrueOnlyForParentsOfPresentFolders() {
