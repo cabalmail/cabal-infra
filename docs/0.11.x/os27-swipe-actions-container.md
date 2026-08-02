@@ -94,6 +94,18 @@ backstop. The same wrapper is on the stable test jobs, where a hang
 should fail the run — loudly and with the raw log dumped, rather than as
 an opaque hour-long cancellation.
 
+Two follow-on layers, from chasing the actual hang (WKWebView
+construction wedges the visionOS 27.0 beta simulator pre-test,
+deterministically): XCTest's per-test execution allowance is enabled on
+all test jobs (`-test-timeouts-enabled YES`, 180s) so a wedge inside a
+test body fails by name in minutes — but a *pre-test* wedge only makes
+XCTest restart the batch and then report the suite as "Executed 0
+tests, 0 failures", a silent vanish. Deterministic pre-test wedges
+therefore get an explicit, notice-annotated `-skip-testing:` carve-out
+(currently `RichTextEditorBridgeHealthTests`, visionOS preview leg
+only; the stable visionOS leg still runs it). Re-test the carve-out on
+each new 27 beta.
+
 Remove them, or promote them to required by dropping
 `continue-on-error`, once Xcode 27 is GA on the runner images.
 
