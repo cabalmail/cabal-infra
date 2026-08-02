@@ -63,6 +63,19 @@ actor FakeImapClient: ImapClient {
         topEnvelopesResult = topEnvelopes
     }
 
+    // Structured-search script (one page; `searchEnvelopesChunked`'s
+    // default implementation stops when `nextCursor` is nil).
+    private var searchResult: SearchResult?
+
+    func scriptSearch(_ result: SearchResult) {
+        searchResult = result
+    }
+
+    func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
+        guard let searchResult else { return try trap() }
+        return searchResult
+    }
+
     func setFlags(
         folder: String,
         uids: [UInt32],
@@ -250,10 +263,16 @@ enum TestFixtures {
         )
     }
 
-    static func makeEnvelope(uid: UInt32, flags: Set<Flag> = []) -> Envelope {
+    static func makeEnvelope(
+        uid: UInt32,
+        flags: Set<Flag> = [],
+        messageId: String? = nil,
+        subject: String? = nil
+    ) -> Envelope {
         Envelope(
             uid: uid,
-            subject: "Subject \(uid)",
+            messageId: messageId,
+            subject: subject ?? "Subject \(uid)",
             from: [EmailAddress(name: "Sender", mailbox: "sender\(uid)", host: "example.com")],
             flags: flags
         )

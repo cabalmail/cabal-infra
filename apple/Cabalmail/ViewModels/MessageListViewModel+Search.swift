@@ -16,7 +16,7 @@ extension MessageListViewModel {
     /// Phase 5 of `docs/0.9.x/imap-search-plan.md` switched the wire
     /// path off the raw IMAP-SEARCH passthrough; the structured contract
     /// returns envelopes plus per-row source folders in a single round
-    /// trip. Cross-folder results populate `sourceFolderByUID` so
+    /// trip. Cross-folder results populate `sourceFolderIndex` so
     /// dispose / flag operations route per-row to the correct mailbox.
     func runSearch(resetFilterTab: Bool = true) async {
         // A text search is "All" mode -- its loaded results drive the pill
@@ -49,9 +49,7 @@ extension MessageListViewModel {
                 maxResults: searchResultCap
             )
             envelopes = result.envelopes.map(\.envelope)
-            sourceFolderByUID = Dictionary(uniqueKeysWithValues: result.envelopes.map {
-                ($0.envelope.uid, $0.folder)
-            })
+            sourceFolderIndex = SearchSourceFolderIndex(result.envelopes)
             searchTotalEstimate = result.totalEstimate
             searchTruncated = result.truncated
             searchFoldersSearched = result.foldersSearched
@@ -107,7 +105,7 @@ extension MessageListViewModel {
         // can't strand a highlighted pill over a plain folder view.
         filterTab = .all
         isSearchActive = false
-        sourceFolderByUID = [:]
+        sourceFolderIndex = SearchSourceFolderIndex()
         searchTotalEstimate = 0
         searchTruncated = false
         searchFoldersSearched = []
@@ -127,10 +125,10 @@ extension MessageListViewModel {
     /// Resolves the IMAP mailbox that owns `envelope`. In folder mode
     /// and in single-folder searches this is always `folder.path`; in
     /// cross-folder search mode the per-row entry from
-    /// `sourceFolderByUID` wins so dispose / flag operations target the
+    /// `sourceFolderIndex` wins so dispose / flag operations target the
     /// right mailbox.
     func sourceFolder(for envelope: Envelope) -> String {
-        sourceFolderByUID[envelope.uid] ?? folder.path
+        sourceFolderIndex.folder(for: envelope) ?? folder.path
     }
 
     /// Per-request chunk size for `runSearch`'s envelope fetch. The match set
