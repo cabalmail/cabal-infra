@@ -29,7 +29,7 @@ extension MessageListViewModel {
         dbg("setSort \(criterion.field)")
         sortCriterion = criterion
         envelopes.removeAll()
-        sourceFolderByUID = [:]
+        sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
         await refresh()
         // Re-stage the bottom window in the new order (resetWindow dropped the

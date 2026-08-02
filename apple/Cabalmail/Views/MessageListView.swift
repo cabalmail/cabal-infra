@@ -170,7 +170,7 @@ struct MessageListView: View {
     @ViewBuilder
     private func moveSheet(for envelope: Envelope) -> some View {
         if let client = appState.client {
-            // Cross-folder search rows live in `sourceFolderByUID`; the
+            // Cross-folder search rows live in `sourceFolderIndex`; the
             // sidebar's `folder` is the search scope, not the row's true
             // mailbox. Excluding the row's actual source folder from the
             // picker is what the user expects.
