@@ -89,41 +89,38 @@ struct FolderListView: View {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.red)
                 }
-                let subscribed = filteredFolders(model.subscribedFolders)
-                let all = filteredFolders(model.folders)
-                let (visibleAll, _) = FolderTree.visibleFolders(
-                    from: all,
+                // Each section is a tree over its own folder list — Subscribed
+                // is a subset of All folders, and the filter narrows both — so
+                // both go through `FolderSectionRows`, which computes depth,
+                // chevron and collapse against the list it's handed.
+                let subscribedRows = FolderSectionRows.rows(
+                    for: filteredFolders(model.subscribedFolders),
+                    collapsed: collapsedSet,
+                    activeSelection: selection?.path
+                )
+                let allRows = FolderSectionRows.rows(
+                    for: filteredFolders(model.folders),
                     collapsed: collapsedSet,
                     activeSelection: selection?.path
                 )
                 if !model.subscribedFolders.isEmpty {
                     DisclosureGroup(isExpanded: $subscribedExpanded) {
-                        ForEach(subscribed, id: \.path) { folder in
-                            folderRow(folder, model: model, depth: 0, collapsed: collapsedSet)
+                        ForEach(subscribedRows) { row in
+                            folderRow(row, model: model, collapsed: collapsedSet)
                         }
                     } label: {
                         Text("Subscribed")
                     }
                     DisclosureGroup(isExpanded: $allExpanded) {
-                        ForEach(visibleAll, id: \.path) { folder in
-                            folderRow(
-                                folder,
-                                model: model,
-                                depth: model.depth(for: folder),
-                                collapsed: collapsedSet
-                            )
+                        ForEach(allRows) { row in
+                            folderRow(row, model: model, collapsed: collapsedSet)
                         }
                     } label: {
                         Text("All folders")
                     }
                 } else {
-                    ForEach(visibleAll, id: \.path) { folder in
-                        folderRow(
-                            folder,
-                            model: model,
-                            depth: model.depth(for: folder),
-                            collapsed: collapsedSet
-                        )
+                    ForEach(allRows) { row in
+                        folderRow(row, model: model, collapsed: collapsedSet)
                     }
                 }
             }
@@ -222,11 +219,11 @@ struct FolderListView: View {
 
     @ViewBuilder
     private func folderRow(
-        _ folder: Folder,
+        _ sectionRow: FolderSectionRow,
         model: FolderListViewModel,
-        depth: Int,
         collapsed: Set<String>
     ) -> some View {
+        let folder = sectionRow.folder
         // `\Noselect` containers can't hold messages, so they're not drop
         // targets (mirrors MoveToFolderSheet's filter). Selectable folders
         // get an `.onDrop` + an accent border while a drag hovers them.
@@ -238,8 +235,8 @@ struct FolderListView: View {
                 unread: appState.folderUnreadCounts[folder.path],
                 total: appState.folderTotalCounts[folder.path]
             ),
-            depth: depth,
-            hasChildren: model.hasChildren(folder),
+            depth: sectionRow.depth,
+            hasChildren: sectionRow.hasChildren,
             isCollapsed: collapsed.contains(folder.path)
         )
             .tag(folder)
