@@ -21,6 +21,7 @@ extension MessageListView {
         }
         .disabled(model == nil)
         .accessibilityLabel(filterButtonAccessibilityLabel)
+        .accessibilityIdentifier("list.filters")
     }
 
     private var filterButtonIcon: String {

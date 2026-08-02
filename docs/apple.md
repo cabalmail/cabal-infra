@@ -128,6 +128,95 @@ xcodegen generate
 
 After that, plain `xcodebuild ... build` and `xcodebuild ... archive` both sign cleanly.
 
+## Simulator testing and automation
+
+Tooling for driving the full app in an iOS simulator — scripted
+scenarios, agent-driven exploration, and reproducing bugs that only
+surface in the real app.
+
+### Sign-in-capable simulator build: `scripts/build-sim.sh`
+
+```sh
+cd apple
+scripts/build-sim.sh            # build + install onto the booted simulator
+scripts/build-sim.sh <UDID>     # ... onto a specific simulator
+scripts/build-sim.sh -          # build only
+```
+
+The invocation it wraps is non-obvious, and getting it wrong produces an
+app that *builds* but cannot sign in:
+
+- It **omits** `CODE_SIGNING_ALLOWED=NO`. The CI build recipe strips
+  entitlements, and sign-in then fails with keychain error `-34018`.
+  Simulator ad-hoc signing (the default) is sufficient. Do not try to
+  repair an unsigned build afterwards with `codesign --entitlements` —
+  that produces launch denials.
+- It **adds** `ENABLE_DEBUG_DYLIB=NO`, without which the notification
+  service extension's preview-dylib link step fails on command-line
+  builds.
+- `ONLY_ACTIVE_ARCH=YES` keeps it quick.
+
+### Driving the installed app: `Tools/SimDrive`
+
+A small XCUITest command REPL. The host writes command files into an
+exchange directory; the test executes each against the installed app and
+writes a JSON result back. Because it runs inside XCUITest, it sees the
+app's accessibility tree — the same interface VoiceOver uses — rather
+than pixels.
+
+```sh
+cd apple/Tools/SimDrive
+./simdrive start                          # boots the runner (blocks until ready)
+./simdrive cmd launch                     # launch the app
+./simdrive cmd tap id:folder.row.INBOX    # address controls by identifier
+./simdrive cmd wait id:message.row.42 timeout:15
+./simdrive cmd swiperow id:message.row.42 edge:trailing hold:2
+./simdrive cmd dump                       # full accessibility tree
+./simdrive stop
+```
+
+The full command grammar (`launch`, `activate`, `env`, `dump`, `focus`,
+`tap`, `type`, `cmdv`, `orient`, `drag`, `swiperow`, `exists`, `wait`)
+is documented at the top of
+`Tools/SimDrive/SimDriveUITests/SimDriveTests.swift`. Notes that keep
+sessions out of known potholes:
+
+- **Addressing controls.** App controls carry `accessibilityIdentifier`s
+  in `area.control` form — `signin.username`, `mfa.verify`,
+  `message.row.<uid>`, `folder.row.<path>`, `compose.subject`, and so
+  on. Prefer `id:` queries over `text:` (label matching breaks when copy
+  changes) and over `xy:` coordinates (which break on rotation and
+  layout changes). When adding an identifier to a *row*, pair it with
+  `.accessibilityElement(children: .contain)` — a bare identifier merges
+  the row's subtree into one accessibility element, which hides revealed
+  swipe buttons from both XCUITest and VoiceOver.
+- **Secure fields.** A SwiftUI `SecureField` does not accept the
+  keyboard assistant bar's Paste button, but does accept hardware Cmd-V.
+  Seed the simulator pasteboard host-side and paste:
+
+  ```sh
+  printf %s "$PASSWORD" | ./simdrive pbcopy   # simctl pbcopy under the hood
+  ./simdrive cmd tap id:signin.password
+  ./simdrive cmd cmdv
+  ```
+
+  This keeps secrets out of the command files and the harness logs,
+  which is the required handling.
+- **Gestures hold the runner's main thread.** A swipe reveal cannot be
+  observed from inside the runner mid-gesture. Use `drag ... hold:<s>`
+  or `swiperow ... hold:<s>` and screenshot from *outside* during the
+  hold (`xcrun simctl io <udid> screenshot out.png`).
+- **First-run interruptions.** On a fresh simulator, expect an iPadOS
+  "Copy and Paste" keyboard education overlay covering the form, and a
+  "Save Password?" alert after sign-in (dismiss with `Not Now`). Script
+  their dismissal (`tap text:Not Now`) or pre-seed the simulator before
+  measuring anything.
+- **MFA makes fresh simulators expensive.** Simulator keychains do not
+  transfer between devices or runtimes, so every new simulator costs a
+  full manual sign-in. Signed-in state *does* persist across reinstalls
+  of the same bundle id on the same simulator — keep one designated
+  signed-in simulator per runtime and record which.
+
 ## Apple Developer account setup
 
 This is the one-time manual setup required to enable CI uploads to

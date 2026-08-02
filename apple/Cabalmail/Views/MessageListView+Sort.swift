@@ -53,6 +53,7 @@ extension MessageListView {
                 .accessibilityLabel("Sort")
         }
         .disabled(model == nil)
+        .accessibilityIdentifier("list.sort")
     }
 
     private func sortLabel(for field: SortCriterion.Field) -> String {

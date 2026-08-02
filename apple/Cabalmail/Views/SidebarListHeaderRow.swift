@@ -14,11 +14,16 @@ struct SidebarListHeaderRow: View {
     let newAction: () -> Void
     let newDisabled: Bool
     let newAccessibilityLabel: String
+    /// Machine-facing identifier for the New button — the caller passes the
+    /// same `area.control` name its compact-toolbar twin carries (e.g.
+    /// `folder.new`), so automation addresses one name on both layouts.
+    let newIdentifier: String
     @Binding var filterText: String
     let filterPrompt: String
     let isRefreshing: Bool
     let refreshDisabled: Bool
     let refreshAccessibilityLabel: String
+    let refreshIdentifier: String
     let refreshAction: () -> Void
 
     var body: some View {
@@ -29,6 +34,7 @@ struct SidebarListHeaderRow: View {
             }
             .buttonStyle(.borderless)
             .disabled(newDisabled)
+            .accessibilityIdentifier(newIdentifier)
 
             filterField
 
@@ -38,6 +44,7 @@ struct SidebarListHeaderRow: View {
             }
             .buttonStyle(.borderless)
             .disabled(refreshDisabled)
+            .accessibilityIdentifier(refreshIdentifier)
         }
         .padding(.horizontal)
         .padding(.bottom, 4)

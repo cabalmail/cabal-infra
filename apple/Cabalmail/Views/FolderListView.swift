@@ -150,6 +150,7 @@ struct FolderListView: View {
                     // The parent picker is seeded from the loaded folder list, so
                     // hold the button until the first list load lands.
                     .disabled(model == nil)
+                    .accessibilityIdentifier("folder.new")
                 }
                 ToolbarItem {
                     Button {
@@ -159,6 +160,7 @@ struct FolderListView: View {
                             .accessibilityLabel("Refresh folders")
                     }
                     .disabled(isRefreshing || model == nil)
+                    .accessibilityIdentifier("folder.refresh")
                 }
             }
         }
@@ -254,6 +256,13 @@ struct FolderListView: View {
                 folderContextMenu(folder, model: model)
             }
         }
+        // `.contain` keeps the row's children (chevron, revealed swipe
+        // buttons) individually reachable — a bare identifier would merge
+        // the subtree into one element and hide them from XCUITest and
+        // VoiceOver (see the subtree-merge trap in
+        // docs/0.11.x/apple-testability-and-accessibility.md).
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("folder.row.\(folder.path)")
     }
 
     @ViewBuilder
@@ -287,6 +296,7 @@ struct FolderListView: View {
                     // triggering row selection in the surrounding List.
                     .buttonStyle(.borderless)
                     .accessibilityLabel(isCollapsed ? "Expand \(folder.name)" : "Collapse \(folder.name)")
+                    .accessibilityIdentifier("folder.disclose.\(folder.path)")
                 } else {
                     Color.clear
                 }

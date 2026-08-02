@@ -31,19 +31,20 @@ struct ComposeMacHeader: View {
             }
             GridRow {
                 fieldLabel("To:")
-                recipientField("To", text: $model.toText, focusValue: .to)
+                recipientField("To", text: $model.toText, focusValue: .to, identifier: "compose.to")
             }
             GridRow {
                 fieldLabel("Cc:")
-                recipientField("Cc", text: $model.ccText, focusValue: .cc)
+                recipientField("Cc", text: $model.ccText, focusValue: .cc, identifier: "compose.cc")
             }
             GridRow {
                 fieldLabel("Bcc:")
-                recipientField("Bcc", text: $model.bccText, focusValue: .bcc)
+                recipientField("Bcc", text: $model.bccText, focusValue: .bcc, identifier: "compose.bcc")
             }
             GridRow {
                 fieldLabel("Subject:")
                 TextField("Subject", text: $model.subject)
+                    .accessibilityIdentifier("compose.subject")
             }
         }
         .padding(.horizontal, 12)
@@ -62,14 +63,16 @@ struct ComposeMacHeader: View {
     private func recipientField(
         _ label: String,
         text: Binding<String>,
-        focusValue: ComposeView.Field
+        focusValue: ComposeView.Field,
+        identifier: String
     ) -> some View {
         RecipientFieldWithSuggestions(
             label: label,
             text: text,
             candidates: candidates,
             focusBinding: focusBinding,
-            focusValue: focusValue
+            focusValue: focusValue,
+            identifier: identifier
         )
     }
 }

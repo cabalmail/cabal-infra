@@ -9,12 +9,24 @@ import CabalmailKit
 /// `/config.json`, constructs a `CabalmailClient`, and authenticates.
 /// Phase 6 replaces this with the real sign-up / reset-password flows.
 struct SignInView: View {
+    /// Return-key focus chain: Return advances through the credential
+    /// fields and submits from the last one, so sign-in is completable
+    /// by keyboard alone.
+    private enum Field: Hashable {
+        case controlDomain, username, password, mfaCode
+    }
+
     @Environment(AppState.self) private var appState
 
+    @FocusState private var focusedField: Field?
     @State private var controlDomain: String = ""
     @State private var username: String = ""
     @State private var password: String = ""
     @State private var mfaCode: String = ""
+    /// Guards the six-digit auto-submit against firing while a submission
+    /// is already in flight (e.g. a paste landing right after the sixth
+    /// typed digit).
+    @State private var isSubmittingMfa = false
 
     /// The pending second factor when Cognito challenged the password
     /// sign-in, nil otherwise. Drives the swap between the credential
@@ -52,6 +64,10 @@ struct SignInView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         #endif
+                        .accessibilityIdentifier("signin.controlDomain")
+                        .focused($focusedField, equals: .controlDomain)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .username }
                 }
                 Section("Account") {
                     TextField("Username", text: $username)
@@ -60,8 +76,19 @@ struct SignInView: View {
                         #if os(iOS) || os(visionOS)
                         .textInputAutocapitalization(.never)
                         #endif
+                        .accessibilityIdentifier("signin.username")
+                        .focused($focusedField, equals: .username)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .password }
                     SecureField("Password", text: $password)
                         .textContentType(.password)
+                        .accessibilityIdentifier("signin.password")
+                        .focused($focusedField, equals: .password)
+                        .submitLabel(.go)
+                        .onSubmit {
+                            guard isFormValid, appState.status != .signingIn else { return }
+                            Task { await submit() }
+                        }
                 }
                 if case .error(let message) = appState.status {
                     Section {
@@ -82,6 +109,7 @@ struct SignInView: View {
                         }
                     }
                     .disabled(!isFormValid || appState.status == .signingIn)
+                    .accessibilityIdentifier("signin.submit")
                 }
         }
     }
@@ -103,6 +131,20 @@ struct SignInView: View {
                     #if os(iOS) || os(visionOS)
                     .keyboardType(.numberPad)
                     #endif
+                    .accessibilityIdentifier("mfa.code")
+                    .focused($focusedField, equals: .mfaCode)
+                    // The on-screen number pad has no Return key; this is
+                    // for hardware keyboards, where Return completes MFA
+                    // without reaching for Verify (the auto-submit below
+                    // usually beats it to the punch on the sixth digit).
+                    .submitLabel(.go)
+                    .onSubmit {
+                        guard mfaCode.count == 6, !isSubmittingMfa else { return }
+                        Task { await submitMfa() }
+                    }
+                    .onChange(of: mfaCode) { _, newValue in
+                        normalizeAndAutoSubmit(newValue)
+                    }
             }
             if let mfaError = appState.mfaError {
                 Section {
@@ -114,11 +156,13 @@ struct SignInView: View {
                 Button("Verify") {
                     Task { await submitMfa() }
                 }
-                .disabled(mfaCode.count < 6)
+                .disabled(mfaCode.count < 6 || isSubmittingMfa)
+                .accessibilityIdentifier("mfa.verify")
                 Button("Back to sign in", role: .cancel) {
                     mfaCode = ""
                     appState.cancelMfaChallenge()
                 }
+                .accessibilityIdentifier("mfa.back")
             }
         }
     }
@@ -138,7 +182,26 @@ struct SignInView: View {
         }
     }
 
+    /// Keeps the code field digits-only (the `.numberPad` keyboard doesn't
+    /// constrain hardware-keyboard or pasted input) and submits as soon as
+    /// six digits are present — the standard OTP pattern, so completing the
+    /// code never requires reaching the Verify button. Normalization
+    /// re-fires `onChange` with the cleaned string, which is when the
+    /// six-digit check runs.
+    private func normalizeAndAutoSubmit(_ newValue: String) {
+        let digits = String(newValue.filter(\.isNumber).prefix(6))
+        guard digits == newValue else {
+            mfaCode = digits
+            return
+        }
+        guard digits.count == 6, !isSubmittingMfa else { return }
+        Task { await submitMfa() }
+    }
+
     private func submitMfa() async {
+        guard !isSubmittingMfa else { return }
+        isSubmittingMfa = true
+        defer { isSubmittingMfa = false }
         await appState.submitMfaCode(mfaCode)
         if appState.status == .signedIn {
             password = ""
