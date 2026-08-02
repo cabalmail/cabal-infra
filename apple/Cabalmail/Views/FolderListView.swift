@@ -60,6 +60,10 @@ struct FolderListView: View {
     // Drives the "New folder" sheet from the `+` button. Non-private so the
     // `+Helpers` extension's `wideSidebarHeader` can raise it too.
     @State var showNewFolderSheet = false
+    // The new-folder sheet's input. Owned here rather than by the sheet
+    // because SwiftUI re-creates the sheet's body when the parent picker's
+    // menu dismisses, which resets any state the sheet holds itself (#889).
+    @State var newFolderForm = NewFolderForm()
     // Folder staged for deletion by a row's swipe / context menu, presented
     // as a confirmation dialog. Non-private so the delete-dialog plumbing in
     // `FolderListView+Helpers.swift` can reach it (same discipline as
@@ -139,7 +143,7 @@ struct FolderListView: View {
             if externalFilter == nil {
                 ToolbarItem {
                     Button {
-                        showNewFolderSheet = true
+                        presentNewFolderSheet()
                     } label: {
                         Image(systemName: "plus")
                             .accessibilityLabel("New folder")
