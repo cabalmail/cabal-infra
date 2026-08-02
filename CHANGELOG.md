@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.21] - 2026-08-02
+
+### Added
+- **Release dashboard.** `scripts/release-dashboard.py` (port 5059, same
+  chrome as the Apple and triage dashboards) drives the stage→prod release
+  cycle from one page: pending changelog fragments with patch/minor/major
+  Promote buttons (runs `promote.sh` with all its guards in a private clone
+  pinned to stage), the stage→main PR's checks with a Merge button that arms
+  when they pass, every workflow run waiting on an environment approval gate
+  — fully paginated, so a run can never hide below the fold of the Actions
+  tab — with per-run Approve buttons, the deploy runs the merge actually
+  triggered tracked through to the published GitHub release, and a table of
+  recent releases. `promote.sh` gains `--no-watch` for callers that monitor
+  PR checks themselves.
+
+### Fixed
+- **New-address form no longer discards what you typed.** Requesting an address
+  without picking a domain now says which field is missing and leaves the form
+  intact, instead of clearing every field with no error and creating nothing. A
+  request the server rejects is reported the same way rather than failing
+  silently.
+- Apple: **Sender-authentication verdict is visible again in the reader.** The
+  message header was pinned to a fixed 15% of the pane, which left the
+  SPF/DKIM/DMARC line — and the "not verified" fallback that matters most —
+  just below the header's bottom edge, hidden under the message body. The
+  header now takes the height its contents need, and only scrolls when a
+  sprawling subject or recipient list would crowd out the reading area.
+- **Move works from the open message.** The reader's Move button was an
+  always-disabled placeholder, so relocating a message meant closing it and
+  going through bulk selection. It now opens a folder chooser and moves the
+  message you are reading.
+
 ## [0.11.20] - 2026-08-01
 
 ### Fixed
