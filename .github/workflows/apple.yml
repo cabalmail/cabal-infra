@@ -175,6 +175,17 @@ jobs:
         # silent minutes, run 30715777188). TERM first, KILL 2m later if the
         # toolchain ignores TERM; the whole kit suite normally finishes in
         # 1-5 minutes, so 30m is pure headroom.
+        #
+        # -test-timeouts-enabled turns on XCTest's per-test execution
+        # allowance (off by default), capped here at 180s per test. It is
+        # enforced by the test runner from OUTSIDE the test, so it catches
+        # even a test wedged on a blocked main thread (which no in-test
+        # deadline can preempt) and fails it BY NAME in minutes — the
+        # validation rerun of the visionOS-27 hang stalled inside
+        # RichTextEditorBridgeHealthTests with output pipeline buffering
+        # hiding the location; the allowance is what turns "57 silent
+        # minutes" into a named failure. gtimeout remains the outer guard
+        # for anything outside a test's body (build, sim boot, teardown).
         run: |
           set -o pipefail
           gtimeout -v --kill-after=2m 30m \
@@ -182,6 +193,8 @@ jobs:
             -scheme CabalmailKit \
             -destination '${{ steps.dest.outputs.destination }}' \
             -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -249,6 +262,8 @@ jobs:
             -scheme CabalmailMac \
             -destination 'platform=macOS' \
             -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -399,6 +414,8 @@ jobs:
             -scheme CabalmailKit \
             -destination '${{ steps.dest.outputs.destination }}' \
             -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -462,6 +479,8 @@ jobs:
             -scheme CabalmailMac \
             -destination 'platform=macOS' \
             -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
