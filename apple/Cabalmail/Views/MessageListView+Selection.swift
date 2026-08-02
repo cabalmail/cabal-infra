@@ -221,6 +221,14 @@ extension MessageListView {
                 activeMessageRow(envelope, model: model, visible: visible)
             }
         }
+        // `.contain` is load-bearing: a bare identifier merges the row's
+        // whole subtree into one accessibility element, which hides the
+        // revealed swipe buttons from XCUITest and VoiceOver alike (the
+        // subtree-merge trap in docs/0.11.x/apple-testability-and-
+        // accessibility.md). The container form names the row while
+        // keeping its children individually reachable.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("message.row.\(envelope.uid)")
     }
 
     /// The live message row. The normal row wraps in `SwipeActionRow` for

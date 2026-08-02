@@ -15,6 +15,10 @@ struct SignInView: View {
     @State private var username: String = ""
     @State private var password: String = ""
     @State private var mfaCode: String = ""
+    /// Guards the six-digit auto-submit against firing while a submission
+    /// is already in flight (e.g. a paste landing right after the sixth
+    /// typed digit).
+    @State private var isSubmittingMfa = false
 
     /// The pending second factor when Cognito challenged the password
     /// sign-in, nil otherwise. Drives the swap between the credential
@@ -52,6 +56,7 @@ struct SignInView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         #endif
+                        .accessibilityIdentifier("signin.controlDomain")
                 }
                 Section("Account") {
                     TextField("Username", text: $username)
@@ -60,8 +65,10 @@ struct SignInView: View {
                         #if os(iOS) || os(visionOS)
                         .textInputAutocapitalization(.never)
                         #endif
+                        .accessibilityIdentifier("signin.username")
                     SecureField("Password", text: $password)
                         .textContentType(.password)
+                        .accessibilityIdentifier("signin.password")
                 }
                 if case .error(let message) = appState.status {
                     Section {
@@ -82,6 +89,7 @@ struct SignInView: View {
                         }
                     }
                     .disabled(!isFormValid || appState.status == .signingIn)
+                    .accessibilityIdentifier("signin.submit")
                 }
         }
     }
@@ -103,6 +111,10 @@ struct SignInView: View {
                     #if os(iOS) || os(visionOS)
                     .keyboardType(.numberPad)
                     #endif
+                    .accessibilityIdentifier("mfa.code")
+                    .onChange(of: mfaCode) { _, newValue in
+                        normalizeAndAutoSubmit(newValue)
+                    }
             }
             if let mfaError = appState.mfaError {
                 Section {
@@ -114,11 +126,13 @@ struct SignInView: View {
                 Button("Verify") {
                     Task { await submitMfa() }
                 }
-                .disabled(mfaCode.count < 6)
+                .disabled(mfaCode.count < 6 || isSubmittingMfa)
+                .accessibilityIdentifier("mfa.verify")
                 Button("Back to sign in", role: .cancel) {
                     mfaCode = ""
                     appState.cancelMfaChallenge()
                 }
+                .accessibilityIdentifier("mfa.back")
             }
         }
     }
@@ -138,7 +152,26 @@ struct SignInView: View {
         }
     }
 
+    /// Keeps the code field digits-only (the `.numberPad` keyboard doesn't
+    /// constrain hardware-keyboard or pasted input) and submits as soon as
+    /// six digits are present — the standard OTP pattern, so completing the
+    /// code never requires reaching the Verify button. Normalization
+    /// re-fires `onChange` with the cleaned string, which is when the
+    /// six-digit check runs.
+    private func normalizeAndAutoSubmit(_ newValue: String) {
+        let digits = String(newValue.filter(\.isNumber).prefix(6))
+        guard digits == newValue else {
+            mfaCode = digits
+            return
+        }
+        guard digits.count == 6, !isSubmittingMfa else { return }
+        Task { await submitMfa() }
+    }
+
     private func submitMfa() async {
+        guard !isSubmittingMfa else { return }
+        isSubmittingMfa = true
+        defer { isSubmittingMfa = false }
         await appState.submitMfaCode(mfaCode)
         if appState.status == .signedIn {
             password = ""

@@ -50,6 +50,7 @@ extension MessageListView {
                         MessageRow(envelope: envelope, isChecked: isChecked, bulkMode: true)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("message.checkbox.\(envelope.uid)")
                 } else if isWideLayout {
                     wideRow(
                         for: envelope,
@@ -251,7 +252,8 @@ extension MessageListView {
                 systemImage: "trash.slash",
                 title: "Delete Forever",
                 tint: .red,
-                role: .destructive
+                role: .destructive,
+                identifier: "message.swipe.dispose"
             ) {
                 purgeCandidate = PurgeCandidate(uids: [envelope.uid])
             }
@@ -261,7 +263,8 @@ extension MessageListView {
             systemImage: action == .archive ? "archivebox" : "trash",
             title: action == .archive ? "Archive" : "Trash",
             tint: .red,
-            role: .destructive
+            role: .destructive,
+            identifier: "message.swipe.dispose"
         ) {
             Task { await model.dispose(envelope) }
         }
@@ -274,7 +277,8 @@ extension MessageListView {
         return SwipeActionSpec(
             systemImage: isSeen ? "envelope.badge" : "envelope.open",
             title: isSeen ? "Unread" : "Read",
-            tint: .blue
+            tint: .blue,
+            identifier: "message.swipe.toggleRead"
         ) {
             Task { await model.toggleSeen(envelope) }
         }

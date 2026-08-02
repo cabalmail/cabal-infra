@@ -20,6 +20,7 @@ extension MessageDetailView {
                     .accessibilityLabel("Edit Draft")
             }
             .disabled(!model.canResumeDraft)
+            .accessibilityIdentifier("reader.editDraft")
         }
     }
 
@@ -52,6 +53,7 @@ extension MessageDetailView {
             Image(systemName: "arrowshape.turn.up.left")
                 .accessibilityLabel("Reply")
         }
+        .accessibilityIdentifier("reader.reply")
     }
 
     @ViewBuilder
@@ -70,6 +72,7 @@ extension MessageDetailView {
             // both ways from the same chord; the icon labels which
             // direction the next press goes.
             .keyboardShortcut("u", modifiers: [.command, .shift])
+            .accessibilityIdentifier("reader.toggleRead")
         }
     }
 
@@ -84,6 +87,7 @@ extension MessageDetailView {
             }
             // Cmd+Shift+L — Mail.app's flag shortcut.
             .keyboardShortcut("l", modifiers: [.command, .shift])
+            .accessibilityIdentifier("reader.toggleFlag")
         }
     }
 
@@ -107,6 +111,7 @@ extension MessageDetailView {
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
             .disabled(model.htmlBody == nil)
+            .accessibilityIdentifier("reader.remoteContent")
         }
     }
 
@@ -126,6 +131,7 @@ extension MessageDetailView {
                     )
             }
             .disabled(model.htmlBody == nil)
+            .accessibilityIdentifier("reader.readerMode")
         }
     }
 
@@ -153,6 +159,7 @@ extension MessageDetailView {
             // hard-coding one or the other. In Trash the chord stages the
             // delete-forever confirmation instead of acting directly.
             .keyboardShortcut(.delete, modifiers: .command)
+            .accessibilityIdentifier("reader.dispose")
         }
     }
 
@@ -329,5 +336,6 @@ extension MessageDetailView {
             Image(systemName: "ellipsis.circle")
                 .accessibilityLabel("More actions")
         }
+        .accessibilityIdentifier("reader.overflow")
     }
 }

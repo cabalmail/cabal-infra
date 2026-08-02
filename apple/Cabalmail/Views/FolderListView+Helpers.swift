@@ -22,11 +22,13 @@ extension FolderListView {
             newAction: { showNewFolderSheet = true },
             newDisabled: model == nil,
             newAccessibilityLabel: "New folder",
+            newIdentifier: "folder.new",
             filterText: filter,
             filterPrompt: "Filter folders",
             isRefreshing: isRefreshing,
             refreshDisabled: isRefreshing || model == nil,
             refreshAccessibilityLabel: "Refresh folders",
+            refreshIdentifier: "folder.refresh",
             refreshAction: { Task { await manualRefresh() } }
         )
     }
@@ -179,6 +181,7 @@ extension FolderListView {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+            .accessibilityIdentifier("folder.swipe.delete")
         }
         Button {
             Task { await model.toggleSubscription(folder) }
@@ -189,6 +192,7 @@ extension FolderListView {
             )
         }
         .tint(folder.isSubscribed ? .orange : .accentColor)
+        .accessibilityIdentifier("folder.swipe.subscribe")
     }
 
     /// Context menu for a folder row: subscribe toggle, Empty Trash (Trash

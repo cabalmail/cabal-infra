@@ -21,12 +21,16 @@ import SwiftUI
 // fills that height rather than sitting inside List padding.
 
 /// One swipe action (leading or trailing). `tint` is the revealed
-/// background; `perform` runs on tap / full-swipe.
+/// background; `perform` runs on tap / full-swipe. `identifier` is the
+/// machine-facing `accessibilityIdentifier` for the revealed button —
+/// stable across the title variants a spec can carry (Archive/Trash,
+/// Read/Unread), so automation addresses the affordance, not the copy.
 struct SwipeActionSpec {
     let systemImage: String
     let title: String
     let tint: Color
     let role: ButtonRole?
+    let identifier: String?
     let perform: () -> Void
 
     init(
@@ -34,12 +38,14 @@ struct SwipeActionSpec {
         title: String,
         tint: Color,
         role: ButtonRole? = nil,
+        identifier: String? = nil,
         perform: @escaping () -> Void
     ) {
         self.systemImage = systemImage
         self.title = title
         self.tint = tint
         self.role = role
+        self.identifier = identifier
         self.perform = perform
     }
 }
@@ -107,5 +113,6 @@ struct SwipeActionRow<Content: View>: View {
             Label(spec.title, systemImage: spec.systemImage)
         }
         .tint(spec.tint)
+        .accessibilityIdentifier(spec.identifier ?? "")
     }
 }

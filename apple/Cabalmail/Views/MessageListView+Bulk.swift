@@ -31,6 +31,7 @@ extension MessageListView {
                         .accessibilityLabel("Select")
                 }
             }
+            .accessibilityIdentifier("list.select")
         }
         #endif
     }
@@ -79,44 +80,32 @@ extension MessageListView {
         bulkActionButton(
             systemImage: "archivebox",
             label: "Archive",
-            accessibilityLabel: "Archive \(messageCount(count))"
+            accessibilityLabel: "Archive \(messageCount(count))",
+            identifier: "bulk.archive"
         ) {
-            // Inside Trash the dispose preference may point back at Trash
-            // itself (a same-folder no-op); Archive on this bar is the
-            // rescue path, so send the selection to the real Archive
-            // folder there. Rescue is a plain move (non-destructive), so
-            // it skips the large-selection confirmation that
-            // requestDispose applies.
-            if model.isTrashFolder {
-                Task { await model.bulkMove(to: DisposeAction.archive.destinationFolder) }
-                endSelectionMode()
-            } else {
-                requestDispose(
-                    uids: model.selectedUIDs,
-                    action: model.disposeAction,
-                    exitBulk: true,
-                    model: model
-                )
-            }
+            bulkArchive(model: model)
         }
         bulkActionButton(
             systemImage: "folder",
             label: "Move…",
-            accessibilityLabel: "Move \(messageCount(count))"
+            accessibilityLabel: "Move \(messageCount(count))",
+            identifier: "bulk.move"
         ) {
             bulkMoveSheetPresented = true
         }
         bulkActionButton(
             systemImage: hasUnread ? "envelope.open" : "envelope.badge",
             label: hasUnread ? "Read" : "Unread",
-            accessibilityLabel: "Mark \(messageCount(count)) \(hasUnread ? "read" : "unread")"
+            accessibilityLabel: "Mark \(messageCount(count)) \(hasUnread ? "read" : "unread")",
+            identifier: "bulk.toggleRead"
         ) {
             Task { await model.bulkSetSeen(hasUnread) }
         }
         bulkActionButton(
             systemImage: hasUnflagged ? "flag" : "flag.slash",
             label: hasUnflagged ? "Flag" : "Unflag",
-            accessibilityLabel: "\(hasUnflagged ? "Flag" : "Unflag") \(messageCount(count))"
+            accessibilityLabel: "\(hasUnflagged ? "Flag" : "Unflag") \(messageCount(count))",
+            identifier: "bulk.toggleFlag"
         ) {
             Task { await model.bulkSetFlagged(hasUnflagged) }
         }
@@ -127,10 +116,31 @@ extension MessageListView {
                 systemImage: "trash.slash",
                 label: "Delete",
                 role: .destructive,
-                accessibilityLabel: "Delete \(messageCount(count)) forever"
+                accessibilityLabel: "Delete \(messageCount(count)) forever",
+                identifier: "bulk.delete"
             ) {
                 purgeCandidate = PurgeCandidate(uids: model.selectedUIDs)
             }
+        }
+    }
+
+    /// The bar's Archive action. Inside Trash the dispose preference may
+    /// point back at Trash itself (a same-folder no-op); Archive on this
+    /// bar is the rescue path, so send the selection to the real Archive
+    /// folder there. Rescue is a plain move (non-destructive), so it
+    /// skips the large-selection confirmation that requestDispose
+    /// applies.
+    private func bulkArchive(model: MessageListViewModel) {
+        if model.isTrashFolder {
+            Task { await model.bulkMove(to: DisposeAction.archive.destinationFolder) }
+            endSelectionMode()
+        } else {
+            requestDispose(
+                uids: model.selectedUIDs,
+                action: model.disposeAction,
+                exitBulk: true,
+                model: model
+            )
         }
     }
 
@@ -147,6 +157,7 @@ extension MessageListView {
         label: String,
         role: ButtonRole? = nil,
         accessibilityLabel: String? = nil,
+        identifier: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(role: role, action: action) {
@@ -161,6 +172,7 @@ extension MessageListView {
         // applied explicitly for destructive roles.
         .foregroundStyle(role == .destructive ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
         .accessibilityLabel(accessibilityLabel ?? label)
+        .accessibilityIdentifier(identifier ?? "")
     }
 
     @ViewBuilder

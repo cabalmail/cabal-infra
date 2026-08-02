@@ -50,6 +50,7 @@ struct FromPicker: View {
             }
             .contentShape(Rectangle())
         }
+        .accessibilityIdentifier("compose.from")
     }
 
     private func addressButton(_ address: Address) -> some View {

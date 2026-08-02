@@ -208,6 +208,7 @@ struct ComposeView: View {
             Button("Cancel") {
                 showDiscardConfirm = true
             }
+            .accessibilityIdentifier("compose.cancel")
         }
         ToolbarItem {
             attachMenu
@@ -262,6 +263,7 @@ struct ComposeView: View {
                 }
             }
             .disabled(!model.canSend || model.isSending)
+            .accessibilityIdentifier("compose.send")
         }
     }
 
@@ -283,6 +285,7 @@ struct ComposeView: View {
             Image(systemName: "paperclip")
                 .accessibilityLabel("Attach")
         }
+        .accessibilityIdentifier("compose.attach")
         #else
         Button {
             showFileImporter = true
@@ -290,6 +293,7 @@ struct ComposeView: View {
             Image(systemName: "paperclip")
                 .accessibilityLabel("Attach file")
         }
+        .accessibilityIdentifier("compose.attach")
         #endif
     }
 
@@ -362,6 +366,7 @@ extension ComposeView {
         case .subject:
             Section("Subject") {
                 TextField("Subject", text: $model.subject)
+                    .accessibilityIdentifier("compose.subject")
             }
         case .attachments:
             if !model.attachments.isEmpty {
@@ -389,21 +394,24 @@ extension ComposeView {
                 text: $model.toText,
                 candidates: recipientCandidates,
                 focusBinding: $focusedField,
-                focusValue: Field.to
+                focusValue: Field.to,
+                identifier: "compose.to"
             )
             RecipientFieldWithSuggestions(
                 label: "Cc",
                 text: $model.ccText,
                 candidates: recipientCandidates,
                 focusBinding: $focusedField,
-                focusValue: Field.cc
+                focusValue: Field.cc,
+                identifier: "compose.cc"
             )
             RecipientFieldWithSuggestions(
                 label: "Bcc",
                 text: $model.bccText,
                 candidates: recipientCandidates,
                 focusBinding: $focusedField,
-                focusValue: Field.bcc
+                focusValue: Field.bcc,
+                identifier: "compose.bcc"
             )
         }
     }
