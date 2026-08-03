@@ -283,17 +283,57 @@ def get_imap_client(_host, user, folder, read_only=False):
     return open_imap_client(IMAP_HOST, user, folder, read_only, mpw)
 
 
-def user_authorized_for_sender(user, sender):
-    """Checks whether the user is allowed to send from the specifed sender address"""
+def address_row_for_sender(user, sender):
+    """Fetches the stored cabal-addresses row for `sender` and reports whether
+    the user may send from it, as (item, authorized).
+
+    `item` is the stored row, or {} when the address has no row or the lookup
+    failed, so a caller that also needs the row does not have to read it a
+    second time. A lookup failure is reported as unauthorized rather than
+    raised, so the caller answers 403 instead of relaying a traceback.
+    """
     try:
         response = ddb_table.get_item(Key={'address': sender})
     except ClientError as err:
         print(err.response['Error']['Message'])
-        return False
-    try:
-        return response['Item']['user'] == user
-    except KeyError:
-        return False
+        return {}, False
+    item = response.get('Item') or {}
+    return item, item.get('user') == user
+
+
+def user_authorized_for_sender(user, sender):
+    """Checks whether the user is allowed to send from the specifed sender address"""
+    _, authorized = address_row_for_sender(user, sender)
+    return authorized
+
+
+def authorized_address_request(event):
+    """Parses an address-scoped request body and authorizes the caller against
+    the stored row, returning (address, item, error).
+
+    On success `error` is None, `address` is the requested address and `item`
+    is that address's stored cabal-addresses row. On a malformed body, or an
+    address the caller does not own, `error` is a ready-to-return response and
+    the other two are None, so a handler can `return error`. Shared by the
+    address-lifecycle endpoints (revoke, suspend, reinstate) so all three gate
+    on the same check with the same wire shape, and so the stored row each of
+    them goes on to read costs one DynamoDB lookup rather than two.
+    """
+    body, error = parse_json_body(event)
+    if error:
+        return None, None, error
+    address = body['address']
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
+    item, authorized = address_row_for_sender(user, address)
+    if not authorized:
+        return None, None, {
+            'statusCode': 403,
+            'body': json.dumps({
+                'Error': 'Address not associated with authenticated user'
+            })
+        }
+    return address, item, None
+
 
 def user_authorized_for_domain(user, domain):
     """Checks whether the user is permitted to create addresses on the given
