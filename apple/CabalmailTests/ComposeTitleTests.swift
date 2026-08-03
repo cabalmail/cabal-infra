@@ -2,11 +2,13 @@ import XCTest
 import CabalmailKit
 @testable import Cabalmail
 
-// Regression coverage for issue #845: tapping Edit Draft on a saved draft
-// put up a composer titled "New Message", on both iPhone and iPad. It isn't
-// a new message — the form comes up populated from the draft, and sending it
-// replaces that draft rather than creating a second one. The title now keys
-// off whether the surface opened on an existing server-side Drafts copy.
+// Regression coverage for issues #845 and #897: a composer that opens
+// populated was titled "New Message". #845 covered the resumed Drafts copy
+// (sending it replaces that draft rather than creating a second one) and
+// left replies on the generic title; #897 reported the reply case as the
+// one that was missed — the sheet says "New Message" over a filled-in To,
+// a "Re: " subject, and the quoted original. The title now keys off the
+// server-side Drafts copy first, then the compose intent.
 @MainActor
 final class ComposeTitleTests: XCTestCase {
 
@@ -26,15 +28,47 @@ final class ComposeTitleTests: XCTestCase {
         XCTAssertEqual(model.navigationTitle, "New Message")
     }
 
-    func testReplyIsStillANewMessage() throws {
+    func testReplySaysReply() throws {
+        // The reported composer: opened from the reader's Reply menu, so it
+        // comes up with the recipient, "Re: <subject>", and the quoted body
+        // already filled in (#897). It used to say "New Message".
         let model = try TestFixtures.makeComposeModel(
             seed: Draft(subject: "Re: hello", inReplyTo: "<abc@example.com>", composeIntent: .reply)
         )
 
-        XCTAssertEqual(
-            model.navigationTitle, "New Message",
-            "a reply really is a new message — only a resumed Drafts copy isn't"
+        XCTAssertEqual(model.navigationTitle, "Reply")
+    }
+
+    func testReplyAllSaysReplyAll() throws {
+        let model = try TestFixtures.makeComposeModel(
+            seed: Draft(subject: "Re: hello", inReplyTo: "<abc@example.com>", composeIntent: .replyAll)
         )
+
+        XCTAssertEqual(model.navigationTitle, "Reply All")
+    }
+
+    func testForwardSaysForward() throws {
+        let model = try TestFixtures.makeComposeModel(
+            seed: Draft(subject: "Fwd: hello", composeIntent: .forward)
+        )
+
+        XCTAssertEqual(model.navigationTitle, "Forward")
+    }
+
+    func testAResumedDraftSaysDraftEvenWhenItBeganAsAReply() throws {
+        // Precedence: what the user reopened is a draft, whatever it was
+        // first composed as.
+        let model = try TestFixtures.makeComposeModel(
+            seed: Draft(
+                subject: "Re: hello",
+                inReplyTo: "<abc@example.com>",
+                composeIntent: .reply,
+                serverUid: 42,
+                serverUidValidity: 9
+            )
+        )
+
+        XCTAssertEqual(model.navigationTitle, "Draft")
     }
 
     func testAutosavingAFreshComposeDoesNotRetitleIt() throws {
