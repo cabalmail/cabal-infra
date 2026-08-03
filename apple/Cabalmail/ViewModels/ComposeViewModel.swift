@@ -51,7 +51,10 @@ final class ComposeViewModel {
     private(set) var draftId: UUID
     let draftStore: DraftStore
     private let preferences: Preferences
-    private let onClose: @MainActor () -> Void
+    /// Dismisses the compose surface (sheet on iPhone, window elsewhere).
+    /// Internal rather than private so the close-without-send legs in
+    /// `ComposeViewModel+Internals.swift` can reach it.
+    let onClose: @MainActor () -> Void
 
     var fromAddress: String?
     var toText: String = ""
@@ -396,32 +399,36 @@ final class ComposeViewModel {
     /// the window goes away — the local copy is still on disk either way,
     /// so nothing is lost by retrying or by force-closing.
     ///
-    /// Empty drafts and drafts without a valid `From` address fall back to
-    /// the local-only autosave: empty composes leave nothing behind (any
-    /// stale server copy is discarded), and a half-finished compose without
-    /// a sender selected can't be saved server-side (no envelope to
-    /// authorize against). `DraftStore.save` silently removes empty drafts
-    /// so a user who opens Compose and closes immediately leaves no
-    /// breadcrumb.
+    /// Empty drafts leave nothing behind (any stale server copy is
+    /// discarded); `DraftStore.save` silently removes them, so a user who
+    /// opens Compose and closes immediately leaves no breadcrumb. A draft
+    /// that *has* content but no valid `From` can't be pushed at all —
+    /// `/save_draft` has no envelope to authorize against — so it keeps the
+    /// composer up and says why rather than closing as if it had saved,
+    /// which is how a filled-in message used to vanish (#903).
+    ///
+    /// `ComposeCancelPolicy` owns the order those cases are considered in.
     @discardableResult
     func cancel() async -> Bool {
         await persistCurrentDraft()
-        guard let fromEmail = currentFromEmail() else {
+        let fromEmail = currentFromEmail()
+        // Bodies first: converting them is what makes a sick bridge report
+        // itself, so `bridgeFailure` is only trustworthy afterwards (#745).
+        let bodies = await computeMessageBodies()
+        switch ComposeCancelPolicy.resolve(
+            bridgeFailed: editorController.bridgeFailure != nil,
+            hasContent: hasDraftContent(bodies: bodies),
+            hasFrom: fromEmail != nil
+        ) {
+        case .closeKeepingLocalCopy:
+            // Pushing an all-empty body would replace a good Drafts copy
+            // with a blank one, so keep the local draft (already flushed
+            // above) and let the window close — trapping the user in a
+            // compose they can't fix is worse.
             stop()
             onClose()
             return true
-        }
-        let message = await buildOutgoingMessage(from: fromEmail)
-        // A dead bridge converts every body to "" (#745). Pushing that to
-        // the server would replace a good Drafts copy with an empty one, so
-        // keep the local draft (already flushed above) and let the window
-        // close — trapping the user in a compose they can't fix is worse.
-        if editorController.bridgeFailure != nil {
-            stop()
-            onClose()
-            return true
-        }
-        guard hasDraftContent(message) else {
+        case .discardEmpty:
             if let ref = serverDraftRef {
                 _ = try? await client.discardDraft(ref)
             }
@@ -429,23 +436,13 @@ final class ComposeViewModel {
             stop()
             onClose()
             return true
+        case .refuseMissingFrom:
+            errorMessage = ComposeCancelPolicy.missingFromMessage
+            return false
+        case .saveToServer:
+            guard let fromEmail else { return false }
+            return await pushDraftToServer(buildOutgoingMessage(from: fromEmail, bodies: bodies))
         }
-        do {
-            serverSaveInFlight = true
-            defer { serverSaveInFlight = false }
-            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
-                serverDraftRef = ref
-            }
-            try? await draftStore.remove(id: draftId)
-            stop()
-            onClose()
-            return true
-        } catch let error as CabalmailError {
-            errorMessage = "Couldn't save draft: \(describe(error))"
-        } catch {
-            errorMessage = "Couldn't save draft: \(error.localizedDescription)"
-        }
-        return false
     }
 
     /// Delete the draft entirely (user confirmed "Discard draft") and
