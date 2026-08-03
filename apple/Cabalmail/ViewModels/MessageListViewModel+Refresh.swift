@@ -120,7 +120,7 @@ extension MessageListViewModel {
         unseen = 0
         flagged = 0
         hasMore = true
-        sourceFolderByUID = [:]
+        sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
         await refresh()
     }

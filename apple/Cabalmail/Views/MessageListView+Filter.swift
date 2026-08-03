@@ -105,6 +105,7 @@ extension MessageListView {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(filter.label), \(pillCount(filter, model: model))")
+        .accessibilityIdentifier("filter.pill.\(filter.rawValue)")
     }
 
     /// Filter-pill count. Mirrors the React pills: server-sourced folder totals

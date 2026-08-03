@@ -8,7 +8,7 @@ import CabalmailKit
 /// - `.search` is the global, cross-folder search surface. It has no anchor
 ///   folder, runs no folder lifecycle (no STATUS / pagination / IDLE / 60s
 ///   poll), and populates `envelopes` only via `runSearch`. Per-row source
-///   folders come from `sourceFolderByUID`, so dispose / flag / move / read
+///   folders come from `sourceFolderIndex`, so dispose / flag / move / read
 ///   still route to each result's true mailbox.
 ///
 /// The view model keeps a resolved `folder` anchor either way (a sentinel for

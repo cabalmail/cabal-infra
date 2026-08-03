@@ -19,16 +19,26 @@ extension FolderListView {
     /// main `FolderListView` body stays under the type-body-length cap.
     func wideSidebarHeader(filter: Binding<String>) -> some View {
         SidebarListHeaderRow(
-            newAction: { showNewFolderSheet = true },
+            newAction: { presentNewFolderSheet() },
             newDisabled: model == nil,
             newAccessibilityLabel: "New folder",
+            newIdentifier: "folder.new",
             filterText: filter,
             filterPrompt: "Filter folders",
             isRefreshing: isRefreshing,
             refreshDisabled: isRefreshing || model == nil,
             refreshAccessibilityLabel: "Refresh folders",
+            refreshIdentifier: "folder.refresh",
             refreshAction: { Task { await manualRefresh() } }
         )
+    }
+
+    /// Raises the "New folder" sheet from an empty form. The form outlives
+    /// the sheet (see `newFolderForm`), so it is cleared on the way in rather
+    /// than by the sheet's own state going away.
+    func presentNewFolderSheet() {
+        newFolderForm.reset()
+        showNewFolderSheet = true
     }
 
     func filteredFolders(_ folders: [Folder]) -> [Folder] {
@@ -179,6 +189,7 @@ extension FolderListView {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+            .accessibilityIdentifier("folder.swipe.delete")
         }
         Button {
             Task { await model.toggleSubscription(folder) }
@@ -189,6 +200,7 @@ extension FolderListView {
             )
         }
         .tint(folder.isSubscribed ? .orange : .accentColor)
+        .accessibilityIdentifier("folder.swipe.subscribe")
     }
 
     /// Context menu for a folder row: subscribe toggle, Empty Trash (Trash
@@ -224,7 +236,7 @@ extension FolderListView {
     @ViewBuilder
     var newFolderSheet: some View {
         if let model {
-            NewFolderSheet(parents: model.possibleParents) { name, parent in
+            NewFolderSheet(parents: model.possibleParents, form: newFolderForm) { name, parent in
                 await model.createFolder(name: name, parent: parent)
             }
         }

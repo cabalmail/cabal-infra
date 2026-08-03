@@ -20,6 +20,9 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
     let candidates: [RecipientSuggestion]
     let focusBinding: FocusState<FocusValue?>.Binding
     let focusValue: FocusValue
+    /// Machine-facing identifier for the text field (e.g. `compose.to`);
+    /// the Contacts-picker button derives `<identifier>.picker` from it.
+    let identifier: String
 
     @State private var showPicker = false
 
@@ -33,6 +36,7 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
                     .keyboardType(.emailAddress)
                     #endif
                     .focused(focusBinding, equals: focusValue)
+                    .accessibilityIdentifier(identifier)
                 Button {
                     showPicker = true
                 } label: {
@@ -43,6 +47,7 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.accentColor)
                 .disabled(candidates.isEmpty)
+                .accessibilityIdentifier("\(identifier).picker")
             }
 
             if focusBinding.wrappedValue == focusValue {

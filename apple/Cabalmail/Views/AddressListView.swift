@@ -41,11 +41,13 @@ struct AddressListView: View {
                     newAction: { showNewAddressSheet = true },
                     newDisabled: false,
                     newAccessibilityLabel: "Request new address",
+                    newIdentifier: "address.new",
                     filterText: externalFilter,
                     filterPrompt: "Filter addresses",
                     isRefreshing: isRefreshing,
                     refreshDisabled: isRefreshing || model == nil,
                     refreshAccessibilityLabel: "Refresh addresses",
+                    refreshIdentifier: "address.refresh",
                     refreshAction: { Task { await manualRefresh() } }
                 )
             }
@@ -97,6 +99,7 @@ struct AddressListView: View {
                         Image(systemName: "plus")
                             .accessibilityLabel("Request new address")
                     }
+                    .accessibilityIdentifier("address.new")
                 }
                 ToolbarItem {
                     Button {
@@ -106,6 +109,7 @@ struct AddressListView: View {
                             .accessibilityLabel("Refresh addresses")
                     }
                     .disabled(isRefreshing || model == nil)
+                    .accessibilityIdentifier("address.refresh")
                 }
             }
         }
@@ -260,6 +264,7 @@ extension AddressListView {
                 systemImage: address.suspended ? "play.circle" : "pause.circle"
             )
         }
+        .accessibilityIdentifier("address.suspend")
     }
 
     @ViewBuilder
@@ -277,6 +282,7 @@ extension AddressListView {
                 } label: {
                     Label("Revoke", systemImage: "xmark.bin")
                 }
+                .accessibilityIdentifier("address.revoke")
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button {
@@ -288,7 +294,13 @@ extension AddressListView {
                     )
                 }
                 .tint(address.favorite ? .gray : .yellow)
+                .accessibilityIdentifier("address.favorite")
             }
+            // `.contain` keeps the revealed swipe buttons individually
+            // reachable — see the subtree-merge trap in
+            // docs/0.11.x/apple-testability-and-accessibility.md.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("address.row.\(address.address)")
             .contextMenu {
                 Button {
                     copyToPasteboard(address.address)

@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.22] - 2026-08-03
+
+### Added
+- Apple: **Machine-readable control surface.** Interactive controls
+  across sign-in, the message list (rows, swipe actions, selection
+  checkboxes, filter pills, bulk-action bar), the folder and address
+  sidebars, and the reader and compose toolbars now carry stable
+  accessibility identifiers, and list rows expose their contents as an
+  accessibility container instead of merging into one element — so
+  revealed swipe actions are individually reachable by VoiceOver and
+  Switch Control rather than the row announcing itself as a single
+  undifferentiated blob.
+- **Simulator build and drive tooling.** `apple/scripts/build-sim.sh`
+  produces a sign-in-capable iOS simulator build with the non-obvious
+  flags baked in, and `apple/Tools/SimDrive` adds an XCUITest-based
+  command REPL that drives the installed app by accessibility
+  identifier (tap, type, paste, swipe-reveal with hold, tree dump) from
+  the host shell. Documented in `docs/apple.md` under "Simulator
+  testing and automation".
+
+### Changed
+- Apple: **Two-factor code auto-submits.** The sign-in code field now
+  keeps itself to six digits and submits as soon as the sixth digit
+  arrives — typed or pasted — so completing sign-in never requires
+  reaching for the Verify button.
+
+### Fixed
+- Apple: **Return advances and submits sign-in.** Return now steps
+  through control domain, username, and password (labeled Next/Go on
+  the software keyboard) and submits from the password field; a
+  hardware-keyboard Return on the two-factor code field submits it
+  too. Both forms were previously mouse/tap-only on the final step.
+- Apple: **New folder with a parent, on iPhone.** Choosing a parent in the New
+  Folder sheet no longer wipes the name you typed and drop the selection —
+  which had made a nested folder impossible to create from iPhone.
+- Apple: **All-mail search crash when two results share a UID.** IMAP UIDs are
+  unique only within a folder, so a cross-folder search routinely returns the same
+  UID from two mailboxes; building the per-row source-folder map assumed otherwise
+  and trapped, killing the app the instant results arrived. Each row now resolves
+  to its own mailbox, so dispose, flag, move and open all target the right folder.
+- Apple: **Nesting and collapse in the sidebar's Subscribed section.** Subscribed
+  drew every folder flush left and ignored its own disclosure chevron, so a nested
+  subscribed folder was indistinguishable from a top-level one and its collapse
+  only took effect down in All folders. Each section now takes its indentation,
+  chevron and collapse from the folders it is actually showing.
+
 ## [0.11.21] - 2026-08-02
 
 ### Added

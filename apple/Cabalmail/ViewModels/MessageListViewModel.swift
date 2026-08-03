@@ -123,11 +123,11 @@ final class MessageListViewModel {
     var searchTruncated: Bool = false
     var searchFoldersSearched: [String] = []
 
-    /// Per-uid source folder for cross-folder results. Empty in folder
+    /// Per-row source folder for cross-folder results. Empty in folder
     /// mode and single-folder searches; `sourceFolder(for:)` falls back
     /// to `folder.path` then. Internal (not private) so the search
     /// extension in `+Search.swift` can populate it.
-    var sourceFolderByUID: [UInt32: String] = [:]
+    var sourceFolderIndex = SearchSourceFolderIndex()
 
     private var uidValidity: UInt32?
     // Folder message count from the last STATUS. Pagination loads until the

@@ -87,6 +87,20 @@ public enum FolderTree {
         return max(0, folder.path.split(separator: "/").count - 1)
     }
 
+    /// Indentation depth *within `list`* — one step per ancestor that
+    /// list actually contains. The sidebar draws two sections over two
+    /// different lists (Subscribed is a subset of All folders, and the
+    /// filter field narrows both), so depth has to be relative to the
+    /// rows on screen: indenting a folder under a parent the section
+    /// isn't showing would read as a child of whatever row happens to
+    /// sit above it. Where every ancestor is present this agrees with
+    /// `depth(for:)`.
+    public static func depth(for folder: Folder, in list: [Folder]) -> Int {
+        if systemPaths.contains(folder.path) { return 0 }
+        let present = Set(list.map(\.path))
+        return ancestors(of: folder.path).filter(present.contains).count
+    }
+
     /// True iff any other folder in `input` lives under `folder` in the tree.
     /// System folders never have collapsible children regardless of name.
     public static func hasChildren(_ folder: Folder, in input: [Folder]) -> Bool {

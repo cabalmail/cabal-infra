@@ -270,14 +270,7 @@ final class FolderListViewModel {
         FolderTree.sidebarOrder(input, dropNoselectUserFolders: true)
     }
 
-    /// Indentation depth - delegates to `FolderTree.depth(for:)`.
-    func depth(for folder: Folder) -> Int {
-        FolderTree.depth(for: folder)
-    }
-
-    /// True iff this folder has at least one descendant in the current list -
-    /// drives the per-folder collapse chevron in "All folders".
-    func hasChildren(_ folder: Folder) -> Bool {
-        FolderTree.hasChildren(folder, in: folders)
-    }
+    // Per-row indentation and the collapse chevron are section-scoped
+    // (Subscribed and All folders draw different lists), so they're
+    // computed in `FolderSectionRows` rather than here.
 }
