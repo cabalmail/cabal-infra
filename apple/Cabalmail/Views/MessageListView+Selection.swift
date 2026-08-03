@@ -47,8 +47,14 @@ extension MessageListView {
                                 indexedRow(index, model: model, visible: visible)
                             }
                         } else {
-                            ForEach(visible) { envelope in
-                                messageRow(envelope, model: model, visible: visible)
+                            // Identity comes from `MessageRowIdentity`, not
+                            // `Envelope.id` (the UID): a cross-folder search can
+                            // return the same UID from two folders, and a
+                            // `ForEach` given two elements with one id draws only
+                            // the first — the other match disappears from the
+                            // list while the header still counts it.
+                            ForEach(MessageRowIdentity.identify(visible)) { row in
+                                messageRow(row.envelope, model: model, visible: visible)
                             }
                         }
                     }

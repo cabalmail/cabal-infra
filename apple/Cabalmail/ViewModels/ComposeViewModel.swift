@@ -101,7 +101,7 @@ final class ComposeViewModel {
     /// `internal` so `ComposeViewModel+Internals.swift` can read them.
     let inReplyTo: String?
     let references: [String]
-    private let composeIntent: ComposeIntent
+    let composeIntent: ComposeIntent
 
     /// Server-side Drafts copy the next save replaces (and a send
     /// discards). Seeded from the draft when resuming; updated after every
