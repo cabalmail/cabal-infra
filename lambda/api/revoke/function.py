@@ -5,9 +5,8 @@ import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
 from helper import active_addresses_on_subdomain  # pylint: disable=import-error
+from helper import authorized_address_request  # pylint: disable=import-error
 from helper import delete_address_dns_records  # pylint: disable=import-error
-from helper import parse_json_body  # pylint: disable=import-error
-from helper import user_authorized_for_sender  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -20,18 +19,9 @@ sns = boto3.client('sns')
 
 def handler(event, _context):
     '''Revokes an email address'''
-    body, error = parse_json_body(event)
+    address, item, error = authorized_address_request(event)
     if error:
         return error
-    address = body['address']
-    user = event['requestContext']['authorizer']['claims']['cognito:username']
-    if not user_authorized_for_sender(user, address):
-        return {
-            'statusCode': 403,
-            'body': json.dumps({
-                'Error': 'Address not associated with authenticated user'
-            })
-        }
     # Take subdomain/tld/zone from the STORED row for `address`, never from the
     # request body. Authorization above is on `address` only, so honoring a
     # client-supplied subdomain/tld would let a caller who owns any one address
@@ -40,7 +30,6 @@ def handler(event, _context):
     # (active_addresses_on_subdomain) returns False for a single-tenant victim
     # subdomain, so the DELETE would proceed. The caller owns `address`, so its
     # row is the authoritative source.
-    item = table.get_item(Key={'address': address}).get('Item') or {}
     subdomain = item.get('subdomain')
     tld = item.get('tld')
     # The zone is resolved from DOMAINS, never from the zone-id cached on the
