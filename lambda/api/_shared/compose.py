@@ -42,6 +42,13 @@ DRAFTS_FOLDER = 'Drafts'
 # `[APPENDUID <uidvalidity> <uid>]`.
 _APPENDUID_RE = re.compile(r'\[APPENDUID (\d+) (\d+)\]')
 
+# The body keys compose_from_body indexes directly. A message cannot be
+# built without them, so their absence is a client error -- but only if it
+# is checked, because an escaping KeyError becomes a bodiless 502 rather
+# than the 400 the handlers already have for a rejected payload (#895).
+COMPOSE_REQUIRED_FIELDS = ('sender', 'subject', 'to_list', 'cc_list',
+                           'bcc_list', 'text', 'html')
+
 # The user's display-name preference (set via /set_preferences) becomes the
 # From header's display name. It is read server-side - never from the request
 # body - so a client cannot put an arbitrary name on the wire per message.
@@ -187,6 +194,7 @@ def compose_from_body(body, user):
     (callers translate it to a 400). Sender authorization is the caller's
     responsibility (see unauthorized_sender_response_or_none).'''
     bucket = CACHE_BUCKET
+    require_fields(body, COMPOSE_REQUIRED_FIELDS)
     validate_outbound_headers(body)
     attachments = load_attachments(body.get('attachments', []), bucket, user)
     # The visible From may carry the user's display-name preference, but the
@@ -200,10 +208,13 @@ def compose_from_body(body, user):
     # -- optional to the validator, required five lines later -- and the
     # KeyError escaped as a bodiless 502 (#895).
     others = body.get('other_headers', {}) or {}
+    # Same defensiveness for the recipient lists: the validator above reads
+    # each as `... or []`, so a null list is a payload it accepts and this
+    # must not then die on `','.join(None)`.
     return compose_message(body['subject'], from_header, {
-                             "to": ','.join(body['to_list']),
-                             "cc": ','.join(body['cc_list']),
-                             "bcc": ','.join(body['bcc_list']),
+                             "to": ','.join(body['to_list'] or []),
+                             "cc": ','.join(body['cc_list'] or []),
+                             "bcc": ','.join(body['bcc_list'] or []),
                              "message_id": others.get('message_id', []) or [],
                              "in_reply_to": others.get('in_reply_to', []) or [],
                              "references": others.get('references', []) or []
@@ -222,6 +233,19 @@ def _reject_crlf(value, field):
         return
     if '\r' in value or '\n' in value:
         raise ValueError(f"{field} contains illegal line breaks")
+
+
+def require_fields(body, fields):
+    """Raises ValueError naming every required body key the request omits.
+
+    Callers translate the ValueError to a 400, which is the point: without
+    this the handlers index the key anyway and the KeyError escapes as a
+    bodiless 502 (#895). Presence only - a supplied value still has to get
+    past validate_outbound_headers.
+    """
+    missing = [field for field in fields if field not in body]
+    if missing:
+        raise ValueError(f"missing required field(s): {', '.join(missing)}")
 
 
 def validate_outbound_headers(body):

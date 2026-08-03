@@ -103,6 +103,17 @@ class ComposeThreadingHeadersTest(unittest.TestCase):
     '''A payload with no threading context composes a message with no
     threading headers -- it does not blow up (#895).'''
 
+    def setUp(self):
+        # Bind compose's module-level preferences table rather than trusting
+        # this file's sys.modules fake to have won the import: under a
+        # directory-wide `discover` a sibling suite's fake gets there first
+        # and hands compose a table with no get_item (#860/#863).
+        self._saved_table = compose._preferences_table  # pylint: disable=protected-access
+        compose._preferences_table = _FakeTable()  # pylint: disable=protected-access
+
+    def tearDown(self):
+        compose._preferences_table = self._saved_table  # pylint: disable=protected-access
+
     def test_control_payload_composes(self):
         msg = compose.compose_from_body(_body(), 'testuser')
         self.assertEqual(msg['Subject'], 'hdr0803 probe')
