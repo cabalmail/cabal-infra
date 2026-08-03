@@ -17,10 +17,12 @@ of the purge endpoints. Log hygiene: no subject/body/recipient logging.
 import json
 from imapclient.exceptions import IMAPClientError # pylint: disable=import-error
 from compose import ( # pylint: disable=import-error
+    COMPOSE_REQUIRED_FIELDS,
     DRAFTS_FOLDER,
     append_draft,
     compose_from_body,
     guarded_draft_expunge,
+    require_fields,
     unauthorized_sender_response_or_none,
 )
 from helper import ( # pylint: disable=import-error
@@ -54,6 +56,12 @@ def _save(body, user):
     '''Composes the draft, APPENDs it to Drafts, and (optionally) replaces a
     prior copy. The compose payload is the /send shape, validated and built
     by the same shared code.'''
+    # Presence first, so a body missing `sender` or `host` is a named 400
+    # rather than the bodiless 502 an escaping KeyError becomes (#895).
+    try:
+        require_fields(body, COMPOSE_REQUIRED_FIELDS + ('host',))
+    except ValueError as err:
+        return _invalid(err)
     unauthorized = unauthorized_sender_response_or_none(user, body['sender'])
     if unauthorized:
         return unauthorized
@@ -106,6 +114,7 @@ def _discard(body, user):
     is missing - in both cases the draft the client meant is already gone or
     was never going to be matched.'''
     try:
+        require_fields(body, ('host',))
         uid = validate_uid(body.get('replaces_uid'))
         uidvalidity = validate_uid(body.get('replaces_uidvalidity'))
     except ValueError as err:

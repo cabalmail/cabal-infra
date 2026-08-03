@@ -8,10 +8,12 @@ from email.utils import getaddresses
 import boto3 # pylint: disable=import-error
 from botocore.exceptions import ClientError # pylint: disable=import-error
 from compose import ( # pylint: disable=import-error
+    COMPOSE_REQUIRED_FIELDS,
     DRAFTS_FOLDER,
     append_draft,
     compose_from_body,
     guarded_draft_expunge,
+    require_fields,
     unauthorized_sender_response_or_none,
 )
 from helper import delete_object # pylint: disable=import-error
@@ -51,6 +53,13 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
     if error:
         return error
     user = event['requestContext']['authorizer']['claims']['cognito:username']
+    # Check every key this handler indexes before anything reads one, so a
+    # payload missing (say) `sender` or `host` gets the same named 400 a
+    # rejected value gets rather than a bodiless 502 (#895).
+    try:
+        require_fields(body, COMPOSE_REQUIRED_FIELDS + ('host',))
+    except ValueError as err:
+        return _invalid(err)
     # Pin the sender to the exact validated address and reuse that same string
     # as the SMTP MAIL FROM below, so a display-name game in the From header
     # cannot leave the envelope sender and the visible From disagreeing.
@@ -62,12 +71,7 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
     try:
         msg = compose_from_body(body, user)
     except ValueError as err:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({
-                "status": str(err)
-            })
-        }
+        return _invalid(err)
 
     if body.get('draft'):
         return _save_draft(body['host'], user, msg)
@@ -97,7 +101,8 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
 
     recipients = [
         addr for _, addr in
-        getaddresses(body['to_list'] + body['cc_list'] + body['bcc_list'])
+        getaddresses((body['to_list'] or []) + (body['cc_list'] or [])
+                     + (body['bcc_list'] or []))
         if addr
     ]
 
@@ -122,6 +127,16 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
         "statusCode": 200,
         "body": json.dumps({
             "status": "submitted"
+        })
+    }
+
+
+def _invalid(err):
+    '''Builds the 400 returned when a validator rejects the request.'''
+    return {
+        "statusCode": 400,
+        "body": json.dumps({
+            "status": str(err)
         })
     }
 
