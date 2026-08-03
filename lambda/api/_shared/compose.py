@@ -193,13 +193,20 @@ def compose_from_body(body, user):
     # address part is always the bare validated sender (which /send also pins
     # as the SMTP MAIL FROM).
     from_header = format_mailbox(sender_display_name(user), body['sender'])
+    # The threading headers are read the same defensive way
+    # validate_outbound_headers reads them: absent means no threading
+    # context, which is exactly what a fresh (non-reply) compose has.
+    # Hard-indexing them here made the two halves of one request disagree
+    # -- optional to the validator, required five lines later -- and the
+    # KeyError escaped as a bodiless 502 (#895).
+    others = body.get('other_headers', {}) or {}
     return compose_message(body['subject'], from_header, {
                              "to": ','.join(body['to_list']),
                              "cc": ','.join(body['cc_list']),
                              "bcc": ','.join(body['bcc_list']),
-                             "message_id": body['other_headers']['message_id'],
-                             "in_reply_to": body['other_headers']['in_reply_to'],
-                             "references": body['other_headers']['references']
+                             "message_id": others.get('message_id', []) or [],
+                             "in_reply_to": others.get('in_reply_to', []) or [],
+                             "references": others.get('references', []) or []
                            },
                            body['text'], body['html'], attachments)
 
