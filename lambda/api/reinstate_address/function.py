@@ -4,9 +4,8 @@ clears the suspended flag in DynamoDB'''
 import json
 import os
 import boto3  # pylint: disable=import-error
-from helper import parse_json_body  # pylint: disable=import-error
+from helper import authorized_address_request  # pylint: disable=import-error
 from helper import publish_address_dns_records  # pylint: disable=import-error
-from helper import user_authorized_for_sender  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -17,19 +16,9 @@ table = ddb.Table('cabal-addresses')
 
 def handler(event, _context):
     '''Reinstates a suspended email address'''
-    body, error = parse_json_body(event)
+    address, item, error = authorized_address_request(event)
     if error:
         return error
-    address = body['address']
-    user = event['requestContext']['authorizer']['claims']['cognito:username']
-    if not user_authorized_for_sender(user, address):
-        return {
-            'statusCode': 403,
-            'body': json.dumps({
-                'Error': 'Address not associated with authenticated user'
-            })
-        }
-    item = table.get_item(Key={'address': address}).get('Item') or {}
     if not item.get('suspended'):
         return {
             'statusCode': 200,
