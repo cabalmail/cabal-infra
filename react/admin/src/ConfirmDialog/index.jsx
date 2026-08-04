@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import useModalDismiss from '../hooks/useModalDismiss';
 import styles from './ConfirmDialog.module.css';
 
 function ConfirmDialog({
@@ -12,29 +12,14 @@ function ConfirmDialog({
   onConfirm,
   onCancel,
 }) {
-  const confirmRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onCancel]);
-
-  useEffect(() => {
-    if (open && confirmRef.current) confirmRef.current.focus();
-  }, [open]);
+  const { focusRef: confirmRef, onScrimHit } = useModalDismiss(open, onCancel);
 
   if (!open) return null;
-
-  const onScrimClick = (e) => {
-    if (e.target === e.currentTarget) onCancel();
-  };
 
   return (
     <div
       className={styles.scrim}
-      onClick={onScrimClick}
+      onClick={onScrimHit}
       role="presentation"
     >
       <div

@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
+import useModalDismiss from '../../hooks/useModalDismiss';
 import { parseEmlSource } from '../../utils/emlSource';
 
 /* =========================================================================
@@ -45,7 +46,6 @@ function ViewSourceModal({
 }) {
   const [tab, setTab] = useState(initialTab);
   const [copied, setCopied] = useState(false);
-  const closeRef = useRef(null);
 
   // Re-sync the tab whenever the modal is (re)opened — the same component
   // is reused for both "View source" and "Show original headers" entry
@@ -54,22 +54,9 @@ function ViewSourceModal({
     if (open) setTab(initialTab);
   }, [open, initialTab]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (open && closeRef.current) closeRef.current.focus();
-  }, [open]);
+  const { focusRef: closeRef, onScrimHit } = useModalDismiss(open, onClose);
 
   const { headers, body } = useMemo(() => parseEmlSource(rawText), [rawText]);
-
-  const onScrimMouseDown = useCallback((e) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
 
   const copy = useCallback(async () => {
     try {
@@ -121,7 +108,7 @@ function ViewSourceModal({
   return (
     <div
       className="source-scrim"
-      onMouseDown={onScrimMouseDown}
+      onMouseDown={onScrimHit}
       role="presentation"
     >
       <div
