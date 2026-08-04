@@ -8,6 +8,8 @@
 
 [![Logo Assets](https://github.com/cabalmail/cabal-infra/actions/workflows/logo-assets.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/logo-assets.yml)
 
+[![Release](https://github.com/cabalmail/cabal-infra/actions/workflows/release.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/release.yml)
+
 # About Cabalmail
 
 The Cabalmail developement team is hard at work preparing our 1.0 release. Stay tuned.
