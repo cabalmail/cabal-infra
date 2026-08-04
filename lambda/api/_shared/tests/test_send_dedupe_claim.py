@@ -7,10 +7,11 @@ No pytest harness in this repo; run under the stdlib:
 /send claims the Message-Id in the dedupe table before SMTP so a retried
 send cannot deliver twice, and releases the claim when delivery fails. It
 used to release only when `send()` RETURNED a non-200 -- anything that
-raised between the claim and the handoff (a bad `to_list` shape, or the
-realistic one: a relay refusing the connection, dialed outside `send()`'s
-try) left the claim behind. The client's retry then matched the orphaned
-claim and got 200 "submitted" for a message nobody ever sent (#909).
+raised between the claim and the handoff (a relay refusing the connection,
+dialed outside `send()`'s try; a socket timeout mid-DATA; the bad `to_list`
+shape the report hit, now rejected upstream as a 400) left the claim
+behind. The client's retry then matched the orphaned claim and got 200
+"submitted" for a message nobody ever sent (#909).
 
 These cover both directions of that: a raise under the claim must release
 it (so the retry really sends), and a completed handoff must keep it (so
@@ -264,9 +265,15 @@ class SendClaimLifecycleTest(unittest.TestCase):
         self.assertEqual(len(self.smtp.sent), 1)
 
     def test_raise_under_the_claim_releases_it_and_answers(self):
-        # The tester's trigger: `to_list` as a bare string makes
-        # getaddresses() raise a TypeError after the claim (#909).
-        response = send.handler(_event(_body(to_list=TEST_SENDER)), None)
+        # A raise the named smtplib handlers do not cover: a socket timeout
+        # mid-DATA is an OSError, so before the wrap it went straight out of
+        # the handler with the claim still held (#909). The tester's own
+        # trigger - `to_list` as a bare string - is now rejected upstream as
+        # a 400 (see test_compose_required_fields.HandlerListShapeTest), so
+        # it no longer reaches the claim; the wrap still has to hold for
+        # everything else that can raise in here.
+        self.smtp.on_send = TimeoutError('timed out')
+        response = send.handler(_event(_body()), None)
         self.assertEqual(response['statusCode'], 500)
         self.assertIn('not delivered', json.loads(response['body'])['status'])
         self.assertEqual(self.smtp.sent, [])
@@ -278,7 +285,9 @@ class SendClaimLifecycleTest(unittest.TestCase):
         # Gateway turned that into a bodiless 502 - so the assertion that
         # matters is on the retry, which was answered 200 "submitted" while
         # nothing went out.
-        self._failed_attempt(_body(to_list=TEST_SENDER))
+        self.smtp.on_send = TimeoutError('timed out')
+        self._failed_attempt(_body())
+        self.smtp.on_send = None
         response = send.handler(_event(_body()), None)
         self.assertEqual(response['statusCode'], 200)
         self.assertEqual(len(self.smtp.sent), 1,

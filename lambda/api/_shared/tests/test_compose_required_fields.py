@@ -11,6 +11,11 @@ or `host` used to die on a KeyError, which API Gateway surfaced as a bodiless
 `{"message": "Internal server error"}` 502 (#895) rather than the named 400
 both handlers already had for a rejected value.
 
+The recipient lists need one check more than presence: a `to_list` that
+arrives as a bare string satisfies every presence and CR/LF check and then
+raises a TypeError in /send's envelope assembly, for the same bodiless 502
+(#909). Those cases live here too.
+
 Third-party imports (boto3, botocore, imapclient, imap_session, smtp_session)
 are faked in sys.modules before import, so the suite needs no AWS access and
 never dials IMAP or SMTP. `helper` and `compose` themselves are the real
@@ -263,6 +268,66 @@ class SaveDraftHandlerRequiredFieldsTest(_ComposeCase):
     def test_discard_missing_host_is_a_400(self):
         event = _event({'op': 'discard', 'replaces_uid': 1, 'replaces_uidvalidity': 1})
         self._assert_400(save_draft.handler(event, None), 'host')
+
+
+class ComposeListShapeTest(_ComposeCase):
+    '''The recipient lists have to BE lists of strings (#909). Presence and
+    CR/LF checks both pass a bare string through; the composer then builds a
+    header of comma-separated characters and /send dies assembling the
+    envelope.'''
+
+    def test_each_string_list_is_named_when_it_is_not_a_list(self):
+        for field in compose.RECIPIENT_LIST_FIELDS:
+            with self.subTest(field=field):
+                with self.assertRaises(ValueError) as caught:
+                    compose.compose_from_body(
+                        _body(**{field: TEST_SENDER}), TEST_USER)
+                self.assertIn(field, str(caught.exception))
+
+    def test_a_non_list_of_any_type_is_rejected(self):
+        for value in ({'address': TEST_SENDER}, 7, True):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError) as caught:
+                    compose.compose_from_body(_body(to_list=value), TEST_USER)
+                self.assertIn('to_list', str(caught.exception))
+
+    def test_a_non_string_entry_is_named(self):
+        # A list of the right shape whose entries aren't addresses fails the
+        # same way one step later, in ','.join().
+        with self.assertRaises(ValueError) as caught:
+            compose.compose_from_body(
+                _body(cc_list=[{'address': TEST_SENDER}]), TEST_USER)
+        self.assertIn('cc_list', str(caught.exception))
+
+    def test_the_accepted_shapes_still_compose(self):
+        # Null (read as `... or []` everywhere) and empty stay valid payloads:
+        # this is a shape check, not a new required-value check.
+        msg = compose.compose_from_body(
+            _body(to_list=[TEST_SENDER], cc_list=None, bcc_list=[]), TEST_USER)
+        self.assertEqual(msg['To'], TEST_SENDER)
+        self.assertIsNone(msg['Cc'])
+
+
+class HandlerListShapeTest(_ComposeCase):
+    '''Both composing endpoints answer the bad shape with the named 400
+    instead of the bodiless 502 the escaping TypeError became (#909).'''
+
+    def _assert_400(self, response, field):
+        self.assertEqual(response['statusCode'], 400)
+        self.assertIn(field, json.loads(response['body'])['status'])
+
+    def test_send_string_to_list_is_a_400(self):
+        # The report's payload: `to_list` sent as a bare address string.
+        self._assert_400(
+            send.handler(_event(_body(to_list=TEST_SENDER)), None), 'to_list')
+
+    def test_send_string_bcc_list_is_a_400(self):
+        self._assert_400(
+            send.handler(_event(_body(bcc_list=TEST_SENDER)), None), 'bcc_list')
+
+    def test_save_draft_string_to_list_is_a_400(self):
+        self._assert_400(
+            save_draft.handler(_event(_body(to_list=TEST_SENDER)), None), 'to_list')
 
 
 if __name__ == '__main__':
