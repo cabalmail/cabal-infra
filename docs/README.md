@@ -5,6 +5,9 @@
 [![Build and Deploy Infrastructure](https://github.com/cabalmail/cabal-infra/actions/workflows/infra.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/infra.yml)
 
 [![Nightly image scan](https://github.com/cabalmail/cabal-infra/actions/workflows/image-scan.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/image-scan.yml)
+
+[![Logo Assets](https://github.com/cabalmail/cabal-infra/actions/workflows/logo-assets.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/logo-assets.yml)
+
 # About Cabalmail
 
 The Cabalmail developement team is hard at work preparing our 1.0 release. Stay tuned.
