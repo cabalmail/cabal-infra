@@ -42,10 +42,6 @@ Some features are too expensive to run in multiple environments and ship via a f
 
 If any of these is unclear, route through stage first.
 
-### Claude automation
-
-The `claude` issue label triggers an automated PR. PRs target `stage`, never `main`. Promotion to `main` is always a deliberate second step the human performs.
-
 ## Repository Structure
 
 ```
@@ -112,7 +108,6 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 | `destroy_terraform.yml` | Manual (`workflow_dispatch`) | Tears down `terraform/infra` for the selected environment. |
 | `apple.yml` | `apple/**` | Builds and tests the iOS app on a macOS runner. Deploys nothing to AWS. |
 | `dependabot.yml` | Schedule (daily) | Dependency update PRs. |
-| `claude.yml` | `@claude` mention | Claude Code action for PR review. |
 Deploy workflows select environment based on branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys (see "Branches and environments" above).
 
 ## Architecture Details
