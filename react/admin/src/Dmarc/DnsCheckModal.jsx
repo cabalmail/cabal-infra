@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import useApi from '../hooks/useApi';
+import useModalDismiss from '../hooks/useModalDismiss';
 import { useAppMessage } from '../contexts/AppMessageContext';
 
 function recordLabel(type) {
@@ -21,7 +22,6 @@ function DnsCheckModal({ open, recordType, domain, onClose }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [repairing, setRepairing] = useState(false);
-  const closeRef = useRef(null);
 
   const fetchCheck = useCallback(() => {
     if (!domain || !recordType) return;
@@ -46,20 +46,7 @@ function DnsCheckModal({ open, recordType, domain, onClose }) {
     if (open) fetchCheck();
   }, [open, fetchCheck]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (open && closeRef.current) closeRef.current.focus();
-  }, [open]);
-
-  const onScrimMouseDown = useCallback((e) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
+  const { focusRef: closeRef, onScrimHit } = useModalDismiss(open, onClose);
 
   const repair = useCallback(() => {
     setRepairing(true);
@@ -132,7 +119,7 @@ function DnsCheckModal({ open, recordType, domain, onClose }) {
   const showRepair = result && result.repairable;
 
   return (
-    <div className="source-scrim" onMouseDown={onScrimMouseDown} role="presentation">
+    <div className="source-scrim" onMouseDown={onScrimHit} role="presentation">
       <div className="source-window dns-window" role="dialog" aria-modal="true" aria-label={`${recordLabel(recordType)} check`}>
         <div className="source-header">
           <div className="source-header-title">
