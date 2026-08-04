@@ -241,12 +241,11 @@ struct NewAddressSheet: View {
     }
 
     /// Seed each field with alphanumerics (mirroring the React Request
-    /// form's Random button). Keeps the character pools identical so
-    /// addresses minted from either client look the same.
+    /// form's Random button). `AddressMint` keeps the character pool
+    /// identical so addresses minted from any surface look the same.
     private func randomize() {
-        let alphanum = "abcdefghijklmnopqrstuvwxyz0123456789"
-        username = String((0..<8).map { _ in alphanum.randomElement() ?? "a" })
-        subdomain = String((0..<8).map { _ in alphanum.randomElement() ?? "a" })
+        username = AddressMint.randomLabel()
+        subdomain = AddressMint.randomLabel()
         if domain.isEmpty, let first = visibleDomains.first?.domain {
             domain = first
         }

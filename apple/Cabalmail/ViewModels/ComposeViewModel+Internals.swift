@@ -9,12 +9,23 @@ extension ComposeViewModel {
     // MARK: - Presentation
 
     /// Title for the compose surface (the sheet's navigation bar on iPhone,
-    /// the window title elsewhere). "New Message" is a lie when the user
-    /// tapped Edit Draft on a saved draft: the form comes up populated, and
-    /// sending replaces that draft rather than adding a second one. Replies
-    /// and forwards keep the generic title — they really are new messages.
+    /// the window title elsewhere). "New Message" is a lie for every
+    /// composer that opens populated: a resumed Drafts copy (whose send
+    /// replaces that draft rather than adding a second one), and a reply /
+    /// reply-all / forward, which come up with the recipient, a prefixed
+    /// subject, and the quoted original already in place. Each says what it
+    /// is instead; only a genuinely blank compose is a new message.
+    ///
+    /// The resumed draft wins over the intent: what the user reopened is a
+    /// draft, whatever it was first composed as.
     var navigationTitle: String {
-        isResumedServerDraft ? "Draft" : "New Message"
+        if isResumedServerDraft { return "Draft" }
+        switch composeIntent {
+        case .reply:     return "Reply"
+        case .replyAll:  return "Reply All"
+        case .forward:   return "Forward"
+        case .new:       return "New Message"
+        }
     }
 
     // MARK: - Editor bridge health
@@ -95,8 +106,17 @@ extension ComposeViewModel {
     /// Shared by `send()` and `cancel()` (Save Draft) so both flows ship
     /// an identical message to `/send`.
     func buildOutgoingMessage(from: EmailAddress) async -> OutgoingMessage {
-        let bodies = await computeMessageBodies()
-        return OutgoingMessage(
+        await buildOutgoingMessage(from: from, bodies: computeMessageBodies())
+    }
+
+    /// Assembly over bodies the caller has already converted. `cancel()`
+    /// needs the bodies before it knows whether it has a sender to build
+    /// with, and each conversion is a WebKit round trip worth not repeating.
+    func buildOutgoingMessage(
+        from: EmailAddress,
+        bodies: (text: String, html: String)
+    ) -> OutgoingMessage {
+        OutgoingMessage(
             from: from,
             to: parseRecipients(toText),
             cc: parseRecipients(ccText),
@@ -152,17 +172,40 @@ extension ComposeViewModel {
         try? await draftStore.save(snapshot)
     }
 
-    /// True when the assembled message carries anything worth keeping —
-    /// the shared emptiness check behind close-without-send and the
-    /// server-save debounce.
-    func hasDraftContent(_ message: OutgoingMessage) -> Bool {
+    /// True when the compose buffer carries anything worth keeping — the
+    /// shared emptiness check behind close-without-send and the server-save
+    /// debounce. Takes the converted bodies rather than an assembled
+    /// message so it can answer before a `From` address is in hand.
+    func hasDraftContent(bodies: (text: String, html: String)) -> Bool {
         !subject.isEmpty
-            || !(message.textBody?.isEmpty ?? true)
-            || !(message.htmlBody?.isEmpty ?? true)
-            || !message.to.isEmpty
-            || !message.cc.isEmpty
-            || !message.bcc.isEmpty
-            || !message.attachments.isEmpty
+            || !bodies.text.isEmpty
+            || !bodies.html.isEmpty
+            || !parseRecipients(toText).isEmpty
+            || !parseRecipients(ccText).isEmpty
+            || !parseRecipients(bccText).isEmpty
+            || !attachments.isEmpty
+    }
+
+    /// `/save_draft` leg of `cancel()`. Returns true when the window may
+    /// close; false leaves it up with the failure on screen — the local
+    /// copy is still on disk either way, so nothing is lost by retrying.
+    func pushDraftToServer(_ message: OutgoingMessage) async -> Bool {
+        do {
+            serverSaveInFlight = true
+            defer { serverSaveInFlight = false }
+            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
+                serverDraftRef = ref
+            }
+            try? await draftStore.remove(id: draftId)
+            stop()
+            onClose()
+            return true
+        } catch let error as CabalmailError {
+            errorMessage = "Couldn't save draft: \(describe(error))"
+        } catch {
+            errorMessage = "Couldn't save draft: \(error.localizedDescription)"
+        }
+        return false
     }
 
     /// Debounced server-side draft push (the `serverAutosaveInterval`
@@ -179,8 +222,9 @@ extension ComposeViewModel {
         // server copy with an empty draft (#745).
         guard editorController.bridgeFailure == nil else { return }
         guard let fromEmail = currentFromEmail() else { return }
-        let message = await buildOutgoingMessage(from: fromEmail)
-        guard hasDraftContent(message) else { return }
+        let bodies = await computeMessageBodies()
+        guard hasDraftContent(bodies: bodies) else { return }
+        let message = buildOutgoingMessage(from: fromEmail, bodies: bodies)
         serverSaveInFlight = true
         defer { serverSaveInFlight = false }
         do {

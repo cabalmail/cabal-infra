@@ -13,7 +13,9 @@ import XCTest
 /// `TEST_RUNNER_SIMDRIVE_DIR` on the xcodebuild command line).
 ///
 /// Command grammar (one command per file; `<query>` is `id:<identifier>`,
-/// `text:<label>`, or `xy:<x>,<y>`):
+/// `text:<label>`, or `xy:<x>,<y>`). A query runs to the end of the line
+/// apart from the trailing `name:value` options its verb accepts, so labels
+/// with spaces — `tap text:Save Draft` — need no quoting:
 ///
 ///   launch                     launch the target app (fresh process)
 ///   activate                   foreground the target app (no relaunch)
@@ -98,9 +100,21 @@ final class SimDriveTests: XCTestCase {
 
     // MARK: - Command dispatch
 
+    /// Verbs that reach into the target app's accessibility tree. Every one
+    /// of them raises an XCTest *failure* (not a Swift error) when the app
+    /// isn't running, and that failure unwinds `testDriveLoop` — killing the
+    /// REPL rather than answering the command (#902). Checking the app's
+    /// state first turns that into an ordinary error result.
+    private static let appDependentVerbs: Set<String> = [
+        "dump", "focus", "tap", "type", "cmdv", "drag", "swiperow", "exists", "wait"
+    ]
+
     private func execute(_ line: String, quit: inout Bool) throws -> String {
         let (verb, remainder) = splitVerb(line)
         let args = remainder.split(separator: " ").map(String.init)
+        if Self.appDependentVerbs.contains(verb) {
+            try requireRunningApp()
+        }
         switch verb {
         case "quit":
             quit = true
@@ -126,12 +140,9 @@ final class SimDriveTests: XCTestCase {
         case "dump":
             return targetApp().debugDescription
         case "focus":
-            let focused = targetApp().descendants(matching: .any)
-                .matching(NSPredicate(format: "hasKeyboardFocus == true"))
-                .firstMatch
-            return focused.exists ? focused.debugDescription : "none"
+            return focusedElement()?.debugDescription ?? "none"
         case "tap":
-            guard let query = args.first else { throw DriveError("tap expects a query") }
+            let query = try selector(from: remainder, verb: "tap")
             if query.hasPrefix("xy:") {
                 try coordinate(from: query).tap()
             } else {
@@ -139,6 +150,11 @@ final class SimDriveTests: XCTestCase {
             }
             return "tapped \(query)"
         case "type":
+            // `typeText` with nothing focused raises an XCTest failure, which
+            // takes the whole loop down with it (#902) — refuse first.
+            guard focusedElement() != nil else {
+                throw DriveError("no keyboard focus — tap a text field before typing")
+            }
             targetApp().typeText(remainder)
             return "typed \(remainder.count) characters"
         case "cmdv":
@@ -150,14 +166,14 @@ final class SimDriveTests: XCTestCase {
         case "drag":
             return try drag(args)
         case "swiperow":
-            return try swipeRow(args)
+            return try swipeRow(remainder)
         case "exists":
-            guard let query = args.first else { throw DriveError("exists expects a query") }
+            let query = try selector(from: remainder, verb: "exists")
             let target = try element(for: query, requireExistence: false)
             let exists = target.exists
             return "exists=\(exists) hittable=\(exists ? target.isHittable : false)"
         case "wait":
-            guard let query = args.first else { throw DriveError("wait expects a query") }
+            let query = try selector(from: remainder, verb: "wait", options: ["timeout"])
             let timeout = value(named: "timeout", in: args).flatMap(Double.init) ?? 10
             let appeared = try element(for: query, requireExistence: false)
                 .waitForExistence(timeout: timeout)
@@ -185,8 +201,9 @@ final class SimDriveTests: XCTestCase {
         return "dragged \(from) -> \(to) (press \(press)s, hold \(hold)s)"
     }
 
-    private func swipeRow(_ args: [String]) throws -> String {
-        guard let query = args.first else { throw DriveError("swiperow expects a query") }
+    private func swipeRow(_ remainder: String) throws -> String {
+        let query = try selector(from: remainder, verb: "swiperow", options: ["edge", "hold"])
+        let args = remainder.split(separator: " ").map(String.init)
         let edge = value(named: "edge", in: args) ?? "trailing"
         let hold = value(named: "hold", in: args).flatMap(Double.init) ?? 0.5
         let row = try element(for: query)
@@ -224,6 +241,50 @@ final class SimDriveTests: XCTestCase {
         let attached = XCUIApplication(bundleIdentifier: targetBundleId)
         app = attached
         return attached
+    }
+
+    /// Throws rather than letting a query run against an app that isn't
+    /// there — see `appDependentVerbs`.
+    private func requireRunningApp() throws {
+        let state = targetApp().state
+        guard state != .notRunning, state != .unknown else {
+            throw DriveError(
+                "target app \(targetBundleId) is not running — 'launch' it first"
+            )
+        }
+    }
+
+    private func focusedElement() -> XCUIElement? {
+        let focused = targetApp().descendants(matching: .any)
+            .matching(NSPredicate(format: "hasKeyboardFocus == true"))
+            .firstMatch
+        return focused.exists ? focused : nil
+    }
+
+    /// The selector argument of a verb that takes one, which is everything
+    /// before the trailing run of `name:value` option tokens.
+    ///
+    /// Splitting on spaces and taking the first token truncated every
+    /// multi-word label — `tap text:Search all mail` silently tapped the
+    /// tab-bar `Search` button instead (#902), and since `element(for:)`
+    /// matches labels exactly, no multi-word label was addressable at all.
+    /// Options only ever follow the selector, so scanning in from the end
+    /// for the ones this verb accepts is unambiguous and leaves the spaces
+    /// in the label alone.
+    private func selector(
+        from remainder: String,
+        verb: String,
+        options: Set<String> = []
+    ) throws -> String {
+        var tokens = remainder.split(separator: " ").map(String.init)
+        while let last = tokens.last,
+              let colon = last.firstIndex(of: ":"),
+              options.contains(String(last[..<colon])) {
+            tokens.removeLast()
+        }
+        let query = tokens.joined(separator: " ")
+        guard !query.isEmpty else { throw DriveError("\(verb) expects a query") }
+        return query
     }
 
     private func element(for query: String, requireExistence: Bool = true) throws -> XCUIElement {

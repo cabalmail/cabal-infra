@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.23] - 2026-08-04
+
+### Added
+- Apple: **Siri and Shortcuts support (first wave).** Four App Intents with
+  "Hey Siri" phrases on iPhone and iPad: get a new random address (minted
+  and copied to the clipboard), create a named address like
+  `acme@complaints.example.com` (Siri asks for the domain when the account
+  can mint on more than one), check the inbox (unread count plus the latest
+  senders), and open a folder by name. All four also appear as building
+  blocks in the Shortcuts app and Spotlight.
+
+### Fixed
+- Apple: **Composer titles for replies and forwards.** A reply, reply-all,
+  or forward opened under the title "New Message" despite arriving with the
+  recipient, subject, and quoted original already filled in. Each composer
+  now says what it is — "Reply", "Reply All", "Forward" — alongside the
+  existing "Draft" and "New Message".
+- Apple: **Save Draft on a message with no From address selected.** Tapping
+  "Save Draft" before picking a sender dismissed the composer exactly as if
+  the save had succeeded, and nothing ever reached the Drafts folder — the
+  typed recipients and subject were gone. The composer now stays open and
+  asks for a From address, since a draft can't be filed without one.
+- Apple: **Search results sharing a UID.** A cross-folder search that matched
+  two messages carrying the same IMAP UID (UIDs are unique only within a
+  folder) drew only one of them, while the header still counted both. The
+  results list now identifies rows by UID plus Message-ID instead of the UID
+  alone.
+- **Incomplete send payloads answered with a bodiless 502.** `/send` and
+  `/save_draft` died on a `KeyError` when a request omitted the `message_id`,
+  `in_reply_to`, or `references` entries of `other_headers` — the shape a
+  fresh, non-reply compose produces — and again when it omitted any of
+  `sender`, `subject`, `to_list`, `cc_list`, `bcc_list`, `text`, `html`, or
+  `host`. The threading headers are now read as optional, matching the
+  validator that already did; the rest are checked before anything indexes
+  them and rejected with the 400 naming the missing field, which both
+  endpoints already returned for a bad value.
+
+### Security
+- **Refreshed the pinned `amazonlinux:2023` base image digest** used by the
+  imap, smtp-in, smtp-out, and sinkhole tiers, picking up upstream OS package
+  fixes including patched `python3`/`python3-libs` builds.
+
 ## [0.11.22] - 2026-08-03
 
 ### Added

@@ -97,6 +97,14 @@ cmd_cmd() {
   while [ ! -f "$DIR/$next.out" ]; do
     sleep 0.2
     waited=$((waited + 1))
+    # A runner that died leaves every queued command unconsumed, so waiting
+    # out the full timeout only delays the same answer — and says nothing
+    # about why (#902). Report the death instead.
+    if [ -f "$DIR/xcodebuild.pid" ] && \
+       ! kill -0 "$(cat "$DIR/xcodebuild.pid")" 2>/dev/null; then
+      log "runner is gone — command $next was never executed; see $DIR/xcodebuild.log"
+      exit 1
+    fi
     if [ "$waited" -ge $((timeout * 5)) ]; then
       log "no result for command $next after ${timeout}s"
       exit 1
