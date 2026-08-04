@@ -49,6 +49,12 @@ _APPENDUID_RE = re.compile(r'\[APPENDUID (\d+) (\d+)\]')
 COMPOSE_REQUIRED_FIELDS = ('sender', 'subject', 'to_list', 'cc_list',
                            'bcc_list', 'text', 'html')
 
+# The recipient keys the composer joins and /send re-reads for the SMTP
+# envelope. Presence is not enough for these: a string where a list belongs
+# gets past every presence and CR/LF check and only fails downstream, where
+# the failure is a TypeError rather than a rejected payload (#909).
+RECIPIENT_LIST_FIELDS = ('to_list', 'cc_list', 'bcc_list')
+
 # The user's display-name preference (set via /set_preferences) becomes the
 # From header's display name. It is read server-side - never from the request
 # body - so a client cannot put an arbitrary name on the wire per message.
@@ -195,6 +201,7 @@ def compose_from_body(body, user):
     responsibility (see unauthorized_sender_response_or_none).'''
     bucket = CACHE_BUCKET
     require_fields(body, COMPOSE_REQUIRED_FIELDS)
+    require_list_fields(body, RECIPIENT_LIST_FIELDS)
     validate_outbound_headers(body)
     attachments = load_attachments(body.get('attachments', []), bucket, user)
     # The visible From may carry the user's display-name preference, but the
@@ -246,6 +253,32 @@ def require_fields(body, fields):
     missing = [field for field in fields if field not in body]
     if missing:
         raise ValueError(f"missing required field(s): {', '.join(missing)}")
+
+
+def require_list_fields(body, fields):
+    """Raises ValueError naming a field whose value is not a list of strings.
+
+    Shape, not presence: `require_fields` above catches an omitted key, and
+    `validate_outbound_headers` catches a hostile value, but neither notices
+    that `to_list` arrived as the bare string an unfamiliar client might send.
+    That payload composed a header of comma-separated characters and then blew
+    up in /send's `getaddresses((body['to_list'] or []) + ...)` with a
+    TypeError, which escaped as a bodiless 502 (#909). It is a client error,
+    so it gets the same named 400 every other rejected payload gets.
+
+    `None` is deliberately allowed: the composer and the header validator both
+    read these as `... or []`, so a null list is an accepted payload meaning
+    "no recipients in this field" (#895).
+    """
+    for field in fields:
+        value = body.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, list):
+            raise ValueError(f"{field} must be a list of addresses")
+        for entry in value:
+            if not isinstance(entry, str):
+                raise ValueError(f"{field} must contain only address strings")
 
 
 def validate_outbound_headers(body):
