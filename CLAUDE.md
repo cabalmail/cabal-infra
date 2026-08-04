@@ -42,10 +42,6 @@ Some features are too expensive to run in multiple environments and ship via a f
 
 If any of these is unclear, route through stage first.
 
-### Claude automation
-
-The `claude` issue label triggers an automated PR. PRs target `stage`, never `main`. Promotion to `main` is always a deliberate second step the human performs.
-
 ## Repository Structure
 
 ```
