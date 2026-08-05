@@ -33,6 +33,42 @@ describe('useModalDismiss', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps Escape from reaching the handlers behind it', () => {
+    // Stands in for useKeyboardShortcuts: a document-level bubble listener
+    // installed before the modal opened, which closes the reader on Escape.
+    const behind = vi.fn();
+    document.addEventListener('keydown', behind);
+    const onDismiss = vi.fn();
+    try {
+      renderHook(() => useModalDismiss(true, onDismiss));
+      act(() => {
+        button.dispatchEvent(
+          new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
+      });
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(behind).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', behind);
+    }
+  });
+
+  it('lets other keys through to the handlers behind it', () => {
+    const behind = vi.fn();
+    document.addEventListener('keydown', behind);
+    try {
+      renderHook(() => useModalDismiss(true, vi.fn()));
+      act(() => {
+        button.dispatchEvent(
+          new window.KeyboardEvent('keydown', { key: 'j', bubbles: true }),
+        );
+      });
+      expect(behind).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener('keydown', behind);
+    }
+  });
+
   it('ignores other keys', () => {
     const onDismiss = vi.fn();
     renderHook(() => useModalDismiss(true, onDismiss));
