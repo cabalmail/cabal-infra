@@ -9,10 +9,13 @@
   settled history from the cache, deriving expiry locally from
   `expirationDate`, so steady-state refreshes fetch about one page per app
   instead of the full history. The volatile window is 14 days, sized so each
-  app's refetch stays inside one page at the current upload rate; the
-  beta-detail recovery chunks run concurrently; and the server shares one
-  in-flight refresh among concurrent requests instead of running a full
-  App Store Connect round per caller. Group assignments made through the
+  app's refetch stays inside one page at the current upload rate; beta
+  states come from the batched buildBetaDetails query (concurrent chunks)
+  instead of the builds-page include, which omitted the linkage for ~75%
+  of builds on every refresh; an empty details answer falls back to the
+  cached states rather than painting live builds "Not yet testable"; and
+  the server shares one in-flight refresh among concurrent requests
+  instead of running a full App Store Connect round per caller. Group assignments made through the
   dashboard mark the build dirty so it is refetched. Pending-fragment
   authored dates are memoized like feature landings, a dead per-fragment
   first-parent log walk was dropped, and each refresh logs per-phase timing

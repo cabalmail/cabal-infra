@@ -469,14 +469,18 @@ def _fetch_build_pages(app_id, cached, token_factory, max_pages=40):
     # too, or ASC omits the relationship linkage from each build (the `included`
     # array comes back, but nothing ties a build to its version / beta detail /
     # groups). Listing only attributes was the bug behind blank columns.
+    #
+    # buildBetaDetail is deliberately NOT included: in practice ASC omitted the
+    # linkage for ~75% of builds on every refresh, so states were re-recovered
+    # via /v1/buildBetaDetails anyway. All states now come from that batched
+    # query (parallel chunks), and the page response is smaller for it.
     url = (
         f"/v1/builds?filter[app]={app_id}"
         "&sort=-uploadedDate&limit=200"
-        "&include=preReleaseVersion,buildBetaDetail,betaGroups"
+        "&include=preReleaseVersion,betaGroups"
         "&fields[builds]=version,uploadedDate,processingState,expired,expirationDate,"
-        "preReleaseVersion,buildBetaDetail,betaGroups"
+        "preReleaseVersion,betaGroups"
         "&fields[preReleaseVersions]=version,platform"
-        "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
         "&fields[betaGroups]=name,isInternalGroup"
         "&limit[betaGroups]=50"
     )
@@ -604,14 +608,15 @@ def fetch_app(app, token_factory):
         f"{len(merged) - len(fetched)} from cache\n"
     )
 
-    # The builds-list `include=buildBetaDetail` is unreliable: ASC often omits
-    # the detail resource / relationship linkage even for builds TestFlight
-    # already shows as Ready to Test. Query the details directly (batched) for
-    # whatever the include failed to cover - refetched builds only; cached ones
-    # had their recovery pass while live. A build still absent after that
-    # genuinely has no beta detail yet - the "ripening" gap between
-    # processingState=VALID and Ready to Test - and cannot be added to a test
-    # group, which the status functions surface as "Not yet testable".
+    # Beta states for the refetched window come from /v1/buildBetaDetails
+    # (batched, parallel chunks; see the include note in _fetch_build_pages).
+    # A build the query does not return falls back to its cached states -
+    # ASC intermittently answers these queries empty, and without the
+    # fallback one flaky response painted every live build "Not yet
+    # testable". A build with no cached states either is genuinely in the
+    # ripening gap between processingState=VALID and Ready to Test: it
+    # cannot be added to a test group yet, which the status functions
+    # surface as "Not yet testable".
     missing = [
         b for b in builds
         if b["id"] in fetched and not b["internal_state"] and not b["expired"]
@@ -619,17 +624,22 @@ def fetch_app(app, token_factory):
     if missing:
         t1 = time.monotonic()
         details = fetch_beta_details_by_build([b["id"] for b in missing], token_factory)
-        recovered = 0
+        recovered = carried = 0
         for b in missing:
+            prev = cached.get(b["id"])
             if b["id"] in details:
                 b["internal_state"], b["external_state"] = details[b["id"]]
                 recovered += 1
+            elif prev and prev.get("internal_state"):
+                b["internal_state"] = prev["internal_state"]
+                b["external_state"] = prev.get("external_state", "")
+                carried += 1
             else:
                 b["beta_detail_missing"] = True
         sys.stderr.write(
             f"  {app['label']} beta details ({time.monotonic() - t1:.1f}s): "
-            f"{recovered} recovered by direct query, "
-            f"{len(missing) - recovered} not yet surfaced by TestFlight\n"
+            f"{recovered} by direct query, {carried} carried from cache, "
+            f"{len(missing) - recovered - carried} not yet surfaced by TestFlight\n"
         )
     save_ledger_cache(bundle_id, merged)
     return {"found": True, "app_id": app_id, "groups": list(groups.values()), "builds": builds}
