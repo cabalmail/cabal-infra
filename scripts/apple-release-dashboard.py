@@ -627,41 +627,53 @@ def fetch_app(app, token_factory):
     sys.stderr.write(
         f"  {app['label']}: {len(fetched)} builds fetched ({pages} page"
         f"{'s' if pages != 1 else ''}, {pages_secs:.1f}s), "
-        f"{len(merged) - len(fetched)} from cache\n"
+        f"{len(merged) - len(fetched)} from cache, "
+        + (f"membership for {len(membership)} builds"
+           if membership is not None else "membership unavailable")
+        + "\n"
     )
 
-    # Beta states for the refetched window come from /v1/buildBetaDetails
-    # (batched, parallel chunks; see the include note in _fetch_build_pages).
-    # A build the query does not return falls back to its cached states -
-    # ASC intermittently answers these queries empty, and without the
-    # fallback one flaky response painted every live build "Not yet
-    # testable". A build with no cached states either is genuinely in the
-    # ripening gap between processingState=VALID and Ready to Test: it
-    # cannot be added to a test group yet, which the status functions
-    # surface as "Not yet testable".
-    missing = [
-        b for b in builds
-        if b["id"] in fetched and not b["internal_state"] and not b["expired"]
-    ]
+    # Beta states come from /v1/buildBetaDetails (batched, parallel chunks;
+    # see the include note in _fetch_build_pages). The recovery set spans
+    # the WHOLE ledger, cached builds included, so a cached build whose
+    # states were lost to an ASC flake is re-queried every refresh until it
+    # heals. Per build:
+    #   - answered by the query: authoritative, use it;
+    #   - in a failed/empty chunk: no information - carry the cached states
+    #     if there are any, else leave blank and unflagged (the status
+    #     falls back to the processing state);
+    #   - absent from an authoritative answer: genuinely in the ripening
+    #     gap between processingState=VALID and Ready to Test, which the
+    #     status functions surface as "Not yet testable".
+    missing = [b for b in builds if not b["internal_state"] and not b["expired"]]
     if missing:
         t1 = time.monotonic()
-        details = fetch_beta_details_by_build([b["id"] for b in missing], token_factory)
-        recovered = carried = 0
+        details, failed = fetch_beta_details_by_build(
+            [b["id"] for b in missing], token_factory
+        )
+        recovered = carried = unknown = 0
         for b in missing:
             prev = cached.get(b["id"])
             if b["id"] in details:
                 b["internal_state"], b["external_state"] = details[b["id"]]
+                b["beta_detail_missing"] = False
                 recovered += 1
-            elif prev and prev.get("internal_state"):
-                b["internal_state"] = prev["internal_state"]
-                b["external_state"] = prev.get("external_state", "")
-                carried += 1
+            elif b["id"] in failed:
+                if prev and prev.get("internal_state"):
+                    b["internal_state"] = prev["internal_state"]
+                    b["external_state"] = prev.get("external_state", "")
+                    carried += 1
+                else:
+                    unknown += 1
             else:
                 b["beta_detail_missing"] = True
+        absent = len(missing) - recovered - carried - unknown
         sys.stderr.write(
             f"  {app['label']} beta details ({time.monotonic() - t1:.1f}s): "
             f"{recovered} by direct query, {carried} carried from cache, "
-            f"{len(missing) - recovered - carried} not yet surfaced by TestFlight\n"
+            f"{absent} not yet surfaced"
+            + (f", {unknown} unknown (query failed)" if unknown else "")
+            + "\n"
         )
     save_ledger_cache(bundle_id, merged)
     return {"found": True, "app_id": app_id, "groups": list(groups.values()), "builds": builds}
@@ -670,10 +682,14 @@ def fetch_app(app, token_factory):
 def fetch_beta_details_by_build(build_ids, token_factory, chunk=50):
     """Fetch buildBetaDetails directly, batched via filter[build].
 
-    Returns {build_id: (internal_state, external_state)}. A build with no
-    entry has no beta detail resource at all - TestFlight has not surfaced
-    it for testing yet. A buildBetaDetail shares its build's id, so the
-    result keys straight off det["id"].
+    Returns (details, failed_ids). details maps build_id ->
+    (internal_state, external_state) from chunks that answered
+    authoritatively; a build absent from those chunks genuinely has no
+    beta detail resource yet. failed_ids holds the builds whose chunk
+    errored twice or came back entirely empty - ASC intermittently
+    answers these queries with an empty 200 - and means NO INFORMATION,
+    not absence. A buildBetaDetail shares its build's id, so details
+    keys straight off det["id"].
     """
     def one(ids):
         q = (
@@ -681,30 +697,43 @@ def fetch_beta_details_by_build(build_ids, token_factory, chunk=50):
             "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
             "&limit=200"
         )
-        try:
-            data, _ = api_get_all(q, token_factory)
-            return data
-        except urllib.error.HTTPError as err:
-            sys.stderr.write(
-                f"  buildBetaDetails query failed (HTTP {err.code}); "
-                "those statuses fall back to the processing state\n"
-            )
-            return []
+        for attempt in (0, 1):
+            try:
+                data, _ = api_get_all(q, token_factory)
+            except (urllib.error.HTTPError, urllib.error.URLError) as err:
+                data = None
+                reason = err
+            else:
+                # A whole chunk with zero details is indistinguishable from
+                # the known ASC flake; treat it like a failure.
+                if data or not ids:
+                    return data
+                reason = "empty response"
+            if attempt == 0:
+                time.sleep(1)
+        sys.stderr.write(
+            f"  buildBetaDetails chunk of {len(ids)} failed twice ({reason}); "
+            "treating those statuses as unknown\n"
+        )
+        return None
 
     chunks = [build_ids[i:i + chunk] for i in range(0, len(build_ids), chunk)]
-    out = {}
+    details, failed = {}, set()
     if not chunks:
-        return out
+        return details, failed
     # The chunks are independent; run them concurrently.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(chunks))) as pool:
-        for data in pool.map(one, chunks):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(chunks))) as pool:
+        for ids, data in zip(chunks, pool.map(one, chunks)):
+            if data is None:
+                failed.update(ids)
+                continue
             for det in data:
                 attrs = det.get("attributes", {})
-                out[det["id"]] = (
+                details[det["id"]] = (
                     attrs.get("internalBuildState", "") or "",
                     attrs.get("externalBuildState", "") or "",
                 )
-    return out
+    return details, failed
 
 
 def fetch_group_membership(group_ids, token_factory):
@@ -720,20 +749,29 @@ def fetch_group_membership(group_ids, token_factory):
         return {}
 
     def one(gid):
-        data, _ = api_get_all(
-            f"/v1/betaGroups/{gid}/relationships/builds?limit=200",
-            token_factory,
-        )
-        return [b["id"] for b in data]
+        for attempt in (0, 1):
+            try:
+                data, _ = api_get_all(
+                    f"/v1/betaGroups/{gid}/relationships/builds?limit=200",
+                    token_factory,
+                )
+                return [b["id"] for b in data]
+            except (urllib.error.HTTPError, urllib.error.URLError):
+                if attempt == 0:
+                    time.sleep(1)
+                else:
+                    raise
+        return []
 
     try:
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=min(4, len(group_ids))
+            max_workers=min(2, len(group_ids))
         ) as pool:
             results = list(pool.map(one, group_ids))
-    except urllib.error.HTTPError as err:
+    except (urllib.error.HTTPError, urllib.error.URLError) as err:
+        code = getattr(err, "code", None) or getattr(err, "reason", err)
         sys.stderr.write(
-            f"  group membership query failed (HTTP {err.code}); "
+            f"  group membership query failed twice ({code}); "
             "keeping previously known groups\n"
         )
         return None
@@ -741,6 +779,15 @@ def fetch_group_membership(group_ids, token_factory):
     for gid, ids in zip(group_ids, results):
         for bid in ids:
             out.setdefault(bid, []).append(gid)
+    if not out:
+        # Every group answering empty is indistinguishable from the ASC
+        # flake (CI attaches each upload to a group, so a truly empty
+        # membership across all groups is implausible). No information.
+        sys.stderr.write(
+            "  group membership came back empty for every group; "
+            "keeping previously known groups\n"
+        )
+        return None
     return out
 
 
