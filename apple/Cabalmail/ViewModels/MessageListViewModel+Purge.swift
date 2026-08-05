@@ -14,6 +14,20 @@ extension MessageListViewModel {
     /// through a confirmation dialog.
     var isTrashFolder: Bool { folder.path == FolderTree.trashPath }
 
+    /// What the preference-driven dispose affordances (trailing swipe,
+    /// Cmd+Delete) mean in this folder, and what an explicitly-Archive
+    /// affordance (context menus, bulk action bar) means. Both resolve
+    /// through `DisposeIntent` so the folder-specific cases — Delete
+    /// Forever in Trash, Restore in Archive — can't drift between the
+    /// label a surface draws and the operation it runs.
+    var disposeIntent: DisposeIntent {
+        .standard(preference: disposeAction, in: folder.path)
+    }
+
+    var archiveIntent: DisposeIntent {
+        .archiving(in: folder.path)
+    }
+
     /// Permanently delete an explicit UID set. Serves both the single-
     /// row surfaces (swipe, row menu — a one-element set) and the
     /// multi-selection surfaces (selection menu, action bar,

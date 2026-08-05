@@ -239,6 +239,120 @@ describe('MessageOverlay (Reader)', () => {
     }
   });
 
+  it('closes the source modal when the reader is hidden, even for the same message', async () => {
+    const { rerender, unmount } = renderOverlay();
+    try {
+      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+      fireEvent.click(screen.getByLabelText('More actions'));
+      fireEvent.click(screen.getByText('View source'));
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'Message source' })).toBeInTheDocument();
+      });
+
+      rerender(
+        <AuthContext.Provider value={authValue}>
+          <AppMessageContext.Provider value={{ setMessage }}>
+            <MessageOverlay
+              envelope={testEnvelope}
+              folder="INBOX"
+              visible={false}
+              flags={['\\Seen']}
+              hide={vi.fn()}
+              updateOverlay={vi.fn()}
+              reply={vi.fn()}
+              replyAll={vi.fn()}
+              forward={vi.fn()}
+              readerFormat="rich"
+              setReaderFormat={vi.fn()}
+            />
+          </AppMessageContext.Provider>
+        </AuthContext.Provider>,
+      );
+      rerender(
+        <AuthContext.Provider value={authValue}>
+          <AppMessageContext.Provider value={{ setMessage }}>
+            <MessageOverlay
+              envelope={testEnvelope}
+              folder="INBOX"
+              visible={true}
+              flags={['\\Seen']}
+              hide={vi.fn()}
+              updateOverlay={vi.fn()}
+              reply={vi.fn()}
+              replyAll={vi.fn()}
+              forward={vi.fn()}
+              readerFormat="rich"
+              setReaderFormat={vi.fn()}
+            />
+          </AppMessageContext.Provider>
+        </AuthContext.Provider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Subject')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('dialog', { name: 'Message source' })).not.toBeInTheDocument();
+    } finally {
+      unmount();
+    }
+  });
+
+  // The reader is closed by an app-level Escape handler (useKeyboardShortcuts,
+  // a document bubble listener). Anything the reader opens on top of itself has
+  // to take Escape for itself, or one keypress closes two layers.
+  describe('Escape inside the reader', () => {
+    const pressEscape = () => {
+      act(() => {
+        document.body.dispatchEvent(
+          new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
+      });
+    };
+
+    it('does not reach the app-level handler while a layer is open', async () => {
+      const behind = vi.fn();
+      document.addEventListener('keydown', behind);
+      const { container, unmount } = renderOverlay();
+      try {
+        await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+
+        // Source modal.
+        fireEvent.click(screen.getByLabelText('More actions'));
+        fireEvent.click(screen.getByText('View source'));
+        await waitFor(() => {
+          expect(screen.getByRole('dialog', { name: 'Message source' })).toBeInTheDocument();
+        });
+        pressEscape();
+        expect(screen.queryByRole('dialog', { name: 'Message source' })).not.toBeInTheDocument();
+
+        // Overflow menu.
+        fireEvent.click(screen.getByLabelText('More actions'));
+        await waitFor(() => expect(screen.getByText('View source')).toBeInTheDocument());
+        pressEscape();
+        await waitFor(() => expect(screen.queryByText('View source')).not.toBeInTheDocument());
+
+        // Move chooser.
+        fireEvent.click(screen.getByLabelText('Move'));
+        await waitFor(() => {
+          expect(container.querySelector('.reader-move-picker select')).toBeTruthy();
+        });
+        pressEscape();
+        await waitFor(() => {
+          expect(container.querySelector('.reader-move-picker select')).toBeNull();
+        });
+
+        expect(behind).not.toHaveBeenCalled();
+
+        // With nothing on top, Escape belongs to the reader again.
+        pressEscape();
+        expect(behind).toHaveBeenCalledTimes(1);
+      } finally {
+        document.removeEventListener('keydown', behind);
+        unmount();
+      }
+    });
+  });
+
   it('overflow menu exposes Archive, Block sender, Print', async () => {
     const { unmount } = renderOverlay();
     try {
