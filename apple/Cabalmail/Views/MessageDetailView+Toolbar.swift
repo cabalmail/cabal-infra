@@ -7,6 +7,22 @@ import CabalmailKit
 // `model` and route their actions back through it.
 
 extension MessageDetailView {
+    /// Draws whichever button `ReaderToolbarLayout` put in this bottom-bar
+    /// slot, so the bar's contents and the tested layout can't drift apart.
+    @ViewBuilder
+    func bottomBarButton(for action: ReaderToolbarAction) -> some View {
+        switch action {
+        case .editDraft:     editDraftButton
+        case .reply:         replyButton
+        case .toggleRead:    seenButton
+        case .toggleFlag:    flagButton
+        case .remoteContent: remoteContentButton
+        case .readerMode:    readerModeButton
+        case .dispose:       disposeButton
+        case .overflow:      overflowMenuButton
+        }
+    }
+
     /// Drafts-folder affordance: resume the open draft in compose.
     /// Disabled until the body fetch + MIME parse complete so a tap can't
     /// seed an empty compose over a draft that hasn't loaded yet.
@@ -260,6 +276,45 @@ extension MessageDetailView {
         return "Couldn't \(verb) message: \(error.localizedDescription)"
     }
 
+    #if os(iOS) || os(visionOS)
+    /// Menu twins of the two display toggles the bottom bar gave up to stay
+    /// inside `ReaderToolbarLayout.capacity`. Same actions, same shortcuts,
+    /// spelled out as labelled rows — a menu row carrying only an SF Symbol
+    /// reads as blank. macOS keeps both as top-toolbar buttons.
+    @ViewBuilder
+    var readerModeMenuItem: some View {
+        if let model {
+            Button {
+                model.toggleReaderMode()
+            } label: {
+                Label(
+                    model.readerMode ? "Show original formatting" : "Show reader view",
+                    systemImage: model.readerMode ? "text.alignleft" : "doc.richtext"
+                )
+            }
+            .disabled(model.htmlBody == nil)
+            .accessibilityIdentifier("reader.readerMode")
+        }
+    }
+
+    @ViewBuilder
+    var remoteContentMenuItem: some View {
+        if let model {
+            Button {
+                model.toggleRemoteContent()
+            } label: {
+                Label(
+                    model.remoteContentAllowed ? "Hide remote content" : "Show remote content",
+                    systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash"
+                )
+            }
+            .keyboardShortcut("i", modifiers: [.command, .shift])
+            .disabled(model.htmlBody == nil)
+            .accessibilityIdentifier("reader.remoteContent")
+        }
+    }
+    #endif
+
     /// Print item shown in the overflow menu. Cmd+P on macOS; the same
     /// shortcut also activates on iPad/iPhone hardware keyboards. Disabled
     /// when the body hasn't loaded yet — printing an empty WKWebView is a
@@ -298,6 +353,13 @@ extension MessageDetailView {
                 .keyboardShortcut("m", modifiers: [.command, .shift])
 
                 alternateDisposeMenuItem(model: model)
+
+                #if os(iOS) || os(visionOS)
+                Divider()
+
+                readerModeMenuItem
+                remoteContentMenuItem
+                #endif
 
                 // Plain text alternative only makes sense when both parts
                 // exist; suppress the item otherwise so we don't show a

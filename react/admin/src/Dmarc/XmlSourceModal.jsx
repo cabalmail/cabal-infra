@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
+import useModalDismiss from '../hooks/useModalDismiss';
 
 function downloadXml(filename, text) {
   if (typeof window === 'undefined') return;
@@ -14,22 +15,7 @@ function downloadXml(filename, text) {
 }
 
 function XmlSourceModal({ open, title, filename, xmlText, loading, error, onClose }) {
-  const closeRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (open && closeRef.current) closeRef.current.focus();
-  }, [open]);
-
-  const onScrimMouseDown = useCallback((e) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
+  const { focusRef: closeRef, onScrimHit } = useModalDismiss(open, onClose);
 
   const copy = useCallback(async () => {
     try { await navigator.clipboard.writeText(xmlText || ''); } catch { /* noop */ }
@@ -51,7 +37,7 @@ function XmlSourceModal({ open, title, filename, xmlText, loading, error, onClos
   }
 
   return (
-    <div className="source-scrim" onMouseDown={onScrimMouseDown} role="presentation">
+    <div className="source-scrim" onMouseDown={onScrimHit} role="presentation">
       <div className="source-window" role="dialog" aria-modal="true" aria-label="DMARC report XML">
         <div className="source-header">
           <div className="source-header-title">
