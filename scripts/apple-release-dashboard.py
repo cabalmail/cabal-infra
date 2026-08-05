@@ -36,6 +36,7 @@ HTML (handy for sharing a snapshot or debugging).
 """
 
 import argparse
+import concurrent.futures
 import html
 import json
 import os
@@ -264,19 +265,22 @@ def read_ref_source(repo_root, ref):
     return text, items
 
 
+# A fragment's authored date is the commit that added it, which never changes
+# once it exists - so memoize across the many /api/data refreshes a running
+# server serves (same rationale as _LANDING_CACHE below). Keyed by file name;
+# only found dates are cached, so a fragment queried before it lands is
+# retried on the next refresh.
+_FRAG_DATE_CACHE = {}
+
+
 def git_dates(repo_root, fragments, ref=None):
     """Best-effort git facts.
 
-    Returns (frag_dates, frag_land, tag_dates):
+    Returns (frag_dates, tag_dates):
       frag_dates[file] = date (YYYY-MM-DD) the fragment was authored
-      frag_land[file]  = Unix time the fragment LANDED on the current branch,
-                         following first-parent so a PR merge counts as the
-                         moment it reached (e.g.) `stage` - which is what a
-                         build number (CI time) is compared against.
       tag_dates[tag]   = date of each version tag
     """
     frag_dates = {}
-    frag_land = {}
     tag_dates = {}
 
     def run(args):
@@ -286,28 +290,25 @@ def git_dates(repo_root, fragments, ref=None):
         ).stdout.strip()
 
     if not os.path.isdir(os.path.join(repo_root, ".git")):
-        return frag_dates, frag_land, tag_dates
+        return frag_dates, tag_dates
 
     refarg = [ref] if ref else []
     for frag in fragments:
+        key = (os.path.abspath(repo_root), ref or "", frag["file"])
+        if key in _FRAG_DATE_CACHE:
+            frag_dates[frag["file"]] = _FRAG_DATE_CACHE[key]
+            continue
         path = f"changelog.d/{frag['file']}"
         out = run(["log", *refarg, "--diff-filter=A", "--follow", "--format=%cs", "-1", "--", path])
         if out:
-            frag_dates[frag["file"]] = out.splitlines()[0]
-        # First-parent add = when it landed on the branch (merge commit time).
-        landed = run(["log", *refarg, "--first-parent", "--diff-filter=A", "--format=%ct", "-1", "--", path])
-        if landed:
-            try:
-                frag_land[frag["file"]] = int(landed.splitlines()[0])
-            except ValueError:
-                pass
+            frag_dates[frag["file"]] = _FRAG_DATE_CACHE[key] = out.splitlines()[0]
 
     out = run(["for-each-ref", "--format=%(refname:short)\t%(creatordate:short)", "refs/tags"])
     for row in out.splitlines():
         if "\t" in row:
             tag, date = row.split("\t", 1)
             tag_dates[tag.strip()] = date.strip()
-    return frag_dates, frag_land, tag_dates
+    return frag_dates, tag_dates
 
 
 # --------------------------------------------------------------------------
@@ -347,9 +348,15 @@ def api_get_all(path, token_factory, max_pages=20):
     return data, included
 
 
-def fetch_app(app, token_factory):
-    """Return a normalized dict of builds + groups for one app record."""
-    bundle_id = app["bundle_id"]
+# bundle_id -> ASC app record id. App ids are immutable, so resolving one is
+# a once-per-process lookup, not a per-refresh round trip.
+_APP_ID_CACHE = {}
+
+
+def resolve_app_id(bundle_id, token_factory):
+    """Resolve a bundle id to its ASC app id (cached; None if not found)."""
+    if bundle_id in _APP_ID_CACHE:
+        return _APP_ID_CACHE[bundle_id]
     # ASC prefix-matches filter[bundleId], so `com.cabalmail.Cabalmail` also
     # returns `com.cabalmail.CabalmailMac`. Match the bundle id exactly.
     q = urllib.parse.urlencode({"filter[bundleId]": bundle_id, "limit": 200})
@@ -359,14 +366,49 @@ def fetch_app(app, token_factory):
         None,
     )
     if match is None:
-        return {"found": False, "groups": [], "builds": []}
-    app_id = match["id"]
+        return None
+    _APP_ID_CACHE[bundle_id] = match["id"]
+    return match["id"]
 
-    groups_data, _ = api_get_all(
-        f"/v1/apps/{app_id}/betaGroups?limit=200"
-        "&fields[betaGroups]=name,isInternalGroup",
-        token_factory,
-    )
+
+def fetch_app(app, token_factory):
+    """Return a normalized dict of builds + groups for one app record."""
+    app_id = resolve_app_id(app["bundle_id"], token_factory)
+    if app_id is None:
+        return {"found": False, "groups": [], "builds": []}
+
+    def get_groups():
+        data, _ = api_get_all(
+            f"/v1/apps/{app_id}/betaGroups?limit=200"
+            "&fields[betaGroups]=name,isInternalGroup",
+            token_factory,
+        )
+        return data
+
+    # JSON:API sparse fieldsets: fields[builds] must list the RELATIONSHIP names
+    # too, or ASC omits the relationship linkage from each build (the `included`
+    # array comes back, but nothing ties a build to its version / beta detail /
+    # groups). Listing only attributes was the bug behind blank columns.
+    def get_builds():
+        return api_get_all(
+            f"/v1/builds?filter[app]={app_id}"
+            "&sort=-uploadedDate&limit=200"
+            "&include=preReleaseVersion,buildBetaDetail,betaGroups"
+            "&fields[builds]=version,uploadedDate,processingState,expired,expirationDate,"
+            "preReleaseVersion,buildBetaDetail,betaGroups"
+            "&fields[preReleaseVersions]=version,platform"
+            "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
+            "&fields[betaGroups]=name,isInternalGroup"
+            "&limit[betaGroups]=50",
+            token_factory,
+        )
+
+    # The groups and builds queries are independent; overlap them.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        groups_future = pool.submit(get_groups)
+        builds_data, included = get_builds()
+        groups_data = groups_future.result()
+
     groups = {
         g["id"]: {
             "id": g["id"],
@@ -375,23 +417,6 @@ def fetch_app(app, token_factory):
         }
         for g in groups_data
     }
-
-    # JSON:API sparse fieldsets: fields[builds] must list the RELATIONSHIP names
-    # too, or ASC omits the relationship linkage from each build (the `included`
-    # array comes back, but nothing ties a build to its version / beta detail /
-    # groups). Listing only attributes was the bug behind blank columns.
-    build_q = (
-        f"/v1/builds?filter[app]={app_id}"
-        "&sort=-uploadedDate&limit=200"
-        "&include=preReleaseVersion,buildBetaDetail,betaGroups"
-        "&fields[builds]=version,uploadedDate,processingState,expired,expirationDate,"
-        "preReleaseVersion,buildBetaDetail,betaGroups"
-        "&fields[preReleaseVersions]=version,platform"
-        "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
-        "&fields[betaGroups]=name,isInternalGroup"
-        "&limit[betaGroups]=50"
-    )
-    builds_data, included = api_get_all(build_q, token_factory)
 
     inc = {(r["type"], r["id"]): r for r in included}
     builds = []
@@ -531,11 +556,12 @@ def fetch_asc():
     def token_factory():
         return make_token(key_id, issuer_id, private_key)
 
-    out = {}
-    for app in APPS:
-        sys.stderr.write(f"Querying App Store Connect for {app['label']} ({app['bundle_id']})...\n")
-        out[app["key"]] = fetch_app(app, token_factory)
-    return out
+    labels = ", ".join(f"{a['label']} ({a['bundle_id']})" for a in APPS)
+    sys.stderr.write(f"Querying App Store Connect for {labels}...\n")
+    # The apps are independent; fetch them concurrently.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(APPS)) as pool:
+        futures = {app["key"]: pool.submit(fetch_app, app, token_factory) for app in APPS}
+        return {key: f.result() for key, f in futures.items()}
 
 
 def make_token_factory():
@@ -1393,7 +1419,7 @@ def main():
         versions = parse_changelog(changelog_path)
         fragments = read_fragments(os.path.join(repo, "changelog.d"))
 
-    frag_dates, _frag_land, tag_dates = git_dates(repo, fragments, ref)
+    frag_dates, tag_dates = git_dates(repo, fragments, ref)
     summaries = [f["summary"] for f in fragments if f["apple"]]
     summaries += [e["summary"] for v in versions for e in v["apple_entries"]]
     landings = feature_landings(repo, summaries, ref)

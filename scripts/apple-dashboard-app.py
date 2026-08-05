@@ -35,10 +35,12 @@ mind ASC rate limits if you leave 10s running for long stretches.
 """
 
 import argparse
+import concurrent.futures
 import importlib.util
 import json
 import os
 import sys
+import time
 import traceback
 
 try:
@@ -94,33 +96,49 @@ def _load_source():
             None, "local working tree")
 
 
-def build_model():
+def _load_repo_side():
+    """Everything the model needs from the repo: parsed sources + git facts."""
     versions, fragments, ref, source_label = _load_source()
-    frag_dates, _frag_land, tag_dates = ENGINE.git_dates(REPO_ROOT, fragments, ref)
+    frag_dates, tag_dates = ENGINE.git_dates(REPO_ROOT, fragments, ref)
     summaries = [f["summary"] for f in fragments if f["apple"]]
     summaries += [e["summary"] for v in versions for e in v["apple_entries"]]
     landings = ENGINE.feature_landings(REPO_ROOT, summaries, ref)
+    return versions, fragments, frag_dates, landings, tag_dates, source_label
 
+
+def _load_asc_side():
+    """Everything the model needs from App Store Connect (or the mock file)."""
     if MOCK_PATH:
         with open(MOCK_PATH, encoding="utf-8") as fh:
-            asc = json.load(fh)
-        demo = True
-    else:
-        missing = [
-            k for k in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_PATH")
-            if not os.environ.get(k, "").strip()
-        ]
-        if missing:
-            raise RuntimeError(
-                "Missing App Store Connect credentials: " + ", ".join(missing) +
-                ". Set them in the environment, or start the app with --mock <file.json>."
-            )
-        asc = ENGINE.fetch_asc()
-        demo = False
+            return json.load(fh), True
+    missing = [
+        k for k in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_PATH")
+        if not os.environ.get(k, "").strip()
+    ]
+    if missing:
+        raise RuntimeError(
+            "Missing App Store Connect credentials: " + ", ".join(missing) +
+            ". Set them in the environment, or start the app with --mock <file.json>."
+        )
+    return ENGINE.fetch_asc(), False
+
+
+def build_model():
+    # The repo side (git fetch + log walks) and the ASC side (HTTPS round
+    # trips) are independent until assemble(); overlap them.
+    t0 = time.monotonic()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        asc_future = pool.submit(_load_asc_side)
+        versions, fragments, frag_dates, landings, tag_dates, source_label = _load_repo_side()
+        t_repo = time.monotonic() - t0
+        asc, demo = asc_future.result()
 
     model = ENGINE.assemble(versions, fragments, frag_dates, landings, tag_dates, asc)
     model["demo"] = demo
     model["source"] = source_label
+    sys.stderr.write(
+        f"refresh: repo {t_repo:.1f}s, total {time.monotonic() - t0:.1f}s\n"
+    )
     return model
 
 
