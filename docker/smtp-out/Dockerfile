@@ -1,4 +1,4 @@
-FROM amazonlinux:2023@sha256:1ebfb6ca925dfc74dc7bf3513e970590df3af9ba3a9c039f8143e5c7212021a0
+FROM amazonlinux:2023@sha256:c4b0d324eaacbc5805ab5f147ba71963184752da90340bf0803c1034a170c8d1
 
 # System packages
 RUN dnf install -y \
