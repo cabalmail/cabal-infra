@@ -380,7 +380,9 @@ def _parse_iso(ts):
 # processing takes minutes-hours, CI attaches groups right after processing,
 # and external beta review returns within a few days of submission.
 VOLATILE_DAYS = 14
-CACHE_SCHEMA = 1
+# Schema 2: discards caches written while the builds-page include still fed
+# groups/states - an ASC outage poisoned those with blank values.
+CACHE_SCHEMA = 2
 CACHE_ENABLED = True   # False = always refetch the full history
 CACHE_DIR = None       # set by main() / the server app; None disables the disk cache
 
@@ -470,19 +472,20 @@ def _fetch_build_pages(app_id, cached, token_factory, max_pages=40):
     # array comes back, but nothing ties a build to its version / beta detail /
     # groups). Listing only attributes was the bug behind blank columns.
     #
-    # buildBetaDetail is deliberately NOT included: in practice ASC omitted the
-    # linkage for ~75% of builds on every refresh, so states were re-recovered
-    # via /v1/buildBetaDetails anyway. All states now come from that batched
-    # query (parallel chunks), and the page response is smaller for it.
+    # buildBetaDetail and betaGroups are deliberately NOT included: the
+    # builds-page include mechanism proved unreliable for both (the beta
+    # detail linkage was omitted for ~75% of builds on every refresh, and
+    # the betaGroups linkage came back empty for every build in some
+    # sessions). States come from the batched /v1/buildBetaDetails query;
+    # group membership comes from each group's own builds relationship
+    # (fetch_group_membership). The page response is much smaller for it.
     url = (
         f"/v1/builds?filter[app]={app_id}"
         "&sort=-uploadedDate&limit=200"
-        "&include=preReleaseVersion,betaGroups"
+        "&include=preReleaseVersion"
         "&fields[builds]=version,uploadedDate,processingState,expired,expirationDate,"
-        "preReleaseVersion,betaGroups"
+        "preReleaseVersion"
         "&fields[preReleaseVersions]=version,platform"
-        "&fields[betaGroups]=name,isInternalGroup"
-        "&limit[betaGroups]=50"
     )
     cutoff = datetime.now(timezone.utc) - timedelta(days=VOLATILE_DAYS)
     dirty = {bid for bid, b in cached.items() if b.get("_dirty")}
@@ -560,23 +563,25 @@ def fetch_app(app, token_factory):
     if app_id is None:
         return {"found": False, "groups": [], "builds": []}
 
-    def get_groups():
+    def get_groups_and_membership():
         data, _ = api_get_all(
             f"/v1/apps/{app_id}/betaGroups?limit=200"
             "&fields[betaGroups]=name,isInternalGroup",
             token_factory,
         )
-        return data
+        membership = fetch_group_membership([g["id"] for g in data], token_factory)
+        return data, membership
 
     cached = load_ledger_cache(bundle_id)
 
-    # The groups and builds queries are independent; overlap them.
+    # The groups/membership chain and the builds pages are independent;
+    # overlap them.
     t0 = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        groups_future = pool.submit(get_groups)
+        groups_future = pool.submit(get_groups_and_membership)
         builds_data, included, pages = _fetch_build_pages(app_id, cached, token_factory)
         pages_secs = time.monotonic() - t0
-        groups_data = groups_future.result()
+        groups_data, membership = groups_future.result()
 
     groups = {
         g["id"]: {
@@ -601,6 +606,23 @@ def fetch_app(app, token_factory):
             exp = _parse_iso(b.get("expiration", ""))
             if exp and exp < now:
                 b["expired"] = True
+    # Group membership is authoritative per refresh and covers the whole
+    # ledger, cached builds included - it both heals any stale cached groups
+    # and picks up out-of-band attaches on builds outside the refetch window.
+    # If the membership query failed, refetched builds inherit their cached
+    # groups instead: the builds page itself carries no group linkage.
+    if membership is not None:
+        for bid, b in merged.items():
+            gids = membership.get(bid, [])
+            names = [groups[g]["name"] for g in gids if g in groups]
+            b["groups"] = [n for n in names if n]
+            b["lanes"] = classify_lanes(gids, groups)
+    else:
+        for bid in fetched:
+            prev = cached.get(bid)
+            if prev:
+                merged[bid]["groups"] = prev.get("groups", [])
+                merged[bid]["lanes"] = prev.get("lanes", [])
     builds = sorted(merged.values(), key=lambda b: b["uploaded"] or "", reverse=True)
     sys.stderr.write(
         f"  {app['label']}: {len(fetched)} builds fetched ({pages} page"
@@ -682,6 +704,43 @@ def fetch_beta_details_by_build(build_ids, token_factory, chunk=50):
                     attrs.get("internalBuildState", "") or "",
                     attrs.get("externalBuildState", "") or "",
                 )
+    return out
+
+
+def fetch_group_membership(group_ids, token_factory):
+    """Map build_id -> [group_id] via each group's ids-only builds relationship.
+
+    Queried from the group side because the builds-page include=betaGroups
+    linkage proved unreliable (empty for every build in some sessions). This
+    also covers builds outside the refetch window, so attaches and detaches
+    on old builds show up on the next refresh regardless of the cache.
+    Returns None if any group query fails, so the caller keeps existing
+    groups rather than wiping them."""
+    if not group_ids:
+        return {}
+
+    def one(gid):
+        data, _ = api_get_all(
+            f"/v1/betaGroups/{gid}/relationships/builds?limit=200",
+            token_factory,
+        )
+        return [b["id"] for b in data]
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(4, len(group_ids))
+        ) as pool:
+            results = list(pool.map(one, group_ids))
+    except urllib.error.HTTPError as err:
+        sys.stderr.write(
+            f"  group membership query failed (HTTP {err.code}); "
+            "keeping previously known groups\n"
+        )
+        return None
+    out = {}
+    for gid, ids in zip(group_ids, results):
+        for bid in ids:
+            out.setdefault(bid, []).append(gid)
     return out
 
 

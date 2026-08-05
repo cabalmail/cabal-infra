@@ -11,9 +11,11 @@
   instead of the full history. The volatile window is 14 days, sized so each
   app's refetch stays inside one page at the current upload rate; beta
   states come from the batched buildBetaDetails query (concurrent chunks)
-  instead of the builds-page include, which omitted the linkage for ~75%
-  of builds on every refresh; an empty details answer falls back to the
-  cached states rather than painting live builds "Not yet testable"; and
+  and group membership from each TestFlight group's own builds relationship
+  instead of the builds-page includes, which proved unreliable for both
+  (membership queried group-side also means attaches and detaches on old
+  builds now show up on the next refresh); an empty answer falls back to
+  the cached values rather than blanking live builds; and
   the server shares one in-flight refresh among concurrent requests
   instead of running a full App Store Connect round per caller. Group assignments made through the
   dashboard mark the build dirty so it is refetched. Pending-fragment
