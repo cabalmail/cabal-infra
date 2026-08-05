@@ -40,6 +40,7 @@ import importlib.util
 import json
 import os
 import sys
+import threading
 import time
 import traceback
 
@@ -142,6 +143,36 @@ def build_model():
     return model
 
 
+_REFRESH_LOCK = threading.Lock()
+_REFRESH_FUTURE = None
+
+
+def coalesced_build_model():
+    """Share one in-flight refresh among concurrent /api/data requests.
+
+    A browser auto-refresh timer overlapping a manual refresh (or a second
+    open tab) would otherwise each run their own full round of App Store
+    Connect calls, roughly doubling the wall time of both."""
+    global _REFRESH_FUTURE
+    with _REFRESH_LOCK:
+        owner = _REFRESH_FUTURE is None
+        if owner:
+            _REFRESH_FUTURE = concurrent.futures.Future()
+        fut = _REFRESH_FUTURE
+    if not owner:
+        return fut.result()
+    try:
+        model = build_model()
+        fut.set_result(model)
+        return model
+    except BaseException as exc:
+        fut.set_exception(exc)
+        raise
+    finally:
+        with _REFRESH_LOCK:
+            _REFRESH_FUTURE = None
+
+
 app = Flask(__name__)
 
 
@@ -158,7 +189,7 @@ def favicon():
 @app.route("/api/data")
 def api_data():
     try:
-        return jsonify(build_model())
+        return jsonify(coalesced_build_model())
     except Exception as exc:  # pylint: disable=broad-except
         sys.stderr.write("api/data error:\n" + traceback.format_exc())
         return jsonify({"error": str(exc)}), 200

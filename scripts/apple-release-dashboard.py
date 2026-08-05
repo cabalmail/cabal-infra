@@ -375,7 +375,11 @@ def _parse_iso(ts):
 # /api/assign are covered - it calls invalidate_build().
 # --------------------------------------------------------------------------
 
-VOLATILE_DAYS = 30
+# 14 days keeps each app's refetch inside one 200-build page at the current
+# upload rate (~8/day iOS). States settle much faster than this in practice:
+# processing takes minutes-hours, CI attaches groups right after processing,
+# and external beta review returns within a few days of submission.
+VOLATILE_DAYS = 14
 CACHE_SCHEMA = 1
 CACHE_ENABLED = True   # False = always refetch the full history
 CACHE_DIR = None       # set by main() / the server app; None disables the disk cache
@@ -563,9 +567,11 @@ def fetch_app(app, token_factory):
     cached = load_ledger_cache(bundle_id)
 
     # The groups and builds queries are independent; overlap them.
+    t0 = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         groups_future = pool.submit(get_groups)
         builds_data, included, pages = _fetch_build_pages(app_id, cached, token_factory)
+        pages_secs = time.monotonic() - t0
         groups_data = groups_future.result()
 
     groups = {
@@ -594,7 +600,8 @@ def fetch_app(app, token_factory):
     builds = sorted(merged.values(), key=lambda b: b["uploaded"] or "", reverse=True)
     sys.stderr.write(
         f"  {app['label']}: {len(fetched)} builds fetched ({pages} page"
-        f"{'s' if pages != 1 else ''}), {len(merged) - len(fetched)} from cache\n"
+        f"{'s' if pages != 1 else ''}, {pages_secs:.1f}s), "
+        f"{len(merged) - len(fetched)} from cache\n"
     )
 
     # The builds-list `include=buildBetaDetail` is unreliable: ASC often omits
@@ -610,6 +617,7 @@ def fetch_app(app, token_factory):
         if b["id"] in fetched and not b["internal_state"] and not b["expired"]
     ]
     if missing:
+        t1 = time.monotonic()
         details = fetch_beta_details_by_build([b["id"] for b in missing], token_factory)
         recovered = 0
         for b in missing:
@@ -619,7 +627,8 @@ def fetch_app(app, token_factory):
             else:
                 b["beta_detail_missing"] = True
         sys.stderr.write(
-            f"  beta details: {recovered} recovered by direct query, "
+            f"  {app['label']} beta details ({time.monotonic() - t1:.1f}s): "
+            f"{recovered} recovered by direct query, "
             f"{len(missing) - recovered} not yet surfaced by TestFlight\n"
         )
     save_ledger_cache(bundle_id, merged)
@@ -634,28 +643,35 @@ def fetch_beta_details_by_build(build_ids, token_factory, chunk=50):
     it for testing yet. A buildBetaDetail shares its build's id, so the
     result keys straight off det["id"].
     """
-    out = {}
-    for i in range(0, len(build_ids), chunk):
-        ids = ",".join(build_ids[i:i + chunk])
+    def one(ids):
         q = (
-            f"/v1/buildBetaDetails?filter[build]={ids}"
+            f"/v1/buildBetaDetails?filter[build]={','.join(ids)}"
             "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
             "&limit=200"
         )
         try:
             data, _ = api_get_all(q, token_factory)
+            return data
         except urllib.error.HTTPError as err:
             sys.stderr.write(
                 f"  buildBetaDetails query failed (HTTP {err.code}); "
                 "those statuses fall back to the processing state\n"
             )
-            continue
-        for det in data:
-            attrs = det.get("attributes", {})
-            out[det["id"]] = (
-                attrs.get("internalBuildState", "") or "",
-                attrs.get("externalBuildState", "") or "",
-            )
+            return []
+
+    chunks = [build_ids[i:i + chunk] for i in range(0, len(build_ids), chunk)]
+    out = {}
+    if not chunks:
+        return out
+    # The chunks are independent; run them concurrently.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(chunks))) as pool:
+        for data in pool.map(one, chunks):
+            for det in data:
+                attrs = det.get("attributes", {})
+                out[det["id"]] = (
+                    attrs.get("internalBuildState", "") or "",
+                    attrs.get("externalBuildState", "") or "",
+                )
     return out
 
 
