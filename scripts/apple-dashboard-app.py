@@ -178,6 +178,9 @@ def api_assign():
         return jsonify({"error": "App Store Connect credentials are not set."}), 200
     try:
         ENGINE.assign_build_to_group(build_id, group_id, token_factory)
+        # The build's group membership just changed; drop it from the settled
+        # cache so the next refresh refetches it even if it's old.
+        ENGINE.invalidate_build(build_id)
         return jsonify({"ok": True})
     except urllib.error.HTTPError as err:
         detail = ""
@@ -635,6 +638,10 @@ def main():
                     help="Don't `git fetch` before reading the ref (use whatever's already fetched)")
     ap.add_argument("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
     ap.add_argument("--port", type=int, default=5057, help="Bind port (default 5057)")
+    ap.add_argument("--cache-dir", default="~/.cache/cabalmail-apple-dashboard",
+                    help="Directory for the settled-builds disk cache (default: %(default)s)")
+    ap.add_argument("--no-asc-cache", action="store_true",
+                    help="Disable the builds cache; refetch the full history on every refresh")
     args = ap.parse_args()
 
     ENGINE = load_engine(args.engine)
@@ -642,9 +649,13 @@ def main():
     MOCK_PATH = os.path.abspath(os.path.expanduser(args.mock)) if args.mock else None
     REF = args.ref
     FETCH = not args.no_fetch
+    ENGINE.CACHE_ENABLED = not args.no_asc_cache
+    ENGINE.CACHE_DIR = os.path.expanduser(args.cache_dir) if ENGINE.CACHE_ENABLED else None
 
     sys.stderr.write(f"Serving Cabalmail Apple dashboard on http://{args.host}:{args.port}  (repo: {REPO_ROOT})\n")
     sys.stderr.write(f"Stage source: {REF}{' (fetch each refresh)' if (FETCH and REF != 'local') else ''}\n")
+    if ENGINE.CACHE_ENABLED:
+        sys.stderr.write(f"Builds cache: {ENGINE.CACHE_DIR}\n")
     if MOCK_PATH:
         sys.stderr.write(f"Using mock ASC data: {MOCK_PATH}\n")
     app.run(host=args.host, port=args.port, debug=False)
