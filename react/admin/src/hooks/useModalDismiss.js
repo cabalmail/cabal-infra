@@ -10,6 +10,12 @@ import { useCallback, useEffect, useRef } from 'react';
  * The listener is only attached while `open` is true, so a closed modal
  * that is still mounted does not swallow Escape from whatever is behind it.
  *
+ * While open it takes the key in the capture phase and stops propagation,
+ * so Escape closes the topmost layer only. The app-level shortcut hook
+ * (which closes the reader on Escape) also listens on `document`, but in
+ * the bubble phase — a real keydown targets the focused element inside the
+ * modal, so capture always runs first and the bubble listener never sees it.
+ *
  * @param {boolean} open Whether the modal is currently open.
  * @param {Function} onDismiss Called on Escape or a scrim hit.
  * @returns {{focusRef: object, onScrimHit: Function}} Ref for the control to
@@ -20,9 +26,14 @@ export default function useModalDismiss(open, onDismiss) {
 
   useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onDismiss(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onDismiss();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
   }, [open, onDismiss]);
 
   useEffect(() => {

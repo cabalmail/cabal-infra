@@ -118,6 +118,16 @@ function MessageOverlay({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envelopeId, loadNonce]);
 
+  // The reader stays mounted while hidden, and the load effect above only
+  // resets on a new envelope — so a sub-window left open when the reader
+  // closes would still be open when the *same* message is reopened.
+  useEffect(() => {
+    if (visible) return;
+    setSourceOpen(false);
+    setMovePickerOpen(false);
+    setConfirmPurge(false);
+  }, [visible]);
+
   const retryLoad = useCallback(() => {
     setLoadNonce((n) => n + 1);
   }, []);
@@ -190,15 +200,18 @@ function MessageOverlay({
     };
     const onKey = (e) => {
       if (e.key === 'Escape') {
+        // Capture phase + stopPropagation so Escape closes the chooser only,
+        // not the reader behind it (useKeyboardShortcuts also listens).
         e.preventDefault();
+        e.stopPropagation();
         setMovePickerOpen(false);
       }
     };
     document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
     };
   }, [movePickerOpen]);
 
