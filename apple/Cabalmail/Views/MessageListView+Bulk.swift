@@ -77,10 +77,11 @@ extension MessageListView {
     private func bulkActionButtons(model: MessageListViewModel, count: Int) -> some View {
         let hasUnread = bulkSelectionContainsUnread(model)
         let hasUnflagged = bulkSelectionContainsUnflagged(model)
+        let restoring = model.archiveIntent == .restore
         bulkActionButton(
-            systemImage: "archivebox",
-            label: "Archive",
-            accessibilityLabel: "Archive \(messageCount(count))",
+            systemImage: restoring ? restoreSymbol : "archivebox",
+            label: restoring ? "Restore" : "Archive",
+            accessibilityLabel: "\(restoring ? "Restore" : "Archive") \(messageCount(count))",
             identifier: "bulk.archive"
         ) {
             bulkArchive(model: model)
@@ -127,20 +128,27 @@ extension MessageListView {
     /// The bar's Archive action. Inside Trash the dispose preference may
     /// point back at Trash itself (a same-folder no-op); Archive on this
     /// bar is the rescue path, so send the selection to the real Archive
-    /// folder there. Rescue is a plain move (non-destructive), so it
-    /// skips the large-selection confirmation that requestDispose
-    /// applies.
+    /// folder there. Inside Archive the button restores instead — an
+    /// archive would move the selection onto its own folder. Both are
+    /// plain moves (non-destructive), so they skip the large-selection
+    /// confirmation that requestDispose applies.
     private func bulkArchive(model: MessageListViewModel) {
-        if model.isTrashFolder {
-            Task { await model.bulkMove(to: DisposeAction.archive.destinationFolder) }
+        switch model.archiveIntent {
+        case .restore:
+            restoreSelection(uids: model.selectedUIDs, model: model)
             endSelectionMode()
-        } else {
-            requestDispose(
-                uids: model.selectedUIDs,
-                action: model.disposeAction,
-                exitBulk: true,
-                model: model
-            )
+        default:
+            if model.isTrashFolder {
+                Task { await model.bulkMove(to: DisposeAction.archive.destinationFolder) }
+                endSelectionMode()
+            } else {
+                requestDispose(
+                    uids: model.selectedUIDs,
+                    action: model.disposeAction,
+                    exitBulk: true,
+                    model: model
+                )
+            }
         }
     }
 

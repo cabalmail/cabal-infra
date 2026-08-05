@@ -221,11 +221,21 @@ extension MessageListView {
         // menu is where the user reaches for the other one. Inside Trash
         // "move to Trash" is meaningless, so the destructive item becomes
         // Delete Forever and stages the same confirmation as the swipe;
-        // Archive stays available as the rescue path.
-        Button {
-            Task { await model.disposeMessages(uids: [envelope.uid], action: .archive) }
-        } label: {
-            Label("Archive", systemImage: "archivebox")
+        // Archive stays available as the rescue path. Inside Archive the
+        // archive item is the one that has nowhere to go, so it becomes
+        // Restore.
+        if model.archiveIntent == .restore {
+            Button {
+                Task { await model.moveTo(envelope, destination: FolderTree.inboxPath) }
+            } label: {
+                restoreActionLabel
+            }
+        } else {
+            Button {
+                Task { await model.disposeMessages(uids: [envelope.uid], action: .archive) }
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
         }
         if model.isTrashFolder {
             Button(role: .destructive) {
@@ -242,12 +252,14 @@ extension MessageListView {
         }
     }
 
-    /// Trailing destructive swipe spec: dispose (Archive/Trash) everywhere
-    /// except inside Trash, where delete means gone forever and stages the
-    /// confirmation dialog instead of acting directly. Same decision as the
-    /// context menu's destructive item; consumed by `SwipeActionRow`.
+    /// Trailing swipe spec: dispose (Archive/Trash) in an ordinary folder,
+    /// Delete Forever inside Trash (staging the confirmation dialog instead
+    /// of acting directly), Restore inside Archive — where an archive would
+    /// otherwise move the message onto its own folder. Same decisions as the
+    /// context menu's items; consumed by `SwipeActionRow`.
     func disposeSwipe(for envelope: Envelope, model: MessageListViewModel) -> SwipeActionSpec {
-        if model.isTrashFolder {
+        switch model.disposeIntent {
+        case .purge:
             return SwipeActionSpec(
                 systemImage: "trash.slash",
                 title: "Delete Forever",
@@ -257,16 +269,28 @@ extension MessageListView {
             ) {
                 purgeCandidate = PurgeCandidate(uids: [envelope.uid])
             }
-        }
-        let action = model.disposeAction
-        return SwipeActionSpec(
-            systemImage: action == .archive ? "archivebox" : "trash",
-            title: action == .archive ? "Archive" : "Trash",
-            tint: .red,
-            role: .destructive,
-            identifier: "message.swipe.dispose"
-        ) {
-            Task { await model.dispose(envelope) }
+        case .restore:
+            // Restore puts the message back in the inbox rather than
+            // removing it from anywhere, so it drops the destructive role
+            // and red tint the other two carry.
+            return SwipeActionSpec(
+                systemImage: restoreSymbol,
+                title: "Restore",
+                tint: .blue,
+                identifier: "message.swipe.dispose"
+            ) {
+                Task { await model.moveTo(envelope, destination: FolderTree.inboxPath) }
+            }
+        case .move(let action):
+            return SwipeActionSpec(
+                systemImage: action == .archive ? "archivebox" : "trash",
+                title: action == .archive ? "Archive" : "Trash",
+                tint: .red,
+                role: .destructive,
+                identifier: "message.swipe.dispose"
+            ) {
+                Task { await model.dispose(envelope) }
+            }
         }
     }
 
@@ -291,6 +315,18 @@ extension MessageListView {
     var purgeActionLabel: some View {
         Label("Delete Forever", systemImage: "trash.slash")
     }
+
+    /// Archive affordance label inside the Archive folder, where archiving
+    /// has nowhere to send the message and the action puts it back in the
+    /// inbox instead. Shared by the row / selection context menus.
+    @ViewBuilder
+    var restoreActionLabel: some View {
+        Label("Restore", systemImage: restoreSymbol)
+    }
+
+    /// One symbol for every Restore affordance — menus, swipe, and the
+    /// reader's toolbar button.
+    var restoreSymbol: String { "tray.and.arrow.up" }
 
     @ViewBuilder
     func addressFilterChip(_ address: String) -> some View {

@@ -154,20 +154,19 @@ extension MessageDetailView {
     @ViewBuilder
     var disposeButton: some View {
         if let model {
-            Button(role: model.isTrashFolder ? .destructive : disposeRole(for: model.disposeAction)) {
-                if model.isTrashFolder {
+            let intent = model.disposeIntent
+            Button(role: intent.isDestructive ? .destructive : nil) {
+                switch intent {
+                case .purge:
                     // In Trash, delete means gone forever — confirm first.
                     purgeConfirmPresented = true
-                } else {
-                    Task { await performDispose(model: model, action: model.disposeAction) }
+                case .restore:
+                    Task { await performMove(to: FolderTree.inboxPath) }
+                case .move(let action):
+                    Task { await performDispose(model: model, action: action) }
                 }
             } label: {
-                if model.isTrashFolder {
-                    Image(systemName: "trash.slash")
-                        .accessibilityLabel("Delete Forever")
-                } else {
-                    disposeToolbarLabel(for: model.disposeAction)
-                }
+                disposeToolbarLabel(for: intent)
             }
             // Cmd+Delete — the same chord Mail.app and most macOS list
             // apps bind to "remove from list." Routes through dispose so
@@ -184,19 +183,26 @@ extension MessageDetailView {
     /// Delete, and vice versa — both destinations stay one click away
     /// without a second toolbar slot. Inside Trash the toolbar button is
     /// Delete Forever and "move to Trash" is meaningless, so the
-    /// alternate is always Archive (the rescue path).
+    /// alternate is always Archive (the rescue path); inside Archive that
+    /// same archive alternate becomes Restore.
     @ViewBuilder
     func alternateDisposeMenuItem(model: MessageDetailViewModel) -> some View {
-        let alternate: DisposeAction = model.isTrashFolder || model.disposeAction == .trash
-            ? .archive
-            : .trash
-        Button(role: disposeRole(for: alternate)) {
-            Task { await performDispose(model: model, action: alternate) }
-        } label: {
+        let alternate: DisposeIntent = model.isTrashFolder || model.disposeAction == .trash
+            ? model.archiveIntent
+            : .move(.trash)
+        Button(role: alternate.isDestructive ? .destructive : nil) {
             switch alternate {
-            case .archive: Label("Archive", systemImage: "archivebox")
-            case .trash:   Label("Delete", systemImage: "trash")
+            case .restore:
+                Task { await performMove(to: FolderTree.inboxPath) }
+            case .move(let action):
+                Task { await performDispose(model: model, action: action) }
+            case .purge:
+                // `archiveIntent` never resolves to purge; the toolbar
+                // button owns the Trash-folder delete-forever path.
+                break
             }
+        } label: {
+            disposeMenuLabel(for: alternate)
         }
     }
 
@@ -248,22 +254,36 @@ extension MessageDetailView {
         }
     }
 
+    /// Bottom-bar label for the dispose button. Icon-only, like every other
+    /// bar slot; the accessibility label carries the verb.
     @ViewBuilder
-    func disposeToolbarLabel(for action: DisposeAction) -> some View {
-        switch action {
-        case .archive:
-            Image(systemName: "archivebox")
-                .accessibilityLabel("Archive")
-        case .trash:
-            Image(systemName: "trash")
-                .accessibilityLabel("Delete")
+    func disposeToolbarLabel(for intent: DisposeIntent) -> some View {
+        Image(systemName: disposeSymbol(for: intent))
+            .accessibilityLabel(disposeVerb(for: intent))
+    }
+
+    /// Menu twin of `disposeToolbarLabel` — a menu row carrying only an SF
+    /// Symbol reads as blank, so the overflow spells the verb out.
+    @ViewBuilder
+    func disposeMenuLabel(for intent: DisposeIntent) -> some View {
+        Label(disposeVerb(for: intent), systemImage: disposeSymbol(for: intent))
+    }
+
+    func disposeSymbol(for intent: DisposeIntent) -> String {
+        switch intent {
+        case .move(.archive): return "archivebox"
+        case .move(.trash):   return "trash"
+        case .restore:        return "tray.and.arrow.up"
+        case .purge:          return "trash.slash"
         }
     }
 
-    func disposeRole(for action: DisposeAction) -> ButtonRole? {
-        switch action {
-        case .archive: return nil
-        case .trash:   return .destructive
+    func disposeVerb(for intent: DisposeIntent) -> String {
+        switch intent {
+        case .move(.archive): return "Archive"
+        case .move(.trash):   return "Delete"
+        case .restore:        return "Restore"
+        case .purge:          return "Delete Forever"
         }
     }
 
