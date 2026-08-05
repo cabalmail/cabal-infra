@@ -2,6 +2,7 @@
 import json
 import os
 import boto3  # pylint: disable=import-error
+from admin_limits import admin_response_or_none  # pylint: disable=import-error
 
 cognito = boto3.client('cognito-idp')
 user_pool_id = os.environ['USER_POOL_ID']
@@ -9,12 +10,9 @@ user_pool_id = os.environ['USER_POOL_ID']
 
 def handler(event, _context):
     '''Confirms a pending user signup'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
     try:
         body = json.loads(event.get('body') or '')
     except (TypeError, ValueError):

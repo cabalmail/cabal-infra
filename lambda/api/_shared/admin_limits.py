@@ -1,10 +1,12 @@
-'''Rate limiting and audit logging for admin mutations.
+'''Admin-endpoint gate: group authorization, rate limiting, and audit logging.
 
 Phase 5 of docs/0.10.x/application-surface-hardening-plan.md. Deliberately
 depends on only boto3 (provided by the Lambda runtime) and the standard
 library, so the admin user-management handlers can adopt it without pulling in
 helper.py's imapclient / dnspython imports or its module-load master-password
-fetch.
+fetch. The admin-group check lives here rather than in helper.py for the same
+reason: most admin handlers import nothing heavier than boto3, and the guard is
+the first thing every one of them runs.
 '''
 import json
 import time
@@ -17,6 +19,28 @@ RATE_LIMIT_WINDOW_SECONDS = 60
 
 _ddb = boto3.resource('dynamodb')
 _rate_limit_table = _ddb.Table(RATE_LIMIT_TABLE)
+
+
+def is_admin(groups_claim):
+    '''True when the caller's `cognito:groups` claim contains the exact `admin`
+    group. The claim is a serialized list -- API Gateway may render it as
+    "admin", "admin,users", or "[admin users]" -- so we split on commas and
+    whitespace and match a whole element. A substring test (`'admin' in claim`)
+    would wrongly admit any group whose name merely contains "admin"
+    (e.g. "admin-readonly", "nonadmin").'''
+    members = (groups_claim or '').strip('[]').replace(',', ' ').split()
+    return 'admin' in members
+
+
+def admin_response_or_none(event):
+    """Returns a 403 response when the caller lacks the admin group, else None"""
+    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
+    if not is_admin(groups):
+        return {
+            'statusCode': 403,
+            'body': json.dumps({'Error': 'Admin access required'})
+        }
+    return None
 
 
 def audit_log(caller, action, target, outcome):

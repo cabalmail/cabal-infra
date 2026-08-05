@@ -5,6 +5,7 @@ import json
 import os
 import boto3  # pylint: disable=import-error
 from helper import sign_url  # pylint: disable=import-error
+from admin_limits import admin_response_or_none  # pylint: disable=import-error
 
 table_name = os.environ.get('DMARC_TABLE_NAME', 'cabal-dmarc-reports')
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -16,12 +17,9 @@ table = ddb.Table(table_name)
 
 def handler(event, _context):
     '''Returns DMARC report records in reverse chronological order'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
     try:
         params = event.get('queryStringParameters') or {}
         scan_kwargs = {
