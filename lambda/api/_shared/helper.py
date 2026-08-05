@@ -59,17 +59,6 @@ SMTP_HOST = f'smtp-out.{CONTROL_DOMAIN}'
 CACHE_BUCKET = f'cache.{CONTROL_DOMAIN}'
 
 
-def is_admin(groups_claim):
-    '''True when the caller's `cognito:groups` claim contains the exact `admin`
-    group. The claim is a serialized list -- API Gateway may render it as
-    "admin", "admin,users", or "[admin users]" -- so we split on commas and
-    whitespace and match a whole element. A substring test (`'admin' in claim`)
-    would wrongly admit any group whose name merely contains "admin"
-    (e.g. "admin-readonly", "nonadmin").'''
-    members = (groups_claim or '').strip('[]').replace(',', ' ').split()
-    return 'admin' in members
-
-
 # ---------------------------------------------------------------------------
 # Planned-maintenance signal.
 #
@@ -225,16 +214,6 @@ def maintenance_guard(handler):
             return maintenance_response(err.state)
     return wrapper
 
-
-def admin_response_or_none(event):
-    """Returns a 403 response when the caller lacks the admin group, else None"""
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if not is_admin(groups):
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
-    return None
 
 def find_managed_apex(domains_map, domain):
     """Returns (apex, zone_id) for the longest managed apex that owns `domain`,

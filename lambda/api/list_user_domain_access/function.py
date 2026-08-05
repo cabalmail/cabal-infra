@@ -6,6 +6,7 @@ that apex domain. Absence of a row is the default-deny state.
 '''
 import json
 import boto3  # pylint: disable=import-error
+from admin_limits import admin_response_or_none  # pylint: disable=import-error
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-user-domain-access')
@@ -13,12 +14,9 @@ table = ddb.Table('cabal-user-domain-access')
 
 def handler(event, _context):
     '''Returns the full allow list as a flat array of {user, domain} items.'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
     try:
         items = []
         scan_kwargs = {
