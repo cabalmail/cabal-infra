@@ -7,7 +7,7 @@
 #
 # Permanent fixture in dev and stage; precondition refuses prod. Reachable
 # only from inside the VPC via Cloud Map (sinkhole.cabal.internal).
-FROM amazonlinux:2023@sha256:1ebfb6ca925dfc74dc7bf3513e970590df3af9ba3a9c039f8143e5c7212021a0
+FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568
 
 RUN dnf install -y python3 awscli-2 \
     && dnf clean all

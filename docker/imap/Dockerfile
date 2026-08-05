@@ -13,7 +13,7 @@
 #   https://github.com/slusarz/dovecot-fts-flatcurve (v1.0.5)
 # Licences are preserved at /usr/share/doc/{xapian,fts-flatcurve}/
 # in the runtime image; see docs/operations.md.
-FROM amazonlinux:2023@sha256:1ebfb6ca925dfc74dc7bf3513e970590df3af9ba3a9c039f8143e5c7212021a0 AS fts-builder
+FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568 AS fts-builder
 
 ARG XAPIAN_VERSION=1.4.31
 ARG FTS_FLATCURVE_VERSION=v1.0.5
@@ -85,7 +85,7 @@ RUN rm -rf /staging/usr/local \
 # ───────────────────────────────────────────────────────────────
 # Runtime image
 # ───────────────────────────────────────────────────────────────
-FROM amazonlinux:2023@sha256:1ebfb6ca925dfc74dc7bf3513e970590df3af9ba3a9c039f8143e5c7212021a0
+FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568
 
 # System packages
 RUN dnf install -y \
