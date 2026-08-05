@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.24] - 2026-08-05
+
+### Removed
+- **claude workflow** The `claude.yml` workflow and mention in `CLAUDE.md`
+  are no longer used.
+
+### Fixed
+- Apple: **Reader actions no longer vanish into a system overflow.** The
+  iPhone/iPad reading toolbar carried seven buttons, which filled the bar to
+  within a couple of points at the narrower phone widths; on iOS 27 the system
+  reclaims that margin and folds the tail — Reader view and Archive, or Delete
+  Forever inside Trash — into an overflow control of its own that takes two
+  taps to open. The bar now keeps Reply, Read/Unread, Flag, Archive/Delete and
+  the "…" menu, and the two display toggles (Reader view and remote content)
+  move into that menu.
+- **A failed send no longer makes the next attempt a silent no-op.** `/send`
+  claims a message's Message-Id before handing it to the relay so a retry
+  cannot deliver twice, but only released the claim when the SMTP step
+  returned an error - not when it raised, which is what a relay refusing
+  the connection does. The orphaned claim then matched the client's retry
+  and answered it `200 "submitted"` without sending anything until the
+  claim expired. The claim is now released on any failure under it, an
+  unreachable relay comes back as a named error instead of a bodiless 502,
+  and a connection that breaks after the message is accepted keeps the
+  claim so the retry still cannot duplicate it.
+- **A malformed recipient list is answered as a rejected request.** `/send`
+  and `/save_draft` checked that `to_list`, `cc_list`, and `bcc_list` were
+  present and free of header injection, but not that they were lists at all.
+  A client sending one as a bare address string got a bodiless `502` from
+  deep in the envelope assembly; it now gets the same `400` naming the
+  offending field that every other rejected payload gets.
+
 ## [0.11.23] - 2026-08-04
 
 ### Added

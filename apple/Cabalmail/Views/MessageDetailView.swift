@@ -282,33 +282,24 @@ struct MessageDetailView: View {
     }
 
     // The detail view exposes seven action buttons. On macOS they live in the
-    // top toolbar; on iOS/visionOS they would crowd the inline title and hide
-    // the subject, so we route them to a bottom bar where they're also easier
-    // to reach with a thumb. Seven is the ceiling that fits an iPhone bottom
-    // bar, which sizes to its content and neither scrolls nor compacts — so
-    // the Drafts affordance swaps into the leading slot instead of adding an
-    // eighth item. Anything new belongs in the overflow menu.
+    // top toolbar, which has room for all of them; on iOS/visionOS they would
+    // crowd the inline title and hide the subject, so we route them to a bottom
+    // bar where they're also easier to reach with a thumb. That bar sizes to
+    // its content and only holds `ReaderToolbarLayout.capacity` items before
+    // the system compacts the tail into an overflow control of its own, so the
+    // two display toggles ride in our own overflow menu instead. See
+    // `ReaderToolbarLayout` — anything new belongs in the overflow menu too.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         #if os(iOS) || os(visionOS)
         ToolbarItemGroup(placement: .bottomBar) {
-            if model?.leadingToolbarAction == .editDraft {
-                editDraftButton
-            } else {
-                replyButton
+            let actions = ReaderToolbarLayout.bottomBar(
+                leading: model?.leadingToolbarAction ?? .reply
+            )
+            ForEach(Array(actions.enumerated()), id: \.element) { index, action in
+                if index > 0 { Spacer() }
+                bottomBarButton(for: action)
             }
-            Spacer()
-            seenButton
-            Spacer()
-            flagButton
-            Spacer()
-            remoteContentButton
-            Spacer()
-            readerModeButton
-            Spacer()
-            disposeButton
-            Spacer()
-            overflowMenuButton
         }
         #else
         if model?.leadingToolbarAction == .editDraft {
