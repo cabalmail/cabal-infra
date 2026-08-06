@@ -1,13 +1,14 @@
 #if os(iOS)
 import AppIntents
-import UIKit
 import CabalmailKit
 
 /// "Get a new random address from Cabalmail." Mints
 /// `<random>@<random>.<domain>` — the same 8+8 alphanumeric shape as the
 /// Random button in `NewAddressSheet` — and copies it to the clipboard so
 /// the user can paste it straight into whatever form asked for an email.
-struct CreateRandomAddressIntent: AppIntent {
+/// `ForegroundContinuableIntent` because the copy may need a foreground
+/// hop (see `finishAddressCreation`).
+struct CreateRandomAddressIntent: AppIntent, ForegroundContinuableIntent {
     static let title: LocalizedStringResource = "Get Random Address"
     static let description = IntentDescription(
         "Creates a new random Cabalmail address and copies it to the clipboard.",
@@ -40,11 +41,7 @@ struct CreateRandomAddressIntent: AppIntent {
         } catch {
             throw IntentError.friendly(error)
         }
-        UIPasteboard.general.string = address
-        return .result(
-            value: address,
-            dialog: "Created \(address) and copied it to the clipboard."
-        )
+        return await finishAddressCreation(address)
     }
 }
 #endif
