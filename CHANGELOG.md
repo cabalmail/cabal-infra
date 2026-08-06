@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.25] - 2026-08-06
+
+### Changed
+- Apple: **Restore replaces Archive inside the Archive folder.** The swipe
+  action, the bulk action bar, the reader's toolbar button, the row and
+  selection context menus, and Cmd+Delete all read "Restore" while you are
+  in Archive and move the message back to INBOX, instead of archiving it
+  onto its own folder — a same-folder move that handed the message a new
+  UID (invalidating cached bodies and envelopes) and dropped its row from
+  the list until the next refresh.
+- **Faster Apple dashboard refresh.** The App Store Connect queries now run
+  concurrently (both apps in parallel, and each app's groups and builds
+  queries overlapped), the immutable app-record lookup is cached for the
+  process lifetime, and the server app overlaps the repo side (git fetch,
+  changelog parsing, log walks) with the ASC side. The build ledger is
+  cached incrementally (in memory and on disk, default
+  `~/.cache/cabalmail-apple-dashboard`, `--no-asc-cache` to disable): a
+  refresh refetches only pages young enough to still change and serves
+  settled history from the cache, deriving expiry locally from
+  `expirationDate`, so steady-state refreshes fetch about one page per app
+  instead of the full history. The volatile window is 14 days, sized so each
+  app's refetch stays inside one page at the current upload rate; beta
+  states come from the batched buildBetaDetails query (concurrent chunks)
+  and group membership from each TestFlight group's own builds relationship
+  instead of the builds-page includes, which proved unreliable for both
+  (membership queried group-side also means attaches and detaches on old
+  builds now show up on the next refresh); an empty answer falls back to
+  the cached values rather than blanking live builds; and
+  the server shares one in-flight refresh among concurrent requests
+  instead of running a full App Store Connect round per caller. Group assignments made through the
+  dashboard mark the build dirty so it is refetched. Pending-fragment
+  authored dates are memoized like feature landings, a dead per-fragment
+  first-parent log walk was dropped, and each refresh logs per-phase timing
+  to stderr.
+
+### Fixed
+- **Escape closes one layer at a time in the reader.** Pressing Escape with the
+  message source, original headers, overflow menu, or folder chooser open also
+  closed the message underneath it, and the source window reappeared the next
+  time that same message was opened.
+- Apple: **Siri-created addresses now actually reach the clipboard.** iOS
+  silently refuses pasteboard writes from a backgrounded process, so the
+  create-address intents' "copied to the clipboard" claim was false when
+  invoked by voice. The intents now detect the failed write and offer a
+  one-tap "Continue" hop into the app, where the copy completes; declining
+  keeps the address in the spoken response and in the intent's Shortcuts
+  output instead of pretending it was copied.
+
+### Security
+- **Refreshed the pinned `amazonlinux:2023` base digest.** The `imap`,
+  `smtp-in`, `smtp-out`, and `sinkhole` Dockerfiles now pin the current
+  upstream `amazonlinux:2023` image, picking up patched `python3`,
+  `python3-libs`, `glib2`, and `gawk` packages on next rebuild.
+
 ## [0.11.24] - 2026-08-05
 
 ### Removed
