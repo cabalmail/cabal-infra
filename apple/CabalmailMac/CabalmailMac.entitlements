@@ -12,7 +12,7 @@
     <true/>
 
     <!--
-        Push notifications (docs/0.11.0/push-notifications.md, phase 6).
+        Push notifications (docs/0.11.x/push-notifications.md, phase 6).
         NOTE: macOS uses the `com.apple.developer.`-prefixed key here,
         unlike iOS's bare `aps-environment` — a real platform difference,
         not a typo (compare Cabalmail/Cabalmail.entitlements). As on iOS,

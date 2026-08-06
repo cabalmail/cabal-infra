@@ -2,7 +2,7 @@
 
 Called by the Apple clients' Notification Service Extension to enrich a
 content-free APNs wake signal on-device, so Apple's push infrastructure never
-sees message content (docs/0.11.0/push-notifications.md). The NSE runs against
+sees message content (docs/0.11.x/push-notifications.md). The NSE runs against
 a hard OS deadline and treats any failure as "show the generic alert", so this
 endpoint favors fast, definite answers over completeness.
 
