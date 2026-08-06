@@ -144,8 +144,18 @@ struct SignedInRootView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .padding(.top, 6)
+        .padding(.top, bannerTopInset)
         .padding(.horizontal, 12)
+    }
+
+    /// Drop the banners below the navigation bar wherever the bar's trailing
+    /// items share that band — see `StatusBannerPlacement`.
+    private var bannerTopInset: CGFloat {
+        #if os(iOS)
+        StatusBannerPlacement.topInset(isRegularWidth: horizontalSizeClass == .regular)
+        #else
+        StatusBannerPlacement.defaultTopInset
+        #endif
     }
 
     /// Builds the banner's trailing action. A `copyAddress` toast copies and
