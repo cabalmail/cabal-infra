@@ -4,13 +4,18 @@ import XCTest
 
 /// Bridge-liveness tests (#745).
 ///
-/// The conversion suite in `RichTextEditorControllerTests` needs an app host
-/// so `editor.html` can actually boot. These don't: they drive the handshake
-/// directly through `handleBridgeMessage` / the navigation-delegate callback
-/// and assert on what happens when the bridge *doesn't* come up, or dies
-/// after it has. Every one of them ends with a `waitUntilReady()` that must
-/// return — before the fix those awaits parked forever and Send spun with no
-/// error and no timeout.
+/// Most of these drive the handshake directly through `handleBridgeMessage` /
+/// the navigation-delegate callback and assert on what happens when the
+/// bridge *doesn't* come up, or dies after it has. Every one of them ends
+/// with a `waitUntilReady()` that must return — before the fix those awaits
+/// parked forever and Send spun with no error and no timeout.
+///
+/// The exception is `testRealEditorPageBootsInThisRunner`, which asserts the
+/// premise the conversion suite depends on: that `editor.html` really boots
+/// in whatever runner is executing. It lives here because this suite has
+/// never been conditionally skipped — a runner that cannot host the editor
+/// has to fail by name rather than quietly take the conversion tests down
+/// with it (#948).
 @MainActor
 final class RichTextEditorBridgeHealthTests: XCTestCase {
     /// The #734 shape: the boot script fails, so `ready` never arrives.
@@ -80,6 +85,25 @@ final class RichTextEditorBridgeHealthTests: XCTestCase {
 
         XCTAssertNil(controller.bridgeFailure)
         XCTAssertTrue(controller.isReady)
+    }
+
+    /// The real `file://` load, end to end: no injected messages, just the
+    /// page booting and posting `ready`. This is what the conversion suite
+    /// assumed and never checked — it skipped itself instead, on the theory
+    /// that an unhosted `xctest` process cannot bootstrap a WKWebView, and
+    /// so nothing noticed that the theory was wrong (#948).
+    func testRealEditorPageBootsInThisRunner() async {
+        // Same generous deadline the conversion suite uses: a cold simulator
+        // needs more than the 10s production default for its first boot.
+        let controller = RichTextEditorController(readyTimeout: 120)
+
+        await controller.waitUntilReady()
+
+        XCTAssertNil(controller.bridgeFailure, "editor bridge never booted in this runner")
+        XCTAssertTrue(controller.isReady)
+        // Ready is the handshake; this is the page actually answering.
+        let html = await controller.markdownToHtml("Hello world")
+        XCTAssertEqual(html, "<p>Hello world</p>\n")
     }
 
     /// The deadline itself. Hosted (`xcodebuild test`) the real page may well

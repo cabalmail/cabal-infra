@@ -6,26 +6,36 @@ import XCTest
 /// `editor-bridge.js` (marked with `breaks: true` + flattenParagraphs, the
 /// turndown ZWSP-trick paragraph + line-break rules, the styleParagraphs
 /// regex) are exercised end-to-end against a live `WKWebView`-backed
-/// controller — same code path the user hits at send time.
+/// controller — same code path the user hits at send time. That works in
+/// every runner in use, `swift test` included: a local `file://` load needs
+/// no app host (#948).
 @MainActor
 final class RichTextEditorControllerTests: XCTestCase {
     private var controller: RichTextEditorController!
 
     override func setUp() async throws {
         try await super.setUp()
-        // WKWebView needs an app host to bootstrap editor.html and post the
-        // JS bridge `ready` message. Standalone `xctest` (which `swift test`
-        // uses) has no host, so the load never completes and the suite
-        // hangs. CI runs these via `xcodebuild test` from apple.yml, which
-        // provides a host; detect the standalone runner by its bundle ID
-        // and skip cleanly there.
-        if Bundle.main.bundleIdentifier == "com.apple.dt.xctest.tool" {
-            throw XCTSkip(
-                "RichTextEditorController requires a WKWebView app host (run via `xcodebuild test`, not `swift test`)."
-            )
+        #if os(visionOS)
+        // Mirrors the visionOS-27 carve-out in apple.yml: WKWebView
+        // construction wedges the visionOS 27.0 beta simulator before the
+        // first test case starts, so no in-test deadline can rescue it.
+        // Stable visionOS runs the suite normally; drop this when the beta
+        // boots a WebView again.
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 {
+            throw XCTSkip("WKWebView creation wedges the visionOS 27 beta simulator (see apple.yml carve-out).")
         }
-        controller = RichTextEditorController()
+        #endif
+        // A cold simulator takes well over the controller's 10s production
+        // readyTimeout to boot its first WebContent process (measured 12.6s
+        // on a freshly booted iPhone 17 Pro sim). Past the deadline every
+        // bridge call answers with its empty fallback, so the suite would
+        // fail on `""` comparisons that say nothing about conversion rules —
+        // give the boot room, and assert the bridge came up here so a
+        // runner that genuinely cannot host it fails by name instead.
+        controller = RichTextEditorController(readyTimeout: 120)
         await controller.waitUntilReady()
+        XCTAssertNil(controller.bridgeFailure, "editor bridge never booted in this runner")
+        XCTAssertTrue(controller.isReady)
     }
 
     override func tearDown() async throws {
