@@ -15,6 +15,14 @@ public enum FolderTree {
     /// permanent deletion (purge / empty trash) when acting inside it.
     public static let trashPath = "Trash"
 
+    /// Dovecot's special-use \Archive mailbox. Archive affordances switch to
+    /// Restore when acting inside it - see `DisposeIntent`.
+    public static let archivePath = "Archive"
+
+    /// The one mailbox every account has. Restoring an archived message puts
+    /// it back here: IMAP keeps no record of where it was archived from.
+    public static let inboxPath = "INBOX"
+
     /// DFS through the `/`-delimited tree formed by `path`s, emitting peers
     /// alphabetically and children directly under their parent. Intermediate
     /// path segments that aren't themselves in `input` are skipped - we

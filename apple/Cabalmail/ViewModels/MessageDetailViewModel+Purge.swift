@@ -11,6 +11,18 @@ extension MessageDetailViewModel {
     /// delete button switches to "delete forever" + confirmation.
     var isTrashFolder: Bool { folder.path == FolderTree.trashPath }
 
+    /// What the toolbar's dispose button means for the open message, and
+    /// what the overflow menu's alternate destination means when it lands
+    /// on Archive. Shares `DisposeIntent` with the list surfaces so the
+    /// reader and the row agree on Delete Forever / Restore.
+    var disposeIntent: DisposeIntent {
+        .standard(preference: disposeAction, in: folder.path)
+    }
+
+    var archiveIntent: DisposeIntent {
+        .archiving(in: folder.path)
+    }
+
     func purge(
         onSuccess: (() -> Void)? = nil,
         onFailure: ((Error) -> Void)? = nil

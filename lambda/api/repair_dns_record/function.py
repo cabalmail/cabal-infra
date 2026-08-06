@@ -2,8 +2,8 @@
 import json
 import os
 import boto3  # pylint: disable=import-error
+from admin_limits import admin_response_or_none  # pylint: disable=import-error
 from helper import ( # pylint: disable=import-error
-    admin_response_or_none,
     assert_zone_owns_apex,
     find_managed_apex,
     validate_dns_apex,

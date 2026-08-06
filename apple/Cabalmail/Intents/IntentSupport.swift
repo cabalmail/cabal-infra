@@ -1,5 +1,6 @@
 #if os(iOS)
 import AppIntents
+import UIKit
 import CabalmailKit
 
 /// Speakable errors for App Intents. Siri reads `localizedStringResource`
@@ -52,6 +53,66 @@ enum IntentDomains {
         guard let allowed = try? await client.allowedDomains() else { return configured }
         let allowedSet = Set(allowed)
         return configured.filter { allowedSet.contains($0) }
+    }
+}
+
+@MainActor
+enum IntentClipboard {
+    /// Writes to the general pasteboard and reports whether the write took.
+    /// A process that isn't foreground can't touch the pasteboard — the
+    /// write fails *silently* (FB13636156: "pasteboard name … is not
+    /// valid" is only logged) — so callers check the `changeCount` delta
+    /// to keep the spoken dialog truthful instead of claiming a copy that
+    /// never happened.
+    static func copy(_ string: String) -> Bool {
+        let pasteboard = UIPasteboard.general
+        let before = pasteboard.changeCount
+        pasteboard.string = string
+        return pasteboard.changeCount != before
+    }
+}
+
+extension ForegroundContinuableIntent {
+    /// Shared tail of both create-address intents. The copy works in place
+    /// only when the app happens to be foreground; from Siri the app is
+    /// backgrounded, so on a failed write this offers a one-tap hop to the
+    /// foreground (where the pasteboard is writable) and completes the copy
+    /// there. Declining still returns the address as the intent's value —
+    /// a Shortcuts chain keeps working — with a dialog that says where to
+    /// find it instead of pretending it was copied.
+    @MainActor
+    func finishAddressCreation(
+        _ address: String
+    ) async -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        if IntentClipboard.copy(address) {
+            return .result(
+                value: address,
+                dialog: "Created \(address) and copied it to the clipboard."
+            )
+        }
+        do {
+            let copied = try await requestToContinueInForeground(
+                IntentDialog("I created \(address). Continue in Cabalmail to copy it?")
+            ) {
+                await IntentClipboard.copy(address)
+            }
+            guard copied else {
+                return .result(value: address, dialog: Self.createdNotCopiedDialog(address))
+            }
+            return .result(
+                value: address,
+                dialog: "Created \(address) and copied it to the clipboard."
+            )
+        } catch {
+            // Declined (or the prompt timed out): the address exists either
+            // way — never re-throw, or a Shortcuts chain would abort after
+            // the server-side create already happened.
+            return .result(value: address, dialog: Self.createdNotCopiedDialog(address))
+        }
+    }
+
+    private static func createdNotCopiedDialog(_ address: String) -> IntentDialog {
+        IntentDialog("Created \(address). You'll find it under Addresses in Cabalmail.")
     }
 }
 #endif
