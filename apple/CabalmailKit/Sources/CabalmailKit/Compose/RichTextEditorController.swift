@@ -8,6 +8,8 @@ import Foundation
 @preconcurrency import WebKit
 #if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
 #endif
 
 /// Owns the WKWebView that backs the rich-text composer surface, exposing an
@@ -128,9 +130,17 @@ public final class RichTextEditorController: NSObject {
     /// rather than treat `""` as "the user wrote nothing" (#745).
     public private(set) var bridgeFailure: String?
 
+    /// True while the editor's contenteditable has DOM focus. Tracked from
+    /// the JS `focus` / `blur` messages so hosts can scope editor-directed
+    /// keyboard shortcuts to the editor actually holding focus.
+    public private(set) var isEditorFocused = false
+
     /// Fires after every `input` event from the editor (typing, paste,
     /// formatting). Use it to invalidate cached HTML.
     public var onContentChanged: (@MainActor () -> Void)?
+    /// Fires when the editor gains or loses DOM focus; the new state is
+    /// already in `isEditorFocused` when this runs.
+    public var onEditorFocusChanged: (@MainActor (Bool) -> Void)?
     /// Fires after a selection change inside the editor surface. The
     /// updated `selection` is already in place when this runs.
     public var onSelectionChanged: (@MainActor (Selection) -> Void)?
@@ -283,48 +293,80 @@ public final class RichTextEditorController: NSObject {
         await call("exec", args: [payload.name] + payload.extras)
     }
 
-    // MARK: - Bridge plumbing
+    /// Inserts the pasteboard's plain-text flavor at the caret, discarding
+    /// any formatting the clipboard carries. The editor page requests this
+    /// via the `pastePlain` bridge message when it sees Cmd-Shift-V (or
+    /// Cmd-Opt-Shift-V); the pasteboard read lives here because page JS
+    /// outside a genuine paste event has no clipboard access.
+    public func pastePlainText() async {
+        await waitUntilReady()
+        #if canImport(AppKit)
+        let text = NSPasteboard.general.string(forType: .string)
+        #elseif canImport(UIKit)
+        let text = UIPasteboard.general.string
+        #endif
+        guard let text, !text.isEmpty else { return }
+        await call("insertPlainText", args: [text])
+    }
 
+}
+
+// MARK: - Bridge plumbing
+
+extension RichTextEditorController {
     // Internal rather than fileprivate so the bridge-liveness tests can
     // drive the handshake without an app host to run editor.html in.
     func handleBridgeMessage(_ payload: [String: Any]) {
         guard let type = payload["type"] as? String else { return }
         switch type {
         case "ready":
-            guard !isReady else { return }
-            isReady = true
-            // A `ready` that arrives after the timeout fired means the boot
-            // was merely slow, not dead — clear the failure so the compose
-            // can go on using the bridge.
-            bridgeFailure = nil
-            readyTimeoutTask?.cancel()
-            readyTimeoutTask = nil
-            let waiters = pendingReadyContinuations
-            pendingReadyContinuations.removeAll()
-            for continuation in waiters { continuation.resume() }
-            onReady?()
+            handleReady()
         case "error":
-            let message = payload["message"] as? String ?? "unknown script error"
-            let source = payload["source"] as? String ?? ""
-            let described = source.isEmpty ? message : "\(message) (\(source))"
-            NSLog("[RichTextEditor] bridge script error: %@", described)
-            // A script error before `ready` is terminal — the handshake
-            // never comes. After `ready` the bridge is live and a stray
-            // page error is not worth disabling the composer for.
-            if isReady {
-                onBridgeError?(described)
-            } else {
-                failBridge(described)
-            }
+            handleScriptError(payload)
         case "input":
             onContentChanged?()
+        case "pastePlain":
+            Task { await pastePlainText() }
         case "selection":
             if let states = payload["states"] as? [String: Any] {
                 selection = Selection(states: states)
                 onSelectionChanged?(selection)
             }
+        case "focus", "blur":
+            isEditorFocused = type == "focus"
+            onEditorFocusChanged?(isEditorFocused)
         default:
             break
+        }
+    }
+
+    private func handleReady() {
+        guard !isReady else { return }
+        isReady = true
+        // A `ready` that arrives after the timeout fired means the boot
+        // was merely slow, not dead — clear the failure so the compose
+        // can go on using the bridge.
+        bridgeFailure = nil
+        readyTimeoutTask?.cancel()
+        readyTimeoutTask = nil
+        let waiters = pendingReadyContinuations
+        pendingReadyContinuations.removeAll()
+        for continuation in waiters { continuation.resume() }
+        onReady?()
+    }
+
+    /// A script error before `ready` is terminal — the handshake never
+    /// comes. After `ready` the bridge is live and a stray page error is
+    /// not worth disabling the composer for.
+    private func handleScriptError(_ payload: [String: Any]) {
+        let message = payload["message"] as? String ?? "unknown script error"
+        let source = payload["source"] as? String ?? ""
+        let described = source.isEmpty ? message : "\(message) (\(source))"
+        NSLog("[RichTextEditor] bridge script error: %@", described)
+        if isReady {
+            onBridgeError?(described)
+        } else {
+            failBridge(described)
         }
     }
 

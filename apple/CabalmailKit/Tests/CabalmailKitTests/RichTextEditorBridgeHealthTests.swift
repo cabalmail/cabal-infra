@@ -95,5 +95,22 @@ final class RichTextEditorBridgeHealthTests: XCTestCase {
             "wait returned without either outcome recorded"
         )
     }
+
+    /// The `focus` / `blur` bridge messages drive `isEditorFocused`, which
+    /// hosts use to scope editor-directed shortcuts (the iPad ⌘⇧V
+    /// paste-without-formatting route) to the editor actually having focus.
+    func testFocusMessagesTrackEditorFocus() {
+        let controller = RichTextEditorController(readyTimeout: 600)
+        var observed: [Bool] = []
+        controller.onEditorFocusChanged = { observed.append($0) }
+        XCTAssertFalse(controller.isEditorFocused)
+
+        controller.handleBridgeMessage(["type": "focus"])
+        XCTAssertTrue(controller.isEditorFocused)
+
+        controller.handleBridgeMessage(["type": "blur"])
+        XCTAssertFalse(controller.isEditorFocused)
+        XCTAssertEqual(observed, [true, false])
+    }
 }
 #endif

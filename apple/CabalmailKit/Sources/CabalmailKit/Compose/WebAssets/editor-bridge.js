@@ -13,6 +13,8 @@
 //                                            stripped before return
 //   window.cabal.styleParagraphs(html)    -> regex injection of margin:0
 //   window.cabal.exec(name, value)        -> document.execCommand wrapper
+//   window.cabal.insertPlainText(text)    -> escaped text at the caret,
+//                                            \n -> <br> (paste w/o format)
 //   window.cabal.activeStates()           -> snapshot of bold/italic/etc.
 //                                            for the SwiftUI toolbar
 //
@@ -113,6 +115,20 @@
       if (shouldUseDefaultEnter()) return;
       event.preventDefault();
       document.execCommand('insertLineBreak');
+      return;
+    }
+    // Cmd-Shift-V pastes without formatting. Alt is allowed so the stock
+    // macOS Edit-menu equivalent (Paste and Match Style, Cmd-Opt-Shift-V)
+    // lands here too instead of reaching the paste listener below, which
+    // would prefer the HTML flavor and paste *with* formatting. Match on
+    // event.code as well because Opt-Shift-V changes event.key to a
+    // composed character on macOS keyboards.
+    if (event.metaKey && event.shiftKey && !event.ctrlKey &&
+        (event.code === 'KeyV' || event.key.toLowerCase() === 'v')) {
+      event.preventDefault();
+      // clipboardData is only readable inside a genuine paste event, so
+      // ask native to read the pasteboard and call insertPlainText back.
+      postNative({ type: 'pastePlain' });
     }
   });
 
@@ -121,6 +137,14 @@
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+  }
+
+  // Shared by the plain-flavor paste path and paste-without-formatting:
+  // insert escaped text at the caret, each newline becoming a <br>.
+  function insertPlainText(text) {
+    if (typeof text !== 'string') return;
+    const withBr = escapeHtml(text).replace(/\r\n?|\n/g, '<br>');
+    document.execCommand('insertHTML', false, withBr);
   }
 
   // Match React's transformPastedHTML + clipboardTextParser: HTML paste
@@ -137,8 +161,7 @@
     }
     if (typeof text === 'string') {
       event.preventDefault();
-      const withBr = escapeHtml(text).replace(/\r\n?|\n/g, '<br>');
-      document.execCommand('insertHTML', false, withBr);
+      insertPlainText(text);
     }
   });
 
@@ -332,6 +355,7 @@
     styleParagraphs: styleParagraphs,
     activeStates: activeStates,
     exec: exec,
+    insertPlainText: insertPlainText,
     focus: focus,
     focusAtStart: focusAtStart,
     setPlaceholder: setPlaceholder
