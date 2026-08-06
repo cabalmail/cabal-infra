@@ -5,8 +5,8 @@ a linked worktree — where `.git` is a file holding a gitdir pointer — both
 returned empty and the dashboard rendered with no fragment dates and every
 feature `furthest: none`, silently and with exit 0.
 
-Not wired into CI: `lint.yml` runs the Python unittest suites under
-`lambda/api/_shared/tests` only. Run by hand from the repo root:
+Run in CI by `.github/workflows/scripts-tests.yml` on pull requests and on
+pushes to the named branches. Run by hand from the repo root:
 
     python3 scripts/tests/test_apple_release_dashboard_git.py
 """
