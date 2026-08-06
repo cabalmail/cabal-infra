@@ -380,7 +380,12 @@ final class MessageListViewModel {
                 sort: sortCriterion
             )
             dbg("refresh topFetched=\(fetched.count)")
-            try await applyRefreshPage(fetched, uidNext: uidNext, uidValidity: uidValidity)
+            // `status.messages == 0` is the server's own count, not the `?? 0`
+            // fallback `applyStatusCounts` applies: only an explicit zero
+            // licenses pruning the list against an empty fetch (#939).
+            try await applyRefreshPage(fetched, uidNext: uidNext,
+                                       uidValidity: uidValidity,
+                                       serverReportsEmpty: status.messages == 0)
             errorMessage = nil
         } catch let error as CabalmailError {
             errorMessage = String(describing: error)
