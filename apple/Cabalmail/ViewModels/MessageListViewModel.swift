@@ -382,8 +382,6 @@ final class MessageListViewModel {
             dbg("refresh topFetched=\(fetched.count)")
             try await applyRefreshPage(fetched, uidNext: uidNext, uidValidity: uidValidity)
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
