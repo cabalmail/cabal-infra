@@ -91,6 +91,7 @@ resource "aws_efs_access_point" "smtp_queue" {
 # smtp-out's queue runners process inbound relay messages through the
 # outbound (DKIM-signing, submission) configuration, and vice versa.
 resource "aws_efs_access_point" "smtp_in_queue" {
+  #checkov:skip=CKV_AWS_330:a forced POSIX identity would break sendmail, which manages per-file qf/df/xf/tf ownership across its listener/queue-runner privilege drops; the access point enforces only the root-directory boundary and creation owner (same posture as the baselined smtp_queue access point above)
   file_system_id = aws_efs_file_system.mailstore.id
 
   root_directory {
