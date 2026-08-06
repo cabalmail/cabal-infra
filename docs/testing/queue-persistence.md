@@ -143,6 +143,17 @@ A leaked `sinkhole.test` recipient in production code would silently queue indef
 
 The deferred message sits in `/var/spool/mqueue` until either step 6/7 delivers it or the sendmail retry budget expires (default 5 days, then bounce). If you abandon the test mid-sequence, run step 6 + 7 to drain, or delete the queue entry by id with `sendmail -qI<id> -d8.43` on one of the tasks.
 
+## smtp-in variant
+
+The inbound relay has the same shared-queue arrangement: its own EFS access point (`/smtp-in-queue`, deliberately separate from smtp-out's so each tier's queue runners only process their own mail) mounted at `/var/spool/mqueue` in the `cabal-smtp-in` tasks. No sinkhole is involved — the deterministic way to park a message in smtp-in's queue is to take the imap tier down, which every imap deploy does anyway (`min_healthy=0, max=100`: the old task stops before the replacement starts).
+
+1. Open a delivery gap: `aws ecs update-service --cluster cabal-mail --service cabal-imap --force-new-deployment`.
+2. While the imap task is down, send a message **from outside the environment** (any external mailbox) to a hosted address, so it arrives via the public MX and lands on smtp-in.
+3. Confirm the deferral: run the step-3 `mailq` loop with `--service-name cabal-smtp-in` / `--container smtp-in`. The message should appear on every smtp-in task, deferred with a connection-refused status.
+4. Replace a task mid-defer: `aws ecs stop-task` on the smtp-in task that accepted the message (its CloudWatch log stream shows the accept), as in step 4 above.
+5. Once the imap task is healthy again, trigger a queue run on any surviving or replacement smtp-in task (`sendmail -q -v` via execute-command), or wait for the 15-minute queue runner.
+6. Verify the message arrives in the recipient mailbox. If it never arrives and `mailq` on every smtp-in task is empty, the handoff failed: capture the `/ecs/cabal-smtp-in` logs for the window and file an issue; do not promote the change.
+
 ## Related
 
 - [docs/0.9.x/sinkhole-test-harness-plan.md](../0.9.x/sinkhole-test-harness-plan.md) - design of the SMTP sinkhole fixture.

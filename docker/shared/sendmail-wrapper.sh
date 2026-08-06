@@ -22,14 +22,20 @@ pkill -x sendmail 2>/dev/null || true
 sleep 1
 rm -f /var/run/sendmail.pid
 
-# smtp-out only: the MTA queue is mounted from EFS (shared across all
-# smtp-out tasks so a replaced task hands off its retries to a sibling -
-# see docs/0.9.x/smtp-out-queue-persistence-plan.md). The access point's
-# creation_info sets root:mail mode 0700 on first creation, but a stale
-# directory from a previous deploy or operator action could still drift;
-# re-assert the rpm default ownership and mode immediately before exec.
-# No-op on subsequent boots when ownership already matches.
-if [ "${TIER:-}" = "smtp-out" ]; then
+# smtp-out and smtp-in: the MTA queue is mounted from EFS (a per-tier
+# directory shared across that tier's tasks, so a replaced task hands off
+# its retries to a sibling - see
+# docs/0.9.x/smtp-out-queue-persistence-plan.md for the pattern). The
+# access point's creation_info sets root:mail mode 0700 on first
+# creation, but a stale directory from a previous deploy or operator
+# action could still drift; re-assert the rpm default ownership and mode
+# immediately before exec. No-op on subsequent boots when ownership
+# already matches. Best-effort by design (|| true): smtp-in runs without
+# CAP_CHOWN, so its chown succeeds only as the no-op (the kernel skips
+# the capability check when the owner is unchanged) - real ownership
+# drift there surfaces as sendmail queue-permission errors rather than
+# being silently repaired.
+if [ "${TIER:-}" = "smtp-out" ] || [ "${TIER:-}" = "smtp-in" ]; then
   chown root:mail /var/spool/mqueue 2>/dev/null || true
   chmod 0700 /var/spool/mqueue 2>/dev/null || true
 fi
