@@ -29,6 +29,9 @@ import XCTest
 ///                              host-side with `simctl pbcopy`; the ONLY
 ///                              way into a SecureField, and keeps secrets
 ///                              out of command files and logs)
+///   key <char> [mods...]       one hardware keystroke with modifiers
+///                              (cmd, shift, alt, ctrl), e.g.
+///                              `key v cmd shift` for Cmd-Shift-V
 ///   orient portrait|left|right|upsidedown
 ///   drag from:<x>,<y> to:<x>,<y> [press:<s>] [hold:<s>]
 ///                              press, drag, then HOLD before release —
@@ -106,7 +109,7 @@ final class SimDriveTests: XCTestCase {
     /// REPL rather than answering the command (#902). Checking the app's
     /// state first turns that into an ordinary error result.
     private static let appDependentVerbs: Set<String> = [
-        "dump", "focus", "tap", "type", "cmdv", "drag", "swiperow", "exists", "wait"
+        "dump", "focus", "tap", "type", "cmdv", "key", "drag", "swiperow", "exists", "wait"
     ]
 
     private func execute(_ line: String, quit: inout Bool) throws -> String {
@@ -160,6 +163,22 @@ final class SimDriveTests: XCTestCase {
         case "cmdv":
             targetApp().typeKey("v", modifierFlags: .command)
             return "pasted"
+        case "key":
+            guard let keyChar = args.first else {
+                throw DriveError("key expects: key <char> [cmd|shift|alt|ctrl ...]")
+            }
+            var flags: XCUIElement.KeyModifierFlags = []
+            for mod in args.dropFirst() {
+                switch mod {
+                case "cmd": flags.insert(.command)
+                case "shift": flags.insert(.shift)
+                case "alt": flags.insert(.option)
+                case "ctrl": flags.insert(.control)
+                default: throw DriveError("unknown modifier '\(mod)'")
+                }
+            }
+            targetApp().typeKey(keyChar, modifierFlags: flags)
+            return "keyed \(([keyChar] + args.dropFirst()).joined(separator: "+"))"
         case "orient":
             try orient(args.first ?? "")
             return "oriented \(args.first ?? "")"
