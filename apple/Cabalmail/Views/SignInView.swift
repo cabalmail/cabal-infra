@@ -65,7 +65,7 @@ struct SignInView: View {
     private var credentialForm: some View {
         Form {
                 Section("Server") {
-                    // On macOS the grouped form shows the title as the row's
+                    // On macOS, the grouped form shows the title as the row's
                     // leading label, so the example moves into the prompt;
                     // on iOS only the placeholder is visible, so it keeps
                     // carrying the full hint.
