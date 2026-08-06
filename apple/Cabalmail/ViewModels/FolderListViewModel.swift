@@ -65,8 +65,6 @@ final class FolderListViewModel {
             let all = try await client.imapClient.listFolders()
             folders = sortForSidebar(all)
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -93,9 +91,6 @@ final class FolderListViewModel {
                 try await client.imapClient.unsubscribe(path: folder.path)
             }
             errorMessage = nil
-        } catch let error as CabalmailError {
-            applySubscription(path: folder.path, to: !target)
-            errorMessage = String(describing: error)
         } catch {
             applySubscription(path: folder.path, to: !target)
             errorMessage = error.localizedDescription
@@ -134,8 +129,6 @@ final class FolderListViewModel {
             await refreshSubscribedCounts()
             errorMessage = nil
             return true
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -151,8 +144,6 @@ final class FolderListViewModel {
             try await client.imapClient.deleteFolder(path: folder.path)
             folders.removeAll { $0.path == folder.path }
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -196,8 +187,6 @@ final class FolderListViewModel {
             appState.setFolderCounts(folderPath: path, unread: 0, total: 0)
             appState.requestRefresh()
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }

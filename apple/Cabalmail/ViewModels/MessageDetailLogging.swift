@@ -74,7 +74,10 @@ enum BodyFetchLog {
 
     static func loadOther(uid: UInt32, attempt: Int, error err: Error) {
         let type = String(describing: type(of: err))
+        // Raw case detail, not `localizedDescription`: since CabalmailError
+        // became a LocalizedError (#940) that reads as the user-facing
+        // sentence, and this log wants the code and payload it drops.
         error("load other uid=\(uid) attempt=\(attempt) type=\(type) "
-              + "error=\(err.localizedDescription)")
+              + "error=\(String(describing: err))")
     }
 }

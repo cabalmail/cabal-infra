@@ -30,8 +30,6 @@ final class AddressesViewModel {
             addresses = try await client.addresses(forceRefresh: force)
                 .sorted { $0.address.localizedCaseInsensitiveCompare($1.address) == .orderedAscending }
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -50,8 +48,6 @@ final class AddressesViewModel {
             )
             addresses.removeAll { $0.id == address.id }
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -76,9 +72,6 @@ final class AddressesViewModel {
         do {
             try await client.setFavorite(address: address.address, favorite: target)
             errorMessage = nil
-        } catch let error as CabalmailError {
-            applyFavorite(addressId: address.id, to: !target)
-            errorMessage = String(describing: error)
         } catch {
             applyFavorite(addressId: address.id, to: !target)
             errorMessage = error.localizedDescription
@@ -105,8 +98,6 @@ final class AddressesViewModel {
                 addresses[index].suspended = suspended
             }
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }

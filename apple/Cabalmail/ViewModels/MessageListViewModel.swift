@@ -387,8 +387,6 @@ final class MessageListViewModel {
                                        uidValidity: uidValidity,
                                        serverReportsEmpty: status.messages == 0)
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
