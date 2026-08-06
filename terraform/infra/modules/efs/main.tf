@@ -74,3 +74,35 @@ resource "aws_efs_access_point" "smtp_queue" {
     Name = "cabal-smtp-queue"
   }
 }
+
+# Access point for the shared smtp-in sendmail relay queue.
+#
+# Same pattern as smtp_queue above, applied to the inbound relay: a
+# message smtp-in has accepted (250) but cannot yet hand to the imap
+# tier - typically because imap is mid-deploy - waits in
+# /var/spool/mqueue for the queue runner. Persisting that queue on EFS
+# lets a replaced smtp-in task hand its deferred inbound mail to
+# whichever sibling task next scans the shared queue; on the container
+# filesystem the queue files - the only record those messages ever
+# existed - die with the task.
+#
+# Deliberately a separate directory from /smtp-queue: each tier's
+# sendmail must scan only its own queue. A shared directory would let
+# smtp-out's queue runners process inbound relay messages through the
+# outbound (DKIM-signing, submission) configuration, and vice versa.
+resource "aws_efs_access_point" "smtp_in_queue" {
+  file_system_id = aws_efs_file_system.mailstore.id
+
+  root_directory {
+    path = "/smtp-in-queue"
+    creation_info {
+      owner_uid   = 0
+      owner_gid   = 12
+      permissions = "0700"
+    }
+  }
+
+  tags = {
+    Name = "cabal-smtp-in-queue"
+  }
+}
