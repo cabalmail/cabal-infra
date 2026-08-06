@@ -22,7 +22,7 @@ struct PurgeCandidate: Identifiable {
 /// UID set staged for the large-selection dispose confirmation: an
 /// archive/trash dispose of `largeDisposeThreshold`-or-more messages
 /// pauses on an "are you sure" dialog before it runs (Phase 3 of
-/// docs/1.1.x/multi-select-bulk-operations.md). Smaller disposes commit
+/// docs/0.11.x/multi-select-bulk-operations.md). Smaller disposes commit
 /// immediately, and non-destructive bulk ops (move, flag, read) never
 /// confirm at any size.
 struct DisposeCandidate: Identifiable {

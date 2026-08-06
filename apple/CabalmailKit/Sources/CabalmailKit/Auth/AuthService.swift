@@ -42,7 +42,7 @@ public enum SignInResult: Sendable, Equatable {
 /// Interface surfaced to the app target and to `ApiClient`/`ImapClient`/`SmtpClient`.
 ///
 /// The React app uses `amazon-cognito-identity-js`. The Apple equivalent
-/// described in `docs/0.6.0/ios-client-plan.md` is **AWS Amplify Swift**, but
+/// described in `docs/0.6.x/ios-client-plan.md` is **AWS Amplify Swift**, but
 /// the current scaffold deliberately avoids a ~2 MB external dependency —
 /// the Cognito user pool is configured with `explicit_auth_flows =
 /// ["USER_PASSWORD_AUTH"]` (see `terraform/infra/modules/user_pool/main.tf`),

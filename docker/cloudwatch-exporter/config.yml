@@ -4,7 +4,7 @@
 # env var).
 #
 # Coverage tuned to the §"Golden Signals per Tier" table in
-# docs/0.7.0/monitoring-plan.md, focusing on metrics the Phase 3 alert
+# docs/0.7.x/monitoring-plan.md, focusing on metrics the Phase 3 alert
 # rules depend on. Keeping the metric set small holds the
 # GetMetricStatistics call rate down (each metric * statistic *
 # dimension is one API call per scrape).

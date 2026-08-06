@@ -22,7 +22,7 @@
 #                    instead of starting services - deploy validation)
 #                    PUSH_QUEUE_URL (imap: consumed by the push-spool-drain
 #                    supervisord program, not this script; see
-#                    docs/0.11.0/push-notifications.md)
+#                    docs/0.11.x/push-notifications.md)
 # IMAP-only:         MASTER_PASSWORD
 # SMTP-OUT-only:     DKIM_PRIVATE_KEY
 set -euo pipefail
@@ -176,7 +176,7 @@ fi
 # the push-spool-drain.sh supervisord program (root, full container env)
 # forwards them to SQS. Sticky world-writable, like /tmp: any user may
 # create signal files, none may delete another's; the drain daemon
-# authenticates each file by owner. See docs/0.11.0/push-notifications.md.
+# authenticates each file by owner. See docs/0.11.x/push-notifications.md.
 if [ "$TIER" = "imap" ]; then
   echo "[entrypoint] Preparing push wake-signal spool..."
   mkdir -p /var/spool/cabal-push

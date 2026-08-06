@@ -20,7 +20,7 @@
     <true/>
 
     <!--
-        Push notifications (docs/0.11.0/push-notifications.md). The value
+        Push notifications (docs/0.11.x/push-notifications.md). The value
         here is always `development`; a distribution provisioning profile
         rewrites it to `production` at signing time, so no per-config
         switching is needed.

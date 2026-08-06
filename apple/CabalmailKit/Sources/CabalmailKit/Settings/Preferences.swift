@@ -5,7 +5,7 @@ import Observation
 // account, in local `UserDefaults`) and synced between the user's devices
 // through the server's per-user preferences row — never through iCloud.
 //
-// Phase 6 scope (`docs/0.6.0/ios-client-plan.md`) covers four surfaces:
+// Phase 6 scope (`docs/0.6.x/ios-client-plan.md`) covers four surfaces:
 // Reading (mark-as-read + remote-content gating), Composing (default From
 // + signature), Actions (dispose swipe target), Appearance (theme).
 //
