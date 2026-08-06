@@ -270,6 +270,13 @@ def address_row_for_sender(user, sender):
     failed, so a caller that also needs the row does not have to read it a
     second time. A lookup failure is reported as unauthorized rather than
     raised, so the caller answers 403 instead of relaying a traceback.
+
+    The row's `user` attribute is slash-delimited: assign_address joins every
+    assignee into one string, so a co-assigned address stores "alice/bob".
+    Membership, not equality, is the ownership test -- an `==` here answers
+    False for every assignee of a multi-user address, the original owner
+    included, while /list and set_favorite (which already split) keep showing
+    it to all of them.
     """
     try:
         response = ddb_table.get_item(Key={'address': sender})
@@ -277,7 +284,8 @@ def address_row_for_sender(user, sender):
         print(err.response['Error']['Message'])
         return {}, False
     item = response.get('Item') or {}
-    return item, item.get('user') == user
+    assigned = (item.get('user') or '').split('/')
+    return item, user in assigned
 
 
 def user_authorized_for_sender(user, sender):

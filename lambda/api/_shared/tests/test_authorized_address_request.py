@@ -180,6 +180,40 @@ class AuthorizedAddressRequestTest(_TableCase):
             helper.authorized_address_request(_event(body='{"nothing": 1}'))
 
 
+class MultiUserAddressTest(_TableCase):
+    '''#913: `user` is slash-delimited once an address is co-assigned, so the
+    check has to test membership. Under the old `==` a multi-user row
+    authorized nobody -- not the co-assignee, and not the original owner
+    either -- while /list and set_favorite (which split on `/`) went on
+    treating every assignee as an owner.'''
+
+    def setUp(self):
+        super().setUp()
+        self.table.rows['shared@x.example'] = {'user': 'alice/bob/carol'}
+
+    def test_every_assignee_is_authorized(self):
+        for user in ('alice', 'bob', 'carol'):
+            with self.subTest(user=user):
+                self.assertTrue(
+                    helper.user_authorized_for_sender(user, 'shared@x.example'))
+
+    def test_an_unassigned_user_is_still_refused(self):
+        self.assertFalse(helper.user_authorized_for_sender('dave', 'shared@x.example'))
+
+    def test_a_partial_name_is_not_a_match(self):
+        # Membership on the split parts, not a substring test: "ali" and
+        # "alice/bob" are both non-assignees of this row.
+        self.assertFalse(helper.user_authorized_for_sender('ali', 'shared@x.example'))
+        self.assertFalse(helper.user_authorized_for_sender('alice/bob', 'shared@x.example'))
+
+    def test_the_lifecycle_preamble_admits_a_co_assignee(self):
+        address, item, error = helper.authorized_address_request(
+            _event(address='shared@x.example', user='bob'))
+        self.assertIsNone(error)
+        self.assertEqual(address, 'shared@x.example')
+        self.assertEqual(item, self.table.rows['shared@x.example'])
+
+
 class UserAuthorizedForSenderTest(_TableCase):
     '''The wrapper still answers for its other callers (compose.py, /send,
     /save_draft), which want the boolean and not the row.'''

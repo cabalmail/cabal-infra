@@ -225,6 +225,17 @@ def _git(repo_root, args):
     return subprocess.run(["git", "-C", repo_root, *args], capture_output=True, text=True, check=False)
 
 
+def is_git_repo(repo_root):
+    """True when git will answer questions about `repo_root`.
+
+    Asks git rather than looking for a `.git` directory: in a linked worktree
+    `.git` is a *file* holding a gitdir pointer, and every command the git
+    facts below run works there just as well as in a full checkout.
+    """
+    proc = _git(repo_root, ["rev-parse", "--is-inside-work-tree"])
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
 _FETCH_STATE = {"t": 0.0}
 
 
@@ -289,7 +300,7 @@ def git_dates(repo_root, fragments, ref=None):
             capture_output=True, text=True, check=False,
         ).stdout.strip()
 
-    if not os.path.isdir(os.path.join(repo_root, ".git")):
+    if not is_git_repo(repo_root):
         return frag_dates, tag_dates
 
     refarg = [ref] if ref else []
@@ -1122,7 +1133,7 @@ def _pickaxe_landing(repo_root, summary, ref=None):
 def feature_landings(repo_root, summaries, ref=None):
     """Map each feature summary -> Unix stage-landing time (best effort)."""
     out = {}
-    if not os.path.isdir(os.path.join(repo_root, ".git")):
+    if not is_git_repo(repo_root):
         return out
     for s in summaries:
         if not s:
