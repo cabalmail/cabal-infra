@@ -31,7 +31,16 @@ final class ComposeFormSectionTests: XCTestCase {
         )
     }
 
-    func testErrorBannerStaysFirst() throws {
-        XCTAssertEqual(ComposeFormSection.allCases.first, .error)
+    // Issue #938: the error banner rode along as the first Form section.
+    // Focusing Subject scrolls the form down for the keyboard, so a section
+    // inserted at the top laid out 27pt above the sheet, behind the toolbar
+    // — Save Draft looked dead. It is pinned above the scroll now, so no
+    // scrolling section may claim the slot.
+    func testTheErrorBannerIsNotAScrollingSection() throws {
+        XCTAssertEqual(
+            ComposeFormSection.allCases.first,
+            .from,
+            "the error banner is pinned, not scrolled: a section can be scrolled out of sight"
+        )
     }
 }
