@@ -15,16 +15,6 @@ final class RichTextEditorControllerTests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
-        #if os(visionOS)
-        // Mirrors the visionOS-27 carve-out in apple.yml: WKWebView
-        // construction wedges the visionOS 27.0 beta simulator before the
-        // first test case starts, so no in-test deadline can rescue it.
-        // Stable visionOS runs the suite normally; drop this when the beta
-        // boots a WebView again.
-        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 {
-            throw XCTSkip("WKWebView creation wedges the visionOS 27 beta simulator (see apple.yml carve-out).")
-        }
-        #endif
         // A cold simulator takes well over the controller's 10s production
         // readyTimeout to boot its first WebContent process (measured 12.6s
         // on a freshly booted iPhone 17 Pro sim). Past the deadline every
