@@ -1,14 +1,15 @@
 #if os(iOS)
 import AppIntents
-import UIKit
 import CabalmailKit
 
 /// "Create a Cabalmail address" with a chosen shape — e.g. username "acme",
 /// subdomain "complaints" → `acme@complaints.<domain>`. Dictated input is
 /// normalized to the `/new` Lambda's local-part / DNS-label rules
 /// (`AddressMint.normalizeLabel`), and the result is copied to the
-/// clipboard like the random variant.
-struct CreateNamedAddressIntent: AppIntent {
+/// clipboard like the random variant. `ForegroundContinuableIntent`
+/// because the copy may need a foreground hop (see
+/// `finishAddressCreation`).
+struct CreateNamedAddressIntent: AppIntent, ForegroundContinuableIntent {
     static let title: LocalizedStringResource = "Create Address"
     static let description = IntentDescription(
         "Creates a Cabalmail address with the username and subdomain you choose, then copies it.",
@@ -57,11 +58,7 @@ struct CreateNamedAddressIntent: AppIntent {
         } catch {
             throw IntentError.friendly(error)
         }
-        UIPasteboard.general.string = address
-        return .result(
-            value: address,
-            dialog: "Created \(address) and copied it to the clipboard."
-        )
+        return await finishAddressCreation(address)
     }
 }
 #endif
