@@ -66,4 +66,42 @@ final class MessageListPillCountTests: XCTestCase {
         XCTAssertEqual(model.unseen, 1)
         XCTAssertEqual(model.flagged, 0)
     }
+
+    // MARK: - #850: a row disposed from the reader
+
+    func testDisposedUnreadRowDropsTheUnreadPill() throws {
+        let model = try makeModel()
+        // The reader archives an unread message: the `\Seen` marking rides
+        // along with the move server-side, and the prune signal is all the
+        // list gets before the row is gone.
+        model.pruneEnvelope(uid: 1)
+        XCTAssertEqual(
+            model.unseen, 0,
+            "a message archived from the reader left the folder unread — the pill must follow"
+        )
+    }
+
+    func testDisposedReadRowLeavesTheUnreadPill() throws {
+        let model = try makeModel()
+        model.pruneEnvelope(uid: 2)
+        XCTAssertEqual(model.unseen, 1, "the read row was never in the Unread count")
+    }
+
+    func testFlagSignalAndPruneCountTheDisposedRowOnce() throws {
+        let model = try makeModel()
+        // The reader posts both signals in one turn; if the flag signal wins
+        // the race the row is already `\Seen` by the time it's pruned.
+        model.applyFlagChange(uid: 1, flag: .seen, added: true)
+        model.pruneEnvelope(uid: 1)
+        XCTAssertEqual(model.unseen, 0, "the departed message must be subtracted exactly once")
+    }
+
+    func testPruneOfAnUnloadedUIDLeavesTheUnreadPill() throws {
+        let model = try makeModel()
+        model.pruneEnvelope(uid: 99)
+        XCTAssertEqual(
+            model.unseen, 1,
+            "a signal for a UID we never had loaded says nothing about the unread count"
+        )
+    }
 }
