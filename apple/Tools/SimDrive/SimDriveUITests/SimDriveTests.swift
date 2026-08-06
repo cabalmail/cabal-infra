@@ -7,7 +7,7 @@ import XCTest
 /// sibling `simdrive` script, then writes numbered command files
 /// (`0001.cmd`, `0002.cmd`, …) into the exchange directory. The loop
 /// executes each against the target app and writes `<n>.out` with a
-/// JSON result. Simulator processes (iOS and visionOS alike) can read
+/// JSON result. A simulator process (i.e. iOS and visionOS alike) can read
 /// and write host paths, so the exchange directory is a plain host
 /// directory handed over via the `SIMDRIVE_DIR` environment variable
 /// (the host passes it as `TEST_RUNNER_SIMDRIVE_DIR` on the xcodebuild
