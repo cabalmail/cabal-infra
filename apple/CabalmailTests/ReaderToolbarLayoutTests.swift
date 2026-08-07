@@ -54,6 +54,27 @@ final class ReaderToolbarLayoutTests: XCTestCase {
         }
     }
 
+    // Regression coverage for issue #923: at regular width on iOS 27 a
+    // `.bottomBar` group attaches to the window rather than the split view's
+    // detail column, spreading the reader's actions under the message list.
+    // The reader draws its own pane-scoped bar there, and only there — iOS 26
+    // and compact width keep the system bar.
+    func testRegularWidthOnOS27DrawsItsOwnBar() {
+        XCTAssertTrue(
+            ReaderToolbarLayout.usesOwnActionBar(isRegularWidth: true, isOS27OrLater: true),
+            "iPad-regular on iOS 27 must pin the actions to the reading pane"
+        )
+    }
+
+    func testSystemBarIsKeptEverywhereElse() {
+        for (regular, os27) in [(true, false), (false, true), (false, false)] {
+            XCTAssertFalse(
+                ReaderToolbarLayout.usesOwnActionBar(isRegularWidth: regular, isOS27OrLater: os27),
+                "regular=\(regular) os27=\(os27) must keep the system bottom bar"
+            )
+        }
+    }
+
     func testEveryActionIsStillReachable() {
         // Demoting must not drop an action on the floor: every case is either
         // drawn on the bar (in one of the two leading configurations) or

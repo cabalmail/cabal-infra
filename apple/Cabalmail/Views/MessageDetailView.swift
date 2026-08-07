@@ -62,6 +62,31 @@ struct MessageDetailView: View {
     // instead of to a fixed slice of the pane. See
     // `ReaderHeaderHeightPolicy`.
     @State var headerContentHeight: CGFloat = 0
+    #if os(iOS)
+    // Drives `drawsOwnActionBar`: at regular width the reader shares the
+    // window with the message list, and on iOS 27 a `.bottomBar` group
+    // spreads across both columns. See `ReaderToolbarLayout`.
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    #endif
+
+    /// True when the reader pins the action set under its own pane instead of
+    /// emitting a `.bottomBar` toolbar group. iOS 27 at regular width only —
+    /// every other platform and OS generation keeps the system bar.
+    var drawsOwnActionBar: Bool {
+        #if os(iOS)
+        // A runtime check, not a compile-time one: CI builds this with the
+        // stable Xcode against the iOS 26 SDK, and the same binary has to
+        // pick the right bar on both OS generations.
+        let isOS27OrLater: Bool
+        if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
+        return ReaderToolbarLayout.usesOwnActionBar(
+            isRegularWidth: horizontalSizeClass == .regular,
+            isOS27OrLater: isOS27OrLater
+        )
+        #else
+        return false
+        #endif
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -125,6 +150,14 @@ struct MessageDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         #endif
         .toolbar { toolbarContent }
+        #if os(iOS)
+        // Pins the action set to the reading pane on iOS 27 at regular width.
+        // Inert (empty content) everywhere else, so compact iPhone and iOS 26
+        // keep the system `.bottomBar` group untouched.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if drawsOwnActionBar { readerActionBar }
+        }
+        #endif
         .sheet(isPresented: $moveSheetPresented) {
             moveSheet
         }
@@ -292,13 +325,18 @@ struct MessageDetailView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         #if os(iOS) || os(visionOS)
-        ToolbarItemGroup(placement: .bottomBar) {
-            let actions = ReaderToolbarLayout.bottomBar(
-                leading: model?.leadingToolbarAction ?? .reply
-            )
-            ForEach(Array(actions.enumerated()), id: \.element) { index, action in
-                if index > 0 { Spacer() }
-                bottomBarButton(for: action)
+        // `drawsOwnActionBar` takes the bar over on iOS 27 at regular width,
+        // where a `.bottomBar` group would span the whole window rather than
+        // the reading pane (see `readerActionBar`).
+        if !drawsOwnActionBar {
+            ToolbarItemGroup(placement: .bottomBar) {
+                let actions = ReaderToolbarLayout.bottomBar(
+                    leading: model?.leadingToolbarAction ?? .reply
+                )
+                ForEach(Array(actions.enumerated()), id: \.element) { index, action in
+                    if index > 0 { Spacer() }
+                    bottomBarButton(for: action)
+                }
             }
         }
         #else
