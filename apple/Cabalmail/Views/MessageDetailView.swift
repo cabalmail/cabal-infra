@@ -67,6 +67,11 @@ struct MessageDetailView: View {
     // window with the message list, and on iOS 27 a `.bottomBar` group
     // spreads across both columns. See `ReaderToolbarLayout`.
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    // Measured width of the pane-scoped action bar, fed to
+    // `ReaderToolbarLayout.ownBar` so the item set tracks the pane as the
+    // user drags the split divider. Starts at 0, which draws the compact
+    // five-item set for the frame before the first measurement lands.
+    @State var readerPaneWidth: CGFloat = 0
     #endif
 
     /// True when the reader pins the action set under its own pane instead of
@@ -320,7 +325,9 @@ struct MessageDetailView: View {
     // bar where they're also easier to reach with a thumb. That bar sizes to
     // its content and only holds `ReaderToolbarLayout.capacity` items before
     // the system compacts the tail into an overflow control of its own, so the
-    // two display toggles ride in our own overflow menu instead. See
+    // two display toggles ride in our own overflow menu instead. The
+    // pane-scoped bar (`readerActionBar`) is exempt from the system budget and
+    // promotes them back when its measured width allows. See
     // `ReaderToolbarLayout` — anything new belongs in the overflow menu too.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
