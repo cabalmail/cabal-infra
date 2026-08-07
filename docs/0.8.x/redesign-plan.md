@@ -63,6 +63,8 @@ If (4) lands on "raw HTML reaches the client," Phase 4 picks up a small sandboxi
 - Rebuild `Folders/` per §4b top-half: "New message" CTA, "FOLDERS" section label with collapse chevron, folder rows with icon + name + unread count, selected-row treatment (left edge 2px accent bar inset, `--surface-hover` fill), hover states.
 - Rebuild `Addresses/` per §4b bottom-half: "ADDRESSES" section label, filter input (28px, placeholder "Filter addresses…"), address rows with stable hash-to-swatch mapping (port the prototype's hash function), mono 12px address text, "+ New address" bottom row that opens the existing request modal, italic hint line.
 - Wire clicking an address to filter the message list to that recipient. This requires a new filter key in the shared state (coordinate with Phase 3).
+
+> **Erratum (2026-08-07):** The click-to-filter behavior shipped but was later removed; clicking an address now copies it to the clipboard.
 - Left rail total width 280px; internal divider is a thin rule.
 
 **Out of scope:** message list, reader, compose. The middle pane can still be today's `Messages` — it just sits next to a freshly-styled rail.

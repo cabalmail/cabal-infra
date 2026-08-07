@@ -128,7 +128,7 @@ extension MessageListView {
         }
     }
 
-    /// The list's top inset. Folder scope shows the address-filter chip and the
+    /// The list's top inset. Folder scope shows the
     /// All / Unread / Flagged pills bar; the global search surface shows the
     /// search-result metadata banner and a controls row (refine filters, sort,
     /// select). Lives here alongside the filter UI it mostly renders.
@@ -147,9 +147,6 @@ extension MessageListView {
                     searchControlsBar(model: model)
                 }
             } else {
-                if let addressFilter, !addressFilter.isEmpty {
-                    addressFilterChip(addressFilter)
-                }
                 // Folder scope has no in-list search anymore, so the refinement
                 // filter button never surfaces here — pass `searchActive: false`.
                 filterTabsBar(model: model, searchActive: false)

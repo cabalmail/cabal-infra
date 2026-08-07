@@ -11,7 +11,8 @@ name: Lint
 #   - Terraform: tflint + checkov + trivy, both the dns and infra stacks
 #                (from infra.yml), using the same pinned tool versions,
 #                shared tflint config, per-stack checkov/trivy configs, and
-#                baseline/ignore drift checks.
+#                baseline/ignore drift checks; plus init/validate (new for the
+#                PR gate — no deploy workflow validates before its plan).
 #   - Python:    pylint over lambda/api and lambda/counter (from app.yml),
 #                plus the lambda/api/_shared unittest suites (new for the PR
 #                gate; no deploy workflow runs them).
@@ -64,6 +65,7 @@ jobs:
             - '.github/scripts/check-suppression-justifications.sh'
             - '.github/scripts/check-iam-resource-scope.py'
             - '.github/scripts/baseline-diff.py'
+            - '.github/scripts/terraform-validate.sh'
             - '.github/workflows/lint.yml'
           python:
             - 'lambda/**'
@@ -179,6 +181,29 @@ jobs:
       run: |
         trivy config terraform/${{ matrix.stack }} --format json --quiet > "$RUNNER_TEMP/trivy-all.json"
         python3 .github/scripts/baseline-diff.py trivy "$RUNNER_TEMP/trivy-all.json" terraform/${{ matrix.stack }}/.trivyignore
+
+  validate:
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [dns, infra]
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+    - name: setup-terraform
+      # Same pinned action and wrapper-off setting as infra.yml's three
+      # setup-terraform steps; nothing here consumes the wrapper's outputs.
+      uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+      with:
+        terraform_wrapper: false
+    - name: terraform-validate
+      # init/validate resolve the module graph, which the scanners never do: a
+      # module argument with no matching variable is invisible to them (#962).
+      # -backend=false means no credentials and no generated backend.tf.
+      run: ./.github/scripts/terraform-validate.sh terraform/${{ matrix.stack }}
 
   # ---------------------------------------------------------------------------
   # Python. Same pylint invocations app.yml runs in the lambda-api and

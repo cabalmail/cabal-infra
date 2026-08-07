@@ -36,13 +36,6 @@ function matchesFilter(envelope, filter) {
   return true;
 }
 
-function matchesAddress(envelope, addressFilter) {
-  if (!addressFilter) return true;
-  const needle = addressFilter.toLowerCase();
-  const recipients = [].concat(envelope.to || [], envelope.cc || []);
-  return recipients.some((r) => String(r || '').toLowerCase().includes(needle));
-}
-
 function Envelopes({
   message_ids,
   folder,
@@ -53,7 +46,6 @@ function Envelopes({
   bulkMode,
   setBulkMode,
   filter,
-  addressFilter,
   emptyLabel,
   onVisibleEnvelopesChange,
   markUnread: markUnreadProp,
@@ -160,12 +152,11 @@ function Envelopes({
     for (const id of message_ids) {
       const env = envelopes[id.toString()];
       if (!env) continue;
-      if (!matchesAddress(env, addressFilter)) continue;
       if (!matchesFilter(env, filter)) continue;
       list.push(id);
     }
     return list;
-  }, [message_ids, envelopes, filter, addressFilter]);
+  }, [message_ids, envelopes, filter]);
 
   // --- Virtualization --------------------------------------------------
   // Render only the rows in (and near) the viewport. SwipeableList forwards
@@ -343,7 +334,7 @@ function Envelopes({
     return (
       <div className={`envelopes-empty ${bulkMode ? 'in-bulk' : ''}`} role="status">
         <span className="envelopes-empty-line">{emptyLabel || 'Inbox zero.'}</span>
-        {(filter !== 'all' || addressFilter) && (
+        {filter !== 'all' && (
           <span className="envelopes-empty-hint">Clear filter to see more →</span>
         )}
       </div>

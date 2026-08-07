@@ -24,23 +24,47 @@ extension MessageDetailView {
     }
 
     #if os(iOS)
+    /// The action set the pane-scoped bar currently draws, sized to the
+    /// measured pane width. Shared by `readerActionBar` and the overflow
+    /// menu (which carries the display toggles only while the bar doesn't),
+    /// so the two can't disagree about where a toggle lives.
+    var ownBarActions: [ReaderToolbarAction] {
+        ReaderToolbarLayout.ownBar(
+            leading: model?.leadingToolbarAction ?? .reply,
+            paneWidth: readerPaneWidth
+        )
+    }
+    #endif
+
+    /// True while the display toggles are drawn on the pane-scoped bar, in
+    /// which case the overflow menu must not offer a second copy — two views
+    /// would otherwise share one accessibility identifier.
+    var displayTogglesAreOnBar: Bool {
+        #if os(iOS)
+        drawsOwnActionBar && ownBarActions.contains(.readerMode)
+        #else
+        false
+        #endif
+    }
+
+    #if os(iOS)
     /// The reader's action set drawn as a bar under the reading pane, for the
     /// layouts where a `.bottomBar` toolbar group would span the whole window
-    /// instead (iOS 27 at regular width — see `ReaderToolbarLayout`). Same
-    /// items in the same order as the system bar, sourced from the same
-    /// `ReaderToolbarLayout.bottomBar`, so the two paths can't drift apart.
+    /// instead (iOS 27 at regular width — see `ReaderToolbarLayout`). Sourced
+    /// from `ReaderToolbarLayout.ownBar`, which sizes the item set to the
+    /// bar's measured width — the pane is user-resizable on iPad, and unlike
+    /// the system bar this one never compacts, so wide panes carry the full
+    /// seven actions. The bar fills the pane regardless of item count (the
+    /// spacers are greedy), so the measurement can't feed back into itself.
     /// Chrome follows the message list's bulk action bar (`Divider` over a
     /// `.bar` background), which ties the controls to the pane they act on —
     /// the thing the window-spanning bar loses.
     @ViewBuilder
     var readerActionBar: some View {
-        let actions = ReaderToolbarLayout.bottomBar(
-            leading: model?.leadingToolbarAction ?? .reply
-        )
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 0) {
-                ForEach(Array(actions.enumerated()), id: \.element) { index, action in
+                ForEach(Array(ownBarActions.enumerated()), id: \.element) { index, action in
                     if index > 0 { Spacer(minLength: 0) }
                     bottomBarButton(for: action)
                 }
@@ -48,6 +72,11 @@ extension MessageDetailView {
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
             .background(.bar)
+        }
+        .onGeometryChange(for: CGFloat.self) { barProxy in
+            barProxy.size.width
+        } action: { newWidth in
+            readerPaneWidth = newWidth
         }
     }
     #endif
@@ -329,7 +358,10 @@ extension MessageDetailView {
     /// Menu twins of the two display toggles the bottom bar gave up to stay
     /// inside `ReaderToolbarLayout.capacity`. Same actions, same shortcuts,
     /// spelled out as labelled rows — a menu row carrying only an SF Symbol
-    /// reads as blank. macOS keeps both as top-toolbar buttons.
+    /// reads as blank. Shown only while the toggles are off the bar: a wide
+    /// pane-scoped bar promotes them back (`displayTogglesAreOnBar`), and the
+    /// menu must not carry a second copy. macOS keeps both as top-toolbar
+    /// buttons.
     @ViewBuilder
     var readerModeMenuItem: some View {
         if let model {
@@ -404,10 +436,12 @@ extension MessageDetailView {
                 alternateDisposeMenuItem(model: model)
 
                 #if os(iOS) || os(visionOS)
-                Divider()
+                if !displayTogglesAreOnBar {
+                    Divider()
 
-                readerModeMenuItem
-                remoteContentMenuItem
+                    readerModeMenuItem
+                    remoteContentMenuItem
+                }
                 #endif
 
                 // Plain text alternative only makes sense when both parts

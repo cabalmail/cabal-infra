@@ -18,7 +18,6 @@ import UIKit
 struct MailRootView: View {
     @State private var selectedFolder: Folder?
     @State private var selectedEnvelope: Envelope?
-    @State private var selectedAddress: Address?
     /// Whether the launch `.task` has already landed on the provisional
     /// INBOX (see there). Never reset — a later re-appearance with a
     /// deliberately cleared selection must not yank the user back to INBOX.
@@ -169,8 +168,6 @@ struct MailRootView: View {
                 scope: .search,
                 injectedSearchModel: searchModel,
                 selection: $selectedEnvelope,
-                addressFilter: nil,
-                onClearAddressFilter: {},
                 onSearchResultSelected: { sourceFolderPath in
                     crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
                 },
@@ -181,8 +178,6 @@ struct MailRootView: View {
             MessageListView(
                 scope: .folder(selectedFolder),
                 selection: $selectedEnvelope,
-                addressFilter: selectedAddress?.address,
-                onClearAddressFilter: { selectedAddress = nil },
                 onSearchResultSelected: { sourceFolderPath in
                     crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
                 },
@@ -251,10 +246,9 @@ struct MailRootView: View {
         } action: { newWidth in
             splitWidth = newWidth
         }
-        // Clearing the envelope selection AND any active address filter when
-        // the folder changes keeps the detail column from briefly rendering
-        // an old message against the new mailbox, and matches the plan's
-        // "switching folders clears the filter" rule.
+        // Clearing the envelope selection when the folder changes keeps the
+        // detail column from briefly rendering an old message against the
+        // new mailbox.
         .onChange(of: selectedFolder) { old, folder in
             // A same-path change is a metadata reconcile — the launch landing
             // swapping its provisional `Folder(path: "INBOX")` for the fetched
@@ -262,7 +256,6 @@ struct MailRootView: View {
             // message selection and don't re-record the cursor.
             guard old?.path != folder?.path else { return }
             selectedEnvelope = nil
-            selectedAddress = nil
             crossFolderDetail = nil
             listSelectionCount = 0
             // Picking a folder shows its list on compact (it's pushed natively
@@ -391,25 +384,19 @@ struct MailRootView: View {
         }
         // Addresses live in a trailing panel rather than the left sidebar,
         // keeping the sidebar free for folders (and, later, feeds). Hidden by
-        // default; the toolbar `at` button (wide layouts) toggles it. Selecting
-        // an address still filters the message list via `selectedAddress`.
+        // default; the toolbar `at` button (wide layouts) toggles it. Tapping
+        // an address copies it to the pasteboard.
         // `.inspector` is the native trailing sidebar on iOS/macOS; visionOS
         // lacks it, so the same toggle drives a sheet there instead.
         #if os(visionOS)
         .sheet(isPresented: $addressInspectorPresented) {
-            AddressListView(
-                selection: $selectedAddress,
-                externalFilter: $addressListFilter
-            )
-            .environment(appState)
+            AddressListView(externalFilter: $addressListFilter)
+                .environment(appState)
         }
         #else
         .inspector(isPresented: $addressInspectorPresented) {
-            AddressListView(
-                selection: $selectedAddress,
-                externalFilter: $addressListFilter
-            )
-            .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
+            AddressListView(externalFilter: $addressListFilter)
+                .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
         }
         #endif
     }
