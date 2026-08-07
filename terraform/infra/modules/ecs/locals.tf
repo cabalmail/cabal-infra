@@ -21,8 +21,13 @@ locals {
       private_ports = []
     }
     smtp-out = {
-      public_ports  = [465, 587]
-      private_ports = []
+      # No public ports: outbound submission is Cabalmail-client-only
+      # (the send Lambda dials smtp-out.cabal.internal:465 directly), so
+      # the NLB carries no 465/587 listeners. Both ports stay open
+      # VPC-only for the target groups' health checks and the Lambda's
+      # direct dials.
+      public_ports  = []
+      private_ports = [465, 587]
     }
   }
 

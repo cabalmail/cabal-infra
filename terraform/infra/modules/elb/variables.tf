@@ -8,11 +8,6 @@ variable "zone_id" {
   description = "Route 53 Zone ID for control domain"
 }
 
-variable "control_domain" {
-  type        = string
-  description = "The control domain"
-}
-
 # -- ECS target group ARNs ------------------------------------
 #
 # There is deliberately no imap target group variable: mailbox access
@@ -27,15 +22,13 @@ variable "ecs_relay_target_group_arn" {
   description = "ARN of the ECS relay target group."
 }
 
-variable "ecs_submission_target_group_arn" {
-  type        = string
-  description = "ARN of the ECS submission target group."
-}
-
-variable "ecs_starttls_target_group_arn" {
-  type        = string
-  description = "ARN of the ECS STARTTLS target group."
-}
+# There are deliberately no submission/starttls target group variables:
+# outbound submission is Cabalmail-client-only (the send Lambda reaches
+# smtp-out over Cloud Map inside the VPC), so this load balancer carries
+# no 465/587 listeners. The submission and starttls target groups live
+# on in the ecs module - the service registers with them and their
+# health checks drive task replacement - they just have no listeners in
+# front of them.
 
 # -- Private DNS -------------------------------------------------
 

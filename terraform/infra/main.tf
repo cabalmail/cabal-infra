@@ -275,11 +275,8 @@ module "load_balancer" {
   public_subnet_ids = module.vpc.public_subnets[*].id
   zone_id           = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   private_zone_id   = module.vpc.private_zone.zone_id
-  control_domain    = var.control_domain
 
-  ecs_relay_target_group_arn      = module.ecs.relay_target_group_arn
-  ecs_submission_target_group_arn = module.ecs.submission_target_group_arn
-  ecs_starttls_target_group_arn   = module.ecs.starttls_target_group_arn
+  ecs_relay_target_group_arn = module.ecs.relay_target_group_arn
 }
 
 # Creates an elastic file system for the mailstore
