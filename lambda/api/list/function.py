@@ -28,12 +28,14 @@ def handler(event, _context):
             'FilterExpression': 'contains(#user, :user)',
             'ExpressionAttributeNames': {
                 '#user': 'user',
-                '#c': 'comment'
+                '#c': 'comment',
+                '#s': 'suspended'
             },
             'ExpressionAttributeValues': {
                 ':user': user
             },
-            'ProjectionExpression': 'subdomain, #c, tld, address, username, #user, favorites'
+            'ProjectionExpression':
+                'subdomain, #c, tld, address, username, #user, favorites, #s'
         }
         while True:
             response = table.scan(**scan_kwargs)
@@ -41,6 +43,7 @@ def handler(event, _context):
                 assigned = item.get('user', '').split('/')
                 if user in assigned:
                     item['favorite'] = user in (item.pop('favorites', None) or set())
+                    item['suspended'] = bool(item.get('suspended'))
                     items.append(item)
             if 'LastEvaluatedKey' not in response:
                 break

@@ -1,7 +1,7 @@
 import Foundation
 
 // Bulk-op chunking and partial-failure aggregation for the API-backed
-// client (Phase 4 of `docs/1.1.x/multi-select-bulk-operations.md`). In its
+// client (Phase 4 of `docs/0.11.x/multi-select-bulk-operations.md`). In its
 // own file so `ApiBackedImapClient.swift` stays under SwiftLint's
 // file-length cap; everything here is a static helper, so the actor's
 // private stored state is never needed.

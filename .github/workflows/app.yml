@@ -103,7 +103,7 @@ jobs:
       front_door: ${{ steps.areas.outputs.front_door }}
     steps:
     - name: checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
     # Guard against per-tier filter drift: if a Dockerfile gains a
     # COPY/ADD of a file under docker/ that its tier's changed-paths
@@ -454,10 +454,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d  # v6.2.2
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c  # v6.2.3
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -556,10 +556,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d  # v6.2.2
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c  # v6.2.3
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -612,10 +612,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d  # v6.2.2
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c  # v6.2.3
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -648,10 +648,19 @@ jobs:
     # directory unconditionally.
     # Eligibility (skip healthchecks_iac and _* scaffolding, skip
     # functions whose module is gated off in this environment) is
-    # decided serially against aws lambda get-function. The actual
-    # update-function-code + wait function-updated calls are then
+    # decided against a single auto-paginated list-functions call
+    # rather than one get-function probe per directory; that call
+    # also returns each function's deployed CodeSha256, which is
+    # compared against the sidecar .zip.base64sha256 the build step
+    # just wrote. A match means the freshly built zip is byte-
+    # identical to the running code (build-api-one.sh's reproducible-
+    # zip machinery makes hashes stable across runs), so the function
+    # is skipped: update-function-code discards every warm execution
+    # environment, and redeploying identical code would cold-start
+    # the whole API surface for nothing. The remaining
+    # update-function-code + wait function-updated calls are
     # dispatched under xargs -P so the wall time is dominated by the
-    # slowest single function rather than the sum of ~30 sequential
+    # slowest single function rather than the sum of sequential
     # waits. AWS does not rate-limit update-function-code across
     # distinct functions at any level we'd hit here.
     - name: deploy
@@ -661,22 +670,37 @@ jobs:
       run: |
         set -euo pipefail
         BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
+        aws lambda list-functions \
+          --query 'Functions[].[FunctionName,CodeSha256]' \
+          --output text > /tmp/deployed-functions.tsv
         TARGETS=()
         SKIPPED=()
+        UNCHANGED=()
         for FUNC_DIR in lambda/api/*/ ; do
           FUNC=$(basename "${FUNC_DIR}")
           case "${FUNC}" in
             healthchecks_iac|_*) continue ;;
           esac
-          if ! aws lambda get-function --function-name "${FUNC}" >/dev/null 2>&1; then
+          DEPLOYED_SHA=$(awk -v f="${FUNC}" '$1 == f {print $2}' /tmp/deployed-functions.tsv)
+          if [ -z "${DEPLOYED_SHA}" ]; then
             echo "::warning::function ${FUNC} not deployed in this environment; skipping"
             SKIPPED+=("${FUNC}")
+            continue
+          fi
+          # Sidecar written by build-api-one.sh; a missing file means the
+          # build step did not do its job, so fail loudly (set -e).
+          BUILT_SHA=$(cat "lambda/api/${FUNC}.zip.base64sha256")
+          if [ "${BUILT_SHA}" = "${DEPLOYED_SHA}" ]; then
+            UNCHANGED+=("${FUNC}")
             continue
           fi
           TARGETS+=("${FUNC}")
         done
         if [ "${#SKIPPED[@]}" -gt 0 ]; then
           echo "skipped (not deployed in this environment): ${SKIPPED[*]}"
+        fi
+        if [ "${#UNCHANGED[@]}" -gt 0 ]; then
+          echo "skipped (deployed code already matches built zip): ${UNCHANGED[*]}"
         fi
         if [ "${#TARGETS[@]}" -eq 0 ]; then
           echo "no api functions to deploy"
@@ -694,10 +718,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d  # v6.2.2
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c  # v6.2.3
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -729,10 +753,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d  # v6.2.2
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c  # v6.2.3
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -775,10 +799,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d  # v6.2.2
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c  # v6.2.3
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}

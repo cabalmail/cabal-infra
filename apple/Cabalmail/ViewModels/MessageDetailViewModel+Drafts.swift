@@ -30,6 +30,16 @@ extension MessageDetailViewModel {
     /// `Drafts` mailbox.
     var isDraftsFolder: Bool { folder.path == "Drafts" }
 
+    /// Leading reader-toolbar action. In Drafts, "Edit Draft" takes the
+    /// Reply slot rather than claiming an eighth one: the iPhone bottom
+    /// bar sizes itself to its content and doesn't scroll or compact, so
+    /// an eighth item spilled ~23pt off each end and clipped the outermost
+    /// buttons to ~5pt slivers. Replacing Reply also reads correctly —
+    /// replying to your own unsent draft isn't a meaningful action.
+    var leadingToolbarAction: LeadingReaderAction {
+        isDraftsFolder ? .editDraft : .reply
+    }
+
     /// Resume needs the fetched, parsed body in hand; until then the Edit
     /// Draft button stays disabled rather than seeding an empty compose.
     var canResumeDraft: Bool {
@@ -53,4 +63,11 @@ extension MessageDetailViewModel {
             serverRef: ref
         )
     }
+}
+
+/// Which action occupies the reader toolbar's first slot; see
+/// `MessageDetailViewModel.leadingToolbarAction`.
+enum LeadingReaderAction {
+    case reply
+    case editDraft
 }

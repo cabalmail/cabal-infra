@@ -8,7 +8,7 @@
 # cabal-push-queue SQS queue and deletes it. Splitting spool from send keeps
 # AWS credentials away from the per-user delivery agents (the 0.10.x
 # container-hardening posture) and keeps SQS latency and outages out of the
-# procmail hot path entirely. See docs/0.11.0/push-notifications.md.
+# procmail hot path entirely. See docs/0.11.x/push-notifications.md.
 #
 # Env (from the task definition via supervisord):
 #   PUSH_QUEUE_URL  target queue; unset = push not provisioned, idle forever

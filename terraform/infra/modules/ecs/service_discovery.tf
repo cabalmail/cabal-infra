@@ -17,8 +17,9 @@
 # (replace_triggered_by below) and then stops evaluating count
 # expressions module-wide, resurrecting count=0 resources as findings.
 locals {
-  sd_namespace_name    = "cabal.internal"
-  sd_imap_service_name = "imap"
+  sd_namespace_name        = "cabal.internal"
+  sd_imap_service_name     = "imap"
+  sd_smtp_out_service_name = "smtp-out"
 }
 
 resource "aws_service_discovery_private_dns_namespace" "mail" {
@@ -129,4 +130,88 @@ resource "terraform_data" "imap_cloud_map_lifecycle" {
   }
 
   depends_on = [aws_ecs_service.imap]
+}
+
+# -- SMTP-OUT registration (private-submission cutover) ----------
+#
+# The send Lambda submits outbound mail to smtp-out. It used to dial the
+# public NLB submission listener (a NAT hairpin once the Lambdas moved
+# into the VPC); registering smtp-out in Cloud Map gives it the same
+# direct private path the imap tier already has. Everything below
+# mirrors the imap registration one-for-one - same
+# health_check_custom_config trap (see the comment on
+# aws_service_discovery_service.imap), same lifecycle bracketing.
+
+resource "aws_service_discovery_service" "smtp_out" {
+  name = local.sd_smtp_out_service_name
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.mail.id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  # Same server-side FailureThreshold pinning as the imap service above;
+  # without this, every plan schedules a forced replacement.
+  lifecycle {
+    ignore_changes = [health_check_custom_config]
+  }
+}
+
+# Same bracket as terraform_data.imap_cloud_map_lifecycle (see the long
+# comment there for the destroy/create ordering rationale). The create
+# provisioner also covers FIRST registration: adding service_registries
+# to the existing smtp-out service is an in-place UpdateService, but ECS
+# only registers tasks with Cloud Map at task START - without the
+# force-new-deployment here, the Cloud Map name would resolve to nothing
+# until the next unrelated deploy. smtp-out rolls with overlap
+# (min_healthy=100), so this redeploy is not client-visible.
+resource "terraform_data" "smtp_out_cloud_map_lifecycle" {
+  triggers_replace = [
+    aws_service_discovery_service.smtp_out.id,
+    var.quiesced,
+  ]
+
+  input = {
+    cluster_name     = aws_ecs_cluster.mail.name
+    ecs_service_name = aws_ecs_service.smtp_out.name
+    region           = var.region
+    desired_count    = var.quiesced ? 0 : 1
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      set -eu
+      echo "[smtp-out-cm-lifecycle] draining ${self.input.ecs_service_name} before Cloud Map service is destroyed"
+      aws --region ${self.input.region} ecs update-service \
+        --cluster ${self.input.cluster_name} \
+        --service ${self.input.ecs_service_name} \
+        --desired-count 0 \
+        --no-cli-pager >/dev/null
+      aws --region ${self.input.region} ecs wait services-stable \
+        --cluster ${self.input.cluster_name} \
+        --services ${self.input.ecs_service_name}
+    EOT
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -eu
+      echo "[smtp-out-cm-lifecycle] restoring ${self.input.ecs_service_name} (desired=${self.input.desired_count}) and forcing redeploy"
+      aws --region ${self.input.region} ecs update-service \
+        --cluster ${self.input.cluster_name} \
+        --service ${self.input.ecs_service_name} \
+        --desired-count ${self.input.desired_count} \
+        --force-new-deployment \
+        --no-cli-pager >/dev/null
+    EOT
+  }
+
+  depends_on = [aws_ecs_service.smtp_out]
 }

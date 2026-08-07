@@ -178,6 +178,24 @@ module "front_door" {
   access_logs_bucket = module.s3_access_logs.bucket
 }
 
+# CloudFront access logs for both distributions, delivered to the shared
+# access-log bucket by CloudWatch vended-log delivery. The module's
+# resources must be created in us-east-1 (CloudFront is global and only
+# accepts its delivery configuration there), so it gets the use1 provider
+# as its default aws; the destination bucket stays in the stack region.
+module "cloudfront_logs" {
+  source                 = "./modules/cloudfront_logs"
+  destination_bucket_arn = module.s3_access_logs.bucket_arn
+  distributions = {
+    admin      = module.admin.cloudfront_distribution_arn
+    front-door = module.front_door.cloudfront_distribution_arn
+  }
+
+  providers = {
+    aws = aws.use1
+  }
+}
+
 # Sets up Route 53 hosted zones for mail domains. When the control domain is
 # also a mail domain, its bootstrap zone is reused rather than duplicated.
 # DNSSEC signing is opt-in per environment (var.dnssec_enabled); the
@@ -230,6 +248,7 @@ module "admin" {
   vpc_id             = module.vpc.vpc.id
   private_subnet_ids = module.vpc.private_subnets[*].id
   imap_internal_host = module.ecs.imap_internal_host
+  smtp_internal_host = module.ecs.smtp_internal_host
 }
 
 # Creates a DynamoDB table for storing address data
@@ -343,7 +362,8 @@ module "ecs" {
   table_arn = module.table.table_arn
   efs_id    = module.efs.efs_id
 
-  smtp_queue_access_point_id = module.efs.smtp_queue_access_point_id
+  smtp_queue_access_point_id    = module.efs.smtp_queue_access_point_id
+  smtp_in_queue_access_point_id = module.efs.smtp_in_queue_access_point_id
 
   user_pool_arn = module.pool.user_pool_arn
   user_pool_id  = module.pool.user_pool_id

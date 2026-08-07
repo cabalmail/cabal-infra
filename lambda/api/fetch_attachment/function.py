@@ -5,22 +5,37 @@ from helper import upload_object # pylint: disable=import-error
 from helper import sign_url # pylint: disable=import-error
 from helper import key_exists # pylint: disable=import-error
 from helper import get_message # pylint: disable=import-error
+from helper import validate_attachment_filename # pylint: disable=import-error
+from helper import validate_folder_name # pylint: disable=import-error
+from helper import validate_part_index # pylint: disable=import-error
+from helper import validate_uid # pylint: disable=import-error
 from helper import CACHE_BUCKET # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
+from helper import message_gone_guard # pylint: disable=import-error
 
 
 @maintenance_guard
+@message_gone_guard
 def handler(event, _context):
     '''Preps an attachment for download from S3 given a folder, message ID,
     and attachment serial number'''
-    query_string = event['queryStringParameters']
+    query_string = event.get('queryStringParameters') or {}
     user = event['requestContext']['authorizer']['claims']['cognito:username']
+    try:
+        folder = validate_folder_name(query_string.get('folder'))
+        msg_id = validate_uid(query_string.get('id'))
+        filename = validate_attachment_filename(query_string.get('filename'))
+        index = validate_part_index(query_string.get('index'))
+    except ValueError as err:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"status": f"Invalid input: {err}"})
+        }
     bucket = CACHE_BUCKET
-    key = f"{user}/{query_string['folder']}/{query_string['id']}/{query_string['filename']}"
-    index = int(query_string['index'])
-    message = get_message(query_string['host'], user,
-                          query_string['folder'].replace("/","."), query_string['id'])
+    key = f"{user}/{folder}/{msg_id}/{filename}"
+    message = get_message(query_string.get('host'), user,
+                          folder.replace("/","."), msg_id)
     i = 0
     if message.is_multipart():
         for part in message.walk():

@@ -36,6 +36,7 @@ HTML (handy for sharing a snapshot or debugging).
 """
 
 import argparse
+import concurrent.futures
 import html
 import json
 import os
@@ -46,7 +47,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 API_BASE = "https://api.appstoreconnect.apple.com"
 
@@ -224,6 +225,17 @@ def _git(repo_root, args):
     return subprocess.run(["git", "-C", repo_root, *args], capture_output=True, text=True, check=False)
 
 
+def is_git_repo(repo_root):
+    """True when git will answer questions about `repo_root`.
+
+    Asks git rather than looking for a `.git` directory: in a linked worktree
+    `.git` is a *file* holding a gitdir pointer, and every command the git
+    facts below run works there just as well as in a full checkout.
+    """
+    proc = _git(repo_root, ["rev-parse", "--is-inside-work-tree"])
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
 _FETCH_STATE = {"t": 0.0}
 
 
@@ -264,19 +276,22 @@ def read_ref_source(repo_root, ref):
     return text, items
 
 
+# A fragment's authored date is the commit that added it, which never changes
+# once it exists - so memoize across the many /api/data refreshes a running
+# server serves (same rationale as _LANDING_CACHE below). Keyed by file name;
+# only found dates are cached, so a fragment queried before it lands is
+# retried on the next refresh.
+_FRAG_DATE_CACHE = {}
+
+
 def git_dates(repo_root, fragments, ref=None):
     """Best-effort git facts.
 
-    Returns (frag_dates, frag_land, tag_dates):
+    Returns (frag_dates, tag_dates):
       frag_dates[file] = date (YYYY-MM-DD) the fragment was authored
-      frag_land[file]  = Unix time the fragment LANDED on the current branch,
-                         following first-parent so a PR merge counts as the
-                         moment it reached (e.g.) `stage` - which is what a
-                         build number (CI time) is compared against.
       tag_dates[tag]   = date of each version tag
     """
     frag_dates = {}
-    frag_land = {}
     tag_dates = {}
 
     def run(args):
@@ -285,29 +300,26 @@ def git_dates(repo_root, fragments, ref=None):
             capture_output=True, text=True, check=False,
         ).stdout.strip()
 
-    if not os.path.isdir(os.path.join(repo_root, ".git")):
-        return frag_dates, frag_land, tag_dates
+    if not is_git_repo(repo_root):
+        return frag_dates, tag_dates
 
     refarg = [ref] if ref else []
     for frag in fragments:
+        key = (os.path.abspath(repo_root), ref or "", frag["file"])
+        if key in _FRAG_DATE_CACHE:
+            frag_dates[frag["file"]] = _FRAG_DATE_CACHE[key]
+            continue
         path = f"changelog.d/{frag['file']}"
         out = run(["log", *refarg, "--diff-filter=A", "--follow", "--format=%cs", "-1", "--", path])
         if out:
-            frag_dates[frag["file"]] = out.splitlines()[0]
-        # First-parent add = when it landed on the branch (merge commit time).
-        landed = run(["log", *refarg, "--first-parent", "--diff-filter=A", "--format=%ct", "-1", "--", path])
-        if landed:
-            try:
-                frag_land[frag["file"]] = int(landed.splitlines()[0])
-            except ValueError:
-                pass
+            frag_dates[frag["file"]] = _FRAG_DATE_CACHE[key] = out.splitlines()[0]
 
     out = run(["for-each-ref", "--format=%(refname:short)\t%(creatordate:short)", "refs/tags"])
     for row in out.splitlines():
         if "\t" in row:
             tag, date = row.split("\t", 1)
             tag_dates[tag.strip()] = date.strip()
-    return frag_dates, frag_land, tag_dates
+    return frag_dates, tag_dates
 
 
 # --------------------------------------------------------------------------
@@ -347,9 +359,106 @@ def api_get_all(path, token_factory, max_pages=20):
     return data, included
 
 
-def fetch_app(app, token_factory):
-    """Return a normalized dict of builds + groups for one app record."""
-    bundle_id = app["bundle_id"]
+def _parse_iso(ts):
+    """Parse an ASC ISO-8601 timestamp; None on failure. (Python < 3.11
+    fromisoformat rejects a trailing Z, which ASC sometimes uses.)"""
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+# --------------------------------------------------------------------------
+# Build-ledger cache. Most of the ledger is immutable history: an expired
+# build never changes again, and a live build's states and group membership
+# only churn in the weeks right after upload (processing, review, CI/manual
+# group attachment). So keep every normalized build ever seen (in memory and
+# on disk), refetch only pages young enough to still change, and serve the
+# rest from cache. Expiry for cached builds is derived locally from
+# expirationDate rather than refetched.
+#
+# Known staleness (accepted): a build older than VOLATILE_DAYS that is
+# manually expired early, or mutated outside this app (e.g. a group attach
+# in App Store Connect's UI), keeps its cached state until its natural
+# expirationDate passes. Attaches made through this dashboard's own
+# /api/assign are covered - it calls invalidate_build().
+# --------------------------------------------------------------------------
+
+# 14 days keeps each app's refetch inside one 200-build page at the current
+# upload rate (~8/day iOS). States settle much faster than this in practice:
+# processing takes minutes-hours, CI attaches groups right after processing,
+# and external beta review returns within a few days of submission.
+VOLATILE_DAYS = 14
+# Schema 2: discards caches written while the builds-page include still fed
+# groups/states - an ASC outage poisoned those with blank values.
+CACHE_SCHEMA = 2
+CACHE_ENABLED = True   # False = always refetch the full history
+CACHE_DIR = None       # set by main() / the server app; None disables the disk cache
+
+_LEDGER_MEM = {}   # bundle_id -> {build_id: normalized build dict}
+
+
+def _cache_path(bundle_id):
+    return os.path.join(CACHE_DIR, f"builds-{bundle_id}.json") if CACHE_DIR else None
+
+
+def load_ledger_cache(bundle_id):
+    """Previously seen builds for one app: memory first, then disk."""
+    if not CACHE_ENABLED:
+        return {}
+    if bundle_id in _LEDGER_MEM:
+        return _LEDGER_MEM[bundle_id]
+    path = _cache_path(bundle_id)
+    if path and os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                blob = json.load(fh)
+            if blob.get("schema") == CACHE_SCHEMA:
+                _LEDGER_MEM[bundle_id] = blob.get("builds") or {}
+                return _LEDGER_MEM[bundle_id]
+        except (OSError, ValueError):
+            pass
+    return {}
+
+
+def save_ledger_cache(bundle_id, builds_by_id):
+    if not CACHE_ENABLED:
+        return
+    _LEDGER_MEM[bundle_id] = builds_by_id
+    path = _cache_path(bundle_id)
+    if not path:
+        return
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump({"schema": CACHE_SCHEMA, "builds": builds_by_id}, fh)
+        os.replace(tmp, path)
+    except OSError as err:
+        sys.stderr.write(f"  ledger cache not saved ({err}); refreshes still work\n")
+
+
+def invalidate_build(build_id):
+    """Mark one build dirty in every app's cache so the next refresh pages far
+    enough back to refetch it. Marking (not deleting) keeps the cached copy as
+    a fallback and tells the pager how deep it must go."""
+    for bundle_id, builds in _LEDGER_MEM.items():
+        if build_id in builds:
+            builds[build_id]["_dirty"] = True
+            save_ledger_cache(bundle_id, builds)
+
+
+# bundle_id -> ASC app record id. App ids are immutable, so resolving one is
+# a once-per-process lookup, not a per-refresh round trip.
+_APP_ID_CACHE = {}
+
+
+def resolve_app_id(bundle_id, token_factory):
+    """Resolve a bundle id to its ASC app id (cached; None if not found)."""
+    if bundle_id in _APP_ID_CACHE:
+        return _APP_ID_CACHE[bundle_id]
     # ASC prefix-matches filter[bundleId], so `com.cabalmail.Cabalmail` also
     # returns `com.cabalmail.CabalmailMac`. Match the bundle id exactly.
     q = urllib.parse.urlencode({"filter[bundleId]": bundle_id, "limit": 200})
@@ -359,14 +468,132 @@ def fetch_app(app, token_factory):
         None,
     )
     if match is None:
-        return {"found": False, "groups": [], "builds": []}
-    app_id = match["id"]
+        return None
+    _APP_ID_CACHE[bundle_id] = match["id"]
+    return match["id"]
 
-    groups_data, _ = api_get_all(
-        f"/v1/apps/{app_id}/betaGroups?limit=200"
-        "&fields[betaGroups]=name,isInternalGroup",
-        token_factory,
+
+def _fetch_build_pages(app_id, cached, token_factory, max_pages=40):
+    """Fetch build pages newest-first, stopping once further pages can only
+    repeat settled history: every build on the current page is already cached
+    and the page reaches back past the volatile window. With an empty cache
+    this walks the full history (the seed fetch)."""
+    # JSON:API sparse fieldsets: fields[builds] must list the RELATIONSHIP names
+    # too, or ASC omits the relationship linkage from each build (the `included`
+    # array comes back, but nothing ties a build to its version / beta detail /
+    # groups). Listing only attributes was the bug behind blank columns.
+    #
+    # buildBetaDetail and betaGroups are deliberately NOT included: the
+    # builds-page include mechanism proved unreliable for both (the beta
+    # detail linkage was omitted for ~75% of builds on every refresh, and
+    # the betaGroups linkage came back empty for every build in some
+    # sessions). States come from the batched /v1/buildBetaDetails query;
+    # group membership comes from each group's own builds relationship
+    # (fetch_group_membership). The page response is much smaller for it.
+    url = (
+        f"/v1/builds?filter[app]={app_id}"
+        "&sort=-uploadedDate&limit=200"
+        "&include=preReleaseVersion"
+        "&fields[builds]=version,uploadedDate,processingState,expired,expirationDate,"
+        "preReleaseVersion"
+        "&fields[preReleaseVersions]=version,platform"
     )
+    cutoff = datetime.now(timezone.utc) - timedelta(days=VOLATILE_DAYS)
+    dirty = {bid for bid, b in cached.items() if b.get("_dirty")}
+    data, included, pages = [], [], 0
+    while url and pages < max_pages:
+        payload = api_get(url, token_factory)
+        page_data = payload.get("data") or []
+        data.extend(page_data)
+        included.extend(payload.get("included") or [])
+        url = (payload.get("links") or {}).get("next")
+        pages += 1
+        dirty -= {b["id"] for b in page_data}
+        if cached and page_data and not dirty:
+            # Pages are newest-first, so the page's last build is its oldest.
+            oldest = _parse_iso(page_data[-1].get("attributes", {}).get("uploadedDate", ""))
+            if (oldest and oldest < cutoff
+                    and all(b["id"] in cached for b in page_data)):
+                url = None
+    if url:
+        sys.stderr.write(
+            f"  builds fetch hit the {max_pages}-page cap; history beyond it is "
+            "missing from this refresh (served from cache once seeded)\n"
+        )
+    return data, included, pages
+
+
+def _normalize_build(b, inc, groups):
+    """Flatten one JSON:API build resource into the dashboard's build dict."""
+    attrs = b.get("attributes", {})
+    rels = b.get("relationships", {})
+
+    prv = (rels.get("preReleaseVersion") or {}).get("data")
+    marketing = ""
+    platform = ""
+    if prv:
+        pr = inc.get(("preReleaseVersions", prv["id"]))
+        if pr:
+            marketing = pr["attributes"].get("version", "")
+            platform = pr["attributes"].get("platform", "")
+
+    # A buildBetaDetail shares its build's id, so fall back to the build id
+    # if the relationship linkage is absent for any reason.
+    bbd = (rels.get("buildBetaDetail") or {}).get("data")
+    det = inc.get(("buildBetaDetails", bbd["id"] if bbd else b["id"]))
+    internal_state = external_state = ""
+    if det:
+        internal_state = det["attributes"].get("internalBuildState", "") or ""
+        external_state = det["attributes"].get("externalBuildState", "") or ""
+
+    group_ids = [g["id"] for g in (rels.get("betaGroups") or {}).get("data") or []]
+    group_names = [groups.get(gid, {}).get("name", "") for gid in group_ids]
+    lanes = classify_lanes(group_ids, groups)
+
+    return {
+        "id": b["id"],
+        "build_number": attrs.get("version", ""),
+        "uploaded": attrs.get("uploadedDate", ""),
+        "processing_state": attrs.get("processingState", ""),
+        "expired": bool(attrs.get("expired")),
+        "expiration": attrs.get("expirationDate", ""),
+        "beta_detail_missing": False,
+        "marketing_version": marketing,
+        "platform": platform,
+        "internal_state": internal_state,
+        "external_state": external_state,
+        "groups": [g for g in group_names if g],
+        "lanes": lanes,
+    }
+
+
+def fetch_app(app, token_factory):
+    """Return a normalized dict of builds + groups for one app record."""
+    bundle_id = app["bundle_id"]
+    app_id = resolve_app_id(bundle_id, token_factory)
+    if app_id is None:
+        return {"found": False, "groups": [], "builds": []}
+
+    def get_groups_and_membership():
+        data, _ = api_get_all(
+            f"/v1/apps/{app_id}/betaGroups?limit=200"
+            "&fields[betaGroups]=name,isInternalGroup",
+            token_factory,
+        )
+        membership = fetch_group_membership([g["id"] for g in data], token_factory)
+        return data, membership
+
+    cached = load_ledger_cache(bundle_id)
+
+    # The groups/membership chain and the builds pages are independent;
+    # overlap them.
+    t0 = time.monotonic()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        groups_future = pool.submit(get_groups_and_membership)
+        builds_data, included, pages = _fetch_build_pages(app_id, cached, token_factory)
+        pages_secs = time.monotonic() - t0
+        groups_data, membership = groups_future.result()
+
     groups = {
         g["id"]: {
             "id": g["id"],
@@ -376,122 +603,202 @@ def fetch_app(app, token_factory):
         for g in groups_data
     }
 
-    # JSON:API sparse fieldsets: fields[builds] must list the RELATIONSHIP names
-    # too, or ASC omits the relationship linkage from each build (the `included`
-    # array comes back, but nothing ties a build to its version / beta detail /
-    # groups). Listing only attributes was the bug behind blank columns.
-    build_q = (
-        f"/v1/builds?filter[app]={app_id}"
-        "&sort=-uploadedDate&limit=200"
-        "&include=preReleaseVersion,buildBetaDetail,betaGroups"
-        "&fields[builds]=version,uploadedDate,processingState,expired,expirationDate,"
-        "preReleaseVersion,buildBetaDetail,betaGroups"
-        "&fields[preReleaseVersions]=version,platform"
-        "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
-        "&fields[betaGroups]=name,isInternalGroup"
-        "&limit[betaGroups]=50"
-    )
-    builds_data, included = api_get_all(build_q, token_factory)
-
     inc = {(r["type"], r["id"]): r for r in included}
-    builds = []
-    for b in builds_data:
-        attrs = b.get("attributes", {})
-        rels = b.get("relationships", {})
+    fetched = {b["id"]: _normalize_build(b, inc, groups) for b in builds_data}
 
-        prv = (rels.get("preReleaseVersion") or {}).get("data")
-        marketing = ""
-        platform = ""
-        if prv:
-            pr = inc.get(("preReleaseVersions", prv["id"]))
-            if pr:
-                marketing = pr["attributes"].get("version", "")
-                platform = pr["attributes"].get("platform", "")
+    # Merge with settled history; refetched builds win. A cached build outside
+    # the refetch window can only change by expiring, which is derivable
+    # locally from its expirationDate.
+    now = datetime.now(timezone.utc)
+    merged = dict(cached)
+    merged.update(fetched)
+    for bid, b in merged.items():
+        if bid not in fetched and not b["expired"]:
+            exp = _parse_iso(b.get("expiration", ""))
+            if exp and exp < now:
+                b["expired"] = True
+    # Group membership is authoritative per refresh and covers the whole
+    # ledger, cached builds included - it both heals any stale cached groups
+    # and picks up out-of-band attaches on builds outside the refetch window.
+    # If the membership query failed, refetched builds inherit their cached
+    # groups instead: the builds page itself carries no group linkage.
+    if membership is not None:
+        for bid, b in merged.items():
+            gids = membership.get(bid, [])
+            names = [groups[g]["name"] for g in gids if g in groups]
+            b["groups"] = [n for n in names if n]
+            b["lanes"] = classify_lanes(gids, groups)
+    else:
+        for bid in fetched:
+            prev = cached.get(bid)
+            if prev:
+                merged[bid]["groups"] = prev.get("groups", [])
+                merged[bid]["lanes"] = prev.get("lanes", [])
+    builds = sorted(merged.values(), key=lambda b: b["uploaded"] or "", reverse=True)
+    sys.stderr.write(
+        f"  {app['label']}: {len(fetched)} builds fetched ({pages} page"
+        f"{'s' if pages != 1 else ''}, {pages_secs:.1f}s), "
+        f"{len(merged) - len(fetched)} from cache, "
+        + (f"membership for {len(membership)} builds"
+           if membership is not None else "membership unavailable")
+        + "\n"
+    )
 
-        # A buildBetaDetail shares its build's id, so fall back to the build id
-        # if the relationship linkage is absent for any reason.
-        bbd = (rels.get("buildBetaDetail") or {}).get("data")
-        det = inc.get(("buildBetaDetails", bbd["id"] if bbd else b["id"]))
-        internal_state = external_state = ""
-        if det:
-            internal_state = det["attributes"].get("internalBuildState", "") or ""
-            external_state = det["attributes"].get("externalBuildState", "") or ""
-
-        group_ids = [g["id"] for g in (rels.get("betaGroups") or {}).get("data") or []]
-        group_names = [groups.get(gid, {}).get("name", "") for gid in group_ids]
-        lanes = classify_lanes(group_ids, groups)
-
-        builds.append(
-            {
-                "id": b["id"],
-                "build_number": attrs.get("version", ""),
-                "uploaded": attrs.get("uploadedDate", ""),
-                "processing_state": attrs.get("processingState", ""),
-                "expired": bool(attrs.get("expired")),
-                "expiration": attrs.get("expirationDate", ""),
-                "beta_detail_missing": False,
-                "marketing_version": marketing,
-                "platform": platform,
-                "internal_state": internal_state,
-                "external_state": external_state,
-                "groups": [g for g in group_names if g],
-                "lanes": lanes,
-            }
-        )
-    # The builds-list `include=buildBetaDetail` is unreliable: ASC often omits
-    # the detail resource / relationship linkage even for builds TestFlight
-    # already shows as Ready to Test. Query the details directly (batched) for
-    # whatever the include failed to cover. A build still absent after that
-    # genuinely has no beta detail yet - the "ripening" gap between
-    # processingState=VALID and Ready to Test - and cannot be added to a test
-    # group, which the status functions surface as "Not yet testable".
+    # Beta states come from /v1/buildBetaDetails (batched, parallel chunks;
+    # see the include note in _fetch_build_pages). The recovery set spans
+    # the WHOLE ledger, cached builds included, so a cached build whose
+    # states were lost to an ASC flake is re-queried every refresh until it
+    # heals. Per build:
+    #   - answered by the query: authoritative, use it;
+    #   - in a failed/empty chunk: no information - carry the cached states
+    #     if there are any, else leave blank and unflagged (the status
+    #     falls back to the processing state);
+    #   - absent from an authoritative answer: genuinely in the ripening
+    #     gap between processingState=VALID and Ready to Test, which the
+    #     status functions surface as "Not yet testable".
     missing = [b for b in builds if not b["internal_state"] and not b["expired"]]
     if missing:
-        details = fetch_beta_details_by_build([b["id"] for b in missing], token_factory)
-        recovered = 0
+        t1 = time.monotonic()
+        details, failed = fetch_beta_details_by_build(
+            [b["id"] for b in missing], token_factory
+        )
+        recovered = carried = unknown = 0
         for b in missing:
+            prev = cached.get(b["id"])
             if b["id"] in details:
                 b["internal_state"], b["external_state"] = details[b["id"]]
+                b["beta_detail_missing"] = False
                 recovered += 1
+            elif b["id"] in failed:
+                if prev and prev.get("internal_state"):
+                    b["internal_state"] = prev["internal_state"]
+                    b["external_state"] = prev.get("external_state", "")
+                    carried += 1
+                else:
+                    unknown += 1
             else:
                 b["beta_detail_missing"] = True
+        absent = len(missing) - recovered - carried - unknown
         sys.stderr.write(
-            f"  beta details: {recovered} recovered by direct query, "
-            f"{len(missing) - recovered} not yet surfaced by TestFlight\n"
+            f"  {app['label']} beta details ({time.monotonic() - t1:.1f}s): "
+            f"{recovered} by direct query, {carried} carried from cache, "
+            f"{absent} not yet surfaced"
+            + (f", {unknown} unknown (query failed)" if unknown else "")
+            + "\n"
         )
+    save_ledger_cache(bundle_id, merged)
     return {"found": True, "app_id": app_id, "groups": list(groups.values()), "builds": builds}
 
 
 def fetch_beta_details_by_build(build_ids, token_factory, chunk=50):
     """Fetch buildBetaDetails directly, batched via filter[build].
 
-    Returns {build_id: (internal_state, external_state)}. A build with no
-    entry has no beta detail resource at all - TestFlight has not surfaced
-    it for testing yet. A buildBetaDetail shares its build's id, so the
-    result keys straight off det["id"].
+    Returns (details, failed_ids). details maps build_id ->
+    (internal_state, external_state) from chunks that answered
+    authoritatively; a build absent from those chunks genuinely has no
+    beta detail resource yet. failed_ids holds the builds whose chunk
+    errored twice or came back entirely empty - ASC intermittently
+    answers these queries with an empty 200 - and means NO INFORMATION,
+    not absence. A buildBetaDetail shares its build's id, so details
+    keys straight off det["id"].
     """
-    out = {}
-    for i in range(0, len(build_ids), chunk):
-        ids = ",".join(build_ids[i:i + chunk])
+    def one(ids):
         q = (
-            f"/v1/buildBetaDetails?filter[build]={ids}"
+            f"/v1/buildBetaDetails?filter[build]={','.join(ids)}"
             "&fields[buildBetaDetails]=internalBuildState,externalBuildState"
             "&limit=200"
         )
-        try:
-            data, _ = api_get_all(q, token_factory)
-        except urllib.error.HTTPError as err:
-            sys.stderr.write(
-                f"  buildBetaDetails query failed (HTTP {err.code}); "
-                "those statuses fall back to the processing state\n"
-            )
-            continue
-        for det in data:
-            attrs = det.get("attributes", {})
-            out[det["id"]] = (
-                attrs.get("internalBuildState", "") or "",
-                attrs.get("externalBuildState", "") or "",
-            )
+        for attempt in (0, 1):
+            try:
+                data, _ = api_get_all(q, token_factory)
+            except (urllib.error.HTTPError, urllib.error.URLError) as err:
+                data = None
+                reason = err
+            else:
+                # A whole chunk with zero details is indistinguishable from
+                # the known ASC flake; treat it like a failure.
+                if data or not ids:
+                    return data
+                reason = "empty response"
+            if attempt == 0:
+                time.sleep(1)
+        sys.stderr.write(
+            f"  buildBetaDetails chunk of {len(ids)} failed twice ({reason}); "
+            "treating those statuses as unknown\n"
+        )
+        return None
+
+    chunks = [build_ids[i:i + chunk] for i in range(0, len(build_ids), chunk)]
+    details, failed = {}, set()
+    if not chunks:
+        return details, failed
+    # The chunks are independent; run them concurrently.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(chunks))) as pool:
+        for ids, data in zip(chunks, pool.map(one, chunks)):
+            if data is None:
+                failed.update(ids)
+                continue
+            for det in data:
+                attrs = det.get("attributes", {})
+                details[det["id"]] = (
+                    attrs.get("internalBuildState", "") or "",
+                    attrs.get("externalBuildState", "") or "",
+                )
+    return details, failed
+
+
+def fetch_group_membership(group_ids, token_factory):
+    """Map build_id -> [group_id] via each group's ids-only builds relationship.
+
+    Queried from the group side because the builds-page include=betaGroups
+    linkage proved unreliable (empty for every build in some sessions). This
+    also covers builds outside the refetch window, so attaches and detaches
+    on old builds show up on the next refresh regardless of the cache.
+    Returns None if any group query fails, so the caller keeps existing
+    groups rather than wiping them."""
+    if not group_ids:
+        return {}
+
+    def one(gid):
+        for attempt in (0, 1):
+            try:
+                data, _ = api_get_all(
+                    f"/v1/betaGroups/{gid}/relationships/builds?limit=200",
+                    token_factory,
+                )
+                return [b["id"] for b in data]
+            except (urllib.error.HTTPError, urllib.error.URLError):
+                if attempt == 0:
+                    time.sleep(1)
+                else:
+                    raise
+        return []
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(2, len(group_ids))
+        ) as pool:
+            results = list(pool.map(one, group_ids))
+    except (urllib.error.HTTPError, urllib.error.URLError) as err:
+        code = getattr(err, "code", None) or getattr(err, "reason", err)
+        sys.stderr.write(
+            f"  group membership query failed twice ({code}); "
+            "keeping previously known groups\n"
+        )
+        return None
+    out = {}
+    for gid, ids in zip(group_ids, results):
+        for bid in ids:
+            out.setdefault(bid, []).append(gid)
+    if not out:
+        # Every group answering empty is indistinguishable from the ASC
+        # flake (CI attaches each upload to a group, so a truly empty
+        # membership across all groups is implausible). No information.
+        sys.stderr.write(
+            "  group membership came back empty for every group; "
+            "keeping previously known groups\n"
+        )
+        return None
     return out
 
 
@@ -531,11 +838,12 @@ def fetch_asc():
     def token_factory():
         return make_token(key_id, issuer_id, private_key)
 
-    out = {}
-    for app in APPS:
-        sys.stderr.write(f"Querying App Store Connect for {app['label']} ({app['bundle_id']})...\n")
-        out[app["key"]] = fetch_app(app, token_factory)
-    return out
+    labels = ", ".join(f"{a['label']} ({a['bundle_id']})" for a in APPS)
+    sys.stderr.write(f"Querying App Store Connect for {labels}...\n")
+    # The apps are independent; fetch them concurrently.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(APPS)) as pool:
+        futures = {app["key"]: pool.submit(fetch_app, app, token_factory) for app in APPS}
+        return {key: f.result() for key, f in futures.items()}
 
 
 def make_token_factory():
@@ -825,7 +1133,7 @@ def _pickaxe_landing(repo_root, summary, ref=None):
 def feature_landings(repo_root, summaries, ref=None):
     """Map each feature summary -> Unix stage-landing time (best effort)."""
     out = {}
-    if not os.path.isdir(os.path.join(repo_root, ".git")):
+    if not is_git_repo(repo_root):
         return out
     for s in summaries:
         if not s:
@@ -1372,7 +1680,15 @@ def main():
     ap.add_argument("--ref", default="origin/stage",
                     help="Git ref to read the stage branch from (default: origin/stage; 'local' = working tree)")
     ap.add_argument("--no-fetch", action="store_true", help="Don't git-fetch before reading the ref")
+    ap.add_argument("--cache-dir", default="~/.cache/cabalmail-apple-dashboard",
+                    help="Directory for the settled-builds disk cache (default: %(default)s)")
+    ap.add_argument("--no-asc-cache", action="store_true",
+                    help="Disable the builds cache; refetch the full history from App Store Connect")
     args = ap.parse_args()
+
+    global CACHE_DIR, CACHE_ENABLED  # pylint: disable=global-statement
+    CACHE_ENABLED = not args.no_asc_cache
+    CACHE_DIR = os.path.expanduser(args.cache_dir) if CACHE_ENABLED else None
 
     repo = os.path.abspath(os.path.expanduser(args.repo))
     ref = None
@@ -1393,7 +1709,7 @@ def main():
         versions = parse_changelog(changelog_path)
         fragments = read_fragments(os.path.join(repo, "changelog.d"))
 
-    frag_dates, _frag_land, tag_dates = git_dates(repo, fragments, ref)
+    frag_dates, tag_dates = git_dates(repo, fragments, ref)
     summaries = [f["summary"] for f in fragments if f["apple"]]
     summaries += [e["summary"] for v in versions for e in v["apple_entries"]]
     landings = feature_landings(repo, summaries, ref)

@@ -223,8 +223,14 @@ resource "aws_ecs_task_definition" "imap" {
 #       is no app.yml/infra.yml image-tag race. MUST be soaked in stage with
 #       real inbound mail (confirm sendmail relays, no CHOWN errors in the
 #       logs) before promoting to prod. See CHANGELOG 0.10.10.
+#   v7: EFS relay-queue mount + stopTimeout - the smtp-out queue-persistence
+#       pattern (docs/0.9.x/smtp-out-queue-persistence-plan.md) applied to
+#       smtp-in, whose mqueue previously lived on the container filesystem
+#       and died with the task, silently dropping inbound mail it had
+#       already accepted (250) but deferred while the imap tier was
+#       mid-deploy.
 resource "terraform_data" "smtp_in_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v6+hc" : "smtp-in-taskdef-v6"
+  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v7+hc" : "smtp-in-taskdef-v7"
 }
 
 resource "aws_ecs_task_definition" "smtp_in" {
@@ -241,6 +247,13 @@ resource "aws_ecs_task_definition" "smtp_in" {
 
     memoryReservation = 384
     memory            = 512
+
+    # Give sendmail up to ~110s to finish an in-flight relay delivery
+    # before SIGKILL (supervisord stopwaitsecs=110 in the smtp-in image).
+    # The persistent EFS-backed queue below is then the safety net rather
+    # than the primary mechanism for surviving deploys. ECS hard-caps
+    # stopTimeout at 120 for EC2 launch type.
+    stopTimeout = 120
 
     portMappings = [
       { containerPort = 25, protocol = "tcp" },
@@ -262,6 +275,11 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "TLS_CERT", valueFrom = "/cabal/control_domain_ssl_cert" },
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
     ], local.healthcheck_secrets)
+
+    mountPoints = [{
+      sourceVolume  = "smtp-in-queue"
+      containerPath = "/var/spool/mqueue"
+    }]
 
     # Runtime posture, phase 2 + 2a (see the imap task def for the full
     # rationale). smtp-in is a pure relay: no dovecot (no SYS_CHROOT) and no
@@ -301,6 +319,25 @@ resource "aws_ecs_task_definition" "smtp_in" {
       }
     }
   }])
+
+  # Shared sendmail relay queue on EFS - lets a replaced smtp-in task hand
+  # off inbound mail it accepted but could not yet relay (typically while
+  # the imap tier is mid-deploy) to whichever sibling task next scans the
+  # queue. Mirrors the smtp-out volume below; separate /smtp-in-queue
+  # directory so each tier's queue runners only ever process their own
+  # tier's mail. IAM auth left disabled for parity with the other EFS
+  # mounts (see the smtp-out volume comment).
+  volume {
+    name = "smtp-in-queue"
+    efs_volume_configuration {
+      file_system_id     = var.efs_id
+      transit_encryption = "ENABLED"
+      authorization_config {
+        access_point_id = var.smtp_in_queue_access_point_id
+        iam             = "DISABLED"
+      }
+    }
+  }
 
   lifecycle {
     ignore_changes       = [container_definitions]

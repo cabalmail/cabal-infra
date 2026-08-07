@@ -86,6 +86,18 @@ function Request({ domains, callback, setMessage }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Validate before touching the form: an incomplete request would post a
+    // malformed address and, on rejection, leave the user with a cleared form
+    // and no explanation.
+    const missing = [
+      !username && 'a username',
+      !subdomain && 'a subdomain',
+      !domain && 'a domain',
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      setMessage(`Please enter ${missing.join(', ')} before requesting an address.`, true);
+      return;
+    }
     const requestButton = e.target;
     requestButton.classList.add('sending');
     const submitUsername = username;
@@ -93,16 +105,23 @@ function Request({ domains, callback, setMessage }) {
     const submitDomain = domain;
     const submitComment = comment;
     const submitAddress = submitUsername + '@' + submitSubdomain + '.' + submitDomain;
-    setUsername("");
-    setSubdomain("");
-    setDomain("");
-    setComment("");
     api.newAddress(
       submitUsername, submitSubdomain, submitDomain, submitComment, submitAddress
     ).then(data => {
       requestButton.classList.remove('sending');
+      setUsername("");
+      setSubdomain("");
+      setDomain("");
+      setComment("");
       setMessage(`Successfully requested ${data.data.address}.`, false);
       callback(data.data.address);
+    }, err => {
+      // Keep what was typed so the request can be corrected and retried.
+      requestButton.classList.remove('sending');
+      setMessage(
+        `Failed to request ${submitAddress}: ` + (err?.response?.data?.message || err?.message || err),
+        true
+      );
     });
   };
 

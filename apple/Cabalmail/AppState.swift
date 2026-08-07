@@ -324,30 +324,8 @@ final class AppState {
         }
     }
 
-    func signOut() async {
-        stopInboxBadgePolling()
-        guard let client else { status = .signedOut; return }
-        #if os(iOS) || os(macOS)
-        // Deregister the APNs token while the Cognito session still works —
-        // `/push_deregister` is an authenticated call like every other, and
-        // `authService.signOut()` below wipes the tokens.
-        await PushRegistrar.shared.sessionWillEnd()
-        #endif
-        await client.imapClient.disconnect()
-        // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
-        // dropping the session so the next account to sign in on this device
-        // can't read the previous user's messages from the shared on-disk
-        // cache.
-        await client.clearLocalData()
-        try? await client.authService.signOut()
-        // Tell the watch to drop its copy of the credentials too.
-        WatchSessionBridge.shared.pushSignedOut()
-        self.client = nil
-        self.navCoordinator = nil
-        self.prefsCoordinator?.stop()
-        self.prefsCoordinator = nil
-        self.status = .signedOut
-    }
+    // `signOut()` lives in the "Session wiring" extension below, alongside
+    // `wireSession` (SwiftLint type-body budget).
 
     /// Hands the app-root `Preferences` to `AppState` at launch, before any
     /// sign-in or restore, so `wireSession` can start a
@@ -546,6 +524,34 @@ extension AppState {
 // MARK: - Session wiring
 
 extension AppState {
+    func signOut() async {
+        stopInboxBadgePolling()
+        guard let client else { status = .signedOut; return }
+        #if os(iOS) || os(macOS)
+        // Deregister the APNs token while the Cognito session still works —
+        // `/push_deregister` is an authenticated call like every other, and
+        // `authService.signOut()` below wipes the tokens.
+        await PushRegistrar.shared.sessionWillEnd()
+        #endif
+        #if os(iOS)
+        IntentBridge.shared.sessionWillEnd()
+        #endif
+        await client.imapClient.disconnect()
+        // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
+        // dropping the session so the next account to sign in on this device
+        // can't read the previous user's messages from the shared on-disk
+        // cache.
+        await client.clearLocalData()
+        try? await client.authService.signOut()
+        // Tell the watch to drop its copy of the credentials too.
+        WatchSessionBridge.shared.pushSignedOut()
+        self.client = nil
+        self.navCoordinator = nil
+        self.prefsCoordinator?.stop()
+        self.prefsCoordinator = nil
+        self.status = .signedOut
+    }
+
     /// Shared tail of `signIn` and `restoreIfPossible`: installs the client,
     /// flips to `.signedIn`, and kicks off the session-scoped side flows —
     /// badge polling, the contacts prompt, push registration (iOS/macOS),
@@ -575,6 +581,14 @@ extension AppState {
         // token — `/push_register` upserts, making this a cheap refresh of
         // the row's `last_seen_at`.
         PushRegistrar.shared.sessionDidStart(appState: self, client: newClient)
+        #endif
+        #if os(iOS)
+        // Hand the session to the App Intents bridge (replays a parked
+        // OpenFolderIntent from a cold launch) and re-donate the
+        // folder-parameterized App Shortcut phrases now that the folder
+        // list is reachable.
+        IntentBridge.shared.sessionDidStart(appState: self)
+        CabalmailAppShortcuts.updateAppShortcutParameters()
         #endif
         await pushSessionToWatch(client: newClient, username: username)
     }

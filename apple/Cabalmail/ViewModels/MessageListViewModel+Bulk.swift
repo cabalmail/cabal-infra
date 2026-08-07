@@ -28,6 +28,15 @@ extension MessageListViewModel {
         selectedUIDs.removeAll()
     }
 
+    /// Leave selection mode without touching the selection. The bulk move /
+    /// dispose paths hand their UIDs to an async `Task` and clear the set
+    /// themselves once it has read them, so the view dropping the mode
+    /// straight after must not clear it here — that would race the read and
+    /// move nothing.
+    func leaveBulkMode() {
+        bulkMode = false
+    }
+
     /// Flip an envelope's membership in the selection set.
     func toggleSelection(_ envelope: Envelope) {
         if selectedUIDs.contains(envelope.uid) {

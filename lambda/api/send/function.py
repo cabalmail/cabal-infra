@@ -3,15 +3,18 @@ import copy
 import json
 import smtplib
 import time
+import traceback
 import uuid
 from email.utils import getaddresses
 import boto3 # pylint: disable=import-error
 from botocore.exceptions import ClientError # pylint: disable=import-error
 from compose import ( # pylint: disable=import-error
+    COMPOSE_REQUIRED_FIELDS,
     DRAFTS_FOLDER,
     append_draft,
     compose_from_body,
     guarded_draft_expunge,
+    require_fields,
     unauthorized_sender_response_or_none,
 )
 from helper import delete_object # pylint: disable=import-error
@@ -22,6 +25,7 @@ from helper import upload_object # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
 from helper import CACHE_BUCKET, SMTP_HOST # pylint: disable=import-error
 from helper import MaintenanceError, maintenance_response # pylint: disable=import-error
+import smtp_session # pylint: disable=import-error
 
 # Sending is SMTP-first: outbound delivery never blocks on IMAP. The Bcc-free
 # Sent copy is staged to S3 and queued, and the append_sent consumer Lambda
@@ -50,6 +54,13 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
     if error:
         return error
     user = event['requestContext']['authorizer']['claims']['cognito:username']
+    # Check every key this handler indexes before anything reads one, so a
+    # payload missing (say) `sender` or `host` gets the same named 400 a
+    # rejected value gets rather than a bodiless 502 (#895).
+    try:
+        require_fields(body, COMPOSE_REQUIRED_FIELDS + ('host',))
+    except ValueError as err:
+        return _invalid(err)
     # Pin the sender to the exact validated address and reuse that same string
     # as the SMTP MAIL FROM below, so a display-name game in the From header
     # cannot leave the envelope sender and the visible From disagreeing.
@@ -61,12 +72,7 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
     try:
         msg = compose_from_body(body, user)
     except ValueError as err:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({
-                "status": str(err)
-            })
-        }
+        return _invalid(err)
 
     if body.get('draft'):
         return _save_draft(body['host'], user, msg)
@@ -94,13 +100,37 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
             })
         }
 
-    recipients = [
-        addr for _, addr in
-        getaddresses(body['to_list'] + body['cc_list'] + body['bcc_list'])
-        if addr
-    ]
+    # Everything between the claim and a confirmed handoff runs under the
+    # claim, so anything that raises in here has to take the claim with it:
+    # an orphaned claim makes the client's retry - the exact retry the
+    # idempotency design exists to serve - match a delivery that never
+    # happened and get back 200 "submitted" until the TTL expires (#909).
+    # We have no 250 from the relay on this path, so releasing may let a
+    # retry deliver twice; that is the same at-least-once bet every MTA
+    # makes on a lost 250, and it beats telling the user we sent mail we
+    # did not send.
+    try:
+        recipients = [
+            addr for _, addr in
+            getaddresses((body['to_list'] or []) + (body['cc_list'] or [])
+                         + (body['bcc_list'] or []))
+            if addr
+        ]
+        return_from_send = send(msg, SMTP_HOST, sender, recipients)
+    except Exception:  # pylint: disable=broad-except
+        if message_id:
+            _release_send(message_id)
+        # Log the traceback the unhandled exception used to leave in
+        # CloudWatch, since the handler now answers instead of dying.
+        print(f'[send] ERROR send failed under claim {message_id}:'
+              f' {traceback.format_exc()}')
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "status": "Send failed; the message was not delivered"
+            })
+        }
 
-    return_from_send = send(msg, SMTP_HOST, sender, recipients)
     if return_from_send['statusCode'] != 200:
         # Delivery failed, so release the claim - the user's retry must be
         # allowed to actually send.
@@ -121,6 +151,16 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
         "statusCode": 200,
         "body": json.dumps({
             "status": "submitted"
+        })
+    }
+
+
+def _invalid(err):
+    '''Builds the 400 returned when a validator rejects the request.'''
+    return {
+        "statusCode": 400,
+        "body": json.dumps({
+            "status": str(err)
         })
     }
 
@@ -257,7 +297,25 @@ def send(msg, smtp_host, from_addr, to_addrs):
     mail or what envelope sender the relay sees. smtplib still strips Bcc from
     the transmitted DATA, so blind recipients stay blind on the wire.
     """
-    smtp_client = smtplib.SMTP_SSL(smtp_host)
+    # smtp_session routes over the Cloud Map internal name when
+    # SMTP_INTERNAL_HOST is set (private-submission cutover), falling back
+    # to the public listener when it is not set or does not answer.
+    #
+    # The dial is guarded like every other step: a relay that is refusing
+    # connections is the ordinary transient failure here, and it has to come
+    # back as a non-200 the handler can release the claim on, not as an
+    # exception out of the handler (#909). smtplib.SMTPException subclasses
+    # OSError, as does ssl.SSLError.
+    try:
+        smtp_client = smtp_session.dial_smtp(smtp_host)
+    except OSError as err:
+        print(f'[send] ERROR could not dial SMTP relay {smtp_host}: {err}')
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "status": "Could not connect to the SMTP relay; mail not sent"
+            })
+        }
     status_code = 200
     body = {
         "status": "submitted"
@@ -286,7 +344,7 @@ def send(msg, smtp_host, from_addr, to_addrs):
             "status": "Other SMTP exception while authenticating"
         }
     if status_code != 200:
-        smtp_client.quit()
+        _quiet_quit(smtp_client)
         return {
             "statusCode": status_code,
             "body": json.dumps(body)
@@ -319,8 +377,22 @@ def send(msg, smtp_host, from_addr, to_addrs):
         body = {
             "status": "Other SMTP exception while sending"
         }
-    smtp_client.quit()
+    _quiet_quit(smtp_client)
     return {
         "statusCode": status_code,
         "body": json.dumps(body)
     }
+
+
+def _quiet_quit(smtp_client):
+    '''Closes the SMTP connection without letting the close itself throw.
+
+    By the time we quit, the outcome is already decided - and after a
+    successful send_message the message is delivered. A QUIT that raises
+    used to escape the handler, which (post-#909) would release the claim
+    on a message the relay had already accepted and let a retry deliver it
+    twice.'''
+    try:
+        smtp_client.quit()
+    except OSError as err:
+        print(f'[send] WARN SMTP quit failed: {err}')

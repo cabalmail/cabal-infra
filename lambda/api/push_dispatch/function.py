@@ -6,7 +6,7 @@ user's registered device tokens in cabal-push-tokens and sends one
 content-free APNs alert per opted-in token. The payload deliberately carries
 no sender/subject/body — the device's Notification Service Extension calls
 /push_envelope to enrich the alert locally, so Apple's infrastructure never
-sees message content (docs/0.11.0/push-notifications.md).
+sees message content (docs/0.11.x/push-notifications.md).
 
 Failure posture:
   * APNs not configured (placeholder SSM values): drop the signal cleanly.

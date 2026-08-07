@@ -35,10 +35,13 @@ mind ASC rate limits if you leave 10s running for long stretches.
 """
 
 import argparse
+import concurrent.futures
 import importlib.util
 import json
 import os
 import sys
+import threading
+import time
 import traceback
 
 try:
@@ -94,34 +97,80 @@ def _load_source():
             None, "local working tree")
 
 
-def build_model():
+def _load_repo_side():
+    """Everything the model needs from the repo: parsed sources + git facts."""
     versions, fragments, ref, source_label = _load_source()
-    frag_dates, _frag_land, tag_dates = ENGINE.git_dates(REPO_ROOT, fragments, ref)
+    frag_dates, tag_dates = ENGINE.git_dates(REPO_ROOT, fragments, ref)
     summaries = [f["summary"] for f in fragments if f["apple"]]
     summaries += [e["summary"] for v in versions for e in v["apple_entries"]]
     landings = ENGINE.feature_landings(REPO_ROOT, summaries, ref)
+    return versions, fragments, frag_dates, landings, tag_dates, source_label
 
+
+def _load_asc_side():
+    """Everything the model needs from App Store Connect (or the mock file)."""
     if MOCK_PATH:
         with open(MOCK_PATH, encoding="utf-8") as fh:
-            asc = json.load(fh)
-        demo = True
-    else:
-        missing = [
-            k for k in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_PATH")
-            if not os.environ.get(k, "").strip()
-        ]
-        if missing:
-            raise RuntimeError(
-                "Missing App Store Connect credentials: " + ", ".join(missing) +
-                ". Set them in the environment, or start the app with --mock <file.json>."
-            )
-        asc = ENGINE.fetch_asc()
-        demo = False
+            return json.load(fh), True
+    missing = [
+        k for k in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_PATH")
+        if not os.environ.get(k, "").strip()
+    ]
+    if missing:
+        raise RuntimeError(
+            "Missing App Store Connect credentials: " + ", ".join(missing) +
+            ". Set them in the environment, or start the app with --mock <file.json>."
+        )
+    return ENGINE.fetch_asc(), False
+
+
+def build_model():
+    # The repo side (git fetch + log walks) and the ASC side (HTTPS round
+    # trips) are independent until assemble(); overlap them.
+    t0 = time.monotonic()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        asc_future = pool.submit(_load_asc_side)
+        versions, fragments, frag_dates, landings, tag_dates, source_label = _load_repo_side()
+        t_repo = time.monotonic() - t0
+        asc, demo = asc_future.result()
 
     model = ENGINE.assemble(versions, fragments, frag_dates, landings, tag_dates, asc)
     model["demo"] = demo
     model["source"] = source_label
+    sys.stderr.write(
+        f"refresh: repo {t_repo:.1f}s, total {time.monotonic() - t0:.1f}s\n"
+    )
     return model
+
+
+_REFRESH_LOCK = threading.Lock()
+_REFRESH_FUTURE = None
+
+
+def coalesced_build_model():
+    """Share one in-flight refresh among concurrent /api/data requests.
+
+    A browser auto-refresh timer overlapping a manual refresh (or a second
+    open tab) would otherwise each run their own full round of App Store
+    Connect calls, roughly doubling the wall time of both."""
+    global _REFRESH_FUTURE
+    with _REFRESH_LOCK:
+        owner = _REFRESH_FUTURE is None
+        if owner:
+            _REFRESH_FUTURE = concurrent.futures.Future()
+        fut = _REFRESH_FUTURE
+    if not owner:
+        return fut.result()
+    try:
+        model = build_model()
+        fut.set_result(model)
+        return model
+    except BaseException as exc:
+        fut.set_exception(exc)
+        raise
+    finally:
+        with _REFRESH_LOCK:
+            _REFRESH_FUTURE = None
 
 
 app = Flask(__name__)
@@ -140,7 +189,7 @@ def favicon():
 @app.route("/api/data")
 def api_data():
     try:
-        return jsonify(build_model())
+        return jsonify(coalesced_build_model())
     except Exception as exc:  # pylint: disable=broad-except
         sys.stderr.write("api/data error:\n" + traceback.format_exc())
         return jsonify({"error": str(exc)}), 200
@@ -160,6 +209,9 @@ def api_assign():
         return jsonify({"error": "App Store Connect credentials are not set."}), 200
     try:
         ENGINE.assign_build_to_group(build_id, group_id, token_factory)
+        # The build's group membership just changed; drop it from the settled
+        # cache so the next refresh refetches it even if it's old.
+        ENGINE.invalidate_build(build_id)
         return jsonify({"ok": True})
     except urllib.error.HTTPError as err:
         detail = ""
@@ -617,6 +669,10 @@ def main():
                     help="Don't `git fetch` before reading the ref (use whatever's already fetched)")
     ap.add_argument("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
     ap.add_argument("--port", type=int, default=5057, help="Bind port (default 5057)")
+    ap.add_argument("--cache-dir", default="~/.cache/cabalmail-apple-dashboard",
+                    help="Directory for the settled-builds disk cache (default: %(default)s)")
+    ap.add_argument("--no-asc-cache", action="store_true",
+                    help="Disable the builds cache; refetch the full history on every refresh")
     args = ap.parse_args()
 
     ENGINE = load_engine(args.engine)
@@ -624,9 +680,13 @@ def main():
     MOCK_PATH = os.path.abspath(os.path.expanduser(args.mock)) if args.mock else None
     REF = args.ref
     FETCH = not args.no_fetch
+    ENGINE.CACHE_ENABLED = not args.no_asc_cache
+    ENGINE.CACHE_DIR = os.path.expanduser(args.cache_dir) if ENGINE.CACHE_ENABLED else None
 
     sys.stderr.write(f"Serving Cabalmail Apple dashboard on http://{args.host}:{args.port}  (repo: {REPO_ROOT})\n")
     sys.stderr.write(f"Stage source: {REF}{' (fetch each refresh)' if (FETCH and REF != 'local') else ''}\n")
+    if ENGINE.CACHE_ENABLED:
+        sys.stderr.write(f"Builds cache: {ENGINE.CACHE_DIR}\n")
     if MOCK_PATH:
         sys.stderr.write(f"Using mock ASC data: {MOCK_PATH}\n")
     app.run(host=args.host, port=args.port, debug=False)

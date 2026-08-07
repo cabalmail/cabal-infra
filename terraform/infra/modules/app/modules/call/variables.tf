@@ -93,3 +93,8 @@ variable "imap_internal_host" {
   type        = string
   description = "Cloud Map DNS name of the imap task. When set, imap_session dials it on 143 + STARTTLS instead of the public IMAPS listener."
 }
+
+variable "smtp_internal_host" {
+  type        = string
+  description = "Cloud Map DNS name of the smtp-out task. When set, smtp_session dials it on 465 instead of the public submission listener."
+}

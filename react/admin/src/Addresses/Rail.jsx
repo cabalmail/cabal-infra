@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Plus, Search, Star, X } from 'lucide-react';
+import { Copy, Pause, Play, Plus, Search, Star, X } from 'lucide-react';
 import useApi from '../hooks/useApi';
 import { ADDRESS_LIST } from '../constants';
 import ConfirmDialog from '../ConfirmDialog';
@@ -15,11 +15,11 @@ function sortAddresses(items) {
 }
 
 function AddressRow({
-  a, isActive, isFavorite, onSelect, onToggleFavorite, onCopy, onRevoke,
+  a, isActive, isFavorite, onSelect, onToggleFavorite, onCopy, onToggleSuspend, onRevoke,
 }) {
   return (
     <li
-      className={`addresses-rail__row${isActive ? ' is-active' : ''}`}
+      className={`addresses-rail__row${isActive ? ' is-active' : ''}${a.suspended ? ' is-suspended' : ''}`}
       title={a.comment ? undefined : a.address}
       data-address={a.address}
       data-comment={a.comment || undefined}
@@ -51,6 +51,17 @@ function AddressRow({
         </button>
         <button
           type="button"
+          className={`addresses-rail__row-action${a.suspended ? ' is-on' : ''}`}
+          title={a.suspended ? 'Reinstate address' : 'Suspend address'}
+          aria-label={a.suspended ? `Reinstate ${a.address}` : `Suspend ${a.address}`}
+          onClick={(e) => onToggleSuspend(e, a)}
+        >
+          {a.suspended
+            ? <Play size={12} aria-hidden="true" />
+            : <Pause size={12} aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
           className="addresses-rail__row-action"
           title="Revoke address"
           aria-label={`Revoke ${a.address}`}
@@ -69,6 +80,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
   const [query, setQuery] = useState('');
   const [showRequest, setShowRequest] = useState(false);
   const [pendingRevoke, setPendingRevoke] = useState(null);
+  const [pendingSuspend, setPendingSuspend] = useState(null);
   const [pendingScroll, setPendingScroll] = useState(null);
   const listRef = useRef(null);
 
@@ -174,6 +186,44 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
     });
   }, [api, setMessage]);
 
+  // Suspension flips DNS state server-side, so the row is only updated after
+  // the call succeeds (no optimistic flip like favorites). Suspending goes
+  // through a confirm dialog because it stops inbound mail; reinstating is
+  // harmless and applies immediately.
+  const toggleSuspend = useCallback((e, a) => {
+    e.stopPropagation();
+    if (!a.suspended) {
+      setPendingSuspend(a);
+      return;
+    }
+    api.reinstateAddress(a.address).then(() => {
+      setMessage && setMessage('Successfully reinstated address.', false);
+      setAddresses((prev) => prev.map((x) => (
+        x.address === a.address ? { ...x, suspended: false } : x
+      )));
+    }).catch(() => {
+      setMessage && setMessage('Request to reinstate address failed.', true);
+    });
+  }, [api, setMessage]);
+
+  const cancelSuspend = useCallback(() => {
+    setPendingSuspend(null);
+  }, []);
+
+  const confirmSuspend = useCallback(() => {
+    const a = pendingSuspend;
+    if (!a) return;
+    setPendingSuspend(null);
+    api.suspendAddress(a.address).then(() => {
+      setMessage && setMessage('Successfully suspended address.', false);
+      setAddresses((prev) => prev.map((x) => (
+        x.address === a.address ? { ...x, suspended: true } : x
+      )));
+    }).catch(() => {
+      setMessage && setMessage('Request to suspend address failed.', true);
+    });
+  }, [api, pendingSuspend, setMessage]);
+
   const confirmRevoke = useCallback(() => {
     const a = pendingRevoke;
     if (!a) return;
@@ -247,6 +297,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
             onSelect={handleSelect}
             onToggleFavorite={toggleFavorite}
             onCopy={copyAddress}
+            onToggleSuspend={toggleSuspend}
             onRevoke={requestRevoke}
           />
         ))}
@@ -263,6 +314,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
             onSelect={handleSelect}
             onToggleFavorite={toggleFavorite}
             onCopy={copyAddress}
+            onToggleSuspend={toggleSuspend}
             onRevoke={requestRevoke}
           />
         ))}
@@ -308,6 +360,22 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingSuspend !== null}
+        title="Suspend address?"
+        message={pendingSuspend ? (
+          <>
+            The DNS records for <strong>{pendingSuspend.address}</strong> will be
+            {' '}removed and inbound mail will stop being deliverable. The address
+            {' '}is kept and can be reinstated at any time.
+          </>
+        ) : null}
+        confirmLabel="Suspend"
+        cancelLabel="Cancel"
+        onConfirm={confirmSuspend}
+        onCancel={cancelSuspend}
+      />
 
       <ConfirmDialog
         open={pendingRevoke !== null}

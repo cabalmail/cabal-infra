@@ -7,15 +7,25 @@ Issues instead of App Store Connect. It fixes the triage deficiencies of the
 native Issues UI:
 
   * shows only open issues that are part of the tester/fixer cycle (bearing at
-    least one lifecycle label: tester-found / accepted / fix-in-review /
-    needs-retest) - closed and unrelated issues are omitted
-  * each lifecycle label gets its own fixed column, so a label reads in the
-    same place on every row instead of wrapping through an inline label list
+    least one lifecycle label: needs-verification / tester-found / verified /
+    verify-blocked / accepted / fix-in-review / needs-retest) - closed and
+    unrelated issues are omitted
+  * each pipeline state gets its own fixed column, so a state reads in the
+    same place on every row instead of wrapping through an inline label list.
+    Labels that mean the same thing to a triager share a column: the pre-triage
+    four (needs-verification, tester-found, verified, verify-blocked) all mean
+    "in the cycle, waiting on you", and accepted/needs-retest - mutually
+    exclusive, since the fixer's reconcile swaps one for the other - both mean
+    "queued for an agent, nothing to triage"; the row names which one applies
   * related PRs (discovered via cross-reference events, since the fixer does
     not use closing keywords) are shown per row with their open/merged/closed
     state, linked directly - no drilling into the issue to find them
+  * a route column shows which pipeline owns each issue - the baseline
+    tester/fixer pair (Mini) or the 27.x-beta pair (Studio, `os27` label) -
+    and its pill toggles the label, re-routing the issue at triage time
   * triage actions per row (these make real changes on GitHub): Accept adds
-    the `accepted` label so the nightly fixer picks the issue up; Close...
+    the `accepted` label so the nightly fixer picks the issue up (disabled
+    while the issue is already accepted or awaiting retest); Close...
     posts a required comment and then closes the issue as not-planned or
     completed
 
@@ -42,6 +52,7 @@ import shutil
 import subprocess
 import sys
 import traceback
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
@@ -51,14 +62,46 @@ except ImportError:
     sys.exit("Flask is not installed. Run: pip install flask")
 
 
-# Lifecycle labels, in pipeline order. Each one becomes a column.
-DEFAULT_STAGES = ["tester-found", "accepted", "fix-in-review", "needs-retest"]
+# Pipeline states, in column order. Each state becomes one column and is satisfied
+# by ANY of its labels - several labels can mean the same thing to a triager, and a
+# column per label makes the table too wide to reach the action buttons.
+#
+# Issues enter the cycle two ways: the tester files its own findings
+# (`tester-found`), while anything the human or one of their agents files enters by
+# being labelled `needs-verification`, which the tester adopts and resolves to
+# `verified` (reproduced) or `verify-blocked` (couldn't confirm - back to the human).
+# All four mean the same thing to a triager - the finding is in the cycle, pre-triage
+# - so they share one column and the row's pill shows where verification stands.
+# Only the human applies `accepted`, which is what queues the fixer.
+#
+# `accepted` and `needs-retest` are mutually exclusive - the fixer's reconcile step
+# removes `accepted` when it adds `needs-retest` (fix live on stage), and a failed
+# retest goes back the other way - and both mean "queued for an agent" (the fixer,
+# or the tester's retest), so they share the `queued` column.
+DEFAULT_STAGES = [
+    ("triage", ["needs-verification", "tester-found", "verified", "verify-blocked"]),
+    ("queued", ["accepted", "needs-retest"]),
+    ("fix-in-review", ["fix-in-review"]),
+]
+# Compact names for labels sharing a column, where the header can't name them.
+SHORT_NAMES = {
+    "needs-verification": "verifying",
+    "tester-found": "found",
+    "verified": "verified",
+    "verify-blocked": "blocked",
+    "accepted": "accepted",
+    "needs-retest": "retest",
+}
 # Fallback colors (GitHub label colors) if the repo query can't supply one.
 FALLBACK_COLORS = {
     "tester-found": "fbca04",
+    "needs-verification": "1D76DB",
+    "verified": "C2E0C6",
+    "verify-blocked": "F9D0C4",
     "accepted": "5319e7",
     "fix-in-review": "e99695",
     "needs-retest": "0e8a16",
+    "os27": "006b75",
 }
 
 QUERY = """
@@ -90,6 +133,35 @@ query($owner: String!, $name: String!, $cursor: String) {
 REPO_SLUG = None
 STAGES = DEFAULT_STAGES
 ACCEPT_LABEL = "accepted"
+# Labels besides ACCEPT_LABEL itself that grey out the Accept button: an issue
+# awaiting retest already has its fix live, so there is nothing to queue.
+ACCEPT_BLOCK_LABELS = ["needs-retest"]
+# Pipeline-routing label: issues carrying it belong to the 27.x-beta tester/fixer
+# pair (Mac Studio); issues without it belong to the baseline pair (Mac Mini). The
+# route column's pill toggles it. Empty disables the column and the endpoint.
+ROUTE_LABEL = "os27"
+
+
+def format_stages(stages):
+    """Render stage definitions back into --stages syntax (for help text)."""
+    return ",".join(labs[0] if [key] == labs else f"{key}={'|'.join(labs)}"
+                    for key, labs in stages)
+
+
+def parse_stages(spec):
+    """Parse --stages: 'label' for a column of its own, 'name=a|b' to group."""
+    stages = []
+    for chunk in spec.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        key, sep, labels = chunk.partition("=")
+        key = key.strip()
+        labs = [l.strip() for l in labels.split("|") if l.strip()] if sep else [key]
+        if not key or not labs:
+            sys.exit(f"--stages: could not read {chunk!r}; use 'label' or 'name=label|label'.")
+        stages.append((key, labs))
+    return stages
 
 
 def detect_repo_slug(repo_path):
@@ -141,13 +213,13 @@ def graphql(variables):
     return payload["data"]
 
 
-def rest(method, path, payload):
+def rest(method, path, payload=None):
     """Call a GitHub REST endpoint (mutations), via token or the gh CLI."""
     token = os.environ.get("GITHUB_TOKEN", "").strip() or os.environ.get("GH_TOKEN", "").strip()
     if token:
         req = urllib.request.Request(
             "https://api.github.com" + path,
-            data=json.dumps(payload).encode(),
+            data=json.dumps(payload).encode() if payload is not None else None,
             headers={"Authorization": f"bearer {token}",
                      "Content-Type": "application/json",
                      "Accept": "application/vnd.github+json"},
@@ -168,9 +240,12 @@ def rest(method, path, payload):
             "Neither GITHUB_TOKEN/GH_TOKEN is set nor is the `gh` CLI on PATH. "
             "Install gh and run `gh auth login`, or export a token."
         )
+    cmd = ["gh", "api", "--method", method, path.lstrip("/")]
+    if payload is not None:
+        cmd += ["--input", "-"]
     proc = subprocess.run(
-        ["gh", "api", "--method", method, path.lstrip("/"), "--input", "-"],
-        input=json.dumps(payload), capture_output=True, text=True, check=False,
+        cmd, input=json.dumps(payload) if payload is not None else None,
+        capture_output=True, text=True, check=False,
     )
     if proc.returncode != 0:
         raise RuntimeError(f"gh api failed: {proc.stderr.strip() or proc.stdout.strip()}")
@@ -196,11 +271,15 @@ def build_model():
             break
         cursor = issues["pageInfo"]["endCursor"]
 
+    stage_labels = [lab for _, labs in STAGES for lab in labs]
     rows = []
     for node in nodes:
         labels = [(l["name"], l["color"]) for l in node["labels"]["nodes"]]
         names = [n for n, _ in labels]
-        stages = [s for s in STAGES if s in names]
+        # Per stage, which of its labels this issue actually carries - the row shows
+        # them so grouping labels into one column doesn't hide which one it is.
+        marks = {key: [lab for lab in labs if lab in names] for key, labs in STAGES}
+        stages = [key for key, _ in STAGES if marks[key]]
         if not stages:
             continue
         prs, seen = [], set()
@@ -223,19 +302,37 @@ def build_model():
             "created": node["createdAt"],
             "updated": node["updatedAt"],
             "stages": stages,
+            "marks": {key: [{"name": lab,
+                             "short": SHORT_NAMES.get(lab, lab),
+                             "color": label_colors.get(lab, "8b8a86")}
+                            for lab in labs]
+                      for key, labs in marks.items() if labs},
+            "accept_blocked": next(
+                (lab for lab in [ACCEPT_LABEL] + ACCEPT_BLOCK_LABELS if lab in names),
+                None),
+            "routed": bool(ROUTE_LABEL and ROUTE_LABEL in names),
             "other_labels": [{"name": n, "color": c} for n, c in labels
-                             if n not in STAGES],
+                             if n not in stage_labels and n != ROUTE_LABEL],
             "prs": prs,
         })
 
-    counts = {s: sum(1 for r in rows if s in r["stages"]) for s in STAGES}
+    counts = {key: sum(1 for r in rows if key in r["stages"]) for key, _ in STAGES}
     return {
         "repo": REPO_SLUG,
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "stages": [{"key": s, "color": label_colors.get(s, "8b8a86")} for s in STAGES],
+        "stages": [{"key": key,
+                    # A grouped column can't be one colour; its rows carry their own.
+                    "color": label_colors.get(labs[0], "8b8a86"),
+                    "multi": len(labs) > 1}
+                   for key, labs in STAGES],
         "accept_label": ACCEPT_LABEL,
-        "missing_labels": [s for s in dict.fromkeys(STAGES + [ACCEPT_LABEL])
-                           if s not in repo_labels] if all_labels_seen else [],
+        "route": {"label": ROUTE_LABEL,
+                  "color": label_colors.get(ROUTE_LABEL, "8b8a86"),
+                  "count": sum(1 for r in rows if r["routed"])} if ROUTE_LABEL else None,
+        "missing_labels": [lab for lab in dict.fromkeys(
+                               stage_labels + [ACCEPT_LABEL]
+                               + ([ROUTE_LABEL] if ROUTE_LABEL else []))
+                           if lab not in repo_labels] if all_labels_seen else [],
         "issues": rows,
         "open_total": total,
         "counts": counts,
@@ -277,6 +374,34 @@ def api_accept():
         return jsonify({"ok": True})
     except Exception as exc:  # pylint: disable=broad-except
         sys.stderr.write("api/accept error:\n" + traceback.format_exc())
+        return jsonify({"error": "An internal error has occurred."}), 200
+
+
+@app.route("/api/route", methods=["POST"])
+def api_route():
+    """Add or remove the pipeline-routing label on an issue (a real GitHub change)."""
+    data = request.get_json(force=True, silent=True) or {}
+    number = data.get("number")
+    routed = data.get("routed")
+    if not ROUTE_LABEL:
+        return jsonify({"error": "No route label is configured."}), 200
+    if not isinstance(number, int) or not isinstance(routed, bool):
+        return jsonify({"error": "number and routed are required."}), 200
+    try:
+        if routed:
+            rest("POST", f"/repos/{REPO_SLUG}/issues/{number}/labels",
+                 {"labels": [ROUTE_LABEL]})
+        else:
+            try:
+                rest("DELETE", f"/repos/{REPO_SLUG}/issues/{number}/labels/"
+                     + urllib.parse.quote(ROUTE_LABEL, safe=""))
+            except RuntimeError as err:
+                # Label already gone (stale row) - the desired state holds.
+                if "404" not in str(err):
+                    raise
+        return jsonify({"ok": True})
+    except Exception as exc:  # pylint: disable=broad-except
+        sys.stderr.write("api/route error:\n" + traceback.format_exc())
         return jsonify({"error": "An internal error has occurred."}), 200
 
 
@@ -410,6 +535,8 @@ PAGE = r"""<!DOCTYPE html>
   .abtn:disabled{opacity:.45; cursor:default}
   .abtn.accept:not(:disabled){color:var(--good-ink); border-color:color-mix(in srgb,var(--good) 40%,var(--border))}
   .abtn.danger:hover:not(:disabled){color:var(--critical); border-color:color-mix(in srgb,var(--critical) 45%,var(--border)); background:var(--surface)}
+  .abtn.route{min-width:56px; text-align:center; font-weight:600}
+  .abtn.route:not(.on){color:var(--muted)}
   .actcell{display:flex; gap:6px}
   .modal{position:fixed; inset:0; background:rgba(0,0,0,.42); display:flex; align-items:center; justify-content:center; z-index:90}
   .modal[hidden]{display:none}
@@ -461,15 +588,27 @@ PAGE = r"""<!DOCTYPE html>
   <div id="issue-table"></div>
 
   <footer>
-    Open issues bearing at least one lifecycle label — <code>tester-found</code> →
-    <code>accepted</code> → <code>fix-in-review</code> → <code>needs-retest</code> — with one
-    column per label so each reads in a fixed position. Other open issues (and everything
+    Open issues bearing at least one lifecycle label, one column per pipeline state so each
+    reads in a fixed position. The <b>triage</b> column is everything pre-triage, and its
+    pill says where verification stands: what you and your agents file enters as
+    <code>needs-verification</code> (<i>verifying</i>) and the tester resolves it to
+    <i>verified</i> or <i>blocked</i>; the tester's own findings arrive pre-verified as
+    <i>found</i>. The <b>queued</b> column holds the issue whenever an agent owes it work —
+    <code>accepted</code> (waiting on the fixer) or <code>needs-retest</code> (fix live,
+    waiting on the tester's retest), never both, since the fixer's reconcile swaps one for
+    the other around <code>fix-in-review</code>. Other open issues (and everything
     closed) are omitted. <b>PRs</b> are discovered from GitHub cross-reference events (the
     fixer links issues without closing keywords, so GitHub's "linked PR" field stays empty);
     a PR that merely mentions the issue also appears here. Click a stat tile to filter to
     that stage; click it again to clear. All links open in a new tab.
-    <b>Accept</b> adds the <code>accepted</code> label (the nightly fixer picks it up);
-    <b>Close…</b> posts your comment and then closes the issue — both are real GitHub changes.
+    The <b>pipeline</b> column shows which tester/fixer pair owns the issue — <i>base</i>
+    (the Mini, current-OS) or the route label (the Studio, 27.x-beta) — and clicking the
+    pill toggles the label to re-route it: retests, verification, and the fixer queues all
+    follow that label.
+    <b>Accept</b> adds the <code>accepted</code> label (the owning pipeline's fixer picks it
+    up) and is disabled while the issue is already accepted or awaiting retest;
+    <b>Close…</b> posts your comment and then closes the issue — the pill, Accept, and
+    Close are all real GitHub changes.
   </footer>
 </div>
 
@@ -494,7 +633,7 @@ const PR_ICON={open:'●', merged:'⛙', closed:'✕', draft:'○'};
 const INTERVALS=[{s:0,label:'Off'},{s:60,label:'1 minute'},{s:300,label:'5 minutes'},{s:900,label:'15 minutes'},{s:3600,label:'1 hour'}];
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-let MODEL=null, activeStage=null, sortKey='updated', sortDir=-1, inFlight=false, intervalSec=0, timer=null;
+let MODEL=null, activeStage=null, activeRoute=false, sortKey='updated', sortDir=-1, inFlight=false, intervalSec=0, timer=null;
 
 function ago(iso){
   const ms=Date.now()-new Date(iso).getTime();
@@ -541,11 +680,13 @@ function renderStats(){
   const tiles=[`<button class="stat" data-stage="" aria-pressed="${activeStage===null}"><div class="n">${MODEL.issues.length}</div><div class="l">All in cycle</div></button>`]
     .concat(MODEL.stages.map(s=>`<button class="stat" data-stage="${esc(s.key)}" aria-pressed="${activeStage===s.key}">`+
       `<div class="n">${MODEL.counts[s.key]||0}</div><div class="l"><span class="dot" style="background:#${esc(s.color)}"></span>${esc(s.key)}</div></button>`));
+  if(MODEL.route) tiles.push(`<button class="stat" data-route="1" aria-pressed="${activeRoute}" title="Issues routed to the 27.x pipeline — click to filter">`+
+    `<div class="n">${MODEL.route.count}</div><div class="l"><span class="dot" style="background:#${esc(MODEL.route.color)}"></span>${esc(MODEL.route.label)}</div></button>`);
   const el=document.getElementById('stats');
   el.innerHTML=tiles.join('');
   el.querySelectorAll('.stat').forEach(b=>b.addEventListener('click',()=>{
-    const s=b.dataset.stage||null;
-    activeStage=(s===activeStage)?null:s;
+    if(b.dataset.route){ activeRoute=!activeRoute; }
+    else { const s=b.dataset.stage||null; activeStage=(s===activeStage)?null:s; }
     renderStats(); renderRows();
   }));
 }
@@ -564,11 +705,31 @@ function prCell(r){
     `<span class="pill ${PR_ROLE[p.state]||'draft'}"><span class="ic">${PR_ICON[p.state]||'○'}</span>${esc(p.state)}</span>`+
     `</div>`).join('');
 }
+function stageCell(r,s){
+  const marks=r.marks[s.key];
+  if(!marks) return '';
+  // A column standing for one label just gets a check; a grouped column names the
+  // label that put the issue there, so the grouping never hides which one it is.
+  if(!s.multi) return `<span class="stagemark" style="color:color-mix(in srgb,#${esc(s.color)} 55%,var(--ink))" title="${esc(marks[0].name)}">✓</span>`;
+  return marks.map(m=>`<span class="ghlabel" style="border-color:#${esc(m.color)}; background:color-mix(in srgb,#${esc(m.color)} 18%,transparent)" title="${esc(m.name)}">${esc(m.short)}</span>`).join('');
+}
+function routeCell(r){
+  // Same footprint routed or not, so the toggle never shifts under the pointer.
+  const lab=MODEL.route.label, c=MODEL.route.color;
+  const title=r.routed
+    ?`Owned by the 27.x pipeline (Studio) — click to return to the baseline pipeline (removes ${lab})`
+    :`Owned by the baseline pipeline (Mini) — click to route to the 27.x pipeline (adds ${lab})`;
+  const style=r.routed?` style="border-color:#${esc(c)}; background:color-mix(in srgb,#${esc(c)} 22%,transparent); color:var(--ink)"`:'';
+  return `<button class="abtn route${r.routed?' on':''}" type="button"${style} title="${esc(title)}" onclick="routeIssue(${r.number},${!r.routed},this)">${r.routed?esc(lab):'base'}</button>`;
+}
 function actCell(r){
-  const accepted=r.stages.includes(MODEL.accept_label);
+  const blocked=r.accept_blocked;
+  const why=blocked===MODEL.accept_label?'Already accepted'
+    :blocked==='needs-retest'?'Fix live — awaiting retest'
+    :'Blocked by '+blocked;
   return `<div class="actcell">`+
-    `<button class="abtn accept" type="button" ${accepted
-      ?'disabled title="Already accepted"'
+    `<button class="abtn accept" type="button" ${blocked
+      ?`disabled title="${esc(why)}"`
       :`onclick="acceptIssue(${r.number},this)" title="Add the ${esc(MODEL.accept_label)} label — queues the nightly fixer"`}>Accept</button>`+
     `<button class="abtn danger" type="button" onclick="openCloseModal(${r.number})" title="Comment on and close this issue">Close…</button>`+
     `</div>`;
@@ -578,8 +739,11 @@ function renderRows(){
   const q=document.getElementById('f-q').value.trim().toLowerCase();
   let rows=MODEL.issues.slice();
   if(activeStage) rows=rows.filter(r=>r.stages.includes(activeStage));
+  if(activeRoute) rows=rows.filter(r=>r.routed);
   if(q) rows=rows.filter(r=>(
     '#'+r.number+' '+r.title+' '+r.stages.join(' ')+' '+
+    Object.values(r.marks).flat().map(m=>m.name).join(' ')+' '+
+    (r.routed&&MODEL.route?MODEL.route.label+' ':'')+
     r.other_labels.map(l=>l.name).join(' ')+' '+
     r.prs.map(p=>'#'+p.number+' '+p.title+' '+p.state).join(' ')
   ).toLowerCase().includes(q));
@@ -587,18 +751,20 @@ function renderRows(){
   document.getElementById('f-count').textContent=`${rows.length} issue${rows.length!==1?'s':''}`;
   const head=`<tr>${th('number','#','')}${th('title','Title','')}${th('created','Age','')}${th('updated','Updated','')}`+
     MODEL.stages.map(s=>th(null,s.key,'stagecol')).join('')+
+    (MODEL.route?th(null,'pipeline','stagecol'):'')+
     `<th>Labels</th><th>PRs</th><th>Actions</th></tr>`;
   const body=rows.map(r=>`<tr>
     <td class="num"><a href="${esc(r.url)}" target="_blank" rel="noopener">#${r.number}</a></td>
     <td class="titlecol"><a class="ititle" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></td>
     <td class="num" title="opened ${esc(r.created)}">${ago(r.created)}</td>
     <td class="num" title="${esc(r.updated)}">${ago(r.updated)}</td>
-    ${MODEL.stages.map(s=>`<td class="stagecol">${r.stages.includes(s.key)?`<span class="stagemark" style="color:color-mix(in srgb,#${esc(s.color)} 55%,var(--ink))" title="${esc(s.key)}">✓</span>`:''}</td>`).join('')}
+    ${MODEL.stages.map(s=>`<td class="stagecol">${stageCell(r,s)}</td>`).join('')}
+    ${MODEL.route?`<td class="stagecol">${routeCell(r)}</td>`:''}
     <td>${r.other_labels.map(l=>`<span class="ghlabel" style="border-color:#${esc(l.color)}; background:color-mix(in srgb,#${esc(l.color)} 18%,transparent)">${esc(l.name)}</span>`).join('')||'<span class="none">—</span>'}</td>
     <td>${prCell(r)}</td>
     <td>${actCell(r)}</td>
   </tr>`).join('');
-  const cols=7+MODEL.stages.length;
+  const cols=7+MODEL.stages.length+(MODEL.route?1:0);
   document.getElementById('issue-table').innerHTML=`<table><thead>${head}</thead><tbody>`+
     (rows.length?body:`<tr><td colspan="${cols}" class="empty">No open issues match.</td></tr>`)+`</tbody></table>`;
 }
@@ -618,6 +784,12 @@ async function acceptIssue(n, btn){
   const d=await postJSON('/api/accept',{number:n});
   if(d && d.ok){ toast(`Accepted #${n} — queued for the fixer.`); await fetchData(); }
   else { toast('Accept failed: '+((d&&d.error)||'unknown error'), true); btn.disabled=false; }
+}
+async function routeIssue(n, routed, btn){
+  btn.disabled=true;
+  const d=await postJSON('/api/route',{number:n, routed});
+  if(d && d.ok){ toast(routed?`Routed #${n} to the ${MODEL.route.label} pipeline.`:`Returned #${n} to the baseline pipeline.`); await fetchData(); }
+  else { toast('Route change failed: '+((d&&d.error)||'unknown error'), true); btn.disabled=false; }
 }
 function openCloseModal(n){
   closeTarget=n;
@@ -682,17 +854,27 @@ renderIntervalMenu(); fetchData();
 
 
 def main():
-    global REPO_SLUG, STAGES, ACCEPT_LABEL
+    global REPO_SLUG, STAGES, ACCEPT_LABEL, ACCEPT_BLOCK_LABELS, ROUTE_LABEL
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     help="Path to a checkout whose origin remote names the GitHub repo "
                          "(default: this script's repo)")
     ap.add_argument("--repo-slug", help="GitHub owner/name (overrides --repo detection)")
-    ap.add_argument("--stages", default=",".join(DEFAULT_STAGES),
-                    help="Comma-separated lifecycle labels, in column order "
-                         f"(default: {','.join(DEFAULT_STAGES)})")
+    ap.add_argument("--stages", default=format_stages(DEFAULT_STAGES),
+                    help="Comma-separated pipeline states, in column order. A state is "
+                         "either a bare label, or 'column name=label|label' when several "
+                         "labels should share one column "
+                         f"(default: {format_stages(DEFAULT_STAGES)})")
     ap.add_argument("--accept-label", default=ACCEPT_LABEL,
                     help=f"Label the Accept button adds (default: {ACCEPT_LABEL})")
+    ap.add_argument("--accept-block-labels", default=",".join(ACCEPT_BLOCK_LABELS),
+                    help="Comma-separated labels besides the accept label itself that "
+                         "disable the Accept button "
+                         f"(default: {','.join(ACCEPT_BLOCK_LABELS)})")
+    ap.add_argument("--route-label", default=ROUTE_LABEL,
+                    help="Label that routes an issue to the 27.x pipeline; shown as a "
+                         "per-row toggle pill in its own column. Pass an empty string "
+                         f"to hide the column (default: {ROUTE_LABEL})")
     ap.add_argument("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
     ap.add_argument("--port", type=int, default=5058,
                     help="Bind port (default 5058; the Apple dashboard uses 5057)")
@@ -701,11 +883,18 @@ def main():
     REPO_SLUG = args.repo_slug or detect_repo_slug(args.repo)
     if not REPO_SLUG:
         sys.exit("Could not determine the GitHub repo from the origin remote; pass --repo-slug owner/name.")
-    STAGES = [s.strip() for s in args.stages.split(",") if s.strip()]
+    STAGES = parse_stages(args.stages)
+    if not STAGES:
+        sys.exit("--stages named no labels; pass at least one.")
     ACCEPT_LABEL = args.accept_label
+    ACCEPT_BLOCK_LABELS = [s.strip() for s in args.accept_block_labels.split(",")
+                           if s.strip()]
+    ROUTE_LABEL = args.route_label.strip()
 
     sys.stderr.write(f"Serving Cabalmail triage dashboard on http://{args.host}:{args.port}  (repo: {REPO_SLUG})\n")
-    sys.stderr.write(f"Lifecycle columns: {', '.join(STAGES)}\n")
+    sys.stderr.write("Pipeline columns: "
+                     + "; ".join(f"{k} ({', '.join(v)})" for k, v in STAGES)
+                     + (f"; route label: {ROUTE_LABEL}" if ROUTE_LABEL else "") + "\n")
     app.run(host=args.host, port=args.port, debug=False)
 
 

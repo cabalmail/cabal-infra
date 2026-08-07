@@ -15,6 +15,14 @@ public enum FolderTree {
     /// permanent deletion (purge / empty trash) when acting inside it.
     public static let trashPath = "Trash"
 
+    /// Dovecot's special-use \Archive mailbox. Archive affordances switch to
+    /// Restore when acting inside it - see `DisposeIntent`.
+    public static let archivePath = "Archive"
+
+    /// The one mailbox every account has. Restoring an archived message puts
+    /// it back here: IMAP keeps no record of where it was archived from.
+    public static let inboxPath = "INBOX"
+
     /// DFS through the `/`-delimited tree formed by `path`s, emitting peers
     /// alphabetically and children directly under their parent. Intermediate
     /// path segments that aren't themselves in `input` are skipped - we
@@ -50,6 +58,34 @@ public enum FolderTree {
         return out
     }
 
+    /// The canonical folder order used by every list that shows folders -
+    /// the sidebar, the "Move to folder…" sheet and the notification-scope
+    /// picker: INBOX first, then user folders as a `/`-delimited tree via
+    /// `sortUserTree`, then the remaining system folders alphabetically.
+    /// Anything not in `input` is not fabricated, and nothing is dropped
+    /// except as `dropNoselectUserFolders` asks.
+    ///
+    /// - Parameter dropNoselectUserFolders: when true, `\Noselect` container
+    ///   folders are omitted from the user-folder section. INBOX and the
+    ///   system folders are unaffected either way - callers that need those
+    ///   filtered too (the move sheet) pre-filter `input` themselves.
+    public static func sidebarOrder(
+        _ input: [Folder],
+        dropNoselectUserFolders: Bool = false
+    ) -> [Folder] {
+        let systemNames = systemPaths.subtracting(["INBOX"])
+        let inbox = input.filter { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame }
+        let system = input
+            .filter { systemNames.contains($0.path) }
+            .sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
+        let userFolders = input.filter { folder in
+            !inbox.contains(folder)
+                && !system.contains(folder)
+                && !(dropNoselectUserFolders && folder.attributes.contains("\\Noselect"))
+        }
+        return inbox + sortUserTree(userFolders) + system
+    }
+
     /// Indentation depth for the "All folders" section - system folders
     /// (Inbox + Sent/Drafts/etc.) sit at depth 0 regardless of any `/` in
     /// the name; user folders indent one step per path segment past the
@@ -57,6 +93,20 @@ public enum FolderTree {
     public static func depth(for folder: Folder) -> Int {
         if systemPaths.contains(folder.path) { return 0 }
         return max(0, folder.path.split(separator: "/").count - 1)
+    }
+
+    /// Indentation depth *within `list`* — one step per ancestor that
+    /// list actually contains. The sidebar draws two sections over two
+    /// different lists (Subscribed is a subset of All folders, and the
+    /// filter field narrows both), so depth has to be relative to the
+    /// rows on screen: indenting a folder under a parent the section
+    /// isn't showing would read as a child of whatever row happens to
+    /// sit above it. Where every ancestor is present this agrees with
+    /// `depth(for:)`.
+    public static func depth(for folder: Folder, in list: [Folder]) -> Int {
+        if systemPaths.contains(folder.path) { return 0 }
+        let present = Set(list.map(\.path))
+        return ancestors(of: folder.path).filter(present.contains).count
     }
 
     /// True iff any other folder in `input` lives under `folder` in the tree.

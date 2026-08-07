@@ -13,7 +13,7 @@
 #   https://github.com/slusarz/dovecot-fts-flatcurve (v1.0.5)
 # Licences are preserved at /usr/share/doc/{xapian,fts-flatcurve}/
 # in the runtime image; see docs/operations.md.
-FROM amazonlinux:2023@sha256:0c74e9fbba754003cfa179fd5cc65be7790d7248443276948704b8a858b298e5 AS fts-builder
+FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568 AS fts-builder
 
 ARG XAPIAN_VERSION=1.4.31
 ARG FTS_FLATCURVE_VERSION=v1.0.5
@@ -85,7 +85,7 @@ RUN rm -rf /staging/usr/local \
 # ───────────────────────────────────────────────────────────────
 # Runtime image
 # ───────────────────────────────────────────────────────────────
-FROM amazonlinux:2023@sha256:0c74e9fbba754003cfa179fd5cc65be7790d7248443276948704b8a858b298e5
+FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568
 
 # System packages
 RUN dnf install -y \
@@ -102,7 +102,12 @@ RUN dnf install -y \
     && pip install supervisor \
     && dnf clean all \
     && sed -i 's/^UID_MAX.*/UID_MAX                 2147483647/' /etc/login.defs \
-    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs
+    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs \
+    # The sendmail RPM's %post scriptlet generates a throwaway self-signed
+    # cert/key here on every install; entrypoint.sh always overwrites the
+    # real TLS_CERT/TLS_KEY under different filenames, so this baked-in
+    # key is unused and would flag as a leaked private key.
+    && rm -f /etc/pki/tls/private/sendmail.key /etc/pki/tls/certs/sendmail.pem
 
 # Xapian runtime library + fts_flatcurve plugin .so + licences,
 # staged by the builder. The plugin loads at dovecot startup once

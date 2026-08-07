@@ -6,7 +6,7 @@ the backstop for the rows neither path can reach: a device that stopped
 launching the app (no re-registration refreshing last_seen_at) whose user
 receives no mail (no send ever surfaces an APNs rejection). Without mail
 there is no push, so nothing is lost by reaping; a device that comes back
-re-registers on its next launch. See docs/0.11.0/push-notifications.md.
+re-registers on its next launch. See docs/0.11.x/push-notifications.md.
 
 Scheduled weekly via EventBridge Scheduler
 (terraform/infra/modules/app/push_token_gc.tf).'''

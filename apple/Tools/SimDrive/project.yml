@@ -1,0 +1,45 @@
+# XcodeGen spec for SimDrive, the full-app simulator drive harness.
+#
+# Run `xcodegen generate` in this directory to produce SimDrive.xcodeproj
+# (gitignored, like the main project). The `simdrive` script does this
+# for you.
+#
+# The single target is a standalone XCUITest bundle with no target
+# application: the test drives whatever app the host names via
+# `XCUIApplication(bundleIdentifier:)`, so the harness never needs to
+# build (or even see) the app under test — install one with
+# scripts/build-sim.sh first.
+
+name: SimDrive
+
+options:
+  bundleIdPrefix: com.cabalmail.tools
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  SimDriveUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SimDriveUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.tools.SimDriveUITests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  SimDrive:
+    build:
+      targets:
+        SimDriveUITests: all
+    test:
+      config: Debug
+      targets:
+        - SimDriveUITests

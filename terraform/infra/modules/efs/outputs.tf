@@ -17,3 +17,8 @@ output "smtp_queue_access_point_id" {
   value       = aws_efs_access_point.smtp_queue.id
   description = "EFS access point id for the shared smtp-out sendmail MTA queue."
 }
+
+output "smtp_in_queue_access_point_id" {
+  value       = aws_efs_access_point.smtp_in_queue.id
+  description = "EFS access point id for the shared smtp-in sendmail relay queue."
+}

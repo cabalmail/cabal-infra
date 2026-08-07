@@ -54,6 +54,22 @@ final class BulkSelectionTests: XCTestCase {
         XCTAssertTrue(model.selectedUIDs.isEmpty)
     }
 
+    func testLeaveBulkModeKeepsTheSelection() throws {
+        let model = try TestFixtures.makeModel(
+            imap: FakeImapClient(),
+            envelopes: [TestFixtures.makeEnvelope(uid: 1)]
+        )
+        model.bulkMode = true
+        model.selectedUIDs = [1]
+        // `endSelectionMode()` runs synchronously right after the view kicks
+        // off `Task { await model.bulkMove(...) }`, and that task reads
+        // `selectedUIDs` when it starts — so dropping the mode must not clear
+        // the set, or the move would run against an empty selection.
+        model.leaveBulkMode()
+        XCTAssertFalse(model.bulkMode)
+        XCTAssertEqual(model.selectedUIDs, [1])
+    }
+
     // MARK: - Optimistic flag state
 
     func testSetSeenAppliesAndStaysOnSuccess() async throws {

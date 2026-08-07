@@ -42,6 +42,19 @@ DRAFTS_FOLDER = 'Drafts'
 # `[APPENDUID <uidvalidity> <uid>]`.
 _APPENDUID_RE = re.compile(r'\[APPENDUID (\d+) (\d+)\]')
 
+# The body keys compose_from_body indexes directly. A message cannot be
+# built without them, so their absence is a client error -- but only if it
+# is checked, because an escaping KeyError becomes a bodiless 502 rather
+# than the 400 the handlers already have for a rejected payload (#895).
+COMPOSE_REQUIRED_FIELDS = ('sender', 'subject', 'to_list', 'cc_list',
+                           'bcc_list', 'text', 'html')
+
+# The recipient keys the composer joins and /send re-reads for the SMTP
+# envelope. Presence is not enough for these: a string where a list belongs
+# gets past every presence and CR/LF check and only fails downstream, where
+# the failure is a TypeError rather than a rejected payload (#909).
+RECIPIENT_LIST_FIELDS = ('to_list', 'cc_list', 'bcc_list')
+
 # The user's display-name preference (set via /set_preferences) becomes the
 # From header's display name. It is read server-side - never from the request
 # body - so a client cannot put an arbitrary name on the wire per message.
@@ -187,19 +200,31 @@ def compose_from_body(body, user):
     (callers translate it to a 400). Sender authorization is the caller's
     responsibility (see unauthorized_sender_response_or_none).'''
     bucket = CACHE_BUCKET
+    require_fields(body, COMPOSE_REQUIRED_FIELDS)
+    require_list_fields(body, RECIPIENT_LIST_FIELDS)
     validate_outbound_headers(body)
     attachments = load_attachments(body.get('attachments', []), bucket, user)
     # The visible From may carry the user's display-name preference, but the
     # address part is always the bare validated sender (which /send also pins
     # as the SMTP MAIL FROM).
     from_header = format_mailbox(sender_display_name(user), body['sender'])
+    # The threading headers are read the same defensive way
+    # validate_outbound_headers reads them: absent means no threading
+    # context, which is exactly what a fresh (non-reply) compose has.
+    # Hard-indexing them here made the two halves of one request disagree
+    # -- optional to the validator, required five lines later -- and the
+    # KeyError escaped as a bodiless 502 (#895).
+    others = body.get('other_headers', {}) or {}
+    # Same defensiveness for the recipient lists: the validator above reads
+    # each as `... or []`, so a null list is a payload it accepts and this
+    # must not then die on `','.join(None)`.
     return compose_message(body['subject'], from_header, {
-                             "to": ','.join(body['to_list']),
-                             "cc": ','.join(body['cc_list']),
-                             "bcc": ','.join(body['bcc_list']),
-                             "message_id": body['other_headers']['message_id'],
-                             "in_reply_to": body['other_headers']['in_reply_to'],
-                             "references": body['other_headers']['references']
+                             "to": ','.join(body['to_list'] or []),
+                             "cc": ','.join(body['cc_list'] or []),
+                             "bcc": ','.join(body['bcc_list'] or []),
+                             "message_id": others.get('message_id', []) or [],
+                             "in_reply_to": others.get('in_reply_to', []) or [],
+                             "references": others.get('references', []) or []
                            },
                            body['text'], body['html'], attachments)
 
@@ -215,6 +240,45 @@ def _reject_crlf(value, field):
         return
     if '\r' in value or '\n' in value:
         raise ValueError(f"{field} contains illegal line breaks")
+
+
+def require_fields(body, fields):
+    """Raises ValueError naming every required body key the request omits.
+
+    Callers translate the ValueError to a 400, which is the point: without
+    this the handlers index the key anyway and the KeyError escapes as a
+    bodiless 502 (#895). Presence only - a supplied value still has to get
+    past validate_outbound_headers.
+    """
+    missing = [field for field in fields if field not in body]
+    if missing:
+        raise ValueError(f"missing required field(s): {', '.join(missing)}")
+
+
+def require_list_fields(body, fields):
+    """Raises ValueError naming a field whose value is not a list of strings.
+
+    Shape, not presence: `require_fields` above catches an omitted key, and
+    `validate_outbound_headers` catches a hostile value, but neither notices
+    that `to_list` arrived as the bare string an unfamiliar client might send.
+    That payload composed a header of comma-separated characters and then blew
+    up in /send's `getaddresses((body['to_list'] or []) + ...)` with a
+    TypeError, which escaped as a bodiless 502 (#909). It is a client error,
+    so it gets the same named 400 every other rejected payload gets.
+
+    `None` is deliberately allowed: the composer and the header validator both
+    read these as `... or []`, so a null list is an accepted payload meaning
+    "no recipients in this field" (#895).
+    """
+    for field in fields:
+        value = body.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, list):
+            raise ValueError(f"{field} must be a list of addresses")
+        for entry in value:
+            if not isinstance(entry, str):
+                raise ValueError(f"{field} must contain only address strings")
 
 
 def validate_outbound_headers(body):

@@ -4,7 +4,7 @@ import Foundation
 //
 // The `/push_register` / `/push_deregister` Lambdas maintain the
 // `cabal-push-tokens` table the push-dispatch Lambda fans out to (see
-// `docs/0.11.0/push-notifications.md`). Same wire conventions as every
+// `docs/0.11.x/push-notifications.md`). Same wire conventions as every
 // other endpoint: flat path under the API Gateway stage, Cognito ID token
 // in the Authorization header, snake_case JSON body.
 

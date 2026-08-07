@@ -51,7 +51,10 @@ final class ComposeViewModel {
     private(set) var draftId: UUID
     let draftStore: DraftStore
     private let preferences: Preferences
-    private let onClose: @MainActor () -> Void
+    /// Dismisses the compose surface (sheet on iPhone, window elsewhere).
+    /// Internal rather than private so the close-without-send legs in
+    /// `ComposeViewModel+Internals.swift` can reach it.
+    let onClose: @MainActor () -> Void
 
     var fromAddress: String?
     var toText: String = ""
@@ -66,6 +69,15 @@ final class ComposeViewModel {
     var availableAddresses: [Address] = []
     var isSending = false
     var errorMessage: String?
+    /// Non-nil while the WebKit editor bridge is known to be unusable,
+    /// mirroring `RichTextEditorController.bridgeFailure` — the controller
+    /// is a plain `NSObject`, so SwiftUI can't observe its state directly.
+    /// Every body conversion answers `""` from that point on, so nothing can
+    /// be sent: this keeps Send disabled and the banner up (#812). Mutated
+    /// only by the `noteEditorUnavailable` / `noteEditorRecovered` pair in
+    /// `ComposeViewModel+Internals.swift`, which a `private(set)` here
+    /// would put out of reach.
+    var editorUnavailable: String?
     /// Set to `.queued` when the most recent send dropped the message into
     /// the outbox instead of delivering it. `ComposeView` reads this to
     /// decide whether the dismiss toast should say "Sent" or "Queued — will
@@ -79,6 +91,10 @@ final class ComposeViewModel {
     /// Latest selection snapshot from the rich editor; drives the toolbar's
     /// active states.
     var richSelection: RichTextEditorController.Selection = .init()
+    /// True while the rich editor's contenteditable has focus. Scopes the
+    /// iPad/visionOS ⌘⇧V paste-without-formatting shortcut to the editor so
+    /// the other compose fields keep their own key handling.
+    var editorFocused = false
 
     /// True when `fromAddress` was pre-filled from the default-From
     /// preference rather than the seed. `refreshAddresses` uses this to
@@ -92,12 +108,18 @@ final class ComposeViewModel {
     /// `internal` so `ComposeViewModel+Internals.swift` can read them.
     let inReplyTo: String?
     let references: [String]
-    private let composeIntent: ComposeIntent
+    let composeIntent: ComposeIntent
 
     /// Server-side Drafts copy the next save replaces (and a send
     /// discards). Seeded from the draft when resuming; updated after every
     /// successful `/save_draft` round trip.
     var serverDraftRef: DraftServerRef?
+    /// Whether this surface opened on a draft that already exists in the
+    /// server Drafts folder (Edit Draft), rather than on a new message, reply
+    /// or forward. Captured at init rather than read off `serverDraftRef`,
+    /// which also becomes non-nil once a fresh compose autosaves: the title
+    /// describes what the user opened, not what has since been saved.
+    let isResumedServerDraft: Bool
     /// Serializes server saves so the debounce loop and an in-progress
     /// close-without-send can't append racing copies.
     var serverSaveInFlight = false
@@ -149,6 +171,7 @@ final class ComposeViewModel {
         self.references = seed.references
         self.composeIntent = seed.composeIntent ?? .new
         self.serverDraftRef = seed.serverRef
+        self.isResumedServerDraft = seed.serverRef != nil
         // Append the preference signature to the seeded body, but only once.
         // Replies / forwards seed with an attribution + quoted body; the
         // signature goes *above* that block so the user's reply text lands
@@ -163,6 +186,9 @@ final class ComposeViewModel {
         self.editorController.onSelectionChanged = { [weak self] selection in
             self?.richSelection = selection
         }
+        self.editorController.onEditorFocusChanged = { [weak self] focused in
+            self?.editorFocused = focused
+        }
         // The user's first character mutates rich-only state; the mirror
         // flag flips and the send logic stops treating the rich pane as a
         // pure echo of the markdown source.
@@ -173,7 +199,13 @@ final class ComposeViewModel {
         // the rich pane (and send-time conversion) is out of commission
         // for this compose. Say so instead of failing silently (#734).
         self.editorController.onBridgeError = { [weak self] message in
-            self?.errorMessage = "Rich-text editor failed to load: \(message)"
+            self?.noteEditorUnavailable(message)
+        }
+        // A `ready` that lands after the failure means the boot was merely
+        // slow; the controller has already cleared its own failure, so drop
+        // the banner and re-enable Send rather than stranding the compose.
+        self.editorController.onReady = { [weak self] in
+            self?.noteEditorRecovered()
         }
     }
 
@@ -254,8 +286,11 @@ final class ComposeViewModel {
         composeIntent == .reply || composeIntent == .replyAll
     }
 
-    /// Is the form complete enough to enable the Send button?
+    /// Is the form complete enough to enable the Send button? A dead editor
+    /// bridge disables it too: the body can't be assembled, so the send
+    /// would only be refused (#745) — better not to offer the tap (#812).
     var canSend: Bool {
+        guard editorUnavailable == nil else { return false }
         guard fromAddress != nil, !subject.isEmpty else { return false }
         return !parseRecipients(toText).isEmpty
             || !parseRecipients(ccText).isEmpty
@@ -320,6 +355,13 @@ final class ComposeViewModel {
     }
 
     func send() async -> Bool {
+        // Checked ahead of `canSend` so a tap that races the bridge dying
+        // gets the real reason instead of the generic form complaint —
+        // silence here is what made a dead bridge look like a dead button.
+        if let reason = editorUnavailable {
+            errorMessage = Self.editorUnavailableMessage(reason)
+            return false
+        }
         guard canSend, let fromEmail = currentFromEmail() else {
             if fromAddress != nil { errorMessage = "Invalid From address." }
             return false
@@ -328,6 +370,14 @@ final class ComposeViewModel {
         defer { isSending = false }
         do {
             let message = await buildOutgoingMessage(from: fromEmail)
+            // Body assembly runs through the WebKit bridge, which answers
+            // "" for every conversion once it is dead. Sending that would
+            // deliver an empty message the user had written text into, so
+            // refuse and leave the window open (#745).
+            if let failure = editorController.bridgeFailure {
+                noteEditorUnavailable(failure)
+                return false
+            }
             // Send-from-draft cleans up the server copy after delivery
             // (best-effort, server-side). A queued send drops the ref; the
             // stale copy survives, which beats discarding a draft for a
@@ -356,23 +406,36 @@ final class ComposeViewModel {
     /// the window goes away — the local copy is still on disk either way,
     /// so nothing is lost by retrying or by force-closing.
     ///
-    /// Empty drafts and drafts without a valid `From` address fall back to
-    /// the local-only autosave: empty composes leave nothing behind (any
-    /// stale server copy is discarded), and a half-finished compose without
-    /// a sender selected can't be saved server-side (no envelope to
-    /// authorize against). `DraftStore.save` silently removes empty drafts
-    /// so a user who opens Compose and closes immediately leaves no
-    /// breadcrumb.
+    /// Empty drafts leave nothing behind (any stale server copy is
+    /// discarded); `DraftStore.save` silently removes them, so a user who
+    /// opens Compose and closes immediately leaves no breadcrumb. A draft
+    /// that *has* content but no valid `From` can't be pushed at all —
+    /// `/save_draft` has no envelope to authorize against — so it keeps the
+    /// composer up and says why rather than closing as if it had saved,
+    /// which is how a filled-in message used to vanish (#903).
+    ///
+    /// `ComposeCancelPolicy` owns the order those cases are considered in.
     @discardableResult
     func cancel() async -> Bool {
         await persistCurrentDraft()
-        guard let fromEmail = currentFromEmail() else {
+        let fromEmail = currentFromEmail()
+        // Bodies first: converting them is what makes a sick bridge report
+        // itself, so `bridgeFailure` is only trustworthy afterwards (#745).
+        let bodies = await computeMessageBodies()
+        switch ComposeCancelPolicy.resolve(
+            bridgeFailed: editorController.bridgeFailure != nil,
+            hasContent: hasDraftContent(bodies: bodies),
+            hasFrom: fromEmail != nil
+        ) {
+        case .closeKeepingLocalCopy:
+            // Pushing an all-empty body would replace a good Drafts copy
+            // with a blank one, so keep the local draft (already flushed
+            // above) and let the window close — trapping the user in a
+            // compose they can't fix is worse.
             stop()
             onClose()
             return true
-        }
-        let message = await buildOutgoingMessage(from: fromEmail)
-        guard hasDraftContent(message) else {
+        case .discardEmpty:
             if let ref = serverDraftRef {
                 _ = try? await client.discardDraft(ref)
             }
@@ -380,23 +443,13 @@ final class ComposeViewModel {
             stop()
             onClose()
             return true
+        case .refuseMissingFrom:
+            errorMessage = ComposeCancelPolicy.missingFromMessage
+            return false
+        case .saveToServer:
+            guard let fromEmail else { return false }
+            return await pushDraftToServer(buildOutgoingMessage(from: fromEmail, bodies: bodies))
         }
-        do {
-            serverSaveInFlight = true
-            defer { serverSaveInFlight = false }
-            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
-                serverDraftRef = ref
-            }
-            try? await draftStore.remove(id: draftId)
-            stop()
-            onClose()
-            return true
-        } catch let error as CabalmailError {
-            errorMessage = "Couldn't save draft: \(describe(error))"
-        } catch {
-            errorMessage = "Couldn't save draft: \(error.localizedDescription)"
-        }
-        return false
     }
 
     /// Delete the draft entirely (user confirmed "Discard draft") and

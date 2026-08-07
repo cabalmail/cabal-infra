@@ -83,15 +83,6 @@ final class MessageDetailViewModel {
 
     func requestPrint() { printRequestTick += 1 }
 
-    /// Pending mark-as-read task for the `.afterDelay` behavior. Cancelled
-    /// when the message is manually toggled read/unread or disposed — those
-    /// paths supersede the delayed write. NOT cancelled by `onDisappear`
-    /// on iPhone (see #735 / #403 note there); the task uses `[weak self]`
-    /// so a truly-departed view lets the model deallocate and the write
-    /// becomes a no-op. Internal so the `+Flags` sibling extension that
-    /// owns the mark-as-read logic can reach it.
-    var pendingMarkAsReadTask: Task<Void, Never>?
-
     /// In-flight body fetch (#403). Owned by the model so SwiftUI's `.task`
     /// double-fire can't cancel it. Not torn down by `onDisappear()` — that
     /// callback is unreliable on iPhone (phantom fires mid-push); the Task
@@ -120,11 +111,6 @@ final class MessageDetailViewModel {
     /// `MessageDetailView`; nil in tests. Same decoupling rationale as
     /// `onFlagChanged`.
     var onMoveInFlight: ((Bool) -> Void)?
-
-    /// Delay for the `.afterDelay` mark-as-read mode. Matches the plan's
-    /// "After delay (2s)" label and is low enough that a quick glance
-    /// doesn't bleed over into "read."
-    static let markAsReadDelay: TimeInterval = 2
 
     struct Attachment: Identifiable, Hashable {
         let id: String
@@ -200,8 +186,7 @@ final class MessageDetailViewModel {
                 return
             } catch {
                 BodyFetchLog.loadOther(uid: uid, attempt: attemptNumber, error: error)
-                errorMessage = (error as? CabalmailError).map { String(describing: $0) }
-                    ?? error.localizedDescription
+                errorMessage = error.localizedDescription
                 completed = true
                 return
             }
@@ -210,18 +195,9 @@ final class MessageDetailViewModel {
 
     /// Deliberately a near no-op. `.onDisappear` is unreliable as a "user
     /// truly left" signal on iPhone: SwiftUI fires it mid-push for phantom
-    /// view instances that aren't actually going away (#403). The same
-    /// phantom fires here after `scheduleMarkAsReadIfNeeded()` has spawned
-    /// the pending task, so cancelling here would silently kill the delayed
-    /// STORE every time (#735).
-    ///
-    /// The pending mark-as-read task captures `self` weakly, so if the view
-    /// is genuinely gone the model deallocates and `setSeen` becomes a
-    /// no-op. If it isn't gone, the 2-second timer runs down and the STORE
-    /// lands as intended. The manual seen toggle and `dispose(...)` still
-    /// cancel the task when they truly supersede it.
-    ///
-    /// The body-fetch `loadTask` is likewise not cancelled here (see #403).
+    /// view instances that aren't actually going away (#403), so the
+    /// body-fetch `loadTask` isn't cancelled here — the model deallocates
+    /// naturally when the view is genuinely gone.
     func onDisappear() {
         BodyFetchLog.disappear(uid: envelope.uid, hadTask: loadTask != nil)
     }
@@ -273,8 +249,6 @@ final class MessageDetailViewModel {
         let wasSeen = isSeen
         if !isSeen {
             isSeen = true
-            pendingMarkAsReadTask?.cancel()
-            pendingMarkAsReadTask = nil
             onFlagChanged?(.seen, true)
         }
         // Shield the optimistic prune from a concurrent refresh until the move

@@ -59,17 +59,6 @@ SMTP_HOST = f'smtp-out.{CONTROL_DOMAIN}'
 CACHE_BUCKET = f'cache.{CONTROL_DOMAIN}'
 
 
-def is_admin(groups_claim):
-    '''True when the caller's `cognito:groups` claim contains the exact `admin`
-    group. The claim is a serialized list -- API Gateway may render it as
-    "admin", "admin,users", or "[admin users]" -- so we split on commas and
-    whitespace and match a whole element. A substring test (`'admin' in claim`)
-    would wrongly admit any group whose name merely contains "admin"
-    (e.g. "admin-readonly", "nonadmin").'''
-    members = (groups_claim or '').strip('[]').replace(',', ' ').split()
-    return 'admin' in members
-
-
 # ---------------------------------------------------------------------------
 # Planned-maintenance signal.
 #
@@ -108,6 +97,15 @@ class MaintenanceError(Exception):
     def __init__(self, state):
         self.state = state or {}
         super().__init__('IMAP is in planned maintenance')
+
+
+class MessageGoneError(Exception):
+    '''Raised by get_message when the requested UID is no longer in the folder.
+    message_gone_guard translates it into a 404 the clients can act on.'''
+    def __init__(self, folder, msg_id):
+        self.folder = folder
+        self.msg_id = msg_id
+        super().__init__(f'no message with UID {msg_id} in {folder}')
 
 
 def _read_maintenance_param():
@@ -177,6 +175,33 @@ def maintenance_response(state):
     }
 
 
+def message_gone_response(folder, msg_id):
+    '''Builds the 404 served when a requested UID is no longer in the folder.'''
+    return {
+        "statusCode": 404,
+        "body": json.dumps({
+            "status": f"That message is no longer in {folder.split('.')[-1]}",
+            "folder": folder,
+            "id": msg_id,
+        })
+    }
+
+
+def message_gone_guard(handler):
+    '''Decorator: turns a MessageGoneError raised anywhere inside a handler
+    that loads a message body into a 404. Left unhandled it escaped as a
+    KeyError, and API Gateway turned that into a bodiless 502 -- clients could
+    not tell "this message is gone" (refresh the folder) from "the server is
+    broken" (retry later).'''
+    @functools.wraps(handler)
+    def wrapper(event, context):
+        try:
+            return handler(event, context)
+        except MessageGoneError as err:
+            return message_gone_response(err.folder, err.msg_id)
+    return wrapper
+
+
 def maintenance_guard(handler):
     '''Decorator: turns a MaintenanceError raised anywhere inside an IMAP-backed
     handler into a friendly 503 maintenance response so clients can show a
@@ -189,16 +214,6 @@ def maintenance_guard(handler):
             return maintenance_response(err.state)
     return wrapper
 
-
-def admin_response_or_none(event):
-    """Returns a 403 response when the caller lacks the admin group, else None"""
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if not is_admin(groups):
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
-    return None
 
 def find_managed_apex(domains_map, domain):
     """Returns (apex, zone_id) for the longest managed apex that owns `domain`,
@@ -247,17 +262,65 @@ def get_imap_client(_host, user, folder, read_only=False):
     return open_imap_client(IMAP_HOST, user, folder, read_only, mpw)
 
 
-def user_authorized_for_sender(user, sender):
-    """Checks whether the user is allowed to send from the specifed sender address"""
+def address_row_for_sender(user, sender):
+    """Fetches the stored cabal-addresses row for `sender` and reports whether
+    the user may send from it, as (item, authorized).
+
+    `item` is the stored row, or {} when the address has no row or the lookup
+    failed, so a caller that also needs the row does not have to read it a
+    second time. A lookup failure is reported as unauthorized rather than
+    raised, so the caller answers 403 instead of relaying a traceback.
+
+    The row's `user` attribute is slash-delimited: assign_address joins every
+    assignee into one string, so a co-assigned address stores "alice/bob".
+    Membership, not equality, is the ownership test -- an `==` here answers
+    False for every assignee of a multi-user address, the original owner
+    included, while /list and set_favorite (which already split) keep showing
+    it to all of them.
+    """
     try:
         response = ddb_table.get_item(Key={'address': sender})
     except ClientError as err:
         print(err.response['Error']['Message'])
-        return False
-    try:
-        return response['Item']['user'] == user
-    except KeyError:
-        return False
+        return {}, False
+    item = response.get('Item') or {}
+    assigned = (item.get('user') or '').split('/')
+    return item, user in assigned
+
+
+def user_authorized_for_sender(user, sender):
+    """Checks whether the user is allowed to send from the specifed sender address"""
+    _, authorized = address_row_for_sender(user, sender)
+    return authorized
+
+
+def authorized_address_request(event):
+    """Parses an address-scoped request body and authorizes the caller against
+    the stored row, returning (address, item, error).
+
+    On success `error` is None, `address` is the requested address and `item`
+    is that address's stored cabal-addresses row. On a malformed body, or an
+    address the caller does not own, `error` is a ready-to-return response and
+    the other two are None, so a handler can `return error`. Shared by the
+    address-lifecycle endpoints (revoke, suspend, reinstate) so all three gate
+    on the same check with the same wire shape, and so the stored row each of
+    them goes on to read costs one DynamoDB lookup rather than two.
+    """
+    body, error = parse_json_body(event)
+    if error:
+        return None, None, error
+    address = body['address']
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
+    item, authorized = address_row_for_sender(user, address)
+    if not authorized:
+        return None, None, {
+            'statusCode': 403,
+            'body': json.dumps({
+                'Error': 'Address not associated with authenticated user'
+            })
+        }
+    return address, item, None
+
 
 def user_authorized_for_domain(user, domain):
     """Checks whether the user is permitted to create addresses on the given
@@ -288,6 +351,7 @@ _FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 _KEYWORD_RE = re.compile(r'^[A-Za-z0-9_\-]+$')
 _CONTROL_CHARS_RE = re.compile(r'[\x00-\x1f\x7f]')
 _CONTENT_ID_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f\s/\\]')
+_ATTACHMENT_NAME_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f/\\]')
 
 # Lowercased wire form -> canonical form. Only these five system flags are
 # client-settable; \Recent and friends are server-managed and never accepted.
@@ -569,6 +633,45 @@ def validate_content_id(value):
     return value
 
 
+def validate_part_index(value):
+    '''Validates a MIME part serial number, returning an int >= 0.
+
+    A part index is a position in `message.walk()`, not a UID: part 0 is the
+    message itself and is a legal value, so validate_uid's [1, 2**32-1] range
+    doesn't apply. Booleans are rejected for the same reason as in
+    validate_uid_list.
+    '''
+    if isinstance(value, bool):
+        raise ValueError(f'invalid attachment index: {value!r}')
+    try:
+        index = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'invalid attachment index: {value!r}') from exc
+    if index < 0:
+        raise ValueError(f'attachment index out of range: {index}')
+    return index
+
+
+def validate_attachment_filename(value):
+    '''Validates the filename an attachment is cached under, returning it
+    unchanged.
+
+    The value becomes the last component of an S3 key, so path separators,
+    control bytes, and the traversal names are rejected. Otherwise it stays
+    permissive: this is a real MIME filename taken from the message, and
+    spaces, non-ASCII, and punctuation all occur in the wild.
+    '''
+    if not isinstance(value, str) or not value:
+        raise ValueError('filename is required')
+    if len(value.encode('utf-8')) > MAX_FOLDER_NAME_BYTES:
+        raise ValueError('filename is too long')
+    if _ATTACHMENT_NAME_FORBIDDEN_RE.search(value):
+        raise ValueError('filename contains illegal characters')
+    if value in ('.', '..'):
+        raise ValueError(f'invalid filename: {value!r}')
+    return value
+
+
 def validate_search_text(value):
     '''Bounds one structured-search free-text field (text/from/to/subject).
 
@@ -708,6 +811,101 @@ def assert_zone_owns_apex(zone_id, apex):
         raise ZoneMismatchError(f'zone-mismatch: zone {zone_id} does not own {apex}')
 
 
+def address_dns_records(subdomain, tld, control_domain):
+    '''Canonical DNS record set for an address subdomain, as (name, type, value)
+    tuples. Must stay in lockstep with the records the `new` handler publishes:
+    suspend/revoke delete exactly these names and reinstate republishes them.'''
+    return (
+        (f'{subdomain}.{tld}', 'MX', f'10 smtp-in.{control_domain}'),
+        (f'{subdomain}.{tld}', 'TXT', f'"v=spf1 include:{control_domain} ~all"'),
+        (f'cabal._domainkey.{subdomain}.{tld}', 'CNAME',
+         f'cabal._domainkey.{control_domain}'),
+        (f'_dmarc.{subdomain}.{tld}', 'CNAME', f'_dmarc.{control_domain}'),
+        (f'default._bimi.{subdomain}.{tld}', 'TXT',
+         f'"v=BIMI1; l=https://www.{control_domain}/assets/bimi/cabalmail.svg"'),
+    )
+
+
+def _find_rrset(zone_id, name, rtype):
+    '''Returns the live resource record set at (name, rtype) in the zone, or
+    None if absent. Exact-match on name and type; Route 53 returns names with a
+    trailing dot.'''
+    resp = _route53().list_resource_record_sets(
+        HostedZoneId=zone_id,
+        StartRecordName=name,
+        StartRecordType=rtype,
+        MaxItems='1'
+    )
+    for rrset in resp.get('ResourceRecordSets', []):
+        if rrset['Name'].rstrip('.').lower() == name.rstrip('.').lower() \
+                and rrset['Type'] == rtype:
+            return rrset
+    return None
+
+
+def publish_address_dns_records(zone_id, subdomain, tld, control_domain):
+    '''UPSERTs the canonical DNS record set for an address subdomain.'''
+    assert_zone_owns_apex(zone_id, tld)
+    changes = [{
+        'Action': 'UPSERT',
+        'ResourceRecordSet': {
+            'Name': name,
+            'Type': rtype,
+            'TTL': 3600,
+            'ResourceRecords': [{'Value': value}]
+        }
+    } for name, rtype, value in address_dns_records(subdomain, tld, control_domain)]
+    _route53().change_resource_record_sets(
+        HostedZoneId=zone_id, ChangeBatch={'Changes': changes})
+
+
+def delete_address_dns_records(zone_id, subdomain, tld, control_domain):
+    '''Deletes the canonical DNS record set for an address subdomain. Deletes
+    are built from the records actually live in the zone rather than blind
+    expected values, so a partially absent set (an address predating the BIMI
+    record, or a re-run after an earlier partial delete) cannot fail the whole
+    change batch with InvalidChangeBatch.'''
+    assert_zone_owns_apex(zone_id, tld)
+    changes = []
+    for name, rtype, _value in address_dns_records(subdomain, tld, control_domain):
+        rrset = _find_rrset(zone_id, name, rtype)
+        if rrset:
+            changes.append({'Action': 'DELETE', 'ResourceRecordSet': rrset})
+    if changes:
+        _route53().change_resource_record_sets(
+            HostedZoneId=zone_id, ChangeBatch={'Changes': changes})
+
+
+def active_addresses_on_subdomain(subdomain, tld, address):
+    '''Checks if other non-suspended addresses share the same subdomain and TLD.
+    The DNS records of a subdomain are shared by every address on it, so
+    suspend/revoke only delete them once this returns False. Suspended
+    co-tenants do not count: their contract is already "DNS absent", and
+    reinstate republishes the records if one comes back.'''
+    scan_kwargs = {
+        'FilterExpression': (
+            'subdomain = :sub AND tld = :tld AND address <> :addr '
+            'AND (attribute_not_exists(#s) OR #s = :false)'
+        ),
+        'ExpressionAttributeNames': {'#s': 'suspended'},
+        'ExpressionAttributeValues': {
+            ':sub': subdomain,
+            ':tld': tld,
+            ':addr': address,
+            ':false': False
+        },
+        'ProjectionExpression': 'address'
+    }
+    while True:
+        response = ddb_table.scan(**scan_kwargs)
+        if response.get('Items'):
+            return True
+        if 'LastEvaluatedKey' not in response:
+            break
+        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+    return False
+
+
 # Folder-size observability (Layer 4.1 of the large-mailbox hardening plan).
 # Each list handler emits one key=value log line tagging the request with a
 # coarse folder-size bucket so CloudWatch Logs Insights can correlate request
@@ -811,8 +1009,12 @@ def get_message(_host, user, folder, msg_id):
     else:
         client = get_imap_client(IMAP_HOST, user, folder, True)
         message = client.fetch([msg_id],['RFC822'])
-        email_body_raw = message[msg_id][b'RFC822']
         client.logout()
+        # A UID FETCH for a UID that is no longer in the mailbox succeeds and
+        # returns an empty dict, so the subscript below is not guaranteed.
+        if msg_id not in message:
+            raise MessageGoneError(folder, msg_id)
+        email_body_raw = message[msg_id][b'RFC822']
         upload_object(bucket, key, "text/plain", email_body_raw)
     message = email.message_from_bytes(email_body_raw, policy=default_policy)
     return message

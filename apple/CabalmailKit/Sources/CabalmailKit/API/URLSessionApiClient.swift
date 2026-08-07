@@ -93,6 +93,20 @@ extension URLSessionApiClient {
         _ = try await send(request, expectedStatuses: 200..<300)
     }
 
+    public func suspendAddress(address: String) async throws {
+        let request = try await put("/suspend_address", json: [
+            "address": address,
+        ])
+        _ = try await send(request, expectedStatuses: 200..<300)
+    }
+
+    public func reinstateAddress(address: String) async throws {
+        let request = try await put("/reinstate_address", json: [
+            "address": address,
+        ])
+        _ = try await send(request, expectedStatuses: 200..<300)
+    }
+
     public func setFavorite(address: String, favorite: Bool) async throws {
         let request = try await put("/set_favorite", json: [
             "address": address,

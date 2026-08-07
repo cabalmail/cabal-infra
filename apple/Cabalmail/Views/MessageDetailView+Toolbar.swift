@@ -7,6 +7,51 @@ import CabalmailKit
 // `model` and route their actions back through it.
 
 extension MessageDetailView {
+    /// Draws whichever button `ReaderToolbarLayout` put in this bottom-bar
+    /// slot, so the bar's contents and the tested layout can't drift apart.
+    @ViewBuilder
+    func bottomBarButton(for action: ReaderToolbarAction) -> some View {
+        switch action {
+        case .editDraft:     editDraftButton
+        case .reply:         replyButton
+        case .toggleRead:    seenButton
+        case .toggleFlag:    flagButton
+        case .remoteContent: remoteContentButton
+        case .readerMode:    readerModeButton
+        case .dispose:       disposeButton
+        case .overflow:      overflowMenuButton
+        }
+    }
+
+    #if os(iOS)
+    /// The reader's action set drawn as a bar under the reading pane, for the
+    /// layouts where a `.bottomBar` toolbar group would span the whole window
+    /// instead (iOS 27 at regular width — see `ReaderToolbarLayout`). Same
+    /// items in the same order as the system bar, sourced from the same
+    /// `ReaderToolbarLayout.bottomBar`, so the two paths can't drift apart.
+    /// Chrome follows the message list's bulk action bar (`Divider` over a
+    /// `.bar` background), which ties the controls to the pane they act on —
+    /// the thing the window-spanning bar loses.
+    @ViewBuilder
+    var readerActionBar: some View {
+        let actions = ReaderToolbarLayout.bottomBar(
+            leading: model?.leadingToolbarAction ?? .reply
+        )
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 0) {
+                ForEach(Array(actions.enumerated()), id: \.element) { index, action in
+                    if index > 0 { Spacer(minLength: 0) }
+                    bottomBarButton(for: action)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 10)
+            .background(.bar)
+        }
+    }
+    #endif
+
     /// Drafts-folder affordance: resume the open draft in compose.
     /// Disabled until the body fetch + MIME parse complete so a tap can't
     /// seed an empty compose over a draft that hasn't loaded yet.
@@ -20,6 +65,7 @@ extension MessageDetailView {
                     .accessibilityLabel("Edit Draft")
             }
             .disabled(!model.canResumeDraft)
+            .accessibilityIdentifier("reader.editDraft")
         }
     }
 
@@ -52,6 +98,7 @@ extension MessageDetailView {
             Image(systemName: "arrowshape.turn.up.left")
                 .accessibilityLabel("Reply")
         }
+        .accessibilityIdentifier("reader.reply")
     }
 
     @ViewBuilder
@@ -70,6 +117,7 @@ extension MessageDetailView {
             // both ways from the same chord; the icon labels which
             // direction the next press goes.
             .keyboardShortcut("u", modifiers: [.command, .shift])
+            .accessibilityIdentifier("reader.toggleRead")
         }
     }
 
@@ -84,6 +132,7 @@ extension MessageDetailView {
             }
             // Cmd+Shift+L — Mail.app's flag shortcut.
             .keyboardShortcut("l", modifiers: [.command, .shift])
+            .accessibilityIdentifier("reader.toggleFlag")
         }
     }
 
@@ -107,6 +156,7 @@ extension MessageDetailView {
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
             .disabled(model.htmlBody == nil)
+            .accessibilityIdentifier("reader.remoteContent")
         }
     }
 
@@ -126,26 +176,26 @@ extension MessageDetailView {
                     )
             }
             .disabled(model.htmlBody == nil)
+            .accessibilityIdentifier("reader.readerMode")
         }
     }
 
     @ViewBuilder
     var disposeButton: some View {
         if let model {
-            Button(role: model.isTrashFolder ? .destructive : disposeRole(for: model.disposeAction)) {
-                if model.isTrashFolder {
+            let intent = model.disposeIntent
+            Button(role: intent.isDestructive ? .destructive : nil) {
+                switch intent {
+                case .purge:
                     // In Trash, delete means gone forever — confirm first.
                     purgeConfirmPresented = true
-                } else {
-                    Task { await performDispose(model: model, action: model.disposeAction) }
+                case .restore:
+                    Task { await performMove(to: FolderTree.inboxPath) }
+                case .move(let action):
+                    Task { await performDispose(model: model, action: action) }
                 }
             } label: {
-                if model.isTrashFolder {
-                    Image(systemName: "trash.slash")
-                        .accessibilityLabel("Delete Forever")
-                } else {
-                    disposeToolbarLabel(for: model.disposeAction)
-                }
+                disposeToolbarLabel(for: intent)
             }
             // Cmd+Delete — the same chord Mail.app and most macOS list
             // apps bind to "remove from list." Routes through dispose so
@@ -153,6 +203,7 @@ extension MessageDetailView {
             // hard-coding one or the other. In Trash the chord stages the
             // delete-forever confirmation instead of acting directly.
             .keyboardShortcut(.delete, modifiers: .command)
+            .accessibilityIdentifier("reader.dispose")
         }
     }
 
@@ -161,19 +212,26 @@ extension MessageDetailView {
     /// Delete, and vice versa — both destinations stay one click away
     /// without a second toolbar slot. Inside Trash the toolbar button is
     /// Delete Forever and "move to Trash" is meaningless, so the
-    /// alternate is always Archive (the rescue path).
+    /// alternate is always Archive (the rescue path); inside Archive that
+    /// same archive alternate becomes Restore.
     @ViewBuilder
     func alternateDisposeMenuItem(model: MessageDetailViewModel) -> some View {
-        let alternate: DisposeAction = model.isTrashFolder || model.disposeAction == .trash
-            ? .archive
-            : .trash
-        Button(role: disposeRole(for: alternate)) {
-            Task { await performDispose(model: model, action: alternate) }
-        } label: {
+        let alternate: DisposeIntent = model.isTrashFolder || model.disposeAction == .trash
+            ? model.archiveIntent
+            : .move(.trash)
+        Button(role: alternate.isDestructive ? .destructive : nil) {
             switch alternate {
-            case .archive: Label("Archive", systemImage: "archivebox")
-            case .trash:   Label("Delete", systemImage: "trash")
+            case .restore:
+                Task { await performMove(to: FolderTree.inboxPath) }
+            case .move(let action):
+                Task { await performDispose(model: model, action: action) }
+            case .purge:
+                // `archiveIntent` never resolves to purge; the toolbar
+                // button owns the Trash-folder delete-forever path.
+                break
             }
+        } label: {
+            disposeMenuLabel(for: alternate)
         }
     }
 
@@ -225,22 +283,36 @@ extension MessageDetailView {
         }
     }
 
+    /// Bottom-bar label for the dispose button. Icon-only, like every other
+    /// bar slot; the accessibility label carries the verb.
     @ViewBuilder
-    func disposeToolbarLabel(for action: DisposeAction) -> some View {
-        switch action {
-        case .archive:
-            Image(systemName: "archivebox")
-                .accessibilityLabel("Archive")
-        case .trash:
-            Image(systemName: "trash")
-                .accessibilityLabel("Delete")
+    func disposeToolbarLabel(for intent: DisposeIntent) -> some View {
+        Image(systemName: disposeSymbol(for: intent))
+            .accessibilityLabel(disposeVerb(for: intent))
+    }
+
+    /// Menu twin of `disposeToolbarLabel` — a menu row carrying only an SF
+    /// Symbol reads as blank, so the overflow spells the verb out.
+    @ViewBuilder
+    func disposeMenuLabel(for intent: DisposeIntent) -> some View {
+        Label(disposeVerb(for: intent), systemImage: disposeSymbol(for: intent))
+    }
+
+    func disposeSymbol(for intent: DisposeIntent) -> String {
+        switch intent {
+        case .move(.archive): return "archivebox"
+        case .move(.trash):   return "trash"
+        case .restore:        return "tray.and.arrow.up"
+        case .purge:          return "trash.slash"
         }
     }
 
-    func disposeRole(for action: DisposeAction) -> ButtonRole? {
-        switch action {
-        case .archive: return nil
-        case .trash:   return .destructive
+    func disposeVerb(for intent: DisposeIntent) -> String {
+        switch intent {
+        case .move(.archive): return "Archive"
+        case .move(.trash):   return "Delete"
+        case .restore:        return "Restore"
+        case .purge:          return "Delete Forever"
         }
     }
 
@@ -252,6 +324,45 @@ extension MessageDetailView {
         }
         return "Couldn't \(verb) message: \(error.localizedDescription)"
     }
+
+    #if os(iOS) || os(visionOS)
+    /// Menu twins of the two display toggles the bottom bar gave up to stay
+    /// inside `ReaderToolbarLayout.capacity`. Same actions, same shortcuts,
+    /// spelled out as labelled rows — a menu row carrying only an SF Symbol
+    /// reads as blank. macOS keeps both as top-toolbar buttons.
+    @ViewBuilder
+    var readerModeMenuItem: some View {
+        if let model {
+            Button {
+                model.toggleReaderMode()
+            } label: {
+                Label(
+                    model.readerMode ? "Show original formatting" : "Show reader view",
+                    systemImage: model.readerMode ? "text.alignleft" : "doc.richtext"
+                )
+            }
+            .disabled(model.htmlBody == nil)
+            .accessibilityIdentifier("reader.readerMode")
+        }
+    }
+
+    @ViewBuilder
+    var remoteContentMenuItem: some View {
+        if let model {
+            Button {
+                model.toggleRemoteContent()
+            } label: {
+                Label(
+                    model.remoteContentAllowed ? "Hide remote content" : "Show remote content",
+                    systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash"
+                )
+            }
+            .keyboardShortcut("i", modifiers: [.command, .shift])
+            .disabled(model.htmlBody == nil)
+            .accessibilityIdentifier("reader.remoteContent")
+        }
+    }
+    #endif
 
     /// Print item shown in the overflow menu. Cmd+P on macOS; the same
     /// shortcut also activates on iPad/iPhone hardware keyboards. Disabled
@@ -292,6 +403,13 @@ extension MessageDetailView {
 
                 alternateDisposeMenuItem(model: model)
 
+                #if os(iOS) || os(visionOS)
+                Divider()
+
+                readerModeMenuItem
+                remoteContentMenuItem
+                #endif
+
                 // Plain text alternative only makes sense when both parts
                 // exist; suppress the item otherwise so we don't show a
                 // toggle that does nothing.
@@ -329,5 +447,6 @@ extension MessageDetailView {
             Image(systemName: "ellipsis.circle")
                 .accessibilityLabel("More actions")
         }
+        .accessibilityIdentifier("reader.overflow")
     }
 }

@@ -24,6 +24,15 @@ public protocol ApiClient: Sendable {
         publicKey: String?
     ) async throws
 
+    /// Suspends an address: the `/suspend_address` Lambda withdraws its DNS
+    /// records (so inbound mail stops resolving) but keeps the address in
+    /// DynamoDB and the mail-tier runtime configuration.
+    func suspendAddress(address: String) async throws
+
+    /// Reverses a suspension: the `/reinstate_address` Lambda republishes the
+    /// address's DNS records and clears the suspended flag.
+    func reinstateAddress(address: String) async throws
+
     /// Toggles the caller's favorite flag on an address. Backed by the
     /// `/set_favorite` Lambda, which ADDs/DELETEs the caller's username
     /// from the row's `favorites` string set.
@@ -153,7 +162,7 @@ public protocol ApiClient: Sendable {
     /// scoped server-side to the authenticated Cognito user. Called after
     /// sign-in once notification permission is granted, and again whenever
     /// APNs rotates the token — the Lambda upserts, so repeat calls are
-    /// cheap. See `docs/0.11.0/push-notifications.md`.
+    /// cheap. See `docs/0.11.x/push-notifications.md`.
     func registerPushDevice(_ registration: PushDeviceRegistration) async throws
 
     /// Removes this device's APNs token via `/push_deregister` so a signed-

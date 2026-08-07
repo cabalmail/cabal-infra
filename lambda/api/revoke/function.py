@@ -4,15 +4,14 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
-from helper import assert_zone_owns_apex  # pylint: disable=import-error
-from helper import parse_json_body  # pylint: disable=import-error
-from helper import user_authorized_for_sender  # pylint: disable=import-error
+from helper import active_addresses_on_subdomain  # pylint: disable=import-error
+from helper import authorized_address_request  # pylint: disable=import-error
+from helper import delete_address_dns_records  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
 address_changed_topic_arn = os.environ.get('ADDRESS_CHANGED_TOPIC_ARN', '')
 
-r53 = boto3.client('route53')
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
 sns = boto3.client('sns')
@@ -20,33 +19,33 @@ sns = boto3.client('sns')
 
 def handler(event, _context):
     '''Revokes an email address'''
-    body, error = parse_json_body(event)
+    address, item, error = authorized_address_request(event)
     if error:
         return error
-    address = body['address']
-    user = event['requestContext']['authorizer']['claims']['cognito:username']
-    if not user_authorized_for_sender(user, address):
-        return {
-            'statusCode': 403,
-            'body': json.dumps({
-                'Error': 'Address not associated with authenticated user'
-            })
-        }
     # Take subdomain/tld/zone from the STORED row for `address`, never from the
     # request body. Authorization above is on `address` only, so honoring a
     # client-supplied subdomain/tld would let a caller who owns any one address
-    # delete another user's DNS records: delete_dns_records targets
-    # `{subdomain}.{tld}`, and the co-tenant guard (other_addresses_on_subdomain)
-    # returns False for a single-tenant victim subdomain, so the DELETE would
-    # proceed. The caller owns `address`, so its row is the authoritative source.
-    item = table.get_item(Key={'address': address}).get('Item') or {}
+    # delete another user's DNS records: delete_address_dns_records targets
+    # `{subdomain}.{tld}`, and the co-tenant guard
+    # (active_addresses_on_subdomain) returns False for a single-tenant victim
+    # subdomain, so the DELETE would proceed. The caller owns `address`, so its
+    # row is the authoritative source.
     subdomain = item.get('subdomain')
     tld = item.get('tld')
-    zone_id = item.get('zone-id') or domains.get(tld)
+    # The zone is resolved from DOMAINS, never from the zone-id cached on the
+    # row: that value is a snapshot from address-creation time that goes stale
+    # if a hosted zone is ever recreated (legacy rows pointed at zones that no
+    # longer exist, failing Route 53 calls with NoSuchHostedZone). For a tld no
+    # longer in DOMAINS this resolves to None and the DNS step is skipped --
+    # the Lambda role's Route 53 grant only covers managed zones anyway.
+    zone_id = domains.get(tld)
     try:
+        # Only ACTIVE (non-suspended) co-tenants keep the records alive: a
+        # suspended address's contract is already "DNS absent", so it must not
+        # block the delete (reinstate republishes the records if it comes back).
         if subdomain and tld and zone_id and \
-                not other_addresses_on_subdomain(subdomain, tld, address):
-            delete_dns_records(zone_id, subdomain, tld)
+                not active_addresses_on_subdomain(subdomain, tld, address):
+            delete_address_dns_records(zone_id, subdomain, tld, control_domain)
         revoke_address(address)
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
@@ -64,65 +63,6 @@ def handler(event, _context):
             'address': address
         })
     }
-
-
-def other_addresses_on_subdomain(subdomain, tld, address):
-    '''Checks if other addresses share the same subdomain and TLD'''
-    scan_kwargs = {
-        'FilterExpression': 'subdomain = :sub AND tld = :tld AND address <> :addr',
-        'ExpressionAttributeValues': {
-            ':sub': subdomain,
-            ':tld': tld,
-            ':addr': address
-        },
-        'ProjectionExpression': 'address'
-    }
-    while True:
-        response = table.scan(**scan_kwargs)
-        if response.get('Items'):
-            return True
-        if 'LastEvaluatedKey' not in response:
-            break
-        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
-    return False
-
-
-def change_item(name, value, record_type):
-    '''Builds a Route 53 DELETE change item'''
-    return {
-        'Action': 'DELETE',
-        'ResourceRecordSet': {
-            'Name': name,
-            'ResourceRecords': [{'Value': value}],
-            'TTL': 3600,
-            'Type': record_type
-        }
-    }
-
-
-def delete_dns_records(zone_id, subdomain, tld):
-    '''Deletes the DNS records for an email address'''
-    assert_zone_owns_apex(zone_id, tld)
-    params = {
-        'HostedZoneId': zone_id,
-        'ChangeBatch': {
-            'Changes': [
-                change_item(
-                    f'{subdomain}.{tld}',
-                    f'10 smtp-in.{control_domain}', 'MX'),
-                change_item(
-                    f'cabal._domainkey.{subdomain}.{tld}',
-                    f'cabal._domainkey.{control_domain}', 'CNAME'),
-                change_item(
-                    f'_dmarc.{subdomain}.{tld}',
-                    f'_dmarc.{control_domain}', 'CNAME'),
-                change_item(
-                    f'{subdomain}.{tld}',
-                    f'"v=spf1 include:{control_domain} ~all"', 'TXT'),
-            ]
-        }
-    }
-    r53.change_resource_record_sets(**params)
 
 
 def revoke_address(address):

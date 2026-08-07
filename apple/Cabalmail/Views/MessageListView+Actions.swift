@@ -22,7 +22,7 @@ struct PurgeCandidate: Identifiable {
 /// UID set staged for the large-selection dispose confirmation: an
 /// archive/trash dispose of `largeDisposeThreshold`-or-more messages
 /// pauses on an "are you sure" dialog before it runs (Phase 3 of
-/// docs/1.1.x/multi-select-bulk-operations.md). Smaller disposes commit
+/// docs/0.11.x/multi-select-bulk-operations.md). Smaller disposes commit
 /// immediately, and non-destructive bulk ops (move, flag, read) never
 /// confirm at any size.
 struct DisposeCandidate: Identifiable {
@@ -81,26 +81,47 @@ extension MessageListView {
             } label: {
                 Label("Move to folder…", systemImage: "folder")
             }
+            selectionDisposeItems(for: uids, model: model)
+        }
+    }
+
+    /// The menu's two dispose items, split out to keep
+    /// `selectionContextMenu` under SwiftLint's body-length cap.
+    @ViewBuilder
+    private func selectionDisposeItems(
+        for uids: Set<UInt32>,
+        model: MessageListViewModel
+    ) -> some View {
+        // Inside Archive the archive item has nowhere to send the
+        // selection, so it restores to the inbox instead — a plain
+        // move, hence no large-selection confirmation.
+        if model.archiveIntent == .restore {
+            Button {
+                restoreSelection(uids: uids, model: model)
+            } label: {
+                restoreActionLabel
+            }
+        } else {
             Button {
                 requestDispose(uids: uids, action: .archive, exitBulk: false, model: model)
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
-            // Inside Trash "move to Trash" is meaningless: delete means
-            // gone forever, so the destructive item stages the same
-            // confirmation as the row swipe, for the whole set.
-            if model.isTrashFolder {
-                Button(role: .destructive) {
-                    purgeCandidate = PurgeCandidate(uids: uids)
-                } label: {
-                    purgeActionLabel
-                }
-            } else {
-                Button(role: .destructive) {
-                    requestDispose(uids: uids, action: .trash, exitBulk: false, model: model)
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
+        }
+        // Inside Trash "move to Trash" is meaningless: delete means
+        // gone forever, so the destructive item stages the same
+        // confirmation as the row swipe, for the whole set.
+        if model.isTrashFolder {
+            Button(role: .destructive) {
+                purgeCandidate = PurgeCandidate(uids: uids)
+            } label: {
+                purgeActionLabel
+            }
+        } else {
+            Button(role: .destructive) {
+                requestDispose(uids: uids, action: .trash, exitBulk: false, model: model)
+            } label: {
+                Label("Delete", systemImage: "trash")
             }
         }
     }
@@ -170,16 +191,30 @@ extension MessageListView {
     /// scoped equivalent in `wideList` (a single selection's Cmd+Delete
     /// belongs to the detail toolbar's dispose button). Honors the
     /// dispose preference (Archive or Trash), same as the trailing
-    /// swipe; inside Trash it stages the delete-forever confirmation
-    /// like every other purge surface.
+    /// swipe — including that swipe's folder-specific cases: inside
+    /// Trash it stages the delete-forever confirmation like every other
+    /// purge surface, and inside Archive it restores.
     func disposeSelection(model: MessageListViewModel) {
         let uids = shortcutTargetUIDs(model: model)
         guard !uids.isEmpty else { return }
-        if model.isTrashFolder {
+        switch model.disposeIntent {
+        case .purge:
             purgeCandidate = PurgeCandidate(uids: uids)
-            return
+        case .restore:
+            restoreSelection(uids: uids, model: model)
+        case .move(let action):
+            requestDispose(uids: uids, action: action, exitBulk: false, model: model)
         }
-        requestDispose(uids: uids, action: model.disposeAction, exitBulk: false, model: model)
+    }
+
+    /// Move a selection back to the inbox — the Archive folder's stand-in
+    /// for archiving it. A restore takes nothing away from the user, so it
+    /// commits straight through rather than routing via `requestDispose`'s
+    /// large-selection confirmation, and it carries unread state with the
+    /// messages instead of marking them `\Seen`.
+    func restoreSelection(uids: Set<UInt32>, model: MessageListViewModel) {
+        guard !uids.isEmpty else { return }
+        Task { await model.moveMessages(uids: uids, to: FolderTree.inboxPath) }
     }
 
     /// Selection size at which a dispose asks first. Large enough that

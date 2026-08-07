@@ -65,8 +65,6 @@ final class FolderListViewModel {
             let all = try await client.imapClient.listFolders()
             folders = sortForSidebar(all)
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -93,9 +91,6 @@ final class FolderListViewModel {
                 try await client.imapClient.unsubscribe(path: folder.path)
             }
             errorMessage = nil
-        } catch let error as CabalmailError {
-            applySubscription(path: folder.path, to: !target)
-            errorMessage = String(describing: error)
         } catch {
             applySubscription(path: folder.path, to: !target)
             errorMessage = error.localizedDescription
@@ -134,8 +129,6 @@ final class FolderListViewModel {
             await refreshSubscribedCounts()
             errorMessage = nil
             return true
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -151,8 +144,6 @@ final class FolderListViewModel {
             try await client.imapClient.deleteFolder(path: folder.path)
             folders.removeAll { $0.path == folder.path }
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -196,8 +187,6 @@ final class FolderListViewModel {
             appState.setFolderCounts(folderPath: path, unread: 0, total: 0)
             appState.requestRefresh()
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -264,29 +253,13 @@ final class FolderListViewModel {
 
     /// Inbox first, then user folders arranged as a `/`-delimited tree
     /// (peers alphabetical, children directly under their parent), then
-    /// system folders grouped at the bottom.
+    /// system folders grouped at the bottom. `\Noselect` containers can't be
+    /// opened, so they're dropped from the user section.
     private func sortForSidebar(_ input: [Folder]) -> [Folder] {
-        let systemNames: Set<String> = ["Sent", "Drafts", "Trash", "Junk", "Archive"]
-        let inbox = input.filter { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame }
-        let system = input
-            .filter { systemNames.contains($0.path) }
-            .sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
-        let userFolders = input.filter { folder in
-            !inbox.contains(folder)
-                && !system.contains(folder)
-                && !folder.attributes.contains("\\Noselect")
-        }
-        return inbox + FolderTree.sortUserTree(userFolders) + system
+        FolderTree.sidebarOrder(input, dropNoselectUserFolders: true)
     }
 
-    /// Indentation depth - delegates to `FolderTree.depth(for:)`.
-    func depth(for folder: Folder) -> Int {
-        FolderTree.depth(for: folder)
-    }
-
-    /// True iff this folder has at least one descendant in the current list -
-    /// drives the per-folder collapse chevron in "All folders".
-    func hasChildren(_ folder: Folder) -> Bool {
-        FolderTree.hasChildren(folder, in: folders)
-    }
+    // Per-row indentation and the collapse chevron are section-scoped
+    // (Subscribed and All folders draw different lists), so they're
+    // computed in `FolderSectionRows` rather than here.
 }
