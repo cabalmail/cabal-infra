@@ -4,16 +4,17 @@ The mail Network Load Balancer writes access logs to a dedicated S3 bucket, `cab
 
 ## What is (and is not) in these logs
 
-NLB access logs are produced **only for TLS listeners**, and only for TLS connections. On this load balancer that means:
+NLB access logs are produced **only for TLS listeners**, and only for TLS connections. This load balancer currently has no TLS listeners, so **no traffic is logged**:
 
 | Listener | Port | Logged? |
 | -------- | ---- | ------- |
-| IMAPS | 993 | Yes - TLS terminates at the NLB |
 | SMTP relay | 25 | No - TCP passthrough |
 | SMTP submission (implicit TLS) | 465 | No - TCP passthrough |
 | SMTP submission (STARTTLS) | 587 | No - TCP passthrough |
 
-For the SMTP tiers, TLS terminates inside the containers (sendmail/Dovecot), so the NLB never sees a handshake to log. Incident response for SMTP abuse still goes through the container logs in CloudWatch. Moving 465/587 termination to the NLB would change certificate ownership and the client-visible handshake, and is a separate decision.
+There is no IMAP listener (mailbox access is Cabalmail-client-only, via the Lambda API inside the VPC). For the SMTP tiers, TLS terminates inside the containers (sendmail/Dovecot), so the NLB never sees a handshake to log. Incident response for SMTP abuse goes through the container logs in CloudWatch. Moving 465/587 termination to the NLB would change certificate ownership and the client-visible handshake, and is a separate decision.
+
+The delivery pipeline (bucket, policy, lifecycle) is retained: it costs nothing when idle, historical objects remain queryable until their 180-day expiry, and any future TLS listener starts logging with no setup.
 
 Each log entry records the client IP and port, the negotiated TLS protocol and cipher, handshake timing, bytes in/out, and the SNI name the client sent. Delivery is one gzipped object per load-balancer node per 5 minutes, best-effort, under:
 

@@ -275,13 +275,8 @@ module "load_balancer" {
   public_subnet_ids = module.vpc.public_subnets[*].id
   zone_id           = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   private_zone_id   = module.vpc.private_zone.zone_id
-  control_domain    = var.control_domain
-  cert_arn          = module.cert.cert_arn
 
-  ecs_imap_target_group_arn       = module.ecs.imap_target_group_arn
-  ecs_relay_target_group_arn      = module.ecs.relay_target_group_arn
-  ecs_submission_target_group_arn = module.ecs.submission_target_group_arn
-  ecs_starttls_target_group_arn   = module.ecs.starttls_target_group_arn
+  ecs_relay_target_group_arn = module.ecs.relay_target_group_arn
 }
 
 # Creates an elastic file system for the mailstore
@@ -377,16 +372,12 @@ module "ecs" {
     tier => local.tier_image_tags[tier]
   }
 
-  # Health-check tuning - raise these to keep containers alive for debugging.
-  # health_check_grace_period is consumed by the imap service only. 120s
-  # comfortably covers image pull + entrypoint + Dovecot startup on a healthy
-  # task; a task still failing NLB checks after that is a bad deploy, and the
-  # imap deployment circuit breaker rolls it back instead of letting it
-  # thrash (was 600, which gave a stuck task 10 minutes before ECS gave up).
-  # Phase 2 of docs/0.10.x/imap-deploy-downtime-plan.md.
-  health_check_grace_period = 120
-  deregistration_delay      = 120
-  unhealthy_threshold       = 10
+  # Health-check tuning for the relay target group - raise these to keep
+  # containers alive for debugging. The imap tier's equivalent knobs
+  # (startPeriod, retries) live in its task definition's container
+  # healthCheck; phase 2 of docs/0.10.x/imap-deploy-downtime-plan.md.
+  deregistration_delay = 120
+  unhealthy_threshold  = 10
 
   healthcheck_ping_param = local.hc_ping_ecs_reconfigure
 
