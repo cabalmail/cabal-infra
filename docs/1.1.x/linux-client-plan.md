@@ -80,7 +80,7 @@ GTK owns the main thread and its own `glib::MainContext` event loop; `reqwest` w
 
 The Apple client has no user-editable configuration: settings are server-synced and everything else is `UserDefaults`. Porting that model directly would give Linux users nothing to edit, which is wrong for the platform — a hand-editable file under `$XDG_CONFIG_HOME` is a baseline expectation, and "I can grep and diff my config" is a real reason people choose a native client over the web app.
 
-But a hand-edited file fights server-synced preferences. If a user sets `dispose_action = "trash"` in a file and the next login pulls `"archive"` from the server, their edit is silently reverted — worse than having no file at all. The resolution is a layered model with explicit precedence and, critically, **sticky overrides**.
+But a hand-edited file has to coexist with server-synced preferences. If a user sets `dispose_action = "trash"` in a file and the next login pulls `"archive"` from the server, their edit is silently reverted — worse than having no file at all. The resolution is explicit precedence plus **treating the file as a peer editor that participates in sync**, rather than as an override layer that suppresses it.
 
 #### Precedence, highest wins
 
@@ -93,18 +93,66 @@ But a hand-edited file fights server-synced preferences. If a user sets `dispose
 
 Note the spec variables are `XDG_CONFIG_HOME` (a single directory) and `XDG_CONFIG_DIRS` (a colon-separated system list). Use the `directories` crate for the former and read the latter directly; do not hand-roll `$HOME/.config`.
 
-#### Sticky overrides
+Flags and environment variables are **transient local overrides**: they apply for the run, are never pushed to the server, and are never written into the file. Everything else participates in propagation, described next.
 
-**A key present in a config file is pinned: the server pull does not overwrite it, and the client does not push it back up.** The Settings UI renders such a control as read-only with an inline note naming the file and line that set it, plus a "Remove override" action that rewrites the file. This is the property that makes hand-editing trustworthy rather than a trap, and it is a hard requirement, not a polish item.
+#### The file is a peer editor, not an override layer
 
-The corollary is that the config file is *the user's*, not the app's. The client writes it only on explicit request ("Remove override", or `cabalmail config set`), never as a side effect of normal settings changes — those go to the synced store. Comments and key order survive a client write (`toml_edit`, not `toml`).
+Preference sync is preserved in full. The config file, the Settings UI, and the server are **three writers to one logical value**, and an edit through any of them propagates to the other two:
+
+```
+config.toml ──(inotify)──┐
+                         ├──> local preference store ──(debounced push)──> server
+Settings UI ─────────────┘             ▲                                     │
+                                       └───(pull on login / focus)───────────┘
+                                                    └──> rewrite config.toml
+```
+
+The file is not a pin and does not suppress sync. It is a second input device onto the same store the UI writes to, and a materialized view of that store's synced section. Editing `dispose_action` in `$EDITOR` behaves exactly as if you had changed it in Settings: it lands in the store and pushes on the same debounce. A server pull that changes a value rewrites the file.
+
+This is what "preserve sync across devices" requires, and it replaces the sticky-override model an earlier draft of this plan proposed. Two properties make it safe:
+
+- **Writes are atomic** — temp file plus `rename(2)`, so a reader never sees a partial file and an open editor's `:w` can't interleave with a client write.
+- **Comments and key order survive** — `toml_edit`, not `toml`. A client rewrite touches only the values it changed.
+
+#### Two sections, different semantics
+
+Not everything can sync — repointing your laptop at stage must not repoint your phone. The file makes the boundary visible rather than implicit:
+
+```toml
+# Synced across all your devices. Changing these here, in Settings,
+# or on another device produces the same result.
+[preferences]
+dispose_action = "trash"
+mark_as_read   = "on_open"
+signature      = "-- \nsent from a machine I control"
+
+# This machine only. Never leaves this device.
+[local]
+control_domain = "stage.cabalmail.example"
+log_level      = "debug"
+cache_max_mb   = 500
+```
+
+A key in the wrong section is a hard parse error naming both sections, not a silent no-op.
+
+#### What the backend actually permits
+
+`lambda/api/set_preferences/function.py` constrains this design in three ways that must be respected rather than discovered later:
+
+1. **The synced key set is closed.** `APP_ALLOWED` enumerates exactly `mark_as_read`, `load_remote_content`, `dispose_action`, `theme`, `default_body_render_mode`, `folder_count_display`, `crash_reporting_enabled`, plus `default_from_address` and `signature`, with `name` at the top level. Unknown keys are rejected with a 400 *by design* ("so a client typo surfaces as a 400"). The client validates the `[preferences]` section against this set locally and reports the offending key with its file position — never by forwarding a 400.
+2. **Per-key merge already exists**, at both levels (`app.#k = :v`). Concurrent multi-device edits are last-write-wins per key, and a client that omits a key cannot clobber it. This is why the Linux client simply never sends `crash_reporting_enabled` and the iOS setting survives untouched.
+3. **There is no delete and no timestamp.** The row carries no `updated_at` or version attribute, and the Lambda only SETs. Two consequences:
+   - **Deleting a line does not reset a preference.** A missing key means "no local opinion"; the store keeps its value and the client re-adds the line on the next rewrite. Resetting is `cabalmail config reset <key>`, which writes the default explicitly and pushes it.
+   - **Offline file edits can lose a race.** Edit `config.toml` on a disconnected laptop while another device changes the same key, and the next foreground pull wins — the client cannot tell which edit is newer, because nothing records when either happened. Bounded and rare, but real; it is stated in `cabalmail.5` rather than papered over. Fixing it properly means adding per-key `updated_at` to the preferences row, which is a server change and out of scope here (open question 7).
+
+Note also that `theme` exists twice — flat (`light`/`dark`, owned by the React app) and inside `app` (`system`/`light`/`dark`, owned by the Apple clients). Linux uses the `app` one, matching Apple. `default_from_address` and `signature` inherit the Lambda's validators (100 and 2000 characters, no control characters bar `\n`/`\t` in the signature); enforce those client-side so the user gets a position-anchored error instead of a rejected push.
 
 #### What belongs where
 
 | Layer | Contents | Rationale |
 |---|---|---|
-| `config.toml` | Control domain and account; cache size caps and directory overrides; poll intervals; log level; proxy; keyring backend and `session_only`; WebKit toggles (hardware acceleration, developer tools); optional overrides of any synced preference | Per-machine, or things a user reasonably wants under version control |
-| Synced preferences | `mark_as_read`, `load_remote_content`, `default_from_address`, `signature`, `dispose_action`, `theme`, `folder_count_display`, `default_body_render_mode`, display name | Follow the user across iOS, web, and Linux |
+| `config.toml` `[preferences]` | The nine synced keys above, plus display name | Bidirectional: file ↔ UI ↔ server |
+| `config.toml` `[local]` | Control domain and account; cache size caps and directory overrides; poll intervals; log level; proxy; keyring backend and `session_only`; WebKit toggles | Per-machine. Syncing these would be actively wrong |
 | `$XDG_STATE_HOME` | Window geometry, pane positions, expanded-folder set, last-selected folder, logs | State, not configuration — nobody hand-edits a window size |
 | `$XDG_DATA_HOME` | Drafts, outbox | User data; must survive a cache wipe |
 | `$XDG_CACHE_HOME` | Envelope cache, message bodies, the fetched deployment descriptor | Safe to delete at any time |
@@ -114,10 +162,11 @@ The corollary is that the config file is *the user's*, not the app's. The client
 #### Consequences
 
 - **No GSettings, no gschema.** With a TOML layer in place, a second configuration store earns nothing, and window geometry is state rather than configuration. Dropping it also removes `glib-compile-schemas` post-install hooks from all three packaging targets — a real simplification in Phases 2 and 8. The cost is departing from GNOME convention; the plan accepts that, because a GTK app with two config systems is worse than one with an unconventional single system.
-- **`cabalmail --print-config`** dumps the merged result with per-key provenance (which layer supplied each value). A layered config that can't explain itself is a support burden; this is cheap and pays for itself the first time someone files a "my setting won't stick" issue.
-- **`cabalmail.5` man page** documenting every key, installed by all three packages, generated from the same table that drives the parser so it cannot drift.
-- **`config.example.toml`**, fully commented, installed to `/usr/share/doc/cabalmail/`. Never written to `$XDG_CONFIG_HOME` at install or first run — an app that materializes a config file it then ignores is a familiar annoyance, and an absent file is what makes "is this key overridden?" answerable.
-- **Live reload** on file change (`notify` crate) for keys that can be applied without a restart; keys that can't are marked in the man page and take effect on next launch.
+- **`cabalmail --print-config`** dumps the effective values with per-key provenance — flag, env, user file, system file, server, or default — and, for synced keys, when they last pushed. A configuration with three writers that can't explain itself is a support burden; this pays for itself the first time someone files "my setting won't stick".
+- **`cabalmail.5` man page** documenting every key, which section it belongs in, and whether it syncs. Installed by all three packages and generated from the same table that drives the parser, so it cannot drift.
+- **The client materializes `config.toml` on first successful sign-in**, populated from the initial server pull, with the section comments shown above. This follows from the file being a view of the store rather than an override layer — a user should not have to create a file to discover what is editable. `config.example.toml` still ships to `/usr/share/doc/cabalmail/` as commented reference documentation.
+- **File watching is core, not polish.** `inotify` via the `notify` crate is the mechanism that makes editor changes propagate at all. Debounce coalesces the write burst editors produce (write-temp, rename, truncate), and a parse failure holds the last-good store, surfaces the error in-app, and pushes nothing — a half-saved file must never reach the server.
+- **Live reload** applies immediately for keys that permit it; keys needing a restart are marked in the man page and in `--print-config`.
 
 ### Distro support matrix
 
@@ -225,14 +274,17 @@ Goal: a workspace that builds an empty window, with the async bridge and the cra
 
 ### 3. Layered configuration
 
-Land the configuration model here, before anything reads a setting — retrofitting precedence and override-pinning after six phases of direct reads is the predictable disaster.
+Land the configuration store and schema here, before anything reads a setting — retrofitting precedence and provenance after six phases of direct reads is the predictable disaster.
 
-- `config/` in the kit: a `Settings` struct where every field records both its value and its **provenance** (flag / env / user file / system file / server / default). Provenance is not a debugging afterthought; Phase 6's Settings UI and `--print-config` both read it, and the sticky-override rule is unimplementable without it.
-- Parse with `toml_edit` so client writes preserve comments and key order.
+- `config/` in the kit: a `Settings` struct where every field records both its value and its **provenance** (flag / env / user file / system file / server / default). Provenance is not a debugging afterthought — `--print-config`, Phase 6's Settings UI, and the propagation rules all read it.
+- Split the schema into the `[preferences]` (synced) and `[local]` (machine-only) sections, with the synced set validated against the Lambda's closed `APP_ALLOWED` list. A key in the wrong section is an error naming both.
+- Parse with `toml_edit`; write atomically (temp + `rename(2)`) preserving comments and key order.
 - Resolve `$XDG_CONFIG_HOME` via `directories`; walk `$XDG_CONFIG_DIRS` in order for system defaults.
-- `cabalmail --print-config` emitting the merged table with a provenance column.
+- `cabalmail --print-config` emitting the effective table with a provenance column, and `cabalmail config set` / `config reset <key>`.
 - Generate `config.example.toml` and the `cabalmail.5` key list from the same parser table, with a test asserting no key exists in the parser that is missing from the man page.
 - Malformed config is a **hard, precise failure** — file, line, column, and the offending key — never a silent fall-back to defaults. A user who typo'd a key needs to be told, not quietly ignored.
+
+The propagation machinery itself (inotify watching, debounce, push/pull wiring) lands in **Phase 6** alongside the Settings UI and the server sync it coordinates with. Phase 1 builds the store, the schema, and the file I/O it depends on — deliberately, so the store is well-tested before three writers are pointed at it.
 
 ### 4. `cabalmail-gtk` shell
 
@@ -260,8 +312,9 @@ cargo xtask fixtures          # regenerate golden fixtures from a live stage dep
 - `cargo run -p cabalmail-gtk` opens a window titled "Cabalmail".
 - `cargo tree -p cabalmail-kit | grep -E 'gtk|webkit'` returns nothing.
 - `cabalmail --print-config` on a clean system reports every key as `default`. Adding `~/.config/cabalmail/config.toml` with one key reports that key as `user-file` and the rest unchanged; setting the matching `CABALMAIL_*` variable flips it to `env`. Running with `XDG_CONFIG_HOME` pointed at a temp directory relocates the lookup — no hard-coded `~/.config` anywhere.
-- A config file with a typo'd key fails with file, line, column, and the bad key; it does not start with defaults.
-- A client write (`cabalmail config set`) preserves surrounding comments and key order.
+- A config file with a typo'd key fails with file, line, column, and the bad key; it does not start with defaults. A synced key placed under `[local]` (or vice versa) fails naming both sections.
+- A client write (`cabalmail config set`) preserves surrounding comments and key order, and is atomic — a concurrent reader sees either the old or the new file, never a truncated one.
+- Every key in `[preferences]` is accepted by the Lambda's `APP_ALLOWED` set; a test asserts the client's synced-key list and the Lambda's list are identical, so a future divergence fails CI rather than producing 400s at runtime.
 
 ---
 
@@ -553,9 +606,17 @@ Tree from `/list_folders`: create (with parent), delete, subscribe / unsubscribe
 
 Sync semantics match Apple: server-wins pull on login and on window focus, debounced push on local edit, stored under the row's `app` map so the web client's flat keys are untouched. A revoked `default_from_address` falls back to None.
 
-**Except where `config.toml` pins the key.** Any setting present in a config file is excluded from both the pull and the push, and its control renders read-only with an inline note naming the file that set it and a "Remove override" action. Implementing this is why `Settings` carries provenance from Phase 1. The two failure modes to test explicitly: a pinned key must survive a server pull that disagrees with it, and removing an override must resume sync at the server's current value rather than pushing the stale local one.
+#### Three-way propagation
 
-The Settings window also links out to the config file and the `cabalmail.5` man page, so the GUI is a discovery path for the text interface rather than a replacement for it.
+This is where the config file, the Settings UI, and the server are wired into one another (the model is specified under Configuration model; Phase 1 built the store it needs). Work items:
+
+- **File → store.** Watch `config.toml` with `notify`, debounced to coalesce the multi-event burst editors emit on save. Reparse, diff against the store, apply changed keys. A parse failure keeps the last-good store, surfaces an in-app error banner with the file position, and pushes nothing.
+- **Store → server.** Changed `[preferences]` keys push on the existing debounce, whether the change originated in the file or the UI. `[local]` keys never push.
+- **Server → store → file.** A pull that changes a value updates the store and rewrites the file atomically, touching only the changed values and leaving comments intact.
+- **Loop suppression.** The rewrite in step three will fire the watcher from step one. Suppress by comparing against the last-written content rather than by timing windows — a debounce race here produces an infinite push loop, and it is the single most likely bug in this phase. Test it explicitly with a fake clock.
+- **Settings UI** reflects external changes live: a key edited in `$EDITOR` moves its control without a reopen.
+
+Controls are never rendered read-only on account of the file — the two are peers, and either can be used at any time. The window links to `config.toml` and to `man 5 cabalmail`, so the GUI is a discovery path for the text interface rather than a replacement for it.
 
 `crash_reporting_enabled` has no Linux consumer (MetricKit is Apple-only) — the key is read and preserved on write so a round trip through the Linux client never clobbers the iOS setting, but no toggle is shown.
 
@@ -564,8 +625,12 @@ The Settings window also links out to the config file and the `cabalmail.5` man 
 - Changing a preference on Linux is reflected in the iOS client after a foreground, and vice versa.
 - A Linux preferences write leaves the web client's `theme` / `accent` / `density` and the Apple `crash_reporting_enabled` intact.
 - Address lifecycle operations round-trip against stage.
-- A key pinned in `config.toml` survives a server pull that disagrees, renders read-only in Settings, and is never pushed. "Remove override" rewrites the file (comments intact) and resumes sync at the **server's** value.
-- Editing `config.toml` while the app runs applies reload-safe keys without a restart.
+- **Round-trip in all six directions.** Editing `dispose_action` in `$EDITOR` moves the Settings control and reaches the server; changing it in Settings rewrites the file; changing it on the iOS client updates both on next foreground.
+- Rewrites preserve user comments and key ordering, and are atomic under a concurrent reader.
+- **No push loop.** A server-driven rewrite does not trigger a push. Assert this with a fake clock and a request counter, not by watching it not happen for a while.
+- A `[local]` key never appears in a `/set_preferences` request body.
+- A syntactically broken save holds the last-good values, shows the error with its file position, and issues no request.
+- `cabalmail config reset <key>` writes the default and propagates it; deleting the line instead leaves the value intact and the line reappears on the next rewrite, as documented.
 
 ---
 
@@ -710,7 +775,7 @@ Apple client feature → Linux status. Anything marked *deferred* is deliberate,
 4. **AUR publication.** Which account owns the AUR package, and does the repo carry the `.SRCINFO` or generate it at publish time?
 5. **Recipient autocomplete source.** Apple reads the system Contacts store. Sent-message history is the proposed substitute; is an optional `libebook` (Evolution Data Server) integration worth the dependency on GNOME systems?
 6. **Dropping GSettings.** The Configuration model replaces dconf with TOML plus `$XDG_STATE_HOME`, which departs from GNOME convention and means the app won't appear in `dconf-editor` or be manageable by the GSettings-based fleet tooling some organizations use. The plan judges one config system better than two. Confirm that trade before Phase 1, since reversing it later means migrating users' files.
-7. **Config keys for synced preferences.** The plan allows `config.toml` to pin *any* synced preference. The narrower alternative — local-only keys in the file, synced preferences exclusively server-side — is simpler to reason about but tells a user editing `signature` that their edit does nothing. Confirm the permissive reading is wanted.
+7. **Per-key `updated_at` on the preferences row.** *(Raised by the resolution of the config-file question — see Configuration model.)* The row has no timestamp or version attribute, so a client cannot tell whether its local edit or the server's value is newer. The consequence is bounded but real: an offline `config.toml` edit loses to a concurrent edit from another device on the next foreground pull. Fixing it means adding a per-key `updated_at` in `set_preferences` and comparing on pull — a server change affecting the Apple and web clients too. Out of scope for 1.1.0 and documented in `cabalmail.5` as a known edge; confirm that's acceptable, or schedule the server work.
 8. **Blueprint vs plain `.ui`.** Blueprint is materially nicer to review but adds a build-time dependency that must be present in all three packaging containers. Confirm it packages cleanly in Phase 2, and fall back to `.ui` XML if not.
 
 ---
