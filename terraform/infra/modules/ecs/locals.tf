@@ -8,16 +8,26 @@
 locals {
   tiers = {
     imap = {
-      public_ports  = [143, 993]
-      private_ports = [25]
+      # No public ports: mailbox access is Cabalmail-client-only, so the
+      # NLB carries no IMAP listener. 143 is VPC-only - it serves the NLB
+      # target group's health checks, the API Lambdas' direct Cloud Map
+      # dials (STARTTLS), and nothing else. Dovecot also listens on 993
+      # in-container (task-def port mapping), but no SG rule admits it.
+      public_ports  = []
+      private_ports = [25, 143]
     }
     smtp-in = {
       public_ports  = [25]
       private_ports = []
     }
     smtp-out = {
-      public_ports  = [465, 587]
-      private_ports = []
+      # No public ports: outbound submission is Cabalmail-client-only
+      # (the send Lambda dials smtp-out.cabal.internal:465 directly), so
+      # the NLB carries no 465/587 listeners. Both ports stay open
+      # VPC-only for the target groups' health checks and the Lambda's
+      # direct dials.
+      public_ports  = []
+      private_ports = [465, 587]
     }
   }
 
@@ -48,18 +58,15 @@ locals {
     } : {},
   )
 
-  # Target groups are keyed by function, not tier, because smtp-out
-  # maps to two target groups (submission + starttls).
-  #
-  # health_check_interval: imap probes every 10s so a freshly started
-  # task is in service ~20s after Dovecot listens (healthy_threshold=2)
-  # instead of 60s. The imap service deploys with a zero-task window
-  # (single-task hard cap), so health-check latency is pure client-facing
-  # downtime there. Trade-off accepted on imap: a broken task is removed
-  # after unhealthy_threshold x 10s instead of x 30s, shrinking the
-  # operator-debugging window by 3x. The smtp tiers roll with overlap
-  # (min_healthy=100), so they keep the relaxed 30s probe. Phase 1 of
-  # docs/0.10.x/imap-deploy-downtime-plan.md.
+  # Only the relay target group remains. The imap/submission/starttls
+  # groups lost their listeners with the public IMAP/submission removal,
+  # and ECS refuses UpdateService on a service that references a target
+  # group with no associated load balancer, so the detached groups and
+  # their service wiring had to go (those tiers rely on the
+  # container-level healthCheck in their task definitions instead).
+  # Probe cadence for them - and the deploy/replacement latency it
+  # drives (phase 1 of docs/0.10.x/imap-deploy-downtime-plan.md) -
+  # lives there now too.
   # preserve_client_ip: NLB client IP preservation is disabled by default
   # for ip-type TCP targets, which hands sendmail the NLB ENI's private
   # address as the SMTP peer. On the relay TG that broke inbound SPF
@@ -68,18 +75,9 @@ locals {
   # and failed every external message), and it also keyed sendmail's
   # confCONNECTION_RATE_THROTTLE and access_db to a single "client".
   # smtp-in's SG already allows 25 from 0.0.0.0/0, so no SG change rides
-  # along. The imap TG must stay at the default: the NLB terminates TLS
-  # (993->143) and Dovecot's login_trusted_networks treats the NLB
-  # forwarding CIDRs as the secured path - preserving real client IPs
-  # there would break plaintext auth on forwarded connections.
-  # submission/starttls are left at the default too: smtp-out's Dovecot
-  # auth posture is tuned for NLB-fronted peers, and nothing there needs
-  # the real IP today.
+  # along.
   target_groups = {
-    imap       = { port = 143, health_check_interval = 10, preserve_client_ip = null }
-    relay      = { port = 25, health_check_interval = 30, preserve_client_ip = "true" }
-    submission = { port = 465, health_check_interval = 30, preserve_client_ip = null } # Dovecot submission (implicit TLS); NLB passes through to container port 465
-    starttls   = { port = 587, health_check_interval = 30, preserve_client_ip = null }
+    relay = { port = 25, health_check_interval = 30, preserve_client_ip = "true" }
   }
 
   # Flatten per-tier port lists into a map keyed by "tier-port" for

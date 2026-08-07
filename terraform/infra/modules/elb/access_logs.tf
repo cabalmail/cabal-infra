@@ -2,13 +2,16 @@
 # docs/0.10.x/resilience-continuity-hardening-plan.md).
 #
 # IMPORTANT CAVEAT: NLB access logs are produced for TLS listeners
-# ONLY. On this load balancer that is the IMAPS listener (993); the
-# SMTP listeners (25, 465, 587) are TCP passthrough - TLS terminates
-# in sendmail/Dovecot inside the containers - so their traffic never
-# appears here and incident response for SMTP abuse still relies on
-# container logs in CloudWatch. Moving 465/587 to TLS listeners would
-# change the data plane (cert ownership, client-visible handshake) and
-# is out of scope here.
+# ONLY, and this load balancer currently has none - the IMAPS listener
+# (993) was removed when public IMAP access closed, and the SMTP
+# listeners (25, 465, 587) are TCP passthrough - TLS terminates in
+# sendmail/Dovecot inside the containers. So no traffic is logged
+# today; the delivery pipeline below is retained because it is free
+# when idle and any future TLS listener starts logging with no setup.
+# Incident response for SMTP abuse relies on container logs in
+# CloudWatch. Moving 465/587 to TLS listeners would change the data
+# plane (cert ownership, client-visible handshake) and is out of
+# scope here.
 #
 # Logs land as gzipped objects under
 # s3://cabal-nlb-access-logs-<account>/mail-nlb/AWSLogs/<account>/...

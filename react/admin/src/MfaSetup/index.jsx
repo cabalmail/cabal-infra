@@ -1,5 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react';
 import AuthShell from '../Login/AuthShell';
+import VerificationCodeField from '../Login/VerificationCodeField';
 import './MfaSetup.css';
 
 /**
@@ -71,26 +72,12 @@ function MfaSetup({
         <code className="mfa-setup__secret">{secret}</code>
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="verificationCode">
-              Code from your app
-            </label>
-          </div>
-          <input
-            id="verificationCode"
-            name="verificationCode"
-            type="text"
-            className="mono"
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            placeholder="123456"
-            onChange={onCodeChange}
-            value={code || ''}
-            required
-            autoFocus
-          />
-        </div>
+        <VerificationCodeField
+          label="Code from your app"
+          value={code}
+          onChange={onCodeChange}
+          autoFocus
+        />
         <button
           type="submit"
           className="auth__btn-primary"

@@ -1,9 +1,15 @@
 /**
-* NLB target groups (target_type = "ip").
+* NLB target group (target_type = "ip") for the inbound relay - the one
+* mail-plane listener (25) the NLB still serves; MX delivery requires
+* it forever.
 *
-* Production NLB listeners in the ELB module forward to these target groups.
-* Keyed by function (imap, relay, submission, starttls) rather than tier
-* because smtp-out maps to two target groups.
+* The imap/submission/starttls groups are gone. Their listeners went
+* with public IMAP/submission access, a listenerless target group is
+* never health-checked by the NLB (Target.NotInUse), and ECS refuses
+* UpdateService on a service that references a target group with no
+* associated load balancer - so keeping the detached wiring "to avoid
+* churn" bricked every deploy to those tiers. Their liveness signal is
+* the container-level healthCheck in the task definitions.
 */
 
 resource "aws_lb_target_group" "tier" {
@@ -36,5 +42,6 @@ resource "aws_lb_target_group" "tier" {
   # group names cause naming collisions during replacement.
 }
 
-# Staging NLB listeners removed - production listeners in the ELB module
-# now forward directly to these ECS target groups (Phase 7 cutover).
+# Staging NLB listeners removed - the remaining production listener in
+# the ELB module (relay, 25) forwards directly to its ECS target group
+# (Phase 7 cutover).

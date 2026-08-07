@@ -18,16 +18,17 @@ resource "aws_ecs_service" "imap" {
 
   enable_execute_command = true
 
-  health_check_grace_period_seconds = var.health_check_grace_period
-
   # No extra task during deploy - only one IMAP container at a time.
   deployment_maximum_percent         = 100
   deployment_minimum_healthy_percent = 0
 
-  # With the grace period at 120s (was 600s), pair fail-fast with an
-  # automatic exit: a bad deploy (broken image, missing secret, task that
-  # never passes NLB health checks) rolls back to the last working
-  # revision instead of thrashing the single-task service indefinitely.
+  # Fail-fast with an automatic exit: a bad deploy (broken image,
+  # missing secret, task whose container health check never goes
+  # healthy) rolls back to the last working revision instead of
+  # thrashing the single-task service indefinitely. The health signal is
+  # the task definition's in-container TCP probe of 143; its startPeriod
+  # (120s) shields the entrypoint's startup work the way the old
+  # load-balancer grace period did.
   # deploy-ecs-service.sh detects the rollback after its stability wait
   # and fails the CI run. Phase 2 of
   # docs/0.10.x/imap-deploy-downtime-plan.md.
@@ -46,11 +47,11 @@ resource "aws_ecs_service" "imap" {
     security_groups = [aws_security_group.tier["imap"].id]
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.tier["imap"].arn
-    container_name   = "imap"
-    container_port   = 143
-  }
+  # No load_balancer block: the NLB has no IMAP listener anymore, and
+  # ECS refuses UpdateService while a service references a target group
+  # with no associated load balancer - keeping the detached wiring
+  # bricked every deploy to this tier (stage post_apply, 2026-08-07).
+  # Liveness comes from the task definition's container healthCheck.
 
   service_registries {
     registry_arn = aws_service_discovery_service.imap.arn
@@ -133,17 +134,9 @@ resource "aws_ecs_service" "smtp_out" {
     security_groups = [aws_security_group.tier["smtp-out"].id]
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.tier["submission"].arn
-    container_name   = "smtp-out"
-    container_port   = 465
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.tier["starttls"].arn
-    container_name   = "smtp-out"
-    container_port   = 587
-  }
+  # No load_balancer blocks: the public submission listeners are gone,
+  # and detached target-group wiring blocks UpdateService (see the imap
+  # service note). Liveness comes from the container healthCheck.
 
   # Private-submission cutover: registers the task's ENI IP at
   # smtp-out.cabal.internal so the send Lambda can dial it directly.
