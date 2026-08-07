@@ -9,6 +9,10 @@
 # The app under test must already be installed on the simulator —
 # use scripts/build-sim.sh for a sign-in-capable build.
 #
+# Works against iOS and visionOS simulators: the destination platform is
+# derived from the device's runtime, and the runner (an iOS test bundle)
+# runs on visionOS in compatibility mode.
+#
 # Usage:
 #   simdrive start [device]          start the REPL (device name or UDID;
 #                                    default: the booted simulator)
@@ -43,10 +47,19 @@ resolve_udid() {
   fi
 }
 
+# The runtime section header above the device's line in `simctl list`
+# tells us which destination platform xcodebuild needs.
+platform_for_udid() {
+  xcrun simctl list devices | awk -v udid="$1" '
+    /^-- /          { runtime = $0 }
+    index($0, udid) { print (runtime ~ /visionOS|xrOS/) ? "visionOS Simulator" : "iOS Simulator"; exit }'
+}
+
 cmd_start() {
-  local udid
+  local udid platform
   udid="$(resolve_udid "${1:-booted}")"
   [ -n "$udid" ] || { log "no matching simulator (is one booted?)"; exit 1; }
+  platform="$(platform_for_udid "$udid")"
 
   command -v xcodegen >/dev/null 2>&1 || {
     log "xcodegen not found — install with: brew install xcodegen"
@@ -58,11 +71,19 @@ cmd_start() {
   mkdir -p "$DIR"
   echo "$udid" > "$DIR/udid"
 
-  log "starting runner on $udid (log: $DIR/xcodebuild.log)"
+  # visionOS drops the TEST_RUNNER_* environment injection, so the runner
+  # can't learn SIMDRIVE_DIR/SIMDRIVE_APP that way there (#872). Both
+  # simulator platforms share the host filesystem, so the settings are
+  # also left at a fixed rendezvous path the runner checks when its
+  # environment is empty.
+  mkdir -p /tmp/simdrive
+  printf '{"dir": "%s", "app": "%s"}\n' "$DIR" "$APP" > /tmp/simdrive/config.json
+
+  log "starting runner on $udid ($platform; log: $DIR/xcodebuild.log)"
   nohup xcodebuild test \
     -project SimDrive.xcodeproj \
     -scheme SimDrive \
-    -destination "platform=iOS Simulator,id=$udid" \
+    -destination "platform=$platform,id=$udid" \
     TEST_RUNNER_SIMDRIVE_DIR="$DIR" \
     TEST_RUNNER_SIMDRIVE_APP="$APP" \
     > "$DIR/xcodebuild.log" 2>&1 &

@@ -338,6 +338,30 @@ extension ComposeView {
                 formSection(section)
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            composeErrorBanner
+        }
+    }
+
+    /// The compose error, pinned between the toolbar and the scrolling
+    /// form. It can't live in the form: the keyboard scrolls the form
+    /// down, and a section inserted at the top then lands above the
+    /// visible region with nothing to scroll it back (#938). Pinned, it
+    /// is readable whatever the scroll offset — which is the whole point
+    /// of keeping the composer up on a failed save (#903).
+    @ViewBuilder
+    private var composeErrorBanner: some View {
+        if let errorMessage = model.errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                .font(.callout)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(.bar)
+                .overlay(alignment: .bottom) { Divider() }
+                .accessibilityIdentifier("compose.error")
+        }
     }
 
     /// Renders one section of `composeForm`. The order lives in
@@ -347,13 +371,6 @@ extension ComposeView {
     private func formSection(_ section: ComposeFormSection) -> some View {
         @Bindable var model = model
         switch section {
-        case .error:
-            if let errorMessage = model.errorMessage {
-                Section {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                }
-            }
         case .from:
             Section("From") {
                 FromPicker(

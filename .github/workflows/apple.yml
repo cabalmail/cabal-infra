@@ -186,8 +186,23 @@ jobs:
         # hiding the location; the allowance is what turns "57 silent
         # minutes" into a named failure. gtimeout remains the outer guard
         # for anything outside a test's body (build, sim boot, teardown).
+        #
+        # Simulator WebContent carve-out: the WKWebView-backed editor tests
+        # need a live WebContent process, and the freshly `simctl create`d
+        # devices these jobs test against never launch one under a hostless
+        # xctest runner — run 31137403361 burned three retry rounds over ~15
+        # minutes of 120s boot timeouts on both iOS and visionOS while every
+        # non-WebKit suite passed on the same destinations. The identical
+        # test boots in 0.6s on a locally booted sim, so this is a property
+        # of the runner's cold, never-booted devices, not of the code.
+        # Conversion coverage lives on the macOS leg (and local runs).
         run: |
           set -o pipefail
+          SKIP_ARGS=""
+          if [ "${{ matrix.platform }}" != "macOS" ]; then
+            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests/testRealEditorPageBootsInThisRunner"
+            echo "::notice title=Simulator WebContent carve-out::Skipping the WKWebView-backed editor tests on ${{ matrix.platform }}: freshly created CI simulators never launch a WebContent process under a hostless runner (see workflow comment). Covered by the macOS leg."
+          fi
           gtimeout -v --kill-after=2m 30m \
             xcodebuild test \
             -scheme CabalmailKit \
@@ -195,6 +210,7 @@ jobs:
             -skipPackagePluginValidation \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 180 \
+            $SKIP_ARGS \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -422,8 +438,14 @@ jobs:
           set -o pipefail
           SKIP_ARGS=""
           if [ "${{ matrix.platform }}" = "visionOS" ]; then
-            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests"
+            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests -skip-testing:CabalmailKitTests/RichTextEditorControllerTests"
             echo "::notice title=visionOS 27 carve-out::Skipping RichTextEditorBridgeHealthTests: WKWebView creation wedges the visionOS 27.0 beta simulator (see workflow comment). Covered by the stable visionOS leg."
+          elif [ "${{ matrix.platform }}" = "iOS" ]; then
+            # Same WebContent carve-out as the stable legs: a freshly
+            # created CI simulator never launches a WebContent process
+            # under a hostless runner.
+            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests/testRealEditorPageBootsInThisRunner"
+            echo "::notice title=Simulator WebContent carve-out::Skipping the WKWebView-backed editor tests on iOS: freshly created CI simulators never launch a WebContent process under a hostless runner. Covered by the macOS legs."
           fi
           gtimeout -v --kill-after=2m 30m \
             xcodebuild test \

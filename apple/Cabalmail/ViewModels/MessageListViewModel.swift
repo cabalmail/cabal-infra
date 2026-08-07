@@ -380,10 +380,13 @@ final class MessageListViewModel {
                 sort: sortCriterion
             )
             dbg("refresh topFetched=\(fetched.count)")
-            try await applyRefreshPage(fetched, uidNext: uidNext, uidValidity: uidValidity)
+            // `status.messages == 0` is the server's own count, not the `?? 0`
+            // fallback `applyStatusCounts` applies: only an explicit zero
+            // licenses pruning the list against an empty fetch (#939).
+            try await applyRefreshPage(fetched, uidNext: uidNext,
+                                       uidValidity: uidValidity,
+                                       serverReportsEmpty: status.messages == 0)
             errorMessage = nil
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -626,11 +629,23 @@ extension MessageListViewModel {
     /// touches the list's in-memory copy so the row disappears immediately
     /// without a server round trip.
     func pruneEnvelope(uid: UInt32) {
+        let removed = envelopes.first { $0.uid == uid }
         let loadedBefore = envelopes.count
         envelopes.removeAll { $0.uid == uid }
         // Only adjust when a row really left the window: a signal for a UID
         // we never had loaded says nothing reliable about the folder total.
         adjustTotalMessages(by: envelopes.count - loadedBefore)
+        // Same for the Unread pill, which otherwise only moves on a flag flip
+        // against a loaded row: the reader's dispose folds the `\Seen` marking
+        // into the move server-side, and its flag signal reaches the list in
+        // the same render pass as this prune -- once the row is gone
+        // `applyOptimisticFlag` no-ops, so the count keeps counting a message
+        // that left the folder. Adjusting on the row that actually departed
+        // holds whichever order the two signals arrive in: if the flag signal
+        // wins the race the row is already `\Seen` here and this is a no-op.
+        if let removed, !removed.flags.contains(.seen) {
+            unseen = max(0, unseen - 1)
+        }
         // The folder lost a row (detail-view dispose, no cache-prune round
         // trip), so a staged bottom window may no longer line up -- drop it.
         invalidateBottomPrefetch()

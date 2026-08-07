@@ -162,7 +162,7 @@ public protocol ApiClient: Sendable {
     /// scoped server-side to the authenticated Cognito user. Called after
     /// sign-in once notification permission is granted, and again whenever
     /// APNs rotates the token — the Lambda upserts, so repeat calls are
-    /// cheap. See `docs/0.11.0/push-notifications.md`.
+    /// cheap. See `docs/0.11.x/push-notifications.md`.
     func registerPushDevice(_ registration: PushDeviceRegistration) async throws
 
     /// Removes this device's APNs token via `/push_deregister` so a signed-

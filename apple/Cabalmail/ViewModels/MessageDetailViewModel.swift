@@ -186,8 +186,7 @@ final class MessageDetailViewModel {
                 return
             } catch {
                 BodyFetchLog.loadOther(uid: uid, attempt: attemptNumber, error: error)
-                errorMessage = (error as? CabalmailError).map { String(describing: $0) }
-                    ?? error.localizedDescription
+                errorMessage = error.localizedDescription
                 completed = true
                 return
             }

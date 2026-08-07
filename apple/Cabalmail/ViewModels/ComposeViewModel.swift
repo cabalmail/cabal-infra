@@ -91,6 +91,10 @@ final class ComposeViewModel {
     /// Latest selection snapshot from the rich editor; drives the toolbar's
     /// active states.
     var richSelection: RichTextEditorController.Selection = .init()
+    /// True while the rich editor's contenteditable has focus. Scopes the
+    /// iPad/visionOS ⌘⇧V paste-without-formatting shortcut to the editor so
+    /// the other compose fields keep their own key handling.
+    var editorFocused = false
 
     /// True when `fromAddress` was pre-filled from the default-From
     /// preference rather than the seed. `refreshAddresses` uses this to
@@ -181,6 +185,9 @@ final class ComposeViewModel {
         self.editorMode = .rich
         self.editorController.onSelectionChanged = { [weak self] selection in
             self?.richSelection = selection
+        }
+        self.editorController.onEditorFocusChanged = { [weak self] focused in
+            self?.editorFocused = focused
         }
         // The user's first character mutates rich-only state; the mirror
         // flag flips and the send logic stops treating the rich pane as a

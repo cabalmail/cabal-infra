@@ -1,0 +1,52 @@
+---
+name: Scripts Tests
+
+# Run the scripts/tests unittest suites on pull requests (so failures surface
+# at review time) and again on pushes to the three named branches (so a merge
+# that combined cleanly-passing PRs is still verified). scripts/ has no deploy
+# workflow, so unlike the areas lint.yml mirrors there is no merge-time check
+# to duplicate — this workflow is the only gate for scripts/**.
+#
+# The suites are stdlib-only (scripts/apple-release-dashboard.py imports its
+# third-party ASC deps lazily), so no pip install is needed — just a pinned
+# interpreter and git, both provided by the runner.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/scripts-tests.yml'
+  push:
+    branches:
+      - main
+      - stage
+      - development
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/scripts-tests.yml'
+
+permissions:
+  contents: read
+
+# Supersede in-flight runs when a PR is updated or a branch advances; a stale
+# test result is never worth finishing. Keyed on the PR number (or ref, for
+# pushes) so concurrent PRs don't cancel each other.
+concurrency:
+  group: scripts-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+    - name: setup-python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      with:
+        python-version: '3.12'
+    - name: unittest-scripts
+      # Discover from the repo root: the suites locate the scripts they test
+      # via paths relative to their own file, per the docstring in each one.
+      run: python3 -m unittest discover -s scripts/tests -p "test_*.py" -v

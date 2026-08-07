@@ -372,11 +372,20 @@ extension MessageListViewModel {
     ///     `envelopes.count > pageSize` gate would have stranded until a hard
     ///     reload) reconcile on the next pull/background refresh instead.
     /// An empty fetch (transient/blank top page) is never read as
-    /// "everything vanished."
+    /// "everything vanished" -- unless STATUS says so too. A folder that
+    /// legitimately emptied out (its last draft deleted server-side, say)
+    /// returns nothing to fetch, so the empty-fetch guard alone stranded
+    /// its rows forever: the pills read "All, 0" beside a row that 404s
+    /// when opened, through refreshes and relaunches (#939). `messages: 0`
+    /// straight from the server is the corroboration that makes the prune
+    /// safe -- and it has to be the server's own 0, not the `?? 0` default
+    /// `applyStatusCounts` falls back to, or a STATUS that dropped the
+    /// field would wipe a live list. Hence `serverReportsEmpty`.
     func applyRefreshPage(
         _ fetched: [Envelope],
         uidNext: UInt32,
-        uidValidity: UInt32
+        uidValidity: UInt32,
+        serverReportsEmpty: Bool = false
     ) async throws {
         // The top page is authoritative over the loaded rows when either the
         // window still fits in one top page, or the fetch spans the whole
@@ -388,7 +397,7 @@ extension MessageListViewModel {
         let fetchSpansFolder = UInt32(fetched.count) >= totalMessages
             && UInt32(envelopes.count) > totalMessages
         let disappeared: [UInt32]
-        if !fetched.isEmpty, windowFitsTopPage || fetchSpansFolder {
+        if !fetched.isEmpty || serverReportsEmpty, windowFitsTopPage || fetchSpansFolder {
             let fetchedUIDs = Set(fetched.map(\.uid))
             // A row we're removing ourselves is exempt: a refresh landing in
             // the moment between a dispose's move committing and the row

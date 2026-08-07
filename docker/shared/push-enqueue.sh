@@ -10,7 +10,7 @@
 # and credential-free: procmail's children run as the recipient user with a
 # sendmail-sanitized environment, and handing them AWS credentials would
 # regress the container-hardening posture for a best-effort side effect.
-# See docs/0.11.0/push-notifications.md.
+# See docs/0.11.x/push-notifications.md.
 #
 # Best-effort BY CONTRACT: this script must never fail (or slow) mail
 # delivery, so it deviates from the house `set -e` rule — every failure path

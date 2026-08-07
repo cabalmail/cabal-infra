@@ -4,7 +4,7 @@ The Apple clients call this on sign-out (and when the user turns push off in
 the app). Deleting a row that is already gone is a success: the goal state is
 "this device no longer receives pushes". push_dispatch also prunes rows on
 APNs Unregistered/BadDeviceToken, so this endpoint is the polite path, not the
-only one. See docs/0.11.0/push-notifications.md.
+only one. See docs/0.11.x/push-notifications.md.
 '''
 import json
 import os

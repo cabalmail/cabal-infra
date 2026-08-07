@@ -64,7 +64,7 @@ targets:
         destinationFilters: [iOS]
       # Notification Service Extension: enriches the wake-signal push
       # ("New mail") with sender / subject / snippet on-device, so message
-      # content never transits APNs (see docs/0.11.0/push-notifications.md).
+      # content never transits APNs (see docs/0.11.x/push-notifications.md).
       # iOS-only for now, same destination-filter rationale as the watch —
       # the push feature ships on iOS first and a visionOS archive must not
       # embed an extension its provisioning doesn't cover.
@@ -383,7 +383,7 @@ targets:
   # the bare "New mail" alert into sender / subject / snippet. Deliberately
   # tiny: Foundation + UserNotifications only, no CabalmailKit — the values
   # it needs arrive via the App Group container and the shared keychain
-  # (see docs/0.11.0/push-notifications.md and PushEnrichmentStore).
+  # (see docs/0.11.x/push-notifications.md and PushEnrichmentStore).
   CabalmailNotificationService:
     type: app-extension
     platform: iOS

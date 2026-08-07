@@ -364,7 +364,8 @@ module "ecs" {
   table_arn = module.table.table_arn
   efs_id    = module.efs.efs_id
 
-  smtp_queue_access_point_id = module.efs.smtp_queue_access_point_id
+  smtp_queue_access_point_id    = module.efs.smtp_queue_access_point_id
+  smtp_in_queue_access_point_id = module.efs.smtp_in_queue_access_point_id
 
   user_pool_arn = module.pool.user_pool_arn
   user_pool_id  = module.pool.user_pool_id

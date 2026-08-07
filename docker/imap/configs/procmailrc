@@ -8,7 +8,7 @@ MAILDIR=$HOME/Maildir       # Make sure this directory exists!
 *^X-Mailer: Outlook Express 3.14159
 IN-spam/
 
-# Push notifications (docs/0.11.0/push-notifications.md): enqueue a
+# Push notifications (docs/0.11.x/push-notifications.md): enqueue a
 # content-free wake signal as a delivery side effect. The :0c carbon-copy
 # flag means delivery continues unconditionally, and the script itself is
 # best-effort (always exits 0), so a slow or unreachable SQS can never
