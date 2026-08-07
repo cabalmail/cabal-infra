@@ -51,11 +51,9 @@ domains = {}
 for item in items:
     # DynamoDB JSON uses typed wrappers; unwrap them
     tld = item.get("tld", {}).get("S", "")
-    zone_id = item.get("zone-id", {}).get("S", "")
     username = item.get("username", {}).get("S", "")
     user = item.get("user", {}).get("S", "")
     subdomain = item.get("subdomain", {}).get("S", "") if "subdomain" in item else None
-    private_key = item.get("private_key", {}).get("S", "") if "private_key" in item else None
 
     # Skip rows whose username carries whitespace. Such a value is written
     # verbatim into virtusertable, where makemap rejects a leading space and
@@ -71,19 +69,13 @@ for item in items:
 
     if tld not in domains:
         domains[tld] = {
-            "zone-id": zone_id,
             "addresses": {},
             "subdomains": {},
         }
-        if private_key:
-            domains[tld]["private_key"] = private_key
 
     if subdomain:
         if subdomain not in domains[tld]["subdomains"]:
-            domains[tld]["subdomains"][subdomain] = {
-                "addresses": {},
-                "action": "nothing",
-            }
+            domains[tld]["subdomains"][subdomain] = {"addresses": {}}
         targets = user.split("/")
         domains[tld]["subdomains"][subdomain]["addresses"][username] = targets
     else:
@@ -92,18 +84,11 @@ for item in items:
 
 # ── Generator functions (one per template) ────────────────────
 
-def gen_relay_domains():
-    """Replaces relay-domains.erb — used by IMAP and SMTP-IN."""
-    lines = []
-    for tld in sorted(domains):
-        lines.append(tld)
-        for subd in sorted(domains[tld]["subdomains"]):
-            lines.append(f"{subd}.{tld}")
-    return "\n".join(lines) + "\n"
+def gen_domain_list():
+    """Every hosted name, one per line: each tld followed by its subdomains.
 
-
-def gen_masq_domains():
-    """Replaces masq-domains.erb — used by SMTP-IN and SMTP-OUT."""
+    relay-domains, local-host-names and masq-domains all want exactly this
+    list, so they share one generator."""
     lines = []
     for tld in sorted(domains):
         lines.append(tld)
@@ -160,36 +145,32 @@ def gen_aliases():
     return "\n".join(lines) + "\n"
 
 
-def gen_imap_access():
-    """Replaces imap-access.erb."""
+def gen_access(known, unknown):
+    """Access map: every provisioned address gets `known`, every bare domain
+    and subdomain gets `unknown` (there is no apex or catch-all addressing).
+    The two tiers differ only in which verbs they use."""
     lines = []
     for tld in sorted(domains):
         d = domains[tld]
         for addr in sorted(d["addresses"]):
-            lines.append(f"To:{addr}@{tld}\tOK")
+            lines.append(f"To:{addr}@{tld}\t{known}")
         for subd in sorted(d["subdomains"]):
             sd = d["subdomains"][subd]
             for addr in sorted(sd["addresses"]):
-                lines.append(f"To:{addr}@{subd}.{tld}\tOK")
-            lines.append(f"To:{subd}.{tld}\tTEMPFAIL")
-        lines.append(f"To:{tld}\tTEMPFAIL")
+                lines.append(f"To:{addr}@{subd}.{tld}\t{known}")
+            lines.append(f"To:{subd}.{tld}\t{unknown}")
+        lines.append(f"To:{tld}\t{unknown}")
     return "\n".join(lines) + "\n"
+
+
+def gen_imap_access():
+    """Replaces imap-access.erb."""
+    return gen_access("OK", "TEMPFAIL")
 
 
 def gen_in_access():
     """Replaces in-access.erb."""
-    lines = []
-    for tld in sorted(domains):
-        d = domains[tld]
-        for addr in sorted(d["addresses"]):
-            lines.append(f"To:{addr}@{tld}\tRELAY")
-        for subd in sorted(d["subdomains"]):
-            sd = d["subdomains"][subd]
-            for addr in sorted(sd["addresses"]):
-                lines.append(f"To:{addr}@{subd}.{tld}\tRELAY")
-            lines.append(f"To:{subd}.{tld}\tREJECT")
-        lines.append(f"To:{tld}\tREJECT")
-    return "\n".join(lines) + "\n"
+    return gen_access("RELAY", "REJECT")
 
 
 def gen_dkim_keytable():
@@ -229,21 +210,21 @@ def write(path, content):
     print(f"  Generated {path}")
 
 if tier == "imap":
-    write("/etc/mail/local-host-names", gen_relay_domains())
-    write("/etc/mail/relay-domains",    gen_relay_domains())
+    write("/etc/mail/local-host-names", gen_domain_list())
+    write("/etc/mail/relay-domains",    gen_domain_list())
     write("/etc/mail/access",           gen_imap_access())
     write("/etc/mail/virtusertable",    gen_virtusertable())
     write("/etc/aliases.dynamic",       gen_aliases())
 
 elif tier == "smtp-in":
-    write("/etc/mail/masq-domains",     gen_masq_domains())
+    write("/etc/mail/masq-domains",     gen_domain_list())
     write("/etc/mail/access",           gen_in_access())
-    write("/etc/mail/relay-domains",    gen_relay_domains())
+    write("/etc/mail/relay-domains",    gen_domain_list())
     write("/etc/mail/mailertable",      gen_mailertable())
     write("/etc/mail/virtusertable",    gen_virtusertable())
 
 elif tier == "smtp-out":
-    write("/etc/mail/masq-domains",     gen_masq_domains())
+    write("/etc/mail/masq-domains",     gen_domain_list())
     write("/etc/mail/mailertable",      gen_mailertable())
     write("/etc/opendkim/KeyTable",     gen_dkim_keytable())
     write("/etc/opendkim/SigningTable",  gen_dkim_signingtable())

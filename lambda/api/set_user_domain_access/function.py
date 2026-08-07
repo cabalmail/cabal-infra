@@ -12,7 +12,11 @@ domain (as declared via the DOMAINS env var).
 import json
 import os
 import boto3  # pylint: disable=import-error
-from admin_limits import audit_log, rate_limit_response_or_none  # pylint: disable=import-error
+from admin_limits import ( # pylint: disable=import-error
+    admin_response_or_none,
+    audit_log,
+    rate_limit_response_or_none,
+)
 
 domains = json.loads(os.environ['DOMAINS'])
 user_pool_id = os.environ['USER_POOL_ID']
@@ -24,12 +28,9 @@ cognito = boto3.client('cognito-idp')
 
 def handler(event, _context):
     '''Add or remove a (user, domain) deny entry.'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
     caller = event['requestContext']['authorizer']['claims']['cognito:username']
     limited = rate_limit_response_or_none(caller, 'set_user_domain_access')
     if limited:

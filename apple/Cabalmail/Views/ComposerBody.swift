@@ -52,6 +52,24 @@ struct ComposerBody: View {
             #endif
             RichTextEditorView(controller: model.editorController)
                 .frame(minHeight: 180)
+                #if os(iOS) || os(visionOS)
+                // On iPadOS/visionOS, UIKit resolves ⌘-chords at the
+                // key-command layer before web content ever sees a keydown,
+                // so the editor page's own ⌘⇧V handler (the macOS path)
+                // never fires — this shortcut is the hardware-keyboard
+                // route. Mounted only while the editor has focus so the
+                // chord stays a text-editing key scoped to the editor.
+                .background {
+                    if model.editorFocused {
+                        Button("Paste and Match Style") {
+                            Task { await model.editorController.pastePlainText() }
+                        }
+                        .keyboardShortcut("v", modifiers: [.command, .shift])
+                        .opacity(0)
+                        .accessibilityHidden(true)
+                    }
+                }
+                #endif
         }
     }
 

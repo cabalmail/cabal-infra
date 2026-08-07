@@ -10,14 +10,27 @@
 
 const LOCALE = 'en-US';
 
+/* Envelope dates arrive from the API as naive UTC — "2026-07-26 01:16:27",
+   no offset and no trailing Z. JS parses a bare date-time as *local* time,
+   which shifted every timestamp and relative age by the viewer's UTC
+   offset. Match that shape and pin it to UTC; anything that already carries
+   a zone (or isn't a date-time at all) goes to Date untouched. */
+const NAIVE_DATE_TIME = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
+
+export function parseDate(value) {
+  if (!value) return null;
+  const naive = NAIVE_DATE_TIME.exec(String(value).trim());
+  const d = new Date(naive ? `${naive[1]}T${naive[2]}Z` : value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
 export default function formatDate(iso, now = new Date()) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
+  const d = parseDate(iso);
+  if (!d) return '';
 
   const ms = now.getTime() - d.getTime();
   if (ms < 60000) return 'now';
@@ -66,9 +79,8 @@ export function domainFor(fromStr) {
 
 /* Reader-pane timestamp, per §4d: "Friday, Apr 17 · 1:10 PM". */
 export function formatReaderTimestamp(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
+  const d = parseDate(iso);
+  if (!d) return '';
   const datePart = d.toLocaleDateString(LOCALE, {
     weekday: 'long',
     month: 'short',

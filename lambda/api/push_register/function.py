@@ -3,7 +3,7 @@
 The Apple clients call this on every launch after sign-in and again whenever
 APNs rotates the token, so the write must be an idempotent upsert. One row per
 (user, device token); push_dispatch fans a wake signal out to every row it
-finds for the recipient. See docs/0.11.0/push-notifications.md.
+finds for the recipient. See docs/0.11.x/push-notifications.md.
 '''
 import datetime
 import json

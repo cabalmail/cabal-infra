@@ -2,7 +2,7 @@ import XCTest
 @testable import CabalmailKit
 
 /// Wire-level tests for the `/push_register` / `/push_deregister` pair
-/// backing APNs token lifecycle (docs/0.11.0/push-notifications.md), plus
+/// backing APNs token lifecycle (docs/0.11.x/push-notifications.md), plus
 /// the shared-container mirroring that hands the ID token to the
 /// Notification Service Extension.
 final class ApiClientPushTests: XCTestCase {

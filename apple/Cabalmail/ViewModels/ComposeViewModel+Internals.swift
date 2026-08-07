@@ -6,6 +6,57 @@ import CabalmailKit
 /// to keep the type body under the SwiftLint length ceiling. Everything
 /// here is `@MainActor` by inheritance from the host class.
 extension ComposeViewModel {
+    // MARK: - Presentation
+
+    /// Title for the compose surface (the sheet's navigation bar on iPhone,
+    /// the window title elsewhere). "New Message" is a lie for every
+    /// composer that opens populated: a resumed Drafts copy (whose send
+    /// replaces that draft rather than adding a second one), and a reply /
+    /// reply-all / forward, which come up with the recipient, a prefixed
+    /// subject, and the quoted original already in place. Each says what it
+    /// is instead; only a genuinely blank compose is a new message.
+    ///
+    /// The resumed draft wins over the intent: what the user reopened is a
+    /// draft, whatever it was first composed as.
+    var navigationTitle: String {
+        if isResumedServerDraft { return "Draft" }
+        switch composeIntent {
+        case .reply:     return "Reply"
+        case .replyAll:  return "Reply All"
+        case .forward:   return "Forward"
+        case .new:       return "New Message"
+        }
+    }
+
+    // MARK: - Editor bridge health
+
+    /// Banner copy for a dead editor bridge. One phrasing for both the
+    /// compose-open announcement and the send refusal, so recovery can
+    /// recognize (and clear) the message it put up.
+    static func editorUnavailableMessage(_ reason: String) -> String {
+        "The message editor didn't load (\(reason)). Nothing can be sent from this "
+            + "window — copy anything you still need, close it, and compose again."
+    }
+
+    /// The bridge reported itself unusable. Raise the banner now, at
+    /// compose-open, rather than leaving the user to discover it by
+    /// pressing Send and watching nothing happen (#812).
+    func noteEditorUnavailable(_ reason: String) {
+        editorUnavailable = reason
+        errorMessage = Self.editorUnavailableMessage(reason)
+    }
+
+    /// The bridge came up after all. Clears the banner, but only the one
+    /// this failure raised — a send or address error reported since then is
+    /// still the more useful message to leave on screen.
+    func noteEditorRecovered() {
+        guard let reason = editorUnavailable else { return }
+        editorUnavailable = nil
+        if errorMessage == Self.editorUnavailableMessage(reason) {
+            errorMessage = nil
+        }
+    }
+
     // MARK: - Attachments
 
     /// Add an already-loaded file (raw bytes + mime type) as an attachment.
@@ -55,8 +106,17 @@ extension ComposeViewModel {
     /// Shared by `send()` and `cancel()` (Save Draft) so both flows ship
     /// an identical message to `/send`.
     func buildOutgoingMessage(from: EmailAddress) async -> OutgoingMessage {
-        let bodies = await computeMessageBodies()
-        return OutgoingMessage(
+        await buildOutgoingMessage(from: from, bodies: computeMessageBodies())
+    }
+
+    /// Assembly over bodies the caller has already converted. `cancel()`
+    /// needs the bodies before it knows whether it has a sender to build
+    /// with, and each conversion is a WebKit round trip worth not repeating.
+    func buildOutgoingMessage(
+        from: EmailAddress,
+        bodies: (text: String, html: String)
+    ) -> OutgoingMessage {
+        OutgoingMessage(
             from: from,
             to: parseRecipients(toText),
             cc: parseRecipients(ccText),
@@ -112,17 +172,40 @@ extension ComposeViewModel {
         try? await draftStore.save(snapshot)
     }
 
-    /// True when the assembled message carries anything worth keeping —
-    /// the shared emptiness check behind close-without-send and the
-    /// server-save debounce.
-    func hasDraftContent(_ message: OutgoingMessage) -> Bool {
+    /// True when the compose buffer carries anything worth keeping — the
+    /// shared emptiness check behind close-without-send and the server-save
+    /// debounce. Takes the converted bodies rather than an assembled
+    /// message so it can answer before a `From` address is in hand.
+    func hasDraftContent(bodies: (text: String, html: String)) -> Bool {
         !subject.isEmpty
-            || !(message.textBody?.isEmpty ?? true)
-            || !(message.htmlBody?.isEmpty ?? true)
-            || !message.to.isEmpty
-            || !message.cc.isEmpty
-            || !message.bcc.isEmpty
-            || !message.attachments.isEmpty
+            || !bodies.text.isEmpty
+            || !bodies.html.isEmpty
+            || !parseRecipients(toText).isEmpty
+            || !parseRecipients(ccText).isEmpty
+            || !parseRecipients(bccText).isEmpty
+            || !attachments.isEmpty
+    }
+
+    /// `/save_draft` leg of `cancel()`. Returns true when the window may
+    /// close; false leaves it up with the failure on screen — the local
+    /// copy is still on disk either way, so nothing is lost by retrying.
+    func pushDraftToServer(_ message: OutgoingMessage) async -> Bool {
+        do {
+            serverSaveInFlight = true
+            defer { serverSaveInFlight = false }
+            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
+                serverDraftRef = ref
+            }
+            try? await draftStore.remove(id: draftId)
+            stop()
+            onClose()
+            return true
+        } catch let error as CabalmailError {
+            errorMessage = "Couldn't save draft: \(describe(error))"
+        } catch {
+            errorMessage = "Couldn't save draft: \(error.localizedDescription)"
+        }
+        return false
     }
 
     /// Debounced server-side draft push (the `serverAutosaveInterval`
@@ -134,9 +217,14 @@ extension ComposeViewModel {
     /// plan calls for without a second persistent queue.
     func autosaveToServer() async {
         guard !isSending, !serverSaveInFlight else { return }
+        // Same reasoning as `cancel()`: with the bridge dead every body
+        // converts to "", and a debounced push of that would overwrite the
+        // server copy with an empty draft (#745).
+        guard editorController.bridgeFailure == nil else { return }
         guard let fromEmail = currentFromEmail() else { return }
-        let message = await buildOutgoingMessage(from: fromEmail)
-        guard hasDraftContent(message) else { return }
+        let bodies = await computeMessageBodies()
+        guard hasDraftContent(bodies: bodies) else { return }
+        let message = buildOutgoingMessage(from: fromEmail, bodies: bodies)
         serverSaveInFlight = true
         defer { serverSaveInFlight = false }
         do {
@@ -165,6 +253,21 @@ extension ComposeViewModel {
 
     func formatAddress(_ address: EmailAddress) -> String {
         "\(address.mailbox)@\(address.host)"
+    }
+
+    /// UID of the server-side Drafts copy that a completed send has just
+    /// superseded, or nil when there's nothing for the Drafts list to
+    /// prune. `/send` discards that copy server-side as part of delivery,
+    /// so the row the user is looking at is stale the moment this returns
+    /// a value — the compose surface signals the list rather than leaving
+    /// it to the next background reconcile a minute later.
+    ///
+    /// A queued send keeps its draft on purpose (the outbox hasn't
+    /// delivered anything yet, and the ref is dropped rather than
+    /// discarded), so it reports nothing.
+    var supersededDraftUID: UInt32? {
+        guard lastSendOutcome == .sent else { return nil }
+        return serverDraftRef?.uid
     }
 
     func describe(_ error: CabalmailError) -> String {

@@ -8,6 +8,8 @@ const mockDeleteAddress = vi.fn();
 const mockNewAddress = vi.fn();
 const mockSetFavorite = vi.fn();
 const mockListMyDomains = vi.fn();
+const mockSuspendAddress = vi.fn();
+const mockReinstateAddress = vi.fn();
 
 const mockApi = {
   getAddresses: mockGetAddresses,
@@ -15,6 +17,8 @@ const mockApi = {
   newAddress: mockNewAddress,
   setFavorite: mockSetFavorite,
   listMyDomains: mockListMyDomains,
+  suspendAddress: mockSuspendAddress,
+  reinstateAddress: mockReinstateAddress,
 };
 
 vi.mock('../hooks/useApi', () => ({
@@ -174,6 +178,73 @@ describe('Addresses rail', () => {
     renderAddresses();
     await waitFor(() => expect(screen.getByText('Favorites')).toBeInTheDocument());
     expect(screen.getByText('All addresses')).toBeInTheDocument();
+  });
+
+  it('opens a confirmation dialog before suspending and suspends on confirm', async () => {
+    mockSuspendAddress.mockResolvedValue({});
+    renderAddresses();
+    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
+    const btn = screen.getByRole('button', { name: /suspend chris@main\.cabalmail\.com/i });
+    await act(async () => { fireEvent.click(btn); });
+    // Dialog open, no API call yet
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(/suspend address\?/i)).toBeInTheDocument();
+    expect(mockSuspendAddress).not.toHaveBeenCalled();
+    // Confirm
+    const confirmBtn = screen.getAllByRole('button', { name: /^suspend$/i })[0];
+    await act(async () => { fireEvent.click(confirmBtn); });
+    expect(mockSuspendAddress).toHaveBeenCalledWith('chris@main.cabalmail.com');
+    // The row flips to offering reinstate
+    expect(screen.getByRole('button', { name: /reinstate chris@main\.cabalmail\.com/i }))
+      .toBeInTheDocument();
+  });
+
+  it('does not suspend when the confirmation dialog is cancelled', async () => {
+    mockSuspendAddress.mockResolvedValue({});
+    renderAddresses();
+    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
+    const btn = screen.getByRole('button', { name: /suspend chris@main\.cabalmail\.com/i });
+    await act(async () => { fireEvent.click(btn); });
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    const cancelBtn = screen.getByRole('button', { name: /^cancel$/i });
+    await act(async () => { fireEvent.click(cancelBtn); });
+    expect(mockSuspendAddress).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('reinstates a suspended address directly, without a dialog', async () => {
+    mockReinstateAddress.mockResolvedValue({});
+    mockGetAddresses.mockResolvedValue({
+      data: {
+        Items: SAMPLE_ADDRESSES.map((a, i) => (
+          i === 1 ? { ...a, suspended: true } : a
+        )),
+      },
+    });
+    renderAddresses();
+    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
+    const btn = screen.getByRole('button', { name: /reinstate chris@main\.cabalmail\.com/i });
+    await act(async () => { fireEvent.click(btn); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(mockReinstateAddress).toHaveBeenCalledWith('chris@main.cabalmail.com');
+    expect(screen.getByRole('button', { name: /suspend chris@main\.cabalmail\.com/i }))
+      .toBeInTheDocument();
+  });
+
+  it('marks suspended rows with the is-suspended class', async () => {
+    mockGetAddresses.mockResolvedValue({
+      data: {
+        Items: SAMPLE_ADDRESSES.map((a, i) => (
+          i === 1 ? { ...a, suspended: true } : a
+        )),
+      },
+    });
+    renderAddresses();
+    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
+    expect(screen.getByText('chris@main.cabalmail.com').closest('li'))
+      .toHaveClass('is-suspended');
+    expect(screen.getByText('me@inbox.cabalmail.com').closest('li'))
+      .not.toHaveClass('is-suspended');
   });
 
   it('does not revoke when the confirmation dialog is cancelled', async () => {

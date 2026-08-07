@@ -1,7 +1,7 @@
 import XCTest
 @testable import CabalmailKit
 
-// Coverage for Phase 4 of `docs/1.1.x/multi-select-bulk-operations.md`:
+// Coverage for Phase 4 of `docs/0.11.x/multi-select-bulk-operations.md`:
 // client-side chunking of large bulk ops and partial-failure aggregation
 // (`CabalmailError.bulkPartialFailure`). In its own file so the primary
 // `ApiBackedImapClientTests` stays under SwiftLint's file/type caps.

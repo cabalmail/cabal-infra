@@ -58,21 +58,62 @@ struct MessageDetailView: View {
     // `nil` until the first scroll report — a sentinel `Int.min` would overflow
     // the `offset - lastReportedPlainOffset` delta on the first callback.
     @State var lastReportedPlainOffset: Int?
+    // Measured height of `headerBlock`, so the header sizes to its content
+    // instead of to a fixed slice of the pane. See
+    // `ReaderHeaderHeightPolicy`.
+    @State var headerContentHeight: CGFloat = 0
+    #if os(iOS)
+    // Drives `drawsOwnActionBar`: at regular width the reader shares the
+    // window with the message list, and on iOS 27 a `.bottomBar` group
+    // spreads across both columns. See `ReaderToolbarLayout`.
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    #endif
+
+    /// True when the reader pins the action set under its own pane instead of
+    /// emitting a `.bottomBar` toolbar group. iOS 27 at regular width only —
+    /// every other platform and OS generation keeps the system bar.
+    var drawsOwnActionBar: Bool {
+        #if os(iOS)
+        // A runtime check, not a compile-time one: CI builds this with the
+        // stable Xcode against the iOS 26 SDK, and the same binary has to
+        // pick the right bar on both OS generations.
+        let isOS27OrLater: Bool
+        if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
+        return ReaderToolbarLayout.usesOwnActionBar(
+            isRegularWidth: horizontalSizeClass == .regular,
+            isOS27OrLater: isOS27OrLater
+        )
+        #else
+        return false
+        #endif
+    }
 
     var body: some View {
         GeometryReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
                 // Subject is shown in full in the pane (the list truncates
                 // it) and the header is allowed to grow with a wrapping
-                // subject. Cap at 15% of the pane's height and let the
-                // header scroll when a very long subject or sprawling
-                // recipient list would otherwise eat the reading area.
+                // subject. The block takes the height its content actually
+                // needs, and only scrolls once that would claim more of the
+                // pane than `ReaderHeaderHeightPolicy` allows. A ScrollView
+                // is greedy along its scroll axis, so this has to be an
+                // explicit height rather than a `maxHeight` — a cap alone
+                // makes the block exactly that tall whatever it holds, which
+                // is what pushed the authentication line out of view.
                 ScrollView(.vertical) {
                     headerBlock
                         .padding(.horizontal)
                         .padding(.vertical, 8)
+                        .onGeometryChange(for: CGFloat.self) { headerProxy in
+                            headerProxy.size.height
+                        } action: { newHeight in
+                            headerContentHeight = newHeight
+                        }
                 }
-                .frame(maxHeight: proxy.size.height * 0.15)
+                .frame(height: ReaderHeaderHeightPolicy.height(
+                    contentHeight: headerContentHeight,
+                    paneHeight: proxy.size.height
+                ))
                 if let attachments = model?.attachments, !attachments.isEmpty {
                     AttachmentStrip(attachments: attachments)
                         .padding(.vertical, 8)
@@ -109,6 +150,14 @@ struct MessageDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         #endif
         .toolbar { toolbarContent }
+        #if os(iOS)
+        // Pins the action set to the reading pane on iOS 27 at regular width.
+        // Inert (empty content) everywhere else, so compact iPhone and iOS 26
+        // keep the system `.bottomBar` group untouched.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if drawsOwnActionBar { readerActionBar }
+        }
+        #endif
         .sheet(isPresented: $moveSheetPresented) {
             moveSheet
         }
@@ -265,37 +314,37 @@ struct MessageDetailView: View {
         }
     }
 
-    // The detail view exposes six action buttons. On macOS they live in the
-    // top toolbar; on iOS/visionOS they would crowd the inline title and hide
-    // the subject, so we route them to a bottom bar where they're also easier
-    // to reach with a thumb.
+    // The detail view exposes seven action buttons. On macOS they live in the
+    // top toolbar, which has room for all of them; on iOS/visionOS they would
+    // crowd the inline title and hide the subject, so we route them to a bottom
+    // bar where they're also easier to reach with a thumb. That bar sizes to
+    // its content and only holds `ReaderToolbarLayout.capacity` items before
+    // the system compacts the tail into an overflow control of its own, so the
+    // two display toggles ride in our own overflow menu instead. See
+    // `ReaderToolbarLayout` — anything new belongs in the overflow menu too.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         #if os(iOS) || os(visionOS)
-        ToolbarItemGroup(placement: .bottomBar) {
-            if model?.isDraftsFolder == true {
-                editDraftButton
-                Spacer()
+        // `drawsOwnActionBar` takes the bar over on iOS 27 at regular width,
+        // where a `.bottomBar` group would span the whole window rather than
+        // the reading pane (see `readerActionBar`).
+        if !drawsOwnActionBar {
+            ToolbarItemGroup(placement: .bottomBar) {
+                let actions = ReaderToolbarLayout.bottomBar(
+                    leading: model?.leadingToolbarAction ?? .reply
+                )
+                ForEach(Array(actions.enumerated()), id: \.element) { index, action in
+                    if index > 0 { Spacer() }
+                    bottomBarButton(for: action)
+                }
             }
-            replyButton
-            Spacer()
-            seenButton
-            Spacer()
-            flagButton
-            Spacer()
-            remoteContentButton
-            Spacer()
-            readerModeButton
-            Spacer()
-            disposeButton
-            Spacer()
-            overflowMenuButton
         }
         #else
-        if model?.isDraftsFolder == true {
+        if model?.leadingToolbarAction == .editDraft {
             ToolbarItem { editDraftButton }
+        } else {
+            ToolbarItem { replyButton }
         }
-        ToolbarItem { replyButton }
         ToolbarItem { seenButton }
         ToolbarItem { flagButton }
         ToolbarItem { remoteContentButton }

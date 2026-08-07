@@ -3,7 +3,11 @@ import json
 import os
 import boto3  # pylint: disable=import-error
 from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
-from admin_limits import audit_log, rate_limit_response_or_none  # pylint: disable=import-error
+from admin_limits import ( # pylint: disable=import-error
+    admin_response_or_none,
+    audit_log,
+    rate_limit_response_or_none,
+)
 
 cognito = boto3.client('cognito-idp')
 user_pool_id = os.environ['USER_POOL_ID']
@@ -13,12 +17,9 @@ user_domain_access_table = ddb.Table('cabal-user-domain-access')
 
 def handler(event, _context):
     '''Deletes a user account'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
     caller = event['requestContext']['authorizer']['claims']['cognito:username']
     limited = rate_limit_response_or_none(caller, 'delete_user')
     if limited:

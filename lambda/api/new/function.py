@@ -154,7 +154,6 @@ def record_address(user, body, address):
         'tld': body['tld'],
         'user': user,
         'username': body['username'],
-        'zone-id': domains[body['tld']],
         'subdomain': body['subdomain'],
         'comment': body.get('comment', ''),
         'RequestTime': datetime.now(timezone.utc).isoformat()

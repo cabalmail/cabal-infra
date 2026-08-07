@@ -50,6 +50,32 @@ const MESSAGE = {
   }
 };
 
+const ADDRESS_RE = /(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))/;
+
+function isValidAddress(addr) {
+  return addr.match(ADDRESS_RE);
+}
+
+// Fold text still sitting in the recipient input into the recipient lists.
+// The To/Cc/Bcc rows share one input state, so uncommitted text belongs to
+// whichever row it was typed in — `fieldId` names that row. Returns the
+// lists as they read once the text is committed, which is what Send has to
+// validate and ship: the click that fires Send also flushes the pending
+// text, but that setState has not landed yet, so the To/CC/BCC it closes
+// over still read pre-flush.
+function withPendingRecipient(lists, pending, fieldId) {
+  if (!pending || !isValidAddress(pending)) return lists;
+  if ([...lists.to, ...lists.cc, ...lists.bcc].indexOf(pending) > -1) return lists;
+  switch (fieldId) {
+    case "recipient-cc":
+      return { ...lists, cc: [...lists.cc, pending] };
+    case "recipient-bcc":
+      return { ...lists, bcc: [...lists.bcc, pending] };
+    default:
+      return { ...lists, to: [...lists.to, pending] };
+  }
+}
+
 function MenuBar({ editor, onImportMarkdown }) {
   if (!editor) return null;
 
@@ -172,6 +198,9 @@ function ComposeOverlay({
   const [addressItems, setAddressItems] = useState([]);
   const [address, setAddress] = useState(composeFromAddress || "");
   const [recipient, setRecipient] = useState("");
+  // Which row the shared recipient input is currently being typed into, so
+  // Send commits pending text back to that row rather than assuming To.
+  const [recipientField, setRecipientField] = useState("recipient-to");
   const [validationFail, setValidationFail] = useState(false);
   const [To, setTo] = useState([]);
   const [CC, setCC] = useState([]);
@@ -583,33 +612,18 @@ function ComposeOverlay({
     return str;
   }, []);
 
-  const validateAddress = useCallback((addr) => {
-    const re = /(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))/;
-    return addr.match(re);
-  }, []);
-
   const addRecipient = useCallback((e) => {
-    if (validateAddress(recipient)) {
-      const unionList = [...To, ...CC, ...BCC];
-      if (unionList.indexOf(recipient) > -1) return;
-      switch (e.target.id) {
-        case "recipient-to":
-          setTo(prev => [...prev, recipient]);
-          break;
-        case "recipient-cc":
-          setCC(prev => [...prev, recipient]);
-          break;
-        case "recipient-bcc":
-          setBCC(prev => [...prev, recipient]);
-          break;
-        default:
-          setTo(prev => [...prev, recipient]);
-      }
-      setRecipient("");
-    } else {
+    if (!isValidAddress(recipient)) {
       setValidationFail(true);
+      return;
     }
-  }, [recipient, To, CC, BCC, validateAddress]);
+    if ([...To, ...CC, ...BCC].indexOf(recipient) > -1) return;
+    const next = withPendingRecipient({ to: To, cc: CC, bcc: BCC }, recipient, e.target.id);
+    setTo(next.to);
+    setCC(next.cc);
+    setBCC(next.bcc);
+    setRecipient("");
+  }, [recipient, To, CC, BCC]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -644,10 +658,15 @@ function ComposeOverlay({
       message_id: msgid.map(s => s.trim()),
       references: ref.map(s => s.trim())
     };
+    // Validate and send the lists as they read with the pending input text
+    // folded in — committing it through addRecipient below only updates the
+    // chips on the next render, one step too late for this click.
+    const { to: sendTo, cc: sendCc, bcc: sendBcc } =
+      withPendingRecipient({ to: To, cc: CC, bcc: BCC }, recipient, recipientField);
     if (recipient) {
-      addRecipient(MESSAGE);
+      addRecipient({ target: { id: recipientField } });
     }
-    if (To.length + CC.length + BCC.length === 0) {
+    if (sendTo.length + sendCc.length + sendBcc.length === 0) {
       setMessage("Please specify at least one recipient.", true);
       return;
     }
@@ -703,7 +722,7 @@ function ComposeOverlay({
         }));
       }
       await api.sendMessage(
-        effectiveSmtpHost, address, To, CC, BCC, Subject, headers,
+        effectiveSmtpHost, address, sendTo, sendCc, sendBcc, Subject, headers,
         htmlBody, textBody, false, wireAttachments,
         // If autosave wrote a Drafts copy, ask /send to expunge it after
         // successful delivery so the stale draft doesn't linger. Best
@@ -722,7 +741,7 @@ function ComposeOverlay({
       setSending(false);
       console.log(err);
     });
-  }, [other_headers, effectiveSmtpHost, recipient, To, CC, BCC, Subject, address, addresses,
+  }, [other_headers, effectiveSmtpHost, recipient, recipientField, To, CC, BCC, Subject, address, addresses,
       editor, markdownContent, attachments, api, hide, setMessage, addRecipient, randomString]);
 
   // Close-without-send: match the Apple compose flow and always attempt a
@@ -804,8 +823,9 @@ function ComposeOverlay({
     return `${(n / (1024 * 1024)).toFixed(1)} MB`;
   }, []);
 
-  const onRecipientChange = (e) => {
+  const onRecipientChange = (e, fieldId) => {
     setRecipient(e.target.value);
+    setRecipientField(fieldId);
     setValidationFail(false);
   };
 
@@ -819,10 +839,11 @@ function ComposeOverlay({
     }
   };
 
-  const removeRecipient = useCallback((list, setList, e) => {
+  const removeRecipient = useCallback((list, setList, fieldId, e) => {
     const addr = e.target.value;
     setList(prev => prev.filter(a => a !== addr));
     setRecipient(addr);
+    setRecipientField(fieldId);
   }, []);
 
   // Root-level keyboard handler: Cmd/Ctrl+Enter sends, Esc minimizes.
@@ -862,7 +883,7 @@ function ComposeOverlay({
         className="recipient-chip__remove"
         onClick={(e) => removeRecipient(
           listName === 'To' ? To : listName === 'CC' ? CC : BCC,
-          setList, e
+          setList, `recipient-${listName.toLowerCase()}`, e
         )}
         value={addr}
         aria-label={`Remove ${addr}`}
@@ -964,7 +985,7 @@ function ComposeOverlay({
               id={`compose-to-${stackIndex}`}
               type="email"
               aria-label="Recipients"
-              onChange={onRecipientChange}
+              onChange={(e) => onRecipientChange(e, 'recipient-to')}
               onKeyDown={handleKeyDown}
               value={recipient}
               className={`recipient-input${validationFail ? " recipient-input--invalid" : ""}`}
@@ -990,7 +1011,7 @@ function ComposeOverlay({
                 <input
                   id={`compose-cc-${stackIndex}`}
                   type="email"
-                  onChange={onRecipientChange}
+                  onChange={(e) => onRecipientChange(e, 'recipient-cc')}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ' || e.key === ';' || e.key === ',') {
                       e.preventDefault();
@@ -1012,7 +1033,7 @@ function ComposeOverlay({
                 <input
                   id={`compose-bcc-${stackIndex}`}
                   type="email"
-                  onChange={onRecipientChange}
+                  onChange={(e) => onRecipientChange(e, 'recipient-bcc')}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ' || e.key === ';' || e.key === ',') {
                       e.preventDefault();

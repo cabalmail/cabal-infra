@@ -4,7 +4,11 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
-from admin_limits import audit_log, rate_limit_response_or_none  # pylint: disable=import-error
+from admin_limits import ( # pylint: disable=import-error
+    admin_response_or_none,
+    audit_log,
+    rate_limit_response_or_none,
+)
 from helper import assert_zone_owns_apex  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
@@ -26,12 +30,9 @@ cognito = boto3.client('cognito-idp')
 
 def handler(event, _context):
     '''Creates a new email address assigned to one or more users'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
     caller = event['requestContext']['authorizer']['claims']['cognito:username']
     limited = rate_limit_response_or_none(caller, 'new_address_admin')
     if limited:
@@ -158,7 +159,6 @@ def record_address(usernames, body, address):
         'tld': body['tld'],
         'user': '/'.join(usernames),
         'username': body['username'],
-        'zone-id': domains[body['tld']],
         'subdomain': body['subdomain'],
         'comment': body.get('comment', ''),
         'RequestTime': datetime.now(timezone.utc).isoformat()

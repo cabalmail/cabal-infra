@@ -228,7 +228,7 @@ final class PreferencesTests: XCTestCase {
 
     func testActivationReadsStoredAccountValues() throws {
         let store = InMemoryPreferenceStore(initialValues: [
-            try scopedKey(.markAsRead): "after_delay",
+            try scopedKey(.markAsRead): "on_open",
             try scopedKey(.loadRemoteContent): "always",
             try scopedKey(.defaultFromAddress): "alice@example.com",
             try scopedKey(.signature): "Best,\nAlice",
@@ -237,7 +237,7 @@ final class PreferencesTests: XCTestCase {
             try scopedKey(.defaultBodyRenderMode): "reader",
         ])
         let preferences = makeActivated(store: store)
-        XCTAssertEqual(preferences.markAsRead, .afterDelay)
+        XCTAssertEqual(preferences.markAsRead, .onOpen)
         XCTAssertEqual(preferences.loadRemoteContent, .always)
         XCTAssertEqual(preferences.defaultFromAddress, "alice@example.com")
         XCTAssertEqual(preferences.signature, "Best,\nAlice")
@@ -266,7 +266,7 @@ final class PreferencesTests: XCTestCase {
     /// another. Every synced key is exercised with a non-default value.
     func testAppPreferencesPayloadRoundTripsThroughApplyRemote() {
         let source = makeActivated()
-        source.markAsRead = .afterDelay
+        source.markAsRead = .onOpen
         source.loadRemoteContent = .always
         source.defaultFromAddress = "me@example.com"
         source.signature = "Cheers,\nChris"
@@ -279,7 +279,7 @@ final class PreferencesTests: XCTestCase {
         let target = makeActivated()
         target.applyRemote(source.appPreferencesPayload())
 
-        XCTAssertEqual(target.markAsRead, .afterDelay)
+        XCTAssertEqual(target.markAsRead, .onOpen)
         XCTAssertEqual(target.loadRemoteContent, .always)
         XCTAssertEqual(target.defaultFromAddress, "me@example.com")
         XCTAssertEqual(target.signature, "Cheers,\nChris")

@@ -16,6 +16,11 @@ public struct Address: Sendable, Codable, Hashable, Identifiable {
     /// the field is absent — older Lambda deployments and locally-constructed
     /// values don't carry it.
     public var favorite: Bool
+    /// True while the address is suspended: its DNS records are withdrawn so
+    /// inbound mail stops resolving, but the address itself is retained and
+    /// can be reinstated. Defaults to false when the field is absent — older
+    /// Lambda deployments and locally-constructed values don't carry it.
+    public var suspended: Bool
 
     public var id: String { address }
 
@@ -25,7 +30,8 @@ public struct Address: Sendable, Codable, Hashable, Identifiable {
         tld: String,
         comment: String? = nil,
         publicKey: String? = nil,
-        favorite: Bool = false
+        favorite: Bool = false,
+        suspended: Bool = false
     ) {
         self.address = address
         self.subdomain = subdomain
@@ -33,6 +39,7 @@ public struct Address: Sendable, Codable, Hashable, Identifiable {
         self.comment = comment
         self.publicKey = publicKey
         self.favorite = favorite
+        self.suspended = suspended
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -42,6 +49,7 @@ public struct Address: Sendable, Codable, Hashable, Identifiable {
         case comment
         case publicKey = "public_key"
         case favorite
+        case suspended
     }
 
     public init(from decoder: Decoder) throws {
@@ -52,5 +60,6 @@ public struct Address: Sendable, Codable, Hashable, Identifiable {
         self.comment = try container.decodeIfPresent(String.self, forKey: .comment)
         self.publicKey = try container.decodeIfPresent(String.self, forKey: .publicKey)
         self.favorite = try container.decodeIfPresent(Bool.self, forKey: .favorite) ?? false
+        self.suspended = try container.decodeIfPresent(Bool.self, forKey: .suspended) ?? false
     }
 }

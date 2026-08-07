@@ -1,4 +1,4 @@
-FROM binwiederhier/ntfy:v2.26.0@sha256:a6d335064ae927c4dbef118e1fa39656b3d2e01472b2a82af5915d5cebfe815f
+FROM binwiederhier/ntfy:v2.26.3@sha256:081b53dbb20674fcfe05fdb4eb8af9036a2645ef979543d16f7f80803af467b1
 
 # The upstream image listens on 80 by default when NTFY_LISTEN_HTTP=:80.
 # Cache + auth DB are expected at /var/cache/ntfy/ (EFS-backed in the

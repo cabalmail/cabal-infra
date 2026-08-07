@@ -240,6 +240,11 @@
   min-width: 0;
 }
 
+.addresses-rail__row.is-suspended .addresses-rail__address {
+  color: var(--ink-quiet);
+  font-style: italic;
+}
+
 .addresses-rail__row-actions {
   display: inline-flex;
   gap: 2px;

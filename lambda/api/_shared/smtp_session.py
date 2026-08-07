@@ -5,10 +5,11 @@ SMTP_INTERNAL_HOST is set (the smtp-out task's Cloud Map name), the TCP
 connection goes there directly - no NLB, no NAT hairpin - while TLS
 verification keeps using the public submission hostname, because the
 container serves the wildcard *.<control-domain> certificate. The split
-lives in _get_socket: smtplib's SMTP_SSL wraps the socket with
-server_hostname=self._host (the constructor's host argument, which
-connect() never overwrites), so overriding only the TCP destination
-leaves the certificate check real and unchanged.
+lives in _get_socket: connect() records the public host it was given
+as self._host before asking _get_socket for the socket, and smtplib's
+SMTP_SSL wraps that socket with server_hostname=self._host, so
+overriding only the TCP destination leaves the certificate check real
+and unchanged.
 
 Unlike the IMAP path, this dial FALLS BACK to the public listener when
 the internal name does not resolve or refuses the connection. Cloud Map

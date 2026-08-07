@@ -148,6 +148,33 @@
   flex-shrink: 0;
 }
 
+/* --- Move folder chooser ----------------------------------------------- */
+
+.reader-move {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Opens leftwards, like the overflow menu: the Move button sits close enough
+   to the pane's right edge that a left-anchored chooser is clipped. */
+.reader-move-picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+
+.reader-move-picker .filter-folder { width: 100%; }
+.reader-move-picker select { width: 100%; }
+
 /* --- Overflow menu ----------------------------------------------------- */
 
 .reader-overflow {

@@ -5,7 +5,7 @@ import Observation
 // account, in local `UserDefaults`) and synced between the user's devices
 // through the server's per-user preferences row — never through iCloud.
 //
-// Phase 6 scope (`docs/0.6.0/ios-client-plan.md`) covers four surfaces:
+// Phase 6 scope (`docs/0.6.x/ios-client-plan.md`) covers four surfaces:
 // Reading (mark-as-read + remote-content gating), Composing (default From
 // + signature), Actions (dispose swipe target), Appearance (theme).
 //
@@ -22,12 +22,10 @@ import Observation
 ///
 /// Defaults to `.manual` per the plan — a behavior that matches the React
 /// app, where the user always explicitly marks messages read via the swipe
-/// action, toolbar button, or context menu. The `.afterDelay` case is a
-/// plain 2-second wait mirroring Mail.app's equivalent option.
+/// action, toolbar button, or context menu.
 public enum MarkAsReadBehavior: String, Codable, Sendable, CaseIterable, Identifiable {
     case manual
     case onOpen = "on_open"
-    case afterDelay = "after_delay"
 
     public var id: String { rawValue }
 }

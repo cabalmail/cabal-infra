@@ -47,8 +47,14 @@ extension MessageListView {
                                 indexedRow(index, model: model, visible: visible)
                             }
                         } else {
-                            ForEach(visible) { envelope in
-                                messageRow(envelope, model: model, visible: visible)
+                            // Identity comes from `MessageRowIdentity`, not
+                            // `Envelope.id` (the UID): a cross-folder search can
+                            // return the same UID from two folders, and a
+                            // `ForEach` given two elements with one id draws only
+                            // the first — the other match disappears from the
+                            // list while the header still counts it.
+                            ForEach(MessageRowIdentity.identify(visible)) { row in
+                                messageRow(row.envelope, model: model, visible: visible)
                             }
                         }
                     }
@@ -221,6 +227,14 @@ extension MessageListView {
                 activeMessageRow(envelope, model: model, visible: visible)
             }
         }
+        // `.contain` is load-bearing: a bare identifier merges the row's
+        // whole subtree into one accessibility element, which hides the
+        // revealed swipe buttons from XCUITest and VoiceOver alike (the
+        // subtree-merge trap in docs/0.11.x/apple-testability-and-
+        // accessibility.md). The container form names the row while
+        // keeping its children individually reachable.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("message.row.\(envelope.uid)")
     }
 
     /// The live message row. The normal row wraps in `SwipeActionRow` for
@@ -239,7 +253,7 @@ extension MessageListView {
         let background = selected ? Color.accentColor.opacity(0.15) : Color.clear
         Group {
             if model.bulkMode {
-                row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+                row(for: envelope, model: model, orderedVisible: visible)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: rowHeight, alignment: .center)
                     .background(background)
@@ -256,7 +270,7 @@ extension MessageListView {
                         trailing: disposeSwipe(for: envelope, model: model),
                         onSelect: { selectRow(envelope, model: model, ordered: visible) },
                         content: {
-                            row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+                            row(for: envelope, model: model, orderedVisible: visible)
                         }
                     )
                 }
@@ -475,28 +489,19 @@ extension MessageListView {
 
     /// The bottom bulk-action bar shows whenever a real multi-selection exists
     /// (two or more) - a single selection uses the reading pane and its own
-    /// toolbar. On iPad / visionOS it also shows while the Select edit mode is
-    /// active so the bar is reachable before any row is picked. Compact iPhone
-    /// keeps the explicit `bulkMode` gate.
+    /// toolbar. Touch layouts also show it while the Select mode is active so
+    /// the bar is reachable before any row is picked.
     func showsBulkActionBar(model: MessageListViewModel) -> Bool {
-        guard isWideLayout else { return model.bulkMode }
-        #if os(macOS)
-        return model.selectedUIDs.count >= 2
-        #else
-        return model.selectedUIDs.count >= 2 || editMode == .active
-        #endif
+        if model.bulkMode { return true }
+        return isWideLayout && model.selectedUIDs.count >= 2
     }
 
     /// Esc clears the selection and exits any touch edit mode. Returns
     /// `.ignored` when there's nothing to clear so the key can do other things.
     func escapePressed(model: MessageListViewModel) -> KeyPress.Result {
         let hadSelection = !model.selectedUIDs.isEmpty
-        #if !os(macOS)
-        let wasEditing = editMode == .active
-        editMode = .inactive
-        #else
-        let wasEditing = false
-        #endif
+        let wasEditing = model.bulkMode
+        model.leaveBulkMode()
         guard hadSelection || wasEditing else { return .ignored }
         model.selectedUIDs.removeAll()
         model.selectionAnchor = nil

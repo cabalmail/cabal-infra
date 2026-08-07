@@ -61,7 +61,7 @@ struct ComposeView: View {
     var body: some View {
         NavigationStack {
             composeContent
-            .navigationTitle("New Message")
+            .navigationTitle(model.navigationTitle)
             #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -146,36 +146,51 @@ struct ComposeView: View {
                 "Discard draft?",
                 isPresented: $showDiscardConfirm
             ) {
-                Button("Discard Draft", role: .destructive) {
-                    Task {
-                        #if os(macOS)
-                        // Pre-approve the close so the dismissWindow call
-                        // inside discard() doesn't get re-intercepted by
-                        // the NSWindowDelegate.
-                        closeCoordinator.allowsClose = true
-                        #endif
-                        await model.discard()
-                    }
-                }
-                Button("Save Draft", role: .cancel) {
-                    Task {
-                        #if os(macOS)
-                        closeCoordinator.allowsClose = true
-                        #endif
-                        let didClose = await model.cancel()
-                        #if os(macOS)
-                        // IMAP save failed: keep the user in the window so
-                        // they can see the error banner and retry.
-                        if !didClose {
-                            closeCoordinator.allowsClose = false
-                        }
-                        #endif
-                    }
+                ForEach(ComposeCancelChoice.allCases, id: \.self) { choice in
+                    Button(choice.title, role: choice.role) { perform(choice) }
                 }
             } message: {
-                Text("Keep a copy of the draft for later, or discard it now.")
+                Text("Keep a copy of the draft for later, discard it now, or go back to editing.")
             }
             .toastOverlay($composeToast)
+        }
+    }
+
+    // MARK: - Cancel dialog
+
+    /// Runs the outcome the user picked in the cancel-compose dialog. Stays
+    /// in this file (rather than the `+Subviews` extension) because it
+    /// touches the `private` close coordinator.
+    private func perform(_ choice: ComposeCancelChoice) {
+        switch choice {
+        case .discard:
+            Task {
+                #if os(macOS)
+                // Pre-approve the close so the dismissWindow call inside
+                // discard() doesn't get re-intercepted by the
+                // NSWindowDelegate.
+                closeCoordinator.allowsClose = true
+                #endif
+                await model.discard()
+            }
+        case .saveDraft:
+            Task {
+                #if os(macOS)
+                closeCoordinator.allowsClose = true
+                #endif
+                let didClose = await model.cancel()
+                #if os(macOS)
+                // IMAP save failed: keep the user in the window so they can
+                // see the error banner and retry.
+                if !didClose {
+                    closeCoordinator.allowsClose = false
+                }
+                #endif
+            }
+        case .keepEditing:
+            // No-op by design — the dialog dismisses and the composer, with
+            // everything typed so far, is still there.
+            break
         }
     }
 
@@ -193,6 +208,7 @@ struct ComposeView: View {
             Button("Cancel") {
                 showDiscardConfirm = true
             }
+            .accessibilityIdentifier("compose.cancel")
         }
         ToolbarItem {
             attachMenu
@@ -211,6 +227,17 @@ struct ComposeView: View {
                     if !sent { closeCoordinator.allowsClose = false }
                     #endif
                     guard sent else { return }
+                    // Sending from a draft discards the server copy, so the
+                    // Drafts list is showing a message that no longer
+                    // exists. Prune it through the same signal the reader's
+                    // archive/move actions use instead of waiting for the
+                    // next background reconcile (the folder is unsubscribed
+                    // by default, so that took over a minute). "Drafts" is
+                    // the mailbox `/save_draft` pins every draft to; see
+                    // `MessageDetailViewModel.isDraftsFolder`.
+                    if let uid = model.supersededDraftUID {
+                        appState.signalDisposed(folderPath: "Drafts", uid: uid)
+                    }
                     // Surface the outcome as a toast on the shared AppState
                     // so the user sees confirmation after the sheet dismisses.
                     // `.queued` means the message is in the outbox and
@@ -236,6 +263,7 @@ struct ComposeView: View {
                 }
             }
             .disabled(!model.canSend || model.isSending)
+            .accessibilityIdentifier("compose.send")
         }
     }
 
@@ -257,6 +285,7 @@ struct ComposeView: View {
             Image(systemName: "paperclip")
                 .accessibilityLabel("Attach")
         }
+        .accessibilityIdentifier("compose.attach")
         #else
         Button {
             showFileImporter = true
@@ -264,6 +293,7 @@ struct ComposeView: View {
             Image(systemName: "paperclip")
                 .accessibilityLabel("Attach file")
         }
+        .accessibilityIdentifier("compose.attach")
         #endif
     }
 
@@ -303,43 +333,59 @@ extension ComposeView {
 
     #if !os(macOS)
     private var composeForm: some View {
+        Form {
+            ForEach(ComposeFormSection.allCases, id: \.self) { section in
+                formSection(section)
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            composeErrorBanner
+        }
+    }
+
+    /// The compose error, pinned between the toolbar and the scrolling
+    /// form. It can't live in the form: the keyboard scrolls the form
+    /// down, and a section inserted at the top then lands above the
+    /// visible region with nothing to scroll it back (#938). Pinned, it
+    /// is readable whatever the scroll offset — which is the whole point
+    /// of keeping the composer up on a failed save (#903).
+    @ViewBuilder
+    private var composeErrorBanner: some View {
+        if let errorMessage = model.errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                .font(.callout)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(.bar)
+                .overlay(alignment: .bottom) { Divider() }
+                .accessibilityIdentifier("compose.error")
+        }
+    }
+
+    /// Renders one section of `composeForm`. The order lives in
+    /// `ComposeFormSection`, which documents why nothing actionable may
+    /// follow `.message`.
+    @ViewBuilder
+    private func formSection(_ section: ComposeFormSection) -> some View {
         @Bindable var model = model
-        return Form {
+        switch section {
+        case .from:
             Section("From") {
                 FromPicker(
                     model: model,
                     onCreateAddress: { showNewAddressSheet = true }
                 )
             }
-            Section("Recipients") {
-                RecipientFieldWithSuggestions(
-                    label: "To",
-                    text: $model.toText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.to
-                )
-                RecipientFieldWithSuggestions(
-                    label: "Cc",
-                    text: $model.ccText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.cc
-                )
-                RecipientFieldWithSuggestions(
-                    label: "Bcc",
-                    text: $model.bccText,
-                    candidates: recipientCandidates,
-                    focusBinding: $focusedField,
-                    focusValue: Field.bcc
-                )
-            }
+        case .recipients:
+            recipientsSection
+        case .subject:
             Section("Subject") {
                 TextField("Subject", text: $model.subject)
+                    .accessibilityIdentifier("compose.subject")
             }
-            Section("Message") {
-                ComposerBody(model: model)
-            }
+        case .attachments:
             if !model.attachments.isEmpty {
                 Section("Attachments") {
                     ForEach(model.attachments) { attachment in
@@ -350,12 +396,40 @@ extension ComposeView {
                     }
                 }
             }
-            if let errorMessage = model.errorMessage {
-                Section {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                }
+        case .message:
+            Section("Message") {
+                ComposerBody(model: model)
             }
+        }
+    }
+
+    private var recipientsSection: some View {
+        @Bindable var model = model
+        return Section("Recipients") {
+            RecipientFieldWithSuggestions(
+                label: "To",
+                text: $model.toText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.to,
+                identifier: "compose.to"
+            )
+            RecipientFieldWithSuggestions(
+                label: "Cc",
+                text: $model.ccText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.cc,
+                identifier: "compose.cc"
+            )
+            RecipientFieldWithSuggestions(
+                label: "Bcc",
+                text: $model.bccText,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                focusValue: Field.bcc,
+                identifier: "compose.bcc"
+            )
         }
     }
     #endif

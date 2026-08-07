@@ -2,6 +2,7 @@
 # pylint: disable=duplicate-code
 import json
 import boto3  # pylint: disable=import-error
+from admin_limits import admin_response_or_none  # pylint: disable=import-error
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
@@ -9,24 +10,24 @@ table = ddb.Table('cabal-addresses')
 
 def handler(event, _context):
     '''Lists all addresses with their assigned users'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
     try:
         items = []
         scan_kwargs = {
             'ExpressionAttributeNames': {
                 '#user': 'user',
-                '#c': 'comment'
+                '#c': 'comment',
+                '#s': 'suspended'
             },
-            'ProjectionExpression': 'subdomain, #c, tld, address, username, #user'
+            'ProjectionExpression': 'subdomain, #c, tld, address, username, #user, #s'
         }
         while True:
             response = table.scan(**scan_kwargs)
-            items.extend(response.get('Items', []))
+            for item in response.get('Items', []):
+                item['suspended'] = bool(item.get('suspended'))
+                items.append(item)
             if 'LastEvaluatedKey' not in response:
                 break
             scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']

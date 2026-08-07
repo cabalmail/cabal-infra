@@ -5,6 +5,618 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.26] - 2026-08-07
+
+### Added
+- Apple: **Paste without formatting in the composer.** ⌘⇧V in the rich-text
+  editor (macOS and iPad hardware keyboards) pastes the clipboard's plain-text
+  flavor: markup arrives as literal text and line breaks are preserved. The
+  macOS Edit menu's Paste and Match Style (⌘⌥⇧V) takes the same path, where it
+  previously pasted with formatting.
+- **CI gate for `scripts/tests`.** A new `scripts-tests.yml` workflow runs
+  the `scripts/tests` unittest suites on pull requests that touch
+  `scripts/**` and on pushes to the named branches; previously the suites
+  ran only by hand.
+
+### Changed
+- Apple: **Native macOS sign-in form.** The Mac sign-in and two-factor
+  screens now use Settings-style grouped forms — width-capped, topped with
+  the app mark, with labeled fields and a right-aligned prominent action
+  button — replacing the unpadded full-width columns layout. While signed
+  out the window also keeps a minimum size so the action buttons can't
+  fall below the fold.
+
+### Fixed
+- Apple: **Compose errors stay on screen.** The iPhone and iPad composer's
+  error banner was the first section of the scrolling form, so when the
+  keyboard had scrolled the form down — the usual state when Save Draft or
+  Send fails — the banner was laid out above the visible region, behind the
+  toolbar. "Couldn't save draft: pick a From address first" never reached
+  the user and Save Draft looked dead. The banner is now pinned between the
+  toolbar and the form, readable at any scroll offset.
+- Apple: **Emptied folders clear their rows.** A message deleted from
+  another client left its row in the list forever once the folder went to
+  zero — the pills read "All, 0" beside a row that failed with a 404 when
+  opened, and neither an explicit refresh nor a relaunch cleared it. A
+  refresh whose STATUS reports the folder holds no messages now drops the
+  stale rows and their cached envelopes.
+- Apple: **iPad reader actions no longer spread across the message list.** On
+  iOS 27 a `.bottomBar` toolbar group in a split view attaches to the window
+  rather than to the detail column, so Reply and Mark-as-read rendered under
+  the message list instead of the message they act on. At regular width on
+  iOS 27 the reader now pins the same five actions to its own pane; compact
+  iPhone and iOS 26 keep the system bar unchanged.
+- Apple: **Status banners no longer cover the iPad toolbar.** The launch
+  resume offer (and every other banner) was drawn across the navigation bar at
+  regular width, hiding New Message, Addresses and the search field for as
+  long as it was up. Banners now hang below the bar there; iPhone keeps them
+  in the title slot, where nothing else sits.
+- Apple: **Errors read as sentences.** Failures surfaced the raw Swift enum,
+  escaped JSON and all — a message deleted from another client showed
+  `server(code: "404", message: "{\"status\": …")` across four red lines of
+  the reader instead of "That message is no longer in Drafts." Every error
+  now carries plain user-facing copy, preferring the server's own
+  explanation where it sends one.
+- Apple: **Settings window closes on sign-out (macOS).** Signing out used
+  to leave the macOS Settings window open, still showing the departed
+  account's settings form. It now closes itself when the session ends and
+  brings the main window — already reset to the sign-in screen — to the
+  front. The other platforms already dismissed their settings surface as
+  part of the sign-out reset.
+- **Authorization on co-assigned addresses.** Assigning a second user to an
+  address left *nobody* — not the co-assignee, not the original owner — able
+  to send from it, revoke, suspend or reinstate it, while the address kept
+  showing up in everyone's list. The shared ownership check now reads the
+  slash-delimited assignee list the same way `/list` and favorites already do.
+- Apple: **Unread pill after archiving from the reader.** Archiving an unread
+  message from the reader dropped the All count but left Unread counting the
+  message that had gone, and staying in the folder never corrected it. A row
+  pruned by the reader's dispose now takes its unread with it.
+- **Durable smtp-in relay queue.** Inbound mail the relay has accepted
+  but not yet handed to the imap tier now waits in a shared EFS-backed
+  queue (per-tier access point, mirroring the smtp-out arrangement)
+  instead of the container's ephemeral filesystem. Previously, a smtp-in
+  task replacement destroyed any messages deferred in its queue — the
+  silent-loss window observed when an imap deploy and a smtp-in deploy
+  overlap, since mail accepted during the imap gap was queued on the
+  outgoing task and killed with it, with no bounce. A replaced task's
+  queue is now drained by whichever sibling task next scans it. The
+  smtp-in task also gains the 120 s stop grace (supervisord
+  `stopwaitsecs=110`) so an in-flight relay delivery finishes before
+  SIGKILL.
+
+## [0.11.25] - 2026-08-06
+
+### Changed
+- Apple: **Restore replaces Archive inside the Archive folder.** The swipe
+  action, the bulk action bar, the reader's toolbar button, the row and
+  selection context menus, and Cmd+Delete all read "Restore" while you are
+  in Archive and move the message back to INBOX, instead of archiving it
+  onto its own folder — a same-folder move that handed the message a new
+  UID (invalidating cached bodies and envelopes) and dropped its row from
+  the list until the next refresh.
+- **Faster Apple dashboard refresh.** The App Store Connect queries now run
+  concurrently (both apps in parallel, and each app's groups and builds
+  queries overlapped), the immutable app-record lookup is cached for the
+  process lifetime, and the server app overlaps the repo side (git fetch,
+  changelog parsing, log walks) with the ASC side. The build ledger is
+  cached incrementally (in memory and on disk, default
+  `~/.cache/cabalmail-apple-dashboard`, `--no-asc-cache` to disable): a
+  refresh refetches only pages young enough to still change and serves
+  settled history from the cache, deriving expiry locally from
+  `expirationDate`, so steady-state refreshes fetch about one page per app
+  instead of the full history. The volatile window is 14 days, sized so each
+  app's refetch stays inside one page at the current upload rate; beta
+  states come from the batched buildBetaDetails query (concurrent chunks)
+  and group membership from each TestFlight group's own builds relationship
+  instead of the builds-page includes, which proved unreliable for both
+  (membership queried group-side also means attaches and detaches on old
+  builds now show up on the next refresh); an empty answer falls back to
+  the cached values rather than blanking live builds; and
+  the server shares one in-flight refresh among concurrent requests
+  instead of running a full App Store Connect round per caller. Group assignments made through the
+  dashboard mark the build dirty so it is refetched. Pending-fragment
+  authored dates are memoized like feature landings, a dead per-fragment
+  first-parent log walk was dropped, and each refresh logs per-phase timing
+  to stderr.
+
+### Fixed
+- **Escape closes one layer at a time in the reader.** Pressing Escape with the
+  message source, original headers, overflow menu, or folder chooser open also
+  closed the message underneath it, and the source window reappeared the next
+  time that same message was opened.
+- Apple: **Siri-created addresses now actually reach the clipboard.** iOS
+  silently refuses pasteboard writes from a backgrounded process, so the
+  create-address intents' "copied to the clipboard" claim was false when
+  invoked by voice. The intents now detect the failed write and offer a
+  one-tap "Continue" hop into the app, where the copy completes; declining
+  keeps the address in the spoken response and in the intent's Shortcuts
+  output instead of pretending it was copied.
+
+### Security
+- **Refreshed the pinned `amazonlinux:2023` base digest.** The `imap`,
+  `smtp-in`, `smtp-out`, and `sinkhole` Dockerfiles now pin the current
+  upstream `amazonlinux:2023` image, picking up patched `python3`,
+  `python3-libs`, `glib2`, and `gawk` packages on next rebuild.
+
+## [0.11.24] - 2026-08-05
+
+### Removed
+- **claude workflow** The `claude.yml` workflow and mention in `CLAUDE.md`
+  are no longer used.
+
+### Fixed
+- Apple: **Reader actions no longer vanish into a system overflow.** The
+  iPhone/iPad reading toolbar carried seven buttons, which filled the bar to
+  within a couple of points at the narrower phone widths; on iOS 27 the system
+  reclaims that margin and folds the tail — Reader view and Archive, or Delete
+  Forever inside Trash — into an overflow control of its own that takes two
+  taps to open. The bar now keeps Reply, Read/Unread, Flag, Archive/Delete and
+  the "…" menu, and the two display toggles (Reader view and remote content)
+  move into that menu.
+- **A failed send no longer makes the next attempt a silent no-op.** `/send`
+  claims a message's Message-Id before handing it to the relay so a retry
+  cannot deliver twice, but only released the claim when the SMTP step
+  returned an error - not when it raised, which is what a relay refusing
+  the connection does. The orphaned claim then matched the client's retry
+  and answered it `200 "submitted"` without sending anything until the
+  claim expired. The claim is now released on any failure under it, an
+  unreachable relay comes back as a named error instead of a bodiless 502,
+  and a connection that breaks after the message is accepted keeps the
+  claim so the retry still cannot duplicate it.
+- **A malformed recipient list is answered as a rejected request.** `/send`
+  and `/save_draft` checked that `to_list`, `cc_list`, and `bcc_list` were
+  present and free of header injection, but not that they were lists at all.
+  A client sending one as a bare address string got a bodiless `502` from
+  deep in the envelope assembly; it now gets the same `400` naming the
+  offending field that every other rejected payload gets.
+
+## [0.11.23] - 2026-08-04
+
+### Added
+- Apple: **Siri and Shortcuts support (first wave).** Four App Intents with
+  "Hey Siri" phrases on iPhone and iPad: get a new random address (minted
+  and copied to the clipboard), create a named address like
+  `acme@complaints.example.com` (Siri asks for the domain when the account
+  can mint on more than one), check the inbox (unread count plus the latest
+  senders), and open a folder by name. All four also appear as building
+  blocks in the Shortcuts app and Spotlight.
+
+### Fixed
+- Apple: **Composer titles for replies and forwards.** A reply, reply-all,
+  or forward opened under the title "New Message" despite arriving with the
+  recipient, subject, and quoted original already filled in. Each composer
+  now says what it is — "Reply", "Reply All", "Forward" — alongside the
+  existing "Draft" and "New Message".
+- Apple: **Save Draft on a message with no From address selected.** Tapping
+  "Save Draft" before picking a sender dismissed the composer exactly as if
+  the save had succeeded, and nothing ever reached the Drafts folder — the
+  typed recipients and subject were gone. The composer now stays open and
+  asks for a From address, since a draft can't be filed without one.
+- Apple: **Search results sharing a UID.** A cross-folder search that matched
+  two messages carrying the same IMAP UID (UIDs are unique only within a
+  folder) drew only one of them, while the header still counted both. The
+  results list now identifies rows by UID plus Message-ID instead of the UID
+  alone.
+- **Incomplete send payloads answered with a bodiless 502.** `/send` and
+  `/save_draft` died on a `KeyError` when a request omitted the `message_id`,
+  `in_reply_to`, or `references` entries of `other_headers` — the shape a
+  fresh, non-reply compose produces — and again when it omitted any of
+  `sender`, `subject`, `to_list`, `cc_list`, `bcc_list`, `text`, `html`, or
+  `host`. The threading headers are now read as optional, matching the
+  validator that already did; the rest are checked before anything indexes
+  them and rejected with the 400 naming the missing field, which both
+  endpoints already returned for a bad value.
+
+### Security
+- **Refreshed the pinned `amazonlinux:2023` base image digest** used by the
+  imap, smtp-in, smtp-out, and sinkhole tiers, picking up upstream OS package
+  fixes including patched `python3`/`python3-libs` builds.
+
+## [0.11.22] - 2026-08-03
+
+### Added
+- Apple: **Machine-readable control surface.** Interactive controls
+  across sign-in, the message list (rows, swipe actions, selection
+  checkboxes, filter pills, bulk-action bar), the folder and address
+  sidebars, and the reader and compose toolbars now carry stable
+  accessibility identifiers, and list rows expose their contents as an
+  accessibility container instead of merging into one element — so
+  revealed swipe actions are individually reachable by VoiceOver and
+  Switch Control rather than the row announcing itself as a single
+  undifferentiated blob.
+- **Simulator build and drive tooling.** `apple/scripts/build-sim.sh`
+  produces a sign-in-capable iOS simulator build with the non-obvious
+  flags baked in, and `apple/Tools/SimDrive` adds an XCUITest-based
+  command REPL that drives the installed app by accessibility
+  identifier (tap, type, paste, swipe-reveal with hold, tree dump) from
+  the host shell. Documented in `docs/apple.md` under "Simulator
+  testing and automation".
+
+### Changed
+- Apple: **Two-factor code auto-submits.** The sign-in code field now
+  keeps itself to six digits and submits as soon as the sixth digit
+  arrives — typed or pasted — so completing sign-in never requires
+  reaching for the Verify button.
+
+### Fixed
+- Apple: **Return advances and submits sign-in.** Return now steps
+  through control domain, username, and password (labeled Next/Go on
+  the software keyboard) and submits from the password field; a
+  hardware-keyboard Return on the two-factor code field submits it
+  too. Both forms were previously mouse/tap-only on the final step.
+- Apple: **New folder with a parent, on iPhone.** Choosing a parent in the New
+  Folder sheet no longer wipes the name you typed and drop the selection —
+  which had made a nested folder impossible to create from iPhone.
+- Apple: **All-mail search crash when two results share a UID.** IMAP UIDs are
+  unique only within a folder, so a cross-folder search routinely returns the same
+  UID from two mailboxes; building the per-row source-folder map assumed otherwise
+  and trapped, killing the app the instant results arrived. Each row now resolves
+  to its own mailbox, so dispose, flag, move and open all target the right folder.
+- Apple: **Nesting and collapse in the sidebar's Subscribed section.** Subscribed
+  drew every folder flush left and ignored its own disclosure chevron, so a nested
+  subscribed folder was indistinguishable from a top-level one and its collapse
+  only took effect down in All folders. Each section now takes its indentation,
+  chevron and collapse from the folders it is actually showing.
+
+## [0.11.21] - 2026-08-02
+
+### Added
+- **Release dashboard.** `scripts/release-dashboard.py` (port 5059, same
+  chrome as the Apple and triage dashboards) drives the stage→prod release
+  cycle from one page: pending changelog fragments with patch/minor/major
+  Promote buttons (runs `promote.sh` with all its guards in a private clone
+  pinned to stage), the stage→main PR's checks with a Merge button that arms
+  when they pass, every workflow run waiting on an environment approval gate
+  — fully paginated, so a run can never hide below the fold of the Actions
+  tab — with per-run Approve buttons, the deploy runs the merge actually
+  triggered tracked through to the published GitHub release, and a table of
+  recent releases. `promote.sh` gains `--no-watch` for callers that monitor
+  PR checks themselves.
+
+### Fixed
+- **New-address form no longer discards what you typed.** Requesting an address
+  without picking a domain now says which field is missing and leaves the form
+  intact, instead of clearing every field with no error and creating nothing. A
+  request the server rejects is reported the same way rather than failing
+  silently.
+- Apple: **Sender-authentication verdict is visible again in the reader.** The
+  message header was pinned to a fixed 15% of the pane, which left the
+  SPF/DKIM/DMARC line — and the "not verified" fallback that matters most —
+  just below the header's bottom edge, hidden under the message body. The
+  header now takes the height its contents need, and only scrolls when a
+  sprawling subject or recipient list would crowd out the reading area.
+- **Move works from the open message.** The reader's Move button was an
+  always-disabled placeholder, so relocating a message meant closing it and
+  going through bulk selection. It now opens a folder chooser and moves the
+  message you are reading.
+
+## [0.11.20] - 2026-08-01
+
+### Fixed
+- **Clean 400 from `fetch_attachment` for a malformed request.** A missing or
+  non-integer `filename`/`index`/`folder`/`id` used to escape the handler as an
+  unhandled exception and reach the client as a bodiless 502 reading "Internal
+  server error", so a caller could not tell a bad request from a broken server.
+  The handler now validates its query string the way its `fetch_inline_image`
+  sibling already did.
+- Apple: **Staged attachments are visible in the iPhone composer.** The
+  "Attachments" list rendered after the body editor, which is greedy, so it
+  started below the fold — and the editor's web view swallows the pan that
+  would scroll down to it. A picked photo left no trace on screen and could
+  not be removed, and repeat picks piled up silently. The list now sits
+  above the editor, beside the send-error banner.
+
+### Security
+- **Refreshed the pinned `amazonlinux:2023` base image digest** used by the
+  imap, smtp-in, smtp-out, and sinkhole tiers, picking up upstream OS package
+  fixes including patched `python3`/`python3-libs` builds.
+
+## [0.11.19] - 2026-07-31
+
+### Changed
+- **Pipeline routing in the triage dashboard.** Each row now shows which
+  tester/fixer pipeline owns the issue — baseline or `os27` (the 27.x-beta
+  pair) — as a fixed-footprint pill that toggles the `os27` label on GitHub,
+  plus a stat tile that filters to routed issues. `--route-label` renames the
+  label; an empty value hides the column.
+
+### Removed
+- Apple: **"After delay (2s)" mark-as-read option.** The Reading setting
+  now offers only Manual and On open. The delay-based path never
+  survived iPhone's phantom `.onDisappear` (issue #735); dropping the
+  option removes the surface rather than papering over it.
+
+### Fixed
+- Apple: **iPhone reader stranded on the empty-selection placeholder.**
+  Sending a draft — or archiving or moving the last message — from inside the
+  reader removed the message being read but left the reader on screen, showing
+  a full-screen "No message selected / Pick a message from the list to read it."
+  under the folder's title bar, with no list to pick from. The reader now pops
+  back to the message list when the message it was showing goes away.
+- Apple: **Cancelling a compose offers all three outcomes.** The confirmation showed
+  only "Discard Draft" under a message promising a keep option, and an accidental tap
+  outside it saved the draft and closed the composer with no way back. It now lists
+  "Discard Draft", "Save Draft" and "Keep Editing", and dismissing it leaves the
+  composer exactly as it was.
+- Apple: **Draft reader toolbar no longer overflows the iPhone screen.** Opening a
+  message in Drafts added "Edit Draft" as an eighth bottom-bar item, which pushed the
+  row wider than the screen and clipped both "Edit Draft" and "More actions" to ~5pt
+  slivers at the edges. Drafts now show "Edit Draft" in place of "Reply" — replying to
+  your own unsent draft was never a meaningful action — keeping the toolbar at seven
+  items in every folder.
+- Apple: **Sending a draft clears it from the Drafts list right away.** The row stayed
+  on screen for a minute or more after the send completed, even though the server copy
+  was already gone, because nothing invalidated the folder the app had just acted on.
+  The compose surface now prunes the row the moment the send lands, the same way the
+  reader's archive and move actions do.
+- Apple: **Composer titled "New Message" when editing a saved draft.** Opening
+  a draft for editing put up a populated form under a "New Message" title,
+  though sending it replaces that draft rather than creating a second one. The
+  composer now reads "Draft" when it opened on a saved draft; new messages,
+  replies and forwards are unchanged.
+- **Clean 404 when a message is no longer in the folder.** Requesting a message
+  whose UID has been expunged (moved, deleted, or emptied from Trash by another
+  client) and whose body was never cached raised a `KeyError` inside the shared
+  message loader, which API Gateway turned into a bodiless 502. `fetch_message`,
+  `fetch_attachment`, `list_attachments`, and `fetch_inline_image` now return a
+  404 naming the folder, so clients can tell "this message is gone, refresh the
+  folder" from "the server is broken".
+- Apple: **Unresolvable skeleton row left behind by a locally-removed
+  message.** Archiving, moving, permanently deleting or sending a draft pruned
+  the row but left the folder's message total at its last server-reported
+  value, so the vacated slot went on rendering a loading placeholder that could
+  never resolve — and the `All` filter pill went on counting it — until the next
+  folder-status poll corrected the count, up to a couple of minutes in an
+  unsubscribed folder such as Drafts. Every optimistic removal now takes the
+  slot off the total with the row, and hands it back if the server write fails.
+- Apple: **Tappable links in plain-text bodies.** URLs and email addresses in a
+  `text/plain` message body rendered as inert text — none of the reader's link
+  handling reached them, because the plain path drew a bare `Text`. They are now
+  detected, styled as links, and activate the same link menu (copy text / copy
+  address / open / share) the HTML path offers.
+- Apple: **Unread dot color on selected rows.** The unread indicator no
+  longer switches to white when its row is selected — white was nearly
+  invisible against the light-mode selection highlight. It now stays the
+  brand color everywhere, which reads fine against the highlight since the
+  dot itself stopped using the selection accent.
+
+## [0.11.18] - 2026-07-28
+
+### Changed
+- **Hash-aware Lambda API deploys.** The deploy step now fetches the
+  deployed function inventory with a single `list-functions` call
+  (replacing ~57 serial per-function probes) and skips any function
+  whose freshly built zip is byte-identical to the running code, as
+  judged by CodeSha256. A push no longer cold-starts the entire API
+  surface by redeploying unchanged code, and the lambda-api job drops
+  from roughly three minutes to about half that on a typical change.
+
+## [0.11.17] - 2026-07-28
+
+### Fixed
+- **Suspend/revoke/reinstate no longer 500 on pre-rebuild addresses.** The
+  handlers used the zone ID cached on the DynamoDB row at address-creation
+  time, so rows created before a hosted zone was recreated pointed Route 53
+  calls at a zone that no longer exists (`NoSuchHostedZone`). The zone is now
+  always resolved from the live `DOMAINS` mapping, and the vestigial
+  `zone-id` attribute is no longer written or read anywhere; leftover values
+  on existing rows are inert.
+
+## [0.11.16] - 2026-07-28
+
+### Changed
+- Apple: **Address swipe gestures reorganized.** Swiping an address row
+  left-to-right now reveals suspend/reinstate and revoke, with
+  suspend/reinstate as the full-swipe default (revoke still asks for
+  confirmation); favorite/unfavorite moved to its own right-to-left
+  swipe. Splitting the actions across the two edges also keeps them
+  from overflowing a narrow address pane.
+
+### Fixed
+- **`suspend_address` / `reinstate_address` import failure.** Both new
+  Lambdas shipped with an empty `requirements.txt`, so the build bundled
+  `helper.py` (whose `imap_session` dependency imports `imapclient`) without
+  the pinned third-party packages, and every invocation died with
+  `Runtime.ImportModuleError: No module named 'imapclient'`. They now pin
+  the same hashed dependency set as the other helper-importing endpoints.
+
+## [0.11.15] - 2026-07-28
+
+### Added
+- **Address suspend and reinstate.** New `/suspend_address` and
+  `/reinstate_address` endpoints withdraw an address's DNS records (MX, SPF,
+  DKIM, DMARC, BIMI) while keeping the address in DynamoDB and the mail-tier
+  runtime configuration, and republish them to reverse the suspension. DNS
+  records shared with an active co-tenant address on the same subdomain are
+  left alone. The React rail exposes a pause/play row action (suspend behind a
+  confirmation dialog, reinstate immediate) with suspended rows dimmed, the
+  admin address list shows a suspended marker, and `/list` and
+  `/list_addresses_admin` now return a `suspended` flag on each row.
+- Apple: **Suspend and reinstate addresses.** The address list's swipe
+  actions and context menu can now suspend an address (its DNS records are
+  withdrawn so inbound mail stops, behind a confirmation dialog) and
+  reinstate it later (immediate). Suspended rows are dimmed with an orange
+  "Suspended" caption. The watch app gets the same swipe action and shows
+  the suspended state in its list and large-type detail view.
+
+### Changed
+- Apple: **Brand color for message links and unread dots.** Links in the
+  message reader and the unread indicator in the message list now use the
+  Cabalmail forest green instead of the platform blue. In "Original" render
+  mode the green is only a default — any link color the sender's own CSS
+  declares still wins, so author fidelity is unchanged.
+
+### Fixed
+- Apple: **Silent Send when the message editor fails to load.** Compose now
+  announces a dead editor bridge the moment the window opens and stops
+  offering Send, instead of leaving an enabled button whose taps did nothing
+  — the send was already being refused, just invisibly. On iPhone the compose
+  error banner also moved to the top of the form, where it can no longer hide
+  below the body editor.
+- **First Send click with an uncommitted recipient in the React composer.**
+  Typing an address and clicking Send without first pressing Enter was
+  rejected with "Please specify at least one recipient." even though the
+  address was visibly in the field, and an uncommitted second address was
+  dropped from the message entirely. Send now folds the pending input text
+  into the recipient lists before validating and sending, and commits it to
+  the row it was typed in rather than always to To.
+- Apple: **Multi-select on iPad and Vision Pro.** The message list's Select
+  button did nothing on wide layouts, leaving bulk Archive / Move / Mark
+  read-unread / Flag unreachable there — it drove a view-local `EditMode`
+  that the virtualized list has no way to render. Every touch layout now
+  shares the checkbox selection mode iPhone already used.
+- **Orphaned BIMI record on revoke.** Revoking a subdomain's last address
+  deleted its MX/SPF/DKIM/DMARC records but left the `default._bimi` TXT
+  record behind (published since the BIMI Phase C rollout). Revoke now
+  removes the full record set, and builds deletes from the records actually
+  live in the zone, so addresses predating BIMI (or partially-removed sets)
+  no longer risk failing the whole change batch.
+- **Untracked committed `__pycache__/*.pyc` bytecode files.** Two stale
+  handler artifacts (`lambda/api/delete_folder/` and
+  `lambda/api/new_folder/`) were on `stage`; `.gitignore` now covers
+  `__pycache__/` repo-wide so locally exercising a handler with
+  `python -m function` cannot re-add them.
+
+### Security
+- **Bumped `postcss` (transitive, via `vite`) to 8.5.23 in `react/admin`.**
+  Pins a fix for a path-traversal issue in previous-source-map auto-loading
+  that could disclose arbitrary `.map` files.
+
+## [0.11.14] - 2026-07-27
+
+### Added
+- **CloudFront access logs for both distributions.** The admin app and
+  the public front door now deliver access logs to the shared
+  `cabal-s3-access-logs-<account>` bucket, alongside the S3 server access
+  logs and under the same 180-day lifecycle. Delivery uses CloudWatch
+  vended-log delivery (CloudFront standard logging v2, new
+  `modules/cloudfront_logs`) rather than the distribution's legacy
+  `logging_config` block: the legacy path authorizes delivery with a
+  bucket ACL grant, and every bucket in the stack has ACLs disabled, so
+  it would have meant re-enabling ACLs on a log bucket. The v2 path
+  authorizes with a bucket policy instead and needs none. Delivery
+  resources live in us-east-1, which CloudFront requires, while the
+  destination bucket stays in the stack region.
+- **Multipart-upload cleanup on the cache bucket.** The
+  `cache.<control_domain>` lifecycle configuration now aborts multipart
+  uploads that have not completed after seven days, matching the two
+  access-log buckets. Attachment staging (presigned PUTs from the admin
+  client) and Lambda-side uploads both use multipart above boto3's
+  threshold, and parts left behind by an interrupted upload are billed
+  while remaining invisible in an object listing. Clears `CKV_AWS_300`
+  from the scanner baseline.
+
+### Changed
+- **Inverted logo on the web app's auth screens.** The sign-in, sign-up,
+  and other pre-login gates now render the logo mark in the accent color
+  directly on the page background, matching the inverted treatment the
+  top bar already uses.
+- **Inverted web-app top-bar logo.** The logo mark in the admin app's top
+  bar now renders in the user's chosen accent color directly on the bar
+  background, instead of surface-colored glyphs on an accent-filled tile —
+  matching the logo treatment in the Apple clients.
+- **Security-group rule descriptions, and an audit of the scanner decay
+  backlog.** The three rules that lacked one now describe what they carry:
+  the NAT instance's masquerade egress and VPC ingress, and the NAT AMI
+  Image Builder's egress. Re-checked the rest of the decay list against
+  what the scanners actually report and reclassified three entries that no
+  longer described real gaps - EBS optimization on the NAT instance (t3 is
+  Nitro-based, so it is already on and cannot be disabled), ALB access
+  logging (only instance is the monitoring tier, disabled in every
+  environment), and API Gateway create-before-destroy (does not mitigate
+  the `execute-api` id change that makes a replacement disruptive).
+  CloudFront access logging remains open and now records the bucket-ACL
+  constraint that blocks the obvious fix. Clears `CKV_AWS_23`,
+  `AWS-0124`, and `CKV_AWS_135` from the gate.
+- **Triage dashboard: `accepted` and `needs-retest` share one column.** The
+  fixer's reconcile step swaps one label for the other when a fix goes live,
+  so the two are mutually exclusive; they now render as a single "queued"
+  column whose pill names the active label, the same grouping the pre-triage
+  labels use. The Accept button is disabled while either label is present
+  (previously only `accepted`), with `--accept-block-labels` to repoint the
+  extra blockers.
+- **Triage dashboard covers the verification flow.** Issues filed by the human
+  or a coding agent enter the tester/fixer cycle via a `needs-verification`
+  label, which the daily tester resolves to `verified` or `verify-blocked`;
+  the dashboard previously keyed only on `tester-found` and missed them.
+  Columns now represent pipeline states rather than single labels: the four
+  pre-triage labels share one "triage" column whose pill (verifying / found /
+  verified / blocked) shows where verification stands, and `--stages` accepts
+  `name=label|label` groupings.
+
+### Fixed
+- **Stale gate status in the scanner baseline record.**
+  `terraform/infra/BASELINE.md` still said the IaC gate was "soft-fail
+  until Phase 3" long after Phase 3 shipped - the workflow jobs it
+  describes are commented `GATING (Phase 3)` and genuinely block the
+  apply. It now states the real posture, names the mechanism (scanner
+  jobs in `approval`'s `needs:` and `if:`, `apply` behind `approval`,
+  plus the baseline-drift step), and records that the decay backlog is
+  complete, so the header matches the now-empty decay table.
+- Apple: **Compose no longer hangs or sends an empty body when the rich-text
+  editor dies.** The WebKit bridge that assembles the message body now reports
+  its own death — a `ready` handshake that never arrives, a failed boot script,
+  or a web content process that stops after boot — instead of leaving Send
+  spinning forever or converting the message to an empty string. Send refuses
+  with an explanatory banner, and draft pushes to the server are skipped rather
+  than replacing a good copy with an empty one.
+- **Describable answer when a folder can't be deleted.** Deleting a folder
+  that is already gone (removed by another client, or never there) returned a
+  bodiless 502 the client could say nothing about. The API now answers 404
+  naming the folder, maps any other IMAP-level failure to a 500 with a real
+  message, and the folder rail shows what the API said instead of its generic
+  line.
+- **Unreachable MFA setup screen for locked-out admins.** The session
+  check ran on every render and bounced any logged-out view that was not
+  on its allowlist back to the login form, and `MfaSetup` was missing
+  from it — so an admin blocked by the MFA gate never saw the
+  self-service enrollment screen the gate routes them to. Reloading that
+  screen still returns to login, since the password it re-authenticates
+  with is deliberately never persisted.
+- **Creating a folder that already exists.** The API turned the server's
+  rejection into an unhandled exception, so the request failed as a 502 with a
+  traceback and the web app had nothing it could show. It now answers 409 and
+  names the folder ("A folder called qa0726 already exists"), any other
+  IMAP-level create failure answers a describable 500, and the folder rail
+  surfaces whichever message the API sent instead of a generic line.
+- **Message timestamps in the web app.** Envelope dates arrive from the API as
+  naive UTC, and the browser was parsing them as local time, so every reader
+  header and every relative age in the message list was off by the viewer's UTC
+  offset — a message sent moments ago could read as hours in the future, and
+  yesterday evening's mail showed today's date. Naive date-times are now pinned
+  to UTC before formatting; values that carry a zone are untouched.
+- Apple: **Readable HTML bodies in "Original" mode.** The reader now injects a
+  `width=device-width` viewport meta on both render paths, not just in Reader
+  mode. Without it WebKit laid messages out at its 980pt desktop viewport and
+  scaled the result down to the pane — about 40% on a phone — so any message
+  that ships no viewport of its own was legible only by pinch-zoom. A sender's
+  own viewport still wins, and the injection never displaces a `<!DOCTYPE>`, so
+  author CSS renders exactly as before.
+- **New folders are subscribed when they are created.** Dovecot does not
+  subscribe on create, so a folder created from the web app never appeared in
+  any client's subscribed list and was never fetched proactively — the native
+  clients only avoided it by subscribing themselves afterwards. The API now
+  subscribes what it creates, which pairs with folder deletion already
+  unsubscribing what it removes.
+
+### Security
+- **Patched `postcss` in `react/admin`.** Bumped the build-tooling `postcss`
+  dependency (pulled in transitively by Vite) from 8.5.15 to 8.5.23, past the
+  8.5.18 fix for a path-traversal bug in previous-source-map auto-loading that
+  could disclose arbitrary `.map` files.
+- Apple: **No silent fetch when long-pressing a link in the reader.** WebKit's
+  stock link preview is disabled, so a long-press no longer loads the target
+  page — a third-party request the remote-content gate one button away in the
+  same toolbar is meant to prevent, and a read receipt for anyone sending a
+  uniquely-keyed link. Copy Link Text / Copy Link Address / Open in Browser /
+  Share are unaffected; they hang off a primary tap.
+- **Dropped the sendmail package's throwaway self-signed cert/key from the
+  `imap`, `smtp-in`, and `smtp-out` images.** The `sendmail` RPM generates a
+  self-signed `/etc/pki/tls/private/sendmail.key` during install; it was
+  never read (the real cert/key are injected at runtime under a different
+  filename) but still shipped in the image and tripped secret scanners.
+
 ## [0.11.13] - 2026-07-26
 
 ### Changed

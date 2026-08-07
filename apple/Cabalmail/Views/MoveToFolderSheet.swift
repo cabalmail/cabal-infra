@@ -143,25 +143,16 @@ struct MoveToFolderSheet: View {
     }
 
     /// Subscribed folders minus the source and any `\Noselect` containers,
-    /// sorted with INBOX pinned first, then user folders in tree order, then
-    /// the remaining system folders. Same shape as the sidebar so the
-    /// picker order doesn't surprise.
+    /// then the shared sidebar order so the picker doesn't surprise. The
+    /// `\Noselect` filter runs here rather than through
+    /// `dropNoselectUserFolders` because the sheet drops such containers
+    /// even when they carry a system name.
     private func sortForPicker(_ input: [Folder]) -> [Folder] {
         let candidates = input.filter { folder in
             folder.isSubscribed
                 && folder.path != currentFolder.path
                 && !folder.attributes.contains("\\Noselect")
         }
-        let systemNames: Set<String> = ["Sent", "Drafts", "Trash", "Junk", "Archive"]
-        let inbox = candidates.filter { folder in
-            folder.path.caseInsensitiveCompare("INBOX") == .orderedSame
-        }
-        let system = candidates
-            .filter { systemNames.contains($0.path) }
-            .sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
-        let userFolders = candidates.filter { folder in
-            !inbox.contains(folder) && !system.contains(folder)
-        }
-        return inbox + FolderTree.sortUserTree(userFolders) + system
+        return FolderTree.sidebarOrder(candidates)
     }
 }

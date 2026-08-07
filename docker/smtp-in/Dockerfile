@@ -6,7 +6,7 @@
 # AL2023, so --with-spf enables OpenDMARC's internal SPF implementation
 # (consumed via SPFSelfValidate in opendmarc.conf). Phase 1 of
 # docs/0.10.x/inbound-auth-verification-plan.md.
-FROM amazonlinux:2023@sha256:0c74e9fbba754003cfa179fd5cc65be7790d7248443276948704b8a858b298e5 AS opendmarc-build
+FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568 AS opendmarc-build
 
 RUN dnf install -y \
       gcc make autoconf automake libtool \
@@ -31,7 +31,7 @@ RUN curl -fsSL -o /tmp/opendmarc.tar.gz \
     && make DESTDIR=/stage install
 
 # ── Runtime stage ─────────────────────────────────────────────────────
-FROM amazonlinux:2023@sha256:0c74e9fbba754003cfa179fd5cc65be7790d7248443276948704b8a858b298e5
+FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568
 
 # System packages. opendkim runs in verify-only mode as the first
 # inbound-auth milter; sendmail-milter provides the libmilter shared
@@ -50,7 +50,12 @@ RUN dnf install -y \
     && pip install supervisor \
     && dnf clean all \
     && sed -i 's/^UID_MAX.*/UID_MAX                 2147483647/' /etc/login.defs \
-    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs
+    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs \
+    # The sendmail RPM's %post scriptlet generates a throwaway self-signed
+    # cert/key here on every install; entrypoint.sh always overwrites the
+    # real TLS_CERT/TLS_KEY under different filenames, so this baked-in
+    # key is unused and would flag as a leaked private key.
+    && rm -f /etc/pki/tls/private/sendmail.key /etc/pki/tls/certs/sendmail.pem
 
 # OpenDMARC binary + library from the builder stage (opendmarc-check and
 # the perl reporting tools are deliberately not copied), plus a service

@@ -92,7 +92,10 @@ function OverflowMenu({
     };
     const onKey = (e) => {
       if (e.key === 'Escape') {
+        // Capture phase + stopPropagation so Escape closes this menu only,
+        // not the reader behind it (useKeyboardShortcuts also listens).
         e.preventDefault();
+        e.stopPropagation();
         close();
         return;
       }
@@ -118,10 +121,10 @@ function OverflowMenu({
       }
     };
     document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
     };
   }, [open, close]);
 

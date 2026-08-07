@@ -4,7 +4,7 @@ import CabalmailKit
 // Row rendering and per-row affordances for `MessageListView`. Lives in
 // a same-module extension so the primary view body stays under
 // SwiftLint's `type_body_length` cap. Holds:
-//   - `row(for:model:isSelected:)` — list-row content (drag + tag)
+//   - `row(for:model:orderedVisible:)` — list-row content (drag + tag)
 //   - `rowContextMenu` — the per-row long-press / right-click menu
 //   - `disposeSwipe` / `toggleReadSwipe` — `SwipeActionSpec`s the
 //     `SwipeActionRow` wrapper reveals on a trailing / leading swipe
@@ -30,32 +30,35 @@ extension MessageListView {
     func row(
         for envelope: Envelope,
         model: MessageListViewModel,
-        isSelected: Bool,
         orderedVisible: [Envelope]
     ) -> some View {
         let bulkMode = model.bulkMode
         let isChecked = model.selectedUIDs.contains(envelope.uid)
         withRowContextMenu(for: envelope, model: model) {
             Group {
-                if isWideLayout {
-                    wideRow(
-                        for: envelope,
-                        isSelected: isSelected,
-                        model: model,
-                        orderedVisible: orderedVisible
-                    )
-                } else if bulkMode {
+                // Selection mode first, on every touch layout: the checkbox
+                // row is what makes multi-select visible, and the wide row
+                // can't draw it (it leans on a native list's selection
+                // circles, which the virtualized `LazyVStack` doesn't have).
+                if bulkMode {
                     // No .tag() while in bulk mode — the list's selection
                     // binding drives the detail pane, and we don't want a
                     // checkbox tap to also pop the reader.
                     Button {
                         model.toggleSelection(envelope)
                     } label: {
-                        MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+                        MessageRow(envelope: envelope, isChecked: isChecked, bulkMode: true)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("message.checkbox.\(envelope.uid)")
+                } else if isWideLayout {
+                    wideRow(
+                        for: envelope,
+                        model: model,
+                        orderedVisible: orderedVisible
+                    )
                 } else {
-                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                    MessageRow(envelope: envelope, isChecked: false, bulkMode: false)
                         .tag(envelope)
                 }
             }
@@ -91,10 +94,9 @@ extension MessageListView {
         }
     }
 
-    /// The wide-layout (native multi-select) row: a UID-tagged `MessageRow` so
-    /// the list's `Set<UInt32>` binding owns selection and the system draws the
-    /// highlight (and selection circles in iPad edit mode). `isSelected` is set
-    /// membership, used only to keep the unread dot legible. On iOS it also
+    /// The wide-layout single-selection row: a UID-tagged `MessageRow` whose
+    /// highlight follows `selectedUIDs`. Multi-select does NOT come through
+    /// here — `bulkMode` takes the checkbox branch above. On iOS it also
     /// carries the hardware-keyboard shift / command-click handling SwiftUI
     /// doesn't wire into the native list there; plain taps fall through to the
     /// list. Kept beside `MessageRow` (which is file-private) and out of
@@ -102,11 +104,10 @@ extension MessageListView {
     @ViewBuilder
     func wideRow(
         for envelope: Envelope,
-        isSelected: Bool,
         model: MessageListViewModel,
         orderedVisible: [Envelope]
     ) -> some View {
-        MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+        MessageRow(envelope: envelope, isChecked: false, bulkMode: false)
             .tag(envelope.uid)
             #if os(iOS)
             .gesture(ModifierClickGesture { kind in
@@ -220,11 +221,21 @@ extension MessageListView {
         // menu is where the user reaches for the other one. Inside Trash
         // "move to Trash" is meaningless, so the destructive item becomes
         // Delete Forever and stages the same confirmation as the swipe;
-        // Archive stays available as the rescue path.
-        Button {
-            Task { await model.disposeMessages(uids: [envelope.uid], action: .archive) }
-        } label: {
-            Label("Archive", systemImage: "archivebox")
+        // Archive stays available as the rescue path. Inside Archive the
+        // archive item is the one that has nowhere to go, so it becomes
+        // Restore.
+        if model.archiveIntent == .restore {
+            Button {
+                Task { await model.moveTo(envelope, destination: FolderTree.inboxPath) }
+            } label: {
+                restoreActionLabel
+            }
+        } else {
+            Button {
+                Task { await model.disposeMessages(uids: [envelope.uid], action: .archive) }
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
         }
         if model.isTrashFolder {
             Button(role: .destructive) {
@@ -241,29 +252,45 @@ extension MessageListView {
         }
     }
 
-    /// Trailing destructive swipe spec: dispose (Archive/Trash) everywhere
-    /// except inside Trash, where delete means gone forever and stages the
-    /// confirmation dialog instead of acting directly. Same decision as the
-    /// context menu's destructive item; consumed by `SwipeActionRow`.
+    /// Trailing swipe spec: dispose (Archive/Trash) in an ordinary folder,
+    /// Delete Forever inside Trash (staging the confirmation dialog instead
+    /// of acting directly), Restore inside Archive — where an archive would
+    /// otherwise move the message onto its own folder. Same decisions as the
+    /// context menu's items; consumed by `SwipeActionRow`.
     func disposeSwipe(for envelope: Envelope, model: MessageListViewModel) -> SwipeActionSpec {
-        if model.isTrashFolder {
+        switch model.disposeIntent {
+        case .purge:
             return SwipeActionSpec(
                 systemImage: "trash.slash",
                 title: "Delete Forever",
                 tint: .red,
-                role: .destructive
+                role: .destructive,
+                identifier: "message.swipe.dispose"
             ) {
                 purgeCandidate = PurgeCandidate(uids: [envelope.uid])
             }
-        }
-        let action = model.disposeAction
-        return SwipeActionSpec(
-            systemImage: action == .archive ? "archivebox" : "trash",
-            title: action == .archive ? "Archive" : "Trash",
-            tint: .red,
-            role: .destructive
-        ) {
-            Task { await model.dispose(envelope) }
+        case .restore:
+            // Restore puts the message back in the inbox rather than
+            // removing it from anywhere, so it drops the destructive role
+            // and red tint the other two carry.
+            return SwipeActionSpec(
+                systemImage: restoreSymbol,
+                title: "Restore",
+                tint: .blue,
+                identifier: "message.swipe.dispose"
+            ) {
+                Task { await model.moveTo(envelope, destination: FolderTree.inboxPath) }
+            }
+        case .move(let action):
+            return SwipeActionSpec(
+                systemImage: action == .archive ? "archivebox" : "trash",
+                title: action == .archive ? "Archive" : "Trash",
+                tint: .red,
+                role: .destructive,
+                identifier: "message.swipe.dispose"
+            ) {
+                Task { await model.dispose(envelope) }
+            }
         }
     }
 
@@ -274,7 +301,8 @@ extension MessageListView {
         return SwipeActionSpec(
             systemImage: isSeen ? "envelope.badge" : "envelope.open",
             title: isSeen ? "Unread" : "Read",
-            tint: .blue
+            tint: .blue,
+            identifier: "message.swipe.toggleRead"
         ) {
             Task { await model.toggleSeen(envelope) }
         }
@@ -287,6 +315,18 @@ extension MessageListView {
     var purgeActionLabel: some View {
         Label("Delete Forever", systemImage: "trash.slash")
     }
+
+    /// Archive affordance label inside the Archive folder, where archiving
+    /// has nowhere to send the message and the action puts it back in the
+    /// inbox instead. Shared by the row / selection context menus.
+    @ViewBuilder
+    var restoreActionLabel: some View {
+        Label("Restore", systemImage: restoreSymbol)
+    }
+
+    /// One symbol for every Restore affordance — menus, swipe, and the
+    /// reader's toolbar button.
+    var restoreSymbol: String { "tray.and.arrow.up" }
 
     @ViewBuilder
     func addressFilterChip(_ address: String) -> some View {
@@ -329,7 +369,6 @@ extension MessageListView {
 
 private struct MessageRow: View {
     let envelope: Envelope
-    let isSelected: Bool
     let isChecked: Bool
     let bulkMode: Bool
 
@@ -412,15 +451,13 @@ private struct MessageRow: View {
         .task(id: senderKey) { await hydrateContactName() }
     }
 
-    // Read/unread indicator. We deliberately avoid `Color.accentColor` here:
-    // on iOS the accent is system blue, which is also the row-selection
-    // highlight, so the dot becomes invisible the moment the user picks the
-    // message. A fixed `.blue` keeps the conventional look against the list
-    // background, and switching to `.white` when the row is selected keeps
-    // the dot legible against the highlight on every platform.
+    // Read/unread indicator, painted in the brand forest green rather than
+    // the platform blue. The asset-catalog color is pinned explicitly rather
+    // than taken from `Color.accentColor`, which macOS repaints with the
+    // user's system accent whenever that isn't "multicolor" (same reasoning
+    // as `iconForeground` in FolderListView+Helpers.swift).
     private var unreadDotColor: Color {
-        guard !envelope.flags.contains(.seen) else { return .clear }
-        return isSelected ? .white : .blue
+        envelope.flags.contains(.seen) ? .clear : Color("AccentColor")
     }
 
     /// The row's first line: `source -> destination`. The destination is the

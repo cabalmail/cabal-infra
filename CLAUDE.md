@@ -42,10 +42,6 @@ Some features are too expensive to run in multiple environments and ship via a f
 
 If any of these is unclear, route through stage first.
 
-### Claude automation
-
-The `claude` issue label triggers an automated PR. PRs target `stage`, never `main`. Promotion to `main` is always a deliberate second step the human performs.
-
 ## Repository Structure
 
 ```
@@ -64,7 +60,7 @@ docs/               Architecture docs, migration plans, setup guides
 
 ### Docs convention
 
-Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.9.x/`) are forward-looking plans for the corresponding roadmap version - design proposals written before or during implementation. Once a feature ships, its as-implemented documentation lives at the top level of `docs/`, not inside the version directory. When you write operator-facing or reference documentation for something that has already shipped, put it in `docs/<topic>.md` and link it from the relevant index (`docs/operations.md`, `docs/setup.md`, etc.). Leave the version directory alone; it is part of the historical planning record.
+Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.9.x/`) are forward-looking plans for the corresponding roadmap version - design proposals written before or during implementation. Once a feature ships, its as-implemented documentation lives at the top level of `docs/`, not inside the version directory. When you write operator-facing or reference documentation for something that has already shipped, put it in `docs/<topic>.md` and link it from the relevant index (`docs/operations.md`, `docs/setup.md`, etc.). Leave the version directory alone; it is part of the historical planning record. One exception: when a plan's claim is later proven wrong, add a dated erratum blockquote (`> **Erratum (YYYY-MM-DD):** ...`) immediately after the paragraph or bullet containing the falsified claim - at the top of the file if the whole doc is invalidated, never as a trailing section (windowed reads miss it). Never rewrite or delete the original text. When an erratum contradicts its surrounding text, the erratum is the corrected record - trust it.
 
 ## Build/Lint/Test Commands
 
@@ -112,7 +108,6 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 | `destroy_terraform.yml` | Manual (`workflow_dispatch`) | Tears down `terraform/infra` for the selected environment. |
 | `apple.yml` | `apple/**` | Builds and tests the iOS app on a macOS runner. Deploys nothing to AWS. |
 | `dependabot.yml` | Schedule (daily) | Dependency update PRs. |
-| `claude.yml` | `@claude` mention | Claude Code action for PR review. |
 Deploy workflows select environment based on branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys (see "Branches and environments" above).
 
 ## Architecture Details

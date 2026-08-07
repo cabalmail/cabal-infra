@@ -201,6 +201,22 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    suspend_address = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    reinstate_address = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     set_favorite = {
       runtime = "python3.13"
 

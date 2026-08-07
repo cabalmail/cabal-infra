@@ -27,12 +27,19 @@ actor FakeImapClient: ImapClient {
         let markSeen: Bool
     }
 
+    struct PurgeCall {
+        let folder: String
+        let uids: Set<UInt32>
+    }
+
     private(set) var flagCalls: [FlagCall] = []
     private(set) var moveCalls: [MoveCall] = []
+    private(set) var purgeCalls: [PurgeCall] = []
     // FIFO scripts; an empty queue means "succeed". Seeded via the
     // scriptFlagResults / scriptMoveResults helpers below.
     private var flagResults: [Result<Void, Error>] = []
     private var moveResults: [Result<Void, Error>] = []
+    private var purgeResults: [Result<Void, Error>] = []
 
     func scriptFlagResults(_ results: [Result<Void, Error>]) {
         flagResults = results
@@ -40,6 +47,10 @@ actor FakeImapClient: ImapClient {
 
     func scriptMoveResults(_ results: [Result<Void, Error>]) {
         moveResults = results
+    }
+
+    func scriptPurgeResults(_ results: [Result<Void, Error>]) {
+        purgeResults = results
     }
 
     // Initial-load script (status + top page), used by the loadInitial
@@ -50,6 +61,19 @@ actor FakeImapClient: ImapClient {
     func scriptInitialLoad(status: FolderStatus, topEnvelopes: [Envelope]) {
         statusResult = status
         topEnvelopesResult = topEnvelopes
+    }
+
+    // Structured-search script (one page; `searchEnvelopesChunked`'s
+    // default implementation stops when `nextCursor` is nil).
+    private var searchResult: SearchResult?
+
+    func scriptSearch(_ result: SearchResult) {
+        searchResult = result
+    }
+
+    func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
+        guard let searchResult else { return try trap() }
+        return searchResult
     }
 
     func setFlags(
@@ -72,6 +96,13 @@ actor FakeImapClient: ImapClient {
         ))
         if !moveResults.isEmpty {
             try moveResults.removeFirst().get()
+        }
+    }
+
+    func purge(folder: String, uids: [UInt32]) async throws {
+        purgeCalls.append(PurgeCall(folder: folder, uids: Set(uids)))
+        if !purgeResults.isEmpty {
+            try purgeResults.removeFirst().get()
         }
     }
 
@@ -212,10 +243,36 @@ enum TestFixtures {
         return model
     }
 
-    static func makeEnvelope(uid: UInt32, flags: Set<Flag> = []) -> Envelope {
+    /// Compose model over the fake transport, with a scratch draft store.
+    /// A real `RichTextEditorController` (and its WKWebView) comes up inside
+    /// it; the bridge-health tests drive the failure hooks directly rather
+    /// than depending on whether `editor.html` loads in the test host.
+    @MainActor
+    static func makeComposeModel(
+        seed: Draft = Draft(),
+        imap: FakeImapClient = FakeImapClient()
+    ) throws -> ComposeViewModel {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cabalmail-compose-tests-\(UUID().uuidString)")
+        return ComposeViewModel(
+            seed: seed,
+            client: try makeClient(imap: imap),
+            draftStore: try DraftStore(directory: tmp),
+            preferences: Preferences(store: InMemoryPreferenceStore()),
+            onClose: {}
+        )
+    }
+
+    static func makeEnvelope(
+        uid: UInt32,
+        flags: Set<Flag> = [],
+        messageId: String? = nil,
+        subject: String? = nil
+    ) -> Envelope {
         Envelope(
             uid: uid,
-            subject: "Subject \(uid)",
+            messageId: messageId,
+            subject: subject ?? "Subject \(uid)",
             from: [EmailAddress(name: "Sender", mailbox: "sender\(uid)", host: "example.com")],
             flags: flags
         )

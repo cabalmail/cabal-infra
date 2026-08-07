@@ -150,6 +150,12 @@
   font-size: 13px;
 }
 
+.admin-addresses__suspended {
+  color: var(--ink-quiet);
+  font-style: italic;
+  font-size: 12px;
+}
+
 .admin-addresses__chip {
   display: inline-flex;
   align-items: center;

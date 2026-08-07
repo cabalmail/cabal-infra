@@ -15,7 +15,7 @@ let nseLog = Logger(subsystem: "com.cabalmail.nse", category: "enrich")
 /// The APNs payload deliberately carries no message content — just
 /// `{"aps": {"alert": "New mail", "mutable-content": 1, ...},
 ///   "msgRef": {"folder": "INBOX", "uid": 4271, "msg_id": "<...>"}}`
-/// (see docs/0.11.0/push-notifications.md). This extension wakes on each
+/// (see docs/0.11.x/push-notifications.md). This extension wakes on each
 /// delivery, calls the `/push_envelope` Lambda with the Cognito ID token
 /// the main app mirrors for it, and rewrites the alert into
 /// sender / subject / snippet. Any failure — no credentials, expired
