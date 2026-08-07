@@ -50,6 +50,22 @@ Envelope payloads from `/list_envelopes` and `/search_envelopes` carry the RFC 5
 
 The Apple clients get new-mail notifications through APNs without Apple's infrastructure ever seeing message content: procmail enqueues a content-free wake signal per delivery, the `push_dispatch` Lambda fans it out to the user's registered devices, and each device enriches the alert locally via `/push_envelope` before display. Push is inert until an APNs auth key is provisioned per environment. See [Push notifications](./push-notifications.md) for the architecture, the key provisioning and rotation runbooks, and the operational notes (DLQ, metrics, token hygiene).
 
+# BIMI
+
+Clients display senders' BIMI logos (fetched and sanitized server-side by the `fetch_bimi` Lambda), and every minted address publishes a `default._bimi` record pointing at your logo so receivers can display it for your outbound mail. See [BIMI](./bimi.md) for the fetch pipeline's safety posture, how to swap in your own logo, and the VMC caveat.
+
+# Inbound sender authentication
+
+The smtp-in tier runs OpenDKIM and OpenDMARC milters that verify SPF, DKIM, and DMARC on every inbound message and stamp the verdicts into an `Authentication-Results` header under the control domain's authserv-id. The clients display the verdicts; nothing is rejected because of them. See [Inbound sender authentication](./inbound-auth.md) for the milter chain and the header trust rule.
+
+# Durable relay queues
+
+Both SMTP tiers keep sendmail's deferred-mail queue on shared EFS, so a task replacement cannot destroy queued mail — a sibling or successor task drains whatever was left behind. The roughly-15-minute sendmail restart cadence in the tier logs is the intentional reconfiguration fallback, not a crash loop. See [Durable relay queues](./mail-queues.md).
+
+# IMAP deploys
+
+Every IMAP image roll has a deliberate zero-task window (the service is capped at one task). Deploys pre-flight the new image before touching the serving task, raise a planned-maintenance flag that turns Lambda errors into a friendly 503 for the ~1–2 minutes of the roll, and fail back with the old task still serving if the new image is bad. Sends are unaffected. See [IMAP deploys](./imap-deploys.md) for what operators and users see and how to distinguish the window from a real outage.
+
 # IMAP full-text search index
 
 The `imap` container ships [dovecot-fts-flatcurve](https://github.com/slusarz/dovecot-fts-flatcurve) (pinned upstream tag and commit baked into `docker/imap/Dockerfile`, licence preserved at `/usr/share/doc/fts-flatcurve/` inside the image). The plugin gives `/search_envelopes` an inverted index instead of a sequential body scan; configuration lives in `docker/imap/configs/dovecot/90-fts.conf`.

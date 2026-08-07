@@ -29,6 +29,7 @@ Cabalmail is a suite of infrastructure code ([Terraform](https://www.terraform.i
 * SMTP submission host
 * Webmail client
 * Administrative interface for reading and composing mail, and for managing addresses
+* Native Apple clients (iPhone, iPad, Mac, Apple Vision Pro, and an Apple Watch companion)
 * Private cloud network
 * DNS
 * Other supporting infrastructure

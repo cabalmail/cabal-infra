@@ -117,6 +117,16 @@ Every handler catches `ValueError` from these validators and returns a 400 with 
 - Admin mutations (`/delete_user`, `/disable_user`, `/enable_user`, `/set_user_domain_access`, `/new_address_admin`) gain a per-caller token bucket implemented against a small DynamoDB counter table (`cabal-rate-limits`, TTL 1 hour) or — simpler — a Cognito client-app usage-plan in API Gateway with an `x-api-key`-by-cognito-username binding. Recommendation: start with DynamoDB; revisit if the table contention becomes measurable. Ceiling: 30 mutations per minute per caller.
 - Audit log: every admin mutation emits a structured JSON log line with `caller`, `action`, `target`, `outcome`. CloudWatch Logs Insights query in the runbook. Optional: pipe to a separate `audit` log group via `subscription_filter` for longer retention. Out of scope for the first ship.
 - Replace the `cabal-addresses.scan(FilterExpression=...)` in `/list` with a `cabal-addresses.query` against a new GSI `(user, address)` so the cost is O(addresses-owned), not O(table).
+
+  > **Erratum (2026-08-07):** The GSI was never added and the scan
+  > deliberately stayed. Multi-user address assignment stores all assignees
+  > slash-joined in the single `user` attribute, so a GSI partitioned on
+  > `user` would file a shared row under `"alice/bob"` and a query for one
+  > assignee would silently miss it; a correct index needs a separate
+  > per-assignee membership table, judged out of scope. `/list` retains the
+  > `contains()`-narrowed scan (see the comment in
+  > `lambda/api/list/function.py`); the GSI entries under "CI changes" and
+  > "Migration sequence" below were likewise never implemented.
 - The `/process_dmarc` per-invocation message ceiling from Phase 1 also counts toward this theme.
 - The `/upload_url` TTL change from Phase 2 also counts toward this theme.
 
