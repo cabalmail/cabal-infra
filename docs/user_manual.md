@@ -2,12 +2,11 @@
 
 Cabalmail gives you one inbox and as many addresses as you want. Create a fresh address every time you hand out your contact information; when one starts attracting spam, revoke it and the spammers lose the ability to reach your servers at all.
 
-There are two clients:
+Use the **native Apple apps** — iPhone, iPad, Mac, and Apple Vision Pro, plus an Apple Watch companion — for day-to-day mail. They carry the full experience: mail, addresses, folders, search, drafts. Android and Linux clients are planned.
 
-- **Native Apple apps** — iPhone, iPad, Mac, and Apple Vision Pro, plus an Apple Watch companion. The full experience: mail, addresses, folders, search, drafts.
-- **The web app** at `https://admin.example.net/` (substituting your control domain) — sign-up, mail, addresses, folders, and the administrator dashboard.
+**Webmail** at `https://admin.example.net/` (substituting your control domain) remains supported, but the admin site is best reserved for account signup, password recovery, and — for administrators — the admin dashboard.
 
-You can also connect any standard mail client over IMAP/SMTP; see [MUA setup](./mua_setup.md).
+Generic mail clients (Thunderbird, Apple Mail, Outlook, …) cannot be connected; there are no public IMAP or SMTP endpoints ([details](./mua_setup.md)).
 
 ## Accounts and signing in
 
