@@ -58,17 +58,15 @@ locals {
     } : {},
   )
 
-  # Target groups are keyed by function, not tier, because smtp-out
-  # maps to two target groups (submission + starttls).
-  #
-  # health_check_interval: only the relay group is attached to a listener
-  # and actually probed by the NLB. The imap/submission/starttls groups
-  # have no listener since the public IMAP/submission removal, so the NLB
-  # never probes them and their interval values are inert (kept against a
-  # future listener). Probe cadence for those tiers - and the deploy/
-  # replacement latency it drives (phase 1 of
-  # docs/0.10.x/imap-deploy-downtime-plan.md) - now lives in the
-  # container-level healthCheck in their task definitions.
+  # Only the relay target group remains. The imap/submission/starttls
+  # groups lost their listeners with the public IMAP/submission removal,
+  # and ECS refuses UpdateService on a service that references a target
+  # group with no associated load balancer, so the detached groups and
+  # their service wiring had to go (those tiers rely on the
+  # container-level healthCheck in their task definitions instead).
+  # Probe cadence for them - and the deploy/replacement latency it
+  # drives (phase 1 of docs/0.10.x/imap-deploy-downtime-plan.md) -
+  # lives there now too.
   # preserve_client_ip: NLB client IP preservation is disabled by default
   # for ip-type TCP targets, which hands sendmail the NLB ENI's private
   # address as the SMTP peer. On the relay TG that broke inbound SPF
@@ -77,17 +75,9 @@ locals {
   # and failed every external message), and it also keyed sendmail's
   # confCONNECTION_RATE_THROTTLE and access_db to a single "client".
   # smtp-in's SG already allows 25 from 0.0.0.0/0, so no SG change rides
-  # along. The imap TG stays at the default: with no IMAP listener on the
-  # NLB it carries no traffic at all, so there is no client IP worth
-  # preserving.
-  # submission/starttls are left at the default too: smtp-out's Dovecot
-  # auth posture is tuned for NLB-fronted peers, and nothing there needs
-  # the real IP today.
+  # along.
   target_groups = {
-    imap       = { port = 143, health_check_interval = 10, preserve_client_ip = null }
-    relay      = { port = 25, health_check_interval = 30, preserve_client_ip = "true" }
-    submission = { port = 465, health_check_interval = 30, preserve_client_ip = null } # Dovecot submission (implicit TLS); NLB passes through to container port 465
-    starttls   = { port = 587, health_check_interval = 30, preserve_client_ip = null }
+    relay = { port = 25, health_check_interval = 30, preserve_client_ip = "true" }
   }
 
   # Flatten per-tier port lists into a map keyed by "tier-port" for

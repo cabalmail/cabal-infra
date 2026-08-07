@@ -1,17 +1,15 @@
 /**
-* NLB target groups (target_type = "ip").
+* NLB target group (target_type = "ip") for the inbound relay - the one
+* mail-plane listener (25) the NLB still serves; MX delivery requires
+* it forever.
 *
-* Only the relay group still has an NLB listener (25, in the ELB module)
-* and is health-checked by the NLB. The imap/submission/starttls groups
-* lost their listeners with the public IMAP/submission removal; the NLB
-* holds their targets in Target.NotInUse and performs no health checks
-* on them. They stay wired to the services anyway because removing a
-* service's load_balancer block forces service replacement - liveness
-* for those tiers comes from the container-level healthCheck in their
-* task definitions instead.
-*
-* Keyed by function (imap, relay, submission, starttls) rather than tier
-* because smtp-out maps to two target groups.
+* The imap/submission/starttls groups are gone. Their listeners went
+* with public IMAP/submission access, a listenerless target group is
+* never health-checked by the NLB (Target.NotInUse), and ECS refuses
+* UpdateService on a service that references a target group with no
+* associated load balancer - so keeping the detached wiring "to avoid
+* churn" bricked every deploy to those tiers. Their liveness signal is
+* the container-level healthCheck in the task definitions.
 */
 
 resource "aws_lb_target_group" "tier" {
