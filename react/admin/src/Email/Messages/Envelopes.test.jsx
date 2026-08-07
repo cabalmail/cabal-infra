@@ -33,7 +33,6 @@ function Harness({
   selected = new Set(),
   bulkMode = false,
   filter = 'all',
-  addressFilter = null,
   ...overrides
 }) {
   const lastSelectedRef = useRef(null);
@@ -52,7 +51,6 @@ function Harness({
           bulkMode={bulk}
           setBulkMode={setBulk}
           filter={filter}
-          addressFilter={addressFilter}
           markUnread={vi.fn()}
           markRead={vi.fn()}
           archive={vi.fn()}

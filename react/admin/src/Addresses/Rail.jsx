@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Pause, Play, Plus, Search, Star, X } from 'lucide-react';
+import { Pause, Play, Plus, Search, Star, X } from 'lucide-react';
 import useApi from '../hooks/useApi';
 import { ADDRESS_LIST } from '../constants';
 import ConfirmDialog from '../ConfirmDialog';
@@ -15,19 +15,19 @@ function sortAddresses(items) {
 }
 
 function AddressRow({
-  a, isActive, isFavorite, onSelect, onToggleFavorite, onCopy, onToggleSuspend, onRevoke,
+  a, isFavorite, onToggleFavorite, onCopy, onToggleSuspend, onRevoke,
 }) {
   return (
     <li
-      className={`addresses-rail__row${isActive ? ' is-active' : ''}${a.suspended ? ' is-suspended' : ''}`}
+      className={`addresses-rail__row${a.suspended ? ' is-suspended' : ''}`}
       title={a.comment ? undefined : a.address}
       data-address={a.address}
       data-comment={a.comment || undefined}
-      onClick={() => onSelect(a.address)}
+      onClick={() => onCopy(a)}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(a.address); }}
-      aria-current={isActive ? 'true' : undefined}
+      aria-label={`Copy ${a.address}`}
+      onKeyDown={(e) => { if (e.key === 'Enter') onCopy(a); }}
     >
       <span className="addresses-rail__address">{a.address}</span>
       <span className="addresses-rail__row-actions" onClick={(e) => e.stopPropagation()}>
@@ -39,15 +39,6 @@ function AddressRow({
           onClick={(e) => onToggleFavorite(e, a)}
         >
           <Star size={12} fill={isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="addresses-rail__row-action"
-          title="Copy address"
-          aria-label={`Copy ${a.address}`}
-          onClick={(e) => onCopy(e, a)}
-        >
-          <Copy size={12} aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -74,7 +65,7 @@ function AddressRow({
   );
 }
 
-function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
+function Addresses({ domains, setMessage }) {
   const api = useApi();
   const [addresses, setAddresses] = useState([]);
   const [query, setQuery] = useState('');
@@ -111,11 +102,6 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
   const favoriteItems = useMemo(() => filtered.filter((a) => a.favorite), [filtered]);
   const showSections = favoriteItems.length > 0;
 
-  const handleSelect = useCallback((address) => {
-    if (typeof onSelectAddress !== 'function') return;
-    onSelectAddress(selectedAddress === address ? null : address);
-  }, [onSelectAddress, selectedAddress]);
-
   const openRequest = useCallback((e) => {
     if (e) e.stopPropagation();
     setShowRequest(true);
@@ -130,8 +116,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
     localStorage.removeItem(ADDRESS_LIST);
     refresh();
     setPendingScroll(newAddress);
-    if (typeof onSelectAddress === 'function') onSelectAddress(newAddress);
-  }, [refresh, onSelectAddress]);
+  }, [refresh]);
 
   // After a successful new-address request, scroll the new row into view
   // once the refreshed list lands in state. block:'nearest' means we only
@@ -148,8 +133,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
     setPendingScroll(null);
   }, [addresses, pendingScroll]);
 
-  const copyAddress = useCallback((e, a) => {
-    e.stopPropagation();
+  const copyAddress = useCallback((a) => {
     const done = (ok) => {
       if (!setMessage) return;
       if (ok) setMessage('Address copied to clipboard.', false);
@@ -232,13 +216,10 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
       setMessage && setMessage('Successfully revoked address.', false);
       localStorage.removeItem(ADDRESS_LIST);
       setAddresses((prev) => prev.filter((x) => x.address !== a.address));
-      if (selectedAddress === a.address && typeof onSelectAddress === 'function') {
-        onSelectAddress(null);
-      }
     }).catch(() => {
       setMessage && setMessage('Request to revoke address failed.', true);
     });
-  }, [api, pendingRevoke, setMessage, selectedAddress, onSelectAddress]);
+  }, [api, pendingRevoke, setMessage]);
 
   return (
     <section className="addresses-rail" aria-label="Addresses">
@@ -292,9 +273,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
           <AddressRow
             key={`fav-${a.address}`}
             a={a}
-            isActive={selectedAddress === a.address}
             isFavorite
-            onSelect={handleSelect}
             onToggleFavorite={toggleFavorite}
             onCopy={copyAddress}
             onToggleSuspend={toggleSuspend}
@@ -309,9 +288,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
           <AddressRow
             key={a.address}
             a={a}
-            isActive={selectedAddress === a.address}
             isFavorite={!!a.favorite}
-            onSelect={handleSelect}
             onToggleFavorite={toggleFavorite}
             onCopy={copyAddress}
             onToggleSuspend={toggleSuspend}

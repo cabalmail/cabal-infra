@@ -65,8 +65,6 @@ struct SearchView: View {
             scope: .search,
             injectedSearchModel: model,
             selection: $selectedEnvelope,
-            addressFilter: nil,
-            onClearAddressFilter: {},
             onSearchResultSelected: { _ in },
             onSelectionCountChanged: { _ in }
         )

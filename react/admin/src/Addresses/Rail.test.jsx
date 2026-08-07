@@ -40,8 +40,6 @@ function renderAddresses(props = {}) {
       <Rail
         domains={[{ domain: 'cabalmail.com' }]}
         setMessage={vi.fn()}
-        selectedAddress={null}
-        onSelectAddress={vi.fn()}
         {...props}
       />
     </AuthContext.Provider>
@@ -81,45 +79,49 @@ describe('Addresses rail', () => {
     expect(screen.queryByText('me@inbox.cabalmail.com')).not.toBeInTheDocument();
   });
 
-  it('calls onSelectAddress when a row is clicked', async () => {
-    const onSelectAddress = vi.fn();
-    renderAddresses({ onSelectAddress });
+  it('copies the address to the clipboard when a row is clicked', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const setMessage = vi.fn();
+    renderAddresses({ setMessage });
     await waitFor(() => expect(screen.getByText('me@inbox.cabalmail.com')).toBeInTheDocument());
-    fireEvent.click(screen.getByText('me@inbox.cabalmail.com').closest('li'));
-    expect(onSelectAddress).toHaveBeenCalledWith('me@inbox.cabalmail.com');
+    await act(async () => {
+      fireEvent.click(screen.getByText('me@inbox.cabalmail.com').closest('li'));
+    });
+    expect(writeText).toHaveBeenCalledWith('me@inbox.cabalmail.com');
+    expect(setMessage).toHaveBeenCalledWith('Address copied to clipboard.', false);
   });
 
-  it('marks the selected address with aria-current', async () => {
-    renderAddresses({ selectedAddress: 'chris@main.cabalmail.com' });
+  it('copies the address when Enter is pressed on a focused row', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderAddresses();
     await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
-    const row = screen.getByText('chris@main.cabalmail.com').closest('li');
-    expect(row).toHaveAttribute('aria-current', 'true');
+    await act(async () => {
+      fireEvent.keyDown(
+        screen.getByText('chris@main.cabalmail.com').closest('li'),
+        { key: 'Enter' },
+      );
+    });
+    expect(writeText).toHaveBeenCalledWith('chris@main.cabalmail.com');
   });
 
-  it('toggles the filter off when the active address is clicked again', async () => {
-    const onSelectAddress = vi.fn();
-    renderAddresses({ selectedAddress: 'chris@main.cabalmail.com', onSelectAddress });
-    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
-    fireEvent.click(screen.getByText('chris@main.cabalmail.com').closest('li'));
-    expect(onSelectAddress).toHaveBeenCalledWith(null);
+  it('reports a copy failure via setMessage', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('nope'));
+    Object.assign(navigator, { clipboard: { writeText } });
+    const setMessage = vi.fn();
+    renderAddresses({ setMessage });
+    await waitFor(() => expect(screen.getByText('me@inbox.cabalmail.com')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByText('me@inbox.cabalmail.com').closest('li'));
+    });
+    expect(setMessage).toHaveBeenCalledWith('Failed to copy address.', true);
   });
 
   it('does not render a colored swatch for address rows', async () => {
     renderAddresses();
     await waitFor(() => expect(screen.getByText('me@inbox.cabalmail.com')).toBeInTheDocument());
     expect(document.querySelector('.addresses-rail__swatch')).toBeNull();
-  });
-
-  it('copies an address to the clipboard via the row copy action', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
-    const setMessage = vi.fn();
-    renderAddresses({ setMessage });
-    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
-    const btn = screen.getByRole('button', { name: /copy chris@main\.cabalmail\.com/i });
-    await act(async () => { fireEvent.click(btn); });
-    expect(writeText).toHaveBeenCalledWith('chris@main.cabalmail.com');
-    expect(setMessage).toHaveBeenCalledWith('Address copied to clipboard.', false);
   });
 
   it('opens the request modal from the "+ New address" row', async () => {

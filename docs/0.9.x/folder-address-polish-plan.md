@@ -10,6 +10,8 @@ Status: planned. Forward-looking; supersede with the as-shipped notes once each 
 4. Apple clients gain affordances for favoriting/unfavoriting addresses.
 5. Apple clients gain a sidebar with tabs for **Folders** and **Addresses**; tapping an address filters the message list to mail sent to that address (parity with the React sidebar).
 
+> **Erratum (2026-08-07):** The address-tap message-list filter shipped as planned but was later removed from both clients — the address list evolved into a management/grab surface, and tapping or clicking an address now copies it to the clipboard instead.
+
 "Favorite address" is a brand-new concept and is stored server-side so it syncs across web and native clients.
 
 ## Non-goals
@@ -72,6 +74,8 @@ Acceptance: folder subscription state round-trips between web and native within 
 - Favorite/unfavorite affordance on each address row (swipe action on iOS, context menu on macOS).
 - Tapping an address sets a message-list filter scoped to that address (envelope `To` match, mirroring how the React sidebar narrows the inbox view). Persist the active filter the same way the currently-selected folder is persisted.
 - Clearing the filter: switching folders, or an explicit "clear" affordance on the active address chip in the message-list header.
+
+> **Erratum (2026-08-07):** The address-tap filter (and its chip) was later removed from both clients; tapping an address now copies it to the clipboard. The filter state was never persisted across relaunch.
 
 Acceptance: native sidebar matches the React sidebar's behavior — folder selection and address-scoped filtering both work and survive app relaunch.
 

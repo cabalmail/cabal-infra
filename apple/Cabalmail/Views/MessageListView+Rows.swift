@@ -8,10 +8,7 @@ import CabalmailKit
 //   - `rowContextMenu` — the per-row long-press / right-click menu
 //   - `disposeSwipe` / `toggleReadSwipe` — `SwipeActionSpec`s the
 //     `SwipeActionRow` wrapper reveals on a trailing / leading swipe
-//   - `addressFilterChip` — the in-list banner when `addressFilter` is
-//     set (used by `Messages` view's address-tap surface)
-//   - `filteredEnvelopes` — case-insensitive `To`/`Cc` substring filter
-//     applied above the list when an address filter is active.
+//   - `filteredEnvelopes` — applies the All/Unread/Flagged tab filter.
 extension MessageListView {
     /// True on layouts where the sidebar and the message list are visible at
     /// once (iPad regular width, macOS, visionOS) - the only place a message-
@@ -328,42 +325,10 @@ extension MessageListView {
     /// reader's toolbar button.
     var restoreSymbol: String { "tray.and.arrow.up" }
 
-    @ViewBuilder
-    func addressFilterChip(_ address: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .foregroundStyle(.tint)
-            Text("Filtered to ")
-                .foregroundStyle(.secondary)
-            + Text(address)
-                .fontWeight(.medium)
-            Spacer()
-            Button {
-                onClearAddressFilter()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Clear address filter")
-            }
-            .buttonStyle(.plain)
-        }
-        .font(.subheadline)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.thinMaterial)
-    }
-
     func filteredEnvelopes(_ envelopes: [Envelope]) -> [Envelope] {
         let tab = model?.filterTab ?? .all
-        let needle = addressFilter?.lowercased() ?? ""
-        return envelopes.filter { envelope in
-            guard tab.includes(envelope) else { return false }
-            guard !needle.isEmpty else { return true }
-            let recipients = envelope.to + envelope.cc
-            return recipients.contains { recipient in
-                "\(recipient.mailbox)@\(recipient.host)".lowercased().contains(needle)
-            }
-        }
+        guard tab != .all else { return envelopes }
+        return envelopes.filter { tab.includes($0) }
     }
 }
 

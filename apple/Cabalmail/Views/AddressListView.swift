@@ -5,10 +5,9 @@ import CabalmailKit
 ///
 /// Mirrors `FolderListView`'s shape: two sections (Favorites on top when
 /// non-empty, then All addresses inclusive), per-row swipe + context-menu
-/// affordances to toggle the favorite flag. Selecting an address sets a
-/// filter on the message list — the parent owns the selection binding,
-/// so it can clear the filter when the user switches folders or taps
-/// the chip in the message-list header.
+/// affordances to toggle the favorite flag. Tapping an address copies it
+/// to the pasteboard — the list is a management/grab surface, not a
+/// message-list filter.
 struct AddressListView: View {
     @Environment(AppState.self) private var appState
     @State private var model: AddressesViewModel?
@@ -22,7 +21,6 @@ struct AddressListView: View {
     // Address staged for suspension. Reinstating is harmless (it republishes
     // DNS records) and fires directly, so only suspend is staged here.
     @State private var pendingSuspend: Address?
-    @Binding var selection: Address?
     /// When set, the parent (the wide macOS / iPad-regular sidebar) owns the
     /// filter field — rendered below the section tabs — and this view filters by
     /// it instead of showing its own top-of-sidebar `.searchable`. Nil keeps the
@@ -56,7 +54,7 @@ struct AddressListView: View {
     }
 
     private var addressList: some View {
-        List(selection: $selection) {
+        List {
             if let model {
                 if model.isLoading && model.addresses.isEmpty {
                     ProgressView("Loading addresses…")
@@ -269,8 +267,15 @@ extension AddressListView {
 
     @ViewBuilder
     private func addressRow(_ address: Address, model: AddressesViewModel) -> some View {
-        row(for: address)
-            .tag(address)
+        Button {
+            copyAddress(address)
+        } label: {
+            row(for: address)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Copy \(address.address)")
             // Two edges so neither side outgrows a narrow sidebar pane, and
             // the full-swipe default is the reversible action (suspend /
             // reinstate), not revoke. First button listed = full-swipe action.
@@ -302,27 +307,36 @@ extension AddressListView {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("address.row.\(address.address)")
             .contextMenu {
-                Button {
-                    copyToPasteboard(address.address)
-                    appState.showToast(.addressCopied(address.address), duration: 7)
-                } label: {
-                    Label("Copy Address", systemImage: "doc.on.doc")
-                }
-                Button {
-                    Task { await model.toggleFavorite(address) }
-                } label: {
-                    Label(
-                        address.favorite ? "Unfavorite" : "Favorite",
-                        systemImage: address.favorite ? "star.slash" : "star.fill"
-                    )
-                }
-                suspendToggleButton(address, model: model)
-                Button(role: .destructive) {
-                    pendingRevoke = address
-                } label: {
-                    Label("Revoke", systemImage: "xmark.bin")
-                }
+                rowContextMenu(address, model: model)
             }
+    }
+
+    @ViewBuilder
+    private func rowContextMenu(_ address: Address, model: AddressesViewModel) -> some View {
+        Button {
+            copyAddress(address)
+        } label: {
+            Label("Copy Address", systemImage: "doc.on.doc")
+        }
+        Button {
+            Task { await model.toggleFavorite(address) }
+        } label: {
+            Label(
+                address.favorite ? "Unfavorite" : "Favorite",
+                systemImage: address.favorite ? "star.slash" : "star.fill"
+            )
+        }
+        suspendToggleButton(address, model: model)
+        Button(role: .destructive) {
+            pendingRevoke = address
+        } label: {
+            Label("Revoke", systemImage: "xmark.bin")
+        }
+    }
+
+    private func copyAddress(_ address: Address) {
+        copyToPasteboard(address.address)
+        appState.showToast(.addressCopied(address.address), duration: 7)
     }
 
     @ViewBuilder
