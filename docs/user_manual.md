@@ -20,6 +20,8 @@ Generic mail clients (Thunderbird, Apple Mail, Outlook, …) cannot be connected
 
 Every address lives on its own subdomain (`foo@bar.example.com`) and delivers to your one inbox.
 
+<img src="./app_screens/ios_addresses.png" alt="Address list on iPhone" width="300" />
+
 - **Create** a named address, or use **Random** for signup forms. Record who got it in the comment field — that is how you find it later. New addresses are usable within a minute or two.
 - **Copy** an address to the clipboard from the list; **favorite** the ones you use often (favorites are per-user).
 - **Suspend** an address to make it stop receiving, reversibly: its DNS records are withdrawn but the address is kept and can be **reinstated** later. On the Apple apps, suspend/reinstate are swipe actions on the address list.
@@ -29,10 +31,18 @@ Every address lives on its own subdomain (`foo@bar.example.com`) and delivers to
 
 ## Mail
 
+<img src="./app_screens/ios_inbox.png" alt="Inbox on iPhone: filter pills, sender avatars, sort and select controls" width="300" />
+
 - **Folders.** Create, delete, and subscribe to folders; favorites sort to the top of pickers. Subscribed folders are refreshed proactively; unsubscribed folders load only when you open them.
+
+  <img src="./app_screens/ios_folders.png" alt="Folder list on iPhone: Subscribed and All folders sections" width="300" />
 - **Reading.** Remote images are blocked by default (load them per message; loading can let a sender track you). A sender-authentication line shows the SPF/DKIM/DMARC verdicts stamped by your own relay, or "not verified" when there are none. Sender avatars come from your Contacts, the sender's published BIMI logo, or initials.
+
+  <img src="./app_screens/ios_reader.png" alt="Reading a message on iPhone: SPF, DKIM, and DMARC verdicts under the sender" width="300" />
 - **Search** is full-text across folders (Trash excluded). Text inside attachments is not indexed.
 - **Triage.** Swipe right to toggle read/unread; swipe left to archive (inside Archive, the same gesture restores). Multi-select for bulk move, flag, read/unread, and delete. Filter the list (All / Unread / Flagged) and change the sort order from the toolbar.
+
+  <img src="./app_screens/ios_swipe.png" alt="Swiping a message row left on iPhone reveals the Archive action" width="300" />
 - **Trash.** Deleting moves a message to Trash. Permanent deletion — per message or Empty Trash — happens only inside Trash and cannot be undone.
 - **Drafts** autosave and sync through the Drafts folder: start a reply on one device, finish it on another.
 - **Compose** supports rich text and attachments; replies pick the From address and recipients from the original message, and forwards carry the original attachments.
