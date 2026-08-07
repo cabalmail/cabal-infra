@@ -49,7 +49,7 @@ Eight phases: workspace scaffolding; **build pipeline, packaging, and test harne
 
 | Choice | Decision | Rationale |
 |---|---|---|
-| Language | **Rust** (2021 edition), MSRV pinned to Debian stable's rustc | One binary, no runtime to package, strong test story |
+| Language | **Rust**, toolchain pinned to **1.97.1**, **edition 2024**, no MSRV promise | One binary, no runtime to package, strong test story. See Toolchain below |
 | UI toolkit | **GTK4 + libadwaita** via `gtk4-rs` / `libadwaita-rs` | The native Linux desktop default; adaptive layout primitives are the `sidebarAdaptable` analog |
 | API floor | **GTK 4.14 / libadwaita 1.4** | Ubuntu 24.04 LTS. Rules out `AdwBottomSheet`, `AdwSpinner`, and other 1.5+/4.16+ API |
 | HTML rendering | **WebKitGTK 6.0** (`webkit6` crate) | Direct WKWebView analog; renders mail bodies *and* hosts the composer |
@@ -59,11 +59,33 @@ Eight phases: workspace scaffolding; **build pipeline, packaging, and test harne
 | Secret storage | **`oo7`** (pure-Rust Secret Service client) | Keychain analog; async, GNOME-blessed, works with gnome-keyring and KWallet's SS interface |
 | User config | **Hand-editable TOML** at `$XDG_CONFIG_HOME/cabalmail/config.toml` | Linux users expect to edit a text file; see Configuration model below |
 | Local state | **`directories`** for XDG base dirs + JSON files | Mirrors the Apple on-disk Codable mirrors; no database, no dconf |
-| UI definition | **Blueprint** (`.blp`) compiled to `.ui` | Readable diffs; falls back to plain `.ui` XML if `blueprint-compiler` proves awkward to package |
+| UI definition | **Blueprint** (`.blp`) compiled to `.ui` | Roughly a third the line count of equivalent XML, and far better diffs. Packaged in Arch, Debian, and Fedora, so the build dependency is available in every packaging container |
 | Async bridging | **One `tokio` multi-thread runtime + `async-channel` into `glib::spawn_future_local`** | See below — this is the one genuinely hard structural problem |
 | Testing | **`cargo test`** + **`wiremock`** (HTTP contract) + **`xvfb`** for widget tests | Kit tests need no display; app tests need a headless one |
 | Linting | **`rustfmt` + `clippy -D warnings`**, plus **`namcap`** / **`lintian`** / **`rpmlint`** on packages | Mirrors swiftlint's role in `apple.yml` |
 | Task automation | **`cargo xtask`** | Gives AI-executed phases one deterministic entry point per operation |
+
+#### Toolchain: pinned 1.97.1, edition 2024, no MSRV promise
+
+An earlier draft pinned MSRV to Debian stable's rustc, on the theory that it kept distro-native packaging open. That reasoning does not survive contact with what the distros actually ship:
+
+| Target | rustc | Consequence |
+|---|---|---|
+| Arch | 1.97.1 | Never binding — always current |
+| Debian 13 trixie | 1.85.0 | Exactly the edition-2024 threshold |
+| Ubuntu 24.04 LTS | 1.75 unversioned; `rustc-1.76`…`1.80` also in archive, rotating | Would be the binding floor, and it is not even a *stable* floor |
+| Fedora / RHEL 10 | current | Not binding |
+
+Holding to 1.75 would cost the entire 1.76–1.97 language window — including let-chains, which config parsing and MIME walking both want — in exchange for a distro-native `.deb`. And a distro-native `.deb` is not actually a step toward the Debian archive: Debian's Rust policy requires **every dependency crate to be packaged separately as its own `.deb`**, which dwarfs any MSRV consideration. Official-archive inclusion is out of scope for 1.1.0 and would be its own project regardless.
+
+So: pin an exact toolchain, build the packages with it, ship the binary.
+
+- `rust-toolchain.toml` pins `1.97.1` with `clippy`, `rustfmt`, and `llvm-tools` components. **Exact, not `stable`** — with `clippy -D warnings` in CI, tracking `stable` means a new Rust release can redden CI overnight on lints nobody wrote code against. Bumping is a deliberate PR.
+- `Cargo.toml` sets `edition = "2024"` and `rust-version = "1.97"`. The `rust-version` field states what we build with; it is not a compatibility promise to anyone.
+- **Arch builds natively** (`makedepends=(rust)`), since Arch's rustc is always ahead of the pin — that keeps the `PKGBUILD` idiomatic and network-free, which AUR expects. Note `rust-toolchain.toml` is a rustup feature and is simply ignored there; the build gets whatever Arch ships, which is fine because Rust is backward compatible within an edition.
+- **Debian and RHEL packaging installs the pinned toolchain in-container** (Phase 8). This is the one place the two paths differ, and it is deliberate.
+
+Contributors need `rustup`, not the distro `rust` package — the two conflict on Arch, and only rustup honours `rust-toolchain.toml`. `linux/README.md` says so explicitly.
 
 #### Async bridging: the one structural risk
 
@@ -121,7 +143,7 @@ Sync scope is a property of each key, and there are three of them — not two. C
 | Scope | Syncs to | Test for membership | Examples |
 |---|---|---|---|
 | **Universal** | Every device, every platform | The concept exists everywhere and should hold one value | `dispose_action`, `signature`, `mark_as_read`, `theme`, `default_from_address` |
-| **Platform-scoped** | Devices of the same platform only | The concept is meaningless on other platforms | Apple: Siri / App Intents, `crash_reporting_enabled` (MetricKit). Web: `accent`, `density`. Linux: close-to-tray, client-side vs server-side decorations, notification actions |
+| **Platform-scoped** | Devices of the same platform only | The concept is meaningless on other platforms | Apple: Siri / App Intents, `crash_reporting_enabled` (MetricKit). Web: `accent`, `density`. Linux: `start_minimized`, `notification_actions`, `close_to_tray` (see caveat under Desktop compatibility) |
 | **Machine-local** | Nothing — stays on the device | Tied to *this* box, not to the user | `control_domain`, `log_level`, `cache_max_mb`, cache paths, proxy, keyring backend |
 
 The distinguishing question for scope two is *"does this concept exist on the other platform?"* — not *"might the user want a different value there?"* A key that exists everywhere but that someone would like to vary per machine is still universal; wanting per-machine variation is not the same as the setting being platform-specific, and conflating them is how a preference system ends up with an unsyncable everything.
@@ -140,8 +162,8 @@ signature      = "-- \nsent from a machine I control"
 
 # Synced to your other Linux machines only. Meaningless on iOS or the web.
 [preferences.linux]
-close_to_tray  = true
-decorations    = "client"
+start_minimized      = false
+notification_actions = ["open", "mark_read", "archive"]
 
 # This machine only. Never leaves this device.
 [local]
@@ -165,11 +187,11 @@ A key in the wrong section is a hard parse error naming the section it belongs i
    - **A sibling `platform` map** with its own validator keyed by client platform. Cleaner separation, more server work, and it needs a platform discriminator the API does not currently carry.
    - **Keep them machine-local for 1.1.0** — no server change, but a user's second Linux machine does not inherit them.
 
-   The plan assumes the first, as the smallest change consistent with "preserve sync wherever possible", but it is the one item here that requires touching shared server code, so it is open question 8.
+   **Decided: prefixed scalar keys** — the smallest change consistent with "preserve sync wherever possible". It remains the only part of this plan that touches shared server code, so the `APP_ALLOWED` additions ship as their own PR against `lambda/api/`, reviewed on its own merits, before the Phase 6 work that depends on them.
 
 4. **There is no delete and no timestamp.** The row carries no `updated_at` or version attribute, and the Lambda only SETs. Two consequences:
    - **Deleting a line does not reset a preference.** A missing key means "no local opinion"; the store keeps its value and the client re-adds the line on the next rewrite. Resetting is `cabalmail config reset <key>`, which writes the default explicitly and pushes it.
-   - **Offline file edits can lose a race.** Edit `config.toml` on a disconnected laptop while another device changes the same key, and the next foreground pull wins — the client cannot tell which edit is newer, because nothing records when either happened. Bounded and rare, but real; it is stated in `cabalmail.5` rather than papered over. Fixing it properly means adding per-key `updated_at` to the preferences row, which is a server change and out of scope here (open question 7).
+   - **Offline file edits can lose a race.** Edit `config.toml` on a disconnected laptop while another device changes the same key, and the next foreground pull wins — the client cannot tell which edit is newer, because nothing records when either happened. Bounded and rare, but real; it is stated in `cabalmail.5` rather than papered over. Fixing it properly means adding per-key `updated_at` to the preferences row, which is a server change and out of scope here (open question 6).
 
 Note also that `theme` exists twice — flat (`light`/`dark`, owned by the React app) and inside `app` (`system`/`light`/`dark`, owned by the Apple clients). Linux uses the `app` one, matching Apple. `default_from_address` and `signature` inherit the Lambda's validators (100 and 2000 characters, no control characters bar `\n`/`\t` in the signature); enforce those client-side so the user gets a position-anchored error instead of a rejected push.
 
@@ -178,7 +200,7 @@ Note also that `theme` exists twice — flat (`light`/`dark`, owned by the React
 | Layer | Contents | Rationale |
 |---|---|---|
 | `config.toml` `[preferences]` | The nine universal keys, plus display name | Bidirectional: file ↔ UI ↔ server, every platform |
-| `config.toml` `[preferences.linux]` | Close-to-tray, decorations, notification actions, single-instance behaviour | Bidirectional, but only between this user's Linux machines |
+| `config.toml` `[preferences.linux]` | `start_minimized`, `notification_actions`, `close_to_tray`, single-instance behaviour | Bidirectional, but only between this user's Linux machines |
 | `config.toml` `[local]` | Control domain and account; cache size caps and directory overrides; poll intervals; log level; proxy; keyring backend and `session_only`; WebKit toggles | Per-machine. Syncing these would be actively wrong |
 | `$XDG_STATE_HOME` | Window geometry, pane positions, expanded-folder set, last-selected folder, logs | State, not configuration — nobody hand-edits a window size |
 | `$XDG_DATA_HOME` | Drafts, outbox | User data; must survive a cache wipe |
@@ -194,6 +216,25 @@ Note also that `theme` exists twice — flat (`light`/`dark`, owned by the React
 - **The client materializes `config.toml` on first successful sign-in**, populated from the initial server pull, with the section comments shown above. This follows from the file being a view of the store rather than an override layer — a user should not have to create a file to discover what is editable. `config.example.toml` still ships to `/usr/share/doc/cabalmail/` as commented reference documentation.
 - **File watching is core, not polish.** `inotify` via the `notify` crate is the mechanism that makes editor changes propagate at all. Debounce coalesces the write burst editors produce (write-temp, rename, truncate), and a parse failure holds the last-good store, surfaces the error in-app, and pushes nothing — a half-saved file must never reach the server.
 - **Live reload** applies immediately for keys that permit it; keys needing a restart are marked in the man page and in `--print-config`.
+
+### Desktop compatibility
+
+GNOME is the reference desktop, but the client must be a good citizen on KDE, Xfce, and tiling WMs, under both Wayland and X11. What that actually requires:
+
+| Concern | Status | Notes |
+|---|---|---|
+| X11 and Wayland | **Both** | GTK4 ships both GDK backends; nothing in this plan is Wayland-only |
+| KDE / Xfce / tiling WMs | **Runs everywhere** | Nothing here assumes a GNOME shell at runtime |
+| Visual fit outside GNOME | **Accepted cost** | libadwaita hard-codes the Adwaita stylesheet and deliberately stopped following the system GTK theme in 1.x. On Breeze it looks like a GNOME app. There is no supported way around this short of abandoning libadwaita |
+| Notifications | **Everywhere** | `org.freedesktop.Notifications` — dunst, mako, Plasma, gnome-shell, actions included |
+| File dialogs | **Everywhere** | Portal-backed; `xdg-desktop-portal-gtk` and `-kde` both exist |
+| Secret Service | **Most desktops** | gnome-keyring, KWallet, and KeePassXC all provide it. Bare WMs frequently provide nothing — the actionable failure path is specified in Phase 3 |
+| Settings persistence | **Everywhere** | Plain files under XDG base dirs. Deliberately not dconf, which needs a D-Bus session bus and silently degrades to an in-memory backend without one |
+| **Tray icon** | **Not on stock GNOME** | GTK4 removed `GtkStatusIcon`; there is no tray API. Needs StatusNotifierItem via a non-GTK crate (`ksni`). Works natively on KDE, Xfce, and tiling setups with waybar; stock GNOME needs the AppIndicator extension |
+| **Launcher unread badge** | **Partial** | The Unity `LauncherEntry` D-Bus interface is honoured by KDE and most docks, but not by stock GNOME Shell |
+| **Server-side decorations** | **Not on GNOME/Wayland** | Mutter deliberately does not implement `xdg-decoration`, so a decorations preference cannot be honoured there. Dropped from scope; the app is CSD throughout |
+
+The last three are why `close_to_tray` carries a caveat and why there is no `decorations` key. The rule for any facility in this class: **detect the capability at runtime, hide the control when it is absent, and keep the stored preference** — so a user who moves between a KDE desktop and a GNOME laptop does not lose the setting on the machine that can honour it.
 
 ### Distro support matrix
 
@@ -290,7 +331,7 @@ Goal: a workspace that builds an empty window, with the async bridge and the cra
 ### 1. Cargo workspace
 
 - `linux/Cargo.toml` declaring members `cabalmail-kit`, `cabalmail-gtk`, `xtask`.
-- `rust-toolchain.toml` pinning a stable channel; MSRV documented in `linux/README.md` and set to Debian stable's rustc so Phase 8 has no surprise.
+- `rust-toolchain.toml` pinning `channel = "1.97.1"` exactly (not `stable`) with `components = ["clippy", "rustfmt", "llvm-tools"]`; `edition = "2024"` and `rust-version = "1.97"` in `Cargo.toml`. `linux/README.md` states that contributors need **rustup**, not the distro `rust` package — on Arch the two conflict, and only rustup honours the pin.
 - `Cargo.lock` committed — distro packaging builds offline against vendored crates, which requires a lock.
 - `rustfmt.toml` and `clippy.toml`; `#![deny(warnings)]` is *not* used (it breaks downstream builds on new compiler versions) — CI passes `-D warnings` instead.
 
@@ -317,7 +358,7 @@ The propagation machinery itself (inotify watching, debounce, push/pull wiring) 
 ### 4. `cabalmail-gtk` shell
 
 - `AdwApplication` with app ID `com.cabalmail.Cabalmail`, a single `AdwApplicationWindow`, and a placeholder `AdwStatusPage`.
-- GResource bundle wired through `build.rs`; Blueprint compilation with a graceful fallback if `blueprint-compiler` is absent.
+- GResource bundle wired through `build.rs`, compiling `.blp` sources via `blueprint-compiler`. Its absence is a **hard build failure naming the package to install**, not a silent fallback — a fallback path here would mean two UI formats in the tree and a build that succeeds differently depending on what happens to be installed.
 - `runtime.rs`: the tokio runtime handle plus the `spawn_to_ui!` macro described above, with unit tests proving a spawned future's result reaches a `glib::MainContext` callback.
 - `.desktop` and AppStream `metainfo.xml`. **No gschema** — window geometry is state (`$XDG_STATE_HOME`), configuration is TOML, and synced preferences are server-side. See the Configuration model.
 
@@ -369,7 +410,8 @@ jobs:
 
 ### 2. Toolchain pinning
 
-- Rust from `rust-toolchain.toml`, installed by `dtolnay/rust-toolchain` pinned to a commit SHA (the repo's convention — every third-party action in `apple.yml` is SHA-pinned; match it).
+- Rust from `rust-toolchain.toml` (1.97.1), installed by `dtolnay/rust-toolchain` pinned to a commit SHA (the repo's convention — every third-party action in `apple.yml` is SHA-pinned; match it). A toolchain bump is a deliberate PR touching one line, which is the point of pinning exactly rather than tracking `stable` under `clippy -D warnings`.
+- `blueprint-compiler` in every container that builds the app crate. Verifying it is present and new enough in the Ubuntu 24.04, Debian, and Fedora images is a Phase 2 acceptance criterion, not a Phase 8 discovery.
 - System dependencies installed by an explicit package list per container, kept in `linux/packaging/deps/<distro>.txt` so the PKGBUILD, the Debian control file, and the CI containers all read one source.
 - `cargo-llvm-cov`, `cargo-deny`, `namcap` installed by pinned version.
 
@@ -408,7 +450,7 @@ Anything in this table that ends up needing a `gtk::Widget` has been modelled wr
 `packaging/arch/PKGBUILD`:
 
 - `pkgver` derived from the latest semver git tag (matching `scripts/promote.sh`, which is the version source of truth); `pkgrel` reset on version bump.
-- `depends=(gtk4 libadwaita webkitgtk-6.0 glib2)`, `makedepends=(rust cargo git)`.
+- `depends=(gtk4 libadwaita webkitgtk-6.0 glib2)`, `makedepends=(rust git blueprint-compiler)`. Arch's `rust` provides `cargo`, so listing both is redundant. This build ignores `rust-toolchain.toml` (a rustup feature) and uses whatever Arch ships — currently 1.97.1, always at or ahead of the pin.
 - Installs `config.example.toml` to `/usr/share/doc/cabalmail/` and `cabalmail.5` to the man path. It does **not** install anything into `/etc/xdg/cabalmail/` — that path is reserved for the administrator, and shipping a file there would make "no system config present" indistinguishable from "administrator chose these defaults".
 - `build()` runs `cargo build --release --frozen --offline` against vendored crates.
 - `check()` runs `cargo test -p cabalmail-kit` — kit tests need no display, so they run inside `makepkg` unmodified.
@@ -646,7 +688,7 @@ This is where the config file, the Settings UI, and the server are wired into on
 
 Controls are never rendered read-only on account of the file — the two are peers, and either can be used at any time. The window links to `config.toml` and to `man 5 cabalmail`, so the GUI is a discovery path for the text interface rather than a replacement for it.
 
-`crash_reporting_enabled` has no Linux consumer (MetricKit is Apple-only) — the key is read and preserved on write so a round trip through the Linux client never clobbers the iOS setting, but no toggle is shown. It is the canonical example of a platform-scoped preference, and the Linux client's own platform-scoped keys (close-to-tray, decorations, notification actions) appear here in a **Linux** group, marked in the UI as syncing only to the user's other Linux machines.
+`crash_reporting_enabled` has no Linux consumer (MetricKit is Apple-only) — the key is read and preserved on write so a round trip through the Linux client never clobbers the iOS setting, but no toggle is shown. It is the canonical example of a platform-scoped preference, and the Linux client's own platform-scoped keys appear here in a **Linux** group, marked in the UI as syncing only to the user's other Linux machines. Keys whose desktop lacks the underlying facility (`close_to_tray` with no StatusNotifierItem host) are hidden rather than shown broken — the stored value still syncs, so moving to a desktop that supports it picks the setting back up.
 
 ### Phase 6 verification
 
@@ -788,14 +830,34 @@ Apple client feature → Linux status. Anything marked *deferred* is deliberate,
 
 ## Prerequisites
 
-- Rust toolchain (`rustup`), `gtk4`, `libadwaita`, `webkitgtk-6.0` development packages. On the Arch development host these are `gtk4`, `libadwaita`, `webkitgtk-6.0` — the first two are already installed; `webkitgtk-6.0` is in `extra`.
-- `blueprint-compiler` for `.blp` sources.
-- `node` / `npm` for `scripts/sync-vendored.sh` in a developer checkout (not needed by `makepkg`).
+On an Arch development host:
+
+```sh
+sudo pacman -S rustup podman webkitgtk-6.0
+rustup default 1.97.1
+rustup component add clippy rustfmt llvm-tools
+```
+
+- **`rustup`, not `rust`.** The two conflict on Arch (`rustup` declares `Provides: rust cargo rustfmt` and `Conflicts With` the same), and only rustup honours `rust-toolchain.toml` — the distro package would silently build with whatever Arch ships regardless of the pin. `pacman -S rustup` offers the replacement in one step; nothing depends on `rust`. Note there is no `rustc` package on Arch; the binary comes from `rust`.
+- `gtk4`, `libadwaita`, `blueprint-compiler`, `nodejs`, `npm` — headers ship in the main packages on Arch, no `-dev` split.
+- `webkitgtk-6.0` and `podman` are the two typically not already present.
+- `node` / `npm` are needed only for `scripts/sync-vendored.sh` in a developer checkout, not by `makepkg`.
 - Podman or Docker for the packaging and smoke targets.
 - A stage-environment account for fixture capture and end-to-end verification.
 - No new AWS resources, no Terraform changes, no new Lambdas.
 
 ---
+
+## Decisions taken
+
+Recorded here so the rationale survives; each was an open question above.
+
+| Date | Question | Decision |
+|---|---|---|
+| 2026-08-07 | Rust toolchain and edition | Pin **1.97.1** exactly, **edition 2024**, no MSRV promise. Ubuntu 24.04's 1.75 floor would cost the whole 1.76-1.97 language window, and a distro-native `.deb` is not a step toward the Debian archive anyway (which requires packaging every dependency crate separately). See Toolchain |
+| 2026-08-07 | Platform-scoped preference sync | **Prefixed scalar keys in `APP_ALLOWED`** (`linux_*`). Two server lines per key, no structural change, and the existing per-key merge already isolates platforms. Nested maps are not expressible - see the backend constraints |
+| 2026-08-07 | GSettings | **Dropped.** Window geometry moves to `$XDG_STATE_HOME`. One config system rather than two, no `glib-compile-schemas` hooks in any package, and no silent degradation on bare WMs without a D-Bus session bus |
+| 2026-08-07 | UI definition format | **Blueprint (`.blp`).** Roughly a third the line count of equivalent `.ui` XML with far better diffs; packaged in Arch, Debian, and Fedora, so every packaging container can build it |
 
 ## Open questions
 
@@ -804,10 +866,7 @@ Apple client feature → Linux status. Anything marked *deferred* is deliberate,
 3. **RHEL 9.** Confirmed unsupportable from distro dependencies. Is RHEL 10 / Fedora an acceptable reading of "RHEL to follow", or does RHEL 9 need to be met — which would mean adopting Flatpak?
 4. **AUR publication.** Which account owns the AUR package, and does the repo carry the `.SRCINFO` or generate it at publish time?
 5. **Recipient autocomplete source.** Apple reads the system Contacts store. Sent-message history is the proposed substitute; is an optional `libebook` (Evolution Data Server) integration worth the dependency on GNOME systems?
-6. **Dropping GSettings.** The Configuration model replaces dconf with TOML plus `$XDG_STATE_HOME`, which departs from GNOME convention and means the app won't appear in `dconf-editor` or be manageable by the GSettings-based fleet tooling some organizations use. The plan judges one config system better than two. Confirm that trade before Phase 1, since reversing it later means migrating users' files.
-7. **Per-key `updated_at` on the preferences row.** *(Raised by the resolution of the config-file question — see Configuration model.)* The row has no timestamp or version attribute, so a client cannot tell whether its local edit or the server's value is newer. The consequence is bounded but real: an offline `config.toml` edit loses to a concurrent edit from another device on the next foreground pull. Fixing it means adding a per-key `updated_at` in `set_preferences` and comparing on pull — a server change affecting the Apple and web clients too. Out of scope for 1.1.0 and documented in `cabalmail.5` as a known edge; confirm that's acceptable, or schedule the server work.
-8. **How platform-scoped preferences sync.** *(See Configuration model.)* Nested per-platform maps are not expressible against the current `set_preferences`, so the options are prefixed scalar keys in `APP_ALLOWED` (two server lines per key, assumed by this plan), a sibling `platform` map with a client platform discriminator (cleaner, more work), or keeping them machine-local for 1.1.0 (no server change, but a second Linux machine inherits nothing). This is the only item in the plan that touches shared server code, so it needs a decision before Phase 6 — and if the answer is "machine-local for now", before Phase 1, since it changes the schema.
-9. **Blueprint vs plain `.ui`.** Blueprint is materially nicer to review but adds a build-time dependency that must be present in all three packaging containers. Confirm it packages cleanly in Phase 2, and fall back to `.ui` XML if not.
+6. **Per-key `updated_at` on the preferences row.** *(Raised by the resolution of the config-file question — see Configuration model.)* The row has no timestamp or version attribute, so a client cannot tell whether its local edit or the server's value is newer. The consequence is bounded but real: an offline `config.toml` edit loses to a concurrent edit from another device on the next foreground pull. Fixing it means adding a per-key `updated_at` in `set_preferences` and comparing on pull — a server change affecting the Apple and web clients too. Out of scope for 1.1.0 and documented in `cabalmail.5` as a known edge; confirm that's acceptable, or schedule the server work.
 
 ---
 
