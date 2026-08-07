@@ -114,9 +114,21 @@ This is what "preserve sync across devices" requires, and it replaces the sticky
 - **Writes are atomic** — temp file plus `rename(2)`, so a reader never sees a partial file and an open editor's `:w` can't interleave with a client write.
 - **Comments and key order survive** — `toml_edit`, not `toml`. A client rewrite touches only the values it changed.
 
-#### Two sections, different semantics
+#### Three sync scopes
 
-Not everything can sync — repointing your laptop at stage must not repoint your phone. The file makes the boundary visible rather than implicit:
+Sync scope is a property of each key, and there are three of them — not two. Collapsing platform-specific settings into "machine-local" would be wrong, because they *should* still follow the user between devices of the same platform: Siri behaviour belongs on both the iPhone and the iPad, and tray behaviour belongs on both of a user's Linux machines.
+
+| Scope | Syncs to | Test for membership | Examples |
+|---|---|---|---|
+| **Universal** | Every device, every platform | The concept exists everywhere and should hold one value | `dispose_action`, `signature`, `mark_as_read`, `theme`, `default_from_address` |
+| **Platform-scoped** | Devices of the same platform only | The concept is meaningless on other platforms | Apple: Siri / App Intents, `crash_reporting_enabled` (MetricKit). Web: `accent`, `density`. Linux: close-to-tray, client-side vs server-side decorations, notification actions |
+| **Machine-local** | Nothing — stays on the device | Tied to *this* box, not to the user | `control_domain`, `log_level`, `cache_max_mb`, cache paths, proxy, keyring backend |
+
+The distinguishing question for scope two is *"does this concept exist on the other platform?"* — not *"might the user want a different value there?"* A key that exists everywhere but that someone would like to vary per machine is still universal; wanting per-machine variation is not the same as the setting being platform-specific, and conflating them is how a preference system ends up with an unsyncable everything.
+
+Two of the three scopes already exist in the wild, unlabelled: `crash_reporting_enabled` is Apple-only and Linux ignores it, while `accent` and `density` are the React app's. This plan names the pattern rather than inventing it.
+
+The file makes all three visible:
 
 ```toml
 # Synced across all your devices. Changing these here, in Settings,
@@ -126,6 +138,11 @@ dispose_action = "trash"
 mark_as_read   = "on_open"
 signature      = "-- \nsent from a machine I control"
 
+# Synced to your other Linux machines only. Meaningless on iOS or the web.
+[preferences.linux]
+close_to_tray  = true
+decorations    = "client"
+
 # This machine only. Never leaves this device.
 [local]
 control_domain = "stage.cabalmail.example"
@@ -133,7 +150,7 @@ log_level      = "debug"
 cache_max_mb   = 500
 ```
 
-A key in the wrong section is a hard parse error naming both sections, not a silent no-op.
+A key in the wrong section is a hard parse error naming the section it belongs in, not a silent no-op.
 
 #### What the backend actually permits
 
@@ -141,7 +158,16 @@ A key in the wrong section is a hard parse error naming both sections, not a sil
 
 1. **The synced key set is closed.** `APP_ALLOWED` enumerates exactly `mark_as_read`, `load_remote_content`, `dispose_action`, `theme`, `default_body_render_mode`, `folder_count_display`, `crash_reporting_enabled`, plus `default_from_address` and `signature`, with `name` at the top level. Unknown keys are rejected with a 400 *by design* ("so a client typo surfaces as a 400"). The client validates the `[preferences]` section against this set locally and reports the offending key with its file position — never by forwarding a 400.
 2. **Per-key merge already exists**, at both levels (`app.#k = :v`). Concurrent multi-device edits are last-write-wins per key, and a client that omits a key cannot clobber it. This is why the Linux client simply never sends `crash_reporting_enabled` and the iOS setting survives untouched.
-3. **There is no delete and no timestamp.** The row carries no `updated_at` or version attribute, and the Lambda only SETs. Two consequences:
+3. **Nested per-platform maps are not expressible.** The obvious encoding for platform scope — `app: {linux: {close_to_tray: "1"}}` — cannot work: `_validate_app` tests `val not in APP_ALLOWED[key]` against a `set`, and a dict value raises `TypeError: unhashable type`. That escapes the handler's `except ValueError`, so the request fails as an unhandled 502 rather than a clean 400. *(Worth fixing independently of this plan — a client bug should not be able to 502 a Lambda. Small and unrelated to Linux; raise it separately.)*
+
+   Platform-scoped sync therefore needs one of:
+   - **Prefixed scalar keys in the existing map** — `linux_close_to_tray: {'0','1'}` added to `APP_ALLOWED`. A two-line server change per key, no structural work, and per-key merge means other platforms never touch them. The shared map accumulates prefixed keys, which a naming convention keeps legible.
+   - **A sibling `platform` map** with its own validator keyed by client platform. Cleaner separation, more server work, and it needs a platform discriminator the API does not currently carry.
+   - **Keep them machine-local for 1.1.0** — no server change, but a user's second Linux machine does not inherit them.
+
+   The plan assumes the first, as the smallest change consistent with "preserve sync wherever possible", but it is the one item here that requires touching shared server code, so it is open question 8.
+
+4. **There is no delete and no timestamp.** The row carries no `updated_at` or version attribute, and the Lambda only SETs. Two consequences:
    - **Deleting a line does not reset a preference.** A missing key means "no local opinion"; the store keeps its value and the client re-adds the line on the next rewrite. Resetting is `cabalmail config reset <key>`, which writes the default explicitly and pushes it.
    - **Offline file edits can lose a race.** Edit `config.toml` on a disconnected laptop while another device changes the same key, and the next foreground pull wins — the client cannot tell which edit is newer, because nothing records when either happened. Bounded and rare, but real; it is stated in `cabalmail.5` rather than papered over. Fixing it properly means adding per-key `updated_at` to the preferences row, which is a server change and out of scope here (open question 7).
 
@@ -151,7 +177,8 @@ Note also that `theme` exists twice — flat (`light`/`dark`, owned by the React
 
 | Layer | Contents | Rationale |
 |---|---|---|
-| `config.toml` `[preferences]` | The nine synced keys above, plus display name | Bidirectional: file ↔ UI ↔ server |
+| `config.toml` `[preferences]` | The nine universal keys, plus display name | Bidirectional: file ↔ UI ↔ server, every platform |
+| `config.toml` `[preferences.linux]` | Close-to-tray, decorations, notification actions, single-instance behaviour | Bidirectional, but only between this user's Linux machines |
 | `config.toml` `[local]` | Control domain and account; cache size caps and directory overrides; poll intervals; log level; proxy; keyring backend and `session_only`; WebKit toggles | Per-machine. Syncing these would be actively wrong |
 | `$XDG_STATE_HOME` | Window geometry, pane positions, expanded-folder set, last-selected folder, logs | State, not configuration — nobody hand-edits a window size |
 | `$XDG_DATA_HOME` | Drafts, outbox | User data; must survive a cache wipe |
@@ -277,7 +304,8 @@ Goal: a workspace that builds an empty window, with the async bridge and the cra
 Land the configuration store and schema here, before anything reads a setting — retrofitting precedence and provenance after six phases of direct reads is the predictable disaster.
 
 - `config/` in the kit: a `Settings` struct where every field records both its value and its **provenance** (flag / env / user file / system file / server / default). Provenance is not a debugging afterthought — `--print-config`, Phase 6's Settings UI, and the propagation rules all read it.
-- Split the schema into the `[preferences]` (synced) and `[local]` (machine-only) sections, with the synced set validated against the Lambda's closed `APP_ALLOWED` list. A key in the wrong section is an error naming both.
+- Give every key a **sync scope** — universal, platform-scoped, or machine-local — as a property of the schema, not of the section it happens to appear in. The sections (`[preferences]`, `[preferences.linux]`, `[local]`) are the file's rendering of that property, and the parser checks the two agree. A key in the wrong section is an error naming where it belongs.
+- Validate the universal set against the Lambda's closed `APP_ALLOWED` list.
 - Parse with `toml_edit`; write atomically (temp + `rename(2)`) preserving comments and key order.
 - Resolve `$XDG_CONFIG_HOME` via `directories`; walk `$XDG_CONFIG_DIRS` in order for system defaults.
 - `cabalmail --print-config` emitting the effective table with a provenance column, and `cabalmail config set` / `config reset <key>`.
@@ -312,7 +340,7 @@ cargo xtask fixtures          # regenerate golden fixtures from a live stage dep
 - `cargo run -p cabalmail-gtk` opens a window titled "Cabalmail".
 - `cargo tree -p cabalmail-kit | grep -E 'gtk|webkit'` returns nothing.
 - `cabalmail --print-config` on a clean system reports every key as `default`. Adding `~/.config/cabalmail/config.toml` with one key reports that key as `user-file` and the rest unchanged; setting the matching `CABALMAIL_*` variable flips it to `env`. Running with `XDG_CONFIG_HOME` pointed at a temp directory relocates the lookup — no hard-coded `~/.config` anywhere.
-- A config file with a typo'd key fails with file, line, column, and the bad key; it does not start with defaults. A synced key placed under `[local]` (or vice versa) fails naming both sections.
+- A config file with a typo'd key fails with file, line, column, and the bad key; it does not start with defaults. A key placed under a section that disagrees with its declared sync scope fails naming the section it belongs in — tested for all three scopes, in both directions.
 - A client write (`cabalmail config set`) preserves surrounding comments and key order, and is atomic — a concurrent reader sees either the old or the new file, never a truncated one.
 - Every key in `[preferences]` is accepted by the Lambda's `APP_ALLOWED` set; a test asserts the client's synced-key list and the Lambda's list are identical, so a future divergence fails CI rather than producing 400s at runtime.
 
@@ -611,14 +639,14 @@ Sync semantics match Apple: server-wins pull on login and on window focus, debou
 This is where the config file, the Settings UI, and the server are wired into one another (the model is specified under Configuration model; Phase 1 built the store it needs). Work items:
 
 - **File → store.** Watch `config.toml` with `notify`, debounced to coalesce the multi-event burst editors emit on save. Reparse, diff against the store, apply changed keys. A parse failure keeps the last-good store, surfaces an in-app error banner with the file position, and pushes nothing.
-- **Store → server.** Changed `[preferences]` keys push on the existing debounce, whether the change originated in the file or the UI. `[local]` keys never push.
+- **Store → server.** Changed keys push on the existing debounce, whether the change originated in the file or the UI, **routed by sync scope**: universal keys as themselves, platform-scoped keys under their `linux_` prefix, machine-local keys not at all. Scope is read from the schema, so a new key gets the right routing by declaring its scope rather than by being added to a push list someone can forget.
 - **Server → store → file.** A pull that changes a value updates the store and rewrites the file atomically, touching only the changed values and leaving comments intact.
 - **Loop suppression.** The rewrite in step three will fire the watcher from step one. Suppress by comparing against the last-written content rather than by timing windows — a debounce race here produces an infinite push loop, and it is the single most likely bug in this phase. Test it explicitly with a fake clock.
 - **Settings UI** reflects external changes live: a key edited in `$EDITOR` moves its control without a reopen.
 
 Controls are never rendered read-only on account of the file — the two are peers, and either can be used at any time. The window links to `config.toml` and to `man 5 cabalmail`, so the GUI is a discovery path for the text interface rather than a replacement for it.
 
-`crash_reporting_enabled` has no Linux consumer (MetricKit is Apple-only) — the key is read and preserved on write so a round trip through the Linux client never clobbers the iOS setting, but no toggle is shown.
+`crash_reporting_enabled` has no Linux consumer (MetricKit is Apple-only) — the key is read and preserved on write so a round trip through the Linux client never clobbers the iOS setting, but no toggle is shown. It is the canonical example of a platform-scoped preference, and the Linux client's own platform-scoped keys (close-to-tray, decorations, notification actions) appear here in a **Linux** group, marked in the UI as syncing only to the user's other Linux machines.
 
 ### Phase 6 verification
 
@@ -628,7 +656,9 @@ Controls are never rendered read-only on account of the file — the two are pee
 - **Round-trip in all six directions.** Editing `dispose_action` in `$EDITOR` moves the Settings control and reaches the server; changing it in Settings rewrites the file; changing it on the iOS client updates both on next foreground.
 - Rewrites preserve user comments and key ordering, and are atomic under a concurrent reader.
 - **No push loop.** A server-driven rewrite does not trigger a push. Assert this with a fake clock and a request counter, not by watching it not happen for a while.
-- A `[local]` key never appears in a `/set_preferences` request body.
+- A `[local]` key never appears in a `/set_preferences` request body. A `[preferences.linux]` key appears only under its `linux_` prefix, and a universal key only unprefixed — asserted per scope, since the routing is the part that silently rots.
+- **Scope isolation across platforms.** A Linux push leaves `crash_reporting_enabled` (Apple), `accent`, and `density` (web) untouched on the row — the existing per-key merge already guarantees this, so the test is a regression guard against someone later "simplifying" the push into a whole-map write.
+- A second Linux machine signing in inherits `[preferences.linux]`; an iOS device signing in does not see those keys at all.
 - A syntactically broken save holds the last-good values, shows the error with its file position, and issues no request.
 - `cabalmail config reset <key>` writes the default and propagates it; deleting the line instead leaves the value intact and the line reappears on the next rewrite, as documented.
 
@@ -776,7 +806,8 @@ Apple client feature → Linux status. Anything marked *deferred* is deliberate,
 5. **Recipient autocomplete source.** Apple reads the system Contacts store. Sent-message history is the proposed substitute; is an optional `libebook` (Evolution Data Server) integration worth the dependency on GNOME systems?
 6. **Dropping GSettings.** The Configuration model replaces dconf with TOML plus `$XDG_STATE_HOME`, which departs from GNOME convention and means the app won't appear in `dconf-editor` or be manageable by the GSettings-based fleet tooling some organizations use. The plan judges one config system better than two. Confirm that trade before Phase 1, since reversing it later means migrating users' files.
 7. **Per-key `updated_at` on the preferences row.** *(Raised by the resolution of the config-file question — see Configuration model.)* The row has no timestamp or version attribute, so a client cannot tell whether its local edit or the server's value is newer. The consequence is bounded but real: an offline `config.toml` edit loses to a concurrent edit from another device on the next foreground pull. Fixing it means adding a per-key `updated_at` in `set_preferences` and comparing on pull — a server change affecting the Apple and web clients too. Out of scope for 1.1.0 and documented in `cabalmail.5` as a known edge; confirm that's acceptable, or schedule the server work.
-8. **Blueprint vs plain `.ui`.** Blueprint is materially nicer to review but adds a build-time dependency that must be present in all three packaging containers. Confirm it packages cleanly in Phase 2, and fall back to `.ui` XML if not.
+8. **How platform-scoped preferences sync.** *(See Configuration model.)* Nested per-platform maps are not expressible against the current `set_preferences`, so the options are prefixed scalar keys in `APP_ALLOWED` (two server lines per key, assumed by this plan), a sibling `platform` map with a client platform discriminator (cleaner, more work), or keeping them machine-local for 1.1.0 (no server change, but a second Linux machine inherits nothing). This is the only item in the plan that touches shared server code, so it needs a decision before Phase 6 — and if the answer is "machine-local for now", before Phase 1, since it changes the schema.
+9. **Blueprint vs plain `.ui`.** Blueprint is materially nicer to review but adds a build-time dependency that must be present in all three packaging containers. Confirm it packages cleanly in Phase 2, and fall back to `.ui` XML if not.
 
 ---
 
