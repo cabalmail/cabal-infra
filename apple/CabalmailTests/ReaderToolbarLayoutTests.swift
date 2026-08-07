@@ -75,6 +75,55 @@ final class ReaderToolbarLayoutTests: XCTestCase {
         }
     }
 
+    // The pane-scoped bar's width-adaptive item set (the Notes half of #923):
+    // `capacity` was measured against the 402pt iPhone system bar, but the
+    // reader's own bar never compacts and knows its pane's real width — which
+    // the user can change by dragging the iPad split divider — so the demoted
+    // toggles return whenever there's room and leave again as the pane
+    // narrows.
+    func testOwnBarPromotesDemotedTogglesWhenWide() {
+        for leading in [LeadingReaderAction.reply, .editDraft] {
+            let actions = ReaderToolbarLayout.ownBar(
+                leading: leading,
+                paneWidth: ReaderToolbarLayout.fullSetMinWidth
+            )
+            for demoted in ReaderToolbarLayout.demotedToOverflow {
+                XCTAssertTrue(
+                    actions.contains(demoted),
+                    "\(demoted.rawValue) must rejoin the \(leading) bar when the pane has room"
+                )
+            }
+        }
+    }
+
+    func testOwnBarMatchesSystemBarWhenNarrow() {
+        for leading in [LeadingReaderAction.reply, .editDraft] {
+            XCTAssertEqual(
+                ReaderToolbarLayout.ownBar(
+                    leading: leading,
+                    paneWidth: ReaderToolbarLayout.fullSetMinWidth - 1
+                ),
+                ReaderToolbarLayout.bottomBar(leading: leading),
+                "a narrow pane draws the same compact set as the system bar"
+            )
+        }
+    }
+
+    func testOwnBarKeepsEndpointsStableAcrossResizes() {
+        // Promotion grows the middle of the bar: Reply keeps the leading edge
+        // and dispose/overflow the trailing one at every width, so dragging
+        // the split divider never relocates those hit targets.
+        for width in [CGFloat(0), 402, ReaderToolbarLayout.fullSetMinWidth, 825] {
+            let actions = ReaderToolbarLayout.ownBar(leading: .reply, paneWidth: width)
+            XCTAssertEqual(actions.first, .reply, "Reply leads at width \(width)")
+            XCTAssertEqual(
+                Array(actions.suffix(2)),
+                [.dispose, .overflow],
+                "dispose and overflow trail at width \(width)"
+            )
+        }
+    }
+
     func testEveryActionIsStillReachable() {
         // Demoting must not drop an action on the floor: every case is either
         // drawn on the bar (in one of the two leading configurations) or

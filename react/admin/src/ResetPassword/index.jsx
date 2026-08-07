@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AuthShell from '../Login/AuthShell';
+import VerificationCodeField from '../Login/VerificationCodeField';
 
 function formatLockout(seconds) {
   if (seconds >= 60) {
@@ -56,23 +57,11 @@ function ResetPassword({
         Enter the code sent to your phone and your new password.
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="verificationCode">Verification code</label>
-          </div>
-          <input
-            id="verificationCode"
-            name="verificationCode"
-            type="text"
-            className="mono"
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            placeholder="123456"
-            onChange={onCodeChange}
-            value={code || ''}
-            required
-          />
-        </div>
+        <VerificationCodeField
+          label="Verification code"
+          value={code}
+          onChange={onCodeChange}
+        />
         <div className="auth__field">
           <div className="auth__field-header">
             <label className="auth__field-label" htmlFor="password">New password</label>

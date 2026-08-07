@@ -196,16 +196,13 @@ struct SignedInRootView: View {
 #if !os(macOS)
 /// Addresses tab for the compact-iPhone bottom bar and the visionOS tab bar
 /// (`VisionSectionView`): the shared `AddressListView` in its own
-/// `NavigationStack`. Selection is local and inert here (there's no adjacent
-/// message list to filter, as there is in the Mail sidebar) — the tab is a
-/// management surface, and request/revoke/favorite/copy live on the rows.
+/// `NavigationStack`. The tab is a management surface — tap copies the
+/// address, and request/revoke/favorite/suspend live on the rows.
 /// Module-internal (not `private`) so `VisionSectionView` can reuse it.
 struct AddressManagementTab: View {
-    @State private var selection: Address?
-
     var body: some View {
         NavigationStack {
-            AddressListView(selection: $selection, externalFilter: nil)
+            AddressListView(externalFilter: nil)
         }
     }
 }

@@ -109,7 +109,6 @@ function Email({
   });
 
   const [folder, setFolder] = useState("INBOX");
-  const [addressFilter, setAddressFilter] = useState(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [envelope, setEnvelope] = useState({});
   const [flags, setFlags] = useState([]);
@@ -159,7 +158,6 @@ function Email({
 
   const selectFolder = useCallback((f) => {
     setFolder(f);
-    setAddressFilter(null);
     setDrawerOpen(false);
     setOverlayVisible(false);
     // Picking a folder exits search mode — the middle pane goes back to the
@@ -172,11 +170,6 @@ function Email({
   }, [setSearchQuery]);
 
   const searchActive = !!(searchQuery && searchQuery.trim());
-
-  const selectAddress = useCallback((address) => {
-    setAddressFilter(address);
-    setOverlayVisible(false);
-  }, []);
 
   const showOverlay = useCallback((env) => {
     setEnvelope(env);
@@ -347,7 +340,6 @@ function Email({
             showOverlay={showOverlay}
             setFolder={selectFolder}
             setMessage={setMessage}
-            addressFilter={addressFilter}
             filter={filter}
             setFilter={setFilter}
             sortKey={sortKey}
@@ -404,8 +396,6 @@ function Email({
               <AddressesRail
                 domains={domains}
                 setMessage={setMessage}
-                selectedAddress={addressFilter}
-                onSelectAddress={selectAddress}
               />
             </aside>
           </>
@@ -423,8 +413,6 @@ function Email({
               <AddressesRail
                 domains={domains}
                 setMessage={setMessage}
-                selectedAddress={addressFilter}
-                onSelectAddress={(a) => { selectAddress(a); closeAddressSidebar(); }}
               />
             </aside>
           </>

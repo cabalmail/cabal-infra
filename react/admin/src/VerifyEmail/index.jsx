@@ -1,4 +1,5 @@
 import AuthShell from '../Login/AuthShell';
+import VerificationCodeField from '../Login/VerificationCodeField';
 
 /**
  * Post-login email gate (identity plan Phase 1). Two modes:
@@ -87,25 +88,11 @@ function VerifyEmail({
         used for account recovery. Request a code, then enter it below.
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="verificationCode">
-              Verification code
-            </label>
-          </div>
-          <input
-            id="verificationCode"
-            name="verificationCode"
-            type="text"
-            className="mono"
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            placeholder="123456"
-            onChange={onCodeChange}
-            value={code || ''}
-            required
-          />
-        </div>
+        <VerificationCodeField
+          label="Verification code"
+          value={code}
+          onChange={onCodeChange}
+        />
         <button type="submit" className="auth__btn-primary">Verify</button>
       </form>
       <p className="auth__alt auth__resend" aria-live="polite">
