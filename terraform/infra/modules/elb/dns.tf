@@ -22,22 +22,17 @@ resource "aws_route53_record" "cname" {
 # tier hostnames.
 
 resource "aws_route53_record" "private" {
-  # imap is included so internal probes (blackbox-exporter's blackbox-tls
-  # job hits imap.<control_domain>:993 from inside the VPC to populate
-  # probe_ssl_earliest_cert_expiry, which feeds the Mail Tiers dashboard's
-  # "TLS days to expiry - IMAP 993" panel and BlackboxTLSCertExpiringSoon
-  # alert) can resolve the hostname to the NLB and reach the TLS listener.
+  # imap is included even though the NLB carries no IMAP listener: the
+  # name must still RESOLVE inside the VPC (the private zone shadows the
+  # public one, so a missing record here is NXDOMAIN, not a fall-through),
+  # and the API Lambdas' fallback path dials imap.<control_domain> when
+  # IMAP_INTERNAL_HOST is unset. A resolvable name that refuses the
+  # connection beats one that fails DNS - the failure is legible.
   #
   # Container-to-container IMAP delivery (smtp-out -> imap LMTP/SMTP) still
   # uses Cloud Map's imap.cabal.internal, which routes directly to the
   # container's private IP on port 143 and bypasses the NLB. See
   # modules/ecs/service_discovery.tf.
-  #
-  # The theoretical concern with aliasing imap to the NLB is that
-  # imap.<control_domain>:25 would then reach the smtp-in listener instead
-  # of erroring out; in practice nothing uses that name on that port (no
-  # MX record points at imap, and the same alias has existed in the
-  # PUBLIC zone since day one with no observed harm).
   #
   # allow_overwrite covers a legacy drift case: prod's private zone has
   # historically held a manually-added A record for imap pointing at a
@@ -59,13 +54,20 @@ resource "aws_route53_record" "private" {
 
 resource "aws_route53_record" "srv" {
   for_each = {
+    # Submission is not publicly offered (sending goes through the
+    # Cabalmail clients via the Lambda API); port 0 / host "." is RFC
+    # 6186's way of saying so, which stops autodiscovering clients from
+    # probing a dead endpoint.
     "_submission._tcp" = {
-      port = 587
-      host = "smtp-out.${var.control_domain}"
+      port = 0
+      host = "."
     },
+    # IMAP is not publicly offered (mailbox access is Cabalmail-client-only,
+    # via the Lambda API); port 0 / host "." is RFC 6186's way of saying so,
+    # which stops autodiscovering clients from probing a dead endpoint.
     "_imaps._tcp" = {
-      port = 993
-      host = "imap.${var.control_domain}"
+      port = 0
+      host = "."
     },
     "_imap._tcp" = {
       port = 0
