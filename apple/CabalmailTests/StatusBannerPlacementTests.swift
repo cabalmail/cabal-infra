@@ -27,18 +27,28 @@ final class StatusBannerPlacementTests: XCTestCase {
         )
     }
 
-    func testCompactWidthKeepsTheBannerInTheTitleSlot() {
-        XCTAssertEqual(
-            StatusBannerPlacement.topInset(isRegularWidth: false),
-            StatusBannerPlacement.defaultTopInset,
-            "compact width has an empty centre title slot — the banner belongs in it"
+    /// #958's iPhone 16 Pro frames: the overlay's origin is the top safe area,
+    /// which is also where the navigation bar starts ({{0, 62}, {402, 54}}).
+    private let compactOverlayOrigin: CGFloat = 62
+    private let compactNavigationBarBottom: CGFloat = 116
+
+    // Regression coverage for #958: the same overlay hid the compact-width
+    // navigation bar's centre title slot, which is not empty — it carries the
+    // folder name you just landed in. The banner has to clear the bar at both
+    // widths, so the compact inset gets pinned against the iPhone frames the
+    // same way the regular-width one is pinned against the iPad's.
+    func testCompactWidthBannersClearTheNavigationBar() {
+        let bannerTop = compactOverlayOrigin + StatusBannerPlacement.topInset(isRegularWidth: false)
+        XCTAssertGreaterThan(
+            bannerTop, compactNavigationBarBottom,
+            "a banner starting inside the bar's band covers the folder-name title"
         )
     }
 
-    func testTheRegularWidthInsetIsTheLargerOfTheTwo() {
-        XCTAssertGreaterThan(
-            StatusBannerPlacement.topInset(isRegularWidth: true),
-            StatusBannerPlacement.topInset(isRegularWidth: false)
-        )
+    func testPlatformsWithoutANavigationBarInTheBandKeepThePlainGap() {
+        // macOS and visionOS bypass `topInset(isRegularWidth:)` entirely and
+        // read this constant, so nothing above may quietly push their banners
+        // down past the window chrome they already sit below.
+        XCTAssertEqual(StatusBannerPlacement.defaultTopInset, 6)
     }
 }
