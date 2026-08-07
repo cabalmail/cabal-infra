@@ -68,9 +68,9 @@ token is presented.
 
 ### 3. Mail service interface
 
-- The IMAP and inbound SMTP endpoints, their ports (993, 25), and their TLS
-  requirements. There is no public submission endpoint; sending goes through
-  the Lambda API (interface 1).
+- The inbound SMTP and submission endpoints, their ports (25, 587, 465), and
+  their TLS requirements. There is no public IMAP endpoint; mailbox access
+  goes through the Lambda API (interface 1).
 - The addressing model: mail is hosted on subdomains only (the apex carries no
   addressing), and addresses follow the per-purpose create/revoke lifecycle.
 - DKIM signing of outbound mail.

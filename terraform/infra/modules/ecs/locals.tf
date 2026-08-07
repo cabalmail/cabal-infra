@@ -8,8 +8,13 @@
 locals {
   tiers = {
     imap = {
-      public_ports  = [143, 993]
-      private_ports = [25]
+      # No public ports: mailbox access is Cabalmail-client-only, so the
+      # NLB carries no IMAP listener. 143 is VPC-only - it serves the NLB
+      # target group's health checks, the API Lambdas' direct Cloud Map
+      # dials (STARTTLS), and nothing else. Dovecot also listens on 993
+      # in-container (task-def port mapping), but no SG rule admits it.
+      public_ports  = []
+      private_ports = [25, 143]
     }
     smtp-in = {
       public_ports  = [25]
@@ -73,10 +78,10 @@ locals {
   # and failed every external message), and it also keyed sendmail's
   # confCONNECTION_RATE_THROTTLE and access_db to a single "client".
   # smtp-in's SG already allows 25 from 0.0.0.0/0, so no SG change rides
-  # along. The imap TG must stay at the default: the NLB terminates TLS
-  # (993->143) and Dovecot's login_trusted_networks treats the NLB
-  # forwarding CIDRs as the secured path - preserving real client IPs
-  # there would break plaintext auth on forwarded connections.
+  # along. The imap TG stays at the default: with no IMAP listener on the
+  # NLB it carries health checks only, so there is no client IP worth
+  # preserving and no reason to disturb a setting the health checks are
+  # known to work under.
   # submission/starttls are left at the default too: smtp-out's Dovecot
   # auth posture is tuned for NLB-fronted peers, and nothing there needs
   # the real IP today.
