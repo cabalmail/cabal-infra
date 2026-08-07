@@ -277,24 +277,20 @@ changes.
   `save_draft`, human reviews and sends — captures most of the value of
   "act on my mail" with none of the exfil risk); OAuth 2.1 authorization
   for MCP clients that won't do static bearer tokens (Cognito as the
-  authorization server + RFC 9728 resource metadata); agent wake-on-mail
+  authorization server + RFC 9728 resource metadata — decided not
+  launch-blocking; Claude Code, the API MCP connector, and Managed Agents
+  vaults all accept static bearer tokens as-is); agent wake-on-mail
   (reuse the push-dispatch fan-out to notify a webhook/queue instead of
   polling); a `send` grant level with recipient allowlists and hard rate
   caps, only if draft-only proves insufficient.
 
 ## Open questions
 
-1. **Client compatibility with static bearer tokens.** Claude Code
-   (`--header`), the Claude API MCP connector (`authorization_token`), and
-   Managed Agents vaults (`static_bearer`) all take our PAT as-is.
-   claude.ai/desktop *custom connectors* push toward OAuth discovery —
-   verify current behavior during Phase A; if bearer-token config is not
-   accepted there, OAuth (Phase C) moves up.
-2. **Multi-user addresses.** Grants are per-mailbox (per Cognito user), and
+1. **Multi-user addresses.** Grants are per-mailbox (per Cognito user), and
    co-assigned addresses deliver to multiple mailboxes — an agent granted
    on one mailbox sees co-assigned mail that lands there. Believed
    acceptable (identical to the human's own view); confirm.
-3. **`fetch_bimi` / sender-intel tools** for the agent (useful for "is this
+2. **`fetch_bimi` / sender-intel tools** for the agent (useful for "is this
    phishing?" workflows) — cheap to add, decide in Phase A scoping.
-4. **Grant caps** — max active grants per user (proposal: 10) and whether
+3. **Grant caps** — max active grants per user (proposal: 10) and whether
    expired/revoked rows should linger for audit or TTL out quickly.
