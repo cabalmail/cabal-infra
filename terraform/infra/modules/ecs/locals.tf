@@ -61,15 +61,14 @@ locals {
   # Target groups are keyed by function, not tier, because smtp-out
   # maps to two target groups (submission + starttls).
   #
-  # health_check_interval: imap probes every 10s so a freshly started
-  # task is in service ~20s after Dovecot listens (healthy_threshold=2)
-  # instead of 60s. The imap service deploys with a zero-task window
-  # (single-task hard cap), so health-check latency is pure client-facing
-  # downtime there. Trade-off accepted on imap: a broken task is removed
-  # after unhealthy_threshold x 10s instead of x 30s, shrinking the
-  # operator-debugging window by 3x. The smtp tiers roll with overlap
-  # (min_healthy=100), so they keep the relaxed 30s probe. Phase 1 of
-  # docs/0.10.x/imap-deploy-downtime-plan.md.
+  # health_check_interval: only the relay group is attached to a listener
+  # and actually probed by the NLB. The imap/submission/starttls groups
+  # have no listener since the public IMAP/submission removal, so the NLB
+  # never probes them and their interval values are inert (kept against a
+  # future listener). Probe cadence for those tiers - and the deploy/
+  # replacement latency it drives (phase 1 of
+  # docs/0.10.x/imap-deploy-downtime-plan.md) - now lives in the
+  # container-level healthCheck in their task definitions.
   # preserve_client_ip: NLB client IP preservation is disabled by default
   # for ip-type TCP targets, which hands sendmail the NLB ENI's private
   # address as the SMTP peer. On the relay TG that broke inbound SPF
@@ -79,9 +78,8 @@ locals {
   # confCONNECTION_RATE_THROTTLE and access_db to a single "client".
   # smtp-in's SG already allows 25 from 0.0.0.0/0, so no SG change rides
   # along. The imap TG stays at the default: with no IMAP listener on the
-  # NLB it carries health checks only, so there is no client IP worth
-  # preserving and no reason to disturb a setting the health checks are
-  # known to work under.
+  # NLB it carries no traffic at all, so there is no client IP worth
+  # preserving.
   # submission/starttls are left at the default too: smtp-out's Dovecot
   # auth posture is tuned for NLB-fronted peers, and nothing there needs
   # the real IP today.

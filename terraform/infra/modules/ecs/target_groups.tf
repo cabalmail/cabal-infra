@@ -1,7 +1,15 @@
 /**
 * NLB target groups (target_type = "ip").
 *
-* Production NLB listeners in the ELB module forward to these target groups.
+* Only the relay group still has an NLB listener (25, in the ELB module)
+* and is health-checked by the NLB. The imap/submission/starttls groups
+* lost their listeners with the public IMAP/submission removal; the NLB
+* holds their targets in Target.NotInUse and performs no health checks
+* on them. They stay wired to the services anyway because removing a
+* service's load_balancer block forces service replacement - liveness
+* for those tiers comes from the container-level healthCheck in their
+* task definitions instead.
+*
 * Keyed by function (imap, relay, submission, starttls) rather than tier
 * because smtp-out maps to two target groups.
 */
@@ -36,5 +44,6 @@ resource "aws_lb_target_group" "tier" {
   # group names cause naming collisions during replacement.
 }
 
-# Staging NLB listeners removed - production listeners in the ELB module
-# now forward directly to these ECS target groups (Phase 7 cutover).
+# Staging NLB listeners removed - the remaining production listener in
+# the ELB module (relay, 25) forwards directly to its ECS target group
+# (Phase 7 cutover).

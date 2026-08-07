@@ -25,9 +25,13 @@ resource "aws_ecs_service" "imap" {
   deployment_minimum_healthy_percent = 0
 
   # With the grace period at 120s (was 600s), pair fail-fast with an
-  # automatic exit: a bad deploy (broken image, missing secret, task that
-  # never passes NLB health checks) rolls back to the last working
-  # revision instead of thrashing the single-task service indefinitely.
+  # automatic exit: a bad deploy (broken image, missing secret, task
+  # whose container health check never goes healthy) rolls back to the
+  # last working revision instead of thrashing the single-task service
+  # indefinitely. The health signal is the task definition's in-container
+  # TCP probe of 143 - the NLB stopped probing the imap target group when
+  # the public IMAPS listener was removed (no listener means no NLB
+  # health checks at all).
   # deploy-ecs-service.sh detects the rollback after its stability wait
   # and fails the CI run. Phase 2 of
   # docs/0.10.x/imap-deploy-downtime-plan.md.
