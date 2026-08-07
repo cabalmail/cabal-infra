@@ -37,6 +37,22 @@ enum ReaderToolbarLayout {
     /// the cheapest slots to reclaim.
     static let demotedToOverflow: [ReaderToolbarAction] = [.readerMode, .remoteContent]
 
+    /// Whether the reader draws the action set itself, in a bar pinned under
+    /// the reading pane, instead of handing it to a `.bottomBar` toolbar
+    /// group.
+    ///
+    /// A `.bottomBar` group in a `NavigationSplitView`'s detail column
+    /// attaches to that column's navigation container on the iOS 26 SDK and
+    /// to the *window* on iOS 27 (measured both ways; an explicit
+    /// `NavigationStack` around the column does not move it back). At regular
+    /// width that spreads the reader's actions across the list column too, so
+    /// Reply and Mark-as-read render under the message list they don't act
+    /// on. Compact width has one column, so the two containers coincide and
+    /// the system bar stays correct there.
+    static func usesOwnActionBar(isRegularWidth: Bool, isOS27OrLater: Bool) -> Bool {
+        isRegularWidth && isOS27OrLater
+    }
+
     /// Bottom-bar items, in drawn order.
     static func bottomBar(leading: LeadingReaderAction) -> [ReaderToolbarAction] {
         [

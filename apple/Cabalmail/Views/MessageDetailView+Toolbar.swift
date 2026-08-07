@@ -23,6 +23,35 @@ extension MessageDetailView {
         }
     }
 
+    #if os(iOS)
+    /// The reader's action set drawn as a bar under the reading pane, for the
+    /// layouts where a `.bottomBar` toolbar group would span the whole window
+    /// instead (iOS 27 at regular width — see `ReaderToolbarLayout`). Same
+    /// items in the same order as the system bar, sourced from the same
+    /// `ReaderToolbarLayout.bottomBar`, so the two paths can't drift apart.
+    /// Chrome follows the message list's bulk action bar (`Divider` over a
+    /// `.bar` background), which ties the controls to the pane they act on —
+    /// the thing the window-spanning bar loses.
+    @ViewBuilder
+    var readerActionBar: some View {
+        let actions = ReaderToolbarLayout.bottomBar(
+            leading: model?.leadingToolbarAction ?? .reply
+        )
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 0) {
+                ForEach(Array(actions.enumerated()), id: \.element) { index, action in
+                    if index > 0 { Spacer(minLength: 0) }
+                    bottomBarButton(for: action)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 10)
+            .background(.bar)
+        }
+    }
+    #endif
+
     /// Drafts-folder affordance: resume the open draft in compose.
     /// Disabled until the body fetch + MIME parse complete so a tap can't
     /// seed an empty compose over a draft that hasn't loaded yet.

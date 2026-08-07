@@ -4,7 +4,7 @@
 #   - critical -> Pushover priority 1 + ntfy priority 5
 #   - warning  -> ntfy priority 3
 #
-# Thresholds match docs/0.7.0/monitoring-plan.md §"Golden Signals per
+# Thresholds match docs/0.7.x/monitoring-plan.md §"Golden Signals per
 # Tier" but are starting points only — every threshold is expected to
 # move once real traffic data lands. See the §"Tuning discipline"
 # guidance for the review cadence.

@@ -14,7 +14,7 @@ import CabalmailKit
 /// Message coordinates from the APNs payload's `msgRef` dictionary:
 /// `{"folder": "INBOX", "uid": 4271, "msg_id": "<...>"}`. `uid` is a
 /// best-effort hint stamped by the dispatch path; `msg_id` is the durable
-/// identity (see `docs/0.11.0/push-notifications.md`). For notification
+/// identity (see `docs/0.11.x/push-notifications.md`). For notification
 /// *actions* we use the uid as given rather than re-resolving through
 /// `/push_envelope` — the backend sends the resolved uid when it can, and a
 /// stale hint only costs a no-op flag/move on a message that already left
@@ -108,7 +108,7 @@ enum PushSettings {
 }
 
 /// Owns the APNs registration lifecycle and the notification-action
-/// handlers for the iOS and macOS apps (docs/0.11.0/push-notifications.md,
+/// handlers for the iOS and macOS apps (docs/0.11.x/push-notifications.md,
 /// phases 1/3/4; macOS parity is phase 6). `AppState` drives the session
 /// edges (`sessionDidStart` / `sessionWillEnd`), `AppDelegate` feeds it
 /// token and action callbacks. One implementation for both platforms —
