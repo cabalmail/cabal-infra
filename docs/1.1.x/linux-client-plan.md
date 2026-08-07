@@ -57,7 +57,8 @@ Eight phases: workspace scaffolding; **build pipeline, packaging, and test harne
 | JSON | **`serde` / `serde_json`** | Standard |
 | Auth | **Hand-rolled Cognito `USER_PASSWORD_AUTH`** | Exactly what `CognitoAuthService` does — JSON POSTs to `cognito-idp.<region>.amazonaws.com`. No AWS SDK |
 | Secret storage | **`oo7`** (pure-Rust Secret Service client) | Keychain analog; async, GNOME-blessed, works with gnome-keyring and KWallet's SS interface |
-| Local state | **`directories`** for XDG paths + JSON files | Mirrors the Apple on-disk Codable mirrors; no database |
+| User config | **Hand-editable TOML** at `$XDG_CONFIG_HOME/cabalmail/config.toml` | Linux users expect to edit a text file; see Configuration model below |
+| Local state | **`directories`** for XDG base dirs + JSON files | Mirrors the Apple on-disk Codable mirrors; no database, no dconf |
 | UI definition | **Blueprint** (`.blp`) compiled to `.ui` | Readable diffs; falls back to plain `.ui` XML if `blueprint-compiler` proves awkward to package |
 | Async bridging | **One `tokio` multi-thread runtime + `async-channel` into `glib::spawn_future_local`** | See below — this is the one genuinely hard structural problem |
 | Testing | **`cargo test`** + **`wiremock`** (HTTP contract) + **`xvfb`** for widget tests | Kit tests need no display; app tests need a headless one |
@@ -74,6 +75,49 @@ GTK owns the main thread and its own `glib::MainContext` event loop; `reqwest` w
 - Widgets are never captured across an `.await` that crosses the runtime boundary. `glib::clone!(#[weak] ...)` is the standard capture form.
 
 `cabalmail-gtk` gets a single `spawn_to_ui!` helper wrapping this dance, written and tested in Phase 1 before any feature code exists.
+
+### Configuration model
+
+The Apple client has no user-editable configuration: settings are server-synced and everything else is `UserDefaults`. Porting that model directly would give Linux users nothing to edit, which is wrong for the platform — a hand-editable file under `$XDG_CONFIG_HOME` is a baseline expectation, and "I can grep and diff my config" is a real reason people choose a native client over the web app.
+
+But a hand-edited file fights server-synced preferences. If a user sets `dispose_action = "trash"` in a file and the next login pulls `"archive"` from the server, their edit is silently reverted — worse than having no file at all. The resolution is a layered model with explicit precedence and, critically, **sticky overrides**.
+
+#### Precedence, highest wins
+
+1. Command-line flags
+2. Environment variables (`CABALMAIL_*`, e.g. `CABALMAIL_LOG_LEVEL`)
+3. `$XDG_CONFIG_HOME/cabalmail/config.toml` (default `~/.config/cabalmail/config.toml`)
+4. Each entry of `$XDG_CONFIG_DIRS` in order (default `/etc/xdg/cabalmail/config.toml`) — gives distro and site administrators a defaults drop point
+5. Server-synced preferences (`/get_preferences`)
+6. Built-in defaults
+
+Note the spec variables are `XDG_CONFIG_HOME` (a single directory) and `XDG_CONFIG_DIRS` (a colon-separated system list). Use the `directories` crate for the former and read the latter directly; do not hand-roll `$HOME/.config`.
+
+#### Sticky overrides
+
+**A key present in a config file is pinned: the server pull does not overwrite it, and the client does not push it back up.** The Settings UI renders such a control as read-only with an inline note naming the file and line that set it, plus a "Remove override" action that rewrites the file. This is the property that makes hand-editing trustworthy rather than a trap, and it is a hard requirement, not a polish item.
+
+The corollary is that the config file is *the user's*, not the app's. The client writes it only on explicit request ("Remove override", or `cabalmail config set`), never as a side effect of normal settings changes — those go to the synced store. Comments and key order survive a client write (`toml_edit`, not `toml`).
+
+#### What belongs where
+
+| Layer | Contents | Rationale |
+|---|---|---|
+| `config.toml` | Control domain and account; cache size caps and directory overrides; poll intervals; log level; proxy; keyring backend and `session_only`; WebKit toggles (hardware acceleration, developer tools); optional overrides of any synced preference | Per-machine, or things a user reasonably wants under version control |
+| Synced preferences | `mark_as_read`, `load_remote_content`, `default_from_address`, `signature`, `dispose_action`, `theme`, `folder_count_display`, `default_body_render_mode`, display name | Follow the user across iOS, web, and Linux |
+| `$XDG_STATE_HOME` | Window geometry, pane positions, expanded-folder set, last-selected folder, logs | State, not configuration — nobody hand-edits a window size |
+| `$XDG_DATA_HOME` | Drafts, outbox | User data; must survive a cache wipe |
+| `$XDG_CACHE_HOME` | Envelope cache, message bodies, the fetched deployment descriptor | Safe to delete at any time |
+| `$XDG_RUNTIME_DIR` | Single-instance lock / activation socket | Per-session, tmpfs |
+| Secret Service | Cognito tokens | Never a file |
+
+#### Consequences
+
+- **No GSettings, no gschema.** With a TOML layer in place, a second configuration store earns nothing, and window geometry is state rather than configuration. Dropping it also removes `glib-compile-schemas` post-install hooks from all three packaging targets — a real simplification in Phases 2 and 8. The cost is departing from GNOME convention; the plan accepts that, because a GTK app with two config systems is worse than one with an unconventional single system.
+- **`cabalmail --print-config`** dumps the merged result with per-key provenance (which layer supplied each value). A layered config that can't explain itself is a support burden; this is cheap and pays for itself the first time someone files a "my setting won't stick" issue.
+- **`cabalmail.5` man page** documenting every key, installed by all three packages, generated from the same table that drives the parser so it cannot drift.
+- **`config.example.toml`**, fully commented, installed to `/usr/share/doc/cabalmail/`. Never written to `$XDG_CONFIG_HOME` at install or first run — an app that materializes a config file it then ignores is a familiar annoyance, and an absent file is what makes "is this key overridden?" answerable.
+- **Live reload** on file change (`notify` crate) for keys that can be applied without a restart; keys that can't are marked in the man page and take effect on next launch.
 
 ### Distro support matrix
 
@@ -104,7 +148,7 @@ linux/
     Cargo.toml
     src/
       lib.rs
-      config/                      # config.json fetch + XDG cache
+      config/                      # layered user config (TOML) + deployment descriptor fetch
       auth/                        # Cognito USER_PASSWORD_AUTH, MFA, token refresh
       secret/                      # Secret Service (oo7) + trait for test doubles
       api/                         # ApiClient trait + reqwest impl, one module per group
@@ -135,7 +179,8 @@ linux/
     data/
       com.cabalmail.Cabalmail.desktop.in
       com.cabalmail.Cabalmail.metainfo.xml.in
-      com.cabalmail.Cabalmail.gschema.xml
+      config.example.toml          # commented reference, installed to /usr/share/doc
+      cabalmail.5.md               # man page source; keys generated from the parser table
 
   xtask/                           # cargo xtask: sync-vendored, package, smoke, fixtures
   scripts/
@@ -178,14 +223,25 @@ Goal: a workspace that builds an empty window, with the async bridge and the cra
 - Crate with module stubs matching the layout above. No GTK, no WebKit in `Cargo.toml` — add a CI check (Phase 2, work item 6) that fails if one ever appears.
 - `CabalmailError` enum covering the error taxonomy the Apple client settled on: `network`, `auth`, `http(status, body)`, `decode`, `protocol`, `cancelled`. The distinction between transport failure and application rejection is load-bearing for the outbox (Phase 5) — model it now.
 
-### 3. `cabalmail-gtk` shell
+### 3. Layered configuration
+
+Land the configuration model here, before anything reads a setting — retrofitting precedence and override-pinning after six phases of direct reads is the predictable disaster.
+
+- `config/` in the kit: a `Settings` struct where every field records both its value and its **provenance** (flag / env / user file / system file / server / default). Provenance is not a debugging afterthought; Phase 6's Settings UI and `--print-config` both read it, and the sticky-override rule is unimplementable without it.
+- Parse with `toml_edit` so client writes preserve comments and key order.
+- Resolve `$XDG_CONFIG_HOME` via `directories`; walk `$XDG_CONFIG_DIRS` in order for system defaults.
+- `cabalmail --print-config` emitting the merged table with a provenance column.
+- Generate `config.example.toml` and the `cabalmail.5` key list from the same parser table, with a test asserting no key exists in the parser that is missing from the man page.
+- Malformed config is a **hard, precise failure** — file, line, column, and the offending key — never a silent fall-back to defaults. A user who typo'd a key needs to be told, not quietly ignored.
+
+### 4. `cabalmail-gtk` shell
 
 - `AdwApplication` with app ID `com.cabalmail.Cabalmail`, a single `AdwApplicationWindow`, and a placeholder `AdwStatusPage`.
 - GResource bundle wired through `build.rs`; Blueprint compilation with a graceful fallback if `blueprint-compiler` is absent.
 - `runtime.rs`: the tokio runtime handle plus the `spawn_to_ui!` macro described above, with unit tests proving a spawned future's result reaches a `glib::MainContext` callback.
-- `.desktop`, AppStream `metainfo.xml`, and a GSettings schema (used only for window geometry — all real preferences live in the kit's synced store).
+- `.desktop` and AppStream `metainfo.xml`. **No gschema** — window geometry is state (`$XDG_STATE_HOME`), configuration is TOML, and synced preferences are server-side. See the Configuration model.
 
-### 4. `xtask`
+### 5. `xtask`
 
 Subcommands, each a thin wrapper so both humans and CI have one spelling:
 
@@ -203,6 +259,9 @@ cargo xtask fixtures          # regenerate golden fixtures from a live stage dep
 - `cargo test -p cabalmail-kit` runs with no display server and no network.
 - `cargo run -p cabalmail-gtk` opens a window titled "Cabalmail".
 - `cargo tree -p cabalmail-kit | grep -E 'gtk|webkit'` returns nothing.
+- `cabalmail --print-config` on a clean system reports every key as `default`. Adding `~/.config/cabalmail/config.toml` with one key reports that key as `user-file` and the rest unchanged; setting the matching `CABALMAIL_*` variable flips it to `env`. Running with `XDG_CONFIG_HOME` pointed at a temp directory relocates the lookup — no hard-coded `~/.config` anywhere.
+- A config file with a typo'd key fails with file, line, column, and the bad key; it does not start with defaults.
+- A client write (`cabalmail config set`) preserves surrounding comments and key order.
 
 ---
 
@@ -269,6 +328,7 @@ Anything in this table that ends up needing a `gtk::Widget` has been modelled wr
 
 - `pkgver` derived from the latest semver git tag (matching `scripts/promote.sh`, which is the version source of truth); `pkgrel` reset on version bump.
 - `depends=(gtk4 libadwaita webkitgtk-6.0 glib2)`, `makedepends=(rust cargo git)`.
+- Installs `config.example.toml` to `/usr/share/doc/cabalmail/` and `cabalmail.5` to the man path. It does **not** install anything into `/etc/xdg/cabalmail/` — that path is reserved for the administrator, and shipping a file there would make "no system config present" indistinguishable from "administrator chose these defaults".
 - `build()` runs `cargo build --release --frozen --offline` against vendored crates.
 - `check()` runs `cargo test -p cabalmail-kit` — kit tests need no display, so they run inside `makepkg` unmodified.
 - `namcap` clean on both the `PKGBUILD` and the built package; CI fails on any namcap error.
@@ -303,9 +363,21 @@ The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow
 
 ### 1. Runtime configuration
 
-`config/`: fetch `https://{control_domain}/config.json`, decode into a `Configuration` struct mirroring `CabalmailKit.Configuration` — `control_domain`, `domains[]`, `invokeUrl`, `cognitoConfig`. Cache under `$XDG_CACHE_HOME/cabalmail/config.json`. Derive `imap_host` with the same rule the React app and Apple client use: a `dev.` prefix is replaced by `imap.`, otherwise `imap.` is prepended.
+Two distinct things are called "config" in this codebase, and conflating them will cause bugs. Keep the names apart in code and docs:
 
-The control domain is entered by the user on first launch, so one binary works against dev / stage / prod.
+| | **Deployment descriptor** | **User config** |
+|---|---|---|
+| Source | `https://{control_domain}/config.json`, written by Terraform | The user's text editor |
+| Owner | The deployment | The user |
+| Path | `$XDG_CACHE_HOME/cabalmail/deployment.json` (cached) | `$XDG_CONFIG_HOME/cabalmail/config.toml` |
+| Editable | No — refetched and overwritten | Yes, that's the point |
+| Type | `Deployment` | `Settings` |
+
+`config/`: fetch the descriptor, decode into a `Deployment` struct mirroring `CabalmailKit.Configuration` — `control_domain`, `domains[]`, `invokeUrl`, `cognitoConfig`. Derive `imap_host` with the same rule the React app and Apple client use: a `dev.` prefix is replaced by `imap.`, otherwise `imap.` is prepended.
+
+The cached copy is deliberately in `$XDG_CACHE_HOME` — deleting it must be harmless, and a stale descriptor after a deployment change is exactly the bug a cache-clear should fix.
+
+The control domain comes from `Settings.control_domain` (so it can be set in `config.toml`, which is how someone pins a workstation to stage) or is entered on first launch. One binary works against dev / stage / prod either way.
 
 ### 2. Authentication
 
@@ -481,6 +553,10 @@ Tree from `/list_folders`: create (with parent), delete, subscribe / unsubscribe
 
 Sync semantics match Apple: server-wins pull on login and on window focus, debounced push on local edit, stored under the row's `app` map so the web client's flat keys are untouched. A revoked `default_from_address` falls back to None.
 
+**Except where `config.toml` pins the key.** Any setting present in a config file is excluded from both the pull and the push, and its control renders read-only with an inline note naming the file that set it and a "Remove override" action. Implementing this is why `Settings` carries provenance from Phase 1. The two failure modes to test explicitly: a pinned key must survive a server pull that disagrees with it, and removing an override must resume sync at the server's current value rather than pushing the stale local one.
+
+The Settings window also links out to the config file and the `cabalmail.5` man page, so the GUI is a discovery path for the text interface rather than a replacement for it.
+
 `crash_reporting_enabled` has no Linux consumer (MetricKit is Apple-only) — the key is read and preserved on write so a round trip through the Linux client never clobbers the iOS setting, but no toggle is shown.
 
 ### Phase 6 verification
@@ -488,6 +564,8 @@ Sync semantics match Apple: server-wins pull on login and on window focus, debou
 - Changing a preference on Linux is reflected in the iOS client after a foreground, and vice versa.
 - A Linux preferences write leaves the web client's `theme` / `accent` / `density` and the Apple `crash_reporting_enabled` intact.
 - Address lifecycle operations round-trip against stage.
+- A key pinned in `config.toml` survives a server pull that disagrees, renders read-only in Settings, and is never pushed. "Remove override" rewrites the file (comments intact) and resumes sync at the **server's** value.
+- Editing `config.toml` while the app runs applies reload-safe keys without a restart.
 
 ---
 
@@ -511,7 +589,7 @@ Note the Apple lesson: dispose is deliberately window-scoped rather than app-glo
 
 ### 3. Session and window state
 
-Window geometry and pane positions in GSettings. Restore the last folder from the nav-state cursor. Optional start-minimized-to-notifications for users who keep mail running.
+Window geometry, pane positions, and the expanded-folder set as JSON under `$XDG_STATE_HOME/cabalmail/` — state, not configuration, and not worth a second config system (see Configuration model). Restore the last folder from the nav-state cursor. Optional start-minimized-to-notifications for users who keep mail running.
 
 ### 4. Offline
 
@@ -560,6 +638,8 @@ Cached envelopes and bodies readable offline; compose available with sends queue
 - Each package installs cleanly into a fresh container of its distro and launches under xvfb.
 - Uninstall leaves no files outside `$XDG_*` user directories.
 - The `.desktop` file registers a working `mailto:` handler on each distro.
+- `man 5 cabalmail` renders on each distro, and every key it documents is accepted by the parser (the Phase 1 drift test, re-run against the installed page).
+- A file dropped at `/etc/xdg/cabalmail/config.toml` is picked up as system defaults and is correctly overridden by a user file — verified on each distro, since `XDG_CONFIG_DIRS` defaults vary.
 
 ---
 
@@ -595,6 +675,7 @@ Apple client feature → Linux status. Anything marked *deferred* is deliberate,
 | **Siri / App Intents** | **Not applicable** | — |
 | **Watch companion, visionOS, MetricKit** | **Not applicable** | — |
 | Admin surfaces (users, DMARC reports, domain access) | Out of scope — web app | — |
+| **Hand-editable config file, man page, `--print-config`** | **Beyond parity** — no Apple equivalent; a platform expectation, not a port | 1, 6 |
 
 ---
 
@@ -628,7 +709,9 @@ Apple client feature → Linux status. Anything marked *deferred* is deliberate,
 3. **RHEL 9.** Confirmed unsupportable from distro dependencies. Is RHEL 10 / Fedora an acceptable reading of "RHEL to follow", or does RHEL 9 need to be met — which would mean adopting Flatpak?
 4. **AUR publication.** Which account owns the AUR package, and does the repo carry the `.SRCINFO` or generate it at publish time?
 5. **Recipient autocomplete source.** Apple reads the system Contacts store. Sent-message history is the proposed substitute; is an optional `libebook` (Evolution Data Server) integration worth the dependency on GNOME systems?
-6. **Blueprint vs plain `.ui`.** Blueprint is materially nicer to review but adds a build-time dependency that must be present in all three packaging containers. Confirm it packages cleanly in Phase 2, and fall back to `.ui` XML if not.
+6. **Dropping GSettings.** The Configuration model replaces dconf with TOML plus `$XDG_STATE_HOME`, which departs from GNOME convention and means the app won't appear in `dconf-editor` or be manageable by the GSettings-based fleet tooling some organizations use. The plan judges one config system better than two. Confirm that trade before Phase 1, since reversing it later means migrating users' files.
+7. **Config keys for synced preferences.** The plan allows `config.toml` to pin *any* synced preference. The narrower alternative — local-only keys in the file, synced preferences exclusively server-side — is simpler to reason about but tells a user editing `signature` that their edit does nothing. Confirm the permissive reading is wanted.
+8. **Blueprint vs plain `.ui`.** Blueprint is materially nicer to review but adds a build-time dependency that must be present in all three packaging containers. Confirm it packages cleanly in Phase 2, and fall back to `.ui` XML if not.
 
 ---
 
