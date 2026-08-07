@@ -175,6 +175,13 @@ The monitoring tier does no runtime config regeneration and is a clean ROFS cand
 
 Ship option 1 for the three mail tiers in 0.10.x (posture hardening without ROFS), set `readOnlyRootFilesystem = true` on the monitoring tier, and capture option 3 as a follow-up if ROFS on the mail tiers later becomes a requirement. The entrypoint and reconfigure write paths are the gating constraint here, not the capability drop.
 
+> **Erratum (2026-08-07):** The monitoring-tier ROFS piece (phase 2b) never
+> shipped: `readonlyRootFilesystem` appears nowhere in the Terraform tree.
+> It was deferred because monitoring is disabled in every environment
+> (`TF_VAR_MONITORING=false`), leaving the module dormant. The mail-tier
+> posture hardening (drop-all capabilities, no-new-privileges, init) did
+> ship as planned.
+
 The posture changes are still the highest-touch part of this plan. Migration order is dev → stage → prod with at least one mail-roundtrip end-to-end test per environment between flips. Other things to verify:
 
 - `/var/log` paths used by sendmail/dovecot. Stdout/stderr-route them (already mostly done) so no on-disk log file is needed.

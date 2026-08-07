@@ -4,6 +4,11 @@
 
 Cabalmail's iOS app ([apple/Cabalmail](../../apple/Cabalmail)) currently learns about new mail only while running in the foreground, via the IMAP IDLE loop in [apple/CabalmailKit/Sources/CabalmailKit/IMAP/LiveImapClient+Idle.swift](../../apple/CabalmailKit/Sources/CabalmailKit/IMAP/LiveImapClient+Idle.swift). When the app is suspended or terminated, iOS does not keep the IMAP connection alive, so the user gets no signal that mail has arrived until they reopen the app. This is the largest remaining UX gap before 1.0 and the most common piece of feedback from native-app users.
 
+> **Erratum (2026-08-07):** Four days after this plan was written, #371 (commit
+> 73711325) switched the production Apple clients to `ApiBackedImapClient`
+> over the Lambda API. The IDLE loop described here never ran in the shipped
+> push-era app; foreground refresh is API polling.
+
 This plan introduces server-originated push notifications via the Apple Push Notification service (APNs) with three constraints:
 
 1. **Apple's infrastructure must not see notification content.** Subject, sender, and snippet are visible to the user but not to APNs. This rules out putting message details in the APNs payload directly.
@@ -27,6 +32,10 @@ The design also targets the macOS app ([apple/CabalmailMac](../../apple/Cabalmai
 - Android push (FCM). Android client is on the 1.1.x roadmap and will get its own plan.
 - Web push for the React admin app. Browser push has a different API surface and a different consent flow; it is out of scope here.
 - Replacing IDLE in the foreground app. APNs supplements IDLE; it does not replace it. While the app is open, IDLE remains the source of truth for instant updates.
+
+  > **Erratum (2026-08-07):** By ship time the foreground app had no IDLE (#371
+  > moved mail traffic to the Lambda API, which polls). APNs supplements
+  > polling, not IDLE.
 - Per-message rule-based push (e.g. "only push if from VIP"). Filtering is folder-level only in 1.0.x; per-sender rules can layer on top later under the procmail-rules roadmap item (1.3.x).
 - Push for SMTP-OUT bounce notifications, DMARC reports, or other system-generated mail to `mail-admin.<domain>`. The admin mailbox is operator-facing, not user-facing.
 
@@ -59,6 +68,11 @@ flowchart TD
 5. On the device, the Notification Service Extension wakes, calls a thin enrichment endpoint (`/push/envelope`) with the user's existing Cognito JWT, and replaces the alert text with `From <sender> | <subject> | <snippet>`.
 6. The OS displays the enriched notification. If the NSE times out or the network is unreachable, the OS displays the fallback `"New mail"`.
 7. If the user taps `Open`, the main app launches and routes to the message via `msgRef`. If the user taps `Mark as Read` or `Archive`, the OS wakes the main app in the background (~30s budget); the action handler refreshes the Cognito token if needed and uses the existing `LiveImapClient` to perform the IMAP operation.
+
+   > **Erratum (2026-08-07):** As shipped, `Mark as Read` and `Archive` run through
+   > the session's `ApiBackedImapClient` (the `/set_flag` and
+   > `/move_messages` Lambda endpoints), not `LiveImapClient` (see
+   > `PushRegistrar.handleNotificationAction`).
 
 ### Why a fetch-on-wake enrichment endpoint instead of reusing CabalmailKit's IMAP client
 
@@ -95,6 +109,12 @@ We can revisit this if a future feature (e.g. fully offline notification renderi
 | `last_seen_at` | S | Updated on each successful push or token re-registration. Used to GC stale tokens. |
 | `last_failure` | S | Optional; set to APNs failure reason on rejection (e.g. `BadDeviceToken`). |
 
+> **Erratum (2026-08-07):** Shipped bundle IDs are `com.cabalmail.Cabalmail` /
+> `com.cabalmail.CabalmailMac` (NSEs append `.NotificationService`), and the
+> App Group is `group.com.cabalmail.Cabalmail` — not the `com.cabalmail.app`
+> / `com.cabalmail.mac` / `group.com.cabalmail.app` names used throughout
+> this plan.
+
 Tokens are encrypted at rest with the existing customer-managed KMS key. The table is in the existing backup plan.
 
 ### New Lambda functions
@@ -105,6 +125,10 @@ Tokens are encrypted at rest with the existing customer-managed KMS key. The tab
 | `push_deregister` | API Gateway POST `/push/deregister` | iOS app calls on logout or when the user disables notifications. |
 | `push_envelope` | API Gateway POST `/push/envelope` | Called by the NSE. Body: `{folder, uid}`. Returns `{from, subject, snippet}` only. Reuses `get_imap_client` from [helper.py](../../lambda/api/_shared/helper.py). Subject and snippet are truncated to safe display lengths server-side. |
 | `push_dispatch` | SQS event source | Consumes `cabal-push-queue`. Per message: looks up tokens for the user, filters by `enabled_folders`, sends APNs requests in parallel, updates `last_seen_at` / `last_failure`, and deletes tokens on `Unregistered (410)` or `BadDeviceToken`. |
+
+> **Erratum (2026-08-07):** The endpoints shipped as flat routes — `/push_register`,
+> `/push_deregister`, `/push_envelope` — matching the rest of the API
+> surface, not the slash-nested `/push/*` paths shown here.
 
 `push_dispatch` reads the APNs `.p8` key and team/key/bundle IDs from SSM SecureString parameters under `/cabal/apns/`. JWT generation will bundle `cryptography` (already a transitive dep) per-function for ES256 signing, the same way other API functions bundle their Python deps.
 
@@ -118,6 +142,13 @@ Add to [docker/imap/configs/procmailrc](../../docker/imap/configs/procmailrc):
 ```
 
 The `:0c` recipe runs as a side effect (carbon copy: delivery still continues unconditionally). The script is best-effort: it pipes a single JSON line to `aws sqs send-message` and exits zero regardless of result. Failures land in `~/.procmail/push-enqueue.log` for diagnosis but do not affect mail flow. The script lives in [docker/shared/push-enqueue.sh](../../docker/shared/push-enqueue.sh) so it can be reused across delivery paths if needed.
+
+> **Erratum (2026-08-07):** Shipped as a spool-and-drain pair, not a direct SQS
+> send: sendmail sanitizes the delivery agent's environment, so the procmail
+> child (`push-enqueue.sh <user> <folder>` — no Subject argument) only
+> writes a spool file under `/var/spool/cabal-push`, and a root supervisord
+> daemon (`push-spool-drain.sh`) forwards it to SQS with the task-role
+> credentials. Failures log to procmail's own `$LOGFILE` via stderr.
 
 The UID is not known at procmail time. We pass `LAST_UID_HINT` via Dovecot's last-uid lookup in the script, falling back to "look up newest in folder" on the consumer side if the hint is stale. This keeps the recipe trivial and avoids a Dovecot LDA hook.
 
@@ -176,6 +207,11 @@ mailbox Archive {
 ```
 
 The iOS app discovers the archive folder via IMAP `LIST (SPECIAL-USE) "" "*"` and caches the result in `UserDefaults`. If the user has renamed or hidden the folder, settings expose a folder picker. The cached folder name is what the `ARCHIVE` action uses.
+
+> **Erratum (2026-08-07):** The API-backed client cannot issue
+> `LIST (SPECIAL-USE)`. As shipped, the app finds the folder named "Archive"
+> (case-insensitive) via `/list_folders`, caches it, and degrades the
+> Archive action to a no-op when absent.
 
 ### Foreground behavior
 
@@ -242,9 +278,22 @@ Each phase is independently deployable and reversible. Phases 1-2 ship infrastru
 - Add a Notifications settings screen to the iOS app: master toggle, per-account toggle, per-folder picker.
 - Mirror state to the existing user preferences mechanism in [lambda/api/get_preferences](../../lambda/api/get_preferences) / [set_preferences](../../lambda/api/set_preferences) for cross-device consistency.
 
+  > **Erratum (2026-08-07):** Notification preferences shipped per-device, not
+  > mirrored into `get_preferences`/`set_preferences`: the folder scope
+  > lives locally (`PushSettings`) and server-side on the device's
+  > `cabal-push-tokens` row (`enabled_folders`, upserted via
+  > `/push_register`).
+
 ### Phase 6: macOS parity
 
 - Add NSE target to the macOS app.
+
+  > **Erratum (2026-08-07):** macOS parity did not ship via the NSE: macOS's
+  > notification daemon kills the extension before `didReceive` runs (Apple
+  > platform defect, forums threads 693011/806789). The dispatcher instead
+  > sends Macs a background push and the running app enriches and posts a
+  > local notification itself; the NSE remains shipped in case Apple fixes
+  > the platform.
 - Reuse the same `/push/envelope` endpoint and the same `push_dispatch` Lambda.
 - Distinct bundle ID and APNs topic; the dispatch Lambda already keys topic off `bundle_id` per-token.
 

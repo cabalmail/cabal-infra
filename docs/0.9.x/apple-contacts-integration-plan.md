@@ -79,6 +79,11 @@ Acceptance: tapping the picker glyph next to To and selecting two contacts appen
 - `CabalmailApp.swift` (iOS/visionOS) and `CabalmailMacApp.swift` (macOS) gain `.onOpenURL { handleMailto($0) }`. The handler routes through the existing compose-launch helper that the New Message button already uses, with the parsed fields pre-filled.
 - macOS only: document in `docs/setup.md` (or wherever the operator-facing setup lives) that selecting Cabalmail as the default mail app is a one-time user action in System Settings -> General -> Default Web Browser / Mail. iOS exposes the same setting under Settings -> Mail -> Default Mail App on iOS 14+.
 
+  > **Erratum (2026-08-07):** The macOS setting actually lives at System
+  > Settings -> Desktop & Dock -> "Default mail reader," and the operator
+  > documentation shipped in `docs/apple.md` ("Setting Cabalmail as the
+  > default mail handler") rather than `docs/setup.md`.
+
 Acceptance: clicking `mailto:test@example.com?subject=Hi&body=Hello` in another app opens Cabalmail to a new compose window with the recipient, subject, and body pre-populated.
 
 ## Risks and open questions

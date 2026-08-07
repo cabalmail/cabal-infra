@@ -139,6 +139,14 @@ The `<account>` and `ENV` come from GitHub Environment variables. The role bears
 
 The IAM resources are added to a new top-level module `terraform/infra/modules/ci_oidc/` (or to the existing `app` module — wherever fits). The OIDC provider is account-wide and gets created once (in a separate small bootstrap if it does not already exist).
 
+> **Erratum (2026-08-07):** The OIDC IAM resources were never brought under
+> Terraform. The provider and a per-account role named `cicd` (not
+> `cabal-deploy-<env>`) are created manually in the console as part of the
+> per-account AWS bootstrap (docs/aws.md), and each workflow assumes the role
+> through the per-environment `AWS_DEPLOY_ROLE_ARN` GitHub variable
+> (docs/github.md). The OIDC migration itself shipped; only its provisioning
+> shape differs from this phase.
+
 Per-environment static keys can be deleted from the GitHub secrets store after Phase 1 lands across all workflows.
 
 ### Phase 2 — S3 sync target verification and Action SHA pinning
@@ -146,6 +154,13 @@ Per-environment static keys can be deleted from the GitHub secrets store after P
 Two small interlocking changes:
 
 1. Every `aws s3 sync` / `aws s3 cp` call in the repo's scripts and workflows gains `--expected-bucket-owner $ACCOUNT_ID`. The account ID is already a known runtime value (it's in the assumed role ARN); set it as `ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"` once per job and pass through.
+
+   > **Erratum (2026-08-07):** The flag as specified does not exist on the
+   > high-level CLI — `aws s3 sync`/`cp` cannot take
+   > `--expected-bucket-owner` (only `s3api` operations can). The shipped
+   > implementation achieves the same fail-closed property with an
+   > `s3api head-bucket --expected-bucket-owner` preflight
+   > (`.github/scripts/verify-bucket-owner.sh`) run before every sync/cp.
 2. Every third-party action in `.github/workflows/*.yml` migrates from tag pin to SHA pin. Pattern:
 
    ```yaml
@@ -159,6 +174,12 @@ Two small interlocking changes:
    ```
 
    Renovate config at [`.github/renovate.json`](../../.github/renovate.json) (new) gets a `github-actions` ecosystem block configured to open PRs that bump the SHA and update the trailing `# v4.x.y` comment.
+
+   > **Erratum (2026-08-07):** No Renovate config was added. Dependabot
+   > handles both jobs — `.github/dependabot.yml` carries `github-actions`
+   > and `docker` ecosystem blocks that bump Action SHAs and image digests —
+   > because the repo already ran Dependabot's alert feed. The Phase 3d
+   > `renovate.json` sketch was likewise never created.
 
 The Checkov action specifically (currently `@master`) goes to a tagged-release SHA. The same change is captured in [`iac-quality-gates-plan.md`](./iac-quality-gates-plan.md) Phase 1; this plan and that one converge at the same line of code — whichever lands first wins.
 
@@ -183,6 +204,13 @@ Renovate's Python ecosystem support handles hash-pinned files transparently; pin
 #### 3b. Docker buildx provenance
 
 Drop `--provenance=false` from every buildx call in [`.github/workflows/app.yml`](../../.github/workflows/app.yml). The default (`provenance=true` with mode=min) produces a SLSA-style attestation pushed to ECR alongside the image. ECR's image-scanning and the trivy-image workflow can both consume it.
+
+> **Erratum (2026-08-07):** Provenance could not be enabled everywhere: the
+> mail-tier builds dropped `--provenance=false`, but the certbot-renewal
+> build keeps it because Lambda container deploys
+> (`update-function-code --image-uri`) reject the multi-manifest OCI index
+> that buildx emits with an attached attestation. The "resolved" premise held
+> for the ECS-consumed images only.
 
 If the older interoperability concern resurfaces (manifest-list shape with provenance attached), `--provenance=mode=max` and explicit platform listing both have workarounds; document the regression in the PR description if encountered.
 
@@ -228,6 +256,12 @@ Covered in detail by [`container-runtime-hardening-plan.md`](./container-runtime
 [`.github/workflows/claude.yml`](../../.github/workflows/claude.yml):
 
 1. Replace `--permission-mode bypassPermissions` with `--permission-mode acceptEdits --allowed-tools "Bash(git*),Bash(gh pr*),Bash(npm test*),Bash(cd react/admin && npm run test*),...,Edit,Write,Read,Grep,Glob"`. The allowed-tools list is the minimum scope the existing Claude PR-drafting playbook actually needs. Any tool not in the list fails closed.
+
+   > **Erratum (2026-08-07):** Phase 4 shipped in June 2026, and the
+   > workflow it hardened was then retired: `claude.yml` was removed
+   > entirely in August 2026. The Dependabot auto-fix path is the only
+   > remaining Claude Code Action invocation and carries the explicit tool
+   > allowlist this phase specified.
 2. Wrap the issue/PR body in an XML "untrusted input" delimiter in the prompt:
 
    ```yaml

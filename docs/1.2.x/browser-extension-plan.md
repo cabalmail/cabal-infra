@@ -170,6 +170,11 @@ Create `extensions/` with the layout above. Set up:
 
 The extension needs `apiUrl`, `userPoolId`, `clientId`, and the list of apex mail domains from somewhere. The convention established by the React admin app (`react/admin/public/config.js`) and adopted by Apple is to fetch `https://<control-domain>/config.js` (or `.json`) at first launch.
 
+> **Erratum (2026-08-07):** `config.js` is not in the React source tree; it is
+> Terraform-generated (`terraform/infra/modules/app/s3.tf`, from
+> `templates/config.js.tftpl`) and served from the control domain via
+> CloudFront. The fetch-at-runtime convention is otherwise as described.
+
 The control domain itself is the only value baked at build time. Store it in a Vite-injected constant per build variant (dev/stage/prod), much like the Android plan's `buildConfigField`. In Vite this is `define: { __CONTROL_DOMAIN__: JSON.stringify(...) }` keyed off `process.env.CABALMAIL_ENV`.
 
 `shared/src/config/ConfigService.ts`:
@@ -341,6 +346,12 @@ No reordering of the roadmap is required. The 1.2.x work and the end-user framew
 ### 2. Cognito Hosted UI + PKCE
 
 The Cognito User Pool already supports the Hosted UI; the existing infrastructure exposes it on `https://<control-domain>/auth/...` (configured in `terraform/infra/modules/user_pool/`). We add an App Client for the extension specifically -- a public client with no client secret, with allowed callback URLs of the form `https://<extension-id>.chromiumapp.org/oauth2/redirect` (Chrome's `chrome.identity.launchWebAuthFlow` redirect convention) and a Safari analog.
+
+> **Erratum (2026-08-07):** The Hosted UI lives on the Cognito-hosted prefix domain
+> `cabal-<account-id>.auth.<region>.amazoncognito.com` (provisioned for the
+> monitoring ALB's OIDC action), not on the control domain. The extension's
+> auth URLs must target that domain, or a custom domain must first be
+> added.
 
 `shared/src/auth/HostedUiAuth.ts`:
 - Generates a PKCE code verifier + challenge

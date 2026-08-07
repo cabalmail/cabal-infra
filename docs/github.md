@@ -44,6 +44,8 @@ These are required for every environment.
 | `TF_VAR_ENVIRONMENT` | `production` | Passed into Terraform as the environment name. |
 | `TF_VAR_IMAP_SCALE` | `{ min = 1, max = 1, des = 1, size = \\"t3.small\\" }` | ECS IMAP tier autoscaling parameters. Quotes must be escaped. |
 | `TF_VAR_INVITATION_CODE` | `shared-signup-secret` | Optional. When set, signups require this code. Leave unset or empty to keep signups open. |
+| `TF_VAR_ENFORCE_ADMIN_MFA` | `false` | Optional. When `true`, the `require_admin_mfa` pre-token-generation trigger refuses sign-in tokens to admin-group members with no enrolled MFA factor. Default `false` (audit mode, log-only). Flip only after every admin has enrolled TOTP. |
+| `TF_VAR_ENFORCE_USER_MFA` | `false` | Optional. Same gate for all non-admin users (a dedicated enrollment app client lets locked-out users enroll self-service). Default `false`. Flip only after the user population has enrolled TOTP. |
 | `TF_VAR_MAIL_DOMAINS` | `[\\"example.com\\",\\"example.org\\"]` | Mail address namespaces. No apex addressing -- see architecture notes. Quotes must be escaped. |
 | `TF_VAR_PROD` | `true` | Enables production-only Terraform resources. Set `true` for `prod`, `false` elsewhere. |
 | `TF_VAR_REPO` | `https://github.com/your-account/cabal-infra` | URL of your forked repository. |
@@ -83,6 +85,12 @@ Note that quotation marks must be escaped with a single backslash. (If you're re
 | Variable | Example | Notes |
 | --- | --- | --- |
 | `TF_VAR_IMAP_POOL_ENABLED` | `false` | Optional. When `true`, the API Lambdas reuse an authenticated master-user IMAP session across warm invocations (keyed by host and user) rather than reconnecting per request. Default `false`; the off path is the original connect/login/logout. Validate in `stage` before promoting to `prod`. |
+
+### Test fixtures
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `TF_VAR_SINKHOLE` | `false` | Optional, non-prod only (a validation block refuses it in prod). When `true`, deploys the [SMTP sinkhole test fixture](./operations.md#test-fixtures-and-pre-promotion-verification) — a tiny configurable SMTP listener used to force deterministic 4xx/5xx responses in test sequences. |
 
 ### Monitoring
 

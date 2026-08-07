@@ -83,6 +83,13 @@ The four "service requires wildcard" cases are fine; the `userpool/*` case is th
 
 [`terraform/infra/modules/ecr/main.tf`](../../terraform/infra/modules/ecr/main.tf): repositories created without `image_scanning_configuration`, without `image_tag_mutability`, without a repository policy. Defaults are scan-off, tag-mutable, any-principal-in-account.
 
+> **Erratum (2026-08-07):** This audit entry was wrong when written:
+> `image_tag_mutability = "IMMUTABLE"` and `scan_on_push = true` were already
+> set on every repository at the time (they date to the ECR module's creation
+> and the 0.9.x build/deploy work). Only the repository-policy observation was
+> accurate, and Phase 5's mutability/scan pieces were already in place before
+> this plan existed.
+
 ## Target state
 
 ### Phase 1 — Cognito MFA (TOTP) and recovery posture
@@ -220,6 +227,12 @@ resource "aws_ecr_repository_policy" "tier" {
 `scan_on_push = true` produces findings; the rollout pattern mirrors [`iac-quality-gates-plan.md`](./iac-quality-gates-plan.md) Phase 2 (baseline current findings, accept them as known, fail on new). Image-scan output uploads to GitHub Code Scanning via SARIF.
 
 `image_tag_mutability = "IMMUTABLE"` means re-tagging a SHA-tagged image fails. The deploy script in [`container-runtime-hardening-plan.md`](./container-runtime-hardening-plan.md) Phase 3 moves to digest references, sidestepping the mutability concern at the consumer side.
+
+> **Erratum (2026-08-07):** The deploy script never moved to digest
+> references — that piece was dropped when container-plan Phase 3 shipped
+> (0.10.6), precisely because tag immutability (already in force) binds each
+> `sha-` tag to one digest, making a task-def digest reference redundant. The
+> deploy path still pins `sha-<8>` tags via per-tier SSM parameters.
 
 ## Migration sequence
 

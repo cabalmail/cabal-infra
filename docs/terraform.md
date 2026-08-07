@@ -80,6 +80,12 @@ The branch selects the GitHub Environment, and the environment supplies everythi
 
 The plan and apply jobs also reconcile the deployed Docker image tags and the deployed Lambda code hashes with what is actually running, so a topology-only Terraform change does not roll back an application deploy that happened out of band via the "Build and Deploy Application" workflow. Image tags are tracked per tier: each `cabal-*` ECS service's running tag is copied into the SSM parameter `/cabal/deployed_image_tag/<tier>` before plan, and each task definition reads its own tier's parameter, so tiers that deploy at different times keep their own tags. The legacy global parameter `/cabal/deployed_image_tag` remains as the fallback for any tier whose per-tier key has not been written yet, and as the bootstrap-sentinel carrier for brand-new environments.
 
+## Scan gates and local reproduction
+
+The scanner step is a hard gate: any Checkov, tflint, or Trivy finding not already recorded in the stack's checked-in baseline/ignore files (`.checkov.baseline`, `.checkov.yaml`, `.trivyignore` per stack) fails the run. Fixing a finding means a real fix, a baseline entry, or an inline skip — either way with a rationale in the stack's `BASELINE.md`; never silence the scan itself.
+
+Run `make scan` at the repo root to reproduce CI locally with the same pinned scanner versions, baselines, and suppressions. Install checkov via pipx/pip, **not** brew — brew's build omits the graph (`CKV2_*`) checks, so a brew checkov passes locally on findings CI will reject (the Makefile's `checkov-graph-guard` fails fast on such an install). Design history: [0.10.x/iac-quality-gates-plan.md](./0.10.x/iac-quality-gates-plan.md).
+
 ## The dns bootstrap stage
 
 `terraform/dns` stands up the Route 53 zone for the control domain. It is a separate stack because its output (the zone's name servers) must be applied to your domain registration before the main stack's certificate validation can succeed; see the provisioning steps in [setup.md](./setup.md).

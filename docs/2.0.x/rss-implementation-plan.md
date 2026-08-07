@@ -227,6 +227,12 @@ one SNS message per (user, item) onto the existing push topic with a
 APNs/FCM delivery; on-device NSE enriches the notification by calling
 `/rss/items/{id}`.
 
+> **Erratum (2026-08-07):** The shipped push path (0.11.0) is SQS-only —
+> procmail-spooled wake signals land on `cabal-push-queue`, consumed by
+> `push_dispatch`; there is no SNS push topic or topic-attribute filtering
+> to reuse. RSS notification fan-in must target the SQS queue or add new
+> SNS plumbing.
+
 **Apple sync path.** When online, the Apple client polls
 `GET /rss/items?subscription_id=X&since=<cursor>` (or one call per
 folder member) to pull new items into its local `ItemCache`. The
@@ -542,6 +548,12 @@ smaller:
   to the existing email API.
 - **SNS topic + SQS queue** reusing the 1.0.x push fanout, with a new
   topic-attribute filter for RSS payloads.
+
+  > **Erratum (2026-08-07):** There is no existing push SNS topic or fanout; the
+  > shipped (0.11.x) pipeline is `cabal-push-queue` (SQS + DLQ) consumed by
+  > `push_dispatch`. Message-attribute filtering as described requires new
+  > SNS infrastructure. All "1.0.x" push references in this plan mean the
+  > path that actually shipped in 0.11.0.
 
 What this does **not** add:
 
