@@ -12,10 +12,13 @@ import XCTest
 ///
 /// The exception is `testRealEditorPageBootsInThisRunner`, which asserts the
 /// premise the conversion suite depends on: that `editor.html` really boots
-/// in whatever runner is executing. It lives here because this suite has
-/// never been conditionally skipped — a runner that cannot host the editor
-/// has to fail by name rather than quietly take the conversion tests down
-/// with it (#948).
+/// in whatever runner is executing — a runner that cannot host the editor
+/// fails by name rather than quietly taking the conversion tests down with
+/// it (#948). The one sanctioned exception is apple.yml's simulator
+/// WebContent carve-out: CI's freshly created iOS/visionOS devices never
+/// launch a WebContent process under a hostless runner, so those legs skip
+/// this test (and the conversion suite) explicitly and loudly, and the
+/// macOS leg carries the coverage.
 @MainActor
 final class RichTextEditorBridgeHealthTests: XCTestCase {
     /// The #734 shape: the boot script fails, so `ready` never arrives.

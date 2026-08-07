@@ -6,9 +6,12 @@ import XCTest
 /// `editor-bridge.js` (marked with `breaks: true` + flattenParagraphs, the
 /// turndown ZWSP-trick paragraph + line-break rules, the styleParagraphs
 /// regex) are exercised end-to-end against a live `WKWebView`-backed
-/// controller — same code path the user hits at send time. That works in
-/// every runner in use, `swift test` included: a local `file://` load needs
-/// no app host (#948).
+/// controller — same code path the user hits at send time. A local `file://`
+/// load needs no app host (#948), so this runs under `swift test` and on any
+/// booted simulator — but NOT on CI's freshly `simctl create`d iOS/visionOS
+/// devices, which never launch a WebContent process under a hostless runner;
+/// apple.yml carves this suite out on those legs and the macOS leg carries
+/// the coverage.
 @MainActor
 final class RichTextEditorControllerTests: XCTestCase {
     private var controller: RichTextEditorController!
