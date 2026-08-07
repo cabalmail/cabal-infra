@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.26] - 2026-08-07
+
+### Added
+- Apple: **Paste without formatting in the composer.** ⌘⇧V in the rich-text
+  editor (macOS and iPad hardware keyboards) pastes the clipboard's plain-text
+  flavor: markup arrives as literal text and line breaks are preserved. The
+  macOS Edit menu's Paste and Match Style (⌘⌥⇧V) takes the same path, where it
+  previously pasted with formatting.
+- **CI gate for `scripts/tests`.** A new `scripts-tests.yml` workflow runs
+  the `scripts/tests` unittest suites on pull requests that touch
+  `scripts/**` and on pushes to the named branches; previously the suites
+  ran only by hand.
+
+### Changed
+- Apple: **Native macOS sign-in form.** The Mac sign-in and two-factor
+  screens now use Settings-style grouped forms — width-capped, topped with
+  the app mark, with labeled fields and a right-aligned prominent action
+  button — replacing the unpadded full-width columns layout. While signed
+  out the window also keeps a minimum size so the action buttons can't
+  fall below the fold.
+
+### Fixed
+- Apple: **Compose errors stay on screen.** The iPhone and iPad composer's
+  error banner was the first section of the scrolling form, so when the
+  keyboard had scrolled the form down — the usual state when Save Draft or
+  Send fails — the banner was laid out above the visible region, behind the
+  toolbar. "Couldn't save draft: pick a From address first" never reached
+  the user and Save Draft looked dead. The banner is now pinned between the
+  toolbar and the form, readable at any scroll offset.
+- Apple: **Emptied folders clear their rows.** A message deleted from
+  another client left its row in the list forever once the folder went to
+  zero — the pills read "All, 0" beside a row that failed with a 404 when
+  opened, and neither an explicit refresh nor a relaunch cleared it. A
+  refresh whose STATUS reports the folder holds no messages now drops the
+  stale rows and their cached envelopes.
+- Apple: **iPad reader actions no longer spread across the message list.** On
+  iOS 27 a `.bottomBar` toolbar group in a split view attaches to the window
+  rather than to the detail column, so Reply and Mark-as-read rendered under
+  the message list instead of the message they act on. At regular width on
+  iOS 27 the reader now pins the same five actions to its own pane; compact
+  iPhone and iOS 26 keep the system bar unchanged.
+- Apple: **Status banners no longer cover the iPad toolbar.** The launch
+  resume offer (and every other banner) was drawn across the navigation bar at
+  regular width, hiding New Message, Addresses and the search field for as
+  long as it was up. Banners now hang below the bar there; iPhone keeps them
+  in the title slot, where nothing else sits.
+- Apple: **Errors read as sentences.** Failures surfaced the raw Swift enum,
+  escaped JSON and all — a message deleted from another client showed
+  `server(code: "404", message: "{\"status\": …")` across four red lines of
+  the reader instead of "That message is no longer in Drafts." Every error
+  now carries plain user-facing copy, preferring the server's own
+  explanation where it sends one.
+- Apple: **Settings window closes on sign-out (macOS).** Signing out used
+  to leave the macOS Settings window open, still showing the departed
+  account's settings form. It now closes itself when the session ends and
+  brings the main window — already reset to the sign-in screen — to the
+  front. The other platforms already dismissed their settings surface as
+  part of the sign-out reset.
+- **Authorization on co-assigned addresses.** Assigning a second user to an
+  address left *nobody* — not the co-assignee, not the original owner — able
+  to send from it, revoke, suspend or reinstate it, while the address kept
+  showing up in everyone's list. The shared ownership check now reads the
+  slash-delimited assignee list the same way `/list` and favorites already do.
+- Apple: **Unread pill after archiving from the reader.** Archiving an unread
+  message from the reader dropped the All count but left Unread counting the
+  message that had gone, and staying in the folder never corrected it. A row
+  pruned by the reader's dispose now takes its unread with it.
+- **Durable smtp-in relay queue.** Inbound mail the relay has accepted
+  but not yet handed to the imap tier now waits in a shared EFS-backed
+  queue (per-tier access point, mirroring the smtp-out arrangement)
+  instead of the container's ephemeral filesystem. Previously, a smtp-in
+  task replacement destroyed any messages deferred in its queue — the
+  silent-loss window observed when an imap deploy and a smtp-in deploy
+  overlap, since mail accepted during the imap gap was queued on the
+  outgoing task and killed with it, with no bounce. A replaced task's
+  queue is now drained by whichever sibling task next scans it. The
+  smtp-in task also gains the 120 s stop grace (supervisord
+  `stopwaitsecs=110`) so an in-flight relay delivery finishes before
+  SIGKILL.
+
 ## [0.11.25] - 2026-08-06
 
 ### Changed
