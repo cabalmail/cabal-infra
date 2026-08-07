@@ -8,11 +8,6 @@ variable "zone_id" {
   description = "Route 53 Zone ID for control domain"
 }
 
-variable "control_domain" {
-  type        = string
-  description = "The control domain"
-}
-
 # -- ECS target group ARNs ------------------------------------
 #
 # There is deliberately no imap target group variable: mailbox access
