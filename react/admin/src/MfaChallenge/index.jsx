@@ -1,4 +1,5 @@
 import AuthShell from '../Login/AuthShell';
+import VerificationCodeField from '../Login/VerificationCodeField';
 
 /**
  * Second-factor challenge screen (identity plan Phase 1). Shown when
@@ -26,26 +27,12 @@ function MfaChallenge({
           : 'Enter the code we just sent to your phone.'}
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="verificationCode">
-              Authentication code
-            </label>
-          </div>
-          <input
-            id="verificationCode"
-            name="verificationCode"
-            type="text"
-            className="mono"
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            placeholder="123456"
-            onChange={onCodeChange}
-            value={code || ''}
-            required
-            autoFocus
-          />
-        </div>
+        <VerificationCodeField
+          label="Authentication code"
+          value={code}
+          onChange={onCodeChange}
+          autoFocus
+        />
         <button type="submit" className="auth__btn-primary">Verify</button>
       </form>
     </AuthShell>

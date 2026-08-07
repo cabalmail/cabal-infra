@@ -1,4 +1,5 @@
 import AuthShell from '../Login/AuthShell';
+import VerificationCodeField from '../Login/VerificationCodeField';
 
 function formatLockout(seconds) {
   if (seconds >= 60) {
@@ -60,23 +61,11 @@ function Verify({
         registration.
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="verificationCode">Verification code</label>
-          </div>
-          <input
-            id="verificationCode"
-            name="verificationCode"
-            type="text"
-            className="mono"
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            placeholder="123456"
-            onChange={onCodeChange}
-            value={code || ''}
-            required
-          />
-        </div>
+        <VerificationCodeField
+          label="Verification code"
+          value={code}
+          onChange={onCodeChange}
+        />
         <button type="submit" className="auth__btn-primary">Verify</button>
       </form>
       {onResend ? (
