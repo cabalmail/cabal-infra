@@ -210,8 +210,6 @@ private struct VisionMailPane: View {
             MessageListView(
                 scope: .folder(selectedFolder),
                 selection: $selectedEnvelope,
-                addressFilter: nil,
-                onClearAddressFilter: {},
                 onSearchResultSelected: { _ in },
                 onSelectionCountChanged: { listSelectionCount = $0 }
             )
