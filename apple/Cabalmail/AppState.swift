@@ -97,6 +97,10 @@ final class AppState {
     var toggleSeenRequestTick = 0
     var toggleFlaggedRequestTick = 0
     var moveSelectionRequestTick = 0
+    /// What those commands (and the reply family) currently have to act on,
+    /// reported by the mail surface via `reportsMessageMenuAvailability`. The
+    /// menu dims a command that would be a no-op instead of advertising it.
+    var messageMenuAvailability: MessageMenuAvailability = .none
     /// Intent to open the iOS / iPadOS / visionOS settings sheet (General /
     /// Addresses / Folders). Bumped by the sidebar gear button and the ⌘,
     /// app command; `SignedInRootView` observes it and presents the sheet.

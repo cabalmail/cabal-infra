@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-08-08
+
+The [compatibility contract](docs/compatibility.md) is now in effect.
+
+### Added
+- **Reference docs for shipped features.** New top-level docs for BIMI
+  (`docs/bimi.md`), inbound sender authentication (`docs/inbound-auth.md`),
+  durable relay queues (`docs/mail-queues.md`), and IMAP deploy behavior
+  (`docs/imap-deploys.md`), linked from operations.md; scan-gate section in
+  terraform.md; `/send` idempotency semantics in
+  draft-sync-and-threading.md; `TF_VAR_SINKHOLE` and the MFA-enforcement
+  variables in github.md. The user manual is rewritten around the native
+  clients (sign-in and MFA, suspend vs revoke, mail features, Siri, Watch,
+  Contacts) and now documents the in-app admin dashboard.
+- **Terraform configuration validation check.**
+  `.github/scripts/terraform-validate.sh` runs `terraform init -backend=false`
+  and `terraform validate` over a stack, catching the cross-file configuration
+  errors the scanners cannot see because they never initialise Terraform — a
+  module argument with no matching variable, a reference to an output the
+  module does not declare, a wrong type. The pull-request lint workflow runs it
+  over both stacks whenever a Terraform path changes. It needs no credentials
+  and no backend.
+
+### Changed
+- **Clicking an address copies it.** The web app's addresses sidebar no
+  longer filters the message list to the clicked address; clicking a row
+  now copies the address to the clipboard. The separate per-row copy
+  button is gone — the whole row is the copy affordance.
+- Apple: **Tapping an address copies it.** The address sidebar no longer
+  filters the message list to the tapped address — the "Filtered to …"
+  chip is gone, and tapping (or clicking) an address row now copies the
+  address to the clipboard, same as the row's Copy Address context-menu
+  action.
+- **In-container health checks for the imap and smtp-out tiers.** With
+  their public NLB listeners gone, these tiers are no longer probed by
+  the load balancer; each task definition now checks its own service
+  ports (143; 465 and 587) directly. The probe gates deployments (the
+  circuit breaker rolls back a task that never becomes healthy) and
+  replaces a hung-but-running task in steady state. Inbound relay (25)
+  still uses the NLB's own health checks.
+- Apple: **iPad reader actions adapt to the pane width.** The pane-scoped
+  action bar under the iPad reader now sizes its item set to the pane's
+  measured width instead of the iPhone-derived five-item budget: when the
+  (user-resizable) reading pane is wide enough, the remote-content and
+  reader-view toggles return to the bar and leave the ••• menu; narrowing
+  the pane demotes them back to the menu.
+
+### Removed
+- **Public IMAP access.** The NLB's IMAPS listener (993) is gone; mailbox
+  access is now exclusively through the Cabalmail clients via the Lambda
+  API, which reaches the imap tier privately. The `_imaps._tcp` SRV
+  record now advertises "not offered" (RFC 6186) like `_imap._tcp`
+  already did, and the imap tier's security group no longer admits
+  public traffic - 143 is VPC-only (health checks and the Lambda API),
+  993 is closed entirely. Outbound submission (465/587) is unaffected.
+- **Public SMTP submission.** The NLB's submission listeners (465 and
+  587) are gone; sending is now exclusively through the Cabalmail
+  clients via the Lambda API, which reaches the smtp-out tier privately.
+  The `_submission._tcp` SRV record now advertises "not offered"
+  (RFC 6186), and the smtp-out tier's security group no longer admits
+  public traffic - 465/587 are VPC-only (health checks and the send
+  Lambda). Inbound relay (25) is unaffected - MX delivery requires it.
+
+### Fixed
+- Apple: **Status banners no longer cover the iPhone navigation bar title.**
+  The offline notice, the toasts and the launch resume offer floated over the
+  compact-width navigation bar's centre slot, hiding the name of the folder you
+  had just landed in for as long as the banner was up. They now hang just below
+  the bar, as they already did on iPad.
+- **Plan-document errata sweep.** Audited every versioned plan directory
+  (`docs/0.4.x` through `docs/2.0.x`) against the code and git history and
+  recorded 64 dated erratum blocks where a plan's claims were falsified by
+  what actually shipped — notably the #371 API-backed-transport reversal
+  across the 0.6.x/0.11.x Apple plans, the never-built fail2ban replacement,
+  the inverted DNSSEC rollout sequence, and the stale Amplify/SNS/1.0.x
+  premises in the 1.1.x–2.0.x plans.
+
 ## [0.11.26] - 2026-08-07
 
 ### Added
