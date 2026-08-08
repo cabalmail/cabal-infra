@@ -216,7 +216,9 @@ struct MailRootView: View {
                 sidebar
             }
             #else
-            sidebar
+            // macOS opens the sidebar at a readable width and remembers the
+            // one the user drags to; every other platform passes through.
+            sidebar.sidebarColumnWidthPolicy()
             #endif
         } content: {
             // Pin the list column to its persisted width and hang the drag
