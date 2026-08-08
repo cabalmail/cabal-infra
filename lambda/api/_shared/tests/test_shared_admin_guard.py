@@ -98,5 +98,55 @@ class AdminGuardTests(unittest.TestCase):
         self.assertFalse(admin_limits.is_admin(None))
 
 
+_INVALID_BODY = {
+    'statusCode': 400,
+    'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
+}
+
+
+class ParseJsonObjectBodyTests(unittest.TestCase):
+    '''Pins the body guard the six admin handlers each used to inline.
+
+    Every rejection answers with one wording regardless of cause -- that is the
+    pre-existing wire contract, and the reason this is not
+    helper.parse_json_body (which distinguishes three causes).
+    '''
+
+    def test_json_object_is_returned(self):
+        '''A JSON object decodes and reports no error.'''
+        body, error = admin_limits.parse_json_object_body({'body': '{"username": "bob"}'})
+        self.assertEqual(body, {'username': 'bob'})
+        self.assertIsNone(error)
+
+    def test_empty_object_is_valid(self):
+        '''`{}` is a JSON object, so it passes -- key access fails later, as before.'''
+        body, error = admin_limits.parse_json_object_body({'body': '{}'})
+        self.assertEqual(body, {})
+        self.assertIsNone(error)
+
+    def test_bytes_body_decodes(self):
+        '''json.loads accepts bytes; the guard must not reject them.'''
+        body, error = admin_limits.parse_json_object_body({'body': b'{"username": "bob"}'})
+        self.assertEqual(body, {'username': 'bob'})
+        self.assertIsNone(error)
+
+    def test_missing_empty_and_malformed_bodies_are_rejected(self):
+        '''Absent, empty, and unparseable bodies all get the one 400.'''
+        for event in ({}, {'body': None}, {'body': ''}, {'body': '   x'},
+                      {'body': 'not json at all'}, {'body': '{'}, {'body': 123}):
+            with self.subTest(event=event):
+                body, error = admin_limits.parse_json_object_body(event)
+                self.assertIsNone(body)
+                self.assertEqual(error, _INVALID_BODY)
+
+    def test_non_object_json_is_rejected(self):
+        '''Valid JSON that is not an object is still a 400, not a later TypeError.'''
+        for raw in ('null', '[]', '[1, 2]', '"a string"', '3', 'true', 'false'):
+            with self.subTest(raw=raw):
+                body, error = admin_limits.parse_json_object_body({'body': raw})
+                self.assertIsNone(body)
+                self.assertEqual(error, _INVALID_BODY)
+
+
 if __name__ == '__main__':
     unittest.main()
