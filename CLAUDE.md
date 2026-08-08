@@ -47,6 +47,7 @@ If any of these is unclear, route through stage first.
 ```
 react/admin/        React frontend (email client + address/folder management)
 apple/              Native Apple clients (iOS + macOS, SwiftUI) and CabalmailKit
+linux/              Native Linux client (GTK4 + libadwaita, Rust) — in progress, see docs/1.1.x/linux-client-plan.md
 lambda/api/         AWS Lambda functions behind API Gateway (Python)
 lambda/counter/     Cognito post-confirmation trigger (Python)
 lambda/certbot-renewal/  Let's Encrypt certificate renewal Lambda
@@ -81,6 +82,13 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - App-layer tests: `cd apple && xcodebuild test -workspace Cabalmail.xcworkspace -scheme CabalmailMac -destination 'platform=macOS' -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""` — XCTest suite for the app target's view models (`apple/CabalmailTests/`, e.g. bulk-selection/move flows against a `FakeImapClient`). `swift test` does **not** compile or run these, and `apple.yml` runs them only on push to a named branch, not on PRs — so run them locally before merging a change to a shared protocol (e.g. `ImapClient`) or a view model.
 - iOS build sanity check: `cd apple && xcodebuild -workspace Cabalmail.xcworkspace -scheme Cabalmail -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO`
 - CI: `apple.yml` builds and tests on a macOS runner; does not deploy anything to AWS
+
+### Linux Client (`linux/`)
+- Toolchain: **rustup**, not the distro `rust` package — only rustup honours the exact pin in `linux/rust-toolchain.toml` (1.97.1), and on Arch the two packages conflict
+- Build: `cd linux && cargo build --workspace`
+- Kit tests: `cd linux && cargo test -p cabalmail-kit` (no display server, no network — keep it that way; `cabalmail-kit` must never gain a GTK/libadwaita/WebKit dependency)
+- Everything CI runs, in CI's order: `cd linux && cargo xtask ci` (subcommands land in Phase 1 work item 5)
+- The app crate builds the `cabalmail` binary; CI does not exist yet (Phase 2)
 
 ### Terraform
 - Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)
