@@ -60,8 +60,13 @@ locals {
 # v6 (docs/0.11.0/push-notifications.md phase 2): add the PUSH_QUEUE_URL env
 # var so the entrypoint can hand the queue URL + task-role credential URI to
 # procmail's push-enqueue.sh (sendmail sanitizes the delivery agents' env).
+# v7: add the container-level healthCheck (TCP 143). Removing the public
+#     IMAPS listener detached the imap target group from the NLB, which
+#     stops NLB health checks entirely (targets sit in Target.NotInUse),
+#     so without this probe a task that starts but never listens would
+#     pass deploys and never be replaced.
 resource "terraform_data" "imap_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v6+hc" : "imap-taskdef-v6"
+  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v7+hc" : "imap-taskdef-v7"
 }
 
 resource "aws_ecs_task_definition" "imap" {
@@ -91,6 +96,24 @@ resource "aws_ecs_task_definition" "imap" {
       { containerPort = 993, protocol = "tcp" },
       { containerPort = 25, protocol = "tcp" },
     ]
+
+    # In-container TCP probe of the IMAP listener. The imap target group
+    # has no NLB listener anymore, and the NLB performs no health checks
+    # on a listenerless target group (Target.NotInUse) - this probe is
+    # therefore the only "listening", not merely "running", signal. It
+    # gates deployments (the circuit breaker below rolls back a task
+    # whose container never goes healthy) and replaces a hung-but-alive
+    # Dovecot in steady state. interval mirrors the 10s the NLB probe
+    # used; startPeriod covers the entrypoint's pre-listen work (cert
+    # render, DynamoDB config generation, user sync), matching the
+    # service's 120s grace period.
+    healthCheck = {
+      command     = ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/127.0.0.1/143'"]
+      interval    = 10
+      timeout     = 5
+      retries     = 3
+      startPeriod = 120
+    }
 
     environment = [
       { name = "TIER", value = "imap" },
@@ -375,6 +398,10 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   #   v3: runtime posture (cap drop=ALL + adds, no-new-privileges, init) - phase 2
   #   v4: add the LOGIN_TRUSTED_NETWORKS env var (NLB public-subnet CIDRs) for
   #       disable_plaintext_auth = yes - phase 4
+  #   v5: add the container-level healthCheck (TCP 465 + 587). The public
+  #       submission listeners are gone, which detached both smtp-out
+  #       target groups from the NLB and ended its health checks
+  #       (Target.NotInUse); see the imap marker's v7 note.
   # The +sinkhole suffix is the var.sinkhole hook described above; the +hc
   # suffix is the analogous var.healthcheck_ping_param hook (see the imap
   # marker) that keeps the HEALTHCHECK_PING_URL secret in step with whether
@@ -382,7 +409,7 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   # the queue/sinkhole work after monitoring was removed, so appending +hc is a
   # no-op for the current (monitoring-off) state and only future-proofs this
   # tier against a re-enable.
-  input = "${var.sinkhole ? "smtp-queue-mount-v4+sinkhole" : "smtp-queue-mount-v4"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
+  input = "${var.sinkhole ? "smtp-queue-mount-v5+sinkhole" : "smtp-queue-mount-v5"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
 }
 
 resource "aws_ecs_task_definition" "smtp_out" {
@@ -411,6 +438,19 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { containerPort = 465, protocol = "tcp" },
       { containerPort = 587, protocol = "tcp" },
     ]
+
+    # In-container TCP probe of both Dovecot submission listeners; the
+    # NLB no longer health-checks the submission/starttls target groups
+    # (no listener -> Target.NotInUse). See the imap task def for the
+    # full rationale. interval mirrors the 30s the NLB probes used;
+    # timeout allows for the two sequential 5s connect attempts.
+    healthCheck = {
+      command     = ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/127.0.0.1/465' && timeout 5 bash -c '</dev/tcp/127.0.0.1/587'"]
+      interval    = 30
+      timeout     = 15
+      retries     = 3
+      startPeriod = 120
+    }
 
     # SINKHOLE_ENABLED is appended conditionally so the env-var list
     # is identical between sinkhole-on and sinkhole-off task defs in

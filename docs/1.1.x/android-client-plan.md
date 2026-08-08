@@ -55,6 +55,12 @@ Seven phases: project scaffolding and shared module; **CI/CD (early, so every su
 | No cross-device resume | Nav-state cursor (`/get_nav_state`/`/set_nav_state`) with restore prompt | Same -- resume cursor |
 | Prefs stored locally | Display name + theme/accent/density synced via `/get_preferences`/`/set_preferences` | Sync the shared prefs server-side (see Phase 6) |
 
+> **Erratum (2026-08-07):** The "Amplify Swift" row is wrong: Amplify did not ship on
+> Apple either. The Apple client's auth is a hand-rolled Cognito
+> `USER_PASSWORD_AUTH` JSON client (`CabalmailKit/Auth/AuthService.swift`);
+> Amplify Android should be weighed on its own merits, not as a mirror of
+> the Apple choice.
+
 ### Stack decisions
 
 | Choice | Decision | Rationale |
@@ -326,6 +332,11 @@ A single transport layer -- the Lambda API surface -- unified under `CabalmailCl
 
 The Apple client uses Amplify Swift. The Android analog is **Amplify Android** (`aws-amplify/amplify-android`), which wraps the same SRP flow and handles token refresh.
 
+> **Erratum (2026-08-07):** The Apple client does not use Amplify (or SRP); it
+> hand-rolls Cognito `USER_PASSWORD_AUTH` in `AuthService.swift`. "Mirrors
+> Apple" would mean a small hand-rolled JSON client, as the Linux plan later
+> specified.
+
 `kit/src/main/kotlin/com/cabalmail/kit/auth/AuthService.kt`:
 - `signIn(username, password)`, `signUp(username, password, email, phone)`, `confirmSignUp(username, code)`
 - `forgotPassword(username)` / `confirmForgotPassword(username, code, newPassword)`
@@ -370,6 +381,13 @@ Endpoints (mirroring the Apple `ApiBackedImapClient` + `ApiClient`):
 | `deleteFolder(name)` | DELETE | `/delete_folder` | Delete folder (must be empty) |
 | `subscribeFolder(name)` | POST | `/subscribe_folder` | Subscribe |
 | `unsubscribeFolder(name)` | POST | `/unsubscribe_folder` | Unsubscribe |
+
+> **Erratum (2026-08-07):** The HTTP column is wrong for most mutating rows: the
+> deployed API uses PUT (`/set_flag`, `/move_messages`, `/send`,
+> `/save_draft`, `/new_folder`, `/subscribe_folder`, `/unsubscribe_folder`,
+> `/set_favorite`, `/set_nav_state`) and DELETE (`/revoke`, `/delete_folder`,
+> `/purge_messages`, `/empty_trash`). See `react/admin/src/ApiClient.js` for
+> the authoritative verbs.
 
 `/append_sent` exists but is an internal SQS consumer that `/send` enqueues -- the client never calls it directly.
 
@@ -565,6 +583,11 @@ Non-mail features, given their own destinations in the navigation graph.
 
 **Two storage tiers.** A subset of preferences is **synced server-side** via `/get_preferences` / `/set_preferences` so they stay consistent across web, Apple, and Android: the From **display name**, **theme**, **accent**, and **density**. Everything else is Android-local behavior stored in Jetpack `DataStore<Preferences>`. (The Apple client syncs `name` via the server and the rest via iCloud; Android has no iCloud, so routing the shared visual prefs through the server endpoint is both the portable choice and the one that matches the web app.)
 
+> **Erratum (2026-08-07):** iCloud is not used. Since 0.11.x the Apple client syncs
+> its whole settings set through `set_preferences`' per-user `app` map (see
+> `APP_ALLOWED`), and the earlier `NSUbiquitousKeyValueStore` mirroring was
+> removed. The storage-tier split here understates the server-synced set.
+
 **Account:**
 - Signed-in account display, sign-out button.
 - **Display name** (synced) -- free-text, used as the From header's display name at send time. Empty = no display name.
@@ -639,6 +662,10 @@ Cross-cutting work to make each form factor feel native, plus robustness improve
 ### 3. Notifications
 
 - Local notifications only (no FCM push -- same constraint as iOS without APNs).
+
+  > **Erratum (2026-08-07):** iOS has had APNs push since 0.11.0. Android starting
+  > with local notifications remains a choice (FCM not yet wired), not a
+  > parity constraint.
 - `WorkManager` periodic background sync (minimum 15 minutes): opens a short API session, fetches folder status, fires a local notification via `NotificationCompat` for new messages since last check. Notification channel: "New Mail" with default importance.
 - Foreground polling when the app is visible: configurable interval (default 60 seconds) via `repeatOnLifecycle(Lifecycle.State.RESUMED)`.
 
@@ -674,6 +701,11 @@ Cross-cutting work to make each form factor feel native, plus robustness improve
 
 - **Public Play Store release.** Tracked as 1.5.x. 1.1.x ships to Play Console internal testers only.
 - **Push notifications (FCM).** Same blocker as iOS/APNs: needs a server-side IDLE watcher to bridge to FCM. Tracked alongside APNs work.
+
+  > **Erratum (2026-08-07):** The blocker no longer exists: APNs push shipped in
+  > 0.11.0 via a procmail delivery hook → SQS (`cabal-push-queue`) →
+  > `push_dispatch`, with no IDLE watcher involved. FCM support is now an
+  > extension of that shipped pipeline.
 - **Kotlin Multiplatform code sharing with iOS.** The `CabalmailKit` Swift code stays Swift; `kit/` is a parallel Kotlin implementation. KMP is a future optimization, not a prerequisite.
 - **Admin features** (user management, DMARC, multi-user address assignment). Admins continue to use the web app.
 - **RSS reader.** Tracked as 2.x.

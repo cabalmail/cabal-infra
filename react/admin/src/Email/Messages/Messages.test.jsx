@@ -34,7 +34,7 @@ vi.mock('../../hooks/useApi', () => ({
 
 const authValue = { token: 'tok', api_url: 'http://api', host: 'host' };
 
-function Harness({ folder = 'INBOX', addressFilter = null, overrides = {} }) {
+function Harness({ folder = 'INBOX', overrides = {} }) {
   const [filter, setFilter] = React.useState('all');
   const [sortKey, setSortKey] = React.useState(DATE);
   const [sortDir, setSortDir] = React.useState(DESC);
@@ -53,7 +53,6 @@ function Harness({ folder = 'INBOX', addressFilter = null, overrides = {} }) {
           showOverlay={vi.fn()}
           setFolder={vi.fn()}
           setMessage={setMessage}
-          addressFilter={addressFilter}
           filter={filter}
           setFilter={setFilter}
           sortKey={sortKey}
@@ -98,16 +97,6 @@ describe('Messages', () => {
     expect(Array.from(pills).map((p) => p.textContent)).toEqual(
       expect.arrayContaining([expect.stringContaining('All')]),
     );
-    unmount();
-  });
-
-  it('uses the address as the title when addressFilter is set', async () => {
-    const { container, unmount } = render(
-      <Harness folder="INBOX" addressFilter="me@example.com" />,
-    );
-    await waitFor(() => {
-      expect(container.querySelector('.msglist-title').textContent).toBe('me@example.com');
-    });
     unmount();
   });
 

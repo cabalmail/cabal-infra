@@ -1356,6 +1356,12 @@ TabView {
 The `RulesView` itself reuses the iOS implementation; SwiftUI
 adapts the layout to the macOS chrome.
 
+> **Erratum (2026-08-07):** The macOS Settings tab bar quoted above was removed in
+> June 2026 (commit 7b44c2c6): Addresses/Folders moved to the main-window
+> sidebar and `SettingsTabsView` now renders `SettingsView` directly. A
+> macOS Rules surface needs a new design (e.g. reintroduce a tab bar, or a
+> sidebar/section placement), not an insertion into the quoted `TabView`.
+
 Match the macOS Settings-window conventions: the master/detail
 layout, the standard padding, the standard pill segmented
 controls. No custom drag-reorder UI -- SwiftUI's native one is

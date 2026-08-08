@@ -5,7 +5,7 @@ defines what that means in practice: which parts of the system are a stable,
 versioned contract, what counts as a breaking change, and how deprecations and
 upgrades are handled.
 
-These guarantees take effect at **1.0.0**. Releases in the `0.x` series carried
+These guarantees took effect at **1.0.0**. Releases in the `0.x` series carried
 no compatibility guarantees - anything could change between them.
 
 ## Who this is for
@@ -68,8 +68,9 @@ token is presented.
 
 ### 3. Mail service interface
 
-- The IMAP, inbound SMTP, and submission endpoints, their ports (993, 25, 587,
-  465), and their TLS requirements.
+- The inbound SMTP endpoint, its port (25), and its TLS requirements. There
+  is no public IMAP or submission endpoint; mailbox access and sending go
+  through the Lambda API (interface 1).
 - The addressing model: mail is hosted on subdomains only (the apex carries no
   addressing), and addresses follow the per-purpose create/revoke lifecycle.
 - DKIM signing of outbound mail.

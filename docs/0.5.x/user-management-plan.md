@@ -20,6 +20,14 @@ Four phases of work: core admin dashboard (Terraform, Lambda, React), phone numb
 
 **`terraform/infra/modules/app/master_user.tf`** — Add `aws_cognito_user_in_group "master_admin"` to place master user in admin group.
 
+> **Erratum (2026-08-07):** The master user was ultimately kept out of the
+> admin group on purpose: its IMAP access uses the Dovecot master-user
+> htpasswd path, it never calls the admin API, and as a headless account it
+> could not satisfy the later `require_admin_mfa` gate (see the comment in
+> `terraform/infra/modules/app/master_user.tf`). No `aws_cognito_user_in_group`
+> resource exists anywhere in the repo; admin-group membership is granted by
+> the operator in the Cognito console.
+
 **`terraform/infra/modules/app/variables.tf`** — Add `admin_group_name` variable.
 
 **`terraform/infra/main.tf`** — Pass `admin_group_name = module.pool.admin_group_name` to the admin module.
@@ -118,6 +126,13 @@ Cognito handles the verification flow automatically: after sign-up, it sends an 
 
 **`terraform/infra/modules/user_pool/main.tf`** — Configure the Cognito user pool for SMS-based password recovery:
 - Set `account_recovery_setting` to prefer `verified_phone_number`
+
+  > **Erratum (2026-08-07):** The shipped configuration prefers
+  > `verified_email` (priority 1) with `verified_phone_number` second, and the
+  > phone mechanism exists only when SMS is enabled — changed by the
+  > identity/IAM hardening work so a SIM swap alone cannot take over an
+  > account (`terraform/infra/modules/user_pool/main.tf`).
+
 - Cognito's `ForgotPassword` API will send a reset code via SMS to the user's verified phone number
 
 **`react/admin/src/Login/index.jsx`** — Add a "Forgot password?" link below the login form that navigates to a password reset flow:
@@ -139,6 +154,13 @@ Automatically ingest DMARC aggregate reports (currently landing in the admin's i
 ### 3a. Report Ingestion Pipeline
 
 **SES Receipt Rule** — Route incoming DMARC report emails (sent to the `rua` address on the control domain) to an S3 bucket instead of (or in addition to) the admin's inbox.
+
+> **Erratum (2026-08-07):** The shipped pipeline uses no SES. DMARC reports
+> are delivered to a dedicated `dmarc` mailbox
+> (`terraform/infra/modules/app/dmarc_user.tf`); the `process_dmarc` Lambda
+> runs on an EventBridge schedule (rate(6 hours)) and ingests them from that
+> mailbox over IMAP via the master-user pattern. The table shipped as
+> `cabal-dmarc-reports` with generic `pk`/`sk` keys.
 
 **`lambda/api/process_dmarc/`** (new) — Lambda triggered by S3 `ObjectCreated` events on the DMARC report bucket:
 - Extract the MIME attachment (zip or gzip)

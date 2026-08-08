@@ -19,12 +19,6 @@ struct MessageListView: View {
     /// True for the global search surface.
     var isSearchScope: Bool { scope.isSearch }
     @Binding var selection: Envelope?
-    /// When set, narrows the visible envelopes to those whose `To` or `Cc`
-    /// includes this address (case-insensitive substring match), matching
-    /// `react/admin/src/Email/Messages/Envelopes.jsx` byte-for-byte.
-    let addressFilter: String?
-    /// Tapped on the filter chip to drop the address scope.
-    let onClearAddressFilter: () -> Void
     /// Fires when the selected envelope is a cross-folder search result.
     /// The string is the result's source folder path — `MailRootView` uses
     /// it to build a synthetic `Folder` for `MessageDetailView` so the

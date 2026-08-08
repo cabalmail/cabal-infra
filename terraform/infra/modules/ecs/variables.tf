@@ -108,12 +108,6 @@ variable "instance_type" {
 
 # -- Health checks --------------------------------------------
 
-variable "health_check_grace_period" {
-  type        = number
-  description = "Seconds ECS ignores target-group health failures after a task starts. Consumed by the imap service only; the smtp services do not set a grace period."
-  default     = 300
-}
-
 variable "deregistration_delay" {
   type        = number
   description = "Seconds the NLB waits for in-flight requests before deregistering a target."

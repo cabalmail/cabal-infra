@@ -125,6 +125,15 @@ Implementation order is recommended but not strict. Phase 1 is the highest-lever
 
 **Change.** Lower the NLB health-check interval for the IMAP target group from 30 s to 10 s. Keep `healthy_threshold=2`. Keep `unhealthy_threshold=10` on the IMAP target group so a broken task stays visible to the operator for the same wall-clock duration as today.
 
+> **Erratum (2026-08-07):** Phases 1-2 shipped as written (June 2026), but
+> the mechanism they tuned was later removed: the 0.11.x private mail plane
+> dropped the public IMAP and submission listeners, and with them the imap
+> target group and the service's load-balancer wiring entirely — ECS cannot
+> update a service referencing a listenerless target group. The fast-probe
+> cadence and fail-fast behavior now live in the container-level
+> `healthCheck` on the imap task definition (PR #963); the NLB retains only
+> the port-25 relay target group.
+
 **Why.** `healthy_threshold=2` x `interval=30s = 60s` worst-case from Dovecot listening to in-service. With interval=10s that becomes ~20s. The same change applied to a broken task means `unhealthy_threshold=10` x `interval=10s = 100s` instead of 300s before NLB removes it - acceptable trade-off for the deploy speedup. If the operator-debugging window matters more, bump `unhealthy_threshold` to 30 to preserve the 300s out-of-service grace.
 
 **Implementation.** Per-target-group health-check overrides. Either:

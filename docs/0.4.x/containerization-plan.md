@@ -25,6 +25,14 @@ Phase 8 replaces fail2ban with a CloudWatch + Lambda + NACL solution,
 after which `NET_ADMIN` is no longer needed and the EC2 capacity provider
 can be right-sized or replaced at the operator's discretion.
 
+> **Erratum (2026-08-07):** Phase 8 was never implemented. fail2ban was
+> disabled in March 2026 (b92dbccc), never re-enabled, and removed together
+> with `NET_ADMIN` during 0.10.x container hardening (2e9577bd) without the
+> CloudWatch + Lambda + NACL replacement; login rate limiting moved to
+> Dovecot's native mechanisms instead
+> (docs/0.10.x/container-runtime-hardening-plan.md). No IP-blocker Lambdas
+> or blocking NACL exist. EC2 launch type remains for other reasons.
+
 ### Migration Progression
 
 ```
@@ -1420,6 +1428,13 @@ Push to docker/ → docker-build.yml builds 3 images → pushes to ECR
                 → ECS rolling deployment replaces containers
 ```
 
+> **Erratum (2026-08-07):** The Terraform-driven deploy flow described here
+> was later replaced. Since the 0.9.x build/deploy simplification (`app.yml`,
+> commits c439c426/3a7d922f), each docker matrix job deploys directly to ECS
+> via register-task-definition + update-service
+> (`.github/scripts/deploy-ecs-service.sh`); Terraform is no longer on the
+> image deploy path, and images are tagged `sha-{first8}`.
+
 This replaces the current flow:
 ```
 Push to chef/ → cookbook.yml tars chef/ → uploads to S3
@@ -1493,6 +1508,11 @@ built on CloudWatch metric filters, CloudWatch alarms, and a Lambda function
 that writes deny rules to a dedicated VPC Network ACL. Once validated, remove
 fail2ban, the `NET_ADMIN` capability, and the associated packages from the
 container images.
+
+> **Erratum (2026-08-07):** This phase was never implemented. fail2ban
+> (already disabled since March 2026) and `NET_ADMIN` were simply removed
+> during 0.10.x container hardening (2e9577bd); none of the
+> CloudWatch/Lambda/NACL resources described below were ever created.
 
 ### Why replace fail2ban
 
@@ -2467,6 +2487,10 @@ Every Chef file and its container-world equivalent:
 | (none) | `modules/ecs/sns.tf` + `sqs.tf` (reconfiguration fan-out) |
 | (none) | `modules/ecs/services.tf` (3 ECS services) |
 | (none) | `modules/ecs/task-definitions.tf` (3 task definitions) |
+
+> **Erratum (2026-08-07):** The `modules/ecs/ecr.tf` row is wrong: no such
+> file was created. ECR repositories are managed by the standalone
+> `terraform/infra/modules/ecr` module, as the Phase 4 section above states.
 
 ### CI/CD changes
 

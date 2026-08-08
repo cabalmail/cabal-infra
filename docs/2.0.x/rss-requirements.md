@@ -21,6 +21,10 @@ the existing 1.1.x plans — see
 [`push-notifications.md`](./../1.1.x/push-notifications.md)) sequences
 the work.
 
+> **Erratum (2026-08-07):** Both referenced plans were since promoted to earlier
+> releases and moved: the BIMI plan is at `docs/0.9.x/bimi.md` and the push
+> plan at `docs/0.11.x/push-notifications.md`.
+
 This directory is `2.0.x` per the operator's answer to Open Q1; the
 release version is 2.0. The plan splits the work across multiple patch
 versions (2.0.0, 2.0.1, ...).
@@ -61,6 +65,11 @@ the revised state throughout.
 - Push notifications for new items use the notification path delivered in
   1.0.x (APNs) and the future Android FCM path, with per-feed/per-folder
   opt-in.
+
+  > **Erratum (2026-08-07):** The APNs push path shipped in 0.11.0, not 1.0.x; the
+  > push plan was promoted to the 0.11.x roadmap after this document was
+  > written. The same correction applies to the "APNs in 1.0.x" bullet
+  > under Confirmed scope.
 - A user can leave Cabalmail with their feed list (OPML export) and arrive
   with one (OPML import).
 
@@ -99,6 +108,8 @@ These items are baseline. The decisions below add to or refine them.
 - User-defined folder hierarchy.
 - Proactive notifications via the existing platform notification path
   (APNs in 1.0.x; FCM later).
+
+  > **Erratum (2026-08-07):** Delivered in 0.11.0, not 1.0.x.
 
 ---
 

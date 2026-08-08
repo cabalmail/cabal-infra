@@ -69,7 +69,6 @@ function Messages({
   host,
   showOverlay,
   setMessage,
-  addressFilter,
   filter,
   setFilter,
   sortKey,
@@ -203,11 +202,11 @@ function Messages({
     };
   }, [api, folder, sortDir, sortKey, setMessage, applyStatus]);
 
-  // Selection gets cleared when folder or filter changes.
+  // Selection gets cleared when the folder changes.
   useEffect(() => {
     setSelected(new Set());
     lastSelectedRef.current = null;
-  }, [folder, addressFilter, setSelected]);
+  }, [folder, setSelected]);
 
   // True only while the current folder's first list/STATUS round trip is in
   // flight (the skeleton is showing). Also gates the pills so a folder switch
@@ -508,7 +507,7 @@ function Messages({
     setVisible(info);
   }, []);
 
-  const title = addressFilter || folder;
+  const title = folder;
   const totalShown = visible.shownIds ? visible.shownIds.length : 0;
   const totalIds = total || visible.totalIds || messageIds.length;
 
@@ -699,7 +698,6 @@ function Messages({
   const emptyLabel = (() => {
     if (filter === 'unread') return 'No unread messages.';
     if (filter === 'flagged') return 'No flagged messages.';
-    if (addressFilter) return `No messages for ${addressFilter}.`;
     return 'Inbox zero.';
   })();
 
@@ -733,7 +731,6 @@ function Messages({
           bulkMode={bulkMode}
           setBulkMode={setBulkMode}
           filter={filter}
-          addressFilter={addressFilter}
           emptyLabel={emptyLabel}
           onVisibleEnvelopesChange={handleVisibleChange}
           markUnread={markUnreadOne}

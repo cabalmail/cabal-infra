@@ -13,6 +13,11 @@ The redesign touches nearly every user-facing surface: the design token system, 
 - **Stately direction only** for v1. The other two directions (Workbench, Quiet Mono) stay as prototype references; the token plumbing supports them but we do not ship their values.
 - **No new runtime dependencies** without explicit sign-off — no Tailwind, no CSS-in-JS library, no component kit. Fonts are the one exception (Google Fonts for Source Serif 4, Inter Tight, IBM Plex Mono).
 - **Lucide icons are deferred.** Phase 1 assumes we extend `icons.jsx` in-house; if the team later approves `lucide-react`, a small follow-up swaps the imports.
+
+  > **Erratum (2026-08-07):** Reversed during implementation — `lucide-react`
+  > (pinned `^1.8.0`) was adopted as the icon source for the redesigned
+  > surfaces instead of extending `icons.jsx` in-house. See the Phase 7.5
+  > "Lucide-react icon defensive rule" section below for the shipped state.
 - Each phase is scoped so that merging it in isolation leaves `0.8.x` in a shippable state. Nothing visible to users breaks mid-way through the rollout; unfinished surfaces either keep their current styling or are gated behind a layout flag on the root.
 
 ## Preflight — resolve before Phase 1 begins
@@ -58,6 +63,8 @@ If (4) lands on "raw HTML reaches the client," Phase 4 picks up a small sandboxi
 - Rebuild `Folders/` per §4b top-half: "New message" CTA, "FOLDERS" section label with collapse chevron, folder rows with icon + name + unread count, selected-row treatment (left edge 2px accent bar inset, `--surface-hover` fill), hover states.
 - Rebuild `Addresses/` per §4b bottom-half: "ADDRESSES" section label, filter input (28px, placeholder "Filter addresses…"), address rows with stable hash-to-swatch mapping (port the prototype's hash function), mono 12px address text, "+ New address" bottom row that opens the existing request modal, italic hint line.
 - Wire clicking an address to filter the message list to that recipient. This requires a new filter key in the shared state (coordinate with Phase 3).
+
+> **Erratum (2026-08-07):** The click-to-filter behavior shipped but was later removed; clicking an address now copies it to the clipboard.
 - Left rail total width 280px; internal divider is a thin rule.
 
 **Out of scope:** message list, reader, compose. The middle pane can still be today's `Messages` — it just sits next to a freshly-styled rail.
@@ -153,6 +160,11 @@ If (4) lands on "raw HTML reaches the client," Phase 4 picks up a small sandboxi
 - **Signup** (`SignUp/`) per §2: 400px card, fields (Email, Password with zxcvbn-style 4-segment strength meter, Confirm password), terms / privacy paragraph, Create account button disabled until valid.
 - **ForgotPassword** (`ForgotPassword/`) per §3: single Email field, Send reset link, success state with checkmark and "Check your email" copy.
 - **Preferences persistence** per README State Management §: localStorage already landed in Phase 1; this phase adds the Cognito custom attribute writeback (`custom:theme`, `custom:accent`, `custom:density`) with 1s debounce. Depends on Preflight (2) — if the user pool schema isn't editable, substitute the DynamoDB `UserPreferences` table path (separate Terraform change, tracked in its own sub-task).
+
+  > **Erratum (2026-08-07):** Shipped via the fallback path: preferences
+  > persist in a DynamoDB `cabal-user-preferences` table through
+  > `get_preferences`/`set_preferences` Lambdas, not Cognito custom
+  > attributes. The user-pool schema was never extended.
 - **Keyboard shortcuts** per Interactions §: new `useKeyboardShortcuts` hook centralizing j/k/Enter/e/#/r/a/f/s/u/c/⌘K/x/Esc and the `g` prefix sequences (`g i`, `g a`, `g s`, `g t`, `g d`). Remove the scattered handlers these replace. Add a `?` help overlay that enumerates the shortcut set.
 
 **Out of scope:**
@@ -161,6 +173,10 @@ If (4) lands on "raw HTML reaches the client," Phase 4 picks up a small sandboxi
 - Prefered subdomain at sign-up (won't do).
 
 **Definition of done:** all three auth screens match the prototype, except for the presence of preferred subdomain. Theme/accent/density persist to Cognito and survive a fresh login on a different device. All keyboard shortcuts route through the single hook and show up in the `?` overlay.
+
+> **Erratum (2026-08-07):** "Persist to Cognito" shipped as "persist to the
+> DynamoDB `cabal-user-preferences` table via `/get_preferences` /
+> `/set_preferences`"; the cross-device property holds.
 
 ---
 

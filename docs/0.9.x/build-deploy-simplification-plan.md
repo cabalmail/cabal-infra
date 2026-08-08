@@ -86,6 +86,12 @@ push terraform/infra/** | terraform/dns/**  -->  infra.yml  (bootstrap stage + m
 
 - `app.yml` builds artifacts in parallel and deploys directly to running infrastructure via AWS CLI calls. It does **not** call Terraform.
 - `infra.yml` owns the topology and only runs when Terraform code changes (or on schedule for drift detection). It does **not** know about specific image tags or zip contents at apply time; those are out-of-band.
+
+  > **Erratum (2026-08-07):** No scheduled run shipped. `infra.yml` triggers
+  > only on push and `workflow_dispatch`; the "weekly" run this plan carried
+  > forward from CLAUDE.md had already been removed from `terraform.yml` in
+  > April 2026 (821393c9), and no drift-detection schedule was ever added to
+  > `infra.yml`.
 - Other workflows (`apple.yml`, `destroy_terraform.yml`, `dependabot.yml`) are unchanged.
 
 ### Trigger graph (target)

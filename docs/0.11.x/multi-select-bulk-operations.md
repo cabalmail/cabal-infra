@@ -248,6 +248,14 @@ and [lambda/api/move_messages/function.py](../../lambda/api/move_messages/functi
   "partial"` so partial-failure flows are surfaced through the body, not
   through HTTP errors.
 
+  > **Erratum (2026-08-07):** The shipped response kept `"submitted"`/`"unable"`
+  > and added only the partial case: `200 {"status": "partial",
+  > "moved_ids"/"flagged_ids": [...], "failed_ids": [...]}` (see
+  > `helper.batch_result_response`). No `"ok"`/`"failed"` statuses and no
+  > per-UID failure reasons shipped. The `refresh_list` opt-in above never
+  > shipped either — the post-store SORT was deleted from `set_flag`
+  > entirely, since both clients re-poll for ordering.
+
 **Apple** — [apple/CabalmailKit/Sources/CabalmailKit/IMAP/ApiBackedImapClient.swift](../../apple/CabalmailKit/Sources/CabalmailKit/IMAP/ApiBackedImapClient.swift):
 
 - Decode the new response shape. When `status == "partial"`, throw a new
@@ -390,6 +398,10 @@ Acceptance criteria:
   finding it.
 - **Chunk size.** 200 is a guess. Validate against real Lambda timing
   during Phase 4; adjust before shipping.
+
+  > **Erratum (2026-08-07):** Shipped as `bulkChunkSize = 1000`
+  > (`ApiBackedImapClient+Bulk.swift`), matching Phase 4's figure; the "200"
+  > here was a leftover from an earlier draft.
 - **Selection persistence across app suspend.** Out of scope; selection
   clears when the app is backgrounded long enough for the view to be torn
   down. Document as a non-goal if it surfaces during review.
@@ -434,3 +446,7 @@ the user-visible behavior under "Added". Subsequent phases append to the
 same Unreleased section until the release cuts. Per project convention, do
 not record intermediate iteration or bug fixes within a phase - only what
 ships.
+
+> **Erratum (2026-08-07):** This work shipped under 0.11.x, and changelog entries
+> are recorded as `changelog.d/` fragments per the repo convention — no
+> Unreleased section is created in CHANGELOG.md.

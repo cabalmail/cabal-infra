@@ -176,23 +176,6 @@
   color: var(--ink);
 }
 
-.addresses-rail__row.is-active {
-  background: var(--surface-hover);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.addresses-rail__row.is-active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--accent);
-}
-
 /* Comment tooltip — appears under the row on hover/focus when the address
    has a comment attached. Uses data-comment so empty comments don't render
    an empty bubble. */
