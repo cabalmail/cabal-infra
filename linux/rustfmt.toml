@@ -1,0 +1,5 @@
+# Stable options only: an unrecognised or nightly-only key makes rustfmt warn on
+# every invocation, which is noise in a `--check` gate.
+edition = "2024"
+style_edition = "2024"
+newline_style = "Unix"

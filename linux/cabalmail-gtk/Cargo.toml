@@ -1,0 +1,24 @@
+[package]
+name = "cabalmail-gtk"
+description = "GTK4 + libadwaita desktop client for Cabalmail"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# The crate is `cabalmail-gtk`; the installed binary is `cabalmail`, which is
+# what the man page, the .desktop file, and the CLI (`cabalmail --print-config`)
+# all refer to.
+[[bin]]
+name = "cabalmail"
+path = "src/main.rs"
+
+# GTK4, libadwaita, WebKitGTK, and tokio arrive with the application shell
+# (Phase 1, work item 4). `cabalmail-kit` is here already because the
+# configuration CLI — `--print-config`, `config set`, `config reset` — is work
+# item 3, and every bit of it that can be decided without a widget lives in the
+# kit.
+[dependencies]
+cabalmail-kit = { path = "../cabalmail-kit" }

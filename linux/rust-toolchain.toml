@@ -1,0 +1,12 @@
+# Pinned to an exact version, not `stable`. CI runs `clippy -D warnings`, so
+# tracking `stable` would let a new Rust release redden CI overnight on lints
+# nobody wrote code against. Bumping this is a deliberate PR.
+#
+# Honoured by rustup only. The Arch PKGBUILD builds with whatever rustc Arch
+# ships (always at or ahead of this pin, and Rust is backward compatible within
+# an edition); the Debian and RHEL packaging containers install this toolchain
+# explicitly.
+[toolchain]
+channel = "1.97.1"
+components = ["clippy", "rustfmt", "llvm-tools"]
+profile = "minimal"
