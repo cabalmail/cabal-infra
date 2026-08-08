@@ -5,7 +5,7 @@ defines what that means in practice: which parts of the system are a stable,
 versioned contract, what counts as a breaking change, and how deprecations and
 upgrades are handled.
 
-These guarantees take effect at **1.0.0**. Releases in the `0.x` series carried
+These guarantees took effect at **1.0.0**. Releases in the `0.x` series carried
 no compatibility guarantees - anything could change between them.
 
 ## Who this is for
