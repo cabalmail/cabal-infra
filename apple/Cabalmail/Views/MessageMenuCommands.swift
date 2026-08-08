@@ -28,20 +28,30 @@ struct MessageMenuCommands: Commands {
     let appState: AppState
 
     var body: some Commands {
+        // Every command here is a no-op with nothing to act on, so each is
+        // dimmed until it has a target — see `MessageMenuAvailability`, which
+        // mirrors the two target rules the handlers themselves use.
+        let availability = appState.messageMenuAvailability
         CommandMenu("Message") {
             Button("Reply") { appState.requestReply() }
                 .keyboardShortcut("r", modifiers: .command)
+                .disabled(!availability.canReply)
             Button("Reply All") { appState.requestReplyAll() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(!availability.canReply)
             Button("Forward") { appState.requestForward() }
                 .keyboardShortcut("j", modifiers: [.command, .shift])
+                .disabled(!availability.canReply)
             Divider()
             Button("Mark as Read/Unread") { appState.requestToggleSeen() }
                 .keyboardShortcut("t", modifiers: .command)
+                .disabled(!availability.canActOnSelection)
             Button("Flag/Unflag") { appState.requestToggleFlagged() }
                 .keyboardShortcut("8", modifiers: [.command, .shift])
+                .disabled(!availability.canActOnSelection)
             Button("Move to Folder…") { appState.requestMoveSelection() }
                 .keyboardShortcut("m", modifiers: .command)
+                .disabled(!availability.canActOnSelection)
         }
     }
 }
