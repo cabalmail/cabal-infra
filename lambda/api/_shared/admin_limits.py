@@ -1,4 +1,5 @@
-'''Admin-endpoint gate: group authorization, rate limiting, and audit logging.
+'''Admin-endpoint preamble: group authorization, rate limiting, audit logging,
+and request-body parsing.
 
 Phase 5 of docs/0.10.x/application-surface-hardening-plan.md. Deliberately
 depends on only boto3 (provided by the Lambda runtime) and the standard
@@ -41,6 +42,33 @@ def admin_response_or_none(event):
             'body': json.dumps({'Error': 'Admin access required'})
         }
     return None
+
+
+def parse_json_object_body(event):
+    '''Parses the request body as a JSON object, returning (body, error).
+
+    On success `error` is None and `body` is the decoded dict; on a missing,
+    empty, non-JSON, or non-object body `error` is a ready-to-return 400 and
+    `body` is None, so a handler can `return error` instead of relaying an
+    unhandled 500 with a traceback.
+
+    Deliberately NOT helper.parse_json_body: that one distinguishes three
+    causes in its message text ("request body is required" / "is not valid
+    JSON" / "must be a JSON object") while these handlers have always answered
+    with the single "is not valid JSON" wording for all three. Unifying them
+    would change what a client reads, so the two live side by side until
+    someone decides to change the wire response on purpose.
+    '''
+    try:
+        body = json.loads(event.get('body') or '')
+    except (TypeError, ValueError):
+        body = None
+    if not isinstance(body, dict):
+        return None, {
+            'statusCode': 400,
+            'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
+        }
+    return body, None
 
 
 def audit_log(caller, action, target, outcome):
