@@ -80,6 +80,11 @@ other platforms*, not *might I want a different value there*. A setting that
 exists everywhere but that you would like to vary per machine is still
 universal.
 
+`[preferences.linux]` may be written any way TOML spells a table - a section
+header, a dotted key (`linux.close_to_tray = true` under `[preferences]`), or
+an inline table (`linux = { close_to_tray = true }`). They are the same
+document and are read identically. The client writes the section header form.
+
 Deleting a line does not reset a setting. A missing key means "no local
 opinion": the store keeps its value and the line reappears on the next rewrite.
 To reset one, run `cabalmail config reset <setting>`, which writes the default

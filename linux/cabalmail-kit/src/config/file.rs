@@ -15,7 +15,7 @@
 use std::io::Write as _;
 use std::path::Path;
 
-use toml_edit::{Document, DocumentMut, Item, Table};
+use toml_edit::{Document, DocumentMut, InlineTable, Item, Table, TableLike};
 
 use super::error::{ConfigError, ConfigErrorKind, Location, nearest_key_name};
 use super::schema::{Key, Scope};
@@ -97,7 +97,7 @@ pub fn parse(path: &Path, text: &str) -> Result<Vec<(Key, Value)>, ConfigError> 
 fn scan(
     path: &Path,
     text: &str,
-    table: &Table,
+    table: &dyn TableLike,
     scope: Scope,
     found: &mut Vec<(Key, Value)>,
 ) -> Result<(), ConfigError> {
@@ -105,8 +105,13 @@ fn scan(
         let position = || key_location(path, text, table, name);
 
         // A nested table is a subsection. `[preferences.linux]` is the only
-        // one there is; anything else is a section nobody declares.
-        if let Some(child) = as_table(item) {
+        // one there is; anything else is a section nobody declares — unless
+        // the name is a declared *key*, in which case the user wrote a table
+        // where a value belongs and the value path below says so in the terms
+        // they were reaching for.
+        if let Some(child) = as_table(item)
+            && Key::from_name(name).is_none()
+        {
             if scope == Scope::Universal && name == "linux" {
                 scan(path, text, child, Scope::Linux, found)?;
                 continue;
@@ -182,7 +187,7 @@ fn scan(
 fn misplaced_at_root(
     path: &Path,
     text: &str,
-    root: &Table,
+    root: &dyn TableLike,
     name: &str,
     item: &Item,
 ) -> ConfigError {
@@ -217,8 +222,15 @@ fn misplaced_at_root(
 
 /// The table behind an item, whether it was written as a section header, a
 /// dotted key, or an inline table.
-fn as_table(item: &Item) -> Option<&Table> {
-    item.as_table()
+///
+/// All three spellings are the same document. `[preferences.linux]`,
+/// `linux.close_to_tray = true`, and `linux = { close_to_tray = true }` say
+/// one thing, and a user who reaches for the third should not be told they
+/// have a typo. `Item::as_table` sees only the first two — `toml_edit` models
+/// an inline table as a *value* — so the parser walks `TableLike`, which
+/// covers both representations.
+fn as_table(item: &Item) -> Option<&dyn TableLike> {
+    item.as_table_like()
 }
 
 /// A TOML value converted into a [`Value`], or `None` for the shapes no key
@@ -253,7 +265,7 @@ fn toml_type_name(value: &toml_edit::Value) -> &'static str {
 }
 
 /// Where a key is written.
-fn key_location(path: &Path, text: &str, table: &Table, name: &str) -> Location {
+fn key_location(path: &Path, text: &str, table: &dyn TableLike, name: &str) -> Location {
     let offset = table
         .key(name)
         .and_then(toml_edit::Key::span)
@@ -262,7 +274,13 @@ fn key_location(path: &Path, text: &str, table: &Table, name: &str) -> Location 
 }
 
 /// Where a key's value is written, falling back to the key itself.
-fn value_location(path: &Path, text: &str, item: &Item, table: &Table, name: &str) -> Location {
+fn value_location(
+    path: &Path,
+    text: &str,
+    item: &Item,
+    table: &dyn TableLike,
+    name: &str,
+) -> Location {
     item.span().map_or_else(
         || key_location(path, text, table, name),
         |span| Location::in_text(path, text, span.start),
@@ -331,24 +349,44 @@ pub fn set_key(
 }
 
 /// The table a scope's keys live in, creating it if it is absent.
-fn section_mut(document: &mut DocumentMut, scope: Scope) -> &mut Table {
+///
+/// `TableLike` rather than `Table` for the same reason the parser walks it:
+/// the section may have been written inline, and the write has to land in the
+/// document the user actually has rather than panic on it.
+fn section_mut(document: &mut DocumentMut, scope: Scope) -> &mut dyn TableLike {
     let root = match scope {
         Scope::Local => "local",
         Scope::Universal | Scope::Linux => "preferences",
     };
-    let table = document
+    let section = document
         .entry(root)
-        .or_insert_with(|| Item::Table(Table::new()))
-        .as_table_mut()
-        .expect("the section is a table");
-    match scope {
-        Scope::Universal | Scope::Local => table,
-        Scope::Linux => table
-            .entry("linux")
-            .or_insert_with(|| Item::Table(Table::new()))
-            .as_table_mut()
-            .expect("[preferences.linux] is a table"),
+        .or_insert_with(|| Item::Table(Table::new()));
+    if scope != Scope::Linux {
+        return section
+            .as_table_like_mut()
+            .expect("the section is a table — the parse before this rejected anything else");
     }
+
+    // A child the file does not have yet is spelled the way its parent is: a
+    // section header under `[preferences]`, an inline table inside an inline
+    // one. Writing a `Table` into an inline table is not representable, and
+    // `TableLike::insert` panics rather than say so.
+    let inline = section.is_inline_table();
+    let parent = section
+        .as_table_like_mut()
+        .expect("[preferences] is a table — the parse before this rejected anything else");
+    if !parent.contains_key("linux") {
+        let child = if inline {
+            Item::Value(toml_edit::Value::InlineTable(InlineTable::new()))
+        } else {
+            Item::Table(Table::new())
+        };
+        parent.insert("linux", child);
+    }
+    parent
+        .get_mut("linux")
+        .and_then(Item::as_table_like_mut)
+        .expect("[preferences.linux] is a table — the parse before this rejected anything else")
 }
 
 /// A [`Value`] as a TOML value.
@@ -506,6 +544,70 @@ cache_max_mb = 500
                 (Key::CacheMaxMb, Value::Number(500)),
             ]
         );
+    }
+
+    /// TOML spells a table three ways and means one thing by all of them. A
+    /// user who writes the inline form is not making a mistake, and telling
+    /// them `linux` is an unknown setting sends them hunting for a typo that
+    /// is not there.
+    #[test]
+    fn every_spelling_of_a_table_reads_the_same() {
+        let expected = vec![
+            (Key::Theme, Value::Text("dark".to_owned())),
+            (Key::CloseToTray, Value::Flag(true)),
+        ];
+        for text in [
+            "[preferences]\ntheme = \"dark\"\n\n[preferences.linux]\nclose_to_tray = true\n",
+            "[preferences]\ntheme = \"dark\"\nlinux.close_to_tray = true\n",
+            "[preferences]\ntheme = \"dark\"\nlinux = { close_to_tray = true }\n",
+            "preferences = { theme = \"dark\", linux = { close_to_tray = true } }\n",
+        ] {
+            assert_eq!(parse_ok(text), expected, "{text}");
+        }
+    }
+
+    /// The inline spellings have to reach the same errors as the section
+    /// form — accepting the syntax is not accepting what it says.
+    #[test]
+    fn an_inline_table_is_checked_like_the_section_it_stands_for() {
+        assert!(matches!(
+            parse_err("[preferences]\nlinux = { theme = \"dark\" }\n").kind,
+            ConfigErrorKind::WrongSection {
+                key: Key::Theme,
+                expected: Scope::Universal,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse_err("[preferences]\nlinux = { close_to_trey = true }\n").kind,
+            ConfigErrorKind::UnknownKey {
+                suggestion: Some("close_to_tray"),
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse_err("[preferences]\nnope = { a = 1 }\n").kind,
+            ConfigErrorKind::UnknownSection { .. }
+        ));
+    }
+
+    /// A declared key written as a table is a value the key does not accept,
+    /// not a section nobody declared. Walking `TableLike` makes it easy to
+    /// report the second, which would send the user looking for a section
+    /// they never wrote.
+    #[test]
+    fn a_key_given_a_table_reports_the_value_not_a_section() {
+        assert!(matches!(
+            parse_err("[preferences]\ntheme = { a = 1 }\n").kind,
+            ConfigErrorKind::InvalidValue {
+                key: Key::Theme,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse_err("[preferences]\n[preferences.theme]\na = 1\n").kind,
+            ConfigErrorKind::NotAValue { .. }
+        ));
     }
 
     #[test]
@@ -774,6 +876,48 @@ log_level = \"debug\"
             "{written}"
         );
         assert!(found.contains(&(Key::LogLevel, Value::Text("debug".to_owned()))));
+    }
+
+    /// Once the parser accepts a spelling the writer has to survive it. A
+    /// `Table` is not representable inside an inline table, so a section the
+    /// write has to create is spelled the way its parent is.
+    #[test]
+    fn a_write_into_an_inline_section_keeps_its_spelling() {
+        let cases = [
+            // The child is already there: edit in place, inline.
+            (
+                "[preferences]\nlinux = { close_to_tray = true }  # mine\n",
+                "[preferences]\nlinux = { close_to_tray = false }  # mine\n",
+            ),
+            // The child has to be created inside an inline parent.
+            (
+                "preferences = { theme = \"dark\" }\n",
+                "preferences = { theme = \"dark\" , linux = { close_to_tray = false } }\n",
+            ),
+        ];
+
+        for (original, expected) in cases {
+            let directory = tempfile::tempdir().expect("a temp directory");
+            let path = directory.path().join("config.toml");
+            std::fs::write(&path, original).expect("the fixture writes");
+
+            set_key(
+                &path,
+                &Settings::defaults(),
+                Key::CloseToTray,
+                &Value::Flag(false),
+            )
+            .expect("the write succeeds");
+
+            let written = std::fs::read_to_string(&path).expect("the file reads back");
+            assert_eq!(written, expected);
+            assert!(
+                parse(&path, &written)
+                    .expect("the written file parses")
+                    .contains(&(Key::CloseToTray, Value::Flag(false))),
+                "{written}"
+            );
+        }
     }
 
     /// Atomicity is the property that lets an editor and the client write the
