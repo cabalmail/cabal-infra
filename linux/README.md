@@ -51,6 +51,8 @@ cargo xtask ci                   # what CI runs, in CI's order
 
 ## Status
 
-Phase 1 is in progress: this is the workspace scaffolding (work item 1). The kit
-modules, the GTK application shell, and the `xtask` subcommand implementations
-follow in work items 2 through 5; CI and Arch packaging in Phase 2.
+Phase 1 is in progress. The workspace scaffolding (work item 1) and the
+`cabalmail-kit` skeleton — module stubs and the `CabalmailError` taxonomy (work
+item 2) — are in place. The layered configuration store, the GTK application
+shell, and the `xtask` subcommand implementations follow in work items 3
+through 5; CI and Arch packaging in Phase 2.
