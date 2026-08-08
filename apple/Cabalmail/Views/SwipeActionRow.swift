@@ -51,7 +51,8 @@ struct SwipeActionSpec {
 }
 
 /// A fixed-height list row that reveals leading / trailing swipe actions
-/// via a borrowed single-row `List`. A tap selects the row (`onSelect`).
+/// via a borrowed single-row `List`. Clicking / tapping the row selects it
+/// (`onSelect`).
 struct SwipeActionRow<Content: View>: View {
     let height: CGFloat
     let rowBackground: Color
@@ -88,23 +89,31 @@ struct SwipeActionRow<Content: View>: View {
     }
 
     private var rowContent: some View {
-        content()
-            .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onSelect)
-            // Horizontal insets give the row its left/right breathing room
-            // (matching `placeholderRow`); vertical stays 0 so `height` alone
-            // sets the row height. The selection background fills the full
-            // width (it's a separate `listRowBackground`), content sits inset.
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            .listRowSeparator(.hidden)
-            .listRowBackground(rowBackground)
-            .swipeActions(edge: .trailing) {
-                if let trailing { swipeButton(trailing) }
-            }
-            .swipeActions(edge: .leading) {
-                if let leading { swipeButton(leading) }
-            }
+        // The row's click target is a `Button`, not a bare `.onTapGesture`.
+        // On macOS 27 a tap gesture inside this list never receives the click
+        // -- a hosted control in the same stack does (#984) -- and a button is
+        // the honest shape anyway: the row answers `AXPress`, so VoiceOver and
+        // automation can activate it, matching the bulk-mode row, which has
+        // always been a `Button`.
+        Button(action: onSelect) {
+            content()
+                .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Horizontal insets give the row its left/right breathing room
+        // (matching `placeholderRow`); vertical stays 0 so `height` alone
+        // sets the row height. The selection background fills the full
+        // width (it's a separate `listRowBackground`), content sits inset.
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(rowBackground)
+        .swipeActions(edge: .trailing) {
+            if let trailing { swipeButton(trailing) }
+        }
+        .swipeActions(edge: .leading) {
+            if let leading { swipeButton(leading) }
+        }
     }
 
     @ViewBuilder
