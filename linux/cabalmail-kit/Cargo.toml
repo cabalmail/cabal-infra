@@ -12,3 +12,6 @@ publish.workspace = true
 # or transitively — that is what lets its tests run on a bare runner with no
 # display server. CI enforces it (Phase 2, work item 6).
 [dependencies]
+directories = "6"
+tempfile = "3"
+toml_edit = "0.25"
