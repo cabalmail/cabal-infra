@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-08-08
 
+The [compatibility contract](docs/compatibility.md) is now in effect.
+
 ### Added
 - **Reference docs for shipped features.** New top-level docs for BIMI
   (`docs/bimi.md`), inbound sender authentication (`docs/inbound-auth.md`),
