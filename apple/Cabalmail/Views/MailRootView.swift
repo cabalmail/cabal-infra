@@ -241,6 +241,12 @@ struct MailRootView: View {
             if isWideSidebar { folderPanelOverlay }
         }
         #endif
+        // Keep the Message menu's commands validated against what they'd
+        // actually act on (see `MessageMenuAvailability`).
+        .reportsMessageMenuAvailability(
+            selectedCount: listSelectionCount,
+            hasOpenMessage: selectedEnvelope != nil
+        )
         // Track the split view's overall width so the list column's max can be
         // clamped to leave the reading pane a floor (see `listColumnMaxWidth`).
         .onGeometryChange(for: CGFloat.self) { proxy in
