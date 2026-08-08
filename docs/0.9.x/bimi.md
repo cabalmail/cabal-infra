@@ -14,6 +14,11 @@ This plan was originally written to fix four problems at once. Two had
 already landed piecemeal during 0.9.x/0.10.x (see **Already shipped**);
 the remaining three phases (A/B/C below) are now implemented on the
 feature branch and pending deploy + on-device/inspector verification.
+
+> **Erratum (2026-08-07):** Since this was written, phases A, B, and C all
+> merged to `main` and deployed; only on-device/inspector verification of the
+> rendered logos remained outstanding. The as-shipped reference documentation
+> is now [docs/bimi.md](../bimi.md).
 The three problems they address:
 
 1. **`fetch_bimi` is not spec-correct.** The Lambda at

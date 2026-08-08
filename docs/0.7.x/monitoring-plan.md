@@ -87,6 +87,12 @@ Set in GitHub Actions environment variables per environment, not in code:
 | stage       | `false` by default  | Flip to `true` when actively testing alert flows or rehearsing a prod change. |
 | dev         | `false` by default  | Flip to `true` for alert-rule development; flip back when done to save cluster capacity. |
 
+> **Erratum (2026-08-07):** The prod row did not survive contact with the AWS
+> bill. After the initial prod deploy, monitoring was disabled everywhere:
+> `TF_VAR_MONITORING` is `false` in prod, stage, and development, and
+> day-to-day observability relies on CloudWatch Logs. The stack remains
+> deployable by flipping the flag.
+
 ### Granularity trade-off
 
 A single bool is coarse but matches how the system is actually used. Alternatives considered and deferred:
@@ -318,6 +324,13 @@ Captured in full in [docs/monitoring.md](../monitoring.md). Brief:
 
 The Pushover/ntfy SSM parameters are TF-managed with placeholder values + `ignore_changes = [value]`. Folding them into "real" Terraform inputs is queued for [docs/0.10.x/state-encryption-plan.md](../0.10.x/state-encryption-plan.md), which gates that on encrypted Terraform state.
 
+> **Erratum (2026-08-07):** The state-encryption plan was recategorized as
+> tentative and now lives at `docs/tentative/state-encryption-plan.md`. Opt-in
+> SSE-KMS state encryption shipped separately
+> (`docs/terraform-state-encryption.md`), but the folding of these parameters
+> into Terraform inputs was deferred indefinitely; runtime secrets remain
+> operator-seeded via `aws ssm put-parameter` against placeholder values.
+
 ---
 
 ## Phase 2: Heartbeat Monitoring
@@ -374,6 +387,14 @@ Three new ECS services. Choose VictoriaMetrics over upstream Prometheus if Phase
 ### 2. Exporters
 
 Add as **sidecars** in existing ECS task definitions (no new EC2 footprint):
+
+> **Erratum (2026-08-07):** Shipped differently. The exporters landed as
+> three standalone ECS services, not sidecars: cloudwatch_exporter and
+> blackbox_exporter run single-task, and node_exporter runs as a DAEMON
+> service (one task per EC2 instance), avoiding duplicate host metrics and
+> mail-tier task-definition churn. The tier-specific exporters (dovecot,
+> postfix, opendkim) were deferred and never shipped. See
+> `terraform/infra/modules/monitoring/exporters.tf`.
 
 | Tier             | Exporter(s)                                                                         |
 | ---------------- | ----------------------------------------------------------------------------------- |

@@ -176,10 +176,10 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 
 ### React App (`react/admin/`)
 
-- **React 17** with class-based components, Vite build tooling, Vitest for tests
+- **React 18** with function components and hooks (only `ErrorBoundary` remains class-based), Vite build tooling, Vitest for tests
 - **Auth**: Amazon Cognito (`amazon-cognito-identity-js`) — signup, login, JWT token management
 - **API**: Axios-based `ApiClient` class, all calls include Cognito JWT in Authorization header
-- **State**: Component-level state with `localStorage` persistence (no Redux/Context for app state)
+- **State**: Component-level state with `localStorage` persistence (no Redux for app state). Auth tokens are the deliberate exception: they live in a module-level variable in `App.jsx` and must never be written to `localStorage`
 - **Contexts**: `AuthContext` (token/api_url/host/domains), `AppMessageContext` (toast notifications)
 - **Email**: Rich text compose with TipTap (`@tiptap/react`). Received HTML is rendered in a sandboxed iframe with no `allow-scripts` (see `Email/ReaderBody.jsx`), which is what neutralizes scripts — there is no library HTML sanitizer. Do not add `allow-scripts` to that sandbox
 - **Key views**: Email (inbox/folders/compose), Addresses (list/request/revoke), Folders (manage), Login/SignUp
@@ -214,7 +214,7 @@ Shared infrastructure:
 ## Code Style Guidelines
 
 - **JavaScript/React**:
-  - Class-based React components with explicit state management (soon to migrate to function-based components)
+  - Function components with hooks
   - Import order: third-party libs, main components, utilities, styles
   - Error handling with try/catch blocks and explicit error messaging
   - Use camelCase for variables/functions, PascalCase for components

@@ -22,7 +22,20 @@ Seven phases: project scaffolding and shared Swift package; **CI/CD (early, so e
 - **Native idioms over parity.** Where the React app uses a custom widget, the Apple client uses the equivalent system control: `NavigationSplitView`, `List`, `.searchable`, `Menu`, share sheet, `.contextMenu`, swipe actions, etc. The goal is an app that feels at home next to Mail.app, not a translation of the web UI.
 - **SwiftUI first.** Use SwiftUI for all new views. Drop to UIKit/AppKit only where SwiftUI lacks a capability (e.g. rich-text composition on some OS versions — see Phase 5).
 - **Hybrid transport: speak protocols directly where they exist; use the API for everything else.** Mail operations (folders, messages, flags, moves, search, drafts, send) go straight to Dovecot over IMAPS (993) and Sendmail over submission (587). Cabalmail-specific operations (address list/create/revoke, BIMI lookup) stay on the existing API Gateway + Lambda surface. This is how every real native mail client works, and it unlocks IMAP IDLE for near-instant new-mail updates without the server-side APNs bridge the container architecture doesn't run. The existing Lambdas (`list_envelopes`, `fetch_message`, `move_messages`, `send`, etc.) continue to back the React app unchanged.
+
+  > **Erratum (2026-08-07):** This principle was reversed by issue #371: the
+  > direct IMAP/SMTP stack proved unreliable across network transitions,
+  > sleep/wake, and provider quirks, so production wires `ApiBackedImapClient`
+  > and routes all mail traffic through the Lambda API. `LiveImapClient` still
+  > compiles but is not on any production path, and there is no IDLE — folder
+  > status is polled via `/folder_status`.
 - **No new Lambdas required.** The address + BIMI endpoints already exist. No server-side changes are needed for the Apple client.
+
+  > **Erratum (2026-08-07):** This did not hold. After issue #371 moved all
+  > mail traffic onto the Lambda API, the Apple clients drove significant new
+  > server-side surface: `save_draft`, `folder_status`, `search_envelopes`,
+  > `append_sent`, nav-state and preferences endpoints, and the
+  > push-notification Lambda family, among others.
 - **No code sharing with the web app.** Swift types are defined fresh. Sharing is limited to the *contract* (endpoint paths and JSON shapes for the API; standard RFCs for IMAP/SMTP).
 - **One Xcode project, multiple targets.** iOS/iPadOS/visionOS share a single app target; macOS is a separate target sharing the same Swift package.
 - **CI from day one.** The Apple workflow lands in Phase 2 against the empty scaffold. Every subsequent phase is developed under green CI, not alongside it.
@@ -154,6 +167,11 @@ Both are YAML-only changes to the existing workflow; no code or architectural im
 
 Three transports, unified under a single `CabalmailClient` actor in `CabalmailKit`:
 
+> **Erratum (2026-08-07):** The direct IMAP and SMTP transports described in
+> this phase were built, then demoted by issue #371: production wiring uses
+> `ApiBackedImapClient` and `/send`, and the direct-protocol clients remain in
+> the tree but are not on any production path.
+
 1. **Cognito auth** — for both issuing the API JWT and validating IMAP/SMTP credentials (Dovecot already Cognito-authenticates via `docker/shared/entrypoint.sh`).
 2. **IMAP/SMTP** — direct to Dovecot (993) and Sendmail submission (587) using the user's Cognito username + password.
 3. **API Gateway** — for Cabalmail-specific endpoints that aren't mail protocol operations.
@@ -161,6 +179,11 @@ Three transports, unified under a single `CabalmailClient` actor in `CabalmailKi
 ### 1. Cognito authentication
 
 The React app uses `amazon-cognito-identity-js`. The Apple analog is **AWS Amplify Swift** (`Amplify` + `AWSCognitoAuthPlugin`), which wraps the same SRP flow and handles token refresh.
+
+> **Erratum (2026-08-07):** Amplify was not adopted. The shipped
+> `CognitoAuthService` is a hand-rolled `URLSession` client against the
+> Cognito IdP JSON API using `USER_PASSWORD_AUTH` and `REFRESH_TOKEN_AUTH`
+> (see the rationale comment in `AuthService.swift`).
 
 `CabalmailKit/Sources/CabalmailKit/Auth/AuthService.swift`:
 - `signIn(username:password:)`, `signUp(username:password:email:phone:)`, `confirmSignUp(username:code:)`
@@ -274,6 +297,12 @@ First user-visible feature: a functional read-only mail client.
 
 The React app uses DOMPurify. The Apple client's `WKWebView` runs in a non-persistent `WKWebsiteDataStore` with JavaScript disabled by default and all network requests blocked by a `WKContentRuleList`. Rich HTML displays correctly; scripts, trackers, and remote fetches do not.
 
+> **Erratum (2026-08-07):** True when written, but the 0.8.0 reader rework
+> replaced DOMPurify: the React app now neutralizes scripts by rendering
+> received HTML in a sandboxed iframe without `allow-scripts`
+> (`Email/MessageOverlay/ReaderBody.jsx`), and the dompurify dependency was
+> removed as unused.
+
 ### Phase 4 Verification
 
 1. Manual on iPhone simulator: sign in, browse folders, read a message with attachments, download an attachment.
@@ -299,6 +328,11 @@ Fields:
 
 Sending builds an RFC 5322 message client-side (multipart/mixed with multipart/alternative for HTML+plain bodies) and submits it via `SmtpClient.send`. While sending, the compose window shows a progress overlay; on success it dismisses and the sent message is `APPEND`ed to the `Sent` folder via `ImapClient`; on failure it remains open with an error banner.
 
+> **Erratum (2026-08-07):** Production sending was moved behind the API with
+> issue #371: the client posts to the `/send` Lambda, which submits via SMTP
+> server-side and queues a Bcc-stripped Sent copy for the `append_sent`
+> consumer to write. The client never APPENDs to Sent itself.
+
 ### 2. Reply / Reply All / Forward
 
 Triggered from the message detail toolbar. The compose scene opens pre-populated:
@@ -310,6 +344,11 @@ Triggered from the message detail toolbar. The compose scene opens pre-populated
 ### 3. Drafts
 
 Drafts persist locally while actively being edited (Core Data or a lightweight `Codable` store, autosaving every 5 seconds). On compose-window close *without* send, the draft is `APPEND`ed to the IMAP `Drafts` folder with the `\Draft` flag and the local copy cleared. On reopen, the IMAP draft is fetched, edited, and re-`APPEND`ed (old copy flagged `\Deleted` and expunged). This gives cross-device draft sync for free — a laptop-started reply resumes on the phone.
+
+> **Erratum (2026-08-07):** Draft sync shipped via the `/save_draft` Lambda,
+> which owns the server-side Drafts lifecycle (save/replace/discard using
+> UIDPLUS coordinates); the API-backed client performs no raw IMAP APPEND.
+> See docs/draft-sync-and-threading.md.
 
 ### Phase 5 Verification
 
@@ -421,8 +460,19 @@ Cross-cutting work to make each platform feel native, plus robustness improvemen
 ### 5. IDLE-based foreground push
 
 - While the app is foregrounded, `ImapClient.idle(folder: "INBOX")` keeps an IMAP IDLE connection open; `EXISTS` events trigger an immediate envelope fetch and update the message list and unread badge. No server-side infrastructure required.
+
+  > **Erratum (2026-08-07):** There is no IMAP IDLE in the shipped client.
+  > Since issue #371, `idle(folder:)` on the API-backed transport polls
+  > `/folder_status` and yields synthetic events when UIDNEXT advances;
+  > near-instant background delivery arrived later via APNs push (0.11.0),
+  > not IDLE.
 - Briefly after backgrounding, iOS keeps the socket alive long enough for IDLE to fire a local notification (via `UNUserNotificationCenter`) for newly arriving mail. Not true push — the connection dies within a minute or two — but it covers the common case of quickly checking another app and returning.
 - True APNs-delivered push (app not running) is still deferred past 0.6.x; it requires a server-side IDLE watcher that translates IMAP events into APNs pokes. The container architecture doesn't run such a process today. Tracked separately.
+
+  > **Erratum (2026-08-07):** Push shipped in 0.11.0 without an IDLE watcher:
+  > delivery-time procmail hooks on the imap tier (`push-enqueue.sh` → spool →
+  > SQS) feed the `push_dispatch` Lambda, which sends APNs notifications. See
+  > docs/push-notifications.md.
 - `BGAppRefreshTask` on iOS / `NSBackgroundActivityScheduler` on macOS periodically opens a short-lived IMAP session and catches up via `STATUS` + `UID FETCH since UIDNEXT`, so unread badges are fresh at launch even when IDLE hasn't been running.
 
 ### 6. Offline reading
@@ -449,6 +499,10 @@ Cross-cutting work to make each platform feel native, plus robustness improvemen
 
 - **App Store public release.** Tracked as 1.6.x. 0.6.x produces builds distributable via TestFlight internal groups (automated via CI in Phase 2).
 - **Push notifications.** Requires new server-side infrastructure (IMAP IDLE watcher, APNs bridge) not present in the 0.4.x container architecture.
+
+  > **Erratum (2026-08-07):** Push notifications later shipped (0.11.0) using
+  > delivery-time procmail hooks, an SQS queue, and the `push_dispatch` Lambda
+  > rather than an IMAP IDLE watcher. See docs/push-notifications.md.
 - **Admin features** (user management, DMARC, multi-user address assignment from 0.5.x). Admins continue to use the web app.
 - **RSS reader.** Tracked as 2.x.
 - **Android client.** Tracked separately starting at 1.1.x.

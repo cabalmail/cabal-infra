@@ -24,6 +24,13 @@ Status: planned. Forward-looking; supersede with the as-shipped notes once each 
 
 New attribute on `cabal-addresses` rows: `favorite` (boolean, default false / absent). DynamoDB is schemaless so no table migration; existing rows without the attribute are treated as `favorite=false`.
 
+> **Erratum (2026-08-07):** Shipped as a per-user set, not a boolean:
+> `cabal-addresses` rows carry a `favorites` string set of usernames, since
+> addresses became multi-user and a row-level boolean would collide across
+> users. `list` derives the caller's boolean from set membership, and
+> `set_favorite` returns 403 (not 404) when the caller isn't associated with
+> the address.
+
 New Lambda `lambda/api/set_favorite/` with API Gateway route `POST /set_favorite` (Cognito-authorized). Body: `{ "address": "...", "favorite": true|false }`. Updates the row's `favorite` attribute; 404 if the address isn't owned by the caller.
 
 `lambda/api/list/` extended to include `favorite` on each returned row.

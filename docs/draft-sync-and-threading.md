@@ -125,6 +125,13 @@ Two deliberate simplifications relative to the plan:
   WebKit dependency into the resume path; turndown remains available in the
   editor for the cross-pane import buttons.
 
+## Send semantics: `/send` is SMTP-first and idempotent
+
+Two `/send` properties clients may rely on (details in `lambda/api/send/function.py`):
+
+- **SMTP-first.** Delivery goes straight to the submission tier; IMAP is not on the delivery path, so sends work through an IMAP maintenance window ([imap-deploys.md](./imap-deploys.md)). The Sent copy (Bcc stripped) and the optional superseded-draft discard are queued server-side afterward, best-effort.
+- **Message-Id claim.** Before dialing SMTP, the Lambda claims the message's `Message-Id` (in `cabal-rate-limits`, TTL'd). A retried `/send` for an already-claimed id gets `200 submitted` without redelivering, so client retry loops cannot double-send. The claim is released on any failure before the relay accepts — the retry must be able to really send — but deliberately kept if the connection breaks *after* acceptance (the same at-least-once bet every MTA makes on a lost `250`).
+
 ## Operator notes
 
 - `save_draft` is a standard API-function Lambda (entry in

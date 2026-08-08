@@ -336,6 +336,14 @@ Registrar DS records: after `aws_route53_hosted_zone_dnssec` activates, Route 53
 
 Rollout sequence per zone (cribbed from AWS's documented DNSSEC enablement procedure):
 
+> **Erratum (2026-08-07):** The sequence below is inverted, and following it
+> would cause the outage the plan warns about: a DS record published while
+> the zone is not yet serving signed responses SERVFAILs every validating
+> resolver. The shipped procedure (docs/dnssec.md) is sign first, DS second —
+> enable signing via Terraform, verify RRSIGs are served, then publish the DS
+> at the registrar — with the inverse order (DS removal first) on
+> disablement. The Phase 4a/4b split as described here was not used.
+
 1. Create KSK resource. Route 53 activates the KSK but does not yet sign.
 2. Operator copies the published DS record value to the registrar.
 3. Registrar publishes the DS record. Wait at least 24 hours for downstream resolver caches.

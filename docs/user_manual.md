@@ -1,231 +1,73 @@
-# Cabalmail App
-The included serverless app can be used to create and revoke email addresses.
+# Cabalmail User Manual
 
-## Personas
+Cabalmail gives you one inbox and as many addresses as you want. Create a fresh address every time you hand out your contact information; when one starts attracting spam, revoke it and the spammers lose the ability to reach your servers at all.
 
-[End User](#user)
-: Creates and revokes email addresses for their own use
+Use the **native Apple apps** — iPhone, iPad, Mac, and Apple Vision Pro, plus an Apple Watch companion — for day-to-day mail. They carry the full experience: mail, addresses, folders, search, drafts. Android and Linux clients are planned.
 
-[Administrator](#admin)
-: Approves or rejects requests to create new accounts
+**Webmail** at `https://admin.example.net/` (substituting your control domain) remains supported, but the admin site is best reserved for account signup, password recovery, and — for administrators — the admin dashboard.
 
-## Working with the App (End User)<a name="user"></a>
-As an end user, you must first establish an account. Once approved, you can use the app to create and revoke addresses. All addresses that you create are aliased to a single inbox. You can reach the app at `https://admin.example.net/` (substituting your control domain for `example.net`).
+Generic mail clients (Thunderbird, Apple Mail, Outlook, …) cannot be connected; there are no public IMAP or SMTP endpoints ([details](./mua_setup.md)).
 
-### _Creating an Account_
-1. Visit the login page at the admin URL.
+## Accounts and signing in
 
-2. Click or tap "Sign up" in the main tab bar.
+**Creating an account.** Use the web app's Sign up form. If your operator configured an invitation code, you must enter it. After sign-up, wait for an administrator to approve your account.
 
-    <img src="./app_screens/0_signup.png" alt="Login Page" width="400" />
+**Signing in.** Username and password, then — if you are enrolled in two-factor authentication — a 6-digit code from your authenticator app (the Apple apps submit it automatically when the sixth digit lands). Operators can make two-factor mandatory; when it is, signing in without an enrolled authenticator walks you through enrollment (scan the QR code, confirm the first code) before you can proceed. You can also enroll voluntarily from the web app.
 
-3. Fill out the form. All fields are mandatory. When done, tap or click the "Signup" button.
+**Recovery.** Password reset is self-service by SMS where the operator has SMS configured; otherwise ask your administrator. If you lose your authenticator, an administrator must reset your MFA.
 
-4. Wait for an administrator to approve your account.
+## Addresses
 
-### _Loging in_
-1. Visit the login page at the admin URL.
+Every address lives on its own subdomain (`foo@bar.example.com`) and delivers to your one inbox.
 
-2. Enter your username and password.
+<img src="./app_screens/ios_addresses.png" alt="Address list on iPhone" width="300" />
 
-    <img src="./app_screens/1_login.png" alt="Login Page" width="400" />
+- **Create** a named address, or use **Random** for signup forms. Record who got it in the comment field — that is how you find it later. New addresses are usable within a minute or two.
+- **Copy** an address to the clipboard from the list; **favorite** the ones you use often (favorites are per-user).
+- **Suspend** an address to make it stop receiving, reversibly: its DNS records are withdrawn but the address is kept and can be **reinstated** later. On the Apple apps, suspend/reinstate are swipe actions on the address list.
+- **Revoke** an address to delete it permanently — the address, and its DNS, are gone for good. You can also revoke the receiving address right from a message you are reading.
+- **Shared addresses.** An administrator can assign one address to several users; each assignee receives its mail in their own inbox.
+- Administrators may limit which mail domains you can create addresses on.
 
-3. Tap or click the "Login" button.
+## Mail
 
-### _Working with Addresses_
+<img src="./app_screens/ios_inbox.png" alt="Inbox on iPhone: filter pills, sender avatars, sort and select controls" width="300" />
 
-Click or tap on "Addresses" in the main tab bar to request a new address, list addresses, or revoke an address.
+- **Folders.** Create, delete, and subscribe to folders; favorites sort to the top of pickers. Subscribed folders are refreshed proactively; unsubscribed folders load only when you open them.
 
-#### Requesting an Address
+  <img src="./app_screens/ios_folders.png" alt="Folder list on iPhone: Subscribed and All folders sections" width="300" />
+- **Reading.** Remote images are blocked by default (load them per message; loading can let a sender track you). A sender-authentication line shows the SPF/DKIM/DMARC verdicts stamped by your own relay, or "not verified" when there are none. Sender avatars come from your Contacts, the sender's published BIMI logo, or initials.
 
-1. From the Addresses screen, click or tap on the "New Address" button to reveal a form.
+  <img src="./app_screens/ios_reader.png" alt="Reading a message on iPhone: SPF, DKIM, and DMARC verdicts under the sender" width="300" />
+- **Search** is full-text across folders (Trash excluded). Text inside attachments is not indexed.
+- **Triage.** Swipe right to toggle read/unread; swipe left to archive (inside Archive, the same gesture restores). Multi-select for bulk move, flag, read/unread, and delete. Filter the list (All / Unread / Flagged) and change the sort order from the toolbar.
 
-    <img src="./app_screens/2_request_address.png" alt="Request Address Page" width="400" />
+  <img src="./app_screens/ios_swipe.png" alt="Swiping a message row left on iPhone reveals the Archive action" width="300" />
+- **Trash.** Deleting moves a message to Trash. Permanent deletion — per message or Empty Trash — happens only inside Trash and cannot be undone.
+- **Drafts** autosave and sync through the Drafts folder: start a reply on one device, finish it on another.
+- **Compose** supports rich text and attachments; replies pick the From address and recipients from the original message, and forwards carry the original attachments.
 
-2. Fill out the form, or use the "Random" button to quickly create a unique address suitable for online contact forms. All fields are mandatory except the Comment field. (For "Comment", we recommend that you record the name of the person or company to whom you intend to give the address. This will help locate it later, especially if you used the "Random" button.) When done, tap or click on the "Request" button.
+## Siri and Shortcuts (iPhone and iPad)
 
-3. After a moment, a popup will appear informing you that the address has been requested. It is generally safe to begin using the address within a minute or two. As a convenience, the app scrolls the new address into view.
+Four intents work with Siri, the Shortcuts app, and Spotlight: mint a random address (copied to the clipboard), create a named address, check the inbox (unread count and latest senders), and open a folder by name. When invoked by voice, iOS requires one tap ("Continue") before the app may write to your clipboard.
 
-    <img src="./app_screens/4_request_address.png" alt="Request Address Page" width="400" />
+## Apple Watch
 
-4. Optionally, tap the 📋 button to copy the address into your system clipboard.
+The Watch companion manages addresses only — mint, list, and revoke from the wrist, with a large-type view for reading an address to someone. It installs alongside the iPhone app.
 
-    <img src="./app_screens/4_request_address.png" alt="Request Address Page" width="400" />
+## Contacts (Apple apps)
 
-#### Listing Your Addresses
-A list of your addresses can be accessed by tapping or clicking the "Addresses" tab in the main tab bar. At the top of this screen, you can filter by arbitrary text.
+At first sign-in the app asks for Contacts access (optional). Contact names and photos label message lists and avatars, and compose autocompletes recipients from your contacts; you can add a correspondent to Contacts from a message header. Lookups happen on your device — no contact data is ever sent to the server.
 
-<img src="./app_screens/5_list_addresses.png" alt="Address List Page" width="400" />
+## Administration
 
-#### Copying an Address
-You can copy an address to your clipboard by tapping or clicking the adjascent 📋 button from the list screen.
+Administrators are members of the `admin` group in the Cognito user pool. Granting that membership is done in the AWS Cognito console (add user to group) — the one administrative act still performed in AWS. Everything else is in the web app, which shows admins additional views:
 
-<img src="./app_screens/6_copy_address.png" alt="Copying an Address" width="400" />
+- **Users** — approve pending sign-ups, disable, or delete accounts.
+- **Addresses** — see every address in the system, create addresses on behalf of users, and assign an address to one or more users.
+- **Domain access** — restrict which mail domains each user may create addresses on.
+- **DMARC** — browse aggregate reports, auto-ingested every six hours from the system's report mailbox.
+- **CAA** — review certificate-issuance violation reports ([details](./caa.md)).
+- **DNS** — per-address health check with a Repair button that republishes missing records. Apex-domain problems are flagged but never auto-repaired.
 
-#### Revoking an Address
-1. Locate the offending address on the list screen. Use the filter to help narrow down the list.
-
-    <img src="./app_screens/7_revoke_address.png" alt="Address List Page with filter applied" width="400" />
-
-2. Tap or click the 🗑️ button.
-
-    <img src="./app_screens/8_revoke_address.png" alt="Revoking an Address" width="400" />
-
-### _Working with Folders_
-
-Click or tap on "Folders" in the main tab bar to create new folders, list folders, delete folders, and designate favorite folders.
-
-#### Creating a Folder
-
-To create a top-level folder:
-
-<img src="./app_screens/9_create_folder.png" alt="Folder Page with text field filled out" width="400" />
-
-1. Enter the desired name in the text field.
-
-2. Tap or click the "New Top-level Folder" button.
-
-To create a subfolder:
-
-1. Enter the desired name in the text field.
-
-2. Tap or click the 📁 button of the desired parent folder.
-
-#### Delete a Folder
-
-To delete a folder, tap or click the 🗑️ button adjascent to the folder you want to delete. Note that deletion proceeds immediately without further warning, and that messages in the folder cannot be recovered.
-
-#### Designate a Folder as a Favorite
-
-To designate a folder as a favorite, tap or click the ☆ button adjacent to the deisred folder.
-
-#### Remove Favorite Designation
-
-To remove a folder from your favorites, tap or click the <span style="color:yellow">★</span> button adjacent to the deisred folder.
-
-### _Working with Email_
-
-Click or tap on "Email" in the main tab bar to access the webmail client. The webmail client provides all standard email operations, including reading and composing. While composing an email, you can create a new sender address on the fly. While reading an email, you can revoke the receiving address to prevent further abuse.
-
-<img src="./app_screens/10_email_list.jpeg" alt="Email Page" width="400" />
-
-#### Changing Folders
-
-The Email screen defaults to "INBOX". To view messages in another folder, tap or click the "Folder:" drop-down in the upper-left, and select the desired folder from the list. The drop-down places "INBOX" at the top, followed by a list of your favorite folders in alphabetical order, followed by a list of other folders in alphabetical order.
-
-<img src="./app_screens/11_email_change_folder.jpeg" alt="Email Page" width="400" />
-
-#### Changing how Messages are Sorted
-
-The Email screen defaults to sorting by descending Date Sent. Change the sort field to Date Received, Subject, or From address by tapping or clicking the Sort by drop-down in the upper-right, and select the desired sort field. Toggle between ascending/descending by tapping or clicking the button with three horizontal lines immediately to the right of the Sort by drop-down.
-
-<img src="./app_screens/12_email_change_sort.jpeg" alt="Email Page" width="400" />
-
-#### Using Swipe Gestures
-
-The message list supports two swipe gestures.
-
-1. Swipe from left to right to toggle between read and unread states.
-
-    <img src="./app_screens/13_email_swipe_read.jpeg" alt="Swipe gesture for toggling read/unread" width="400" />
-
-2. Swipe from right to left to archive a message. Archiving marks a message as read and moves it to an Archive folder
-
-    <img src="./app_screens/14_email_swipe_archive.jpeg" alt="Swipe gesture for toggling read/unread" width="400" />
-
-#### Bulk Operations on Messages
-
-By tapping or clicking the checkboxes to the left of each message, you can select them for bulk operations. The buttons along the top of the message list will perform the following operations on the checked messages:
-
-|         Button         | Function                                                                   |
-| ---------------------- | -------------------------------------------------------------------------- |
-|           🗑️           | Delete selected messages (can't be undone).                                |
-|           📨           | Move selected messages to another folder.                                  |
-|           🙈           | Mark selected messages as unread.                                          |
-|           🐵           | Mark selected messages as read.                                            |
-|           📭           | Remove flag from selected messages.                                        |
-|           📫           | Add flag to selected messages.                                             |
-
-#### Reading a Message
-
-Tap or click the subject of an email in the message list to see the full email. Wide screen devices show the message to the right of the message list. Narrow screen devices show only the message; you can return to the message list by tapping the ❌ button in the upper right.
-
-<img src="./app_screens/15_email_read.jpeg" alt="Email Page" width="400" />
-
-There are a number of options available while reading a message:
-
-|         Button         | Function                                                                   |
-| ---------------------- | -------------------------------------------------------------------------- |
-|           ❌           | Close the message and return to message list (narrow screen devices only). |
-|           🗑️           | Delete message (can't be undone).                                          |
-|           📨           | Move message to another folder.                                            |
-|           🙈           | Mark message as unread.                                                    |
-|           🐵           | Mark message as read.                                                      |
-|           📭           | Remove flag from message.                                                  |
-|           📫           | Add flag to message.                                                       |
-|           👈           | Reply to sender.                                                           |
-|         👈👈           | Reply to all.                                                              |
-|           👉           | Forward message.                                                           |
-|  🗑️ Revoke \_\_\_\_\_  | Revoke the address that received the message.                              |
-|           ▲            | Hide most header information in order to see more of the message body.     |
-|           ▼            | Show the full header information.                                          |
-|       Rich Text        | Show the HTML version of the message if present (default view).            |
-|      Plain Text        | Show the plain text version of the message if present.                     |
-|           📎           |Show list of attachments.                                                   |
-|         \</\>          | Show message source.                                                       |
-
-The following options only pertain to the Rich Text view:
-
-|         Button         | Function                                                                   |
-| ---------------------- | -------------------------------------------------------------------------- |
-|      <ins>⇩</ins>      | Download external images (may allow sender to track you).                  |
-|           ◐            | Rotate through different views.                                            |
-
-These are the three view states accessed from the ◐ button:
-
-- Default. Text and background color match system defaults. This means dark text and light background for systems with a bright default, and light text and dark background for systems with a dark default.
-- Message style. No styling is applied apart from what is embedded in the message.
-- Inverted. Oposite of default.
-
-#### Composing a Message
-
-<img src="./app_screens/16_email_compose.jpeg" alt="Email Page" width="400" />
-
-There are two ways to invoke the composition experience: the “New email” button in the lower right of the screen, or by replying or forwarding a message. When replying, all relevant fields will be filled out:
-- The From address will be selected based on what can be ascertained from the headers of the original message.
-- The Recipient list will include the sender of the original message. In a reply-all, it will also include all recipients of the original message.
-- The Subject will be the subject of the original message prefixed by “Re: “ or “Fwd: “ for replies or forwards respectively.
-- The message body will contain the body and partial header information from the original message.
-
-### _Log Out_
-When done, log out of the application by tapping or clicking the "Log out" button in the upper right.
-
-## Managing Accounts (Administrator)<a name="admin"></a>
-
-Cabalmail does not create a custom user interface for administering end user accounts. Rather, this is done in the AWS Cognito console.
-
-### _Approving Account Requests_
-1. Log in to your AWS account using the IAM user that you created during [AWS setup step 2](./aws.md).
-2. Make sure you are in the correct AWS region (as specified in your GitHub environment variables). Use the menu in the upper right of the AWS console if you need to change regions.
-3. Navigate to [Cognito](https://console.aws.amazon.com/cognito/home).
-4. Click the "Manage User Pools" button.
-5. Click on the "cabal" user pool.
-6. In the left navigation, click on "Users and groups" under the heading "General settings".
-7. Click on the user name of the user who you want to approve.
-8. Examine the user's details to verify that you selected the right one.
-9. Click the "Enable user" button.
-
-### _Disabling an Account<a name="disable"></a>_
-1. Log in to your AWS account using the IAM user that you created during [AWS setup step 2](./aws.md).
-2. Make sure you are in the correct AWS region (as specified in your Terraform variables). Use the menu in the upper right of the AWS console if you need to change regions.
-3. Navigate to [Cognito](https://console.aws.amazon.com/cognito/home).
-4. Click the "Manage User Pools" button.
-5. Click on the "cabal" user pool.
-6. In the left navigation, click on "Users and groups" under the heading "General settings".
-7. Click on the user name of the user who you want to disable.
-8. Examine the user's details to verify that you selected the right one.
-9. Click the "Disable user" button.
-
-### _Deleting an Account_
-1. Follow the steps in [Disabling an Account](#disable).
-2. Click the "Delete user" button.
+Operators can require two-factor authentication for admins or for all users; see [GitHub setup](./github.md) for the enforcement variables and [operations](./operations.md) for day-to-day system care.
