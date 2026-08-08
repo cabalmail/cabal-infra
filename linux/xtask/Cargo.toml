@@ -11,4 +11,5 @@ publish.workspace = true
 [dependencies]
 
 [dev-dependencies]
+cabalmail-kit = { path = "../cabalmail-kit" }
 toml = "1"

@@ -1,0 +1,143 @@
+# Cabalmail configuration reference.
+#
+# Copy the settings you want into your own file at
+# $XDG_CONFIG_HOME/cabalmail/config.toml (usually
+# ~/.config/cabalmail/config.toml), or run `cabalmail config set`.
+# Uncommenting a line makes it your setting; leaving it commented
+# means you have no local opinion and the value comes from elsewhere.
+#
+# `cabalmail --print-config` shows what is in force and where each
+# value came from. Full documentation: man 5 cabalmail.
+#
+# Generated from the client's key table — do not edit by hand.
+
+
+# Synced across all your devices. Changing these here, in Settings, or on
+# another device produces the same result.
+[preferences]
+
+# Display name used in the From header of messages you send. Shared with
+# the web client. Empty means no display name.
+# Accepts text, up to 100 characters.
+#name = ""
+
+# When a message is marked read: `manual` only when you say so, `on_open`
+# as soon as the reader shows it.
+# Accepts one of `manual` or `on_open`.
+#mark_as_read = "manual"
+
+# Whether the reader loads images and other resources hosted by the
+# sender. `off` blocks them, `ask` offers a per-message banner, `always`
+# loads them. Remote content is how a sender learns you opened the
+# message.
+# Accepts one of `off`, `ask`, or `always`.
+#load_remote_content = "off"
+
+# Which folder the dispose action moves a message to.
+# Accepts one of `archive` or `trash`.
+#dispose_action = "archive"
+
+# Light or dark appearance. `system` follows the desktop setting.
+# Accepts one of `system`, `light`, or `dark`.
+#theme = "system"
+
+# How a message body is first rendered: `original` keeps the sender's
+# styling, `reader` applies a legible one.
+# Accepts one of `original` or `reader`.
+#default_body_render_mode = "original"
+
+# Which count the folder sidebar shows next to each folder.
+# Accepts one of `unread`, `total`, or `both`.
+#folder_count_display = "unread"
+
+# Address preselected when you compose. Empty means no default, and a
+# revoked address falls back to none.
+# Accepts text, up to 100 characters.
+#default_from_address = ""
+
+# Plain-text signature appended to messages you send, below the RFC 3676
+# `-- ` delimiter the composer inserts for you.
+# Accepts text, up to 2000 characters, newlines allowed.
+#signature = ""
+
+
+# Synced to your other Linux machines only. Meaningless on iOS or the web.
+[preferences.linux]
+
+# Start without showing a window, for keeping mail running in the
+# background.
+# Accepts `true` or `false`. Takes effect on the next start.
+#start_minimized = false
+
+# Closing the window leaves the client running in the notification area
+# instead of quitting. Requires a StatusNotifierItem host, which stock
+# GNOME does not provide without the AppIndicator extension; where it is
+# unavailable the setting is kept but not honoured.
+# Accepts `true` or `false`.
+#close_to_tray = false
+
+# A second launch raises the running window instead of starting a second
+# copy.
+# Accepts `true` or `false`. Takes effect on the next start.
+#single_instance = true
+
+# Buttons offered on a new-mail notification, in order. An empty list
+# shows the notification with no actions.
+# Accepts any of `open`, `mark_read`, or `archive`, in order.
+#notification_actions = ["open", "mark_read", "archive"]
+
+
+# This machine only. Never leaves this device.
+[local]
+
+# The Cabalmail deployment this machine talks to — the host that serves
+# `config.json`. Set it to pin a workstation to stage; empty means the
+# client asks on first launch.
+# Accepts text, up to 253 characters. Takes effect on the next start.
+#control_domain = ""
+
+# Account prefilled on the sign-in screen. Credentials themselves are
+# never stored here — they live in the Secret Service keyring.
+# Accepts text, up to 128 characters. Takes effect on the next start.
+#username = ""
+
+# Verbosity of the debug log.
+# Accepts one of `error`, `warn`, `info`, `debug`, or `trace`.
+#log_level = "info"
+
+# Cap on the cached message bodies, in megabytes. The oldest are evicted
+# past it; the cache is safe to delete at any time.
+# Accepts a whole number from 1 to 1000000.
+#cache_max_mb = 200
+
+# Overrides where cached envelopes and bodies are written. Empty uses the
+# XDG cache directory.
+# Accepts text, up to 4096 characters. Takes effect on the next start.
+#cache_dir = ""
+
+# How often folders are checked for new mail while the window has focus.
+# There is no push channel on Linux, so this is what decides how quickly
+# new mail appears.
+# Accepts a whole number from 5 to 3600.
+#poll_interval_seconds = 60
+
+# The same, while the window is unfocused or the machine is on battery.
+# Accepts a whole number from 30 to 86400.
+#poll_interval_unfocused_seconds = 300
+
+# HTTP proxy for API requests, as a URL. Empty uses the environment's
+# proxy settings.
+# Accepts text, up to 2048 characters. Takes effect on the next start.
+#proxy = ""
+
+# Where credentials are kept. `secret-service` requires a running keyring
+# daemon; `none` keeps them in memory for the session only, so you sign in
+# again next launch. `auto` uses the Secret Service when one answers.
+# Accepts one of `auto`, `secret-service`, or `none`. Takes effect on the next start.
+#keyring = "auto"
+
+# Never write credentials to the keyring, even when one is available.
+# Equivalent to `keyring = "none"`, and the same as passing
+# `--session-only`.
+# Accepts `true` or `false`. Takes effect on the next start.
+#session_only = false

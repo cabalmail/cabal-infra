@@ -45,14 +45,44 @@ headers in the main packages on Arch; there is no `-dev` split.
 ```sh
 cargo build --workspace
 cargo test -p cabalmail-kit      # no display server, no network
+cargo test -p xtask              # workspace shape, schema/Lambda drift, generated docs
 cargo run -p cabalmail-gtk
 cargo xtask ci                   # what CI runs, in CI's order
 ```
 
+`cargo test -p xtask` is where the checks that reach outside the workspace live:
+that the toolchain pin is exact, that the client's synced-preference keys match
+`lambda/api/set_preferences/function.py`'s `APP_ALLOWED` (a divergence would
+400 on every push at runtime), and that the generated documentation is current.
+After changing the configuration schema, regenerate the two committed files it
+drives:
+
+```sh
+CABALMAIL_UPDATE_DOCS=1 cargo test -p xtask
+```
+
+## Configuration
+
+Settings live in `$XDG_CONFIG_HOME/cabalmail/config.toml`, hand-editable, with
+three sections that say how far each value travels: `[preferences]` syncs to
+every device, `[preferences.linux]` to this user's other Linux machines, and
+`[local]` nowhere. Flags and `CABALMAIL_*` variables override for one run
+without touching the file or the server.
+
+```sh
+cabalmail --print-config                       # values and where each came from
+cabalmail config set dispose_action trash
+cabalmail config reset dispose_action
+```
+
+Full reference: `cabalmail-gtk/data/cabalmail.5.md` (installed as
+`man 5 cabalmail`) and `cabalmail-gtk/data/config.example.toml`. Both are
+generated from the key table in `cabalmail-kit/src/config/schema.rs`.
+
 ## Status
 
-Phase 1 is in progress. The workspace scaffolding (work item 1) and the
+Phase 1 is in progress. The workspace scaffolding (work item 1), the
 `cabalmail-kit` skeleton — module stubs and the `CabalmailError` taxonomy (work
-item 2) — are in place. The layered configuration store, the GTK application
-shell, and the `xtask` subcommand implementations follow in work items 3
-through 5; CI and Arch packaging in Phase 2.
+item 2) — and the layered configuration store with its CLI (work item 3) are in
+place. The GTK application shell and the `xtask` subcommand implementations
+follow in work items 4 and 5; CI and Arch packaging in Phase 2.

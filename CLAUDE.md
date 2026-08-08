@@ -87,6 +87,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - Toolchain: **rustup**, not the distro `rust` package — only rustup honours the exact pin in `linux/rust-toolchain.toml` (1.97.1), and on Arch the two packages conflict
 - Build: `cd linux && cargo build --workspace`
 - Kit tests: `cd linux && cargo test -p cabalmail-kit` (no display server, no network — keep it that way; `cabalmail-kit` must never gain a GTK/libadwaita/WebKit dependency)
+- Repo-shape and drift tests: `cd linux && cargo test -p xtask` — the checks that reach outside the workspace. One asserts the client's synced-preference keys and enum values match `APP_ALLOWED` in [`lambda/api/set_preferences/function.py`](lambda/api/set_preferences/function.py); the server rejects an unknown key in the `app` map with a 400 *by design*, so a divergence would surface as a failed push at runtime. Another asserts the generated docs are current — after changing `linux/cabalmail-kit/src/config/schema.rs`, regenerate `cabalmail-gtk/data/config.example.toml` and the `cabalmail.5.md` key list with `CABALMAIL_UPDATE_DOCS=1 cargo test -p xtask`
 - Everything CI runs, in CI's order: `cd linux && cargo xtask ci` (subcommands land in Phase 1 work item 5)
 - The app crate builds the `cabalmail` binary; CI does not exist yet (Phase 2)
 
