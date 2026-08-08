@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Cabalmail
+GenericName=Email Client
+Comment=Read and send mail on your own Cabalmail deployment
+Exec=@BINARY@
+TryExec=@BINARY@
+Icon=com.cabalmail.Cabalmail
+Terminal=false
+Categories=Network;Email;GTK;
+Keywords=Email;Mail;Message;IMAP;Address;
+StartupNotify=true
+# Matches the application ID, which is what GTK reports as the toplevel's
+# application ID under Wayland and as WM_CLASS under X11. Without it a launcher
+# cannot tie the running window back to this entry.
+StartupWMClass=com.cabalmail.Cabalmail

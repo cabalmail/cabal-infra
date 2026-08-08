@@ -1,0 +1,25 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The application shell. Adw.ToolbarView is libadwaita 1.4 — the API floor,
+// which is Ubuntu 24.04's libadwaita. The three panes (folders, messages,
+// reader) replace the status page in Phase 4; the header bar and the window
+// itself stay.
+template $CabalmailWindow: Adw.ApplicationWindow {
+  title: "Cabalmail";
+  default-width: 1100;
+  default-height: 720;
+  width-request: 360;
+  height-request: 294;
+
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Adw.StatusPage {
+      icon-name: "mail-unread-symbolic";
+      title: "Cabalmail";
+      description: "Sign-in and mail arrive in later phases. This window is the application shell: the GTK4 and libadwaita scaffolding, the compiled Blueprint template, and the runtime bridge that every later request rides on.";
+    };
+  };
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The bundle the binary carries. `ui/` paths are the Blueprint output, written
+  to OUT_DIR by build.rs; anything else here is read from resources/ directly.
+-->
+<gresources>
+  <gresource prefix="/com/cabalmail/Cabalmail">
+    <file preprocess="xml-stripblanks">ui/window.ui</file>
+  </gresource>
+</gresources>

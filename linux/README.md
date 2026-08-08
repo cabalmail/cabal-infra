@@ -25,7 +25,7 @@ Install **`rustup`, not the distro `rust` package**. On Arch the two conflict
 Arch ships rather than the pinned toolchain.
 
 ```sh
-sudo pacman -S rustup podman webkitgtk-6.0
+sudo pacman -S rustup podman gtk4 libadwaita webkitgtk-6.0 blueprint-compiler
 rustup toolchain install 1.97.1 --profile minimal -c clippy -c rustfmt -c llvm-tools
 ```
 
@@ -36,19 +36,31 @@ CI overnight on lints nobody wrote code against. Bumping it is a deliberate PR.
 `Cargo.lock` is committed — distro packaging builds offline against vendored
 crates, which needs a lock.
 
-Other build dependencies (`gtk4`, `libadwaita`, `blueprint-compiler`, and
-`nodejs`/`npm` for the vendored composer JS in a developer checkout) ship
-headers in the main packages on Arch; there is no `-dev` split.
+Those packages ship their headers in the main package on Arch; there is no
+`-dev` split. `nodejs`/`npm` join the list once the composer's vendored
+JavaScript arrives (Phase 5).
+
+`blueprint-compiler` is not optional: the interface is written in Blueprint and
+compiled to GtkBuilder XML by `cabalmail-gtk/build.rs`, which fails loudly and
+names the package if the compiler is missing rather than falling back to a
+second UI format.
 
 ## Build and test
 
 ```sh
 cargo build --workspace
 cargo test -p cabalmail-kit      # no display server, no network
+cargo test -p cabalmail-gtk      # widget tests skip without a display; CI uses xvfb-run
 cargo test -p xtask              # workspace shape, schema/Lambda drift, generated docs
 cargo run -p cabalmail-gtk
 cargo xtask ci                   # what CI runs, in CI's order
 ```
+
+The app is built against **GTK 4.14 and libadwaita 1.4** — Ubuntu 24.04's
+versions — through the `v4_14` and `v1_4` crate features, so newer API fails to
+compile here rather than in a packaging container months later. Raising those
+features is a deliberate decision about which distros the client still supports,
+not a fix for a call site that will not build.
 
 `cargo test -p xtask` is where the checks that reach outside the workspace live:
 that the toolchain pin is exact, that the client's synced-preference keys match
@@ -83,6 +95,9 @@ generated from the key table in `cabalmail-kit/src/config/schema.rs`.
 
 Phase 1 is in progress. The workspace scaffolding (work item 1), the
 `cabalmail-kit` skeleton — module stubs and the `CabalmailError` taxonomy (work
-item 2) — and the layered configuration store with its CLI (work item 3) are in
-place. The GTK application shell and the `xtask` subcommand implementations
-follow in work items 4 and 5; CI and Arch packaging in Phase 2.
+item 2) — the layered configuration store with its CLI (work item 3), and the
+GTK application shell (work item 4) are in place. `cargo run -p cabalmail-gtk`
+opens a window; there is nothing to sign in to yet, which is Phase 3.
+
+The `xtask` subcommand implementations follow in work item 5; CI and Arch
+packaging in Phase 2.

@@ -123,6 +123,35 @@ fn every_declared_member_exists() {
     }
 }
 
+/// The API floor is Ubuntu 24.04's GTK 4.14 and libadwaita 1.4, and the crate
+/// features are what enforce it — newer API fails to compile rather than
+/// building fine on Arch and surfacing as a packaging failure months later.
+/// Raising these is a decision about which distros the client supports, so it
+/// should fail here and be argued in a PR.
+#[test]
+fn the_app_builds_against_the_api_floor() {
+    let manifest = read("cabalmail-gtk/Cargo.toml")
+        .parse::<toml::Table>()
+        .expect("the app manifest parses");
+    let dependencies = manifest["dependencies"]
+        .as_table()
+        .expect("the app declares dependencies");
+
+    for (name, expected) in [("gtk", "v4_14"), ("adw", "v1_4")] {
+        let features: Vec<&str> = dependencies[name]["features"]
+            .as_array()
+            .unwrap_or_else(|| panic!("`{name}` declares no features"))
+            .iter()
+            .map(|value| value.as_str().expect("a feature is a string"))
+            .collect();
+        assert_eq!(
+            features,
+            vec![expected],
+            "`{name}` must pin the API floor, and only the floor"
+        );
+    }
+}
+
 /// The kit's freedom from GUI dependencies is what lets its tests run on a bare
 /// runner. Phase 2 adds the transitive `cargo tree` check in CI; this catches
 /// the direct case at the point someone types it.

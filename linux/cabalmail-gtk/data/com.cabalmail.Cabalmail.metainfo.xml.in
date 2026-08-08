@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata, installed to /usr/share/metainfo/. Packaging substitutes
+  @BINARY@, @VERSION@, and @DATE@; nothing else in this file is generated.
+
+  Screenshots are deliberately absent until there is a UI worth showing —
+  Phase 7 adds them along with the rest of the desktop-integration polish.
+-->
+<component type="desktop-application">
+  <id>com.cabalmail.Cabalmail</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+
+  <name>Cabalmail</name>
+  <summary>Mail client for your own Cabalmail deployment</summary>
+
+  <description>
+    <p>
+      A native GTK4 client for Cabalmail, a self-hosted mail system. It reads
+      and sends mail, manages folders, and mints disposable addresses on your
+      own domains — one per vendor, per signup, per anything, revoked the
+      moment one is burned.
+    </p>
+    <p>
+      The client talks only to your deployment's own API. It needs a Cabalmail
+      deployment to sign in to; it is not a general-purpose IMAP client.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">com.cabalmail.Cabalmail.desktop</launchable>
+  <provides>
+    <binary>@BINARY@</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/cabalmail/cabal-infra</url>
+  <url type="bugtracker">https://github.com/cabalmail/cabal-infra/issues</url>
+
+  <developer id="com.cabalmail">
+    <name>Cabalmail</name>
+  </developer>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

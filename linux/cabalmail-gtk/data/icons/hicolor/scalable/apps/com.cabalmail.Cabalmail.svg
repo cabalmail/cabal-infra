@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Application icon. 128x128 on the 112x112 art area GNOME's icon guidelines
+     use, so it sits correctly next to other app icons in a launcher. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="#1a5fb4"/>
+  <rect x="8" y="8" width="112" height="56" rx="26" fill="#3584e4"/>
+  <g transform="translate(0 4)">
+    <rect x="28" y="42" width="72" height="48" rx="7" fill="#ffffff"/>
+    <path d="M31 47 L64 71 L97 47" fill="none" stroke="#1a5fb4" stroke-width="6"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
