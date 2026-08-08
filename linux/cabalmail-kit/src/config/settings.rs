@@ -6,6 +6,9 @@
 //! replaces one from a lower-precedence source, which is what lets the server
 //! pull land asynchronously after startup without stepping on the file the
 //! user edited.
+//!
+//! It is also what separates the value in force from the value that may be
+//! written back: see [`Settings::persisted`].
 
 use std::path::PathBuf;
 
@@ -94,10 +97,26 @@ pub struct Resolved {
 /// built, because the defaults populate it. There is no "unset" state for a
 /// caller to handle, which is what keeps later phases from each inventing
 /// their own fallback for a missing setting.
+///
+/// The store keeps **two** views of every key, because two different questions
+/// get asked of it and they have different answers:
+///
+/// - [`get`](Self::get) — what is in force for this run, transient layers
+///   included. What the client behaves as.
+/// - [`persisted`](Self::persisted) — what is in force ignoring the transient
+///   layers. What may be written to `config.toml` or pushed to the server.
+///
+/// One value per key cannot answer both: when `CABALMAIL_THEME` wins, the
+/// value it displaced is gone, and it is not necessarily the default — it can
+/// be a system file's or the server's. Tracking the shadowed value is what
+/// keeps a variable exported for one run out of the file, which is the
+/// promise [`Source::is_transient`] exists to make.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
     /// Indexed by `key as usize`; see the discriminant test in `schema`.
     values: Vec<Resolved>,
+    /// The same table with the transient layers left out.
+    persisted: Vec<Resolved>,
 }
 
 impl Settings {
@@ -122,14 +141,33 @@ impl Settings {
                     source: Source::Default,
                 }
             })
-            .collect();
-        Self { values }
+            .collect::<Vec<_>>();
+        Self {
+            persisted: values.clone(),
+            values,
+        }
     }
 
     /// This key's resolved value and provenance.
     #[must_use]
     pub fn resolved(&self, key: Key) -> &Resolved {
         &self.values[key as usize]
+    }
+
+    /// This key's value and provenance with the transient layers left out —
+    /// the highest-precedence source that was not a flag or a `CABALMAIL_*`
+    /// variable.
+    ///
+    /// This is the view a *writer* reads. Materializing `config.toml` from
+    /// [`resolved`](Self::resolved) would stamp this shell's environment into
+    /// the file permanently, and — for a `[preferences]` key — push it to
+    /// every other device from Phase 6 onwards.
+    ///
+    /// Identical to [`resolved`](Self::resolved) for every key no transient
+    /// layer touched, which on a normal run is all of them.
+    #[must_use]
+    pub fn persisted(&self, key: Key) -> &Resolved {
+        &self.persisted[key as usize]
     }
 
     /// This key's value.
@@ -149,8 +187,23 @@ impl Settings {
     /// Equal ranks do not replace, so the first file found in `$XDG_CONFIG_DIRS`
     /// wins over later ones — the order the spec gives that list.
     ///
-    /// Returns whether the value was taken.
+    /// The two views are ranked independently, so a layer that loses the run
+    /// can still win the file: a server pull arriving after a `CABALMAIL_*`
+    /// variable leaves the variable in force for this run and becomes what
+    /// [`persisted`](Self::persisted) reports.
+    ///
+    /// Returns whether the value in force changed.
     pub fn apply(&mut self, key: Key, value: Value, source: Source) -> bool {
+        if !source.is_transient() {
+            let slot = &mut self.persisted[key as usize];
+            if source.rank() > slot.source.rank() {
+                *slot = Resolved {
+                    value: value.clone(),
+                    source: source.clone(),
+                };
+            }
+        }
+
         let slot = &mut self.values[key as usize];
         if source.rank() > slot.source.rank() {
             *slot = Resolved { value, source };
@@ -163,8 +216,16 @@ impl Settings {
     /// Overwrites a value regardless of precedence.
     ///
     /// For the writers that own the store outright — the Settings UI and
-    /// `config set`, which write the file and then reflect the change.
+    /// `config set`, which write the file and then reflect the change. A
+    /// transient source is still transient here: it takes the run, not the
+    /// file.
     pub fn set(&mut self, key: Key, value: Value, source: Source) {
+        if !source.is_transient() {
+            self.persisted[key as usize] = Resolved {
+                value: value.clone(),
+                source: source.clone(),
+            };
+        }
         self.values[key as usize] = Resolved { value, source };
     }
 
@@ -410,6 +471,75 @@ mod tests {
         assert_eq!(counted, Key::ALL.len());
     }
 
+    /// The property the file writer depends on: a transient layer takes the
+    /// run without becoming what gets written. Both directions matter — the
+    /// run has to see the variable, and the file must not.
+    #[test]
+    fn a_transient_layer_wins_the_run_without_winning_the_file() {
+        let mut settings = Settings::defaults();
+        settings.apply(
+            Key::Theme,
+            Value::Text("dark".to_owned()),
+            Source::Env("CABALMAIL_THEME".to_owned()),
+        );
+
+        assert_eq!(settings.text(Key::Theme), "dark");
+        assert_eq!(
+            settings.persisted(Key::Theme).value.as_text(),
+            Some("system")
+        );
+        assert_eq!(settings.persisted(Key::Theme).source, Source::Default);
+    }
+
+    /// The two views rank independently, so a layer that loses the run can
+    /// still win the file. This is the case that rules out "reset the
+    /// transient keys to their defaults before writing": the value a variable
+    /// displaced is not always the default.
+    #[test]
+    fn a_lower_layer_arriving_later_becomes_what_is_written() {
+        let mut settings = Settings::defaults();
+        settings.apply(
+            Key::Theme,
+            Value::Text("dark".to_owned()),
+            Source::Env("CABALMAIL_THEME".to_owned()),
+        );
+
+        // The server pull lands after startup and loses to the variable.
+        assert!(settings.apply_server([("theme", "light")]).is_empty());
+
+        assert_eq!(settings.text(Key::Theme), "dark");
+        assert_eq!(
+            settings.persisted(Key::Theme).value.as_text(),
+            Some("light")
+        );
+        assert_eq!(settings.persisted(Key::Theme).source, Source::Server);
+    }
+
+    /// Every key no transient layer touched reads the same either way, which
+    /// is every key on a normal run.
+    #[test]
+    fn the_two_views_agree_wherever_nothing_transient_applied() {
+        let mut settings = Settings::defaults();
+        settings.apply(Key::Theme, Value::Text("dark".to_owned()), user_file());
+        settings.apply(
+            Key::DisposeAction,
+            Value::Text("trash".to_owned()),
+            Source::Server,
+        );
+        settings.apply(
+            Key::LogLevel,
+            Value::Text("debug".to_owned()),
+            Source::Flag("--log-level".to_owned()),
+        );
+
+        for (key, resolved) in settings.iter() {
+            if key == Key::LogLevel {
+                continue;
+            }
+            assert_eq!(settings.persisted(key), resolved, "{key}");
+        }
+    }
+
     #[test]
     fn set_overwrites_regardless_of_precedence() {
         let mut settings = Settings::defaults();
@@ -424,5 +554,11 @@ mod tests {
             Source::UserFile(Path::new("/tmp/config.toml").to_path_buf()),
         );
         assert_eq!(settings.text(Key::Theme), "light");
+        // `set` is a writer reflecting a write it just made, so it lands in
+        // both views.
+        assert_eq!(
+            settings.persisted(Key::Theme).value.as_text(),
+            Some("light")
+        );
     }
 }

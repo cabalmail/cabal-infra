@@ -440,6 +440,108 @@ mod tests {
         );
     }
 
+    /// Materializing the file must not launder this run's transient layers
+    /// into it. A variable exported for one run, or a flag passed to one
+    /// invocation, would otherwise become a permanent `user file` value — and
+    /// for a `[preferences]` key, something Phase 6 pushes to every other
+    /// device the account touches.
+    ///
+    /// Both transient layers are covered. Flags cannot reach this path from
+    /// `config set` today (the parser drops them at `config`), but the
+    /// Settings UI writes from a running session's store, where they apply.
+    #[test]
+    fn a_materialized_file_carries_no_flag_or_environment_value() {
+        let home = tempfile::tempdir().expect("a temp directory");
+        let environment = Environment::from_pairs([
+            (
+                "XDG_CONFIG_HOME".to_owned(),
+                home.path().display().to_string(),
+            ),
+            (
+                "XDG_CONFIG_DIRS".to_owned(),
+                home.path().join("no-such-system-dir").display().to_string(),
+            ),
+            ("CABALMAIL_THEME".to_owned(), "dark".to_owned()),
+            ("CABALMAIL_LOG_LEVEL".to_owned(), "debug".to_owned()),
+        ]);
+        let overrides = vec![(
+            Key::CacheMaxMb,
+            Value::Number(999),
+            Source::Flag("--cache-max-mb".to_owned()),
+        )];
+
+        let session = load(&environment, &overrides).expect("the load succeeds");
+        assert_eq!(session.settings.text(Key::Theme), "dark");
+        assert_eq!(session.settings.number(Key::CacheMaxMb), 999);
+
+        let path = write_user_setting(
+            &environment,
+            &session.settings,
+            Key::DisposeAction,
+            &Value::Text("trash".to_owned()),
+        )
+        .expect("the write succeeds");
+
+        // Read the file back through a plain environment: whatever the write
+        // put there is now all there is.
+        let plain = self::environment(home.path(), None);
+        let loaded = load(&plain, &[]).expect("the load succeeds");
+        assert_eq!(loaded.files, vec![path.clone()]);
+
+        assert_eq!(loaded.settings.text(Key::DisposeAction), "trash");
+        assert_eq!(
+            loaded.settings.source(Key::DisposeAction),
+            &Source::UserFile(path)
+        );
+        assert_eq!(loaded.settings.text(Key::Theme), "system");
+        assert_eq!(loaded.settings.text(Key::LogLevel), "info");
+        assert_eq!(loaded.settings.number(Key::CacheMaxMb), 200);
+
+        // Still in force for the run that set them, though.
+        let session = load(&environment, &overrides).expect("the load succeeds");
+        assert_eq!(session.settings.text(Key::Theme), "dark");
+        assert_eq!(session.settings.number(Key::CacheMaxMb), 999);
+    }
+
+    /// The value a variable displaced is not always the default, so the file
+    /// gets the highest layer that is not transient rather than a reset.
+    #[test]
+    fn a_materialized_file_keeps_the_layer_the_variable_displaced() {
+        let home = tempfile::tempdir().expect("a temp directory");
+        let system_root = tempfile::tempdir().expect("a temp directory");
+        write_config(system_root.path(), "[preferences]\ntheme = \"light\"\n");
+        let environment = Environment::from_pairs([
+            (
+                "XDG_CONFIG_HOME".to_owned(),
+                home.path().display().to_string(),
+            ),
+            (
+                "XDG_CONFIG_DIRS".to_owned(),
+                system_root.path().display().to_string(),
+            ),
+            ("CABALMAIL_THEME".to_owned(), "dark".to_owned()),
+        ]);
+
+        let session = load(&environment, &[]).expect("the load succeeds");
+        assert_eq!(session.settings.text(Key::Theme), "dark");
+
+        write_user_setting(
+            &environment,
+            &session.settings,
+            Key::DisposeAction,
+            &Value::Text("trash".to_owned()),
+        )
+        .expect("the write succeeds");
+
+        let text = std::fs::read_to_string(home.path().join("cabalmail").join("config.toml"))
+            .expect("the file reads");
+        let line = text
+            .lines()
+            .find(|line| line.starts_with("theme"))
+            .expect("the file sets theme");
+        assert!(line.ends_with("= \"light\""), "{line}");
+    }
+
     #[test]
     fn the_report_shows_values_provenance_and_the_restart_legend() {
         let home = tempfile::tempdir().expect("a temp directory");

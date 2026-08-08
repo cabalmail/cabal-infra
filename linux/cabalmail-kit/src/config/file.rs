@@ -276,10 +276,12 @@ fn value_location(path: &Path, text: &str, item: &Item, table: &Table, name: &st
 /// key order, spacing, even the alignment of the `=` — comes back out as it
 /// went in, because the document is edited rather than re-serialized.
 ///
-/// A file that does not exist is materialized in full first, from the values
-/// currently in force. That is the same file the client writes on first
-/// sign-in: a user should not have to discover what is editable by reading the
-/// manual, and a one-key file would teach them nothing.
+/// A file that does not exist is materialized in full first, from the store's
+/// [persisted](Settings::persisted) view — the values in force with this run's
+/// flags and `CABALMAIL_*` variables left out. That is the same file the
+/// client writes on first sign-in: a user should not have to discover what is
+/// editable by reading the manual, and a one-key file would teach them
+/// nothing.
 ///
 /// # Errors
 ///
@@ -365,7 +367,8 @@ fn to_toml(value: &Value) -> toml_edit::Value {
 /// present, each section under the sentence that says how far its values
 /// travel. Transient overrides (flags and environment variables) are
 /// deliberately *not* what is written — the file records settings, not this
-/// invocation's arguments.
+/// invocation's arguments — which is why every value comes from
+/// [`Settings::persisted`] rather than from what is in force.
 #[must_use]
 pub fn render(settings: &Settings) -> String {
     let mut out = String::new();
@@ -393,7 +396,7 @@ pub fn render(settings: &Settings) -> String {
             .max()
             .unwrap_or_default();
         for key in keys {
-            let value = settings.get(key).to_toml();
+            let value = settings.persisted(key).value.to_toml();
             out.push_str(&format!("{:width$} = {value}\n", key.name(), width = width));
         }
     }

@@ -87,6 +87,9 @@ fn load(environment: &Environment, overrides: &[config::Override]) -> Result<Loa
 fn write(environment: &Environment, key: Key, value: &Value) -> Result<ExitCode, String> {
     // The current values are what a missing file is materialized from, so the
     // file the user ends up with reflects what the client was already doing.
+    // Loading with no overrides keeps this run's flags out of it; the store's
+    // persisted view keeps `CABALMAIL_*` out, which `load` has no way not to
+    // apply.
     let settings = match config::load(environment, &[]) {
         Ok(loaded) => loaded.settings,
         Err(error) => return Err(error.to_string()),
