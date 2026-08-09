@@ -152,6 +152,26 @@ fn the_app_builds_against_the_api_floor() {
     }
 }
 
+/// `cargo xtask …` is the documented spelling of every build operation — in
+/// this README, in CLAUDE.md, and in the workflow from Phase 2. It is an alias
+/// in `.cargo/config.toml` and nothing else, so losing the alias turns every
+/// one of those instructions into "no such subcommand".
+#[test]
+fn cargo_xtask_is_aliased() {
+    let config = parse(".cargo/config.toml");
+    let alias = config["alias"]["xtask"]
+        .as_str()
+        .expect("the xtask alias is a string");
+    assert!(
+        alias.contains("--package xtask") || alias.contains("-p xtask"),
+        "the `xtask` alias does not run the xtask package: {alias}"
+    );
+    assert!(
+        alias.trim_end().ends_with("--"),
+        "the `xtask` alias must end in `--` so subcommands reach xtask: {alias}"
+    );
+}
+
 /// The kit's freedom from GUI dependencies is what lets its tests run on a bare
 /// runner. Phase 2 adds the transitive `cargo tree` check in CI; this catches
 /// the direct case at the point someone types it.

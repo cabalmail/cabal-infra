@@ -15,6 +15,7 @@ IMAP library, no SMTP transport.
 | `cabalmail-kit/` | Library crate: config, auth, API client, models, MIME, caches, compose, outbox, policy. **No GTK, libadwaita, or WebKit dependency**, so its tests run with no display server. |
 | `cabalmail-gtk/` | The application. Builds the `cabalmail` binary. |
 | `xtask/` | `cargo xtask …` — build, packaging, and CI automation. |
+| `scripts/` | Shell helpers the xtask subcommands wrap. |
 | `packaging/` | Distribution packaging (Arch first; Debian and RPM in Phase 8). |
 
 ## Toolchain
@@ -53,8 +54,31 @@ cargo test -p cabalmail-kit      # no display server, no network
 cargo test -p cabalmail-gtk      # widget tests skip without a display; CI uses xvfb-run
 cargo test -p xtask              # workspace shape, schema/Lambda drift, generated docs
 cargo run -p cabalmail-gtk
-cargo xtask ci                   # what CI runs, in CI's order
+cargo xtask ci                   # what CI runs, in CI's order — run before every push
 ```
+
+## Tasks
+
+`cargo xtask` is the one spelling of each build operation, shared by humans and
+by the workflow, so neither can drift from the other:
+
+| Subcommand | What it does |
+| --- | --- |
+| `cargo xtask ci` | `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace checks, app tests — in that order, stopping at the first failure. Wraps the app tests in `xvfb-run` when there is no session to use. |
+| `cargo xtask sync-vendored` | Materializes marked and turndown into `cabalmail-gtk/resources/editor/` from `react/admin/node_modules`, running `npm ci` first if needed. Needs node and npm; the files it writes are gitignored. Wraps [`scripts/sync-vendored.sh`](scripts/sync-vendored.sh), the sibling of `apple/scripts/sync-vendored.sh`. |
+| `cargo xtask package <distro>` | Declared; lands with Arch packaging in Phase 2. |
+| `cargo xtask smoke` | Declared; lands with the test harness in Phase 2. |
+| `cargo xtask fixtures` | Declared; lands with the HTTP contract fixtures in Phase 2. |
+
+The three that have not landed answer with the work item that implements them
+rather than with "unknown subcommand" — the vocabulary is fixed now so the
+plan, the workflow, and this README can name an operation before it exists.
+
+`react/admin/package.json` holds the marked and turndown version pins for all
+three clients, which is what keeps the Linux composer inside Dependabot's
+reach. `makepkg` does not run `sync-vendored`: the PKGBUILD fetches the same
+upstream tarballs as pinned `source=()` entries, because `prepare()` must not
+reach the network (Phase 2).
 
 The app is built against **GTK 4.14 and libadwaita 1.4** — Ubuntu 24.04's
 versions — through the `v4_14` and `v1_4` crate features, so newer API fails to
@@ -93,11 +117,13 @@ generated from the key table in `cabalmail-kit/src/config/schema.rs`.
 
 ## Status
 
-Phase 1 is in progress. The workspace scaffolding (work item 1), the
+Phase 1 is complete. The workspace scaffolding (work item 1), the
 `cabalmail-kit` skeleton — module stubs and the `CabalmailError` taxonomy (work
-item 2) — the layered configuration store with its CLI (work item 3), and the
-GTK application shell (work item 4) are in place. `cargo run -p cabalmail-gtk`
-opens a window; there is nothing to sign in to yet, which is Phase 3.
+item 2) — the layered configuration store with its CLI (work item 3), the GTK
+application shell (work item 4), and the `xtask` entry points (work item 5) are
+in place. `cargo run -p cabalmail-gtk` opens a window; there is nothing to sign
+in to yet, which is Phase 3.
 
-The `xtask` subcommand implementations follow in work item 5; CI and Arch
-packaging in Phase 2.
+Next is Phase 2: the `linux.yml` workflow, Arch packaging, and the contract-test
+harness — which is also what fills in `cargo xtask package`, `smoke`, and
+`fixtures`.

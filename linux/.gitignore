@@ -1,1 +1,10 @@
 /target
+
+# Upstream bytes, materialized by scripts/sync-vendored.sh from
+# react/admin/node_modules — that package.json holds the version pins, and
+# Dependabot bumps them there. Adding a file here means adding it to the
+# script; a test in xtask asserts the two lists agree.
+/cabalmail-gtk/resources/editor/marked.umd.js
+/cabalmail-gtk/resources/editor/turndown.js
+/cabalmail-gtk/resources/editor/marked-LICENSE.md
+/cabalmail-gtk/resources/editor/turndown-LICENSE
