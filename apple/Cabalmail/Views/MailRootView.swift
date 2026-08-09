@@ -216,7 +216,9 @@ struct MailRootView: View {
                 sidebar
             }
             #else
-            sidebar
+            // macOS opens the sidebar at a readable width and remembers the
+            // one the user drags to; every other platform passes through.
+            sidebar.sidebarColumnWidthPolicy()
             #endif
         } content: {
             // Pin the list column to its persisted width and hang the drag
@@ -239,6 +241,12 @@ struct MailRootView: View {
             if isWideSidebar { folderPanelOverlay }
         }
         #endif
+        // Keep the Message menu's commands validated against what they'd
+        // actually act on (see `MessageMenuAvailability`).
+        .reportsMessageMenuAvailability(
+            selectedCount: listSelectionCount,
+            hasOpenMessage: selectedEnvelope != nil
+        )
         // Track the split view's overall width so the list column's max can be
         // clamped to leave the reading pane a floor (see `listColumnMaxWidth`).
         .onGeometryChange(for: CGFloat.self) { proxy in

@@ -89,7 +89,7 @@ extension MessageListView {
                     .font(.subheadline.weight(filter == model.filterTab ? .semibold : .regular))
                 Text("\(pillCount(filter, model: model))")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(FilterPillCountStyle.countEmphasis().shapeStyle)
             }
             // Keep the label on one line; ViewThatFits relies on this to
             // detect when the row no longer fits and stack pills instead.
