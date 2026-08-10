@@ -760,9 +760,11 @@ extension MailRootView {
 // MARK: - Resizable list column
 
 /// Clamp bounds for the resizable message-list column on the wide iPad layout.
-private let listColumnMinWidth: CGFloat = 300
+/// Shared with the macOS width policy so the two can't drift — see
+/// `ListColumnWidth`.
+private let listColumnMinWidth = ListColumnWidth.minimum
 /// Width reserved for the reading pane when clamping the list column's maximum.
-private let readerColumnMinWidth: CGFloat = 360
+private let readerColumnMinWidth = ListColumnWidth.readerFloor
 
 extension MailRootView {
     /// Whether the list column is pinned to a user-set width and shows the drag
@@ -850,9 +852,10 @@ extension MailRootView {
     }
 
     /// Pins the content column to the persisted width and overlays the drag
-    /// handle, but only on the wide iPad/visionOS layout. Compact (collapsed
-    /// stack) and macOS (native resizable dividers) pass the column through
-    /// untouched.
+    /// handle, but only on the wide iPad/visionOS layout. macOS keeps its
+    /// native resizable dividers and instead bounds the column so the reading
+    /// pane can't be starved (`ListColumnWidth`); compact iPhone, where that
+    /// policy passes through, gets the column untouched.
     @ViewBuilder
     fileprivate func resizableContentColumn(_ column: some View) -> some View {
         if resizableColumns {
@@ -866,7 +869,7 @@ extension MailRootView {
                     )
                 }
         } else {
-            column
+            column.listColumnWidthPolicy(splitWidth: splitWidth)
         }
     }
 }
