@@ -18,6 +18,9 @@ struct ComposeMacHeader: View {
     let candidates: [RecipientSuggestion]
     let focusBinding: FocusState<ComposeView.Field?>.Binding
     let onCreateAddress: () -> Void
+    /// Forwarded to each recipient field so a Contacts grant made from one
+    /// of them re-snapshots the address book all three share.
+    let onContactsAccessChanged: () -> Void
 
     var body: some View {
         Grid(
@@ -72,7 +75,8 @@ struct ComposeMacHeader: View {
             candidates: candidates,
             focusBinding: focusBinding,
             focusValue: focusValue,
-            identifier: identifier
+            identifier: identifier,
+            onContactsAccessChanged: onContactsAccessChanged
         )
     }
 }

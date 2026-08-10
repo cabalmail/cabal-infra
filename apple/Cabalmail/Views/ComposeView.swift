@@ -309,6 +309,17 @@ struct ComposeView: View {
         photoSelection = []
     }
     #endif
+
+    // MARK: - Contacts
+
+    /// Re-snapshot the address book after the user grants Contacts access
+    /// from a recipient field's picker button. All three fields share this
+    /// one array, so one grant re-arms all of them.
+    func reloadRecipientCandidates() {
+        Task { @MainActor in
+            recipientCandidates = await appState.contactsStore.allEntries()
+        }
+    }
 }
 
 // MARK: - Layout fork
@@ -412,7 +423,8 @@ extension ComposeView {
                 candidates: recipientCandidates,
                 focusBinding: $focusedField,
                 focusValue: Field.to,
-                identifier: "compose.to"
+                identifier: "compose.to",
+                onContactsAccessChanged: reloadRecipientCandidates
             )
             RecipientFieldWithSuggestions(
                 label: "Cc",
@@ -420,7 +432,8 @@ extension ComposeView {
                 candidates: recipientCandidates,
                 focusBinding: $focusedField,
                 focusValue: Field.cc,
-                identifier: "compose.cc"
+                identifier: "compose.cc",
+                onContactsAccessChanged: reloadRecipientCandidates
             )
             RecipientFieldWithSuggestions(
                 label: "Bcc",
@@ -428,7 +441,8 @@ extension ComposeView {
                 candidates: recipientCandidates,
                 focusBinding: $focusedField,
                 focusValue: Field.bcc,
-                identifier: "compose.bcc"
+                identifier: "compose.bcc",
+                onContactsAccessChanged: reloadRecipientCandidates
             )
         }
     }
@@ -444,7 +458,8 @@ extension ComposeView {
                 model: model,
                 candidates: recipientCandidates,
                 focusBinding: $focusedField,
-                onCreateAddress: { showNewAddressSheet = true }
+                onCreateAddress: { showNewAddressSheet = true },
+                onContactsAccessChanged: reloadRecipientCandidates
             )
             Divider()
             ComposerBody(model: model)
