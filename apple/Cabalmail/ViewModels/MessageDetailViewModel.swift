@@ -194,19 +194,24 @@ final class MessageDetailViewModel {
         }
     }
 
-    /// Adds the just-parsed plain-text body to the message's Spotlight
-    /// entry (fire-and-forget; the indexer gates on the folder being
-    /// subscribed). HTML-only messages contribute metadata only — the
-    /// `text/plain` alternative covers the overwhelming majority, and
-    /// bodies are never fetched just to index them.
+    /// Adds the just-parsed body text to the message's Spotlight entry
+    /// (fire-and-forget; the indexer gates on the folder being subscribed).
+    /// Prefers the `text/plain` alternative; an HTML-only message falls
+    /// back to a search-oriented tag strip (`HTMLText`). Bodies are never
+    /// fetched just to index them.
     private func donateBodyToSpotlight() {
-        guard let text = plainText, !text.isEmpty else { return }
+        var text = plainText ?? ""
+        if text.isEmpty, let html = htmlBody {
+            text = HTMLText.plainText(from: html)
+        }
+        guard !text.isEmpty else { return }
+        let donated = text
         let client = client
         let envelope = envelope
         let folderPath = folder.path
         Task {
             await client.spotlightIndexer?.indexBody(
-                text: text, envelope: envelope, folder: folderPath
+                text: donated, envelope: envelope, folder: folderPath
             )
         }
     }
