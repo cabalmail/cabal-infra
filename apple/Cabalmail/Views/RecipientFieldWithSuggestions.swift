@@ -23,8 +23,23 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
     /// Machine-facing identifier for the text field (e.g. `compose.to`);
     /// the Contacts-picker button derives `<identifier>.picker` from it.
     let identifier: String
+    /// Called after the user grants Contacts access from this button, so
+    /// the parent can re-snapshot the address book its fields share.
+    let onContactsAccessChanged: () -> Void
 
+    @Environment(AppState.self) private var appState
     @State private var showPicker = false
+    /// Drives the picker button's affordance alongside `candidates`. Loaded
+    /// in `.task`; `.notDetermined` until then, which is also the state that
+    /// makes the first tap ask for access.
+    @State private var contactsAuthorization: ContactsAuthorizationStatus = .notDetermined
+
+    private var pickerAffordance: ContactsPickerAffordance {
+        ContactsPickerAffordance(
+            authorization: contactsAuthorization,
+            hasCandidates: !candidates.isEmpty
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -38,15 +53,16 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
                     .focused(focusBinding, equals: focusValue)
                     .accessibilityIdentifier(identifier)
                 Button {
-                    showPicker = true
+                    tapPicker()
                 } label: {
                     Image(systemName: "person.crop.circle.badge.plus")
                         .imageScale(.large)
-                        .accessibilityLabel("Pick \(label) recipients from Contacts")
+                        .accessibilityLabel(pickerAffordance.hint(for: label))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
-                .disabled(candidates.isEmpty)
+                .foregroundStyle(Color.accentColor.opacity(pickerAffordance.tintOpacity))
+                .disabled(!pickerAffordance.isEnabled)
+                .help(pickerAffordance.hint(for: label))
                 .accessibilityIdentifier("\(identifier).picker")
             }
 
@@ -65,6 +81,29 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
             ContactPickerSheet(candidates: candidates) { picked in
                 applyPicked(picked)
             }
+        }
+        .task {
+            contactsAuthorization = await appState.contactsStore.authorizationStatus
+        }
+    }
+
+    /// One tap, four outcomes. Access is requested from here — not only from
+    /// the reader's address menu — so a user who reaches compose first still
+    /// has a way to turn Contacts on.
+    private func tapPicker() {
+        switch pickerAffordance {
+        case .pick:
+            showPicker = true
+        case .requestAccess:
+            Task { @MainActor in
+                _ = await appState.contactsStore.requestAccess()
+                contactsAuthorization = await appState.contactsStore.authorizationStatus
+                onContactsAccessChanged()
+            }
+        case .openSystemSettings:
+            ContactsPrivacySettings.open()
+        case .noCandidates:
+            break
         }
     }
 
