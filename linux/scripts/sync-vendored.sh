@@ -8,7 +8,9 @@
 # composer needs the same bytes inside its WebKitGTK view as the React and
 # Apple composers have, so Markdown round-trips identically across all three;
 # this script is how those bytes get there. It is the sibling of
-# apple/scripts/sync-vendored.sh and deliberately works the same way.
+# apple/scripts/sync-vendored.sh and deliberately works the same way, except
+# that it verifies an existing node_modules against the lockfile before
+# trusting it (see the NEED_INSTALL block).
 #
 # Files produced (all gitignored; see linux/.gitignore):
 #   linux/cabalmail-gtk/resources/editor/
@@ -20,7 +22,9 @@
 # Run this:
 #   - Via `cargo xtask sync-vendored`, which is the documented spelling
 #   - After `git clone`, before building the composer (Phase 5 onward)
-#   - Any time react/admin/package.json's marked or turndown versions change
+#   - Any time react/admin/package-lock.json's marked or turndown versions
+#     change — the script notices a stale node_modules and reinstalls, so a
+#     bump does not need any manual cleanup here
 #
 # Note makepkg does *not* run this: PKGBUILD fetches the upstream npm tarballs
 # as pinned source=() entries instead, because prepare() must not reach the
@@ -47,11 +51,32 @@ TURNDOWN_SRC="$REACT_DIR/node_modules/turndown/dist/turndown.js"
 MARKED_LICENSE="$REACT_DIR/node_modules/marked/LICENSE.md"
 TURNDOWN_LICENSE="$REACT_DIR/node_modules/turndown/LICENSE"
 
-# Skip `npm ci` when every source file is already present — a local rebuild
-# loop shouldn't pay the install cost on every run. CI starts cold and always
-# installs. If you bumped marked or turndown in react/admin/package.json,
-# delete the destination directory or run `npm ci` in react/admin yourself
-# before re-running this script.
+LOCKFILE="$REACT_DIR/package-lock.json"
+
+# The version `npm ci` would install. The lockfile, not package.json, is the
+# comparison: package.json carries a caret range, and the range is still
+# satisfied by the version a Dependabot bump replaced.
+locked_version() {
+    node -e 'const lock = require(process.argv[1]);
+             const entry = (lock.packages || {})["node_modules/" + process.argv[2]];
+             process.stdout.write((entry && entry.version) || "");' \
+        "$LOCKFILE" "$1" 2>/dev/null || true
+}
+
+# The version actually sitting in node_modules.
+installed_version() {
+    local manifest="$REACT_DIR/node_modules/$1/package.json"
+    [ -f "$manifest" ] || return 0
+    node -e 'process.stdout.write(require(process.argv[1]).version || "");' \
+        "$manifest" 2>/dev/null || true
+}
+
+# Skip `npm ci` when every source file is present *and* at the locked version —
+# a local rebuild loop shouldn't pay the install cost on every run, but a stale
+# tree must never be vendored silently. That is the whole point of pinning in
+# one place: when a bump lands (CVE or otherwise), the next run reinstalls
+# rather than copying the version the bump replaced. CI starts cold and always
+# installs.
 NEED_INSTALL=0
 for src in "$MARKED_SRC" "$TURNDOWN_SRC" "$MARKED_LICENSE" "$TURNDOWN_LICENSE"; do
     if [ ! -f "$src" ]; then
@@ -60,12 +85,27 @@ for src in "$MARKED_SRC" "$TURNDOWN_SRC" "$MARKED_LICENSE" "$TURNDOWN_LICENSE"; 
     fi
 done
 
+if [ "$NEED_INSTALL" -eq 0 ]; then
+    if ! command -v node >/dev/null 2>&1; then
+        echo "[sync-vendored] error: node not found on PATH; cannot confirm the vendored versions match $LOCKFILE. Install Node.js (e.g. 'pacman -S nodejs npm')." >&2
+        exit 1
+    fi
+    for package in marked turndown; do
+        locked="$(locked_version "$package")"
+        installed="$(installed_version "$package")"
+        if [ -z "$locked" ] || [ "$installed" != "$locked" ]; then
+            echo "[sync-vendored] $package ${installed:-(absent)} does not match the lockfile's ${locked:-(unknown)}; reinstalling."
+            NEED_INSTALL=1
+        fi
+    done
+fi
+
 if [ "$NEED_INSTALL" -eq 1 ]; then
     if ! command -v npm >/dev/null 2>&1; then
         echo "[sync-vendored] error: npm not found on PATH. Install Node.js (e.g. 'pacman -S nodejs npm')." >&2
         exit 1
     fi
-    echo "[sync-vendored] react/admin/node_modules is incomplete; running 'npm ci'..."
+    echo "[sync-vendored] installing react/admin dependencies with 'npm ci'..."
     (cd "$REACT_DIR" && npm ci --no-audit --no-fund)
 fi
 
