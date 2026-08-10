@@ -1,0 +1,8 @@
+# The MSRV is not set here on purpose: clippy reads `rust-version` from
+# Cargo.toml, and duplicating it produces a divergence warning the moment the
+# two are bumped out of step.
+
+# Test code may unwrap. Only relevant if a restriction lint is ever switched on,
+# but stating it here keeps that from becoming a per-file allow spree later.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

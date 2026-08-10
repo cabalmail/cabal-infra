@@ -42,11 +42,16 @@ Some features are too expensive to run in multiple environments and ship via a f
 
 If any of these is unclear, route through stage first.
 
+### No PII in public artifacts
+
+This repository is public. Never put PII — real names, production email addresses, phone numbers, or anything else identifying a real person — in code comments, commit messages, issue titles/descriptions, PR titles/descriptions/comments, changelog fragments, docs, test fixtures, or anywhere else that is or might be publicly exposed. When a live example is required, use a stage-environment address instead of a production one.
+
 ## Repository Structure
 
 ```
 react/admin/        React frontend (email client + address/folder management)
 apple/              Native Apple clients (iOS + macOS, SwiftUI) and CabalmailKit
+linux/              Native Linux client (GTK4 + libadwaita, Rust) — in progress, see docs/1.1.x/linux-client-plan.md
 lambda/api/         AWS Lambda functions behind API Gateway (Python)
 lambda/counter/     Cognito post-confirmation trigger (Python)
 lambda/certbot-renewal/  Let's Encrypt certificate renewal Lambda
@@ -81,6 +86,14 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - App-layer tests: `cd apple && xcodebuild test -workspace Cabalmail.xcworkspace -scheme CabalmailMac -destination 'platform=macOS' -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""` — XCTest suite for the app target's view models (`apple/CabalmailTests/`, e.g. bulk-selection/move flows against a `FakeImapClient`). `swift test` does **not** compile or run these, and `apple.yml` runs them only on push to a named branch, not on PRs — so run them locally before merging a change to a shared protocol (e.g. `ImapClient`) or a view model.
 - iOS build sanity check: `cd apple && xcodebuild -workspace Cabalmail.xcworkspace -scheme Cabalmail -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO`
 - CI: `apple.yml` builds and tests on a macOS runner; does not deploy anything to AWS
+
+### Linux Client (`linux/`)
+- Toolchain: **rustup**, not the distro `rust` package — only rustup honours the exact pin in `linux/rust-toolchain.toml` (1.97.1), and on Arch the two packages conflict
+- Build: `cd linux && cargo build --workspace`
+- Kit tests: `cd linux && cargo test -p cabalmail-kit` (no display server, no network — keep it that way; `cabalmail-kit` must never gain a GTK/libadwaita/WebKit dependency)
+- Repo-shape and drift tests: `cd linux && cargo test -p xtask` — the checks that reach outside the workspace. One asserts the client's synced-preference keys and enum values match `APP_ALLOWED` in [`lambda/api/set_preferences/function.py`](lambda/api/set_preferences/function.py); the server rejects an unknown key in the `app` map with a 400 *by design*, so a divergence would surface as a failed push at runtime. Another asserts the generated docs are current — after changing `linux/cabalmail-kit/src/config/schema.rs`, regenerate `cabalmail-gtk/data/config.example.toml` and the `cabalmail.5.md` key list with `CABALMAIL_UPDATE_DOCS=1 cargo test -p xtask`
+- Everything CI runs, in CI's order: `cd linux && cargo xtask ci` (subcommands land in Phase 1 work item 5)
+- The app crate builds the `cabalmail` binary; CI does not exist yet (Phase 2)
 
 ### Terraform
 - Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)

@@ -12,8 +12,6 @@
 
 # About Cabalmail
 
-The Cabalmail developement team is hard at work preparing our 1.0 release. Stay tuned.
-
 The Cabalmail repository creates AWS infrastructure and machine configuration for a Cabalmail system — a system for hosting and managing your personal email by creating new addresses for each interlocutor.
 
 WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email. Use at your own risk!
@@ -62,7 +60,7 @@ See [these suggestions](./operations.md) for assuring the continued smooth opera
 
 See the linked docouments for information on:
 
-* Setting up [Mail User Agents](./mua_setup.md) such as Outlook, Thunderbird, iOS Mail, etc.
+* Setting up [Mail User Agents](./mua_setup.md).
 * Working with [the Cabalmail App](./user_manual.md) and managing user accounts.
 
 # Documentation

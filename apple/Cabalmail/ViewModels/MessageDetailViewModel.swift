@@ -163,6 +163,7 @@ final class MessageDetailViewModel {
                 try await hydrate(from: tree)
                 errorMessage = nil
                 BodyFetchLog.loadSuccess(uid: uid, attempt: attemptNumber, bytes: bytes.count)
+                donateBodyToSpotlight()
                 scheduleMarkAsReadIfNeeded()
                 completed = true
                 return
@@ -190,6 +191,28 @@ final class MessageDetailViewModel {
                 completed = true
                 return
             }
+        }
+    }
+
+    /// Adds the just-parsed body text to the message's Spotlight entry
+    /// (fire-and-forget; the indexer gates on the folder being subscribed).
+    /// Prefers the `text/plain` alternative; an HTML-only message falls
+    /// back to a search-oriented tag strip (`HTMLText`). Bodies are never
+    /// fetched just to index them.
+    private func donateBodyToSpotlight() {
+        var text = plainText ?? ""
+        if text.isEmpty, let html = htmlBody {
+            text = HTMLText.plainText(from: html)
+        }
+        guard !text.isEmpty else { return }
+        let donated = text
+        let client = client
+        let envelope = envelope
+        let folderPath = folder.path
+        Task {
+            await client.spotlightIndexer?.indexBody(
+                text: donated, envelope: envelope, folder: folderPath
+            )
         }
     }
 

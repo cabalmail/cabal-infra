@@ -97,11 +97,21 @@ final class AppState {
     var toggleSeenRequestTick = 0
     var toggleFlaggedRequestTick = 0
     var moveSelectionRequestTick = 0
+    /// What those commands (and the reply family) currently have to act on,
+    /// reported by the mail surface via `reportsMessageMenuAvailability`. The
+    /// menu dims a command that would be a no-op instead of advertising it.
+    var messageMenuAvailability: MessageMenuAvailability = .none
     /// Intent to open the iOS / iPadOS / visionOS settings sheet (General /
     /// Addresses / Folders). Bumped by the sidebar gear button and the ⌘,
     /// app command; `SignedInRootView` observes it and presents the sheet.
     /// macOS ignores it - settings there is the dedicated ⌘, scene.
     var settingsRequestTick = 0
+
+    /// A Spotlight result tapped before sign-in / restore completed; routed
+    /// once the session is wired, mirroring `PushRegistrar.pendingOpen`.
+    /// `@ObservationIgnored` because no view renders it — it's a one-shot
+    /// handoff consumed by `routePendingSpotlightOpen()` (SpotlightRouting).
+    @ObservationIgnored var pendingSpotlightRef: SpotlightMessageRef?
 
     /// Latest envelope disposed from the detail view. `MessageListView`
     /// observes this via `.onChange` and prunes the matching UID from its
@@ -590,6 +600,11 @@ extension AppState {
         IntentBridge.shared.sessionDidStart(appState: self)
         CabalmailAppShortcuts.updateAppShortcutParameters()
         #endif
+        // Refresh the on-device Spotlight index for this session (each
+        // subscribed folder's top page), and route a Spotlight tap that
+        // arrived before the session was wired (cold launch from search).
+        Task { await newClient.refreshSpotlightIndex() }
+        routePendingSpotlightOpen()
         await pushSessionToWatch(client: newClient, username: username)
     }
 }

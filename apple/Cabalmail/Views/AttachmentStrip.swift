@@ -1,4 +1,5 @@
 import SwiftUI
+import CabalmailKit
 #if os(iOS) || os(visionOS)
 import UIKit
 import QuickLook
@@ -8,12 +9,19 @@ import QuickLook
 ///
 /// Tapping a chip opens the file in the platform's preview UI — on iOS /
 /// visionOS via `QLPreviewController`, on macOS via `NSWorkspace.open(_:)`.
-/// Phase 7 polish will replace the macOS path with
-/// `NSSharingServicePicker` so the user can forward / save from the chip
-/// directly.
+/// Calendar invites (`.ics`) are the exception on iOS / visionOS: QuickLook
+/// can only display them and Calendar offers no share-sheet route, so they
+/// open in `CalendarEventSheet` with an Add to Calendar flow instead (an
+/// unparseable invite still falls back to QuickLook). On macOS the plain
+/// `open` already lands in Calendar's own import prompt. Phase 7 polish
+/// will replace the macOS path with `NSSharingServicePicker` so the user
+/// can forward / save from the chip directly.
 struct AttachmentStrip: View {
     let attachments: [MessageDetailViewModel.Attachment]
     @State private var previewURL: URL?
+    #if canImport(EventKitUI)
+    @State private var calendarInvite: CalendarInvite?
+    #endif
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -25,6 +33,7 @@ struct AttachmentStrip: View {
                         AttachmentChip(attachment: attachment)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("reader.attachment.\(attachment.filename)")
                 }
             }
             .padding(.horizontal)
@@ -32,12 +41,26 @@ struct AttachmentStrip: View {
         #if os(iOS) || os(visionOS)
         .quickLookPreview($previewURL)
         #endif
+        #if canImport(EventKitUI)
+        .sheet(item: $calendarInvite) { invite in
+            CalendarEventSheet(invite: invite)
+        }
+        #endif
     }
 
     private func open(_ attachment: MessageDetailViewModel.Attachment) {
         #if os(macOS)
         NSWorkspace.shared.open(attachment.fileURL)
         #else
+        #if canImport(EventKitUI)
+        if ICalendar.isCalendarAttachment(mimeType: attachment.mimeType, filename: attachment.filename),
+           let data = try? Data(contentsOf: attachment.fileURL),
+           let calendar = ICalendarParser.parse(data),
+           !calendar.events.isEmpty {
+            calendarInvite = CalendarInvite(calendar: calendar)
+            return
+        }
+        #endif
         previewURL = attachment.fileURL
         #endif
     }
@@ -65,6 +88,9 @@ private struct AttachmentChip: View {
     }
 
     private var iconName: String {
+        if ICalendar.isCalendarAttachment(mimeType: attachment.mimeType, filename: attachment.filename) {
+            return "calendar"
+        }
         switch attachment.mimeType.split(separator: "/").first?.lowercased() {
         case "image":  return "photo"
         case "audio":  return "waveform"

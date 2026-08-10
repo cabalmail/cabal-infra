@@ -1,0 +1,19 @@
+[workspace]
+members = ["cabalmail-kit", "cabalmail-gtk", "xtask"]
+# A virtual manifest infers nothing from `edition`, so the resolver version has
+# to be stated. 3 is the edition-2024 default.
+resolver = "3"
+
+[workspace.package]
+# The packaged version comes from the latest semver git tag (see
+# `scripts/promote.sh`, and the `pkgver` rule in packaging/arch/PKGBUILD once it
+# exists). This field is what an unreleased local build reports.
+version = "1.1.0-dev"
+edition = "2024"
+# What the workspace is built with. Deliberately not a compatibility promise:
+# there is no MSRV policy for this client. See "Toolchain" in
+# docs/1.1.x/linux-client-plan.md.
+rust-version = "1.97"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/cabalmail/cabal-infra"
+publish = false

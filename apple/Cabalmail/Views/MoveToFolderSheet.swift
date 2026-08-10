@@ -43,45 +43,38 @@ struct MoveToFolderSheet: View {
         .task { await load() }
     }
 
-    @ViewBuilder
     private var content: some View {
-        if isLoading {
-            ProgressView("Loading folders…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let errorMessage {
-            VStack(spacing: 12) {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                Button("Retry") {
-                    Task { await load() }
+        AsyncContentView(
+            isLoading: isLoading,
+            loadingLabel: "Loading folders…",
+            errorMessage: errorMessage,
+            retry: { Task { await load() } },
+            content: {
+                if visibleFolders.isEmpty {
+                    ContentUnavailableView(
+                        "No folders to move to",
+                        systemImage: "folder",
+                        description: Text(
+                            search.isEmpty
+                            ? "Subscribe to additional folders in the sidebar to use them as move targets."
+                            : "No subscribed folder matches \"\(search)\"."
+                        )
+                    )
+                } else {
+                    List(visibleFolders) { folder in
+                        Button {
+                            onSelect(folder)
+                        } label: {
+                            row(for: folder)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    #if os(iOS) || os(visionOS)
+                    .listStyle(.plain)
+                    #endif
                 }
-                .buttonStyle(.bordered)
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if visibleFolders.isEmpty {
-            ContentUnavailableView(
-                "No folders to move to",
-                systemImage: "folder",
-                description: Text(
-                    search.isEmpty
-                    ? "Subscribe to additional folders in the sidebar to use them as move targets."
-                    : "No subscribed folder matches \"\(search)\"."
-                )
-            )
-        } else {
-            List(visibleFolders) { folder in
-                Button {
-                    onSelect(folder)
-                } label: {
-                    row(for: folder)
-                }
-                .buttonStyle(.plain)
-            }
-            #if os(iOS) || os(visionOS)
-            .listStyle(.plain)
-            #endif
-        }
+        )
     }
 
     @ViewBuilder

@@ -262,35 +262,26 @@ struct NotificationFolderPickerView: View {
             .task { await load() }
     }
 
-    @ViewBuilder
     private var content: some View {
-        if isLoading {
-            ProgressView("Loading folders…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let errorMessage {
-            VStack(spacing: 12) {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                Button("Retry") {
-                    Task { await load() }
+        AsyncContentView(
+            isLoading: isLoading,
+            loadingLabel: "Loading folders…",
+            errorMessage: errorMessage,
+            retry: { Task { await load() } },
+            content: {
+                List(folders) { folder in
+                    Button {
+                        toggle(folder.path)
+                    } label: {
+                        row(for: folder)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.bordered)
+                #if os(iOS)
+                .listStyle(.plain)
+                #endif
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            List(folders) { folder in
-                Button {
-                    toggle(folder.path)
-                } label: {
-                    row(for: folder)
-                }
-                .buttonStyle(.plain)
-            }
-            #if os(iOS)
-            .listStyle(.plain)
-            #endif
-        }
+        )
     }
 
     @ViewBuilder

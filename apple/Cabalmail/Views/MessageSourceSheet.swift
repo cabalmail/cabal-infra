@@ -80,31 +80,22 @@ struct MessageSourceSheet: View {
         .task { await load() }
     }
 
-    @ViewBuilder
     private var content: some View {
-        if isLoading {
-            ProgressView("Loading source…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let errorMessage {
-            VStack(spacing: 12) {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                Button("Retry") {
-                    Task { await load() }
+        AsyncContentView(
+            isLoading: isLoading,
+            loadingLabel: "Loading source…",
+            errorMessage: errorMessage,
+            retry: { Task { await load() } },
+            content: {
+                ScrollView([.vertical, .horizontal]) {
+                    Text(currentText)
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
                 }
-                .buttonStyle(.bordered)
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ScrollView([.vertical, .horizontal]) {
-                Text(currentText)
-                    .font(.system(.footnote, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-            }
-        }
+        )
     }
 
     @ToolbarContentBuilder
