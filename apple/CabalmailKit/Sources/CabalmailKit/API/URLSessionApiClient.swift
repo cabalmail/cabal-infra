@@ -37,14 +37,22 @@ extension URLSessionApiClient {
         // wrapper over the DynamoDB scan output (see
         // `lambda/api/list/function.py`). Check that first, with the plain
         // array and `{"addresses": [...]}` kept as fallbacks in case the
-        // Lambda wire changes.
-        if let wrapped = try? JSONDecoder().decode(ItemsWrapper.self, from: data) {
-            return wrapped.Items
+        // Lambda wire changes. If every shape fails, rethrow the
+        // Items-shape error: it names the field that actually broke,
+        // whereas the last fallback's error blames the missing "addresses"
+        // key on any malformed `Items` payload.
+        let decoder = JSONDecoder()
+        do {
+            return try decoder.decode(ItemsWrapper.self, from: data).Items
+        } catch {
+            if let direct = try? decoder.decode([Address].self, from: data) {
+                return direct
+            }
+            if let wrapped = try? decoder.decode(LowercaseAddressesWrapper.self, from: data) {
+                return wrapped.addresses
+            }
+            throw error
         }
-        if let direct = try? JSONDecoder().decode([Address].self, from: data) {
-            return direct
-        }
-        return try JSONDecoder().decode(LowercaseAddressesWrapper.self, from: data).addresses
     }
 
     // The `Items` key is PascalCase because the Lambda emits the shape

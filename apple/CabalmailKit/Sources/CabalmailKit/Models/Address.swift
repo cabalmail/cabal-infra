@@ -55,7 +55,11 @@ public struct Address: Sendable, Codable, Hashable, Identifiable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.address = try container.decode(String.self, forKey: .address)
-        self.subdomain = try container.decode(String.self, forKey: .subdomain)
+        // Rows minted before the no-apex-addressing policy (pre-2020) live
+        // directly on a mail domain's apex and have no `subdomain` attribute
+        // at all, so DynamoDB's projection omits the key. Treat absence as
+        // empty rather than failing the whole list over one legacy row.
+        self.subdomain = try container.decodeIfPresent(String.self, forKey: .subdomain) ?? ""
         self.tld = try container.decode(String.self, forKey: .tld)
         self.comment = try container.decodeIfPresent(String.self, forKey: .comment)
         self.publicKey = try container.decodeIfPresent(String.self, forKey: .publicKey)
