@@ -154,6 +154,11 @@ targets:
             UTTypeDescription: Cabalmail message reference
             UTTypeConformsTo:
               - public.data
+        # Continued from a tapped Spotlight result (the literal value of
+        # CSSearchableItemActionType). Declaring it lets the system hand the
+        # activity to `.onContinueUserActivity` in CabalmailApp.swift.
+        NSUserActivityTypes:
+          - com.apple.corespotlightitem
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail
@@ -218,6 +223,9 @@ targets:
       - path: Cabalmail/AppState.swift
       - path: Cabalmail/AppStateSignals.swift
       - path: Cabalmail/NavStateCoordinator.swift
+      # Spotlight tap routing (shared AppState extension; both app entries
+      # attach the .onContinueUserActivity handler that calls into it).
+      - path: Cabalmail/SpotlightRouting.swift
       - path: Cabalmail/PreferencesSyncCoordinator.swift
       - path: Cabalmail/Pasteboard.swift
       # Shared with AppState.swift: the no-op stub branch compiles here
@@ -288,6 +296,10 @@ targets:
             UTTypeDescription: Cabalmail message reference
             UTTypeConformsTo:
               - public.data
+        # Mirror of the iOS target's Spotlight-continuation declaration; the
+        # handler lives in CabalmailMacApp.swift.
+        NSUserActivityTypes:
+          - com.apple.corespotlightitem
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac
