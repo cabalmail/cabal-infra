@@ -1,4 +1,4 @@
-'''Deletes a user from the Cognito user pool (admin only)'''  # pylint: disable=duplicate-code
+'''Deletes a user from the Cognito user pool (admin only)'''
 import json
 import os
 import boto3  # pylint: disable=import-error
@@ -6,6 +6,7 @@ from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
 from admin_limits import ( # pylint: disable=import-error
     admin_response_or_none,
     audit_log,
+    parse_json_object_body,
     rate_limit_response_or_none,
 )
 
@@ -24,15 +25,9 @@ def handler(event, _context):
     limited = rate_limit_response_or_none(caller, 'delete_user')
     if limited:
         return limited
-    try:
-        body = json.loads(event.get('body') or '')
-    except (TypeError, ValueError):
-        body = None
-    if not isinstance(body, dict):
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
-        }
+    body, invalid = parse_json_object_body(event)
+    if invalid:
+        return invalid
     username = ''
     try:
         username = body['username']
