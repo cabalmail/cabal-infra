@@ -42,6 +42,10 @@ Some features are too expensive to run in multiple environments and ship via a f
 
 If any of these is unclear, route through stage first.
 
+### No PII in public artifacts
+
+This repository is public. Never put PII — real names, production email addresses, phone numbers, or anything else identifying a real person — in code comments, commit messages, issue titles/descriptions, PR titles/descriptions/comments, changelog fragments, docs, test fixtures, or anywhere else that is or might be publicly exposed. When a live example is required, use a stage-environment address instead of a production one.
+
 ## Repository Structure
 
 ```
