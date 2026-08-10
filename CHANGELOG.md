@@ -5,6 +5,113 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-10
+
+### Added
+- Apple: **Add calendar invites to Calendar.** Tapping an `.ics` attachment on
+  iOS / visionOS now opens an event sheet showing the invite's details
+  (time, location, organizer, recurrence) with an Add to Calendar button that
+  launches the system event editor prefilled — previously the attachment
+  preview was a dead end, since iOS gives third-party apps no share-sheet or
+  Files route into Calendar. Multi-event files list every event; invites the
+  parser can't read still fall back to the QuickLook preview. On macOS,
+  opening an `.ics` attachment already triggers Calendar's own import prompt.
+- **Cargo workspace for the native Linux client.** `linux/` holds a three-crate
+  workspace — `cabalmail-kit` (the GUI-free core), `cabalmail-gtk` (the
+  application, which builds the `cabalmail` binary), and `xtask` (build and
+  packaging automation) — with the Rust toolchain pinned to an exact 1.97.1,
+  edition 2024, a committed `Cargo.lock` for offline distro packaging, and
+  shared rustfmt and clippy configuration. No user-facing functionality yet;
+  this is the scaffolding the rest of the client is built through. See
+  [`docs/1.1.x/linux-client-plan.md`](docs/1.1.x/linux-client-plan.md).
+- **Layered configuration for the Linux client.** Settings live in a
+  hand-editable `$XDG_CONFIG_HOME/cabalmail/config.toml`, resolved through a
+  precedence stack — command-line flag, `CABALMAIL_*` environment variable,
+  user file, `$XDG_CONFIG_DIRS` entries in order, server-synced preferences,
+  built-in default — with every key recording which of those it came from.
+  Three sections say how far a value travels: `[preferences]` to every device,
+  `[preferences.linux]` to the user's other Linux machines, `[local]` nowhere;
+  a key written in the wrong one is an error naming the section it belongs in,
+  as is an unknown key or an unacceptable value, each reported with the file,
+  line, and column. Client writes are atomic and preserve comments, key order,
+  and alignment, so the file can be shared with an open editor. `cabalmail
+  --print-config`, `cabalmail config set`, and `cabalmail config reset` drive
+  it from a terminal; `config.example.toml` and the `cabalmail.5` key list are
+  generated from the same table the parser reads, and a test asserts the synced
+  key set matches the `set_preferences` Lambda's so a divergence fails CI
+  rather than 400ing on a push. The propagation machinery that watches the file
+  and pushes to the server lands with the Settings window in Phase 6. See
+  [`docs/1.1.x/linux-client-plan.md`](docs/1.1.x/linux-client-plan.md).
+- **Core library skeleton for the Linux client.** `cabalmail-kit` gains its
+  module layout — config, auth, secret storage, API client, models, MIME,
+  caches, compose, outbox, policy, and preferences — together with the
+  `CabalmailError` taxonomy every one of them returns. Errors classify
+  themselves as transient or permanent, which is what lets the outbox queue a
+  send that lost the network while surfacing one the server refused, and each
+  case renders a plain sentence rather than a debug form. Still no user-facing
+  functionality; the crate has no GTK, libadwaita, or WebKit dependency, so its
+  tests run with no display server. See
+  [`docs/1.1.x/linux-client-plan.md`](docs/1.1.x/linux-client-plan.md).
+- Apple: **Spotlight search for messages.** Messages in subscribed folders
+  are indexed on-device with Core Spotlight: search by subject, sender, or
+  recipient from system search, plus full text once a message has been
+  read, and tap a result to open the message in Cabalmail. The index stays
+  on the device and tracks the mailbox — moves, deletes, unsubscribes, and
+  sign-out all remove the matching entries.
+
+### Fixed
+- Apple: **Contacts buttons in compose no longer sit there looking live.** The
+  picker button beside To / Cc / Bcc rendered at full accent strength even when
+  it was inert, and it went inert whenever the contact list came back empty —
+  including when that was because Contacts access had never been granted, with
+  no way to grant it from compose. It now asks for access when access has never
+  been decided, opens the system privacy pane when access was refused, and dims
+  only in the one case where there is genuinely nothing to pick.
+- Apple: **Reading pane could be squeezed out of the macOS window.** The
+  message-list column declared no width of its own, so the split gave it what it
+  asked for and charged its neighbours: the list froze at its launch width and
+  the reading pane absorbed every resize alone, down to 60pt in a small window.
+  A reader that narrow shows nothing, so selecting a message looked like it did
+  nothing. The list now opens bounded and gives ground as the window shrinks, so
+  the reader keeps a readable share at every window size.
+- Apple: **Clicking a message row selects it again on macOS 27.** The row's
+  click target is now a button rather than a bare tap gesture, which macOS 27
+  never delivered the click to — the reading pane stayed on "No message
+  selected", no row highlighted, and the Message menu acted on nothing. The row
+  also answers `AXPress` now, so VoiceOver and automation can activate it.
+- Apple: **macOS folder sidebar opens wide enough to read its folder names.**
+  The sidebar took SwiftUI's default column width, which left `INBOX` and
+  `Archive` rendering as `I…` and `Arc…` on every launch once the disclosure
+  indent, unread badge and row menu had taken their share. It now opens at a
+  width sized for a folder name, still resizes by the native divider, and
+  remembers the width the user drags it to.
+- Apple: **The macOS and iPadOS Message menu dims commands that have nothing
+  to act on.** Reply, Reply All, Forward, Mark as Read/Unread, Flag/Unflag and
+  Move to Folder… stayed enabled with no message selected and did nothing when
+  chosen; each is now enabled only when it has a message to act on.
+- Apple: **Filter-pill counts on visionOS.** The All / Unread / Flagged counts
+  above the message list were drawn in a secondary foreground fill, which over
+  passthrough glass composites to no visible contrast — the row read as three
+  bare labels with the numbers missing. They now draw at the same strength as
+  their labels on visionOS; iPhone, iPad and the Mac are unchanged.
+
+### Security
+- **Every remote-content vector in the web reader is now withheld until you
+  load images.** Blocking previously covered only `<img src>`, so a message
+  could still reach a tracking host through a CSS `background-image`, an
+  `@import`, a `srcset`, or a `<video poster>` — and a message whose only
+  remote references were in CSS showed no "remote images are blocked" banner
+  at all, leaving no way to opt in. The reader document now carries a
+  content-security policy that denies remote subresources outright, and the
+  banner appears for all of those vectors.
+- Threat protection's responses are now pinned instead of inheriting
+  Cognito's defaults: account-takeover risk answers with a TOTP challenge for
+  enrolled users (never a hard block, so the password-only service accounts
+  that carry the mail path cannot be cut off by a risk misfire), low-level
+  noise is ignored, and sign-ins with a breach-corpus password are blocked
+  outright. The configuration is inert in audit mode; it defines exactly what
+  enforced mode does when `TF_VAR_THREAT_PROTECTION_ENFORCED` is flipped.
+
 ## [1.0.0] - 2026-08-08
 
 The [compatibility contract](docs/compatibility.md) is now in effect.
