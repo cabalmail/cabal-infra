@@ -105,15 +105,20 @@ function ReaderBody({
       ),
     ).then((pairs) => {
       if (cancelled) return;
-      let out = base || '';
-      for (const [cid, url] of pairs) {
-        if (!url) continue;
-        const escaped = cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        out = out.replace(
-          new RegExp(`(<img\\b[^>]*?\\bsrc=["'])cid:${escaped}(["'])`, 'gi'),
-          `$1${url}$2`,
-        );
-      }
+      // One pass with a lookup, rather than a regex built per cid: the cid
+      // comes out of the message, and message content has no business
+      // becoming a pattern. Matching stays case-insensitive, and a cid we
+      // couldn't resolve keeps its original src.
+      const urlByCid = new Map(
+        pairs.filter(([, url]) => url).map(([cid, url]) => [cid.toLowerCase(), url]),
+      );
+      const out = (base || '').replace(
+        /(<img\b[^>]*?\bsrc=["'])cid:([^"']+)(["'])/gi,
+        (match, prefix, cid, suffix) => {
+          const url = urlByCid.get(cid.toLowerCase());
+          return url ? `${prefix}${url}${suffix}` : match;
+        },
+      );
       finalize(out, pairs.map(([, url]) => url));
     }).catch(() => {
       if (setMessage) setMessage('Unable to load inline image.', true);
