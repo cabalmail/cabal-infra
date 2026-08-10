@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import useApi from '../hooks/useApi';
+import usePagedReports from '../hooks/usePagedReports';
 import { useAppMessage } from '../contexts/AppMessageContext';
 import XmlSourceModal from '../Dmarc/XmlSourceModal';
 // Dmarc.css carries the shared modal scaffold (.source-*) that
@@ -25,9 +26,13 @@ function rawFilename(report) {
 function Caa() {
   const api = useApi();
   const { setMessage } = useAppMessage();
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [nextToken, setNextToken] = useState(null);
+
+  const fetchPage = useCallback((token) => api.listCaaReports(token), [api]);
+  const { reports, loading, nextToken, refresh, loadMore } = usePagedReports({
+    fetchPage,
+    sortReports: sortByReceived,
+    errorLabel: 'CAA',
+  });
 
   const [rawOpen, setRawOpen] = useState(false);
   const [rawTitle, setRawTitle] = useState('');
@@ -35,42 +40,6 @@ function Caa() {
   const [rawText, setRawText] = useState('');
   const [rawLoading, setRawLoading] = useState(false);
   const [rawError, setRawError] = useState(false);
-
-  const loadReports = useCallback((token) => {
-    setLoading(true);
-    api.listCaaReports(token).then(
-      (response) => {
-        const data = response.data || response;
-        const newReports = data.Reports || [];
-        if (token) {
-          setReports(prev => sortByReceived([...prev, ...newReports]));
-        } else {
-          setReports(sortByReceived(newReports));
-        }
-        setNextToken(data.NextToken || null);
-        setLoading(false);
-      },
-      (err) => {
-        setMessage("Failed to load CAA reports: " + (err.message || err), true);
-        setLoading(false);
-      }
-    );
-  }, [api, setMessage]);
-
-  useEffect(() => {
-    loadReports();
-  }, [loadReports]);
-
-  const handleRefresh = useCallback(() => {
-    setNextToken(null);
-    loadReports();
-  }, [loadReports]);
-
-  const handleLoadMore = useCallback(() => {
-    if (nextToken) {
-      loadReports(nextToken);
-    }
-  }, [nextToken, loadReports]);
 
   const openRaw = useCallback((report) => {
     if (!report.raw_url) {
@@ -101,7 +70,7 @@ function Caa() {
 
   return (
     <div className="Caa">
-      <button id="reload" onClick={handleRefresh}>&#x21bb;</button>
+      <button id="reload" onClick={refresh}>&#x21bb;</button>
 
       <h2>CAA Violation Reports</h2>
       {reports.length === 0 ? (
@@ -143,7 +112,7 @@ function Caa() {
             ))}
           </ul>
           {nextToken && (
-            <button className="load-more" onClick={handleLoadMore} disabled={loading}>
+            <button className="load-more" onClick={loadMore} disabled={loading}>
               {loading ? 'Loading...' : 'Load more'}
             </button>
           )}

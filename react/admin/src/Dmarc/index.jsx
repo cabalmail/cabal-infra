@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import useApi from '../hooks/useApi';
+import usePagedReports from '../hooks/usePagedReports';
 import { useAppMessage } from '../contexts/AppMessageContext';
 import XmlSourceModal from './XmlSourceModal';
 import DnsCheckModal from './DnsCheckModal';
@@ -45,9 +46,13 @@ function ResultBadge({ value, onFailClick, label }) {
 function Dmarc() {
   const api = useApi();
   const { setMessage } = useAppMessage();
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [nextToken, setNextToken] = useState(null);
+
+  const fetchPage = useCallback((token) => api.listDmarcReports(token), [api]);
+  const { reports, loading, nextToken, refresh, loadMore } = usePagedReports({
+    fetchPage,
+    sortReports: sortByDate,
+    errorLabel: 'DMARC',
+  });
 
   const [xmlOpen, setXmlOpen] = useState(false);
   const [xmlTitle, setXmlTitle] = useState('');
@@ -59,42 +64,6 @@ function Dmarc() {
   const [dnsOpen, setDnsOpen] = useState(false);
   const [dnsType, setDnsType] = useState('dkim');
   const [dnsDomain, setDnsDomain] = useState('');
-
-  const loadReports = useCallback((token) => {
-    setLoading(true);
-    api.listDmarcReports(token).then(
-      (response) => {
-        const data = response.data || response;
-        const newReports = data.Reports || [];
-        if (token) {
-          setReports(prev => sortByDate([...prev, ...newReports]));
-        } else {
-          setReports(sortByDate(newReports));
-        }
-        setNextToken(data.NextToken || null);
-        setLoading(false);
-      },
-      (err) => {
-        setMessage("Failed to load DMARC reports: " + (err.message || err), true);
-        setLoading(false);
-      }
-    );
-  }, [api, setMessage]);
-
-  useEffect(() => {
-    loadReports();
-  }, [loadReports]);
-
-  const handleRefresh = useCallback(() => {
-    setNextToken(null);
-    loadReports();
-  }, [loadReports]);
-
-  const handleLoadMore = useCallback(() => {
-    if (nextToken) {
-      loadReports(nextToken);
-    }
-  }, [nextToken, loadReports]);
 
   const openXml = useCallback((report) => {
     if (!report.xml_url) {
@@ -132,7 +101,7 @@ function Dmarc() {
 
   return (
     <div className="Dmarc">
-      <button id="reload" onClick={handleRefresh}>&#x21bb;</button>
+      <button id="reload" onClick={refresh}>&#x21bb;</button>
 
       <h2>DMARC Reports</h2>
       {reports.length === 0 ? (
@@ -201,7 +170,7 @@ function Dmarc() {
             ))}
           </ul>
           {nextToken && (
-            <button className="load-more" onClick={handleLoadMore} disabled={loading}>
+            <button className="load-more" onClick={loadMore} disabled={loading}>
               {loading ? 'Loading...' : 'Load more'}
             </button>
           )}
