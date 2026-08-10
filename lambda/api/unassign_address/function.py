@@ -1,10 +1,13 @@
 '''Removes a user from a multi-user email address (admin only)'''
-# pylint: disable=duplicate-code,too-many-return-statements
+# pylint: disable=too-many-return-statements
 import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
-from admin_limits import admin_response_or_none  # pylint: disable=import-error
+from admin_limits import ( # pylint: disable=import-error
+    admin_response_or_none,
+    parse_json_object_body,
+)
 
 address_changed_topic_arn = os.environ.get('ADDRESS_CHANGED_TOPIC_ARN', '')
 
@@ -18,15 +21,9 @@ def handler(event, _context):
     denial = admin_response_or_none(event)
     if denial:
         return denial
-    try:
-        body = json.loads(event.get('body') or '')
-    except (TypeError, ValueError):
-        body = None
-    if not isinstance(body, dict):
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
-        }
+    body, invalid = parse_json_object_body(event)
+    if invalid:
+        return invalid
     address = body['address']
     target_user = body['username']
     try:
