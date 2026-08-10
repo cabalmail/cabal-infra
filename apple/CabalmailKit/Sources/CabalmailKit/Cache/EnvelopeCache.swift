@@ -24,13 +24,66 @@ public actor EnvelopeCache {
         }
     }
 
+    /// One mutation of the on-disk mirror, as observed through `changes()`.
+    /// Every write path funnels through this cache, which makes the stream a
+    /// single chokepoint for anything that must mirror the mailbox — the
+    /// Spotlight indexer is the first consumer. Events carry deltas (what
+    /// changed), not whole snapshots, so a routine page merge doesn't force
+    /// consumers to reprocess thousands of untouched envelopes.
+    public enum ChangeEvent: Sendable {
+        case upserted(envelopes: [Envelope], folder: String)
+        case removed(uids: [UInt32], folder: String)
+        /// The folder's snapshot was dropped wholesale — an explicit
+        /// `invalidate` or a UIDVALIDITY change (old UIDs are meaningless).
+        case invalidated(folder: String)
+        case cleared
+    }
+
     private let directory: URL
     private let fileManager: FileManager
+    private var changeContinuations: [UUID: AsyncStream<ChangeEvent>.Continuation] = [:]
 
     public init(directory: URL, fileManager: FileManager = .default) throws {
         self.directory = directory
         self.fileManager = fileManager
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    deinit {
+        // Finish outstanding streams so a consumer's `for await` loop ends
+        // with the cache (sign-out releases the per-session client) instead
+        // of suspending forever and retaining its task's captures.
+        for continuation in changeContinuations.values {
+            continuation.finish()
+        }
+    }
+
+    /// Async stream of every subsequent cache mutation. Multiple observers
+    /// are supported; each stream ends when the cache is deallocated.
+    public func changes() -> AsyncStream<ChangeEvent> {
+        AsyncStream { continuation in
+            let id = UUID()
+            changeContinuations[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                Task { await self.removeContinuation(id: id) }
+            }
+        }
+    }
+
+    private func removeContinuation(id: UUID) {
+        changeContinuations.removeValue(forKey: id)
+    }
+
+    /// Test hook: whether any change-stream observer is registered. Events
+    /// are not replayed to late subscribers, so tests that bind a consumer
+    /// in a background task wait on this before mutating.
+    var hasChangeObservers: Bool { !changeContinuations.isEmpty }
+
+    private func emit(_ event: ChangeEvent) {
+        for continuation in changeContinuations.values {
+            continuation.yield(event)
+        }
     }
 
     public func snapshot(for folder: String) -> Snapshot? {
@@ -40,6 +93,14 @@ public actor EnvelopeCache {
     }
 
     public func store(_ snapshot: Snapshot, for folder: String) throws {
+        try write(snapshot, for: folder)
+        // A whole-snapshot write has no delta to report; treat every entry
+        // as upserted. `merge` / `replace` / `remove` use `write` directly
+        // and emit the precise delta instead.
+        emit(.upserted(envelopes: Array(snapshot.envelopes.values), folder: folder))
+    }
+
+    private func write(_ snapshot: Snapshot, for folder: String) throws {
         let url = fileURL(for: folder)
         let data = try JSONEncoder().encode(snapshot)
         try data.write(to: url, options: .atomic)
@@ -48,6 +109,7 @@ public actor EnvelopeCache {
     public func invalidate(folder: String) throws {
         let url = fileURL(for: folder)
         try? fileManager.removeItem(at: url)
+        emit(.invalidated(folder: folder))
     }
 
     /// Drops every folder snapshot. Called on sign-out so the next account
@@ -57,23 +119,29 @@ public actor EnvelopeCache {
     public func clearAll() throws {
         try? fileManager.removeItem(at: directory)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        emit(.cleared)
     }
 
     public func merge(envelopes: [Envelope], uidValidity: UInt32, uidNext: UInt32, into folder: String) throws {
         let existing = snapshot(for: folder)
         var merged: [UInt32: Envelope]
+        let uidValidityChanged: Bool
         if let existing, existing.uidValidity == uidValidity {
             merged = existing.envelopes
+            uidValidityChanged = false
         } else {
             merged = [:]
+            uidValidityChanged = existing != nil
         }
         for envelope in envelopes {
             merged[envelope.uid] = envelope
         }
-        try store(
+        try write(
             Snapshot(uidValidity: uidValidity, uidNext: uidNext, envelopes: merged),
             for: folder
         )
+        if uidValidityChanged { emit(.invalidated(folder: folder)) }
+        if !envelopes.isEmpty { emit(.upserted(envelopes: envelopes, folder: folder)) }
     }
 
     /// Drops the given UIDs from the folder's on-disk snapshot. Called by
@@ -91,7 +159,7 @@ public actor EnvelopeCache {
             changed = true
         }
         guard changed else { return }
-        try store(
+        try write(
             Snapshot(
                 uidValidity: existing.uidValidity,
                 uidNext: existing.uidNext,
@@ -99,6 +167,7 @@ public actor EnvelopeCache {
             ),
             for: folder
         )
+        emit(.removed(uids: uids, folder: folder))
     }
 
     /// Writes a fresh snapshot that merges `envelopes` into the existing
@@ -126,11 +195,15 @@ public actor EnvelopeCache {
     ) throws {
         let existing = snapshot(for: folder)
         var merged: [UInt32: Envelope]
+        let uidValidityChanged: Bool
         if let existing, existing.uidValidity == uidValidity {
             merged = existing.envelopes
+            uidValidityChanged = false
         } else {
             merged = [:]
+            uidValidityChanged = existing != nil
         }
+        let before = Set(merged.keys)
         if let keepingRange {
             // Drop cached UIDs inside the refresh window that the server
             // didn't return. Outside-window entries (older pages) stay.
@@ -146,10 +219,14 @@ public actor EnvelopeCache {
         for envelope in envelopes {
             merged[envelope.uid] = envelope
         }
-        try store(
+        let dropped = before.subtracting(merged.keys).sorted()
+        try write(
             Snapshot(uidValidity: uidValidity, uidNext: uidNext, envelopes: merged),
             for: folder
         )
+        if uidValidityChanged { emit(.invalidated(folder: folder)) }
+        if !dropped.isEmpty { emit(.removed(uids: dropped, folder: folder)) }
+        if !envelopes.isEmpty { emit(.upserted(envelopes: envelopes, folder: folder)) }
     }
 
     private func fileURL(for folder: String) -> URL {

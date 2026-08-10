@@ -65,6 +65,12 @@ final class FolderListViewModel {
             let all = try await client.imapClient.listFolders()
             folders = sortForSidebar(all)
             errorMessage = nil
+            // Keep the Spotlight indexer's subscription gate current — it
+            // also purges the index domains of folders unsubscribed or
+            // deleted from another client since the last list.
+            await client.spotlightIndexer?.setSubscribedFolders(
+                Set(all.filter(\.isSubscribed).map(\.path))
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -91,6 +97,11 @@ final class FolderListViewModel {
                 try await client.imapClient.unsubscribe(path: folder.path)
             }
             errorMessage = nil
+            // Unsubscribing purges the folder from the Spotlight index;
+            // subscribing admits it (indexed on next open or session sweep).
+            await client.spotlightIndexer?.noteSubscription(
+                folder: folder.path, isSubscribed: target
+            )
         } catch {
             applySubscription(path: folder.path, to: !target)
             errorMessage = error.localizedDescription
@@ -144,6 +155,10 @@ final class FolderListViewModel {
             try await client.imapClient.deleteFolder(path: folder.path)
             folders.removeAll { $0.path == folder.path }
             errorMessage = nil
+            // The folder's envelope-cache snapshot isn't invalidated on
+            // delete (the row just disappears), so purge its Spotlight
+            // domain explicitly.
+            await client.spotlightIndexer?.removeFolder(folder.path)
         } catch {
             errorMessage = error.localizedDescription
         }

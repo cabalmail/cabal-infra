@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreSpotlight
 import CabalmailKit
 
 /// Stable identifier for the main mail window's `WindowGroup`, shared
@@ -67,6 +68,12 @@ struct CabalmailMacApp: App {
                     if let mailto = MailtoURL(url) {
                         appState.requestCompose(seed: mailto.draft())
                     }
+                }
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    // A tapped Spotlight result. Parks on AppState until the
+                    // session is wired when it arrives via cold launch (see
+                    // SpotlightRouting.swift).
+                    appState.handleSpotlightActivity(activity)
                 }
         }
         // A WindowGroup's default reaction to an external event (an

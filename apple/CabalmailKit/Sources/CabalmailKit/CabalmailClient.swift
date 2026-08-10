@@ -24,6 +24,12 @@ public actor CabalmailClient {
     public nonisolated let draftStore: DraftStore
     public nonisolated let outbox: Outbox
 
+    /// On-device Core Spotlight mirror of subscribed folders. Wired by
+    /// `make(...)` on platforms with CoreSpotlight; nil under the memberwise
+    /// initializer (tests) and on watchOS, and every consumer no-ops through
+    /// the optional.
+    public nonisolated let spotlightIndexer: SpotlightIndexer?
+
     /// Retained so the path monitor outlives initialization. The underlying
     /// `NWPathMonitor` stops when this property is released. Only `make(...)`
     /// sets it — tests that build the client via the memberwise initializer
@@ -67,6 +73,7 @@ public actor CabalmailClient {
         self.bodyCache = bodyCache
         self.draftStore = draftStore
         self.outbox = outbox
+        self.spotlightIndexer = nil
         self.metricKitCollector = .shared
         #if canImport(Network)
         self.pathMonitor = nil
@@ -116,6 +123,11 @@ public actor CabalmailClient {
         )
         let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
         let outbox = try Outbox(directory: cacheDirectory.appendingPathComponent("outbox"))
+        #if canImport(CoreSpotlight)
+        let spotlight: SpotlightIndexer? = SpotlightIndexer(index: LiveSearchableIndex())
+        #else
+        let spotlight: SpotlightIndexer? = nil
+        #endif
         return CabalmailClient(
             configuration: configuration,
             authService: auth,
@@ -127,6 +139,7 @@ public actor CabalmailClient {
             bodyCache: bodies,
             draftStore: drafts,
             outbox: outbox,
+            spotlightIndexer: spotlight,
             monitorNetworkPath: true
         )
     }
@@ -146,6 +159,7 @@ public actor CabalmailClient {
         bodyCache: MessageBodyCache,
         draftStore: DraftStore,
         outbox: Outbox,
+        spotlightIndexer: SpotlightIndexer?,
         monitorNetworkPath: Bool
     ) {
         self.configuration = configuration
@@ -158,7 +172,15 @@ public actor CabalmailClient {
         self.bodyCache = bodyCache
         self.draftStore = draftStore
         self.outbox = outbox
+        self.spotlightIndexer = spotlightIndexer
         self.metricKitCollector = .shared
+        if let spotlightIndexer {
+            // Feed the indexer from the envelope cache's change stream for
+            // the client's whole lifetime; the stream finishes when the
+            // cache deallocates, ending this task with the session.
+            let cache = envelopeCache
+            Task { await spotlightIndexer.bind(to: cache) }
+        }
         if monitorNetworkPath {
             let imap = imapClient
             self.pathMonitor = NetworkPathMonitor {
@@ -341,6 +363,18 @@ public actor CabalmailClient {
         try? await bodyCache.clearAll()
         try? await draftStore.removeAll()
         try? await outbox.removeAll()
+        // Explicit rather than relying on the cache change stream's
+        // `.cleared` event: sign-out must not race a fire-and-forget task
+        // with the next account's sign-in.
+        await spotlightIndexer?.removeAll()
+    }
+
+    /// Kicks the Spotlight sweep for the current session — refreshes the
+    /// subscribed-folder set and indexes each subscribed folder's top page.
+    /// Called (fire-and-forget) by `wireSession` on sign-in / restore.
+    public func refreshSpotlightIndex() async {
+        guard let spotlightIndexer else { return }
+        await spotlightIndexer.sweep(imap: imapClient, envelopeCache: envelopeCache)
     }
 
     /// Activate or deactivate MetricKit diagnostic collection. The Settings
