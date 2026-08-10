@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import useApi from '../../hooks/useApi';
+import { hasRemoteContent, remoteContentBlockMeta, allowRemoteContent } from './remoteContent';
 
 /* =========================================================================
    Reader body — §4d.
@@ -28,7 +29,9 @@ const DEFAULT_LIGHT_STYLE = `
 function blockTrackingImages(html) {
   // Defuse http(s) <img> srcs so remote images don't load until the user
   // opts in. `cid:` URLs are untouched; they're rewritten with presigned
-  // URLs after the message-load phase.
+  // URLs after the message-load phase. This covers only <img src>; every
+  // other vector (CSS url(), srcset, poster, @import) is blocked by the
+  // injected CSP in remoteContent.js, which also backstops this rewrite.
   return html.replace(/(<img\b[^>]*?\bsrc=["'])(https?:)/gi, '$1disabled-$2');
 }
 
@@ -36,20 +39,23 @@ function restoreTrackingImages(html) {
   return html.replace(/(<img\b[^>]*?\bsrc=["'])disabled-(https?:)/gi, '$1$2');
 }
 
-/* Prepend the default-light <style> block to the srcdoc. If the HTML has
-   a <head>, slot it in there; otherwise drop it at the start so the
-   browser's implicit head-promotion picks it up. Placing the block first
-   inside <head> means any sender-authored styles parse later and win on
-   specificity ties. */
-function injectDefaultStyle(html) {
-  if (!html) return `<html><head>${DEFAULT_LIGHT_STYLE}</head><body></body></html>`;
+/* Prepend the default-light <style> block, and the remote-content policy
+   when one applies, to the srcdoc. If the HTML has a <head>, slot them in
+   there; otherwise drop them at the start so the browser's implicit
+   head-promotion picks them up. Placing the block first inside <head>
+   means any sender-authored styles parse later and win on specificity
+   ties — and that the CSP is in force before the first sender reference
+   is parsed. */
+function injectDefaultStyle(html, policyMeta = '') {
+  const head = `${policyMeta}${DEFAULT_LIGHT_STYLE}`;
+  if (!html) return `<html><head>${head}</head><body></body></html>`;
   if (/<head[^>]*>/i.test(html)) {
-    return html.replace(/<head([^>]*)>/i, `<head$1>${DEFAULT_LIGHT_STYLE}`);
+    return html.replace(/<head([^>]*)>/i, `<head$1>${head}`);
   }
   if (/<html[^>]*>/i.test(html)) {
-    return html.replace(/<html([^>]*)>/i, `<html$1><head>${DEFAULT_LIGHT_STYLE}</head>`);
+    return html.replace(/<html([^>]*)>/i, `<html$1><head>${head}</head>`);
   }
-  return `${DEFAULT_LIGHT_STYLE}${html}`;
+  return `${head}${html}`;
 }
 
 function ReaderBody({
@@ -61,10 +67,7 @@ function ReaderBody({
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [iframeHeight, setIframeHeight] = useState(120);
 
-  const hasRemoteImages = useMemo(
-    () => /(<img\b[^>]*?\bsrc=["'])https?:/i.test(html || ''),
-    [html],
-  );
+  const hasRemoteImages = useMemo(() => hasRemoteContent(html), [html]);
 
   // Compose the srcdoc. Tracking images are defused unless the user opted
   // in; cid: references are resolved to presigned URLs asynchronously;
@@ -81,9 +84,10 @@ function ReaderBody({
       (base || '').matchAll(/(<img\b[^>]*?\bsrc=["'])cid:([^"']+)(["'])/gi),
     ).map((m) => m[2]);
 
-    const finalize = (htmlStr) => {
+    const finalize = (htmlStr, inlineImageUrls = []) => {
       if (cancelled) return;
-      setResolvedHtml(injectDefaultStyle(htmlStr || ''));
+      const policyMeta = imagesLoaded ? '' : remoteContentBlockMeta(inlineImageUrls);
+      setResolvedHtml(injectDefaultStyle(htmlStr || '', policyMeta));
     };
 
     if (cids.length === 0) {
@@ -110,7 +114,7 @@ function ReaderBody({
           `$1${url}$2`,
         );
       }
-      finalize(out);
+      finalize(out, pairs.map(([, url]) => url));
     }).catch(() => {
       if (setMessage) setMessage('Unable to load inline image.', true);
     });
@@ -169,7 +173,7 @@ function ReaderBody({
             type="button"
             onClick={() => {
               setImagesLoaded(true);
-              setResolvedHtml(restoreTrackingImages(resolvedHtml));
+              setResolvedHtml(allowRemoteContent(restoreTrackingImages(resolvedHtml)));
             }}
           >
             Load images
