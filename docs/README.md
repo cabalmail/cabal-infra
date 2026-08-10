@@ -60,7 +60,7 @@ See [these suggestions](./operations.md) for assuring the continued smooth opera
 
 See the linked docouments for information on:
 
-* Setting up [Mail User Agents](./mua_setup.md) such as Outlook, Thunderbird, iOS Mail, etc.
+* Setting up [Mail User Agents](./mua_setup.md).
 * Working with [the Cabalmail App](./user_manual.md) and managing user accounts.
 
 # Documentation
