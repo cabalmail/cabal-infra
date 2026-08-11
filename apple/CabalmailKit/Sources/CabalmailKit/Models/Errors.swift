@@ -33,6 +33,13 @@ public enum CabalmailError: Error, Sendable, Equatable {
     /// so the UI can show "temporarily unavailable" instead of a raw error.
     case maintenance(message: String)
 
+    /// The API is holding an unresolved dedupe claim on this message's
+    /// Message-Id (`409 {"status":"duplicate_in_flight"}`): an earlier
+    /// submission of the same message is still in flight, or died before it
+    /// could report whether it delivered. Neither sent nor failed — the
+    /// caller keeps the message and tries again once the claim clears (#1019).
+    case sendInFlight
+
     /// A bulk flag/move landed for some UIDs but not others. The bulk-op
     /// Lambdas issue their IMAP commands in bounded batches and report a
     /// succeeded/failed split (`status: "partial"`); the API-backed client
@@ -83,6 +90,8 @@ extension CabalmailError: LocalizedError {
         case .maintenance(let message):
             // Already client-facing copy, carried for exactly this purpose.
             return message
+        case .sendInFlight:
+            return "That message is already being sent; it will finish on its own."
         case .bulkPartialFailure(let succeeded, let failed):
             let total = succeeded.count + failed.count
             return "\(failed.count) of \(total) messages couldn't be updated."

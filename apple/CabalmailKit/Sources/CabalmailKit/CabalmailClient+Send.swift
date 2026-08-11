@@ -117,11 +117,14 @@ extension CabalmailClient {
     ///
     /// `network` / `transport` / `timeout` / `cancelled` are transient —
     /// retrying when the connection returns has a real chance of
-    /// succeeding. `invalidCredentials`, `smtpCommandFailed`, and the rest
-    /// are application-level and surface to the user immediately.
+    /// succeeding. `sendInFlight` joins them: the API is holding an
+    /// unresolved claim on this Message-Id, so the message is neither sent
+    /// nor refused and the outbox is where it belongs until the claim
+    /// clears (#1019). `invalidCredentials`, `smtpCommandFailed`, and the
+    /// rest are application-level and surface to the user immediately.
     static func shouldQueue(_ error: CabalmailError) -> Bool {
         switch error {
-        case .network, .transport, .timeout, .cancelled:
+        case .network, .transport, .timeout, .cancelled, .sendInFlight:
             return true
         default:
             return false
