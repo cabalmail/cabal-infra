@@ -69,6 +69,12 @@ fi
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+admin_limits' function.py 2>/dev/null; then
   cp ../_shared/admin_limits.py ./build/admin_limits.py
 fi
+# The address-mutation handlers publish the address_changed SNS event through
+# address_events; stdlib(+boto3) only, like admin_limits.py, so it ships even in
+# the zips whose requirements.txt is empty.
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+address_events' function.py 2>/dev/null; then
+  cp ../_shared/address_events.py ./build/address_events.py
+fi
 # process_dmarc imports imap_session directly (login-only dmarc-user dial,
 # no helper.py); ship it plus its imap_pool dependency for any such handler.
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+imap_session' function.py 2>/dev/null; then

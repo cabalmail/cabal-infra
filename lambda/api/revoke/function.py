@@ -2,19 +2,17 @@
 # pylint: disable=duplicate-code
 import json
 import os
-from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from address_events import notify_containers  # pylint: disable=import-error
 from helper import active_addresses_on_subdomain  # pylint: disable=import-error
 from helper import authorized_address_request  # pylint: disable=import-error
 from helper import delete_address_dns_records  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
-address_changed_topic_arn = os.environ.get('ADDRESS_CHANGED_TOPIC_ARN', '')
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
-sns = boto3.client('sns')
 
 
 def handler(event, _context):
@@ -68,17 +66,3 @@ def handler(event, _context):
 def revoke_address(address):
     '''Deletes the address from DynamoDB'''
     table.delete_item(Key={'address': address})
-
-
-def notify_containers():
-    '''Publishes an address change event to SNS'''
-    if not address_changed_topic_arn:
-        print('ADDRESS_CHANGED_TOPIC_ARN not set, skipping SNS publish')
-        return
-    sns.publish(
-        TopicArn=address_changed_topic_arn,
-        Message=json.dumps({
-            'event': 'address_changed',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        })
-    )

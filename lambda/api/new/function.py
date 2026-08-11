@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from address_events import notify_containers  # pylint: disable=import-error
 from helper import assert_zone_owns_apex  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
@@ -13,7 +14,6 @@ from helper import validate_local_part  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
-address_changed_topic_arn = os.environ.get('ADDRESS_CHANGED_TOPIC_ARN', '')
 
 # Subdomains reserved on the control domain. When the control domain doubles as
 # a mail domain (it appears in mail_domains), these labels already carry
@@ -32,7 +32,6 @@ RESERVED_CONTROL_SUBDOMAINS = frozenset({
 r53 = boto3.client('route53')
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
-sns = boto3.client('sns')
 
 
 def handler(event, _context):
@@ -158,17 +157,3 @@ def record_address(user, body, address):
         'comment': body.get('comment', ''),
         'RequestTime': datetime.now(timezone.utc).isoformat()
     })
-
-
-def notify_containers():
-    '''Publishes an address change event to SNS'''
-    if not address_changed_topic_arn:
-        print('ADDRESS_CHANGED_TOPIC_ARN not set, skipping SNS publish')
-        return
-    sns.publish(
-        TopicArn=address_changed_topic_arn,
-        Message=json.dumps({
-            'event': 'address_changed',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        })
-    )
