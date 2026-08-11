@@ -251,15 +251,25 @@ def _queue_sent_copy(msg, _host, user, message_id):
 
 def _claim_send(message_id):
     '''Conditionally claims a Message-Id in the dedupe table. Returns True if it
-    was newly claimed, False if a claim already exists. Fails OPEN (returns True)
-    on any non-conditional error so a dedupe-store hiccup never blocks a send.'''
+    was newly claimed or the prior claim has expired, False while a live claim
+    exists. Fails OPEN (returns True) on any non-conditional error so a
+    dedupe-store hiccup never blocks a send.
+
+    The condition compares `expires_at` rather than trusting DynamoDB to have
+    reaped the row: TTL deletion is best-effort (AWS documents it as typically
+    within 48 hours), so an existence-only check made the claim block for as
+    long as the row physically survived instead of the SEND_DEDUPE_TTL the
+    constant advertises - measured at 192 s past expiry on stage (#1018).'''
+    now = int(time.time())
     try:
         _dedupe_table.put_item(
             Item={
                 'pk': f'senddedupe#{message_id}',
-                'expires_at': int(time.time()) + SEND_DEDUPE_TTL,
+                'expires_at': now + SEND_DEDUPE_TTL,
             },
-            ConditionExpression='attribute_not_exists(pk)'
+            ConditionExpression='attribute_not_exists(pk) OR #e < :now',
+            ExpressionAttributeNames={'#e': 'expires_at'},
+            ExpressionAttributeValues={':now': now}
         )
         return True
     except ClientError as err:
