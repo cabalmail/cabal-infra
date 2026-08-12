@@ -35,6 +35,7 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.signature, "")
         XCTAssertEqual(preferences.disposeAction, .archive)
         XCTAssertEqual(preferences.disposeAdvance, .nextUnread)
+        XCTAssertEqual(preferences.markReadAdvance, .stay)
         XCTAssertEqual(preferences.theme, .system)
         XCTAssertEqual(preferences.defaultBodyRenderMode, .original)
     }
@@ -56,38 +57,19 @@ final class PreferencesTests: XCTestCase {
         preferences.signature = "-- sent from iOS"
         preferences.disposeAction = .trash
         preferences.disposeAdvance = .previousUnread
+        preferences.markReadAdvance = .nextUnread
         preferences.theme = .dark
         preferences.defaultBodyRenderMode = .reader
 
-        XCTAssertEqual(
-            store.stringValue(forKey: try scopedKey(.markAsRead)),
-            "on_open"
-        )
-        XCTAssertEqual(
-            store.stringValue(forKey: try scopedKey(.loadRemoteContent)),
-            "ask"
-        )
-        XCTAssertEqual(
-            store.stringValue(forKey: try scopedKey(.defaultFromAddress)),
-            "me@example.com"
-        )
-        XCTAssertEqual(
-            store.stringValue(forKey: try scopedKey(.signature)),
-            "-- sent from iOS"
-        )
-        XCTAssertEqual(
-            store.stringValue(forKey: try scopedKey(.disposeAction)),
-            "trash"
-        )
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.markAsRead)), "on_open")
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.loadRemoteContent)), "ask")
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.defaultFromAddress)), "me@example.com")
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.signature)), "-- sent from iOS")
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.disposeAction)), "trash")
         XCTAssertEqual(store.stringValue(forKey: try scopedKey(.disposeAdvance)), "previous_unread")
-        XCTAssertEqual(
-            store.stringValue(forKey: try scopedKey(.theme)),
-            "dark"
-        )
-        XCTAssertEqual(
-            store.stringValue(forKey: try scopedKey(.defaultBodyRenderMode)),
-            "reader"
-        )
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.markReadAdvance)), "next_unread")
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.theme)), "dark")
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.defaultBodyRenderMode)), "reader")
         // Nothing lands on the legacy device-wide keys.
         for key in Preferences.Key.allCases {
             XCTAssertNil(store.stringValue(forKey: key.rawValue))
@@ -275,6 +257,7 @@ final class PreferencesTests: XCTestCase {
         source.signature = "Cheers,\nChris"
         source.disposeAction = .trash
         source.disposeAdvance = .firstUnread
+        source.markReadAdvance = .previousUnread
         source.theme = .dark
         source.crashReportingEnabled = true
         source.defaultBodyRenderMode = .reader
@@ -289,6 +272,7 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(target.signature, "Cheers,\nChris")
         XCTAssertEqual(target.disposeAction, .trash)
         XCTAssertEqual(target.disposeAdvance, .firstUnread)
+        XCTAssertEqual(target.markReadAdvance, .previousUnread)
         XCTAssertEqual(target.theme, .dark)
         XCTAssertTrue(target.crashReportingEnabled)
         XCTAssertEqual(target.defaultBodyRenderMode, .reader)

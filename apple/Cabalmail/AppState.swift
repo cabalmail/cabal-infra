@@ -131,6 +131,13 @@ final class AppState {
     var lastEnvelopeFlagChange: EnvelopeFlagChange?
     private var flagChangeTick = 0
 
+    /// Latest mark-read-and-advance driven from the detail view's mark-read
+    /// control. `MessageListView` observes this and moves the selection per
+    /// the carried `MarkReadAdvance`; the `\Seen` flip itself travels on
+    /// `lastEnvelopeFlagChange` as usual.
+    var lastReadAdvanceRequest: ReadAdvanceRequest?
+    private var readAdvanceTick = 0
+
     /// UIDs with a flag write in flight from the detail view, keyed by folder
     /// path (IMAP UIDs are only unique within a mailbox, so a bare UID set
     /// would let a pending write in one folder shield an unrelated row with
@@ -245,6 +252,16 @@ final class AppState {
         if flag == .seen {
             applyUnreadDelta(folderPath: folderPath, delta: added ? -1 : 1)
         }
+    }
+
+    func signalReadAdvance(folderPath: String, uid: UInt32, advance: MarkReadAdvance) {
+        readAdvanceTick += 1
+        lastReadAdvanceRequest = ReadAdvanceRequest(
+            folderPath: folderPath,
+            uid: uid,
+            advance: advance,
+            tick: readAdvanceTick
+        )
     }
 
     /// Mark a detail-view flag write as in flight (`true`, when the STORE is

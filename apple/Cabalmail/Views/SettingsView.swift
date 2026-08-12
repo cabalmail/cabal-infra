@@ -199,10 +199,16 @@ struct SettingsView: View {
                 Text("Go to previous unread").tag(DisposeAdvance.previousUnread)
                 Text("Go to first unread").tag(DisposeAdvance.firstUnread)
             }
+            Picker("After marking read", selection: $preferences.markReadAdvance) {
+                Text("Stay here").tag(MarkReadAdvance.stay)
+                Text("Go to next unread").tag(MarkReadAdvance.nextUnread)
+                Text("Go to previous unread").tag(MarkReadAdvance.previousUnread)
+                Text("Go to first unread").tag(MarkReadAdvance.firstUnread)
+            }
         } header: {
             Text("Actions")
         } footer: {
-            Text("Which message the reading pane opens after you archive or delete from it.")
+            Text("Which message the reading pane opens after you archive, delete, or mark read from it.")
         }
     }
 

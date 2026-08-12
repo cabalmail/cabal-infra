@@ -149,4 +149,38 @@ final class DisposeAdvanceTests: XCTestCase {
         XCTAssertEqual(model.advanceTarget(after: current, following: .previousUnread)?.uid, 6)
         XCTAssertEqual(model.advanceTarget(after: current, following: .firstUnread)?.uid, 6)
     }
+
+    /// The mark-read variant shares the per-policy walks; what's distinct is
+    /// `.stay` (always nil — the caller leaves the selection alone) and that
+    /// the walks ignore `current`'s own read state, so the result is the
+    /// same whether the optimistic `\Seen` flip has landed on the row yet.
+    func testMarkReadAdvanceTargetFollowsThePolicy() throws {
+        let model = try makeModel([
+            TestFixtures.makeEnvelope(uid: 6),
+            TestFixtures.makeEnvelope(uid: 5, flags: [.seen]),
+            TestFixtures.makeEnvelope(uid: 4),
+            TestFixtures.makeEnvelope(uid: 3, flags: [.seen]),
+            TestFixtures.makeEnvelope(uid: 2),
+        ])
+        for currentFlags in [Set<Flag>(), [.seen]] {
+            model.envelopes[2] = TestFixtures.makeEnvelope(uid: 4, flags: currentFlags)
+            let current = try envelope(model, uid: 4)
+            XCTAssertNil(model.markReadAdvanceTarget(after: current, following: .stay))
+            XCTAssertEqual(model.markReadAdvanceTarget(after: current, following: .nextUnread)?.uid, 2)
+            XCTAssertEqual(model.markReadAdvanceTarget(after: current, following: .previousUnread)?.uid, 6)
+            XCTAssertEqual(model.markReadAdvanceTarget(after: current, following: .firstUnread)?.uid, 6)
+        }
+    }
+
+    func testMarkReadAdvanceWithNoOtherUnreadReturnsNil() throws {
+        let model = try makeModel([
+            TestFixtures.makeEnvelope(uid: 5, flags: [.seen]),
+            TestFixtures.makeEnvelope(uid: 4),
+            TestFixtures.makeEnvelope(uid: 3, flags: [.seen]),
+        ])
+        let current = try envelope(model, uid: 4)
+        for advance in MarkReadAdvance.allCases {
+            XCTAssertNil(model.markReadAdvanceTarget(after: current, following: advance))
+        }
+    }
 }

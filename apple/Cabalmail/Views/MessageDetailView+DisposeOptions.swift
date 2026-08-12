@@ -62,9 +62,10 @@ extension MessageDetailView {
 
     #if os(macOS)
     /// The chevron menu: every Archive/Delete × after-dispose combination.
-    /// Choosing a row persists the pair — making it the button face's
-    /// default and what Settings shows — then disposes the open message
-    /// with it.
+    /// Rendered as menu toggles so the pair currently in effect — the
+    /// button face's default — carries the native checkmark. Choosing a row
+    /// persists the pair — making it the default and what Settings shows —
+    /// then disposes the open message with it.
     @ViewBuilder
     func disposeOptionItems(model: MessageDetailViewModel) -> some View {
         ForEach(Array(DisposeAction.allCases.enumerated()), id: \.element) { index, action in
@@ -85,18 +86,21 @@ extension MessageDetailView {
         // the rows read true in the special folders: Delete Forever inside
         // Trash, Restore inside Archive.
         let intent = model.intent(for: action)
-        Button(role: intent.isDestructive ? .destructive : nil) {
-            preferences.disposeAction = action
-            preferences.disposeAdvance = advance
-            switch intent {
-            case .purge:
-                purgeConfirmPresented = true
-            case .restore:
-                Task { await performMove(to: FolderTree.inboxPath) }
-            case .move(let destination):
-                Task { await performDispose(model: model, action: destination) }
+        Toggle(isOn: Binding(
+            get: { preferences.disposeAction == action && preferences.disposeAdvance == advance },
+            set: { _ in
+                preferences.disposeAction = action
+                preferences.disposeAdvance = advance
+                switch intent {
+                case .purge:
+                    purgeConfirmPresented = true
+                case .restore:
+                    Task { await performMove(to: FolderTree.inboxPath) }
+                case .move(let destination):
+                    Task { await performDispose(model: model, action: destination) }
+                }
             }
-        } label: {
+        )) {
             Text("\(disposeVerb(for: intent)) and \(advanceDescription(for: advance))")
         }
     }

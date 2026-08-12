@@ -506,6 +506,21 @@ extension MessageListView {
                 selection = next
             }
         }
+        .onChange(of: appState.lastReadAdvanceRequest) { _, signal in
+            // Detail view marked the current message read with a move-to
+            // option. Advance the selection like the dispose handler above,
+            // but never prune (the row is still here, just read now) and
+            // never clear the selection — no candidate means stay put.
+            guard let signal, signal.folderPath == folder.path else { return }
+            guard let current = model?.envelopes.first(where: { $0.uid == signal.uid }),
+                  let next = model?.markReadAdvanceTarget(after: current, following: signal.advance)
+            else { return }
+            if isWideLayout {
+                model?.selectedUIDs = [next.uid]
+            } else {
+                selection = next
+            }
+        }
         .onChange(of: appState.lastEnvelopeFlagChange) { _, signal in
             // Detail view toggled \Seen (or another flag in the future).
             // Apply it directly to the matching row so the bold styling +

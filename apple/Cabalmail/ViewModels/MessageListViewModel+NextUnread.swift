@@ -19,6 +19,24 @@ extension MessageListViewModel {
         }
     }
 
+    /// The envelope to select after `current` is marked read from the detail
+    /// view, per the user's after-mark-read preference. Returns nil for
+    /// `.stay` and when no candidate exists — the caller then leaves the
+    /// selection where it is (the marked row is still in the list, so nil
+    /// never clears it). The walks don't consult `current`'s own read state,
+    /// so this is safe to call before or after its optimistic `\Seen` flip
+    /// lands. Named apart from `advanceTarget` because an overload on the
+    /// advance type alone makes shared members (`.nextUnread` et al.)
+    /// ambiguous at contextual-member call sites.
+    func markReadAdvanceTarget(after current: Envelope, following advance: MarkReadAdvance) -> Envelope? {
+        switch advance {
+        case .stay:           return nil
+        case .nextUnread:     return nextUnreadEnvelope(after: current)
+        case .previousUnread: return previousUnreadEnvelope(before: current)
+        case .firstUnread:    return firstUnreadEnvelope(excluding: current)
+        }
+    }
+
     /// The envelope after `current` in the current list ordering, read or
     /// not. Disposing the bottom row falls back to the row above it — the
     /// new bottom — rather than bouncing back to the list.
