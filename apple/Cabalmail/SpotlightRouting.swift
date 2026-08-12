@@ -53,3 +53,40 @@ extension AppState {
         routeSpotlightRef(ref)
     }
 }
+
+/// Bridges the AppKit `application(_:continue:restorationHandler:)` callback
+/// to `AppState` on macOS. SwiftUI's `.onContinueUserActivity` never fires
+/// for `CSSearchableItemActionType` on macOS (Apple Developer Forums thread
+/// 760522; also observed in the 2026-08-12 probe — only the AppKit delegate
+/// callback delivered the activity), so the macOS `AppDelegate` branch hands
+/// activities here. The SwiftUI modifier stays attached in both app entries:
+/// it is the working path on iOS/visionOS and harmless redundancy on macOS.
+///
+/// A singleton (like `PushRegistrar` / `IntentBridge`) because the delegate
+/// exists before the SwiftUI tree: an activity from a cold Spotlight-result
+/// launch can arrive before `attach(_:)` runs, so it parks here; AppState's
+/// own `pendingSpotlightRef` covers the later not-yet-signed-in window.
+@MainActor
+final class SpotlightRouter {
+    static let shared = SpotlightRouter()
+
+    private(set) weak var appState: AppState?
+    private var pendingActivity: NSUserActivity?
+
+    /// Called from the app entry's `.task` as soon as the root AppState
+    /// exists; replays a parked cold-launch activity.
+    func attach(_ appState: AppState) {
+        self.appState = appState
+        guard let activity = pendingActivity else { return }
+        pendingActivity = nil
+        appState.handleSpotlightActivity(activity)
+    }
+
+    func handle(_ activity: NSUserActivity) {
+        guard let appState else {
+            pendingActivity = activity
+            return
+        }
+        appState.handleSpotlightActivity(activity)
+    }
+}

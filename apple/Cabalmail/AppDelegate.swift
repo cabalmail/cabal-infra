@@ -9,6 +9,7 @@ import UIKit
 import AppKit
 #endif
 import UserNotifications
+import CoreSpotlight
 import CabalmailKit
 
 #if os(iOS)
@@ -104,6 +105,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await PushRegistrar.shared.presentGenericNotification(for: ref)
             }
         }
+    }
+
+    /// Spotlight-result continuation. On macOS this AppKit callback is the
+    /// only reliable delivery path — SwiftUI's `.onContinueUserActivity`
+    /// never fires for `CSSearchableItemActionType` here (see
+    /// `SpotlightRouter`). iOS keeps the SwiftUI path and does not
+    /// implement the UIKit equivalent.
+    func application(
+        _ application: NSApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
+    ) -> Bool {
+        guard userActivity.activityType == CSSearchableItemActionType else { return false }
+        SpotlightRouter.shared.handle(userActivity)
+        return true
     }
 }
 #endif
