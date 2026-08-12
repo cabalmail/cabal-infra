@@ -70,6 +70,13 @@ export const UNREAD = {
   action: "unread",
   icon: "🙈"
 };
+// Set on the message being answered once a reply leaves. There is no
+// toolbar entry for it — the user never sets it by hand — so it carries
+// only the wire fields the /set_flag call needs.
+export const ANSWERED = {
+  imap: '\\Answered',
+  op: "set"
+};
 export const FLAGGED = {
   imap: '\\Flagged',
   css: "flagged",
