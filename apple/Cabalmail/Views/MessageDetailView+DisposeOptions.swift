@@ -1,21 +1,25 @@
 import SwiftUI
 import CabalmailKit
 
-// The reader toolbar's dispose control and its macOS option menu. Split
-// from `MessageDetailView+Toolbar.swift` so that file stays under
-// SwiftLint's file_length cap.
+// The reader toolbar's dispose control and its option menu. Split from
+// `MessageDetailView+Toolbar.swift` so that file stays under SwiftLint's
+// file_length cap.
 
 extension MessageDetailView {
-    /// The toolbar's dispose control. On macOS it is a split button: the
-    /// button face runs the current default — the most recently chosen
-    /// action + advance pair, also editable in Settings — and the chevron
-    /// opens every Archive/Delete × after-dispose combination. Touch (and
-    /// gaze) platforms keep the plain button — a split target this small
-    /// doesn't work under a finger — so their options live in Settings.
+    /// The toolbar's dispose control: a `Menu` with a primary action on
+    /// every platform. The face runs the current default — the most
+    /// recently chosen action + advance pair, also editable in Settings —
+    /// and the menu offers every Archive/Delete × after-dispose
+    /// combination. macOS renders it as a split button with a chevron
+    /// segment; the touch and gaze platforms render the plain button they
+    /// had before, with the same menu on touch-and-hold (pinch-and-hold on
+    /// visionOS) — the HIG accelerator idiom Mail.app uses on its own
+    /// trash/archive button. Because a hold menu is a hidden affordance,
+    /// it never becomes the only route: Settings carries the same options
+    /// and the overflow menu keeps the alternate dispose action.
     @ViewBuilder
     var disposeButton: some View {
         if let model {
-            #if os(macOS)
             Menu {
                 disposeOptionItems(model: model)
             } label: {
@@ -23,26 +27,40 @@ extension MessageDetailView {
             } primaryAction: {
                 runDispose(model: model)
             }
-            .menuIndicator(.visible)
+            .menuIndicator(optionMenuIndicator)
+            .tint(disposeTint(for: model.disposeIntent))
             // Cmd+Delete — the same chord Mail.app and most macOS list
-            // apps bind to "remove from list." Routes through dispose so
-            // it follows the user's Archive/Trash preference rather than
-            // hard-coding one or the other. In Trash the chord stages the
-            // delete-forever confirmation instead of acting directly.
+            // apps bind to "remove from list"; also fires from iPad/iPhone
+            // hardware keyboards. Routes through dispose so it follows the
+            // user's Archive/Trash preference rather than hard-coding one
+            // or the other. In Trash the chord stages the delete-forever
+            // confirmation instead of acting directly.
             .keyboardShortcut(.delete, modifiers: .command)
             .accessibilityIdentifier("reader.dispose")
-            #else
-            let intent = model.disposeIntent
-            Button(role: intent.isDestructive ? .destructive : nil) {
-                runDispose(model: model)
-            } label: {
-                disposeToolbarLabel(for: intent)
-            }
-            // Cmd+Delete for hardware keyboards — see the macOS branch.
-            .keyboardShortcut(.delete, modifiers: .command)
-            .accessibilityIdentifier("reader.dispose")
-            #endif
         }
+    }
+
+    /// Chevron segment on macOS only. On the touch platforms the control
+    /// keeps its plain-button footprint — the hold menu is an accelerator,
+    /// not a second hit target.
+    var optionMenuIndicator: Visibility {
+        #if os(macOS)
+        return .visible
+        #else
+        return .hidden
+        #endif
+    }
+
+    /// Red face for a destructive default on the touch platforms, standing
+    /// in for the `.destructive` button role a `Menu` face can't carry.
+    /// macOS keeps the system toolbar tint either way, matching the split
+    /// button as it shipped.
+    private func disposeTint(for intent: DisposeIntent) -> Color? {
+        #if os(macOS)
+        return nil
+        #else
+        return intent.isDestructive ? .red : nil
+        #endif
     }
 
     /// Runs the dispose the control's face advertises, per
@@ -60,8 +78,7 @@ extension MessageDetailView {
         }
     }
 
-    #if os(macOS)
-    /// The chevron menu: every Archive/Delete × after-dispose combination.
+    /// The option menu: every Archive/Delete × after-dispose combination.
     /// Rendered as menu toggles so the pair currently in effect — the
     /// button face's default — carries the native checkmark. Choosing a row
     /// persists the pair — making it the default and what Settings shows —
@@ -113,5 +130,4 @@ extension MessageDetailView {
         case .firstUnread:    return "Move to First Unread"
         }
     }
-    #endif
 }
