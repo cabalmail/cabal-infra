@@ -384,6 +384,14 @@ private struct MessageRow: View {
                             .foregroundStyle(.orange)
                             .accessibilityLabel(AuthResultsLine.warningCopy)
                     }
+                    // `\Answered` — the same left-turn arrow Mail uses, so
+                    // "I already replied to this" reads at a glance.
+                    if envelope.flags.contains(.answered) {
+                        Image(systemName: "arrowshape.turn.up.left.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Replied")
+                    }
                     if envelope.hasAttachments {
                         Image(systemName: "paperclip")
                             .font(.caption)

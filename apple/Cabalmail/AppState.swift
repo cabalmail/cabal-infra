@@ -212,6 +212,27 @@ final class AppState {
         }
     }
 
+    /// Marks a replied-to message `\Answered` after its reply sends: signal
+    /// the list optimistically (so the replied arrow appears at once), then
+    /// STORE the flag best-effort. Shielded via `setFlagWrite` so a refresh
+    /// landing mid-write can't revert the row. No revert on failure — unlike
+    /// the detail view's toggles there's no surface left to show an error on
+    /// (the composer is gone), and the next full refresh restores truth.
+    func markAnswered(folderPath: String, uid: UInt32) {
+        signalFlagChange(folderPath: folderPath, uid: uid, flag: .answered, added: true)
+        guard let client else { return }
+        setFlagWrite(folderPath: folderPath, uid: uid, inFlight: true)
+        Task {
+            defer { setFlagWrite(folderPath: folderPath, uid: uid, inFlight: false) }
+            try? await client.imapClient.setFlags(
+                folder: folderPath,
+                uids: [uid],
+                flags: [.answered],
+                operation: .add
+            )
+        }
+    }
+
     func signalFlagChange(folderPath: String, uid: UInt32, flag: Flag, added: Bool) {
         flagChangeTick += 1
         lastEnvelopeFlagChange = EnvelopeFlagChange(

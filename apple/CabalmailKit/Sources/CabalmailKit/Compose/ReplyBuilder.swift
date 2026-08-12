@@ -39,6 +39,11 @@ public enum ReplyBuilder {
     ///   - userAddresses: The signed-in user's owned addresses, used both
     ///     to pick the default From and (for reply-all) to drop the user
     ///     from the recipient list.
+    ///   - sourceFolder: The mailbox holding the original message. When
+    ///     given, reply / reply-all seeds carry `replySourceFolder` +
+    ///     `replySourceUid` so a successful send can mark the original
+    ///     `\Answered`. Forwards never carry them — forwarding is not a
+    ///     reply, and the flag would lie.
     ///   - now: Clock hook for deterministic tests. Production passes
     ///     `Date.init`.
     public static func build(
@@ -46,6 +51,7 @@ public enum ReplyBuilder {
         body: String?,
         mode: ReplyMode,
         userAddresses: [Address],
+        sourceFolder: String? = nil,
         now: () -> Date = Date.init
     ) -> Draft {
         let ownedAddressStrings = Set(userAddresses.map { $0.address.lowercased() })
@@ -75,6 +81,7 @@ public enum ReplyBuilder {
             : replyQuote(body: body, envelope: envelope, now: now())
 
         let threading = threadingHeaders(from: envelope, mode: mode)
+        let isReply = mode == .reply || mode == .replyAll
 
         return Draft(
             updatedAt: now(),
@@ -86,7 +93,9 @@ public enum ReplyBuilder {
             body: quoted,
             inReplyTo: threading.inReplyTo,
             references: threading.references,
-            composeIntent: composeIntent(for: mode)
+            composeIntent: composeIntent(for: mode),
+            replySourceFolder: isReply ? sourceFolder : nil,
+            replySourceUid: isReply && sourceFolder != nil ? envelope.uid : nil
         )
     }
 
