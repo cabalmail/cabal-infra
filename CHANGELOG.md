@@ -5,6 +5,109 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-12
+
+### Added
+- Apple: **Replied indicator in the message list.** Messages you have
+  replied to now show the familiar left-turn reply arrow alongside the
+  flag and attachment icons. Sending a reply also records the answered
+  state on the server, so the indicator appears immediately and follows
+  the message to every device.
+- **Application shell for the Linux client.** `cabalmail` now opens a GTK4 and
+  libadwaita window: an `AdwApplication` under the `com.cabalmail.Cabalmail`
+  application ID, a Blueprint-defined main window compiled to a GResource at
+  build time, a quit action on Ctrl+Q, and the `theme` preference applied to
+  libadwaita's style manager, so `system`, `light`, and `dark` are honoured from
+  the first launch. Underneath it is the piece that would be painful to
+  retrofit: one tokio runtime owned by the application and a `spawn_to_ui!`
+  helper that runs a future on it, hands the result to a `glib` main-context
+  task, and captures widgets weakly — the single spelling every later phase's
+  requests use, tested end to end before there is a request to make. Ships the
+  `.desktop` entry, AppStream metadata, and application icon that packaging
+  installs. The build requires `blueprint-compiler`, and it says so by name
+  rather than falling back to a second UI format. There is still nothing to
+  sign in to; that is Phase 3. See
+  [`docs/1.1.x/linux-client-plan.md`](docs/1.1.x/linux-client-plan.md).
+- **Task runner for the Linux client.** `cargo xtask ci` runs what CI runs, in
+  CI's order — `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace
+  checks, app tests — stopping at the first failure and repeating the command
+  so it can be re-run by hand, and reaching for `xvfb-run` only when there is no
+  session for the widget tests to use. The step list lives in one place, so the
+  pre-push gate and the workflow that lands in Phase 2 cannot drift apart.
+  `cargo xtask sync-vendored` materializes the composer's marked and turndown
+  bundles from `react/admin/node_modules`, which stays the single source of
+  their version pins across the React, Apple, and Linux clients; the bytes are
+  gitignored, and a test fails if a file is added to the script without an
+  ignore line. `package`, `smoke`, and `fixtures` are declared rather than
+  omitted — asking for one names the work item that implements it — so the plan
+  and the workflow can spell an operation before it exists. See
+  [`docs/1.1.x/linux-client-plan.md`](docs/1.1.x/linux-client-plan.md).
+- Apple: **Disposal options on the reader's dispose button.** On macOS the
+  reading pane's dispose button is now a split button: the face runs the
+  current default, and the chevron opens every Archive/Delete combination
+  with where to go next — next message, next unread, previous unread, or
+  first unread. Choosing an option makes it the new default, and a
+  checkmark marks the option currently in effect. Every Apple
+  client gains a matching "After disposing" setting (synced across
+  devices) controlling which message the reading pane advances to after
+  an archive or delete; previously it always advanced to the next unread.
+- Apple: **Mark-read options on the reader's read/unread button.** On macOS
+  the reading pane's mark-read button is now a split button like the dispose
+  button next to it: the face still toggles read/unread, and on an unread
+  message the chevron offers Mark Read and Stay Here / Move to Next Unread /
+  Move to Previous Unread / Move to First Unread, with a checkmark on the
+  option currently in effect. Choosing an option makes it the new default
+  for the face; on an already-read message the options are disabled and the
+  button simply marks unread. Every Apple client gains a matching "After
+  marking read" setting (synced across devices); the default, Stay Here,
+  matches the previous behavior.
+
+### Fixed
+- Apple: **Message-list divider in a narrow macOS window.** Below about 920pt
+  the list column's cap had collapsed onto its floor, so the divider had no
+  travel and the drag silently widened the folder sidebar instead — taking the
+  width out of the reading pane the drag was meant to widen. The column now
+  keeps a resize range at every window width, bought by letting the list be
+  squeezed rather than by letting it grow into the reader.
+- **A send retry is no longer refused past the dedupe window.** `/send` claims
+  a Message-Id for ten minutes so a retry a client makes after a lost response
+  cannot deliver twice, but the claim was released only by DynamoDB's TTL
+  reaper, which runs best-effort and can be hours late. A repeat of the same
+  Message-Id - the Apple outbox re-submits its stored one on every drain - was
+  therefore refused for as long as the row happened to survive, silently,
+  behind a `200 "submitted"`. The claim now expires on schedule.
+- Apple: **A queued message is no longer discarded when the server refuses to
+  send it twice.** `/send` claims a Message-Id across the SMTP handoff, and the
+  outbox re-submits its stored id on every drain. Any duplicate used to get the
+  same `200 "submitted"` a real delivery gets, so the outbox deleted the queued
+  message and logged it as sent - even when the claim was left behind by a
+  submission that died before delivering anything, in which case the message
+  was simply gone, with no error and no copy in Sent. `/send` now answers only
+  a claim it can show delivered that way; one it cannot is a `409`, and the
+  outbox holds the message until the claim clears instead of spending a retry
+  on it.
+- **String-shaped threading headers no longer swallow later sends.** A
+  `/send` or `/save_draft` payload carrying `other_headers.message_id` (or
+  `in_reply_to`/`references`) as a bare string instead of a one-element list
+  composed a Message-Id of the string's first character; `/send` then claimed
+  that same character as its dedupe key for every such request, so each one
+  after the first was silently discarded behind a `200 "submitted"`. The three
+  threading fields now earn the same named 400 a bare-string `to_list` does.
+- Apple: **Mac Spotlight results open Cabalmail.** Clicking a Cabalmail
+  message in macOS Spotlight opened Apple Mail — the system's default
+  handler for the result's email content type — because the macOS app
+  didn't declare Core Spotlight continuation. The click now routes back
+  to Cabalmail and opens the message. iOS was unaffected.
+- Apple: **Spotlight results now appear on iOS and open Cabalmail on
+  macOS.** Indexed messages were invisible in iOS Spotlight (iOS 17+
+  requires a display name the entries didn't set), and on macOS clicking
+  a result still opened Apple Mail — the system routes results typed
+  `public.email-message` to the default mail handler no matter what the
+  donating app declares, so entries are now donated under a neutral text
+  type and macOS delivery goes through the AppKit continuation callback
+  (SwiftUI's handler never fires there). The index rebuilds itself once
+  on first launch after updating.
+
 ## [1.1.0] - 2026-08-10
 
 ### Added
