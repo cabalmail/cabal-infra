@@ -64,6 +64,22 @@ public enum DisposeAction: String, Codable, Sendable, CaseIterable, Identifiable
     }
 }
 
+/// Which message the reading pane advances to after the open message is
+/// disposed (archived, deleted, or purged) from the reader.
+///
+/// `.nextUnread` is the historical behavior — triage skips straight to the
+/// next message needing attention. `.next` walks the list in its current
+/// ordering regardless of read state; `.previousUnread` walks the other
+/// direction; `.firstUnread` jumps back to the topmost unread.
+public enum DisposeAdvance: String, Codable, Sendable, CaseIterable, Identifiable {
+    case next
+    case nextUnread = "next_unread"
+    case previousUnread = "previous_unread"
+    case firstUnread = "first_unread"
+
+    public var id: String { rawValue }
+}
+
 /// Theme override applied above the system setting.
 public enum AppTheme: String, Codable, Sendable, CaseIterable, Identifiable {
     case system
@@ -163,6 +179,7 @@ public final class Preferences {
         case defaultFromAddress = "cabalmail.prefs.default_from_address"
         case signature = "cabalmail.prefs.signature"
         case disposeAction = "cabalmail.prefs.dispose_action"
+        case disposeAdvance = "cabalmail.prefs.dispose_advance"
         case theme = "cabalmail.prefs.theme"
         case crashReportingEnabled = "cabalmail.prefs.crash_reporting_enabled"
         case defaultBodyRenderMode = "cabalmail.prefs.default_body_render_mode"
@@ -188,6 +205,11 @@ public final class Preferences {
     }
     public var disposeAction: DisposeAction {
         didSet { persist(.disposeAction, disposeAction.rawValue) }
+    }
+    /// Which message the reader advances to after a dispose. Defaults to
+    /// `.nextUnread`, the behavior from before this was a preference.
+    public var disposeAdvance: DisposeAdvance {
+        didSet { persist(.disposeAdvance, disposeAdvance.rawValue) }
     }
     public var theme: AppTheme {
         didSet { persist(.theme, theme.rawValue) }
@@ -236,6 +258,7 @@ public final class Preferences {
         self.defaultFromAddress = nil
         self.signature = ""
         self.disposeAction = .archive
+        self.disposeAdvance = .nextUnread
         self.theme = .system
         self.crashReportingEnabled = false
         self.defaultBodyRenderMode = .original
@@ -312,6 +335,7 @@ public final class Preferences {
         defaultFromAddress = readString(.defaultFromAddress)
         signature = readString(.signature) ?? ""
         disposeAction = readEnum(.disposeAction, default: .archive)
+        disposeAdvance = readEnum(.disposeAdvance, default: .nextUnread)
         theme = readEnum(.theme, default: .system)
         crashReportingEnabled = readString(.crashReportingEnabled) == "1"
         defaultBodyRenderMode = readEnum(.defaultBodyRenderMode, default: .original)
@@ -375,6 +399,7 @@ public final class Preferences {
         static let defaultFromAddress = "default_from_address"
         static let signature = "signature"
         static let disposeAction = "dispose_action"
+        static let disposeAdvance = "dispose_advance"
         static let theme = "theme"
         static let crashReportingEnabled = "crash_reporting_enabled"
         static let defaultBodyRenderMode = "default_body_render_mode"
@@ -393,6 +418,7 @@ public final class Preferences {
             AppWireKey.defaultFromAddress: defaultFromAddress ?? "",
             AppWireKey.signature: signature,
             AppWireKey.disposeAction: disposeAction.rawValue,
+            AppWireKey.disposeAdvance: disposeAdvance.rawValue,
             AppWireKey.theme: theme.rawValue,
             AppWireKey.crashReportingEnabled: crashReportingEnabled ? "1" : "0",
             AppWireKey.defaultBodyRenderMode: defaultBodyRenderMode.rawValue,
@@ -422,6 +448,9 @@ public final class Preferences {
         }
         if let raw = remote[AppWireKey.disposeAction], let value = DisposeAction(rawValue: raw) {
             disposeAction = value
+        }
+        if let raw = remote[AppWireKey.disposeAdvance], let value = DisposeAdvance(rawValue: raw) {
+            disposeAdvance = value
         }
         if let raw = remote[AppWireKey.theme], let value = AppTheme(rawValue: raw) {
             theme = value

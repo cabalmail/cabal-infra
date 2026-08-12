@@ -29,6 +29,7 @@ APP_ALLOWED = {
     'mark_as_read':             {'manual', 'on_open'},
     'load_remote_content':      {'off', 'ask', 'always'},
     'dispose_action':           {'archive', 'trash'},
+    'dispose_advance':          {'next', 'next_unread', 'previous_unread', 'first_unread'},
     'theme':                    {'system', 'light', 'dark'},
     'default_body_render_mode': {'original', 'reader'},
     'folder_count_display':     {'unread', 'total', 'both'},

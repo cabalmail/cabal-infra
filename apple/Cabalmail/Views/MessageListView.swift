@@ -484,15 +484,18 @@ extension MessageListView {
         }
         .onChange(of: appState.lastDisposedEnvelope) { _, signal in
             // Detail view archived / trashed the current message. Advance
-            // the split-view selection to the next unread envelope (so the
-            // user can keep triaging without bouncing back to the list),
-            // then prune the matching row so it disappears immediately.
-            // Other folders ignore the signal.
+            // the split-view selection per the user's after-dispose
+            // preference (so the user can keep triaging without bouncing
+            // back to the list), then prune the matching row so it
+            // disappears immediately. Other folders ignore the signal.
             guard let signal, signal.folderPath == folder.path else { return }
             let current = model?.envelopes.first { $0.uid == signal.uid }
-            // Compute the advance target before pruning - `nextUnreadEnvelope`
-            // walks from `current`'s index, which disappears once it's pruned.
-            let next = current.flatMap { model?.nextUnreadEnvelope(after: $0) }
+            // Compute the advance target before pruning - every advance
+            // policy walks from `current`'s index, which disappears once
+            // it's pruned.
+            let next = current.flatMap {
+                model?.advanceTarget(after: $0, following: preferences.disposeAdvance)
+            }
             model?.pruneEnvelope(uid: signal.uid)
             if isWideLayout {
                 // Wide layouts drive the reading pane off `selectedUIDs`;

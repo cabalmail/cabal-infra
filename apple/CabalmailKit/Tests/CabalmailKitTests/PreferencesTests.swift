@@ -34,6 +34,7 @@ final class PreferencesTests: XCTestCase {
         XCTAssertNil(preferences.defaultFromAddress)
         XCTAssertEqual(preferences.signature, "")
         XCTAssertEqual(preferences.disposeAction, .archive)
+        XCTAssertEqual(preferences.disposeAdvance, .nextUnread)
         XCTAssertEqual(preferences.theme, .system)
         XCTAssertEqual(preferences.defaultBodyRenderMode, .original)
     }
@@ -54,6 +55,7 @@ final class PreferencesTests: XCTestCase {
         preferences.defaultFromAddress = "me@example.com"
         preferences.signature = "-- sent from iOS"
         preferences.disposeAction = .trash
+        preferences.disposeAdvance = .previousUnread
         preferences.theme = .dark
         preferences.defaultBodyRenderMode = .reader
 
@@ -77,6 +79,7 @@ final class PreferencesTests: XCTestCase {
             store.stringValue(forKey: try scopedKey(.disposeAction)),
             "trash"
         )
+        XCTAssertEqual(store.stringValue(forKey: try scopedKey(.disposeAdvance)), "previous_unread")
         XCTAssertEqual(
             store.stringValue(forKey: try scopedKey(.theme)),
             "dark"
@@ -271,6 +274,7 @@ final class PreferencesTests: XCTestCase {
         source.defaultFromAddress = "me@example.com"
         source.signature = "Cheers,\nChris"
         source.disposeAction = .trash
+        source.disposeAdvance = .firstUnread
         source.theme = .dark
         source.crashReportingEnabled = true
         source.defaultBodyRenderMode = .reader
@@ -284,6 +288,7 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(target.defaultFromAddress, "me@example.com")
         XCTAssertEqual(target.signature, "Cheers,\nChris")
         XCTAssertEqual(target.disposeAction, .trash)
+        XCTAssertEqual(target.disposeAdvance, .firstUnread)
         XCTAssertEqual(target.theme, .dark)
         XCTAssertTrue(target.crashReportingEnabled)
         XCTAssertEqual(target.defaultBodyRenderMode, .reader)

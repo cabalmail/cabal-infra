@@ -23,6 +23,18 @@ extension MessageDetailViewModel {
         .archiving(in: folder.path)
     }
 
+    /// The intent a dispose-options row runs for an explicitly chosen
+    /// destination, reconciled with the open folder like the toolbar
+    /// default: archiving keeps its Restore / rescue-from-Trash special
+    /// cases, and an explicit Delete inside Trash is the delete-forever
+    /// path.
+    func intent(for action: DisposeAction) -> DisposeIntent {
+        switch action {
+        case .archive: return archiveIntent
+        case .trash:   return .standard(preference: .trash, in: folder.path)
+        }
+    }
+
     func purge(
         onSuccess: (() -> Void)? = nil,
         onFailure: ((Error) -> Void)? = nil

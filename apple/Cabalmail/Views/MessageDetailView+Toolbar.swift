@@ -209,32 +209,9 @@ extension MessageDetailView {
         }
     }
 
-    @ViewBuilder
-    var disposeButton: some View {
-        if let model {
-            let intent = model.disposeIntent
-            Button(role: intent.isDestructive ? .destructive : nil) {
-                switch intent {
-                case .purge:
-                    // In Trash, delete means gone forever — confirm first.
-                    purgeConfirmPresented = true
-                case .restore:
-                    Task { await performMove(to: FolderTree.inboxPath) }
-                case .move(let action):
-                    Task { await performDispose(model: model, action: action) }
-                }
-            } label: {
-                disposeToolbarLabel(for: intent)
-            }
-            // Cmd+Delete — the same chord Mail.app and most macOS list
-            // apps bind to "remove from list." Routes through dispose so
-            // it follows the user's Archive/Trash preference rather than
-            // hard-coding one or the other. In Trash the chord stages the
-            // delete-forever confirmation instead of acting directly.
-            .keyboardShortcut(.delete, modifiers: .command)
-            .accessibilityIdentifier("reader.dispose")
-        }
-    }
+    // `disposeButton` lives in `MessageDetailView+DisposeOptions.swift`
+    // with the macOS split-control menu it grew — keeping it here would
+    // push this file past SwiftLint's file_length cap.
 
     /// Overflow-menu item for whichever dispose destination the toolbar
     /// button does NOT cover: preference says Archive, the menu offers
