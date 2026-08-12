@@ -199,103 +199,10 @@ final class AppState {
     func requestForward() { forwardRequestTick += 1 }
     func requestSettings() { settingsRequestTick += 1 }
     // The selection-scoped request bumpers live in the "Message-menu
-    // selection intents" extension below (SwiftLint type-body budget).
-
-    func signalDisposed(folderPath: String, uid: UInt32, wasUnread: Bool = false) {
-        disposedTick += 1
-        lastDisposedEnvelope = DisposedEnvelope(
-            folderPath: folderPath,
-            uid: uid,
-            tick: disposedTick
-        )
-        // Dispose marks the message `\Seen` before the move, so the source
-        // folder loses one unread message iff the row was unread to begin
-        // with. The `setSeen(true)` path that ran moments earlier already
-        // applied a -1 via `signalFlagChange`; passing `wasUnread` lets the
-        // list-swipe path (which doesn't go through `setSeen`) report the
-        // same delta exactly once.
-        if wasUnread {
-            applyUnreadDelta(folderPath: folderPath, delta: -1)
-        }
-    }
-
-    /// Marks a replied-to message `\Answered` after its reply sends: signal
-    /// the list optimistically (so the replied arrow appears at once), then
-    /// STORE the flag best-effort. Shielded via `setFlagWrite` so a refresh
-    /// landing mid-write can't revert the row. No revert on failure — unlike
-    /// the detail view's toggles there's no surface left to show an error on
-    /// (the composer is gone), and the next full refresh restores truth.
-    func markAnswered(folderPath: String, uid: UInt32) {
-        signalFlagChange(folderPath: folderPath, uid: uid, flag: .answered, added: true)
-        guard let client else { return }
-        setFlagWrite(folderPath: folderPath, uid: uid, inFlight: true)
-        Task {
-            defer { setFlagWrite(folderPath: folderPath, uid: uid, inFlight: false) }
-            try? await client.imapClient.setFlags(
-                folder: folderPath,
-                uids: [uid],
-                flags: [.answered],
-                operation: .add
-            )
-        }
-    }
-
-    func signalFlagChange(folderPath: String, uid: UInt32, flag: Flag, added: Bool) {
-        flagChangeTick += 1
-        lastEnvelopeFlagChange = EnvelopeFlagChange(
-            folderPath: folderPath,
-            uid: uid,
-            flag: flag,
-            added: added,
-            tick: flagChangeTick
-        )
-        if flag == .seen {
-            applyUnreadDelta(folderPath: folderPath, delta: added ? -1 : 1)
-        }
-    }
-
-    func signalReadAdvance(folderPath: String, uid: UInt32, advance: MarkReadAdvance) {
-        readAdvanceTick += 1
-        lastReadAdvanceRequest = ReadAdvanceRequest(
-            folderPath: folderPath,
-            uid: uid,
-            advance: advance,
-            tick: readAdvanceTick
-        )
-    }
-
-    /// Mark a detail-view flag write as in flight (`true`, when the STORE is
-    /// dispatched) or resolved (`false`, on success or failure). While a UID
-    /// is in flight the list's merge keeps the optimistic flag instead of the
-    /// fetched one; clearing it lets the next refresh carry server truth. Safe
-    /// to call `false` for a UID that was never inserted (a no-op removal).
-    func setFlagWrite(folderPath: String, uid: UInt32, inFlight: Bool) {
-        if inFlight {
-            pendingFlagWriteUIDs[folderPath, default: []].insert(uid)
-        } else {
-            pendingFlagWriteUIDs[folderPath]?.remove(uid)
-            if pendingFlagWriteUIDs[folderPath]?.isEmpty == true {
-                pendingFlagWriteUIDs[folderPath] = nil
-            }
-        }
-    }
-
-    /// Mark a detail-view archive / trash / move as in flight (`true`, before
-    /// the server move) or resolved (`false`, on success or failure). While a
-    /// UID is in flight the list's merge keeps the optimistically-pruned row
-    /// gone; clearing it lets the next refresh re-add the row if the move
-    /// failed, or confirm its absence if it succeeded. Safe to call `false`
-    /// for a UID that was never inserted (a no-op removal).
-    func setMoveInFlight(folderPath: String, uid: UInt32, inFlight: Bool) {
-        if inFlight {
-            pendingMoveUIDs[folderPath, default: []].insert(uid)
-        } else {
-            pendingMoveUIDs[folderPath]?.remove(uid)
-            if pendingMoveUIDs[folderPath]?.isEmpty == true {
-                pendingMoveUIDs[folderPath] = nil
-            }
-        }
-    }
+    // selection intents" extension below (SwiftLint type-body budget), and
+    // the cross-view signal senders (`signalDisposed`, `signalFlagChange`,
+    // `signalReadAdvance`, `markAnswered`, and the in-flight shields) in
+    // the "Cross-view signals" extension below, for the same budget.
 
     /// Publishes a toast and auto-clears it after `duration`. The task lives
     /// outside structured concurrency because the caller's scope (usually a
@@ -547,6 +454,110 @@ final class AppState {
         // verbatim like .maintenance above.
         case .server(code: "UserLambdaValidationException", message: let message): return message
         default:                  return nil
+        }
+    }
+}
+
+// MARK: - Cross-view signals
+
+// Senders for the one-way detail → list signals declared in the class body
+// above (their tick counters and in-flight shield maps stay there — stored
+// properties can't live in an extension). Split out for the same SwiftLint
+// type-body budget as the other extensions in this file.
+extension AppState {
+    func signalDisposed(folderPath: String, uid: UInt32, wasUnread: Bool = false) {
+        disposedTick += 1
+        lastDisposedEnvelope = DisposedEnvelope(
+            folderPath: folderPath,
+            uid: uid,
+            tick: disposedTick
+        )
+        // Dispose marks the message `\Seen` before the move, so the source
+        // folder loses one unread message iff the row was unread to begin
+        // with. The `setSeen(true)` path that ran moments earlier already
+        // applied a -1 via `signalFlagChange`; passing `wasUnread` lets the
+        // list-swipe path (which doesn't go through `setSeen`) report the
+        // same delta exactly once.
+        if wasUnread {
+            applyUnreadDelta(folderPath: folderPath, delta: -1)
+        }
+    }
+
+    /// Marks a replied-to message `\Answered` after its reply sends: signal
+    /// the list optimistically (so the replied arrow appears at once), then
+    /// STORE the flag best-effort. Shielded via `setFlagWrite` so a refresh
+    /// landing mid-write can't revert the row. No revert on failure — unlike
+    /// the detail view's toggles there's no surface left to show an error on
+    /// (the composer is gone), and the next full refresh restores truth.
+    func markAnswered(folderPath: String, uid: UInt32) {
+        signalFlagChange(folderPath: folderPath, uid: uid, flag: .answered, added: true)
+        guard let client else { return }
+        setFlagWrite(folderPath: folderPath, uid: uid, inFlight: true)
+        Task {
+            defer { setFlagWrite(folderPath: folderPath, uid: uid, inFlight: false) }
+            try? await client.imapClient.setFlags(
+                folder: folderPath,
+                uids: [uid],
+                flags: [.answered],
+                operation: .add
+            )
+        }
+    }
+
+    func signalFlagChange(folderPath: String, uid: UInt32, flag: Flag, added: Bool) {
+        flagChangeTick += 1
+        lastEnvelopeFlagChange = EnvelopeFlagChange(
+            folderPath: folderPath,
+            uid: uid,
+            flag: flag,
+            added: added,
+            tick: flagChangeTick
+        )
+        if flag == .seen {
+            applyUnreadDelta(folderPath: folderPath, delta: added ? -1 : 1)
+        }
+    }
+
+    func signalReadAdvance(folderPath: String, uid: UInt32, advance: MarkReadAdvance) {
+        readAdvanceTick += 1
+        lastReadAdvanceRequest = ReadAdvanceRequest(
+            folderPath: folderPath,
+            uid: uid,
+            advance: advance,
+            tick: readAdvanceTick
+        )
+    }
+
+    /// Mark a detail-view flag write as in flight (`true`, when the STORE is
+    /// dispatched) or resolved (`false`, on success or failure). While a UID
+    /// is in flight the list's merge keeps the optimistic flag instead of the
+    /// fetched one; clearing it lets the next refresh carry server truth. Safe
+    /// to call `false` for a UID that was never inserted (a no-op removal).
+    func setFlagWrite(folderPath: String, uid: UInt32, inFlight: Bool) {
+        if inFlight {
+            pendingFlagWriteUIDs[folderPath, default: []].insert(uid)
+        } else {
+            pendingFlagWriteUIDs[folderPath]?.remove(uid)
+            if pendingFlagWriteUIDs[folderPath]?.isEmpty == true {
+                pendingFlagWriteUIDs[folderPath] = nil
+            }
+        }
+    }
+
+    /// Mark a detail-view archive / trash / move as in flight (`true`, before
+    /// the server move) or resolved (`false`, on success or failure). While a
+    /// UID is in flight the list's merge keeps the optimistically-pruned row
+    /// gone; clearing it lets the next refresh re-add the row if the move
+    /// failed, or confirm its absence if it succeeded. Safe to call `false`
+    /// for a UID that was never inserted (a no-op removal).
+    func setMoveInFlight(folderPath: String, uid: UInt32, inFlight: Bool) {
+        if inFlight {
+            pendingMoveUIDs[folderPath, default: []].insert(uid)
+        } else {
+            pendingMoveUIDs[folderPath]?.remove(uid)
+            if pendingMoveUIDs[folderPath]?.isEmpty == true {
+                pendingMoveUIDs[folderPath] = nil
+            }
         }
     }
 }
