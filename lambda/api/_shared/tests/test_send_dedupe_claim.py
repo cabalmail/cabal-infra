@@ -145,10 +145,16 @@ class _FakeDedupeTable:
     TTL is exactly the state #1018 is about: DynamoDB reaps best-effort, so
     an expired row is still physically there to be conditioned on. The
     condition is EVALUATED rather than assumed - the handler only gets past
-    a stale row if the expression it passes actually says so.'''
+    a stale row if the expression it passes actually says so.
+
+    `delivered` holds the pks the handler has marked delivered. It is a
+    separate set rather than a field of the stored item so a claim planted
+    by a test is, like an orphaned one in production, unmarked by default -
+    which is the state #1019 lives in.'''
 
     def __init__(self):
         self.claims = {}
+        self.delivered = set()
 
     def _condition_holds(self, key, expression, names, values):
         '''Evaluates the `A OR B` condition shapes this handler writes,
@@ -185,9 +191,37 @@ class _FakeDedupeTable:
             err.response = {'Error': {'Code': 'ConditionalCheckFailedException'}}
             raise err
         self.claims[key] = Item.get('expires_at')
+        # A fresh claim replaces the whole row, so any delivery marker the
+        # previous (now expired) claim carried goes with it.
+        self.delivered.discard(key)
+
+    def get_item(self, Key=None, **_kwargs):  # pylint: disable=invalid-name
+        key = Key['pk']
+        if key not in self.claims:
+            return {}
+        item = {'pk': key, 'expires_at': self.claims[key]}
+        if key in self.delivered:
+            item['delivered'] = True
+        return {'Item': item}
+
+    def update_item(self, Key=None, UpdateExpression=None,
+                    ExpressionAttributeNames=None, ExpressionAttributeValues=None,
+                    **_kwargs):  # pylint: disable=invalid-name
+        '''Models the one SET the handler writes, resolving its `#name`
+        alias the way DynamoDB does. Anything else is unmodelled and fails
+        loudly rather than silently recording a marker the real table would
+        have rejected.'''
+        expression = UpdateExpression or ''
+        for placeholder, attribute in (ExpressionAttributeNames or {}).items():
+            expression = expression.replace(placeholder, attribute)
+        value = (ExpressionAttributeValues or {}).get(':true')
+        if expression != 'SET delivered = :true' or value is not True:
+            raise AssertionError(f'unmodelled update: {expression!r}')
+        self.delivered.add(Key['pk'])
 
     def delete_item(self, Key=None, **_kwargs):  # pylint: disable=invalid-name
         self.claims.pop(Key['pk'], None)
+        self.delivered.discard(Key['pk'])
 
 
 class _FakeSMTP:
@@ -300,7 +334,11 @@ class SendClaimLifecycleTest(unittest.TestCase):
         send.handler(_event(_body()), None)
         response = send.handler(_event(_body()), None)
         self.assertEqual(response['statusCode'], 200)
-        self.assertEqual(json.loads(response['body'])['status'], 'submitted')
+        body = json.loads(response['body'])
+        self.assertEqual(body['status'], 'submitted')
+        # The claim the first send left behind carries its delivery marker,
+        # so this retry is answered with the truth rather than a guess.
+        self.assertTrue(body.get('duplicate'))
         self.assertEqual(len(self.smtp.sent), 1)
 
     def test_raise_under_the_claim_releases_it_and_answers(self):
@@ -368,9 +406,14 @@ class SendClaimLifecycleTest(unittest.TestCase):
         self.assertEqual(response['statusCode'], 401)
         self._assert_claimed(False)
 
-    def _seed_claim(self, offset):
-        '''Plants a surviving claim whose expires_at is `offset` seconds away.'''
+    def _seed_claim(self, offset, delivered=False):
+        '''Plants a surviving claim whose expires_at is `offset` seconds away.
+
+        Unmarked by default: that is the orphaned/in-flight shape, a claim
+        some earlier attempt took and never reported a delivery for.'''
         self.dedupe.claims[self._claim_key] = int(time.time()) + offset
+        if delivered:
+            self.dedupe.delivered.add(self._claim_key)
 
     def test_a_claim_past_its_ttl_no_longer_blocks(self):
         # The defect (#1018): TTL deletion is best-effort, so the row outlives
@@ -388,14 +431,74 @@ class SendClaimLifecycleTest(unittest.TestCase):
     def test_a_live_claim_still_blocks(self):
         # The other direction: expiry must not become a hole in the dedupe
         # the whole claim exists for.
+        #
+        # Re-pointed for #1019. This used to assert the refusal was a 200
+        # "submitted"; a seeded claim carries no delivery marker, so that
+        # claim died with the fix - a blocked send that cannot be shown to
+        # have been delivered is now answered 409. What the case is actually
+        # about is unchanged: the live claim blocks, and does not have its
+        # window extended by the request it refuses.
         self._seed_claim(send.SEND_DEDUPE_TTL // 2)
         expires_at = self.dedupe.claims[self._claim_key]
         response = send.handler(_event(_body()), None)
-        self.assertEqual(response['statusCode'], 200)
-        self.assertEqual(json.loads(response['body'])['status'], 'submitted')
+        self.assertEqual(response['statusCode'], 409)
         self.assertEqual(self.smtp.sent, [])
         self.assertEqual(self.dedupe.claims[self._claim_key], expires_at,
                          'a refused claim must not have its window extended')
+
+    def test_an_unconfirmed_claim_is_not_answered_like_a_delivery(self):
+        # #1019: a claim whose owner never reported a delivery - still in
+        # flight, or orphaned by a handler that died mid-send - was answered
+        # with the byte-identical 200 "submitted" a real delivery gets. The
+        # Apple outbox took that as proof and deleted the queued message,
+        # losing it outright when the claim was orphaned.
+        self._seed_claim(send.SEND_DEDUPE_TTL // 2)
+        response = send.handler(_event(_body()), None)
+        self.assertNotEqual(
+            response['statusCode'], 200,
+            'an unproven claim answered exactly like a delivery')
+        self.assertEqual(response['statusCode'], 409)
+        self.assertEqual(json.loads(response['body'])['status'], 'duplicate_in_flight')
+        self.assertEqual(self.smtp.sent, [],
+                         'the refusal must still not deliver a second copy')
+
+    def test_a_confirmed_claim_is_answered_like_a_delivery(self):
+        # The other half: once the claim carries the marker the message
+        # really is out, so the client must be told to stop retrying. This
+        # is the case the dedupe exists for and it must not regress into a
+        # 409 that provokes a duplicate delivery after the TTL.
+        self._seed_claim(send.SEND_DEDUPE_TTL // 2, delivered=True)
+        response = send.handler(_event(_body()), None)
+        self.assertEqual(response['statusCode'], 200)
+        body = json.loads(response['body'])
+        self.assertEqual(body['status'], 'submitted')
+        self.assertTrue(body.get('duplicate'))
+        self.assertEqual(self.smtp.sent, [])
+
+    def test_a_delivery_marks_its_own_claim(self):
+        # The marker is what makes the two answers above distinguishable at
+        # all; without it every duplicate reads as unconfirmed forever.
+        send.handler(_event(_body()), None)
+        self.assertIn(self._claim_key, self.dedupe.delivered)
+
+    def test_only_confirmed_claims_are_reported_as_sent(self):
+        # The invariant rather than the two cases: across every live claim
+        # state, "the client may stop retrying" is true exactly when the
+        # claim records a delivery - and no state delivers a second copy.
+        for offset in (1, 60, 600, 86400):
+            for delivered in (False, True):
+                with self.subTest(offset=offset, delivered=delivered):
+                    self.dedupe.claims.clear()
+                    self.dedupe.delivered.clear()
+                    self.smtp.sent.clear()
+                    self._seed_claim(offset, delivered=delivered)
+                    response = send.handler(_event(_body()), None)
+                    reported_sent = response['statusCode'] == 200
+                    self.assertEqual(
+                        reported_sent, delivered,
+                        f'claim (delivered={delivered}) answered '
+                        f'{response["statusCode"]}')
+                    self.assertEqual(self.smtp.sent, [])
 
     def test_only_unexpired_claims_block(self):
         # The invariant rather than the two cases: blocked iff the surviving

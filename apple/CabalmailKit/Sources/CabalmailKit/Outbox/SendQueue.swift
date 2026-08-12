@@ -90,6 +90,20 @@ public actor SendQueue {
             try await sender(entry.message)
             try? await outbox.remove(id: entry.id)
             CabalmailLog.info("SendQueue", "sent queued message \(entry.id)")
+        } catch CabalmailError.sendInFlight {
+            // The API still holds a dedupe claim on this message's Message-Id
+            // and can't prove it delivered, so this attempt says nothing about
+            // the message's fate. Keep the entry and roll `attempts` back: a
+            // claim outliving a handful of drains must not exhaust the retry
+            // budget and drop a message nobody ever sent (#1019). The claim
+            // clears within the server's dedupe window, and the next drain
+            // either delivers it or is told it already went out.
+            entry.attempts = original.attempts
+            try? await outbox.update(entry)
+            CabalmailLog.info(
+                "SendQueue",
+                "deferred \(entry.id): an earlier submission of it is still in flight"
+            )
         } catch {
             entry.lastError = "\(error)"
             let maxAttempts = outbox.maxAttempts

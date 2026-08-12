@@ -333,7 +333,11 @@ extension URLSessionApiClient {
             json["discard_draft_uidvalidity"] = Int(validity)
         }
         let httpRequest = try await put("/send", json: json)
-        _ = try await send(httpRequest, expectedStatuses: 200..<300)
+        do {
+            _ = try await send(httpRequest, expectedStatuses: 200..<300)
+        } catch let error as CabalmailError {
+            throw sendInFlightError(error)
+        }
     }
 
     public func requestAttachmentUploads(
@@ -395,4 +399,29 @@ extension URLSessionApiClient {
         }
         return data
     }
+}
+
+/// Shape of `/send`'s already-claimed response
+/// (`lambda/api/send/function.py` `_duplicate_response`).
+private struct DuplicateInFlightBody: Decodable {
+    let status: String
+}
+
+/// Maps `409 {"status":"duplicate_in_flight"}` onto `.sendInFlight`.
+///
+/// /send holds a dedupe claim on the Message-Id across the SMTP handoff. It
+/// answers a duplicate it can prove delivered with the same 200 a fresh
+/// delivery gets — but one it cannot (still in flight, or orphaned by a
+/// handler that died) now answers 409, because the outbox was deleting those
+/// queued messages as sent when nothing had been delivered (#1019). Any other
+/// error passes through unchanged.
+private func sendInFlightError(_ error: CabalmailError) -> CabalmailError {
+    guard case .server(let code, let message) = error,
+          code == "409",
+          let data = message.data(using: .utf8),
+          let body = try? JSONDecoder().decode(DuplicateInFlightBody.self, from: data),
+          body.status == "duplicate_in_flight" else {
+        return error
+    }
+    return .sendInFlight
 }
