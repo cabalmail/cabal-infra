@@ -35,6 +35,10 @@ extension MessageListViewModel {
             await clearSearch()
             return
         }
+        // Recorded at submit time, not on success: the question the
+        // placeholder asks is "has this term been sent yet", which a failed
+        // request answers just as much as a successful one.
+        submittedQuery = trimmed
         isLoading = true
         defer { isLoading = false }
         do {
@@ -99,6 +103,7 @@ extension MessageListViewModel {
     func clearSearch() async {
         dbg("clearSearch")
         searchQuery = ""
+        submittedQuery = ""
         searchFilters = MessageSearchFilters()
         // Folder mode is "All" mode: reset the pill too, so clearing a search
         // (including the banner's clear button while a pill filter is active)
