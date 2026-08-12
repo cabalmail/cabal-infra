@@ -10,11 +10,19 @@ When `folder` is supplied the search is single-folder. When `folder` is
 omitted (or empty) the Lambda enumerates the user's subscribed folders,
 excludes Trash, runs SEARCH against each in turn, merges the matches
 newest-first, and stamps each result envelope with its source folder. The
-5,000-result cap applies to the merged match set. No FTS yet (Phase 4),
-so body search is whatever Dovecot's sequential scan gives us.
+5,000-result cap applies to the merged match set.
 
-The old raw-syntax `/search` endpoint stays in place during the migration
-window so the Apple client keeps working until Phase 5 cuts it over.
+Body and text searches run against Dovecot's full-text index (Phase 4 --
+fts_flatcurve, configured in `docker/imap/configs/dovecot/90-fts.conf`,
+operator notes in `docs/operations.md`), not a sequential scan. That config
+sets `fts_enforced = yes`, so a folder whose index is missing fails its
+SEARCH rather than falling back to a slow scan; `search_folders` logs and
+skips such a folder, which in cross-folder mode means an un-indexed folder
+contributes nothing instead of stalling the request. Backfilling the index
+is an operator step, not something this endpoint can do.
+
+Phase 5 is complete: the raw-syntax `/search` endpoint it replaced is gone,
+and every client reaches search through here.
 '''
 import base64
 import datetime
