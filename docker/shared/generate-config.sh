@@ -76,6 +76,9 @@ for item in items:
     if subdomain:
         if subdomain not in domains[tld]["subdomains"]:
             domains[tld]["subdomains"][subdomain] = {"addresses": {}}
+        # Always a list, one entry per co-assigned user: `user` is the
+        # slash-delimited multi-user attribute, and str.split never
+        # returns fewer than one element.
         targets = user.split("/")
         domains[tld]["subdomains"][subdomain]["addresses"][username] = targets
     else:
@@ -108,11 +111,10 @@ def gen_virtusertable():
             sd = d["subdomains"][subd]
             for addr in sorted(sd["addresses"]):
                 targets = sd["addresses"][addr]
-                if isinstance(targets, list) and len(targets) > 1:
+                if len(targets) > 1:
                     lines.append(f"{addr}@{subd}.{tld}\t{'_'.join(sorted(targets))}")
                 else:
-                    t = targets[0] if isinstance(targets, list) else targets
-                    lines.append(f"{addr}@{subd}.{tld}\t{t}")
+                    lines.append(f"{addr}@{subd}.{tld}\t{targets[0]}")
     return "\n".join(lines) + "\n"
 
 
@@ -135,7 +137,7 @@ def gen_aliases():
             addrs = domains[tld]["subdomains"][subd]["addresses"]
             for addr in addrs:
                 targets = addrs[addr]
-                if isinstance(targets, list) and len(targets) > 1:
+                if len(targets) > 1:
                     key = "_".join(sorted(targets))
                     combined[key] = sorted(targets)
 

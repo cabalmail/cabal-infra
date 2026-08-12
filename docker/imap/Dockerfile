@@ -144,6 +144,10 @@ COPY shared/reconfigure.sh                 /usr/local/bin/reconfigure.sh
 COPY shared/sendmail-wrapper.sh            /usr/local/bin/sendmail-wrapper.sh
 COPY shared/prepare-sendmail.sh            /usr/local/bin/prepare-sendmail.sh
 
+# Static + dynamic alias assembly (imap only): called by both
+# prepare-sendmail.sh at startup and reconfigure.sh on every regeneration.
+COPY shared/assemble-aliases.sh            /usr/local/bin/assemble-aliases.sh
+
 # Clears the planned-maintenance SSM flag once Dovecot is serving (imap only).
 COPY shared/clear-maintenance.sh           /usr/local/bin/clear-maintenance.sh
 
