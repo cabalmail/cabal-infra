@@ -84,14 +84,24 @@ public enum ContactsAuthorizationStatus: Sendable, Equatable {
 public actor LiveContactsStore: ContactsStore {
     private let store = CNContactStore()
     private var cache: [String: ContactLookup] = [:]
-    /// Session cache for `allEntries`. Populated lazily on first call.
-    /// We don't subscribe to `CNContactStoreDidChange` — the cost of a
-    /// rebuild-per-launch is small and saves the complexity of an
-    /// invalidation path. Compose autocomplete sees newly-added
-    /// contacts on the next launch.
+    /// Session cache for `allEntries`. Populated lazily on first call and
+    /// dropped whenever the address book changes. The change subscription
+    /// exists for the `.limited` grant: widening the shared selection is
+    /// the one address-book edit a user makes *because* the app told them
+    /// to, so making them relaunch to see the result is a dead end.
     private var allEntriesCache: [RecipientSuggestion]?
+    /// Token for the `CNContactStoreDidChange` subscription, registered on
+    /// first `allEntries` call rather than in `init` so a store nobody asks
+    /// for a snapshot from never observes anything.
+    private var storeChangeObserver: (any NSObjectProtocol)?
 
     public init() {}
+
+    deinit {
+        if let storeChangeObserver {
+            NotificationCenter.default.removeObserver(storeChangeObserver)
+        }
+    }
 
     public var authorizationStatus: ContactsAuthorizationStatus {
         ContactsAuthorizationStatus(CNContactStore.authorizationStatus(for: .contacts))
@@ -115,10 +125,29 @@ public actor LiveContactsStore: ContactsStore {
 
     public func allEntries() async -> [RecipientSuggestion] {
         guard authorizationStatusIsAccessible else { return [] }
+        observeStoreChanges()
         if let cached = allEntriesCache { return cached }
         let entries = fetchAllEntries()
         allEntriesCache = entries
         return entries
+    }
+
+    /// Idempotent. `CNContactStoreDidChange` fires for a widened `.limited`
+    /// selection as well as for edits to the book itself, so one
+    /// subscription covers both.
+    private func observeStoreChanges() {
+        guard storeChangeObserver == nil else { return }
+        storeChangeObserver = NotificationCenter.default.addObserver(
+            forName: .CNContactStoreDidChange,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            Task { await self?.invalidateAllEntries() }
+        }
+    }
+
+    private func invalidateAllEntries() {
+        allEntriesCache = nil
     }
 
     private func fetchAllEntries() -> [RecipientSuggestion] {
