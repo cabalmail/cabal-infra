@@ -115,6 +115,14 @@ final class MessageListViewModel {
     /// Structured filter form state — mirrors the React filter panel.
     var searchFilters = MessageSearchFilters()
 
+    /// The trimmed term the most recent submitted search ran with. Distinct
+    /// from `searchQuery`, which tracks the field as the user types: search is
+    /// submit-driven, so the two diverge for every keystroke between typing
+    /// and Return, and that gap is what tells a pending query from an
+    /// exhausted one.
+    /// Written by `runSearch()` / `clearSearch()` only.
+    var submittedQuery: String = ""
+
     /// `true` while search results are showing in `envelopes`.
     var isSearchActive: Bool = false
 
