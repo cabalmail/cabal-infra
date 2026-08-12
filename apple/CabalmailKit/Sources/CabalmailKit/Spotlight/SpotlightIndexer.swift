@@ -28,7 +28,16 @@ import Foundation
 /// unsubscribed folders never reach Spotlight, and unsubscribing purges the
 /// folder's domain from the index.
 public actor SpotlightIndexer {
+    /// Bumped when already-donated items must be re-donated to be correct —
+    /// e.g. the v2 content-type change (`.emailMessage` → `.text`), without
+    /// which pre-existing items keep opening Apple Mail on macOS. The sweep
+    /// wipes the index once when the persisted marker doesn't match, then
+    /// rebuilds it.
+    static let schemaVersion = 2
+    private static let schemaVersionKey = "cabalmail.spotlight.schemaVersion"
+
     private let index: SearchableIndexing
+    private let defaults: UserDefaults
 
     /// Nil until the first folder list arrives (`setSubscribedFolders`);
     /// upserts are dropped until then so an unsubscribed folder's envelopes
@@ -64,8 +73,9 @@ public actor SpotlightIndexer {
     /// "what the user would see opening the folder".
     private let sweepPageLimit: UInt32 = 200
 
-    public init(index: SearchableIndexing) {
+    public init(index: SearchableIndexing, defaults: UserDefaults = .standard) {
         self.index = index
+        self.defaults = defaults
     }
 
     // MARK: - Envelope-cache feed
@@ -224,6 +234,7 @@ public actor SpotlightIndexer {
     /// user opens it.
     public func sweep(imap: ImapClient, envelopeCache: EnvelopeCache) async {
         guard index.isAvailable else { return }
+        await migrateSchemaIfNeeded()
         guard let folders = try? await imap.listFolders() else {
             CabalmailLog.warn("Spotlight", "sweep skipped: folder list unavailable")
             return
@@ -247,6 +258,23 @@ public actor SpotlightIndexer {
             }
         }
         CabalmailLog.info("Spotlight", "sweep finished for \(subscribed.count) folders")
+    }
+
+    /// One-time wipe when the entry schema changed (see `schemaVersion`).
+    /// The marker is only advanced after a successful wipe, so a failed
+    /// deleteAll retries on the next sweep rather than stranding stale
+    /// items.
+    private func migrateSchemaIfNeeded() async {
+        guard defaults.integer(forKey: Self.schemaVersionKey) != Self.schemaVersion else { return }
+        do {
+            try await index.deleteAll()
+        } catch {
+            CabalmailLog.warn("Spotlight", "schema-migration wipe failed: \(error)")
+            return
+        }
+        bodyTexts.removeAll()
+        defaults.set(Self.schemaVersion, forKey: Self.schemaVersionKey)
+        CabalmailLog.info("Spotlight", "index wiped for schema v\(Self.schemaVersion); sweep will rebuild")
     }
 
     private func sweepFolder(_ path: String, imap: ImapClient, envelopeCache: EnvelopeCache) async {

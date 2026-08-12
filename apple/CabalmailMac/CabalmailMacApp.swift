@@ -42,6 +42,11 @@ struct CabalmailMacApp: App {
                     // restore so the session's PreferencesSyncCoordinator can
                     // pull the server copy (server wins on login).
                     appState.usePreferences(preferences)
+                    // Give the AppKit delegate's Spotlight-continuation
+                    // bridge its AppState before the restore suspends —
+                    // a cold launch from a Spotlight result parks its
+                    // activity in the router until this runs.
+                    SpotlightRouter.shared.attach(appState)
                     await appState.restoreIfPossible()
                     if preferences.crashReportingEnabled {
                         appState.client?.setCrashReportingEnabled(true)
@@ -70,9 +75,10 @@ struct CabalmailMacApp: App {
                     }
                 }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
-                    // A tapped Spotlight result. Parks on AppState until the
-                    // session is wired when it arrives via cold launch (see
-                    // SpotlightRouting.swift).
+                    // Kept for symmetry with iOS, but macOS never delivers
+                    // this — the working path is AppDelegate's
+                    // `application(_:continue:restorationHandler:)` via
+                    // `SpotlightRouter` (see SpotlightRouting.swift).
                     appState.handleSpotlightActivity(activity)
                 }
         }
