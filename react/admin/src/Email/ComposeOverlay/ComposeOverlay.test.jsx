@@ -8,6 +8,7 @@ const mockGetAddresses = vi.fn().mockResolvedValue({
   data: { Items: [{ address: 'user@test.com' }, { address: 'other@test.com' }] }
 });
 const mockSendMessage = vi.fn().mockResolvedValue({});
+const mockSetFlag = vi.fn().mockResolvedValue({});
 const mockGetAttachmentUploadUrls = vi.fn();
 const mockUploadAttachmentToS3 = vi.fn().mockResolvedValue({});
 const mockGetAttachment = vi.fn();
@@ -19,6 +20,7 @@ const mockSaveDraft = vi.fn().mockResolvedValue({
 const mockApi = {
   getAddresses: mockGetAddresses,
   sendMessage: mockSendMessage,
+  setFlag: mockSetFlag,
   getAttachmentUploadUrls: mockGetAttachmentUploadUrls,
   uploadAttachmentToS3: mockUploadAttachmentToS3,
   getAttachment: mockGetAttachment,
@@ -803,6 +805,90 @@ describe('ComposeOverlay', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+  // Issue #1031: a reply sent from React left the original unflagged, so the
+  // replied indicator every client renders (React's reply icon, the Apple
+  // message list since d56fa0b7) showed the message as unanswered no matter
+  // where it was read.
+  describe('\\Answered on the message being replied to', () => {
+    async function composeAndSend(props) {
+      const { unmount } = renderCompose(props);
+      try {
+        await waitFor(() => {
+          expect(mockGetAddresses).toHaveBeenCalled();
+        });
+        fireEvent.click(screen.getByLabelText('From'));
+        fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+        fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Re: hi' } });
+        fireEvent.change(screen.getByLabelText('Recipients'), {
+          target: { value: 'dest@test.com' }
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+        await waitFor(() => {
+          expect(mockSendMessage).toHaveBeenCalled();
+        });
+      } finally {
+        unmount();
+      }
+    }
+
+    it('flags the source message once a reply is away', async () => {
+      await composeAndSend({
+        type: 'reply',
+        reply_source: { folder: 'INBOX', id: 74 },
+      });
+      await waitFor(() => {
+        expect(mockSetFlag).toHaveBeenCalled();
+      });
+      const [folder, flag, op, ids] = mockSetFlag.mock.calls[0];
+      expect(folder).toBe('INBOX');
+      expect(flag).toBe('\\Answered');
+      expect(op).toBe('set');
+      expect(ids).toEqual([74]);
+    });
+
+    it('flags the source message for reply-all too', async () => {
+      await composeAndSend({
+        type: 'replyAll',
+        reply_source: { folder: 'Archive', id: 12 },
+      });
+      await waitFor(() => {
+        expect(mockSetFlag).toHaveBeenCalled();
+      });
+      expect(mockSetFlag.mock.calls[0][0]).toBe('Archive');
+      expect(mockSetFlag.mock.calls[0][3]).toEqual([12]);
+    });
+
+    it('leaves a new message alone — nothing was answered', async () => {
+      await composeAndSend({ type: 'new' });
+      expect(mockSetFlag).not.toHaveBeenCalled();
+    });
+
+    it('leaves a forward alone — a forward does not answer anything', async () => {
+      await composeAndSend({
+        type: 'forward',
+        reply_source: { folder: 'INBOX', id: 74 },
+      });
+      expect(mockSetFlag).not.toHaveBeenCalled();
+    });
+
+    it('sends normally when the reply has no source coordinates', async () => {
+      // Reply opened from a surface that does not know the source uid: the
+      // send must still complete, just without the flag.
+      await composeAndSend({ type: 'reply' });
+      expect(mockSetFlag).not.toHaveBeenCalled();
+      expect(setMessage).toHaveBeenCalledWith('Email sent', false);
+    });
+
+    it('still reports the send as sent when flagging fails', async () => {
+      mockSetFlag.mockRejectedValueOnce(new Error('nope'));
+      await composeAndSend({
+        type: 'reply',
+        reply_source: { folder: 'INBOX', id: 74 },
+      });
+      expect(setMessage).toHaveBeenCalledWith('Email sent', false);
+      expect(setMessage).not.toHaveBeenCalledWith('Error sending email', true);
     });
   });
 });

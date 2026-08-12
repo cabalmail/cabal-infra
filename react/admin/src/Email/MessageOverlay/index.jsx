@@ -262,15 +262,17 @@ function MessageOverlay({
     { message_id: messageId, in_reply_to: inReplyTo, references },
   ], [recipient, messageBodyHtml, messageBodyPlain, envelope, messageId, inReplyTo, references]);
 
+  // Replying carries the source coordinates so the compose window can mark
+  // the original \Answered once the reply is actually away.
   const reply = useCallback(() => {
     const [r, b, e, h] = createPayload();
-    replyProp(r, b, e, h);
-  }, [createPayload, replyProp]);
+    replyProp(r, b, e, h, { folder, id: envelopeId });
+  }, [createPayload, replyProp, folder, envelopeId]);
 
   const replyAll = useCallback(() => {
     const [r, b, e, h] = createPayload();
-    replyAllProp(r, b, e, h);
-  }, [createPayload, replyAllProp]);
+    replyAllProp(r, b, e, h, { folder, id: envelopeId });
+  }, [createPayload, replyAllProp, folder, envelopeId]);
 
   const forward = useCallback(() => {
     const [r, b, e, h] = createPayload();

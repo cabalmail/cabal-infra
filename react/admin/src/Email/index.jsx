@@ -218,16 +218,19 @@ function Email({
       other_headers: other_headers,
       // Forward only: `{folder, id, seen, attachments}` of the original
       // message, so the compose window can carry its attachments over.
-      forward_attachments: source
+      forward_attachments: type === "forward" ? source : undefined,
+      // Reply / reply-all only: `{folder, id}` of the message being
+      // answered, so a successful send can flag it \Answered.
+      reply_source: type === "forward" ? undefined : source
     });
   }, [openCompose]);
 
-  const reply = useCallback((recipient, body, env, other_headers) => {
-    launchComposer(recipient, body, env, other_headers, "reply");
+  const reply = useCallback((recipient, body, env, other_headers, source) => {
+    launchComposer(recipient, body, env, other_headers, "reply", source);
   }, [launchComposer]);
 
-  const replyAll = useCallback((recipient, body, env, other_headers) => {
-    launchComposer(recipient, body, env, other_headers, "replyAll");
+  const replyAll = useCallback((recipient, body, env, other_headers, source) => {
+    launchComposer(recipient, body, env, other_headers, "replyAll", source);
   }, [launchComposer]);
 
   const forward = useCallback((recipient, body, env, other_headers, source) => {
@@ -435,6 +438,7 @@ function Email({
               type={w.type}
               other_headers={w.other_headers}
               forward_attachments={w.forward_attachments}
+              reply_source={w.reply_source}
               composeFromAddress={composeFromAddress}
               setComposeFromAddress={setComposeFromAddress}
               layout={layout}
