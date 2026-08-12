@@ -29,6 +29,21 @@ enum ListColumnWidth {
     /// Width the reading pane needs before it can show a message rather than a
     /// column of one-word lines.
     static let readerFloor: CGFloat = 360
+    /// Floor the column may be squeezed to in a window too narrow to seat all
+    /// three columns at their preferred widths. Below `minimum` a row's sender
+    /// and date stop sharing a line, which is why `minimum` is the floor
+    /// wherever the window can afford it — but a cramped window has to take the
+    /// width from somewhere, and taking it from the list is what leaves the
+    /// reader able to render a message at all.
+    static let squeezedMinimum: CGFloat = 220
+    /// The narrowest resize range worth handing the divider.
+    ///
+    /// A column whose floor equals its ceiling has no travel, and the split view
+    /// does not then leave the divider alone: the drag silently retargets the
+    /// *sidebar*, which grows to its own maximum and takes the width out of the
+    /// reading pane. So the drag a user makes to give the reader room was taking
+    /// room away from it (#1014).
+    static let minimumTravel: CGFloat = 60
     /// The largest share of the window the list may claim.
     ///
     /// This, not `ideal`, is what decides the split on macOS 27: measured there,
@@ -40,19 +55,30 @@ enum ListColumnWidth {
     /// point of the window.
     static let maximumWindowShare: CGFloat = 0.45
 
-    /// Upper bound in a split of `splitWidth`: the list's share of the window,
-    /// and never more than leaves the sidebar its launch width and the reader
-    /// its floor.
+    /// Resize range for the column in a split of `splitWidth`.
     ///
-    /// Never reports below `minimum` — a window too small to seat all three has
-    /// to overflow somewhere, and the list is the column whose content stays
-    /// legible (and scrollable) when squeezed. Zero, the pre-layout
-    /// measurement, resolves to `ideal` so the first layout doesn't pin the
-    /// column to its floor and flick it wider a frame later.
-    static func maximum(splitWidth: CGFloat, sidebarWidth: CGFloat) -> CGFloat {
-        guard splitWidth > 0 else { return ideal }
+    /// The ceiling is the list's share of the window, and never more than leaves
+    /// the sidebar its launch width and the reader its floor. The floor is
+    /// `minimum` wherever the window can seat that and still leave the divider
+    /// somewhere to travel; in a window too narrow for all three (below about
+    /// 980pt with the shipped constants) the list gives ground instead —
+    /// `squeezedMinimum` rather than a ceiling raised into the reader's floor,
+    /// because the reader is the point of the window (#984).
+    ///
+    /// The range is never empty. That is the whole of #1014: the old form
+    /// clamped the ceiling up to `minimum`, so at and below ~920pt floor and
+    /// ceiling met, the column froze, and the drag went to the sidebar instead
+    /// — costing the reading pane the width the drag was meant to give it.
+    ///
+    /// Zero, the pre-layout measurement, resolves to `ideal` so the first layout
+    /// doesn't pin the column to its floor and flick it wider a frame later.
+    static func bounds(splitWidth: CGFloat,
+                       sidebarWidth: CGFloat) -> (minimum: CGFloat, maximum: CGFloat) {
+        guard splitWidth > 0 else { return (minimum, ideal) }
         let leavingReaderItsFloor = splitWidth - sidebarWidth - readerFloor
-        return max(minimum, min(splitWidth * maximumWindowShare, leavingReaderItsFloor))
+        let ceiling = min(splitWidth * maximumWindowShare, leavingReaderItsFloor)
+        let floor = min(minimum, max(squeezedMinimum, ceiling - minimumTravel))
+        return (floor, max(ceiling, floor + minimumTravel))
     }
 }
 
@@ -68,14 +94,15 @@ private struct ListColumnWidthPolicy: ViewModifier {
     let splitWidth: CGFloat
 
     func body(content: Content) -> some View {
-        content
+        let bounds = ListColumnWidth.bounds(
+            splitWidth: splitWidth,
+            sidebarWidth: SidebarColumnWidth.ideal
+        )
+        return content
             .navigationSplitViewColumnWidth(
-                min: ListColumnWidth.minimum,
+                min: bounds.minimum,
                 ideal: ListColumnWidth.ideal,
-                max: ListColumnWidth.maximum(
-                    splitWidth: splitWidth,
-                    sidebarWidth: SidebarColumnWidth.ideal
-                )
+                max: bounds.maximum
             )
     }
 }

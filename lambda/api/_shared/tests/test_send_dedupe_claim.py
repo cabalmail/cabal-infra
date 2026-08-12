@@ -17,6 +17,13 @@ These cover both directions of that: a raise under the claim must release
 it (so the retry really sends), and a completed handoff must keep it (so
 the retry does not deliver twice) even if closing the connection throws.
 
+They also cover when the claim stops holding. The TTL is the escape hatch
+from an orphaned claim, but DynamoDB reaps expired rows best-effort, so the
+row is routinely still there after `expires_at` and an existence-only
+condition kept honouring it - measured 192 s past expiry on stage (#1018).
+The claim now compares `expires_at`, so the window is the 600 s the
+constant advertises rather than however long the row survives.
+
 Third-party imports are faked in sys.modules before import as in the
 sibling suites; `helper` and `compose` are the real modules, and the
 handler is loaded under a unique module name (#860/#863).
@@ -26,6 +33,7 @@ import json
 import os
 import smtplib
 import sys
+import time
 import types
 import unittest
 
@@ -131,24 +139,55 @@ send = _load_handler('send')
 
 class _FakeDedupeTable:
     '''cabal-rate-limits stand-in implementing the one conditional write
-    and the one delete the claim lifecycle uses.'''
+    and the one delete the claim lifecycle uses.
+
+    `claims` maps pk -> the stored `expires_at`, because a row outliving its
+    TTL is exactly the state #1018 is about: DynamoDB reaps best-effort, so
+    an expired row is still physically there to be conditioned on. The
+    condition is EVALUATED rather than assumed - the handler only gets past
+    a stale row if the expression it passes actually says so.'''
 
     def __init__(self):
-        self.claims = set()
+        self.claims = {}
 
-    def put_item(self, Item=None, **_kwargs):  # pylint: disable=invalid-name
+    def _condition_holds(self, key, expression, names, values):
+        '''Evaluates the `A OR B` condition shapes this handler writes,
+        resolving `#name` placeholders the way DynamoDB does.'''
+        expression = expression or 'attribute_not_exists(pk)'
+        for placeholder, attribute in (names or {}).items():
+            expression = expression.replace(placeholder, attribute)
+        for term in expression.split(' OR '):
+            term = term.strip()
+            if term == 'attribute_not_exists(pk)':
+                if key not in self.claims:
+                    return True
+            elif term == 'expires_at < :now':
+                assert ':now' in values, 'condition references :now but none was passed'
+                stored = self.claims.get(key)
+                if stored is not None and stored < values[':now']:
+                    return True
+            else:
+                raise AssertionError(f'unmodelled condition term: {term!r}')
+        return False
+
+    # pylint: disable=invalid-name
+    def put_item(self, Item=None, ConditionExpression=None,
+                 ExpressionAttributeNames=None, ExpressionAttributeValues=None,
+                 **_kwargs):
         key = Item['pk']
-        if key in self.claims:
+        if not self._condition_holds(key, ConditionExpression,
+                                     ExpressionAttributeNames or {},
+                                     ExpressionAttributeValues or {}):
             # The module bound whichever ClientError its botocore import
             # resolved to, so raise that class rather than this file's fake.
             err = send.ClientError(
                 {'Error': {'Code': 'ConditionalCheckFailedException'}}, 'PutItem')
             err.response = {'Error': {'Code': 'ConditionalCheckFailedException'}}
             raise err
-        self.claims.add(key)
+        self.claims[key] = Item.get('expires_at')
 
     def delete_item(self, Key=None, **_kwargs):  # pylint: disable=invalid-name
-        self.claims.discard(Key['pk'])
+        self.claims.pop(Key['pk'], None)
 
 
 class _FakeSMTP:
@@ -328,6 +367,49 @@ class SendClaimLifecycleTest(unittest.TestCase):
         response = send.handler(_event(_body()), None)
         self.assertEqual(response['statusCode'], 401)
         self._assert_claimed(False)
+
+    def _seed_claim(self, offset):
+        '''Plants a surviving claim whose expires_at is `offset` seconds away.'''
+        self.dedupe.claims[self._claim_key] = int(time.time()) + offset
+
+    def test_a_claim_past_its_ttl_no_longer_blocks(self):
+        # The defect (#1018): TTL deletion is best-effort, so the row outlives
+        # its own expires_at - measured at 192 s past on stage - and an
+        # existence-only condition kept refusing the send. The refusal is the
+        # silent one (200 "submitted"), so nothing upstream notices.
+        self._seed_claim(-1)
+        response = send.handler(_event(_body()), None)
+        self.assertEqual(response['statusCode'], 200)
+        self.assertEqual(len(self.smtp.sent), 1,
+                         'a claim past its own TTL still blocked the send')
+        self.assertGreater(self.dedupe.claims[self._claim_key], int(time.time()),
+                           'the expired claim was not replaced with a fresh one')
+
+    def test_a_live_claim_still_blocks(self):
+        # The other direction: expiry must not become a hole in the dedupe
+        # the whole claim exists for.
+        self._seed_claim(send.SEND_DEDUPE_TTL // 2)
+        expires_at = self.dedupe.claims[self._claim_key]
+        response = send.handler(_event(_body()), None)
+        self.assertEqual(response['statusCode'], 200)
+        self.assertEqual(json.loads(response['body'])['status'], 'submitted')
+        self.assertEqual(self.smtp.sent, [])
+        self.assertEqual(self.dedupe.claims[self._claim_key], expires_at,
+                         'a refused claim must not have its window extended')
+
+    def test_only_unexpired_claims_block(self):
+        # The invariant rather than the two cases: blocked iff the surviving
+        # row is still live, at any age on either side. Offset 0 is left out
+        # as a coin flip - the handler truncates its clock to whole seconds.
+        for offset in (-86400, -600, -60, -1, 1, 60, 600, 86400):
+            with self.subTest(offset=offset):
+                self.smtp.sent.clear()
+                self._seed_claim(offset)
+                send.handler(_event(_body()), None)
+                delivered = len(self.smtp.sent) == 1
+                self.assertEqual(
+                    delivered, offset < 0,
+                    f'claim expiring {offset:+d}s from now: delivered={delivered}')
 
 
 if __name__ == '__main__':

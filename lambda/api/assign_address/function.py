@@ -2,19 +2,17 @@
 # pylint: disable=too-many-return-statements
 import json
 import os
-from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from address_events import notify_containers  # pylint: disable=import-error
 from admin_limits import ( # pylint: disable=import-error
     admin_response_or_none,
     parse_json_object_body,
 )
 
-address_changed_topic_arn = os.environ.get('ADDRESS_CHANGED_TOPIC_ARN', '')
 user_pool_id = os.environ['USER_POOL_ID']
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
-sns = boto3.client('sns')
 cognito = boto3.client('cognito-idp')
 
 
@@ -75,17 +73,3 @@ def cognito_user_exists(username):
         return True
     except cognito.exceptions.UserNotFoundException:
         return False
-
-
-def notify_containers():
-    '''Publishes an address change event to SNS'''
-    if not address_changed_topic_arn:
-        print('ADDRESS_CHANGED_TOPIC_ARN not set, skipping SNS publish')
-        return
-    sns.publish(
-        TopicArn=address_changed_topic_arn,
-        Message=json.dumps({
-            'event': 'address_changed',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        })
-    )
