@@ -300,6 +300,11 @@ targets:
         # handler lives in CabalmailMacApp.swift.
         NSUserActivityTypes:
           - com.apple.corespotlightitem
+        # macOS-only: without this key Spotlight never routes a donated
+        # item back to the donating app — it falls back to opening the
+        # result by content type, and `public.email-message`'s default
+        # handler is Apple Mail. iOS has no equivalent requirement.
+        CoreSpotlightContinuation: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac
