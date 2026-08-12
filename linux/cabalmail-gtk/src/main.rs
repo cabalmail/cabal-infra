@@ -1,10 +1,9 @@
 //! Entry point for the Cabalmail Linux client.
 //!
-//! The `AdwApplication` shell, the GResource bundle, and the `spawn_to_ui!`
-//! async bridge land in Phase 1, work item 4. What is here now is the
-//! configuration surface from work item 3 — `--print-config`, `config set`,
-//! `config reset`, and the per-setting override flags — which is a command-line
-//! interface rather than a UI, and needs no window to be useful.
+//! This is the command line and nothing else: it parses one invocation and
+//! either answers it here — `--print-config`, `config set`, `config reset` —
+//! or resolves the configuration and hands it to the application in
+//! `cabalmail_gtk`. GTK is never given the command line; the flags are ours.
 
 use std::process::ExitCode;
 
@@ -55,25 +54,13 @@ fn run(arguments: &[String]) -> Result<ExitCode, String> {
         }
         Invocation::Run { overrides } => {
             let loaded = load(&environment, &overrides)?;
+            // Warnings are not fatal — a stale `CABALMAIL_*` variable in a
+            // shell profile should be said out loud, not refuse to start the
+            // client — so they go to stderr and the window still opens.
             for warning in &loaded.warnings {
                 eprintln!("cabalmail: {warning}");
             }
-            println!(
-                "cabalmail {} — the GTK application shell is not implemented yet \
-                 (Phase 1, work item 4).",
-                env!("CARGO_PKG_VERSION")
-            );
-            println!(
-                "Configuration loaded: {} setting(s) from {} file(s). \
-                 Run `cabalmail --print-config` to see them.",
-                loaded
-                    .settings
-                    .iter()
-                    .filter(|(_, resolved)| resolved.source != config::Source::Default)
-                    .count(),
-                loaded.files.len()
-            );
-            Ok(ExitCode::SUCCESS)
+            cabalmail_gtk::application::run(loaded.settings)
         }
     }
 }
