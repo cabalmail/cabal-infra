@@ -238,6 +238,12 @@ struct ComposeView: View {
                     if let uid = model.supersededDraftUID {
                         appState.signalDisposed(folderPath: "Drafts", uid: uid)
                     }
+                    // A reply left the device (or the outbox owns it now):
+                    // mark the original `\Answered` so the list's replied
+                    // arrow appears without waiting for a refresh.
+                    if let folder = model.replySourceFolder, let uid = model.replySourceUid {
+                        appState.markAnswered(folderPath: folder, uid: uid)
+                    }
                     // Surface the outcome as a toast on the shared AppState
                     // so the user sees confirmation after the sheet dismisses.
                     // `.queued` means the message is in the outbox and

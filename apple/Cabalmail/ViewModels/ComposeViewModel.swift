@@ -109,6 +109,12 @@ final class ComposeViewModel {
     let inReplyTo: String?
     let references: [String]
     let composeIntent: ComposeIntent
+    /// Where the message being replied to lives, when this compose is a
+    /// reply / reply-all seed (nil otherwise — including forwards). After a
+    /// successful send, `ComposeView` marks that message `\Answered` so the
+    /// list's replied indicator lights up.
+    let replySourceFolder: String?
+    let replySourceUid: UInt32?
 
     /// Server-side Drafts copy the next save replaces (and a send
     /// discards). Seeded from the draft when resuming; updated after every
@@ -170,6 +176,8 @@ final class ComposeViewModel {
         self.inReplyTo = seed.inReplyTo
         self.references = seed.references
         self.composeIntent = seed.composeIntent ?? .new
+        self.replySourceFolder = seed.replySourceFolder
+        self.replySourceUid = seed.replySourceUid
         self.serverDraftRef = seed.serverRef
         self.isResumedServerDraft = seed.serverRef != nil
         // Append the preference signature to the seeded body, but only once.

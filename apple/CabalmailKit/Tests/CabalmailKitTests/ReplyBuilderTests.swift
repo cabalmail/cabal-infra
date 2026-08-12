@@ -177,6 +177,41 @@ final class ReplyBuilderTests: XCTestCase {
         XCTAssertTrue(draft.cc.isEmpty)
     }
 
+    // MARK: - Reply source (the `\Answered` marker's coordinates)
+
+    func testReplyCarriesSourceCoordinates() {
+        let envelope = makeEnvelope(from: [("bob", "example.com")])
+        for mode: ReplyBuilder.ReplyMode in [.reply, .replyAll] {
+            let draft = ReplyBuilder.build(
+                from: envelope, body: nil, mode: mode, userAddresses: [],
+                sourceFolder: "INBOX", now: clock
+            )
+            XCTAssertEqual(draft.replySourceFolder, "INBOX")
+            XCTAssertEqual(draft.replySourceUid, envelope.uid)
+        }
+    }
+
+    func testForwardNeverCarriesSourceCoordinates() {
+        // Forwarding is not a reply; the seed must not let a send mark the
+        // original `\Answered` even when the caller passes the folder.
+        let envelope = makeEnvelope(from: [("bob", "example.com")])
+        let draft = ReplyBuilder.build(
+            from: envelope, body: nil, mode: .forward, userAddresses: [],
+            sourceFolder: "INBOX", now: clock
+        )
+        XCTAssertNil(draft.replySourceFolder)
+        XCTAssertNil(draft.replySourceUid)
+    }
+
+    func testReplyWithoutSourceFolderCarriesNoCoordinates() {
+        let envelope = makeEnvelope(from: [("bob", "example.com")])
+        let draft = ReplyBuilder.build(
+            from: envelope, body: nil, mode: .reply, userAddresses: [], now: clock
+        )
+        XCTAssertNil(draft.replySourceFolder)
+        XCTAssertNil(draft.replySourceUid)
+    }
+
     // MARK: - Quoting
 
     func testReplyBodyQuotesOriginalWithAttribution() {

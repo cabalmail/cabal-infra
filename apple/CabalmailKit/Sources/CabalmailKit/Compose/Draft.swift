@@ -60,6 +60,15 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
     /// JSON decodes cleanly and the fields stay independently inspectable.
     public var serverUid: UInt32?
     public var serverUidValidity: UInt32?
+    /// Coordinates of the message this draft replies to, so a successful
+    /// send can mark it `\Answered` (the message-list "replied" arrow).
+    /// Only set by reply / reply-all seeds — never forwards — and stored
+    /// as two optionals for the same decode-stability reason as the
+    /// server-draft pair above. Best-effort by design: a UIDVALIDITY reset
+    /// between seeding and sending orphans the pair, and the flag store
+    /// just misses.
+    public var replySourceFolder: String?
+    public var replySourceUid: UInt32?
 
     public init(
         id: UUID = UUID(),
@@ -74,7 +83,9 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
         references: [String] = [],
         composeIntent: ComposeIntent? = nil,
         serverUid: UInt32? = nil,
-        serverUidValidity: UInt32? = nil
+        serverUidValidity: UInt32? = nil,
+        replySourceFolder: String? = nil,
+        replySourceUid: UInt32? = nil
     ) {
         self.id = id
         self.updatedAt = updatedAt
@@ -89,6 +100,8 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
         self.composeIntent = composeIntent
         self.serverUid = serverUid
         self.serverUidValidity = serverUidValidity
+        self.replySourceFolder = replySourceFolder
+        self.replySourceUid = replySourceUid
     }
 
     /// The server coordinates as a `DraftServerRef`, when both halves are

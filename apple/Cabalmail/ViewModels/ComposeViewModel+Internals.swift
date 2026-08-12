@@ -167,7 +167,9 @@ extension ComposeViewModel {
             inReplyTo: inReplyTo,
             references: references,
             serverUid: serverDraftRef?.uid,
-            serverUidValidity: serverDraftRef?.uidValidity
+            serverUidValidity: serverDraftRef?.uidValidity,
+            replySourceFolder: replySourceFolder,
+            replySourceUid: replySourceUid
         )
         try? await draftStore.save(snapshot)
     }
