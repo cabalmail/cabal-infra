@@ -88,6 +88,20 @@ struct EnvelopeFlagChange: Equatable, Sendable {
     let tick: Int
 }
 
+/// Signal payload for a mark-read that should also move the reading pane
+/// (the detail toolbar's mark-read control, whose macOS option menu picks
+/// where to go next). Distinct from `DisposedEnvelope` because the marked
+/// row stays in the list — the observer only advances the selection, it
+/// never prunes, and a missing advance target means "stay put" rather than
+/// "clear the selection". `tick` is monotonic for the usual reason: marking
+/// the same UID read again after an unread round trip must still fire.
+struct ReadAdvanceRequest: Equatable, Sendable {
+    let folderPath: String
+    let uid: UInt32
+    let advance: MarkReadAdvance
+    let tick: Int
+}
+
 /// One message inside a drag payload: the UID plus the mailbox that owns it.
 /// Folder-mode lists collapse to a single source; a cross-folder search
 /// selection can span several, so each item carries its own `sourceFolder`

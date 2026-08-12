@@ -130,25 +130,9 @@ extension MessageDetailView {
         .accessibilityIdentifier("reader.reply")
     }
 
-    @ViewBuilder
-    var seenButton: some View {
-        if let model {
-            Button {
-                Task { await model.toggleSeen() }
-            } label: {
-                // Icon reflects the current state; tap-action is the
-                // inverse. Matches Mail.app: an already-read message
-                // shows "envelope.open" and tapping marks it unread.
-                Image(systemName: model.isSeen ? "envelope.open" : "envelope.badge")
-                    .accessibilityLabel(model.isSeen ? "Mark as unread" : "Mark as read")
-            }
-            // Cmd+Shift+U — Mail.app's mark-unread shortcut. We toggle
-            // both ways from the same chord; the icon labels which
-            // direction the next press goes.
-            .keyboardShortcut("u", modifiers: [.command, .shift])
-            .accessibilityIdentifier("reader.toggleRead")
-        }
-    }
+    // `seenButton` lives in `MessageDetailView+SeenOptions.swift` with the
+    // macOS split-control menu it grew — the same arrangement as
+    // `disposeButton` below.
 
     @ViewBuilder
     var flagButton: some View {

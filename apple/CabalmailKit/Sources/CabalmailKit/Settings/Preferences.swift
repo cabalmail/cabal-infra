@@ -80,6 +80,23 @@ public enum DisposeAdvance: String, Codable, Sendable, CaseIterable, Identifiabl
     public var id: String { rawValue }
 }
 
+/// Which message the reading pane advances to after the user marks the open
+/// message read from the reader's toolbar button (or its macOS option menu).
+///
+/// `.stay` is the historical behavior — mark read, keep reading. The other
+/// three walk the list the same way their `DisposeAdvance` namesakes do; a
+/// separate enum because the sets differ (mark-read can stay put, dispose
+/// can't; dispose can advance to the next message regardless of read state,
+/// which is meaningless after marking the current one read).
+public enum MarkReadAdvance: String, Codable, Sendable, CaseIterable, Identifiable {
+    case stay
+    case nextUnread = "next_unread"
+    case previousUnread = "previous_unread"
+    case firstUnread = "first_unread"
+
+    public var id: String { rawValue }
+}
+
 /// Theme override applied above the system setting.
 public enum AppTheme: String, Codable, Sendable, CaseIterable, Identifiable {
     case system
@@ -180,6 +197,7 @@ public final class Preferences {
         case signature = "cabalmail.prefs.signature"
         case disposeAction = "cabalmail.prefs.dispose_action"
         case disposeAdvance = "cabalmail.prefs.dispose_advance"
+        case markReadAdvance = "cabalmail.prefs.mark_read_advance"
         case theme = "cabalmail.prefs.theme"
         case crashReportingEnabled = "cabalmail.prefs.crash_reporting_enabled"
         case defaultBodyRenderMode = "cabalmail.prefs.default_body_render_mode"
@@ -210,6 +228,11 @@ public final class Preferences {
     /// `.nextUnread`, the behavior from before this was a preference.
     public var disposeAdvance: DisposeAdvance {
         didSet { persist(.disposeAdvance, disposeAdvance.rawValue) }
+    }
+    /// Which message the reader advances to after a manual mark-as-read.
+    /// Defaults to `.stay`, the behavior from before this was a preference.
+    public var markReadAdvance: MarkReadAdvance {
+        didSet { persist(.markReadAdvance, markReadAdvance.rawValue) }
     }
     public var theme: AppTheme {
         didSet { persist(.theme, theme.rawValue) }
@@ -259,6 +282,7 @@ public final class Preferences {
         self.signature = ""
         self.disposeAction = .archive
         self.disposeAdvance = .nextUnread
+        self.markReadAdvance = .stay
         self.theme = .system
         self.crashReportingEnabled = false
         self.defaultBodyRenderMode = .original
@@ -336,6 +360,7 @@ public final class Preferences {
         signature = readString(.signature) ?? ""
         disposeAction = readEnum(.disposeAction, default: .archive)
         disposeAdvance = readEnum(.disposeAdvance, default: .nextUnread)
+        markReadAdvance = readEnum(.markReadAdvance, default: .stay)
         theme = readEnum(.theme, default: .system)
         crashReportingEnabled = readString(.crashReportingEnabled) == "1"
         defaultBodyRenderMode = readEnum(.defaultBodyRenderMode, default: .original)
@@ -400,6 +425,7 @@ public final class Preferences {
         static let signature = "signature"
         static let disposeAction = "dispose_action"
         static let disposeAdvance = "dispose_advance"
+        static let markReadAdvance = "mark_read_advance"
         static let theme = "theme"
         static let crashReportingEnabled = "crash_reporting_enabled"
         static let defaultBodyRenderMode = "default_body_render_mode"
@@ -419,6 +445,7 @@ public final class Preferences {
             AppWireKey.signature: signature,
             AppWireKey.disposeAction: disposeAction.rawValue,
             AppWireKey.disposeAdvance: disposeAdvance.rawValue,
+            AppWireKey.markReadAdvance: markReadAdvance.rawValue,
             AppWireKey.theme: theme.rawValue,
             AppWireKey.crashReportingEnabled: crashReportingEnabled ? "1" : "0",
             AppWireKey.defaultBodyRenderMode: defaultBodyRenderMode.rawValue,
@@ -433,12 +460,8 @@ public final class Preferences {
     public func applyRemote(_ remote: [String: String]) {
         isApplyingRemote = true
         defer { isApplyingRemote = false }
-        if let raw = remote[AppWireKey.markAsRead], let value = MarkAsReadBehavior(rawValue: raw) {
-            markAsRead = value
-        }
-        if let raw = remote[AppWireKey.loadRemoteContent], let value = LoadRemoteContentPolicy(rawValue: raw) {
-            loadRemoteContent = value
-        }
+        applyEnum(remote[AppWireKey.markAsRead], to: \.markAsRead)
+        applyEnum(remote[AppWireKey.loadRemoteContent], to: \.loadRemoteContent)
         if let raw = remote[AppWireKey.defaultFromAddress] {
             // Empty string is the wire encoding for "no default".
             defaultFromAddress = raw.isEmpty ? nil : raw
@@ -446,24 +469,24 @@ public final class Preferences {
         if let raw = remote[AppWireKey.signature] {
             signature = raw
         }
-        if let raw = remote[AppWireKey.disposeAction], let value = DisposeAction(rawValue: raw) {
-            disposeAction = value
-        }
-        if let raw = remote[AppWireKey.disposeAdvance], let value = DisposeAdvance(rawValue: raw) {
-            disposeAdvance = value
-        }
-        if let raw = remote[AppWireKey.theme], let value = AppTheme(rawValue: raw) {
-            theme = value
-        }
+        applyEnum(remote[AppWireKey.disposeAction], to: \.disposeAction)
+        applyEnum(remote[AppWireKey.disposeAdvance], to: \.disposeAdvance)
+        applyEnum(remote[AppWireKey.markReadAdvance], to: \.markReadAdvance)
+        applyEnum(remote[AppWireKey.theme], to: \.theme)
         if let raw = remote[AppWireKey.crashReportingEnabled] {
             crashReportingEnabled = raw == "1"
         }
-        if let raw = remote[AppWireKey.defaultBodyRenderMode], let value = BodyRenderMode(rawValue: raw) {
-            defaultBodyRenderMode = value
-        }
-        if let raw = remote[AppWireKey.folderCountDisplay], let value = FolderCountDisplay(rawValue: raw) {
-            folderCountDisplay = value
-        }
+        applyEnum(remote[AppWireKey.defaultBodyRenderMode], to: \.defaultBodyRenderMode)
+        applyEnum(remote[AppWireKey.folderCountDisplay], to: \.folderCountDisplay)
+    }
+
+    /// One enum-valued `applyRemote` arm: writes `raw` through `property`
+    /// when it decodes, leaves the current value untouched when it doesn't.
+    private func applyEnum<Value: RawRepresentable>(
+        _ raw: String?, to property: ReferenceWritableKeyPath<Preferences, Value>
+    ) where Value.RawValue == String {
+        guard let raw, let value = Value(rawValue: raw) else { return }
+        self[keyPath: property] = value
     }
 }
 

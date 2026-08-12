@@ -25,8 +25,14 @@ use cabalmail_kit::config::{Key, Kind, Scope, Wire};
 ///
 /// `dispose_advance` steers which message the Apple readers select after a
 /// dispose; this client has no after-dispose auto-advance, so it neither
-/// reads nor sends the key.
-const DELIBERATELY_UNSUPPORTED: &[&str] = &["crash_reporting_enabled", "dispose_advance"];
+/// reads nor sends the key. `mark_read_advance` is its mark-as-read twin
+/// (where the Apple readers go after the toolbar's mark-read) and is
+/// unsupported for the same reason.
+const DELIBERATELY_UNSUPPORTED: &[&str] = &[
+    "crash_reporting_enabled",
+    "dispose_advance",
+    "mark_read_advance",
+];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
