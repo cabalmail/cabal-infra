@@ -1,4 +1,6 @@
 import XCTest
+import CoreSpotlight
+import UniformTypeIdentifiers
 @testable import CabalmailKit
 
 /// Records every `SearchableIndexing` operation for assertions. An actor so
@@ -95,6 +97,57 @@ final class SpotlightIndexerTests: XCTestCase {
             textContent: "  line one\n\n\tline   two  "
         )
         XCTAssertEqual(entry.contentDescription, "line one line two")
+    }
+
+    // MARK: - CSSearchableItem mapping
+
+    /// Regression guards for two empirically painful platform behaviors:
+    /// macOS routes email-typed results to Apple Mail regardless of
+    /// CoreSpotlightContinuation, and iOS 17+ hides items whose attribute
+    /// set lacks `displayName`. See `SpotlightEntry.searchableItem()`.
+    func testSearchableItemAvoidsMailRoutedContentTypes() {
+        let item = SpotlightEntry(envelope: envelope(uid: 1, subject: "Hi"), folder: "INBOX")
+            .searchableItem()
+        let contentType = item.attributeSet.contentType
+        XCTAssertNotEqual(contentType, UTType.emailMessage.identifier)
+        XCTAssertNotEqual(contentType, UTType.message.identifier)
+        XCTAssertEqual(contentType, UTType.text.identifier)
+    }
+
+    func testSearchableItemSetsDisplayNameAndDefaultExpiration() {
+        let item = SpotlightEntry(envelope: envelope(uid: 1, subject: "Hi"), folder: "INBOX")
+            .searchableItem()
+        XCTAssertEqual(item.attributeSet.displayName, "Hi")
+        XCTAssertEqual(item.attributeSet.title, "Hi")
+        // `.distantFuture` has a history of making items invisible; the
+        // default expiry (refreshed by the session sweep) must stand.
+        XCTAssertNotEqual(item.expirationDate, .distantFuture)
+    }
+
+    // MARK: - Schema migration
+
+    func testFirstSweepWipesIndexOnceForSchemaChange() async throws {
+        let suiteName = "spotlight-tests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let indexer = SpotlightIndexer(index: fake, defaults: defaults)
+        let imap = SweepFakeImapClient(folders: [], envelopesByFolder: [:])
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cabalmail-spotlight-schema-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let cache = try EnvelopeCache(directory: tempDir)
+
+        await indexer.sweep(imap: imap, envelopeCache: cache)
+        var wipes = await fake.deleteAllCount
+        XCTAssertEqual(wipes, 1)
+        XCTAssertEqual(
+            defaults.integer(forKey: "cabalmail.spotlight.schemaVersion"),
+            SpotlightIndexer.schemaVersion
+        )
+
+        await indexer.sweep(imap: imap, envelopeCache: cache)
+        wipes = await fake.deleteAllCount
+        XCTAssertEqual(wipes, 1, "marker persisted; second sweep must not wipe again")
     }
 
     // MARK: - Subscription gating

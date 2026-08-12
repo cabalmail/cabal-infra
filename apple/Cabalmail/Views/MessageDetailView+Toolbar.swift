@@ -130,25 +130,9 @@ extension MessageDetailView {
         .accessibilityIdentifier("reader.reply")
     }
 
-    @ViewBuilder
-    var seenButton: some View {
-        if let model {
-            Button {
-                Task { await model.toggleSeen() }
-            } label: {
-                // Icon reflects the current state; tap-action is the
-                // inverse. Matches Mail.app: an already-read message
-                // shows "envelope.open" and tapping marks it unread.
-                Image(systemName: model.isSeen ? "envelope.open" : "envelope.badge")
-                    .accessibilityLabel(model.isSeen ? "Mark as unread" : "Mark as read")
-            }
-            // Cmd+Shift+U — Mail.app's mark-unread shortcut. We toggle
-            // both ways from the same chord; the icon labels which
-            // direction the next press goes.
-            .keyboardShortcut("u", modifiers: [.command, .shift])
-            .accessibilityIdentifier("reader.toggleRead")
-        }
-    }
+    // `seenButton` lives in `MessageDetailView+SeenOptions.swift` with the
+    // macOS split-control menu it grew — the same arrangement as
+    // `disposeButton` below.
 
     @ViewBuilder
     var flagButton: some View {
@@ -209,32 +193,9 @@ extension MessageDetailView {
         }
     }
 
-    @ViewBuilder
-    var disposeButton: some View {
-        if let model {
-            let intent = model.disposeIntent
-            Button(role: intent.isDestructive ? .destructive : nil) {
-                switch intent {
-                case .purge:
-                    // In Trash, delete means gone forever — confirm first.
-                    purgeConfirmPresented = true
-                case .restore:
-                    Task { await performMove(to: FolderTree.inboxPath) }
-                case .move(let action):
-                    Task { await performDispose(model: model, action: action) }
-                }
-            } label: {
-                disposeToolbarLabel(for: intent)
-            }
-            // Cmd+Delete — the same chord Mail.app and most macOS list
-            // apps bind to "remove from list." Routes through dispose so
-            // it follows the user's Archive/Trash preference rather than
-            // hard-coding one or the other. In Trash the chord stages the
-            // delete-forever confirmation instead of acting directly.
-            .keyboardShortcut(.delete, modifiers: .command)
-            .accessibilityIdentifier("reader.dispose")
-        }
-    }
+    // `disposeButton` lives in `MessageDetailView+DisposeOptions.swift`
+    // with the macOS split-control menu it grew — keeping it here would
+    // push this file past SwiftLint's file_length cap.
 
     /// Overflow-menu item for whichever dispose destination the toolbar
     /// button does NOT cover: preference says Archive, the menu offers

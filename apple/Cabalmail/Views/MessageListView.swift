@@ -484,21 +484,39 @@ extension MessageListView {
         }
         .onChange(of: appState.lastDisposedEnvelope) { _, signal in
             // Detail view archived / trashed the current message. Advance
-            // the split-view selection to the next unread envelope (so the
-            // user can keep triaging without bouncing back to the list),
-            // then prune the matching row so it disappears immediately.
-            // Other folders ignore the signal.
+            // the split-view selection per the user's after-dispose
+            // preference (so the user can keep triaging without bouncing
+            // back to the list), then prune the matching row so it
+            // disappears immediately. Other folders ignore the signal.
             guard let signal, signal.folderPath == folder.path else { return }
             let current = model?.envelopes.first { $0.uid == signal.uid }
-            // Compute the advance target before pruning - `nextUnreadEnvelope`
-            // walks from `current`'s index, which disappears once it's pruned.
-            let next = current.flatMap { model?.nextUnreadEnvelope(after: $0) }
+            // Compute the advance target before pruning - every advance
+            // policy walks from `current`'s index, which disappears once
+            // it's pruned.
+            let next = current.flatMap {
+                model?.advanceTarget(after: $0, following: preferences.disposeAdvance)
+            }
             model?.pruneEnvelope(uid: signal.uid)
             if isWideLayout {
                 // Wide layouts drive the reading pane off `selectedUIDs`;
                 // advancing the set re-derives `selection` via the list's
                 // `.onChange(of: selectedUIDs)` below.
                 model?.selectedUIDs = next.map { [$0.uid] } ?? []
+            } else {
+                selection = next
+            }
+        }
+        .onChange(of: appState.lastReadAdvanceRequest) { _, signal in
+            // Detail view marked the current message read with a move-to
+            // option. Advance the selection like the dispose handler above,
+            // but never prune (the row is still here, just read now) and
+            // never clear the selection — no candidate means stay put.
+            guard let signal, signal.folderPath == folder.path else { return }
+            guard let current = model?.envelopes.first(where: { $0.uid == signal.uid }),
+                  let next = model?.markReadAdvanceTarget(after: current, following: signal.advance)
+            else { return }
+            if isWideLayout {
+                model?.selectedUIDs = [next.uid]
             } else {
                 selection = next
             }

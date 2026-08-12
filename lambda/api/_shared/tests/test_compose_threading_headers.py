@@ -151,6 +151,46 @@ class ComposeThreadingHeadersTest(unittest.TestCase):
         self.assertEqual(msg['In-Reply-To'], '<parent@example.com>')
         self.assertEqual(msg['References'], '<gramps@example.com> <parent@example.com>')
 
+    def test_string_threading_header_is_rejected(self):
+        # The tester's payload (#1013): a bare string where a one-element list
+        # belongs. It used to compose Message-Id: '<' -- the string's first
+        # character -- which /send then claimed as a dedupe key shared by
+        # every such request, silently discarding all but the first.
+        for field in ('message_id', 'in_reply_to', 'references'):
+            with self.subTest(field=field):
+                with self.assertRaises(ValueError) as caught:
+                    compose.compose_from_body(
+                        _body(other_headers={field: '<a-1@example.com>'}), 'testuser')
+                self.assertIn(f'other_headers.{field}', str(caught.exception))
+
+    def test_no_payload_composes_a_threading_header_the_caller_did_not_supply(self):
+        # The invariant behind the case above: whatever shape arrives, a
+        # composed message either carries a header the caller actually sent or
+        # carries none -- never a fragment of one.
+        shapes = ('<a@example.com>', 123, {'0': '<a@example.com>'},
+                  ['<a@example.com>', 7], [None])
+        for shape in shapes:
+            for field, header in (('message_id', 'Message-Id'),
+                                  ('in_reply_to', 'In-Reply-To'),
+                                  ('references', 'References')):
+                with self.subTest(shape=shape, field=field):
+                    body = _body(other_headers={field: shape})
+                    try:
+                        msg = compose.compose_from_body(body, 'testuser')
+                    except ValueError:
+                        continue
+                    supplied = [s for s in shape if isinstance(s, str)] \
+                        if isinstance(shape, list) else []
+                    allowed = {None, ' '.join(supplied), *supplied}
+                    self.assertIn(msg[header], allowed)
+
+    def test_non_object_other_headers_is_rejected(self):
+        # `others.get(...)` on a string is an AttributeError, i.e. the
+        # bodiless 502 the shape checks exist to prevent (#895).
+        with self.assertRaises(ValueError) as caught:
+            compose.compose_from_body(_body(other_headers='<a-1@example.com>'), 'testuser')
+        self.assertIn('other_headers', str(caught.exception))
+
     def test_header_injection_is_still_rejected(self):
         with self.assertRaises(ValueError):
             compose.compose_from_body(

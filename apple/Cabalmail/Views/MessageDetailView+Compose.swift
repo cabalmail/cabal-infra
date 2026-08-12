@@ -22,7 +22,8 @@ extension MessageDetailView {
                 from: model?.threadedEnvelope ?? envelope,
                 body: model?.plainText,
                 mode: mode,
-                userAddresses: addresses
+                userAddresses: addresses,
+                sourceFolder: folder.path
             )
             if mode == .forward {
                 stashForwardAttachments(for: seed)

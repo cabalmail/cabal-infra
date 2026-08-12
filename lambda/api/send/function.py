@@ -89,16 +89,11 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
     message_id = msg['Message-Id']
 
     # Idempotency: claim the Message-Id before SMTP so a retried /send (e.g. the
-    # client never saw our response) cannot deliver twice. A duplicate claim
-    # means we already delivered this exact message; report success so the
-    # client stops retrying.
+    # client never saw our response) cannot deliver twice. What a duplicate
+    # claim is worth depends on whether that earlier attempt ever reported a
+    # delivery - see _duplicate_response.
     if message_id and not _claim_send(message_id):
-        return {
-            "statusCode": 200,
-            "body": json.dumps({
-                "status": "submitted"
-            })
-        }
+        return _duplicate_response(message_id)
 
     # Everything between the claim and a confirmed handoff runs under the
     # claim, so anything that raises in here has to take the claim with it:
@@ -138,8 +133,14 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
             _release_send(message_id)
         return return_from_send
 
-    # Delivered. Queue the Bcc-free Sent copy (best effort; a queue failure here
-    # loses only the Sent record, not the delivery).
+    # Delivered. Stamp the claim so a duplicate arriving inside the window can
+    # be told the message really went out; a bare claim proves only that some
+    # attempt started (#1019).
+    if message_id:
+        _confirm_send(message_id)
+
+    # Queue the Bcc-free Sent copy (best effort; a queue failure here loses
+    # only the Sent record, not the delivery).
     _queue_sent_copy(sent_copy, body['host'], user, message_id)
 
     # Send-from-draft cleanup (best effort, same spirit as the Sent copy):
@@ -251,15 +252,25 @@ def _queue_sent_copy(msg, _host, user, message_id):
 
 def _claim_send(message_id):
     '''Conditionally claims a Message-Id in the dedupe table. Returns True if it
-    was newly claimed, False if a claim already exists. Fails OPEN (returns True)
-    on any non-conditional error so a dedupe-store hiccup never blocks a send.'''
+    was newly claimed or the prior claim has expired, False while a live claim
+    exists. Fails OPEN (returns True) on any non-conditional error so a
+    dedupe-store hiccup never blocks a send.
+
+    The condition compares `expires_at` rather than trusting DynamoDB to have
+    reaped the row: TTL deletion is best-effort (AWS documents it as typically
+    within 48 hours), so an existence-only check made the claim block for as
+    long as the row physically survived instead of the SEND_DEDUPE_TTL the
+    constant advertises - measured at 192 s past expiry on stage (#1018).'''
+    now = int(time.time())
     try:
         _dedupe_table.put_item(
             Item={
                 'pk': f'senddedupe#{message_id}',
-                'expires_at': int(time.time()) + SEND_DEDUPE_TTL,
+                'expires_at': now + SEND_DEDUPE_TTL,
             },
-            ConditionExpression='attribute_not_exists(pk)'
+            ConditionExpression='attribute_not_exists(pk) OR #e < :now',
+            ExpressionAttributeNames={'#e': 'expires_at'},
+            ExpressionAttributeValues={':now': now}
         )
         return True
     except ClientError as err:
@@ -267,6 +278,71 @@ def _claim_send(message_id):
             return False
         print(f'[send-dedupe] WARN claim failed, proceeding: {err}')
         return True
+
+
+def _duplicate_response(message_id):
+    '''Answers a request whose Message-Id is already claimed.
+
+    Only a claim carrying the delivery marker proves the message went out.
+    A claim without one is either still in flight or was orphaned by a
+    handler that died mid-send (#909), and answering it with the same 200
+    "submitted" a real delivery gets makes the two indistinguishable: the
+    Apple SendQueue read that as proof and deleted the queued message
+    without anything having been delivered (#1019). So an unconfirmed claim
+    gets a 409 instead - the message is neither sent nor failed, and the
+    client must keep it and retry once the claim clears (<= SEND_DEDUPE_TTL).'''
+    if _claim_confirmed(message_id):
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "status": "submitted",
+                "duplicate": True
+            })
+        }
+    return {
+        "statusCode": 409,
+        "body": json.dumps({
+            "status": "duplicate_in_flight",
+            "message": "An earlier submission of this message is still in flight."
+        })
+    }
+
+
+def _claim_confirmed(message_id):
+    '''True when the live claim on this Message-Id carries the marker
+    _confirm_send writes after the relay accepts the message.
+
+    Fails CLOSED (returns False) on a read error: an unreadable claim is one
+    we cannot prove delivered, and telling the client to retry costs at worst
+    a duplicate once the claim expires - the same at-least-once bet the
+    release-on-failure path already makes.'''
+    try:
+        response = _dedupe_table.get_item(
+            Key={'pk': f'senddedupe#{message_id}'},
+            ConsistentRead=True
+        )
+    except ClientError as err:
+        print(f'[send-dedupe] WARN claim read failed, treating as unconfirmed: {err}')
+        return False
+    return bool((response.get('Item') or {}).get('delivered'))
+
+
+def _confirm_send(message_id):
+    '''Marks a claim delivered so a later duplicate can be told the truth.
+
+    Best effort: a failure here only costs the duplicate a 409 and another
+    retry, never a delivery. The attribute is aliased because a reserved-word
+    ValidationException would land in the except below and disable the marker
+    silently (#1018).'''
+    try:
+        _dedupe_table.update_item(
+            Key={'pk': f'senddedupe#{message_id}'},
+            UpdateExpression='SET #d = :true',
+            ExpressionAttributeNames={'#d': 'delivered'},
+            ExpressionAttributeValues={':true': True}
+        )
+    except ClientError as err:
+        print(f'[send-dedupe] WARN delivery marker failed: {err}')
 
 
 def _release_send(message_id):

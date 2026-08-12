@@ -55,6 +55,16 @@ COMPOSE_REQUIRED_FIELDS = ('sender', 'subject', 'to_list', 'cc_list',
 # the failure is a TypeError rather than a rejected payload (#909).
 RECIPIENT_LIST_FIELDS = ('to_list', 'cc_list', 'bcc_list')
 
+# The other_headers keys the composer indexes and joins. Same reasoning as
+# RECIPIENT_LIST_FIELDS, with a worse failure: a string here passes every
+# presence and CR/LF check (the injection validator iterates it character by
+# character, and each single character is clean), then `[0]` degenerates the
+# composed Message-Id to the string's first character. /send claims that
+# header as its dedupe key, so every string-shaped request claims the same
+# key and each one after the first is silently discarded behind a
+# 200 "submitted" (#1013).
+THREADING_LIST_FIELDS = ('message_id', 'in_reply_to', 'references')
+
 # The user's display-name preference (set via /set_preferences) becomes the
 # From header's display name. It is read server-side - never from the request
 # body - so a client cannot put an arbitrary name on the wire per message.
@@ -202,6 +212,7 @@ def compose_from_body(body, user):
     bucket = CACHE_BUCKET
     require_fields(body, COMPOSE_REQUIRED_FIELDS)
     require_list_fields(body, RECIPIENT_LIST_FIELDS)
+    require_other_header_lists(body)
     validate_outbound_headers(body)
     attachments = load_attachments(body.get('attachments', []), bucket, user)
     # The visible From may carry the user's display-name preference, but the
@@ -265,20 +276,46 @@ def require_list_fields(body, fields):
     up in /send's `getaddresses((body['to_list'] or []) + ...)` with a
     TypeError, which escaped as a bodiless 502 (#909). It is a client error,
     so it gets the same named 400 every other rejected payload gets.
-
-    `None` is deliberately allowed: the composer and the header validator both
-    read these as `... or []`, so a null list is an accepted payload meaning
-    "no recipients in this field" (#895).
     """
     for field in fields:
-        value = body.get(field)
-        if value is None:
-            continue
-        if not isinstance(value, list):
-            raise ValueError(f"{field} must be a list of addresses")
-        for entry in value:
-            if not isinstance(entry, str):
-                raise ValueError(f"{field} must contain only address strings")
+        _require_string_list(body.get(field), field, 'addresses', 'address')
+
+
+def require_other_header_lists(body):
+    """Raises ValueError naming an other_headers field with the wrong shape.
+
+    The threading headers get the same shape check the recipient lists got in
+    #909, because they reach a worse place when they are wrong: a bare string
+    Message-Id composes as its own first character and then poisons /send's
+    dedupe key for every later string-shaped request (#1013). Rejecting it as
+    a named 400 puts the threading headers on the same footing as `to_list`.
+
+    `other_headers` itself is read the composer's way (`... or {}`), so an
+    omitted key, `null`, and `{}` all keep meaning "nothing to thread
+    against" (#895); only a present, non-object value is a client error.
+    """
+    others = body.get('other_headers') or {}
+    if not isinstance(others, dict):
+        raise ValueError("other_headers must be an object")
+    for field in THREADING_LIST_FIELDS:
+        _require_string_list(others.get(field), f"other_headers.{field}",
+                             'header values', 'header')
+
+
+def _require_string_list(value, label, plural, singular):
+    """Raises ValueError unless `value` is None or a list of strings.
+
+    `None` is deliberately allowed everywhere this is used: the composer and
+    the header validator both read these as `... or []`, so a null list is an
+    accepted payload meaning "this field carries nothing" (#895).
+    """
+    if value is None:
+        return
+    if not isinstance(value, list):
+        raise ValueError(f"{label} must be a list of {plural}")
+    for entry in value:
+        if not isinstance(entry, str):
+            raise ValueError(f"{label} must contain only {singular} strings")
 
 
 def validate_outbound_headers(body):

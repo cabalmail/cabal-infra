@@ -187,12 +187,28 @@ struct SettingsView: View {
     @ViewBuilder
     private func actionsSection(bindable preferences: Preferences) -> some View {
         @Bindable var preferences = preferences
-        Section("Actions") {
+        Section {
             Picker("Dispose action", selection: $preferences.disposeAction) {
                 Text("Archive").tag(DisposeAction.archive)
                 Text("Trash").tag(DisposeAction.trash)
             }
             .pickerStyle(.segmented)
+            Picker("After disposing", selection: $preferences.disposeAdvance) {
+                Text("Go to next message").tag(DisposeAdvance.next)
+                Text("Go to next unread").tag(DisposeAdvance.nextUnread)
+                Text("Go to previous unread").tag(DisposeAdvance.previousUnread)
+                Text("Go to first unread").tag(DisposeAdvance.firstUnread)
+            }
+            Picker("After marking read", selection: $preferences.markReadAdvance) {
+                Text("Stay here").tag(MarkReadAdvance.stay)
+                Text("Go to next unread").tag(MarkReadAdvance.nextUnread)
+                Text("Go to previous unread").tag(MarkReadAdvance.previousUnread)
+                Text("Go to first unread").tag(MarkReadAdvance.firstUnread)
+            }
+        } header: {
+            Text("Actions")
+        } footer: {
+            Text("Which message the reading pane opens after you archive, delete, or mark read from it.")
         }
     }
 

@@ -8,6 +8,16 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+# The application — the shell, the async bridge, and every widget — is the
+# library; the binary is the entry point that parses a command line and either
+# answers it (`--print-config`, `config set`) or starts the application. The
+# split is what keeps `cargo build` honest about what is reachable: a `pub`
+# helper in a binary-only crate reads as dead code until its first caller, and
+# the bridge's first caller is Phase 3.
+[lib]
+name = "cabalmail_gtk"
+path = "src/lib.rs"
+
 # The crate is `cabalmail-gtk`; the installed binary is `cabalmail`, which is
 # what the man page, the .desktop file, and the CLI (`cabalmail --print-config`)
 # all refer to.
@@ -15,10 +25,19 @@ publish.workspace = true
 name = "cabalmail"
 path = "src/main.rs"
 
-# GTK4, libadwaita, WebKitGTK, and tokio arrive with the application shell
-# (Phase 1, work item 4). `cabalmail-kit` is here already because the
-# configuration CLI — `--print-config`, `config set`, `config reset` — is work
-# item 3, and every bit of it that can be decided without a widget lives in the
-# kit.
 [dependencies]
 cabalmail-kit = { path = "../cabalmail-kit" }
+# The API floor is GTK 4.14 / libadwaita 1.4 — Ubuntu 24.04 LTS. The version
+# features are what enforce it: 4.16-only API does not compile, rather than
+# compiling here on Arch's 4.22 and failing in a packaging container months
+# later.
+gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_4"] }
+# One multi-thread runtime, created at startup and owned by the application.
+# Phase 3's `reqwest` brings the `net` and `time` features with it; nothing here
+# needs them yet.
+tokio = { version = "1", features = ["rt-multi-thread"] }
+async-channel = "2"
+
+[build-dependencies]
+glib-build-tools = "0.22"
