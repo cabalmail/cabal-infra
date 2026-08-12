@@ -41,13 +41,7 @@ regenerate() {
     makemap hash /etc/mail/access.db       < /etc/mail/access
     makemap hash /etc/mail/virtusertable.db < /etc/mail/virtusertable
     # Reassemble aliases (static + dynamic) and rebuild the alias db
-    cat /etc/aliases.static > /etc/aliases
-    if [ -f /etc/aliases.dynamic ]; then
-      echo "" >> /etc/aliases
-      echo "# Dynamic aliases (generated from DynamoDB)" >> /etc/aliases
-      cat /etc/aliases.dynamic >> /etc/aliases
-    fi
-    newaliases
+    /usr/local/bin/assemble-aliases.sh
 
   elif [ "$TIER" = "smtp-in" ]; then
     makemap hash /etc/mail/access.db       < /etc/mail/access
