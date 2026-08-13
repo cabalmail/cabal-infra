@@ -49,18 +49,7 @@ extension MessageDetailViewModel {
                 folder: folder.path,
                 uids: [envelope.uid]
             )
-            let uidValidity = try? await currentUIDValidity()
-            try? await client.envelopeCache.remove(
-                uids: [envelope.uid],
-                folder: folder.path
-            )
-            if let uidValidity {
-                await client.bodyCache.remove(
-                    folder: folder.path,
-                    uidValidity: uidValidity,
-                    uid: envelope.uid
-                )
-            }
+            await pruneCachesAfterMove()
         } catch {
             errorMessage = "\(error)"
             onFailure?(error)
