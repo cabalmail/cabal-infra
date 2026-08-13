@@ -28,7 +28,7 @@ final class SendQueueTests: XCTestCase {
         let sent = SentCounter()
         let queue = SendQueue(outbox: outbox) { _ in await sent.bump() }
         await queue.kickDrain()
-        try await Self.waitUntil { try await outbox.count() == 0 }
+        try await waitUntil { try await outbox.count() == 0 }
         let total = await sent.count
         XCTAssertEqual(total, 2)
     }
@@ -40,7 +40,7 @@ final class SendQueueTests: XCTestCase {
             throw CabalmailError.network("simulated")
         }
         await queue.kickDrain()
-        try await Self.waitUntil {
+        try await waitUntil {
             (try await outbox.list().first?.attempts ?? 0) == 1
         }
         let entries = try await outbox.list()
@@ -55,11 +55,11 @@ final class SendQueueTests: XCTestCase {
             throw CabalmailError.network("always fails")
         }
         await queue.kickDrain()
-        try await Self.waitUntil {
+        try await waitUntil {
             (try await outbox.list().first?.attempts ?? 0) == 1
         }
         await queue.kickDrain()
-        try await Self.waitUntil { (try await outbox.count()) == 0 }
+        try await waitUntil { (try await outbox.count()) == 0 }
         let remaining = try await outbox.count()
         XCTAssertEqual(remaining, 0)
     }
@@ -72,7 +72,7 @@ final class SendQueueTests: XCTestCase {
         let (stream, continuation) = AsyncStream<Bool>.makeStream()
         await queue.bind(reachability: stream)
         continuation.yield(true)
-        try await Self.waitUntil { try await outbox.count() == 0 }
+        try await waitUntil { try await outbox.count() == 0 }
         let total = await sent.count
         XCTAssertEqual(total, 1)
         await queue.stop()
@@ -87,18 +87,6 @@ final class SendQueueTests: XCTestCase {
             subject: subject,
             textBody: "body"
         )
-    }
-
-    /// Polls a condition up to 2 seconds. The queue runs on its own actor
-    /// so tests can't deterministically `await` a drain from the outside —
-    /// polling is the stable idiom for this kind of cross-actor handoff.
-    private static func waitUntil(_ condition: @escaping () async throws -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline {
-            if try await condition() { return }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        XCTFail("condition never met within 2s")
     }
 }
 

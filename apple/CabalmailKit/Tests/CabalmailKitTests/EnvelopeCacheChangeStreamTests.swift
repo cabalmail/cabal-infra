@@ -32,11 +32,7 @@ final class EnvelopeCacheChangeStreamTests: XCTestCase {
             }
         }
         // Events aren't replayed to late subscribers; wait for registration.
-        let deadline = Date().addingTimeInterval(5)
-        while Date() < deadline {
-            if await cache.hasChangeObservers { break }
-            try await Task.sleep(nanoseconds: 5_000_000)
-        }
+        try await waitUntil { await cache.hasChangeObservers }
     }
 
     override func tearDown() async throws {
@@ -48,14 +44,12 @@ final class EnvelopeCacheChangeStreamTests: XCTestCase {
         Envelope(uid: uid, subject: "uid-\(uid)")
     }
 
-    private func waitForEvents(count: Int) async throws -> [EnvelopeCache.ChangeEvent] {
-        let deadline = Date().addingTimeInterval(5)
-        while Date() < deadline {
-            let events = await log.events
-            if events.count >= count { return events }
-            try await Task.sleep(nanoseconds: 5_000_000)
-        }
-        XCTFail("timed out waiting for \(count) events")
+    private func waitForEvents(
+        count: Int,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws -> [EnvelopeCache.ChangeEvent] {
+        try await waitUntil(file: file, line: line) { await self.log.events.count >= count }
         return await log.events
     }
 
