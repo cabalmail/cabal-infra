@@ -291,18 +291,7 @@ final class MessageDetailViewModel {
                 destination: destination,
                 markSeen: !wasSeen
             )
-            let uidValidity = try? await currentUIDValidity()
-            try? await client.envelopeCache.remove(
-                uids: [envelope.uid],
-                folder: folder.path
-            )
-            if let uidValidity {
-                await client.bodyCache.remove(
-                    folder: folder.path,
-                    uidValidity: uidValidity,
-                    uid: envelope.uid
-                )
-            }
+            await pruneCachesAfterMove()
         } catch {
             errorMessage = "\(error)"
             onFailure?(error)
@@ -339,18 +328,7 @@ final class MessageDetailViewModel {
                 uids: [envelope.uid],
                 destination: destination
             )
-            let uidValidity = try? await currentUIDValidity()
-            try? await client.envelopeCache.remove(
-                uids: [envelope.uid],
-                folder: folder.path
-            )
-            if let uidValidity {
-                await client.bodyCache.remove(
-                    folder: folder.path,
-                    uidValidity: uidValidity,
-                    uid: envelope.uid
-                )
-            }
+            await pruneCachesAfterMove()
         } catch {
             errorMessage = "\(error)"
             onFailure?(error)
@@ -375,8 +353,8 @@ final class MessageDetailViewModel {
 // `@MainActor` isolation, inherited by the extension.
 
 // Internal (not `private`) so the move/dispose/purge paths — including the
-// `+Purge` sibling extension — can resolve the folder's UIDVALIDITY for
-// body-cache pruning.
+// `+Purge` sibling extension — can resolve the folder's UIDVALIDITY and
+// prune the message out of the caches.
 extension MessageDetailViewModel {
     func currentUIDValidity() async throws -> UInt32 {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
@@ -384,6 +362,27 @@ extension MessageDetailViewModel {
         }
         let status = try await client.imapClient.status(path: folder.path)
         return status.uidValidity ?? 0
+    }
+
+    /// Cache cleanup once the open message has left `folder` — a confirmed
+    /// dispose, move, or purge. The single-message counterpart to
+    /// `MessageListViewModel.pruneCachesAfter(move:uid:)`. The body cache is
+    /// keyed by UIDVALIDITY, so an unresolvable validity leaves the body
+    /// entry alone rather than guessing at the key; the envelope row goes
+    /// either way.
+    func pruneCachesAfterMove() async {
+        let uidValidity = try? await currentUIDValidity()
+        try? await client.envelopeCache.remove(
+            uids: [envelope.uid],
+            folder: folder.path
+        )
+        if let uidValidity {
+            await client.bodyCache.remove(
+                folder: folder.path,
+                uidValidity: uidValidity,
+                uid: envelope.uid
+            )
+        }
     }
 }
 
