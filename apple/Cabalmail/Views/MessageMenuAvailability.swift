@@ -31,6 +31,30 @@ struct MessageMenuAvailability: Equatable {
     /// fall back to the open message when the list has no selection of its
     /// own — matching `shortcutTargetUIDs`.
     var canActOnSelection: Bool { selectedCount > 0 || hasOpenMessage }
+
+    /// Which surface installs the window-scoped Cmd+Delete equivalent.
+    ///
+    /// The chord can't be a menu item (see `MessageMenuCommands`: an app-wide
+    /// equivalent would fire from the compose window and steal the text
+    /// system's delete-to-line-start), so it rides a window-scoped control —
+    /// and exactly one at a time. Two equivalents in one window leave AppKit
+    /// to pick a winner, which is how an always-on list button silently did
+    /// nothing.
+    var disposeChordHost: DisposeChordHost {
+        if selectedCount > 1 { return .list }
+        if hasOpenMessage { return .reader }
+        return .none
+    }
+}
+
+/// The surface that owns Cmd+Delete right now.
+enum DisposeChordHost: Equatable {
+    /// A multi-selection: the message list disposes the whole set.
+    case list
+    /// One message open in the reading pane, which disposes that message.
+    case reader
+    /// Nothing to dispose, so the chord is installed nowhere.
+    case none
 }
 
 private struct MessageMenuAvailabilityReporter: ViewModifier {
