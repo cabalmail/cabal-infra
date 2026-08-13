@@ -82,7 +82,7 @@ final class SendDuplicateInFlightTests: XCTestCase {
             throw CabalmailError.sendInFlight
         }
         await queue.kickDrain()
-        try await Self.waitUntil {
+        try await waitUntil {
             (try await outbox.list().first?.lastAttemptAt) != nil
         }
         let entries = try await outbox.list()
@@ -105,7 +105,7 @@ final class SendDuplicateInFlightTests: XCTestCase {
         }
         for pass in 1...4 {
             await queue.kickDrain()
-            try await Self.waitUntil { await refusals.count >= pass }
+            try await waitUntil { await refusals.count >= pass }
         }
         let remaining = try await outbox.count()
         XCTAssertEqual(remaining, 1, "the message was dropped while its claim was unresolved")
@@ -120,7 +120,7 @@ final class SendDuplicateInFlightTests: XCTestCase {
             throw CabalmailError.network("simulated")
         }
         await queue.kickDrain()
-        try await Self.waitUntil {
+        try await waitUntil {
             (try await outbox.list().first?.attempts ?? 0) == 1
         }
         let entries = try await outbox.list()
@@ -166,17 +166,6 @@ final class SendDuplicateInFlightTests: XCTestCase {
             textBody: "body",
             messageId: "<claimed@cabalmail.example>"
         )
-    }
-
-    /// Same polling idiom as `SendQueueTests`: the queue runs on its own
-    /// actor, so a drain can't be awaited from the outside.
-    private static func waitUntil(_ condition: @escaping () async throws -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline {
-            if try await condition() { return }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        XCTFail("condition never met within 2s")
     }
 }
 
