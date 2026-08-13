@@ -3,7 +3,7 @@ import {
   Minus, Maximize2, Minimize2, X, Paperclip,
 } from 'lucide-react';
 import './ComposeOverlay.css';
-import { ADDRESS_LIST } from '../../constants';
+import { ADDRESS_LIST, ANSWERED } from '../../constants';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
@@ -181,6 +181,7 @@ function ComposeOverlay({
   type,
   other_headers,
   forward_attachments,
+  reply_source,
   smtp_host,
   domains: propDomains,
   stackIndex = 0,
@@ -644,6 +645,19 @@ function ComposeOverlay({
     loadAddresses().catch(() => { /* non-fatal */ });
   }, [loadAddresses]);
 
+  // A reply that has actually left flags the message it answers, so the
+  // replied indicator every client renders (React's reply icon, the Apple
+  // message list) reflects the mailbox rather than which client was used.
+  // Fire-and-forget on the success path: the mail is already away, and a
+  // failed flag costs an indicator, not a message.
+  const markSourceAnswered = useCallback(() => {
+    if (type !== "reply" && type !== "replyAll") return;
+    const { folder: srcFolder, id: srcId } = reply_source || {};
+    if (!srcFolder || !srcId) return;
+    api.setFlag(srcFolder, ANSWERED.imap, ANSWERED.op, [srcId])
+      .catch((err) => console.log(err));
+  }, [api, type, reply_source]);
+
   const handleSend = useCallback(() => {
     const oh = other_headers || {};
     const irt = oh.message_id || [];
@@ -733,6 +747,7 @@ function ComposeOverlay({
     };
 
     uploadAndSend().then(() => {
+      markSourceAnswered();
       setMessage("Email sent", false);
       setSending(false);
       hide();
@@ -742,7 +757,8 @@ function ComposeOverlay({
       console.log(err);
     });
   }, [other_headers, effectiveSmtpHost, recipient, recipientField, To, CC, BCC, Subject, address, addresses,
-      editor, markdownContent, attachments, api, hide, setMessage, addRecipient, randomString]);
+      editor, markdownContent, attachments, api, hide, setMessage, addRecipient, randomString,
+      markSourceAnswered]);
 
   // Close-without-send: match the Apple compose flow and always attempt a
   // final /save_draft (fire-and-forget) so the draft survives the closing

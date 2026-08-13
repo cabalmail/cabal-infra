@@ -1,26 +1,26 @@
 import SwiftUI
 import CabalmailKit
 
-// The reader toolbar's mark-read control and its macOS option menu. A
-// sibling of `MessageDetailView+DisposeOptions.swift` (same split-button
-// pattern, same file-length reasoning).
+// The reader toolbar's mark-read control and its option menu. A sibling
+// of `MessageDetailView+DisposeOptions.swift` (same pattern, same
+// file-length reasoning).
 
 extension MessageDetailView {
-    /// The toolbar's read/unread control. On macOS it is a split button:
-    /// the button face toggles `\Seen` — marking read additionally moves
-    /// the reading pane per the current default, the most recently chosen
-    /// option below, also editable in Settings — and the chevron opens the
-    /// mark-read-and-go-to combinations. The options only apply to an
-    /// unread message (a mark-unread never navigates), so they are disabled
-    /// while the message reads as seen; the control stays a split button in
-    /// both states so it never changes footprint under the pointer. Touch
-    /// (and gaze) platforms keep the plain toggle — a split target this
-    /// small doesn't work under a finger — so their option lives in
-    /// Settings.
+    /// The toolbar's read/unread control: a `Menu` with a primary action
+    /// on every platform. The face toggles `\Seen` — marking read
+    /// additionally moves the reading pane per the current default, the
+    /// most recently chosen option below, also editable in Settings — and
+    /// the menu opens the mark-read-and-go-to combinations. macOS renders
+    /// it as a split button with a chevron segment; the touch and gaze
+    /// platforms render the plain toggle they had before, with the same
+    /// menu on touch-and-hold (pinch-and-hold on visionOS) — a hidden
+    /// accelerator, so Settings stays the discoverable route. The options
+    /// only apply to an unread message (a mark-unread never navigates), so
+    /// they are disabled while the message reads as seen; the control's
+    /// footprint never changes between the two states.
     @ViewBuilder
     var seenButton: some View {
         if let model {
-            #if os(macOS)
             Menu {
                 seenOptionItems(model: model)
             } label: {
@@ -28,22 +28,13 @@ extension MessageDetailView {
             } primaryAction: {
                 runToggleSeen(model: model)
             }
-            .menuIndicator(.visible)
-            // Cmd+Shift+U — Mail.app's mark-unread shortcut. We toggle
-            // both ways from the same chord; the icon labels which
-            // direction the next press goes.
+            .menuIndicator(optionMenuIndicator)
+            // Cmd+Shift+U — Mail.app's mark-unread shortcut, also live on
+            // iPad/iPhone hardware keyboards. We toggle both ways from the
+            // same chord; the icon labels which direction the next press
+            // goes.
             .keyboardShortcut("u", modifiers: [.command, .shift])
             .accessibilityIdentifier("reader.toggleRead")
-            #else
-            Button {
-                runToggleSeen(model: model)
-            } label: {
-                seenToolbarLabel(isSeen: model.isSeen)
-            }
-            // Cmd+Shift+U for hardware keyboards — see the macOS branch.
-            .keyboardShortcut("u", modifiers: [.command, .shift])
-            .accessibilityIdentifier("reader.toggleRead")
-            #endif
         }
     }
 
@@ -81,8 +72,7 @@ extension MessageDetailView {
         )
     }
 
-    #if os(macOS)
-    /// The chevron menu: mark read × where to go next. Rendered as menu
+    /// The option menu: mark read × where to go next. Rendered as menu
     /// toggles so the row whose option is the button face's current default
     /// carries the native checkmark; choosing a row persists that option —
     /// making it the default and what Settings shows — then marks the open
@@ -115,5 +105,4 @@ extension MessageDetailView {
         case .firstUnread:    return "Move to First Unread"
         }
     }
-    #endif
 }

@@ -208,6 +208,11 @@ struct MessageListView: View {
                 compactList(model: model, visible: visible)
             }
         }
+        // An empty results area is ambiguous on a submit-driven search, so it
+        // says which of the two it is (#1027).
+        .overlay {
+            searchResultsPlaceholder(model: model, visibleRowCount: visible.count)
+        }
         // Search input lives on the search *surface*, not the folder list:
         // `.searchable` on the iPhone search tab (driving the iOS 26 tab-bar
         // morph) and the sidebar field on iPad/macOS — both bind this model's

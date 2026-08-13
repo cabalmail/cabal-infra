@@ -33,6 +33,11 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
     /// in `.task`; `.notDetermined` until then, which is also the state that
     /// makes the first tap ask for access.
     @State private var contactsAuthorization: ContactsAuthorizationStatus = .notDetermined
+    /// True while the user is away in the privacy pane, so coming back
+    /// re-reads authorization and re-snapshots the address book instead of
+    /// leaving the button showing the state they just left to change.
+    @State private var awaitingSettingsReturn = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private var pickerAffordance: ContactsPickerAffordance {
         ContactsPickerAffordance(
@@ -85,6 +90,14 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
         .task {
             contactsAuthorization = await appState.contactsStore.authorizationStatus
         }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, awaitingSettingsReturn else { return }
+            awaitingSettingsReturn = false
+            Task { @MainActor in
+                contactsAuthorization = await appState.contactsStore.authorizationStatus
+                onContactsAccessChanged()
+            }
+        }
     }
 
     /// One tap, four outcomes. Access is requested from here — not only from
@@ -100,7 +113,10 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
                 contactsAuthorization = await appState.contactsStore.authorizationStatus
                 onContactsAccessChanged()
             }
-        case .openSystemSettings:
+        case .openSystemSettings, .shareMoreContacts:
+            // The user leaves the app to change a system setting, so note
+            // that the return trip has to re-read what they chose.
+            awaitingSettingsReturn = true
             ContactsPrivacySettings.open()
         case .noCandidates:
             break

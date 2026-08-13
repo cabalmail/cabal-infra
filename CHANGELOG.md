@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-08-13
+
+### Changed
+- Apple: **Reader option menus on touch-and-hold.** The reading pane's
+  dispose and mark-read controls now carry their option menus on iOS,
+  iPadOS, and visionOS too: tap runs the default as before, and
+  touch-and-hold (pinch-and-hold on visionOS) opens the same
+  Archive/Delete × after-dispose and mark-read-and-go-to menus the macOS
+  split buttons offer, checkmarked default included — the same idiom as
+  holding Mail's own trash button. The buttons look and act unchanged on
+  a plain tap, and the Settings pickers remain the discoverable route.
+
+### Fixed
+- Apple: **Compose Contacts buttons under limited Contacts access.** When
+  Contacts is granted for a chosen subset of the address book and nothing in
+  that subset has an email address, the buttons beside To / Cc / Bcc went inert
+  and read "No contacts with email addresses to pick from" — a statement about
+  the device that was false, on a phone full of contacts the app simply had not
+  been shown, with no way forward from compose. They now stay live, say that
+  only the shared contacts are visible, and open the privacy pane where the
+  selection is widened. Coming back re-reads the selection, so the pickers arm
+  themselves without a relaunch.
+- **Search finds a word whatever capitalization it was written in.** The
+  full-text index stored each word with its original casing while the search
+  side also tried the query lowercased, so the two only ever met for words
+  written all-lowercase or in Title case. A word in ALL CAPS (`OTP`, `AWS`, a
+  shouty subject, a ticket prefix) was unreachable by any query casing, and a
+  word with a capital inside it (`PayPal`) only by retyping it exactly — in
+  subjects and bodies alike, and silently, as an empty result rather than an
+  error. Terms are now folded to lowercase on the way into the index. Mail
+  already indexed keeps the old terms until the index is rebuilt; the operator
+  step is in `docs/operations.md`.
+- Apple: **Readable mail domain in the Create Address sheet.** On iPhone the
+  domain menu was squeezed down to a single character and an ellipsis by the
+  username and subdomain fields beside it, hiding which of the configured mail
+  domains a new address would use — and hiding it exactly when domains differ
+  only in their ending. The domain is now sized before the two fields share
+  what is left.
+- **A reply sent from the web client marks the message it answers.** The
+  answered state was recorded only by the native clients, so a reply written in
+  the browser left the original reading as unanswered — in the web client's own
+  message list and on every other device. Sending a reply or reply-all from the
+  browser now records it where the mailbox keeps it, so the replied indicator
+  agrees wherever the message is read.
+- Apple: **A typed-but-unsubmitted search no longer looks like "no matches".**
+  Search runs when you press Return, but until then the results area went
+  blank — indistinguishable from a search that had run and found nothing, even
+  though the matching message was there the whole time. A typed term now says
+  "Press Return to search", and a search that really did come back empty says
+  so and names the term.
+
 ## [1.2.0] - 2026-08-12
 
 ### Added

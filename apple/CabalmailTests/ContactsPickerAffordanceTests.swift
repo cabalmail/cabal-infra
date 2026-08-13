@@ -35,12 +35,46 @@ final class ContactsPickerAffordanceTests: XCTestCase {
         XCTAssertEqual(affordance(.authorized, hasCandidates: false), .noCandidates)
     }
 
+    // MARK: - Limited access (#1030)
+
+    /// A `.limited` grant with nothing shared used to land on `.noCandidates`,
+    /// which claims the address book is empty — false on a device holding
+    /// contacts the user simply hasn't shared — and left the button inert.
+    func testLimitedWithNothingSharedOffersToShareRatherThanClaimingAnEmptyBook() {
+        XCTAssertEqual(affordance(.limited, hasCandidates: false), .shareMoreContacts)
+        XCTAssertNotEqual(affordance(.limited, hasCandidates: false), .noCandidates)
+    }
+
+    func testTheShareMoreStateIsLiveAndLeadsSomewhere() {
+        let state = affordance(.limited, hasCandidates: false)
+        XCTAssertTrue(state.isEnabled)
+        XCTAssertEqual(state.tintOpacity, 1, accuracy: 0.001)
+    }
+
+    /// The hint is the whole point: it has to describe the grant, not the
+    /// device, and name the way out.
+    func testTheShareMoreHintBlamesTheGrantAndNamesTheWayOut() {
+        let hint = affordance(.limited, hasCandidates: false).hint(for: "To")
+        XCTAssertTrue(hint.contains("shared"), hint)
+        XCTAssertTrue(hint.contains("Privacy settings"), hint)
+        XCTAssertFalse(hint.contains("No contacts with email addresses"), hint)
+    }
+
+    /// Full authorization is the only state where "there is nothing here"
+    /// is a claim we can make about the device.
+    func testOnlyFullAccessCanReportAnEmptyAddressBook() {
+        for status in [ContactsAuthorizationStatus.limited, .notDetermined, .denied, .restricted] {
+            XCTAssertNotEqual(affordance(status, hasCandidates: false), .noCandidates, "\(status)")
+        }
+    }
+
     // MARK: - Enabled controls look enabled, inert ones look inert
 
     func testOnlyTheNoCandidatesStateIsDisabled() {
         XCTAssertTrue(affordance(.authorized, hasCandidates: true).isEnabled)
         XCTAssertTrue(affordance(.notDetermined, hasCandidates: false).isEnabled)
         XCTAssertTrue(affordance(.denied, hasCandidates: false).isEnabled)
+        XCTAssertTrue(affordance(.limited, hasCandidates: false).isEnabled)
         XCTAssertFalse(affordance(.authorized, hasCandidates: false).isEnabled)
     }
 
@@ -53,8 +87,9 @@ final class ContactsPickerAffordanceTests: XCTestCase {
     }
 
     func testEveryStateThatLooksLiveHasSomethingToDo() {
-        let states: [ContactsPickerAffordance] = [.pick, .requestAccess, .openSystemSettings, .noCandidates]
-        for state in states {
+        // `allCases`, not a hand-written list, so a state added later can't
+        // slip past this invariant the way `.shareMoreContacts` would have.
+        for state in ContactsPickerAffordance.allCases {
             XCTAssertEqual(
                 state.isEnabled,
                 state.tintOpacity == 1,

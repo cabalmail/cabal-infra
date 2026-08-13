@@ -206,6 +206,13 @@ struct NewAddressSheet: View {
                 }
             }
             .labelsHidden()
+            // The two text fields are greedy: without this the row hands them
+            // its width first and the domain gets the remainder, which on a
+            // phone collapses `cabal-mail.com` to `c…` — truncating away
+            // exactly the characters that distinguish one configured domain
+            // from another. The domain is a choice, not free text, so it is
+            // sized first and the fields share what's left.
+            .layoutPriority(1)
             .disabled(isLoadingDomains || noDomainsAvailable)
         }
     }

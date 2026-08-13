@@ -96,6 +96,20 @@ doveadm fts rescan -u "$USERNAME"
 
 `doveadm fts rescan` queues the rebuild; the actual indexing runs on the next mailbox access (or immediately if `doveadm index -u $USER '*'` is run afterwards). On a multi-gigabyte mailbox the indexer burns CPU and EFS throughput for several minutes per user. Run during off hours.
 
+## Rebuilding after a tokenizer or filter change
+
+`doveadm fts rescan` only indexes messages the index has never seen: it compares the mailbox against the index and reindexes what is *missing*. A change to `fts_tokenizers` or `fts_filters` in [`90-fts.conf`](../docker/imap/configs/dovecot/90-fts.conf) changes the terms a message would be stored under, but every message is still present in the index, so a rescan is a no-op and old mail stays searchable only under the old terms. New mail arriving after the roll picks up the new terms, which is what makes this easy to miss — recent mail behaves, older mail does not.
+
+To rebuild for real, delete each mailbox's index and then run the backfill above. From inside an `imap` task, per user:
+
+```bash
+find "/home/$USERNAME/Maildir" -type d -name '.fts' -exec rm -rf {} +
+doveadm fts rescan -u "$USERNAME"
+doveadm index -u "$USERNAME" '*'
+```
+
+The index directories hold flatcurve's Xapian databases (`index.*` / `current.*`) and are derived data — deleting them loses no mail, only search coverage until the reindex finishes. Budget the same CPU and EFS throughput as a first-light backfill, and see the throughput note below.
+
 ## EFS throughput during a rescan
 
 Reindexing is small-file-heavy. If a backfill saturates the filesystem, raise `provisioned_throughput_in_mibps` in [`terraform/infra/modules/efs/main.tf`](../terraform/infra/modules/efs/main.tf) for the duration of the rescan and roll it back once the per-user `.fts/` directories stop growing. The plan's expectation is that the steady-state footprint sits well inside whatever throughput the mail tier already needs, so this is a rollout-window concern only.
