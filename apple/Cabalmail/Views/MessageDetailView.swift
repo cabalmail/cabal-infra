@@ -155,6 +155,9 @@ struct MessageDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         #endif
         .toolbar { toolbarContent }
+        // Window-scoped Cmd+Delete, hosted where the toolbar can't evict it
+        // (see `disposeChordHost`).
+        .background { disposeChordHost }
         #if os(iOS)
         // Pins the action set to the reading pane on iOS 27 at regular width.
         // Inert (empty content) everywhere else, so compact iPhone and iOS 26

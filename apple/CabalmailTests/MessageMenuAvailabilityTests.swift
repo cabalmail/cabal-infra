@@ -40,4 +40,57 @@ final class MessageMenuAvailabilityTests: XCTestCase {
         XCTAssertTrue(availability.canReply)
         XCTAssertTrue(availability.canActOnSelection)
     }
+
+    // MARK: - Cmd+Delete ownership (#1047)
+
+    // The chord used to ride the reader's dispose toolbar button. AppKit
+    // collapses the trailing items of a crowded toolbar into its own overflow
+    // popup — below ~1300pt of window width that is exactly the dispose button
+    // — and the key equivalent went with it, so Cmd+Delete became a silent
+    // no-op. It now rides a hidden button, and these are the rules deciding
+    // which surface installs it.
+
+    func testTheReaderOwnsTheChordForTheMessageItHasOpen() {
+        let availability = MessageMenuAvailability(selectedCount: 1, hasOpenMessage: true)
+        XCTAssertEqual(availability.disposeChordHost, .reader)
+    }
+
+    func testTheListOwnsTheChordForAMultiSelection() {
+        // 2+ rows: the reading pane shows the count placeholder, not a message.
+        let availability = MessageMenuAvailability(selectedCount: 4, hasOpenMessage: false)
+        XCTAssertEqual(availability.disposeChordHost, .list)
+    }
+
+    func testNothingToDisposeInstallsTheChordNowhere() {
+        XCTAssertEqual(MessageMenuAvailability.none.disposeChordHost, .none)
+    }
+
+    // The invariant the comments have been carrying since the always-on list
+    // button silently did nothing: never two hosts at once, in any state.
+    func testExactlyOneSurfaceEverOwnsTheChord() {
+        for selectedCount in 0...5 {
+            for hasOpenMessage in [true, false] {
+                let availability = MessageMenuAvailability(
+                    selectedCount: selectedCount,
+                    hasOpenMessage: hasOpenMessage
+                )
+                let host = availability.disposeChordHost
+                XCTAssertEqual(
+                    host == .list, selectedCount > 1,
+                    "list host disagrees with the multi-selection rule at \(selectedCount)"
+                )
+                XCTAssertEqual(
+                    host == .reader, selectedCount <= 1 && hasOpenMessage,
+                    "reader host disagrees with the open-message rule at \(selectedCount)"
+                )
+            }
+        }
+    }
+
+    // A multi-selection on compact iPhone keeps the list as host even though a
+    // message can also be open behind the selection.
+    func testAMultiSelectionOutranksAnOpenMessage() {
+        let availability = MessageMenuAvailability(selectedCount: 3, hasOpenMessage: true)
+        XCTAssertEqual(availability.disposeChordHost, .list)
+    }
 }
