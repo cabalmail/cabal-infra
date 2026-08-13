@@ -93,6 +93,11 @@ struct MailRootView: View {
     /// Live width of the whole split view, read via `.onGeometryChange`, used to
     /// clamp the list column so the reading pane always keeps a minimum width.
     @State private var splitWidth: CGFloat = 0
+    /// Live width of the detail (reading pane) column, read the same way. The
+    /// toolbar search field is sized against it — a toolbar item is laid out
+    /// outside its column's clip, so an item wider than the column overhangs
+    /// into the neighbouring one instead of being cut.
+    @State private var detailColumnWidth: CGFloat = 0
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     /// Drives the cross-client cursor reconcile: returning to the foreground
@@ -404,7 +409,7 @@ struct MailRootView: View {
         #else
         .inspector(isPresented: $addressInspectorPresented) {
             AddressListView(externalFilter: $addressListFilter)
-                .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
+                .addressInspectorWidth()
         }
         #endif
     }
@@ -541,6 +546,14 @@ extension MailRootView {
                 #endif
             }
         }
+        // The search field sizes itself against this column (see
+        // `ToolbarSearchFieldWidth`); a toolbar item can't measure its own
+        // pane, so the pane measures itself here.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { newWidth in
+            detailColumnWidth = newWidth
+        }
         // Global search rides the reading pane's toolbar on wide layouts (its
         // former home was the sidebar top). `.primaryAction` right-aligns it
         // above the detail column. Compact iPhone (no `isWideSidebar`) reaches
@@ -593,13 +606,18 @@ extension MailRootView {
         )
     }
 
-    /// Toolbar host for the search field (wide iPad-regular / macOS): a fixed
+    /// Toolbar host for the search field (wide iPad-regular / macOS): a stated
     /// width so it right-aligns cleanly above the message detail column rather
-    /// than stretching. Same query/focus wiring as the sidebar host.
+    /// than stretching, capped to the column so it can't overhang into the
+    /// neighbouring one (`ToolbarSearchFieldWidth`). Same query/focus wiring as
+    /// the sidebar host.
     @ViewBuilder
     private var toolbarSearchField: some View {
         searchFieldCore
-            .frame(width: 260)
+            .frame(width: ToolbarSearchFieldWidth.width(
+                columnWidth: detailColumnWidth,
+                inspectorPresented: addressInspectorPresented
+            ))
     }
 
     @ViewBuilder
