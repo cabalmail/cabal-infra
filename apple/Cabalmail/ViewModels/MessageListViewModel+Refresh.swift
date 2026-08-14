@@ -35,7 +35,24 @@ extension MessageListViewModel {
         totalMessages = messages
         unseen = max(0, status.unseen ?? unseen)
         flagged = max(0, status.flagged ?? flagged)
+        publishFolderCounts(status)
         return messages
+    }
+
+    /// Push the same STATUS reply at the sidebar badge. The badge and the
+    /// Unread chip are one number shown twice in one window, but only the
+    /// sidebar's own refresh used to re-run STATUS — so a message arriving
+    /// between sidebar refreshes moved the chip and left the badge behind
+    /// (#1064). Sourcing both from this reply is what keeps them equal.
+    ///
+    /// Only a reply that actually carried the counts is published: `unseen`
+    /// and `flagged` fall back to the prior value above rather than flashing
+    /// 0, and a badge must not be overwritten with a guess either.
+    private func publishFolderCounts(_ status: FolderStatus) {
+        guard !isSearchScope, let unread = status.unseen, let total = status.messages else {
+            return
+        }
+        appState.setFolderCounts(folderPath: folder.path, unread: unread, total: total)
     }
 
     /// Row onAppear: the list is now rendering this absolute index. A row
