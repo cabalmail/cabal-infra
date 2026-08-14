@@ -28,7 +28,7 @@ final class SendQueueTests: XCTestCase {
         let sent = SentCounter()
         let queue = SendQueue(outbox: outbox) { _ in await sent.bump() }
         await queue.kickDrain()
-        try await Self.waitUntil { try await outbox.count() == 0 }
+        try await waitUntil { try await outbox.count() == 0 }
         let total = await sent.count
         XCTAssertEqual(total, 2)
     }
@@ -40,7 +40,7 @@ final class SendQueueTests: XCTestCase {
             throw CabalmailError.network("simulated")
         }
         await queue.kickDrain()
-        try await Self.waitUntil {
+        try await waitUntil {
             (try await outbox.list().first?.attempts ?? 0) == 1
         }
         let entries = try await outbox.list()
@@ -55,11 +55,11 @@ final class SendQueueTests: XCTestCase {
             throw CabalmailError.network("always fails")
         }
         await queue.kickDrain()
-        try await Self.waitUntil {
+        try await waitUntil {
             (try await outbox.list().first?.attempts ?? 0) == 1
         }
         await queue.kickDrain()
-        try await Self.waitUntil { (try await outbox.count()) == 0 }
+        try await waitUntil { (try await outbox.count()) == 0 }
         let remaining = try await outbox.count()
         XCTAssertEqual(remaining, 0)
     }
@@ -72,10 +72,66 @@ final class SendQueueTests: XCTestCase {
         let (stream, continuation) = AsyncStream<Bool>.makeStream()
         await queue.bind(reachability: stream)
         continuation.yield(true)
-        try await Self.waitUntil { try await outbox.count() == 0 }
+        try await waitUntil { try await outbox.count() == 0 }
         let total = await sent.count
         XCTAssertEqual(total, 1)
         await queue.stop()
+    }
+
+    func testAMessageEnqueuedDuringADrainIsSentByTheSameDrain() async throws {
+        // `CabalmailClient.send(_:)` enqueues and then kicks. The running
+        // drain listed the outbox before that enqueue, so unless the kick is
+        // honoured the new message sits there until the next reachability
+        // transition (#1061).
+        let outbox = try Outbox(directory: directory)
+        _ = try await outbox.enqueue(Self.makeMessage(subject: "first"))
+        let gate = DrainGate()
+        let sent = SentSubjects()
+        let queue = SendQueue(outbox: outbox) { message in
+            await sent.record(message.subject)
+            if message.subject == "first" {
+                await gate.markEntered()
+                await gate.waitUntilOpen()
+            }
+        }
+        await queue.kickDrain()
+        try await waitUntil { await gate.entered }
+
+        _ = try await outbox.enqueue(Self.makeMessage(subject: "second"))
+        await queue.kickDrain()
+        await gate.open()
+
+        try await waitUntil { await sent.subjects.contains("second") }
+        let remaining = try await outbox.count()
+        XCTAssertEqual(remaining, 0, "a message enqueued mid-drain was left in the outbox")
+        await queue.stop()
+    }
+
+    func testStoppingDuringADrainCancelsTheKickItWasHolding() async throws {
+        // The coalesced kick must not outlive the queue: a drain retiring
+        // after `stop()` has no business starting another one.
+        let outbox = try Outbox(directory: directory)
+        _ = try await outbox.enqueue(Self.makeMessage(subject: "first"))
+        let gate = DrainGate()
+        let sent = SentSubjects()
+        let queue = SendQueue(outbox: outbox) { message in
+            await sent.record(message.subject)
+            if message.subject == "first" {
+                await gate.markEntered()
+                await gate.waitUntilOpen()
+            }
+        }
+        await queue.kickDrain()
+        try await waitUntil { await gate.entered }
+
+        _ = try await outbox.enqueue(Self.makeMessage(subject: "second"))
+        await queue.kickDrain()
+        await queue.stop()
+        await gate.open()
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let subjects = await sent.subjects
+        XCTAssertFalse(subjects.contains("second"), "a stopped queue started another drain")
     }
 
     // MARK: - Helpers
@@ -88,21 +144,30 @@ final class SendQueueTests: XCTestCase {
             textBody: "body"
         )
     }
-
-    /// Polls a condition up to 2 seconds. The queue runs on its own actor
-    /// so tests can't deterministically `await` a drain from the outside —
-    /// polling is the stable idiom for this kind of cross-actor handoff.
-    private static func waitUntil(_ condition: @escaping () async throws -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline {
-            if try await condition() { return }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        XCTFail("condition never met within 2s")
-    }
 }
 
 private actor SentCounter {
     private(set) var count = 0
     func bump() { count += 1 }
+}
+
+private actor SentSubjects {
+    private(set) var subjects: [String] = []
+    func record(_ subject: String) { subjects.append(subject) }
+}
+
+/// Holds a drain open from inside the sender closure so the test can enqueue
+/// against a pass that is provably in flight.
+private actor DrainGate {
+    private(set) var entered = false
+    private var isOpen = false
+
+    func markEntered() { entered = true }
+    func open() { isOpen = true }
+
+    func waitUntilOpen() async {
+        while !isOpen {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+    }
 }

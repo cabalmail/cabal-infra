@@ -279,19 +279,6 @@ final class SpotlightIndexerTests: XCTestCase {
         XCTAssertEqual(Array(inbox?.envelopes.keys ?? [:].keys), [1])
     }
 
-    // MARK: - Helpers
-
-    private func waitUntil(
-        _ condition: @escaping () async -> Bool,
-        timeout: TimeInterval = 5
-    ) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if await condition() { return }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        XCTFail("timed out waiting for condition")
-    }
 }
 
 /// Minimal `ImapClient` for the sweep test: a folder list, one page of

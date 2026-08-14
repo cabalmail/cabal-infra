@@ -11,21 +11,33 @@ enum ReaderToolbarAction: String, CaseIterable {
     case readerMode = "reader.readerMode"
     case dispose = "reader.dispose"
     case overflow = "reader.overflow"
+    case move = "reader.move"
+    case plainText = "reader.plainText"
+    case viewSource = "reader.viewSource"
+    case viewHeaders = "reader.viewHeaders"
+    case printMessage = "reader.print"
 }
 
-/// Which reader actions the iPhone/iPad bottom bar draws and which ones the
-/// app's own overflow menu carries. Pure, so the width budget is an enforced
-/// invariant instead of a comment that goes stale under a new SDK.
+/// Which reader actions each platform's bar draws and which ones ride a menu.
+/// Pure, so the layout policy is an enforced invariant instead of a comment
+/// that goes stale under a new SDK.
 ///
-/// The bar sizes itself to its content, and past a certain item count the
-/// system takes over: on the iOS 27 SDK it silently folds the tail into its
-/// own `ToolbarOverflowBarButtonItem`, which swallowed Reader view and
-/// Archive/Delete Forever outright and nested our `…` menu a tap deeper. Seven
-/// items fit on the iOS 26 SDK with about 2pt to spare at 402pt (measured), so
-/// the previous ceiling was never a ceiling — it was the bar being exactly
-/// full. Demoting to `capacity` keeps every action addressable regardless of
-/// which SDK compacts at what width; macOS is unaffected and keeps all seven in
-/// its roomy top toolbar.
+/// On the touch platforms the bar sizes itself to its content, and past a
+/// certain item count the system takes over: on the iOS 27 SDK it silently
+/// folds the tail into its own `ToolbarOverflowBarButtonItem`, which swallowed
+/// Reader view and Archive/Delete Forever outright and nested our `…` menu a
+/// tap deeper. Seven items fit on the iOS 26 SDK with about 2pt to spare at
+/// 402pt (measured), so the previous ceiling was never a ceiling — it was the
+/// bar being exactly full. Demoting to `capacity` keeps every action
+/// addressable regardless of which SDK compacts at what width.
+///
+/// macOS turned out not to be "unaffected in its roomy top toolbar" after
+/// all: below ~1300pt of window AppKit folds the toolbar's *trailing* items
+/// into its own "more toolbar items" (») popup, which used to be exactly the
+/// dispose button and the `…` menu (#1047). The macOS answer is the inverse
+/// of the iOS one — no app-side budget, no app-owned overflow menu; instead
+/// `macToolbar` orders every action by reverse demotion priority and lets the
+/// system popup do the demoting in exactly that order.
 enum ReaderToolbarLayout {
     /// Items the bottom bar draws before the system starts compacting —
     /// measured on the iOS 27 SDK at 402pt, where four app buttons plus the
@@ -44,6 +56,36 @@ enum ReaderToolbarLayout {
     /// items must have at least that much room before the demoted toggles
     /// come back.
     static let fullSetMinWidth: CGFloat = 560
+
+    /// Actions that are first-class toolbar buttons on macOS but menu rows in
+    /// the reader's own `…` menu on the touch platforms, which have no room
+    /// for eleven buttons.
+    static let touchOverflowOnly: [ReaderToolbarAction] = [
+        .move, .plainText, .viewSource, .viewHeaders, .printMessage
+    ]
+
+    /// The macOS top toolbar, in drawn order: every reader action as its own
+    /// button, no app-owned overflow menu, ordered by *reverse demotion
+    /// priority* (#1047). AppKit folds a crowded toolbar's trailing items
+    /// into its "more toolbar items" (») popup first, so the drawn order IS
+    /// the demotion policy: Print gives way first, the filing actions last.
+    /// Every button face is a `Label` because the popup flattens buttons into
+    /// menu rows, and a row with no title reads as blank.
+    static func macToolbar(leading: LeadingReaderAction) -> [ReaderToolbarAction] {
+        [
+            leading == .editDraft ? .editDraft : .reply,
+            .dispose,
+            .toggleRead,
+            .remoteContent,
+            .toggleFlag,
+            .readerMode,
+            .move,
+            .plainText,
+            .viewSource,
+            .viewHeaders,
+            .printMessage
+        ]
+    }
 
     /// Whether the reader draws the action set itself, in a bar pinned under
     /// the reading pane, instead of handing it to a `.bottomBar` toolbar

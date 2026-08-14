@@ -93,6 +93,11 @@ struct MailRootView: View {
     /// Live width of the whole split view, read via `.onGeometryChange`, used to
     /// clamp the list column so the reading pane always keeps a minimum width.
     @State private var splitWidth: CGFloat = 0
+    /// Live width of the content (message list) column, read the same way. The
+    /// toolbar search field is sized against it — a toolbar item is laid out
+    /// outside its column's clip, so an item wider than the column overhangs
+    /// into the neighbouring one instead of being cut.
+    @State private var contentColumnWidth: CGFloat = 0
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     /// Drives the cross-client cursor reconcile: returning to the foreground
@@ -105,7 +110,7 @@ struct MailRootView: View {
     /// here so the toolbar search field and the content column share one query
     /// and result set. The compact-width analogue is `SearchView` (the iPhone
     /// `Tab(role: .search)`); there's no bottom tab bar here, so search is
-    /// reached from the detail column's toolbar instead.
+    /// reached from the message-list column's toolbar instead.
     @State private var searchModel: MessageListViewModel?
     /// Focus on the global search field. Drives the content-column swap: while
     /// the field is focused (or holds a query / active search) the content
@@ -133,6 +138,16 @@ struct MailRootView: View {
         return showsSettingsGear
         #endif
     }
+    /// Where the global search field is drawn on this layout: the column's
+    /// toolbar, a header row inside the column, or nowhere at all. See
+    /// `GlobalSearchFieldPlacement` for why iPadOS can't use its bar.
+    private var searchFieldHost: GlobalSearchFieldHost {
+        GlobalSearchFieldPlacement.host(
+            isWideSidebar: isWideSidebar,
+            columnScopedToolbar: GlobalSearchFieldPlacement.platformColumnScopedToolbar
+        )
+    }
+
     /// Folder that drives `MessageDetailView`. Cross-folder search results
     /// override the sidebar selection; everything else uses it directly.
     private var detailFolder: Folder? {
@@ -404,37 +419,15 @@ struct MailRootView: View {
         #else
         .inspector(isPresented: $addressInspectorPresented) {
             AddressListView(externalFilter: $addressListFilter)
-                .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
+                .addressInspectorWidth()
         }
         #endif
     }
 
-    #if os(macOS)
-    // Disabled stand-ins for `MessageDetailView`'s seven top-toolbar
-    // buttons. Icons mirror the default state of each real button so the
-    // empty pane looks like a quiescent reading pane rather than a row
-    // of mystery placeholders. We don't bother reading Preferences for
-    // the dispose icon — `.archive` is the default and a one-frame icon
-    // flip when the real toolbar takes over is cheap.
-    @ToolbarContentBuilder
-    private var emptyDetailToolbar: some ToolbarContent {
-        ToolbarItem { disabledToolbarButton(systemImage: "arrowshape.turn.up.left", label: "Reply") }
-        ToolbarItem { disabledToolbarButton(systemImage: "envelope.badge", label: "Mark as read") }
-        ToolbarItem { disabledToolbarButton(systemImage: "flag", label: "Flag") }
-        ToolbarItem { disabledToolbarButton(systemImage: "eye.slash", label: "Show remote content") }
-        ToolbarItem { disabledToolbarButton(systemImage: "doc.richtext", label: "Show reader view") }
-        ToolbarItem { disabledToolbarButton(systemImage: "archivebox", label: "Archive") }
-        ToolbarItem { disabledToolbarButton(systemImage: "ellipsis.circle", label: "More actions") }
-    }
-
-    private func disabledToolbarButton(systemImage: String, label: String) -> some View {
-        Button {} label: {
-            Image(systemName: systemImage)
-                .accessibilityLabel(label)
-        }
-        .disabled(true)
-    }
-    #endif
+    // The macOS empty reading pane reserves its toolbar slots with
+    // `EmptyDetailToolbar` (its own file), which derives the stand-in set
+    // from the same `ReaderToolbarLayout.macToolbar` order the real toolbar
+    // draws.
 }
 
 // MARK: - Sidebar chrome
@@ -494,14 +487,13 @@ extension MailRootView {
     }
 
     /// Detail column content: the reader for the selected message, a
-    /// multi-selection placeholder, or an empty-state prompt — plus the global
-    /// search field, hosted here (above the reading pane) on wide layouts.
+    /// multi-selection placeholder, or an empty-state prompt.
     ///
-    /// Search formerly lived at the top of the sidebar; on iPad-regular / macOS
-    /// it now right-aligns in this column's toolbar. Engaging it swaps the
-    /// *content* column to cross-folder results (via `isSearching`); the reader
-    /// shown here stays put until a result is picked. Compact iPhone keeps its
-    /// dedicated search tab (`SearchView`) and adds nothing here.
+    /// The global search field used to right-align in this column's toolbar;
+    /// the #1047 toolbar rework moved it above the message list
+    /// (`decoratedContentColumn`) — the results it drives appear in that
+    /// column, and the reader needs its whole toolbar section for the eleven
+    /// action buttons.
     @ViewBuilder
     private var detailColumn: some View {
         Group {
@@ -515,7 +507,7 @@ extension MailRootView {
                     description: Text("Use the action bar below the list to act on them together.")
                 )
                 #if os(macOS)
-                .toolbar { emptyDetailToolbar }
+                .toolbar { EmptyDetailToolbar() }
                 #endif
             } else if let folder = detailFolder, let selectedEnvelope {
                 MessageDetailView(
@@ -537,69 +529,46 @@ extension MailRootView {
                 // items at the trailing edge — visually above the empty
                 // detail pane — until a message is picked and the real
                 // detail toolbar shoves them back into place.
-                .toolbar { emptyDetailToolbar }
+                .toolbar { EmptyDetailToolbar() }
                 #endif
             }
         }
-        // Global search rides the reading pane's toolbar on wide layouts (its
-        // former home was the sidebar top). `.primaryAction` right-aligns it
-        // above the detail column. Compact iPhone (no `isWideSidebar`) reaches
-        // search through its dedicated tab instead, so nothing is added there.
-        .toolbar {
-            if isWideSidebar {
-                ToolbarItem(placement: .primaryAction) {
-                    toolbarSearchField
-                }
-            }
-        }
     }
 
-    /// The search field itself — magnifying-glass icon, the query text field,
-    /// and a clear button — on a rounded translucent background. The wide
-    /// (iPad-regular / macOS) toolbar host (`toolbarSearchField`) adds its own
-    /// outer layout; compact iPhone has no sidebar search field (it uses the
-    /// bottom Search tab), so this is the only remaining host.
-    @ViewBuilder
-    private var searchFieldCore: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("Search all mail", text: searchQueryBinding)
-                .textFieldStyle(.plain)
-                .focused($searchFieldFocused)
-                .onSubmit {
-                    Task { await searchModel?.runSearch() }
-                }
-            if !(searchModel?.searchQuery.isEmpty ?? true) {
-                Button {
-                    // Zeroing the query lets the mounted search list's
-                    // `onChange(of: searchQuery)` drop search mode; dropping
-                    // focus then swaps the content column back to the folder.
-                    searchModel?.searchQuery = ""
-                    searchFieldFocused = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 7)
-                .fill(Color.secondary.opacity(0.12))
+    /// The search control itself, wired to the shared query and focus state
+    /// (`GlobalSearchField`); its two hosts below add their own outer layout.
+    private var searchFieldCore: GlobalSearchField {
+        GlobalSearchField(
+            query: searchQueryBinding,
+            isFocused: $searchFieldFocused,
+            onSubmit: { Task { await searchModel?.runSearch() } }
         )
     }
 
-    /// Toolbar host for the search field (wide iPad-regular / macOS): a fixed
-    /// width so it right-aligns cleanly above the message detail column rather
-    /// than stretching. Same query/focus wiring as the sidebar host.
-    @ViewBuilder
+    /// Toolbar host for the search field (macOS / visionOS): a stated width so
+    /// it right-aligns cleanly above the message-list column rather than
+    /// stretching, capped to the column — less its fixed sibling buttons — so
+    /// it can't overhang into the neighbouring one
+    /// (`ToolbarSearchFieldWidth`).
     private var toolbarSearchField: some View {
         searchFieldCore
-            .frame(width: 260)
+            .frame(width: ToolbarSearchFieldWidth.width(
+                columnWidth: contentColumnWidth,
+                inspectorPresented: addressInspectorPresented
+            ))
+    }
+
+    /// Column-header host for the search field (iPadOS), where the list
+    /// column's own navigation bar has no room for it
+    /// (`GlobalSearchFieldPlacement`). Takes the column's full width, so the
+    /// magnifier and the whole placeholder are drawn whatever the column is
+    /// dragged to, and sits above the list's filter pills — the same place the
+    /// sidebar's filter field sits over its list.
+    private var columnHeaderSearchField: some View {
+        searchFieldCore
+            .padding(.horizontal)
+            .padding(.top, 4)
+            .padding(.bottom, 6)
     }
 
     @ViewBuilder
@@ -804,50 +773,76 @@ extension MailRootView {
     /// by `resizableContentColumn` as a single view.
     @ViewBuilder
     fileprivate var decoratedContentColumn: some View {
-        contentColumn
-            // Toggle for the trailing addresses inspector. Wide layouts only
-            // (macOS always; regular-width iPad via `showsSettingsGear`); compact
-            // iPhone reaches addresses through its dedicated bottom tab instead.
-            .toolbar {
-                if isWideSidebar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            addressInspectorPresented.toggle()
-                        } label: {
-                            Image(systemName: "at")
-                                .accessibilityLabel("Addresses")
-                        }
+        VStack(spacing: 0) {
+            // On iPadOS the search field is drawn here rather than in the
+            // column's own navigation bar, which has no room for it
+            // (`GlobalSearchFieldPlacement`).
+            if searchFieldHost == .columnHeader {
+                columnHeaderSearchField
+            }
+            contentColumn
+        }
+        // The search field sizes itself against this column (see
+        // `ToolbarSearchFieldWidth`); a toolbar item can't measure its own
+        // pane, so the pane measures itself here.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { newWidth in
+            contentColumnWidth = newWidth
+        }
+        // Global search rides the message-list column on wide layouts
+        // (moved from above the reading pane in the #1047 toolbar rework —
+        // the results it drives show in this column, and the reader needs
+        // its toolbar section for its own buttons), next to the toggle for
+        // the trailing addresses inspector. Wide layouts only (macOS
+        // always; regular-width iPad via `showsSettingsGear`); compact
+        // iPhone reaches search through its dedicated tab and addresses
+        // through its bottom tab instead.
+        .toolbar {
+            if searchFieldHost == .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    toolbarSearchField
+                }
+            }
+            if isWideSidebar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        addressInspectorPresented.toggle()
+                    } label: {
+                        Image(systemName: "at")
+                            .accessibilityLabel("Addresses")
                     }
                 }
             }
-            // Folder-panel toggle (standing in for the removed system sidebar
-            // toggle, same leading slot) and the app-level Settings gear.
-            // Regular-width iPad only (compact keeps its Settings tab and
-            // navigates folders as the stack root; macOS has its Settings
-            // scene and a tiled sidebar).
-            #if os(iOS)
-            .toolbar {
-                if showsSettingsGear {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            withAnimation(folderPanelAnimation) {
-                                folderPanelPresented.toggle()
-                            }
-                        } label: {
-                            Image(systemName: "sidebar.leading")
-                                .accessibilityLabel("Toggle folder list")
+        }
+        // Folder-panel toggle (standing in for the removed system sidebar
+        // toggle, same leading slot) and the app-level Settings gear.
+        // Regular-width iPad only (compact keeps its Settings tab and
+        // navigates folders as the stack root; macOS has its Settings
+        // scene and a tiled sidebar).
+        #if os(iOS)
+        .toolbar {
+            if showsSettingsGear {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        withAnimation(folderPanelAnimation) {
+                            folderPanelPresented.toggle()
                         }
+                    } label: {
+                        Image(systemName: "sidebar.leading")
+                            .accessibilityLabel("Toggle folder list")
                     }
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            appState.requestSettings()
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .accessibilityLabel("Settings")
-                        }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        appState.requestSettings()
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .accessibilityLabel("Settings")
                     }
                 }
             }
+        }
             #endif
     }
 

@@ -141,9 +141,7 @@ struct MessageDetailView: View {
         .navigationTitle(envelope.subject ?? "(no subject)")
         #else
         // Suppress the inline nav-bar subject: it duplicated the subject shown
-        // in `headerBlock` right below it, and blanking it reclaims the detail
-        // column's top bar for the global search field that `MailRootView` hosts
-        // there on wide (iPad-regular) layouts.
+        // in `headerBlock` right below it.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         // Reading a message uses the full bottom edge for the action toolbar;
@@ -155,6 +153,12 @@ struct MessageDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         #endif
         .toolbar { toolbarContent }
+        // Window-scoped keyboard equivalents, hosted where the toolbar can't
+        // evict them (see `disposeChordHost` / `readerChordHosts`).
+        .background {
+            disposeChordHost
+            readerChordHosts
+        }
         #if os(iOS)
         // Pins the action set to the reading pane on iOS 27 at regular width.
         // Inert (empty content) everywhere else, so compact iPhone and iOS 26
@@ -319,16 +323,14 @@ struct MessageDetailView: View {
         }
     }
 
-    // The detail view exposes seven action buttons. On macOS they live in the
-    // top toolbar, which has room for all of them; on iOS/visionOS they would
-    // crowd the inline title and hide the subject, so we route them to a bottom
-    // bar where they're also easier to reach with a thumb. That bar sizes to
-    // its content and only holds `ReaderToolbarLayout.capacity` items before
-    // the system compacts the tail into an overflow control of its own, so the
-    // two display toggles ride in our own overflow menu instead. The
-    // pane-scoped bar (`readerActionBar`) is exempt from the system budget and
-    // promotes them back when its measured width allows. See
-    // `ReaderToolbarLayout` — anything new belongs in the overflow menu too.
+    // The reader's action set, routed per platform. macOS draws every action
+    // as its own top-toolbar button — eleven of them, ordered by reverse
+    // demotion priority so that when the window gets too narrow AppKit's
+    // trailing-first eviction into the » popup demotes Print first and the
+    // filing actions last (#1047); there is no app-owned overflow menu there.
+    // iOS/visionOS route a width-budgeted subset to a bottom bar (easier to
+    // reach with a thumb; the extras ride `overflowMenuButton`). Both orders
+    // live in `ReaderToolbarLayout`, which is where anything new gets a slot.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         #if os(iOS) || os(visionOS)
@@ -342,22 +344,17 @@ struct MessageDetailView: View {
                 )
                 ForEach(Array(actions.enumerated()), id: \.element) { index, action in
                     if index > 0 { Spacer() }
-                    bottomBarButton(for: action)
+                    toolbarButton(for: action)
+                        // The faces are `Label`s for the macOS » popup's
+                        // sake; this bar draws them icon-only, as before.
+                        .labelStyle(.iconOnly)
                 }
             }
         }
         #else
-        if model?.leadingToolbarAction == .editDraft {
-            ToolbarItem { editDraftButton }
-        } else {
-            ToolbarItem { replyButton }
-        }
-        ToolbarItem { seenButton }
-        ToolbarItem { flagButton }
-        ToolbarItem { remoteContentButton }
-        ToolbarItem { readerModeButton }
-        ToolbarItem { disposeButton }
-        ToolbarItem { overflowMenuButton }
+        // Both halves live in `MessageDetailView+MacToolbar.swift`.
+        macToolbarLeading
+        macToolbarTrailing
         #endif
     }
 

@@ -7,10 +7,13 @@ import CabalmailKit
 // `model` and route their actions back through it.
 
 extension MessageDetailView {
-    /// Draws whichever button `ReaderToolbarLayout` put in this bottom-bar
-    /// slot, so the bar's contents and the tested layout can't drift apart.
+    /// Draws whichever button `ReaderToolbarLayout` put in this slot — the
+    /// touch bottom bar or the macOS top toolbar — so the bars' contents and
+    /// the tested layout can't drift apart. Exhaustive one-case-per-action
+    /// dispatch; the branch count IS the point, not incidental complexity.
     @ViewBuilder
-    func bottomBarButton(for action: ReaderToolbarAction) -> some View {
+    // swiftlint:disable:next cyclomatic_complexity
+    func toolbarButton(for action: ReaderToolbarAction) -> some View {
         switch action {
         case .editDraft:     editDraftButton
         case .reply:         replyButton
@@ -20,6 +23,11 @@ extension MessageDetailView {
         case .readerMode:    readerModeButton
         case .dispose:       disposeButton
         case .overflow:      overflowMenuButton
+        case .move:          moveButton
+        case .plainText:     plainTextButton
+        case .viewSource:    viewSourceButton
+        case .viewHeaders:   viewHeadersButton
+        case .printMessage:  printButton
         }
     }
 
@@ -66,12 +74,17 @@ extension MessageDetailView {
             HStack(spacing: 0) {
                 ForEach(Array(ownBarActions.enumerated()), id: \.element) { index, action in
                     if index > 0 { Spacer(minLength: 0) }
-                    bottomBarButton(for: action)
+                    toolbarButton(for: action)
                 }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
             .background(.bar)
+            // The faces are `Label`s for the macOS » popup's sake; this is a
+            // plain `HStack`, not a toolbar, so icon-only must be stated. The
+            // style doesn't leak into the controls' hold menus — UIKit menu
+            // rows always draw title + icon.
+            .labelStyle(.iconOnly)
         }
         .onGeometryChange(for: CGFloat.self) { barProxy in
             barProxy.size.width
@@ -80,6 +93,14 @@ extension MessageDetailView {
         }
     }
     #endif
+
+    // Every button face here is a `Label`, not a bare `Image`: on macOS the
+    // system's "more toolbar items" (») popup flattens evicted buttons into
+    // menu rows and draws the item's title, so an icon-only face renders as a
+    // blank row there (#1047). The toolbars themselves still draw icons only —
+    // macOS's unified toolbar does that by default, and the touch call sites
+    // apply `.labelStyle(.iconOnly)` (see `readerActionBar` and the
+    // `.bottomBar` group in `MessageDetailView.toolbarContent`).
 
     /// Drafts-folder affordance: resume the open draft in compose.
     /// Disabled until the body fetch + MIME parse complete so a tap can't
@@ -90,8 +111,7 @@ extension MessageDetailView {
             Button {
                 beginResumeDraft()
             } label: {
-                Image(systemName: "square.and.pencil")
-                    .accessibilityLabel("Edit Draft")
+                Label("Edit Draft", systemImage: "square.and.pencil")
             }
             .disabled(!model.canResumeDraft)
             .accessibilityIdentifier("reader.editDraft")
@@ -124,8 +144,7 @@ extension MessageDetailView {
                 Label("Forward", systemImage: "arrowshape.turn.up.forward")
             }
         } label: {
-            Image(systemName: "arrowshape.turn.up.left")
-                .accessibilityLabel("Reply")
+            Label("Reply", systemImage: "arrowshape.turn.up.left")
         }
         .accessibilityIdentifier("reader.reply")
     }
@@ -140,11 +159,14 @@ extension MessageDetailView {
             Button {
                 Task { await model.toggleFlagged() }
             } label: {
-                Image(systemName: model.isFlagged ? "flag.slash" : "flag")
-                    .accessibilityLabel(model.isFlagged ? "Unflag" : "Flag")
+                Label(
+                    model.isFlagged ? "Unflag" : "Flag",
+                    systemImage: model.isFlagged ? "flag.slash" : "flag"
+                )
             }
-            // Cmd+Shift+L — Mail.app's flag shortcut.
-            .keyboardShortcut("l", modifiers: [.command, .shift])
+            // Cmd+Shift+L rides `readerChordHosts`, not this button — an
+            // equivalent on a toolbar item dies with the item when the
+            // toolbar overflows (#1047).
             .accessibilityIdentifier("reader.toggleFlag")
         }
     }
@@ -158,16 +180,13 @@ extension MessageDetailView {
             Button {
                 model.toggleRemoteContent()
             } label: {
-                Image(systemName: model.remoteContentAllowed
-                      ? "eye.fill"
-                      : "eye.slash")
-                    .accessibilityLabel(
-                        model.remoteContentAllowed
+                Label(
+                    model.remoteContentAllowed
                         ? "Hide remote content"
-                        : "Show remote content"
-                    )
+                        : "Show remote content",
+                    systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash"
+                )
             }
-            .keyboardShortcut("i", modifiers: [.command, .shift])
             .disabled(model.htmlBody == nil)
             .accessibilityIdentifier("reader.remoteContent")
         }
@@ -179,14 +198,12 @@ extension MessageDetailView {
             Button {
                 model.toggleReaderMode()
             } label: {
-                Image(systemName: model.readerMode
-                      ? "text.alignleft"
-                      : "doc.richtext")
-                    .accessibilityLabel(
-                        model.readerMode
+                Label(
+                    model.readerMode
                         ? "Show original formatting"
-                        : "Show reader view"
-                    )
+                        : "Show reader view",
+                    systemImage: model.readerMode ? "text.alignleft" : "doc.richtext"
+                )
             }
             .disabled(model.htmlBody == nil)
             .accessibilityIdentifier("reader.readerMode")
@@ -197,36 +214,13 @@ extension MessageDetailView {
     // with the macOS split-control menu it grew — keeping it here would
     // push this file past SwiftLint's file_length cap.
 
-    /// Overflow-menu item for whichever dispose destination the toolbar
-    /// button does NOT cover: preference says Archive, the menu offers
-    /// Delete, and vice versa — both destinations stay one click away
-    /// without a second toolbar slot. Inside Trash the toolbar button is
-    /// Delete Forever and "move to Trash" is meaningless, so the
-    /// alternate is always Archive (the rescue path); inside Archive that
-    /// same archive alternate becomes Restore.
-    @ViewBuilder
-    func alternateDisposeMenuItem(model: MessageDetailViewModel) -> some View {
-        let alternate: DisposeIntent = model.isTrashFolder || model.disposeAction == .trash
-            ? model.archiveIntent
-            : .move(.trash)
-        Button(role: alternate.isDestructive ? .destructive : nil) {
-            switch alternate {
-            case .restore:
-                Task { await performMove(to: FolderTree.inboxPath) }
-            case .move(let action):
-                Task { await performDispose(model: model, action: action) }
-            case .purge:
-                // `archiveIntent` never resolves to purge; the toolbar
-                // button owns the Trash-folder delete-forever path.
-                break
-            }
-        } label: {
-            disposeMenuLabel(for: alternate)
-        }
-    }
+    // The overflow menu used to carry an "alternate dispose" item (Delete
+    // for users whose button says Archive, and vice versa). It's gone: the
+    // dispose control's own option menu offers every Archive/Delete pair,
+    // so the alternate was a second copy of a reachable action (#1047).
 
-    /// Shared dispose flow behind the toolbar button (preference default)
-    /// and the overflow menu's alternate-destination item.
+    /// Shared dispose flow behind the dispose control's primary action and
+    /// its option-menu rows.
     func performDispose(model: MessageDetailViewModel, action: DisposeAction) async {
         await model.dispose(
             action: action,
@@ -273,18 +267,11 @@ extension MessageDetailView {
         }
     }
 
-    /// Bottom-bar label for the dispose button. Icon-only, like every other
-    /// bar slot; the accessibility label carries the verb.
+    /// Face of the dispose control: verb + symbol for the destination in
+    /// effect. The bars draw it icon-only like every other slot; the title
+    /// is what the macOS » popup shows when the toolbar overflows.
     @ViewBuilder
     func disposeToolbarLabel(for intent: DisposeIntent) -> some View {
-        Image(systemName: disposeSymbol(for: intent))
-            .accessibilityLabel(disposeVerb(for: intent))
-    }
-
-    /// Menu twin of `disposeToolbarLabel` — a menu row carrying only an SF
-    /// Symbol reads as blank, so the overflow spells the verb out.
-    @ViewBuilder
-    func disposeMenuLabel(for intent: DisposeIntent) -> some View {
         Label(disposeVerb(for: intent), systemImage: disposeSymbol(for: intent))
     }
 
@@ -350,17 +337,17 @@ extension MessageDetailView {
                     systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash"
                 )
             }
-            .keyboardShortcut("i", modifiers: [.command, .shift])
             .disabled(model.htmlBody == nil)
             .accessibilityIdentifier("reader.remoteContent")
         }
     }
     #endif
 
-    /// Print item shown in the overflow menu. Cmd+P on macOS; the same
-    /// shortcut also activates on iPad/iPhone hardware keyboards. Disabled
-    /// when the body hasn't loaded yet — printing an empty WKWebView is a
-    /// non-action that hides the menu's intent.
+    /// Print item shown in the touch platforms' overflow menu (macOS draws a
+    /// toolbar button instead — see `printButton`). Cmd+P rides
+    /// `readerChordHosts`. Disabled when the body hasn't loaded yet —
+    /// printing an empty WKWebView is a non-action that hides the menu's
+    /// intent.
     @ViewBuilder
     var printMenuItem: some View {
         if let model {
@@ -369,20 +356,18 @@ extension MessageDetailView {
             } label: {
                 Label("Print…", systemImage: "printer")
             }
-            .keyboardShortcut("p", modifiers: .command)
             .disabled(model.htmlBody == nil && model.plainText == nil)
         }
     }
 
-    /// Overflow menu (•••) — houses the actions that don't earn their own
-    /// toolbar slot. "Move to folder…" closes the same parity gap with the
-    /// React reader; the alternate dispose item covers whichever of
-    /// Archive / Delete the toolbar button doesn't; "View source" /
-    /// "View headers" expose the raw RFC 5322 the reader has already
-    /// fetched. Cmd+Shift+M and Cmd+U match the shortcuts on the existing
-    /// macOS Reply/Forward menu pattern (the button-level shortcut only
-    /// fires when this scene is focused, which matches the existing macOS
-    /// mail-client convention).
+    /// Overflow menu (•••) — the touch platforms' home for the actions that
+    /// don't earn a slot on their width-budgeted bars. macOS stopped using it
+    /// in the #1047 rework: there every action is its own toolbar button and
+    /// the system's » popup is the constrained-space fallback. "Move to
+    /// folder…" closes the same parity gap with the React reader; "View
+    /// source" / "View headers" expose the raw RFC 5322 the reader has
+    /// already fetched. Hardware-keyboard chords for these actions ride
+    /// `readerChordHosts`, not the rows.
     @ViewBuilder
     var overflowMenuButton: some View {
         Menu {
@@ -392,9 +377,6 @@ extension MessageDetailView {
                 } label: {
                     Label("Move to folder…", systemImage: "folder")
                 }
-                .keyboardShortcut("m", modifiers: [.command, .shift])
-
-                alternateDisposeMenuItem(model: model)
 
                 #if os(iOS) || os(visionOS)
                 if !displayTogglesAreOnBar {
@@ -426,7 +408,6 @@ extension MessageDetailView {
                 } label: {
                     Label("View source", systemImage: "chevron.left.forwardslash.chevron.right")
                 }
-                .keyboardShortcut("u", modifiers: .command)
 
                 Button {
                     sourceSheetTab = .headers
@@ -439,8 +420,7 @@ extension MessageDetailView {
                 printMenuItem
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
-                .accessibilityLabel("More actions")
+            Label("More actions", systemImage: "ellipsis.circle")
         }
         .accessibilityIdentifier("reader.overflow")
     }

@@ -288,7 +288,10 @@ extension MessageListView {
             // macOS: Compose + Reload share a `.primaryAction` group so
             // SwiftUI doesn't sink Reload into the trailing `>>` overflow
             // chevron when the unified window toolbar (this column +
-            // MessageDetailView's seven buttons) gets crowded.
+            // MessageDetailView's eleven buttons) gets crowded — the
+            // reader's buttons are deliberately NOT grouped, so that they
+            // evict one at a time in priority order (#1047), but these two
+            // must never be what the window gives up.
             #if os(macOS)
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
