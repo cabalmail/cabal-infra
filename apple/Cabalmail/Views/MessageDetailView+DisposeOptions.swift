@@ -29,14 +29,32 @@ extension MessageDetailView {
             }
             .menuIndicator(optionMenuIndicator)
             .tint(disposeTint(for: model.disposeIntent))
-            // Cmd+Delete — the same chord Mail.app and most macOS list
-            // apps bind to "remove from list"; also fires from iPad/iPhone
-            // hardware keyboards. Routes through dispose so it follows the
-            // user's Archive/Trash preference rather than hard-coding one
-            // or the other. In Trash the chord stages the delete-forever
-            // confirmation instead of acting directly.
-            .keyboardShortcut(.delete, modifiers: .command)
             .accessibilityIdentifier("reader.dispose")
+        }
+    }
+
+    /// Cmd+Delete for the open message — the chord Mail.app and most macOS
+    /// list apps bind to "remove from list", also fired by iPad/iPhone
+    /// hardware keyboards. Routes through dispose so it follows the user's
+    /// Archive/Trash preference; in Trash it stages the delete-forever
+    /// confirmation rather than acting directly.
+    ///
+    /// A hidden button rather than the dispose toolbar button's own
+    /// `.keyboardShortcut`, which is where it used to live: a key equivalent
+    /// riding a toolbar item goes wherever that item goes, and AppKit
+    /// collapses the trailing items of a crowded toolbar into its own "more
+    /// toolbar items" popup — taking the equivalent with them, so the chord
+    /// died in a narrow window with no sign it had (#1047). The same hidden-
+    /// button idiom the message list uses for a multi-selection; installed
+    /// only while this reader owns the chord (`DisposeChordHost`), because two
+    /// equivalents in one window leave AppKit to pick a winner.
+    @ViewBuilder
+    var disposeChordHost: some View {
+        if let model, appState.messageMenuAvailability.disposeChordHost == .reader {
+            Button("") { runDispose(model: model) }
+                .keyboardShortcut(.delete, modifiers: .command)
+                .opacity(0)
+                .accessibilityHidden(true)
         }
     }
 
