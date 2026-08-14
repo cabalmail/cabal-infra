@@ -148,8 +148,12 @@ final class FolderListViewModel {
 
     /// Delete a user folder. Gated by `canDelete` so system folders and
     /// `\Noselect` containers stay protected; prunes the row on success.
-    func deleteFolder(_ folder: Folder) async {
-        guard canDelete(folder) else { return }
+    /// Returns true on success so the caller can move a selection that was
+    /// pointing at the folder (the sidebar's binding is owned by the split
+    /// view, not by this model).
+    @discardableResult
+    func deleteFolder(_ folder: Folder) async -> Bool {
+        guard canDelete(folder) else { return false }
         do {
             try await client.imapClient.connectAndAuthenticate()
             try await client.imapClient.deleteFolder(path: folder.path)
@@ -159,9 +163,11 @@ final class FolderListViewModel {
             // delete (the row just disappears), so purge its Spotlight
             // domain explicitly.
             await client.spotlightIndexer?.removeFolder(folder.path)
+            return true
         } catch {
             errorMessage = error.localizedDescription
         }
+        return false
     }
 
     /// Folders the user can nest a new folder under. `\Noselect`

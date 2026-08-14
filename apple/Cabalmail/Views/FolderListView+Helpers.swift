@@ -263,7 +263,17 @@ extension FolderListView {
         Button("Delete", role: .destructive) {
             let target = folder
             pendingDelete = nil
-            Task { await model?.deleteFolder(target) }
+            Task {
+                guard let model, await model.deleteFolder(target) else { return }
+                // The row is gone from the sidebar, but the selection the
+                // split view binds to is ours to move — left alone it keeps
+                // the message list pointed at a folder the server no longer
+                // has (#1062).
+                selection = FolderSelectionRecovery.selection(
+                    current: selection,
+                    remaining: model.folders
+                )
+            }
         }
         Button("Cancel", role: .cancel) {
             pendingDelete = nil
