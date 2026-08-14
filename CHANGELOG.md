@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-08-14
+
+### Changed
+- Apple: **Reworked macOS reader toolbar.** Every reader action is now its own
+  toolbar button — Move, Show plain text, View source, View headers and Print
+  join the existing seven — and the app's own "…" menu is gone from macOS. The
+  buttons are ordered so a narrowing window folds them into the system's
+  toolbar-overflow popup least-important-first (Print first, Reply and
+  Archive/Delete last), instead of eating the filing actions first, and every
+  button now carries a label so the popup's rows aren't blank. Keyboard
+  shortcuts ride the window rather than individual buttons, so they keep
+  working at any window width. The global search field moved from above the
+  reading pane to above the message list, whose results it shows, and the
+  "…" menu's alternate Archive/Delete item is gone everywhere — the dispose
+  button's own option menu already offers every destination.
+
+### Fixed
+- Apple: **Cmd+Delete in a narrow macOS window.** The chord rode the reader's
+  dispose toolbar button, so once the window was narrow enough for the system
+  to fold that button into its "more toolbar items" popup, the chord silently
+  did nothing. It now rides a control the toolbar can't evict, and works at any
+  window width.
+- Apple: **Deleting the folder you are looking at now moves you to INBOX.**
+  The sidebar row disappeared but the selection kept pointing at the deleted
+  folder, so the window title stayed on it, the message list stayed empty, and
+  refreshing from there rendered a bare "Internal server error." — the only way
+  out was picking another folder. Deleting a folder other than the selected one
+  is unaffected, as is a selected child of a deleted parent.
+- Apple: **Global search and the Addresses panel are reachable again on iPad.**
+  The message-list column draws its own navigation bar at column width, and the
+  search field plus the four fixed buttons overran it, so iPadOS folded the
+  field and the Addresses button into a system overflow that never opened —
+  leaving both with no entry point. The field now draws in the column itself,
+  above the list, where it takes the column's width, keeps its magnifier and
+  full placeholder, and shrinks with the column when the Addresses panel opens
+  instead of hanging under the neighbouring pane. macOS keeps its toolbar
+  search field unchanged.
+- Apple: **The sidebar's unread badge keeps up with the message list.** New
+  mail found by the list's own refresh (the toolbar button, pull-to-refresh or
+  the background poll) moved the list's Unread count but left the sidebar badge
+  on its old value until the sidebar was refreshed separately, so two counts of
+  the same thing disagreed in one window. Both now come from the same server
+  reply.
+- Apple: **The New Folder sheet shows its example inside the name field
+  again.** On macOS the `e.g. Projects` hint was drawn as the row's leading
+  label, to the left of the box and under the `Name` header, so the sheet read
+  as a field labelled with an example that never went away. It is now grey
+  placeholder text inside the empty field, as on iOS.
+- Apple: **A message queued while the outbox was draining no longer waits for
+  the next network change.** Sending while an earlier queued message was being
+  retried enqueued the new message behind a drain that had already listed the
+  outbox, and the kick meant to catch it was dropped because a drain was
+  running — so the message sat unsent until reachability next changed, which on
+  a stable connection could be a long time. A kick that arrives mid-drain is now
+  held and runs another pass as soon as the current one finishes.
+- Apple: **Long recipients in the reader header.** A recipient wider than the
+  reading pane — easy to reach on iPad once the Addresses panel takes a third
+  column — was placed at its full width and hard-cut mid-string by the pane
+  edge, with no ellipsis and no wrap. The header's flow layout now proposes an
+  oversized recipient the width of the line, so it truncates or wraps the way
+  the sender line above it already did.
+- Apple: **Search field clipped by the neighbouring column.** On iPad, opening
+  the Addresses panel left the toolbar's search field wider than the space it
+  had: its magnifier and the first letter of "Search all mail" were hidden
+  behind the message list. The field now sizes itself to the toolbar area it
+  actually has, and keeps its full width everywhere it fits.
+
 ## [1.2.1] - 2026-08-13
 
 ### Changed
