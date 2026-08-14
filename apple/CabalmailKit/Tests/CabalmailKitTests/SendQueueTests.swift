@@ -78,6 +78,62 @@ final class SendQueueTests: XCTestCase {
         await queue.stop()
     }
 
+    func testAMessageEnqueuedDuringADrainIsSentByTheSameDrain() async throws {
+        // `CabalmailClient.send(_:)` enqueues and then kicks. The running
+        // drain listed the outbox before that enqueue, so unless the kick is
+        // honoured the new message sits there until the next reachability
+        // transition (#1061).
+        let outbox = try Outbox(directory: directory)
+        _ = try await outbox.enqueue(Self.makeMessage(subject: "first"))
+        let gate = DrainGate()
+        let sent = SentSubjects()
+        let queue = SendQueue(outbox: outbox) { message in
+            await sent.record(message.subject)
+            if message.subject == "first" {
+                await gate.markEntered()
+                await gate.waitUntilOpen()
+            }
+        }
+        await queue.kickDrain()
+        try await waitUntil { await gate.entered }
+
+        _ = try await outbox.enqueue(Self.makeMessage(subject: "second"))
+        await queue.kickDrain()
+        await gate.open()
+
+        try await waitUntil { await sent.subjects.contains("second") }
+        let remaining = try await outbox.count()
+        XCTAssertEqual(remaining, 0, "a message enqueued mid-drain was left in the outbox")
+        await queue.stop()
+    }
+
+    func testStoppingDuringADrainCancelsTheKickItWasHolding() async throws {
+        // The coalesced kick must not outlive the queue: a drain retiring
+        // after `stop()` has no business starting another one.
+        let outbox = try Outbox(directory: directory)
+        _ = try await outbox.enqueue(Self.makeMessage(subject: "first"))
+        let gate = DrainGate()
+        let sent = SentSubjects()
+        let queue = SendQueue(outbox: outbox) { message in
+            await sent.record(message.subject)
+            if message.subject == "first" {
+                await gate.markEntered()
+                await gate.waitUntilOpen()
+            }
+        }
+        await queue.kickDrain()
+        try await waitUntil { await gate.entered }
+
+        _ = try await outbox.enqueue(Self.makeMessage(subject: "second"))
+        await queue.kickDrain()
+        await queue.stop()
+        await gate.open()
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let subjects = await sent.subjects
+        XCTAssertFalse(subjects.contains("second"), "a stopped queue started another drain")
+    }
+
     // MARK: - Helpers
 
     private static func makeMessage(subject: String) -> OutgoingMessage {
@@ -93,4 +149,25 @@ final class SendQueueTests: XCTestCase {
 private actor SentCounter {
     private(set) var count = 0
     func bump() { count += 1 }
+}
+
+private actor SentSubjects {
+    private(set) var subjects: [String] = []
+    func record(_ subject: String) { subjects.append(subject) }
+}
+
+/// Holds a drain open from inside the sender closure so the test can enqueue
+/// against a pass that is provably in flight.
+private actor DrainGate {
+    private(set) var entered = false
+    private var isOpen = false
+
+    func markEntered() { entered = true }
+    func open() { isOpen = true }
+
+    func waitUntilOpen() async {
+        while !isOpen {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+    }
 }

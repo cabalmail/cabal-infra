@@ -28,6 +28,13 @@ public actor SendQueue {
     private let sender: Sender
     private var drainTask: Task<Void, Never>?
     private var reachabilityTask: Task<Void, Never>?
+    /// A kick that arrived while a drain was already running, owed another
+    /// pass once that one finishes (#1061).
+    private var pendingKick = false
+    /// Identifies the drain a completion belongs to, so a task retired by
+    /// `stop()` — or superseded by a later one — can't clear or restart the
+    /// drain that replaced it.
+    private var drainGeneration = 0
 
     public init(outbox: Outbox, sender: @escaping Sender) {
         self.outbox = outbox
@@ -54,22 +61,56 @@ public actor SendQueue {
     /// `CabalmailClient.send(_:)` after enqueueing a message so a
     /// reachability signal that already came through gets another shot.
     public func kickDrain() {
-        guard drainTask == nil || drainTask?.isCancelled == true else { return }
-        drainTask = Task { [weak self] in
-            await self?.drain()
-            await self?.markDrainComplete()
+        guard drainTask == nil || drainTask?.isCancelled == true else {
+            // A drain is already in flight, and it listed the outbox when it
+            // started — a message enqueued since is invisible to it. Dropping
+            // this kick would leave that message queued until the next
+            // reachability transition, which on a stable connection may never
+            // come (#1061). Remember it instead and run another pass.
+            pendingKick = true
+            return
         }
+        startDrain()
     }
 
     public func stop() {
         drainTask?.cancel()
         drainTask = nil
+        pendingKick = false
+        drainGeneration += 1
         reachabilityTask?.cancel()
         reachabilityTask = nil
     }
 
-    private func markDrainComplete() {
+    private func startDrain() {
+        pendingKick = false
+        drainGeneration += 1
+        let generation = drainGeneration
+        drainTask = Task { [weak self] in
+            await self?.drainWhileKicked()
+            await self?.markDrainComplete(generation: generation)
+        }
+    }
+
+    /// Repeats the pass while kicks keep arriving during one, so a message
+    /// enqueued mid-drain is picked up by the same task rather than waiting
+    /// for a fresh trigger. Each pass re-lists the outbox, so the retry
+    /// budget is spent exactly as it would be across separate kicks.
+    private func drainWhileKicked() async {
+        repeat {
+            pendingKick = false
+            await drain()
+        } while pendingKick && !Task.isCancelled
+    }
+
+    private func markDrainComplete(generation: Int) {
+        guard generation == drainGeneration else { return }
         drainTask = nil
+        // A kick landing between the last pass and this retirement would
+        // otherwise fall into the same hole the coalescing closes.
+        if pendingKick {
+            startDrain()
+        }
     }
 
     private func drain() async {
