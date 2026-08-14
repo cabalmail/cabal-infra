@@ -93,11 +93,11 @@ struct MailRootView: View {
     /// Live width of the whole split view, read via `.onGeometryChange`, used to
     /// clamp the list column so the reading pane always keeps a minimum width.
     @State private var splitWidth: CGFloat = 0
-    /// Live width of the detail (reading pane) column, read the same way. The
+    /// Live width of the content (message list) column, read the same way. The
     /// toolbar search field is sized against it — a toolbar item is laid out
     /// outside its column's clip, so an item wider than the column overhangs
     /// into the neighbouring one instead of being cut.
-    @State private var detailColumnWidth: CGFloat = 0
+    @State private var contentColumnWidth: CGFloat = 0
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     /// Drives the cross-client cursor reconcile: returning to the foreground
@@ -110,7 +110,7 @@ struct MailRootView: View {
     /// here so the toolbar search field and the content column share one query
     /// and result set. The compact-width analogue is `SearchView` (the iPhone
     /// `Tab(role: .search)`); there's no bottom tab bar here, so search is
-    /// reached from the detail column's toolbar instead.
+    /// reached from the message-list column's toolbar instead.
     @State private var searchModel: MessageListViewModel?
     /// Focus on the global search field. Drives the content-column swap: while
     /// the field is focused (or holds a query / active search) the content
@@ -414,32 +414,10 @@ struct MailRootView: View {
         #endif
     }
 
-    #if os(macOS)
-    // Disabled stand-ins for `MessageDetailView`'s seven top-toolbar
-    // buttons. Icons mirror the default state of each real button so the
-    // empty pane looks like a quiescent reading pane rather than a row
-    // of mystery placeholders. We don't bother reading Preferences for
-    // the dispose icon — `.archive` is the default and a one-frame icon
-    // flip when the real toolbar takes over is cheap.
-    @ToolbarContentBuilder
-    private var emptyDetailToolbar: some ToolbarContent {
-        ToolbarItem { disabledToolbarButton(systemImage: "arrowshape.turn.up.left", label: "Reply") }
-        ToolbarItem { disabledToolbarButton(systemImage: "envelope.badge", label: "Mark as read") }
-        ToolbarItem { disabledToolbarButton(systemImage: "flag", label: "Flag") }
-        ToolbarItem { disabledToolbarButton(systemImage: "eye.slash", label: "Show remote content") }
-        ToolbarItem { disabledToolbarButton(systemImage: "doc.richtext", label: "Show reader view") }
-        ToolbarItem { disabledToolbarButton(systemImage: "archivebox", label: "Archive") }
-        ToolbarItem { disabledToolbarButton(systemImage: "ellipsis.circle", label: "More actions") }
-    }
-
-    private func disabledToolbarButton(systemImage: String, label: String) -> some View {
-        Button {} label: {
-            Image(systemName: systemImage)
-                .accessibilityLabel(label)
-        }
-        .disabled(true)
-    }
-    #endif
+    // The macOS empty reading pane reserves its toolbar slots with
+    // `EmptyDetailToolbar` (its own file), which derives the stand-in set
+    // from the same `ReaderToolbarLayout.macToolbar` order the real toolbar
+    // draws.
 }
 
 // MARK: - Sidebar chrome
@@ -499,14 +477,13 @@ extension MailRootView {
     }
 
     /// Detail column content: the reader for the selected message, a
-    /// multi-selection placeholder, or an empty-state prompt — plus the global
-    /// search field, hosted here (above the reading pane) on wide layouts.
+    /// multi-selection placeholder, or an empty-state prompt.
     ///
-    /// Search formerly lived at the top of the sidebar; on iPad-regular / macOS
-    /// it now right-aligns in this column's toolbar. Engaging it swaps the
-    /// *content* column to cross-folder results (via `isSearching`); the reader
-    /// shown here stays put until a result is picked. Compact iPhone keeps its
-    /// dedicated search tab (`SearchView`) and adds nothing here.
+    /// The global search field used to right-align in this column's toolbar;
+    /// the #1047 toolbar rework moved it above the message list
+    /// (`decoratedContentColumn`) — the results it drives appear in that
+    /// column, and the reader needs its whole toolbar section for the eleven
+    /// action buttons.
     @ViewBuilder
     private var detailColumn: some View {
         Group {
@@ -520,7 +497,7 @@ extension MailRootView {
                     description: Text("Use the action bar below the list to act on them together.")
                 )
                 #if os(macOS)
-                .toolbar { emptyDetailToolbar }
+                .toolbar { EmptyDetailToolbar() }
                 #endif
             } else if let folder = detailFolder, let selectedEnvelope {
                 MessageDetailView(
@@ -542,27 +519,8 @@ extension MailRootView {
                 // items at the trailing edge — visually above the empty
                 // detail pane — until a message is picked and the real
                 // detail toolbar shoves them back into place.
-                .toolbar { emptyDetailToolbar }
+                .toolbar { EmptyDetailToolbar() }
                 #endif
-            }
-        }
-        // The search field sizes itself against this column (see
-        // `ToolbarSearchFieldWidth`); a toolbar item can't measure its own
-        // pane, so the pane measures itself here.
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { newWidth in
-            detailColumnWidth = newWidth
-        }
-        // Global search rides the reading pane's toolbar on wide layouts (its
-        // former home was the sidebar top). `.primaryAction` right-aligns it
-        // above the detail column. Compact iPhone (no `isWideSidebar`) reaches
-        // search through its dedicated tab instead, so nothing is added there.
-        .toolbar {
-            if isWideSidebar {
-                ToolbarItem(placement: .primaryAction) {
-                    toolbarSearchField
-                }
             }
         }
     }
@@ -607,15 +565,16 @@ extension MailRootView {
     }
 
     /// Toolbar host for the search field (wide iPad-regular / macOS): a stated
-    /// width so it right-aligns cleanly above the message detail column rather
-    /// than stretching, capped to the column so it can't overhang into the
-    /// neighbouring one (`ToolbarSearchFieldWidth`). Same query/focus wiring as
+    /// width so it right-aligns cleanly above the message-list column rather
+    /// than stretching, capped to the column — less its fixed sibling
+    /// buttons — so it can't overhang into the neighbouring one
+    /// (`ToolbarSearchFieldWidth`). Same query/focus wiring as
     /// the sidebar host.
     @ViewBuilder
     private var toolbarSearchField: some View {
         searchFieldCore
             .frame(width: ToolbarSearchFieldWidth.width(
-                columnWidth: detailColumnWidth,
+                columnWidth: contentColumnWidth,
                 inspectorPresented: addressInspectorPresented
             ))
     }
@@ -823,11 +782,27 @@ extension MailRootView {
     @ViewBuilder
     fileprivate var decoratedContentColumn: some View {
         contentColumn
-            // Toggle for the trailing addresses inspector. Wide layouts only
-            // (macOS always; regular-width iPad via `showsSettingsGear`); compact
-            // iPhone reaches addresses through its dedicated bottom tab instead.
+            // The search field sizes itself against this column (see
+            // `ToolbarSearchFieldWidth`); a toolbar item can't measure its own
+            // pane, so the pane measures itself here.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { newWidth in
+                contentColumnWidth = newWidth
+            }
+            // Global search rides the message-list column's toolbar on wide
+            // layouts (moved from above the reading pane in the #1047 toolbar
+            // rework — the results it drives show in this column, and the
+            // reader needs its toolbar section for its own buttons), next to
+            // the toggle for the trailing addresses inspector. Wide layouts
+            // only (macOS always; regular-width iPad via `showsSettingsGear`);
+            // compact iPhone reaches search through its dedicated tab and
+            // addresses through its bottom tab instead.
             .toolbar {
                 if isWideSidebar {
+                    ToolbarItem(placement: .primaryAction) {
+                        toolbarSearchField
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         Button {
                             addressInspectorPresented.toggle()

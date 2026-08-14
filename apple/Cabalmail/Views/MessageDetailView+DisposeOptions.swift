@@ -15,8 +15,7 @@ extension MessageDetailView {
     /// had before, with the same menu on touch-and-hold (pinch-and-hold on
     /// visionOS) — the HIG accelerator idiom Mail.app uses on its own
     /// trash/archive button. Because a hold menu is a hidden affordance,
-    /// it never becomes the only route: Settings carries the same options
-    /// and the overflow menu keeps the alternate dispose action.
+    /// it never becomes the only route: Settings carries the same options.
     @ViewBuilder
     var disposeButton: some View {
         if let model {
