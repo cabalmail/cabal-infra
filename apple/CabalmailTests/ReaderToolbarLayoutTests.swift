@@ -127,15 +127,84 @@ final class ReaderToolbarLayoutTests: XCTestCase {
     func testEveryActionIsStillReachable() {
         // Demoting must not drop an action on the floor: every case is either
         // drawn on the bar (in one of the two leading configurations) or
-        // carried by the overflow menu.
+        // carried by the overflow menu — including the actions that are only
+        // ever menu rows on the touch platforms.
         let reachable = Set(ReaderToolbarLayout.bottomBar(leading: .reply))
             .union(ReaderToolbarLayout.bottomBar(leading: .editDraft))
             .union(ReaderToolbarLayout.demotedToOverflow)
+            .union(ReaderToolbarLayout.touchOverflowOnly)
 
         XCTAssertEqual(
             reachable,
             Set(ReaderToolbarAction.allCases),
             "every reader action must be on the bar or in the overflow menu"
+        )
+    }
+
+    // The macOS toolbar (#1047): every action is its own button and the drawn
+    // order IS the demotion policy — AppKit folds a crowded toolbar's
+    // *trailing* items into its "more toolbar items" (») popup first, so the
+    // buttons are laid out left-to-right in reverse demotion priority. The
+    // original defect was the inverse: the seven buttons were in importance
+    // order, so the first things the system evicted were the dispose split
+    // button and the overflow menu, taking the primary filing action (and its
+    // Cmd+Delete equivalent) with them.
+    func testMacToolbarIsOrderedByReverseDemotionPriority() {
+        // The agreed demotion order, most-expendable first. `macToolbar` must
+        // be exactly its reverse.
+        let demotionOrder: [ReaderToolbarAction] = [
+            .printMessage,
+            .viewHeaders,
+            .viewSource,
+            .plainText,
+            .move,
+            .readerMode,
+            .toggleFlag,
+            .remoteContent,
+            .toggleRead,
+            .dispose,
+            .reply
+        ]
+
+        XCTAssertEqual(
+            ReaderToolbarLayout.macToolbar(leading: .reply),
+            demotionOrder.reversed(),
+            "the macOS toolbar must draw reverse demotion priority, left to right"
+        )
+    }
+
+    func testMacToolbarCarriesEveryActionAndNoOverflowMenu() {
+        for leading in [LeadingReaderAction.reply, .editDraft] {
+            let actions = ReaderToolbarLayout.macToolbar(leading: leading)
+            let expected = Set(ReaderToolbarAction.allCases)
+                .subtracting([.overflow, leading == .editDraft ? .reply : .editDraft])
+
+            XCTAssertEqual(
+                Set(actions), expected,
+                "\(leading): every action is its own button; the app-owned overflow menu is gone"
+            )
+            XCTAssertEqual(actions.count, Set(actions).count, "\(leading): no duplicate slots")
+        }
+    }
+
+    func testMacToolbarSwapsTheLeadingSlotForDrafts() {
+        XCTAssertEqual(ReaderToolbarLayout.macToolbar(leading: .reply).first, .reply)
+        XCTAssertEqual(ReaderToolbarLayout.macToolbar(leading: .editDraft).first, .editDraft)
+        XCTAssertEqual(
+            ReaderToolbarLayout.macToolbar(leading: .reply).dropFirst(),
+            ReaderToolbarLayout.macToolbar(leading: .editDraft).dropFirst(),
+            "the leading slot swaps; everything after it stays put"
+        )
+    }
+
+    func testMacToolbarKeepsTheFilingActionsAtTheSurvivingEdge() {
+        // The #1047 regression, inverted: dispose must now be among the LAST
+        // buttons the system could ever evict, not the first.
+        let actions = ReaderToolbarLayout.macToolbar(leading: .reply)
+        XCTAssertEqual(
+            Array(actions.prefix(2)),
+            [.reply, .dispose],
+            "reply and dispose survive at the leading edge at any width"
         )
     }
 }

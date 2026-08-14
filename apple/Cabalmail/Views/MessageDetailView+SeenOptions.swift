@@ -29,22 +29,24 @@ extension MessageDetailView {
                 runToggleSeen(model: model)
             }
             .menuIndicator(optionMenuIndicator)
-            // Cmd+Shift+U — Mail.app's mark-unread shortcut, also live on
-            // iPad/iPhone hardware keyboards. We toggle both ways from the
-            // same chord; the icon labels which direction the next press
-            // goes.
-            .keyboardShortcut("u", modifiers: [.command, .shift])
+            // Cmd+Shift+U (Mail.app's mark-unread chord) rides
+            // `readerChordHosts`, not this control — an equivalent on a
+            // toolbar item dies with the item when the toolbar overflows
+            // (#1047).
             .accessibilityIdentifier("reader.toggleRead")
         }
     }
 
-    /// Icon reflects the current state; tap-action is the inverse. Matches
+    /// Face reflects the current state; tap-action is the inverse. Matches
     /// Mail.app: an already-read message shows "envelope.open" and tapping
-    /// marks it unread.
+    /// marks it unread. A `Label` so the macOS » popup has a title to draw
+    /// when the toolbar overflows; the bars render it icon-only.
     @ViewBuilder
     private func seenToolbarLabel(isSeen: Bool) -> some View {
-        Image(systemName: isSeen ? "envelope.open" : "envelope.badge")
-            .accessibilityLabel(isSeen ? "Mark as unread" : "Mark as read")
+        Label(
+            isSeen ? "Mark as unread" : "Mark as read",
+            systemImage: isSeen ? "envelope.open" : "envelope.badge"
+        )
     }
 
     /// Runs the toggle the control's face advertises — shared by the plain
