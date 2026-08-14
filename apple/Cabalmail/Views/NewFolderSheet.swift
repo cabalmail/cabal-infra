@@ -20,7 +20,14 @@ struct NewFolderSheet: View {
         NavigationStack {
             Form {
                 Section("Name") {
-                    TextField("e.g. Projects", text: $form.name)
+                    // The example belongs *inside* the empty field, so it is
+                    // a prompt rather than the field's title: macOS `Form`
+                    // promotes a `TextField`'s title into the leading label
+                    // column, which drew "e.g. Projects" as the row's label
+                    // under the "Name" header (#1063). The title survives
+                    // hidden, for VoiceOver.
+                    TextField("Name", text: $form.name, prompt: Text("e.g. Projects"))
+                        .labelsHidden()
                         .autocorrectionDisabled()
                         #if os(iOS) || os(visionOS)
                         .textInputAutocapitalization(.never)
