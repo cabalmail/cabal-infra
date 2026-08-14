@@ -10,7 +10,11 @@ enum AddressInspectorWidth {
 }
 
 /// Width policy for the search field that rides the message-list column's
-/// toolbar on wide layouts (`MailRootView.toolbarSearchField`).
+/// toolbar on wide layouts (`MailRootView.toolbarSearchField`) — macOS and
+/// visionOS. iPadOS draws the field in the column instead, because its
+/// column-scoped navigation bar can't seat one at all
+/// (`GlobalSearchFieldPlacement`); the iOS arms below are what the toolbar
+/// host would need if it ever returns there, and are unused meanwhile.
 ///
 /// The field wants `preferred`, which is what makes it right-align cleanly
 /// above its column instead of stretching — right up until the toolbar area is
