@@ -82,6 +82,18 @@ struct DisposedEnvelope: Equatable, Sendable {
     let tick: Int
 }
 
+/// Signal payload for a Drafts copy that `/save_draft` replaced in place —
+/// posted when a compose session closes via Save Draft rather than Send.
+/// Distinct from `DisposedEnvelope` because a replace is not a dispose:
+/// something took the retired copy's place, so the list re-points at the
+/// survivor instead of advancing to the next message per the user's
+/// after-dispose preference (#1078).
+struct DraftReplacedSignal: Equatable, Sendable {
+    let folderPath: String
+    let replacement: DraftReplacement
+    let tick: Int
+}
+
 /// Signal payload for a flag change driven from outside the list (currently:
 /// the detail view toggling `\Seen`). The list view applies this directly to
 /// its in-memory envelope so the row updates without a server round trip.

@@ -525,6 +525,12 @@ extension MessageListView {
                 selection = next
             }
         }
+        .onChange(of: appState.lastDraftReplaced) { _, signal in
+            // A compose session saved over a Drafts copy this list may be
+            // showing. Handler in `+Actions.swift`; other folders ignore it.
+            guard let signal, signal.folderPath == folder.path else { return }
+            handleDraftReplaced(signal.replacement)
+        }
         .onChange(of: appState.lastReadAdvanceRequest) { _, signal in
             // Detail view marked the current message read with a move-to
             // option. Advance the selection like the dispose handler above,
