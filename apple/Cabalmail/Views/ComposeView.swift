@@ -179,6 +179,17 @@ struct ComposeView: View {
                 closeCoordinator.allowsClose = true
                 #endif
                 let didClose = await model.cancel()
+                // The save replaced the server copy, expunging the UID an
+                // open Drafts list — and the reader this dismissal returns
+                // to — is still holding. Hand the list the whole chain plus
+                // the survivor so it can swap rather than strand the user
+                // on content the server no longer has (#1078).
+                if didClose, let replacement = model.savedDraftReplacement {
+                    appState.signalDraftReplaced(
+                        folderPath: "Drafts",
+                        replacement: replacement
+                    )
+                }
                 #if os(macOS)
                 // IMAP save failed: keep the user in the window so they can
                 // see the error banner and retry.

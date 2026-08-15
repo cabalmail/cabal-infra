@@ -278,6 +278,28 @@ extension ComposeViewModel {
         return replacedServerDraftUIDs + (serverDraftRef.map { [$0.uid] } ?? [])
     }
 
+    /// The replace chain a *saved* (not sent) compose session leaves behind,
+    /// or nil when it retired nothing. Save Draft on a resumed — or merely
+    /// long-lived — draft expunges the copy it replaces, which leaves the
+    /// list rendering a phantom row and, worse, leaves the reader the user
+    /// lands back on holding the retired copy's body. Edit Draft from there
+    /// re-seeds the pre-edit content and pins the send's discard to a UID
+    /// that no longer exists, so the edit is silently dropped and the saved
+    /// copy is orphaned (#1078).
+    ///
+    /// The send path reports the same chain through `supersededDraftUIDs`;
+    /// this one is its Save Draft counterpart, and names the survivor too
+    /// because — unlike a send — something is still in Drafts to look at.
+    var savedDraftReplacement: DraftReplacement? {
+        guard lastSendOutcome == nil else { return nil }
+        guard let surviving = serverDraftRef?.uid,
+              !replacedServerDraftUIDs.isEmpty else { return nil }
+        return DraftReplacement(
+            retiredUIDs: replacedServerDraftUIDs,
+            survivingUID: surviving
+        )
+    }
+
     /// Takes on the ref `/save_draft` just returned, remembering the UID it
     /// replaced. The old copy is expunged server-side by the replace, so
     /// its row in an open Drafts list is already a phantom (#1071).

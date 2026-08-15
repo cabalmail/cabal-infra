@@ -137,6 +137,8 @@ final class AppState {
     /// `lastEnvelopeFlagChange` as usual.
     var lastReadAdvanceRequest: ReadAdvanceRequest?
     private var readAdvanceTick = 0
+    var lastDraftReplaced: DraftReplacedSignal?
+    private var draftReplacedTick = 0
 
     /// UIDs with a flag write in flight from the detail view, keyed by folder
     /// path (IMAP UIDs are only unique within a mailbox, so a bare UID set
@@ -489,6 +491,20 @@ extension AppState {
         if wasUnread {
             applyUnreadDelta(folderPath: folderPath, delta: -1)
         }
+    }
+
+    /// A compose session saved over the Drafts copy an open list may be
+    /// showing. The retired UIDs are already expunged server-side and the
+    /// survivor carries the content the user just saved, so the list prunes
+    /// the one and re-points at the other (#1078).
+    func signalDraftReplaced(folderPath: String, replacement: DraftReplacement) {
+        guard !replacement.retiredUIDs.isEmpty else { return }
+        draftReplacedTick += 1
+        lastDraftReplaced = DraftReplacedSignal(
+            folderPath: folderPath,
+            replacement: replacement,
+            tick: draftReplacedTick
+        )
     }
 
     /// Marks a replied-to message `\Answered` after its reply sends: signal
