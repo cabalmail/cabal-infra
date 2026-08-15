@@ -66,12 +66,19 @@ struct Toast: Equatable, Sendable {
 }
 
 /// Signal payload for a successful dispose action. Carries the folder path
-/// and UID so list views in non-matching folders can ignore it, plus a
+/// and UIDs so list views in non-matching folders can ignore it, plus a
 /// monotonic `tick` so `.onChange` fires even if the same UID value
 /// reappears after a folder switch + UIDVALIDITY reset.
+///
+/// `uids` is usually one element — a disposed message is one row. A
+/// send-from-draft names several: every copy its compose session left in
+/// Drafts, since an autosave replaces the copy under a new UID and the list
+/// may be rendering any of them (#1071). One signal rather than several
+/// because `.onChange` observes the latest value, so back-to-back posts in
+/// the same update would drop all but the last.
 struct DisposedEnvelope: Equatable, Sendable {
     let folderPath: String
-    let uid: UInt32
+    let uids: [UInt32]
     let tick: Int
 }
 

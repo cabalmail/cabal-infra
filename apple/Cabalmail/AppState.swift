@@ -466,10 +466,18 @@ final class AppState {
 // type-body budget as the other extensions in this file.
 extension AppState {
     func signalDisposed(folderPath: String, uid: UInt32, wasUnread: Bool = false) {
+        signalDisposed(folderPath: folderPath, uids: [uid], wasUnread: wasUnread)
+    }
+
+    /// Multi-UID form, for a sender that invalidates more than one row at
+    /// once: a send-from-draft retires every Drafts copy its compose
+    /// session created, not just the newest (#1071).
+    func signalDisposed(folderPath: String, uids: [UInt32], wasUnread: Bool = false) {
+        guard !uids.isEmpty else { return }
         disposedTick += 1
         lastDisposedEnvelope = DisposedEnvelope(
             folderPath: folderPath,
-            uid: uid,
+            uids: uids,
             tick: disposedTick
         )
         // Dispose marks the message `\Seen` before the move, so the source

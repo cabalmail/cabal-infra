@@ -118,8 +118,14 @@ final class ComposeViewModel {
 
     /// Server-side Drafts copy the next save replaces (and a send
     /// discards). Seeded from the draft when resuming; updated after every
-    /// successful `/save_draft` round trip.
+    /// successful `/save_draft` round trip — go through
+    /// `adoptServerDraftRef` for that so the replaced UID is recorded.
     var serverDraftRef: DraftServerRef?
+    /// UIDs of the Drafts copies earlier `/save_draft` replaces expunged.
+    /// Each replace lands a new UID, but an open Drafts list keeps
+    /// rendering whichever one it loaded, so a send has to name the whole
+    /// chain to prune the row the user is actually looking at (#1071).
+    var replacedServerDraftUIDs: [UInt32] = []
     /// Whether this surface opened on a draft that already exists in the
     /// server Drafts folder (Edit Draft), rather than on a new message, reply
     /// or forward. Captured at init rather than read off `serverDraftRef`,
