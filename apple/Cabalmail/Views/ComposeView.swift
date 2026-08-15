@@ -172,6 +172,18 @@ struct ComposeView: View {
                 closeCoordinator.allowsClose = true
                 #endif
                 await model.discard()
+                // The discard expunged the server copy an open Drafts list
+                // — and the reader this dismissal returns to — is still
+                // holding. Say so, or the row survives and Edit Draft on it
+                // reopens the discarded draft with Send live (#1081). Same
+                // signal as Save Draft; the replacement has no survivor, so
+                // the policy drops the reader rather than re-pointing it.
+                if let replacement = model.retiredDraftReplacement {
+                    appState.signalDraftReplaced(
+                        folderPath: "Drafts",
+                        replacement: replacement
+                    )
+                }
             }
         case .saveDraft:
             Task {
@@ -183,8 +195,10 @@ struct ComposeView: View {
                 // open Drafts list — and the reader this dismissal returns
                 // to — is still holding. Hand the list the whole chain plus
                 // the survivor so it can swap rather than strand the user
-                // on content the server no longer has (#1078).
-                if didClose, let replacement = model.savedDraftReplacement {
+                // on content the server no longer has (#1078). An emptied
+                // body takes the `.discardEmpty` exit through this same
+                // button and reports a chain with no survivor (#1081).
+                if didClose, let replacement = model.retiredDraftReplacement {
                     appState.signalDraftReplaced(
                         folderPath: "Drafts",
                         replacement: replacement

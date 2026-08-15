@@ -278,8 +278,8 @@ extension ComposeViewModel {
         return replacedServerDraftUIDs + (serverDraftRef.map { [$0.uid] } ?? [])
     }
 
-    /// The replace chain a *saved* (not sent) compose session leaves behind,
-    /// or nil when it retired nothing. Save Draft on a resumed — or merely
+    /// The chain a *closed but not sent* compose session leaves behind, or
+    /// nil when it retired nothing. Save Draft on a resumed — or merely
     /// long-lived — draft expunges the copy it replaces, which leaves the
     /// list rendering a phantom row and, worse, leaves the reader the user
     /// lands back on holding the retired copy's body. Edit Draft from there
@@ -287,17 +287,32 @@ extension ComposeViewModel {
     /// that no longer exists, so the edit is silently dropped and the saved
     /// copy is orphaned (#1078).
     ///
-    /// The send path reports the same chain through `supersededDraftUIDs`;
-    /// this one is its Save Draft counterpart, and names the survivor too
-    /// because — unlike a send — something is still in Drafts to look at.
-    var savedDraftReplacement: DraftReplacement? {
+    /// A discard strands the same list and the same reader, minus the
+    /// survivor: Edit Draft on the row left behind reopens the thrown-away
+    /// draft with Send live, and it delivers (#1081). Both exits report
+    /// here, so the view signals the list the same way either way and
+    /// `DraftReplacementPolicy` owns the difference.
+    ///
+    /// The send path reports its chain through `supersededDraftUIDs`
+    /// instead: a send is a dispose, and the list advances per the user's
+    /// after-dispose preference rather than dropping the reader.
+    var retiredDraftReplacement: DraftReplacement? {
         guard lastSendOutcome == nil else { return nil }
-        guard let surviving = serverDraftRef?.uid,
-              !replacedServerDraftUIDs.isEmpty else { return nil }
-        return DraftReplacement(
-            retiredUIDs: replacedServerDraftUIDs,
-            survivingUID: surviving
+        return DraftReplacementPolicy.retirement(
+            discarded: didDiscardServerDraft,
+            replacedUIDs: replacedServerDraftUIDs,
+            currentUID: serverDraftRef?.uid
         )
+    }
+
+    /// Notes the outcome of a server-side discard. `discardDraft` returning
+    /// false means the UIDVALIDITY guard declined — the copy is gone under
+    /// those coordinates either way, so the row is stale in both cases. A
+    /// *thrown* request (nil here) says nothing about the server, so the
+    /// session stays quiet and leaves the row for the next refresh to
+    /// settle rather than pruning a message that may still exist.
+    func recordServerDraftDiscard(_ result: Bool?) {
+        didDiscardServerDraft = result != nil
     }
 
     /// Takes on the ref `/save_draft` just returned, remembering the UID it
