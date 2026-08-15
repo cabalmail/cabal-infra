@@ -1,8 +1,13 @@
 //! `cargo xtask ci` — everything CI runs, in CI's order.
 //!
 //! There is one list of steps and it lives here, so the pre-push gate and the
-//! workflow cannot drift apart: `linux.yml` (Phase 2) runs these same
-//! subcommands rather than restating the commands in YAML.
+//! workflow cannot drift apart: `.github/workflows/linux.yml` runs these same
+//! steps rather than restating the commands in YAML. A developer runs the whole
+//! list with `cargo xtask ci`; the workflow gives each step its own job and
+//! names it with `cargo xtask ci --step <name>`, so a failure is attributed to
+//! a job rather than buried in one long log. `--list` prints the names, which
+//! is what the drift test in `tests/workflow_contract.rs` compares the workflow
+//! against.
 //!
 //! Fail-fast is deliberate. This is a gate, and the first failure is the one
 //! worth reading; a run that continues past a formatting failure just buries it
@@ -25,16 +30,37 @@ pub enum Display {
     None,
 }
 
-pub fn run(workspace: &Path) -> Result<(), String> {
+/// Runs the gate. `only` narrows it to the single step of that name, which is
+/// how each CI job runs exactly one of them.
+pub fn run(workspace: &Path, only: Option<&str>) -> Result<(), String> {
     let display = detect_display();
-    if display == Display::None {
+    let steps: Vec<Step> = match only {
+        Some(name) => plan(&cargo(), display)
+            .into_iter()
+            .filter(|step| step.label == name)
+            .collect(),
+        None => plan(&cargo(), display),
+    };
+
+    // A selection that matched nothing would run zero steps and report success
+    // — a CI job that tested nothing and went green. `parse` rejects an unknown
+    // name before we get here; this is the backstop for the day something else
+    // calls in.
+    if steps.is_empty() {
+        return Err(format!(
+            "no ci step matched `{}`. Steps: {}",
+            only.unwrap_or(""),
+            step_names().join(", ")
+        ));
+    }
+
+    if display == Display::None && steps.iter().any(|step| step.label == APP_TESTS) {
         eprintln!(
             "[xtask] ci: no display server and no xvfb-run — the widget tests \
              will skip themselves. Install xorg-server-xvfb to run them."
         );
     }
 
-    let steps = plan(&cargo(), display);
     let total = steps.len();
     for (index, step) in steps.iter().enumerate() {
         println!("[xtask] ci: step {} of {total}", index + 1);
@@ -44,6 +70,14 @@ pub fn run(workspace: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Every step name, in the order the gate runs them.
+pub fn step_names() -> Vec<&'static str> {
+    plan("cargo", Display::None)
+        .into_iter()
+        .map(|step| step.label)
+        .collect()
+}
+
 /// The cargo that invoked us. Cargo sets `$CARGO` for its subprocesses, so
 /// `cargo +nightly xtask ci` runs its steps under the same toolchain the
 /// caller asked for rather than silently reverting to the default.
@@ -51,16 +85,26 @@ fn cargo() -> String {
     std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned())
 }
 
+/// The one step name that cares whether there is a display to draw on.
+const APP_TESTS: &str = "app-tests";
+
 /// The steps, in order. Pure so the order and the flags are testable without
 /// running a two-minute build.
+///
+/// A step's label is also the name a CI job selects it by, so the labels are
+/// single words: renaming one renames a workflow argument, and the drift test
+/// fails until both move together.
 fn plan(cargo: &str, display: Display) -> Vec<Step> {
     vec![
+        // `fmt` parses rather than resolves, so it is the one step with no
+        // `--locked` to give it.
         Step::new("format", cargo, ["fmt", "--all", "--check"]),
         Step::new(
             "clippy",
             cargo,
             [
                 "clippy",
+                "--locked",
                 "--workspace",
                 "--all-targets",
                 "--",
@@ -68,8 +112,16 @@ fn plan(cargo: &str, display: Display) -> Vec<Step> {
                 "warnings",
             ],
         ),
-        Step::new("kit tests", cargo, ["test", "-p", "cabalmail-kit"]),
-        Step::new("workspace checks", cargo, ["test", "-p", "xtask"]),
+        Step::new(
+            "kit-tests",
+            cargo,
+            ["test", "--locked", "-p", "cabalmail-kit"],
+        ),
+        Step::new(
+            "workspace-checks",
+            cargo,
+            ["test", "--locked", "-p", "xtask"],
+        ),
         app_tests(cargo, display),
     ]
 }
@@ -78,14 +130,14 @@ fn plan(cargo: &str, display: Display) -> Vec<Step> {
 /// `-a` picks a free server number, which matters on a runner where two jobs
 /// can overlap.
 fn app_tests(cargo: &str, display: Display) -> Step {
-    let test = ["test", "-p", "cabalmail-gtk"];
+    let test = ["test", "--locked", "-p", "cabalmail-gtk"];
     match display {
         Display::Xvfb => {
             let mut args = vec!["-a".to_owned(), cargo.to_owned()];
             args.extend(test.iter().map(|arg| (*arg).to_owned()));
-            Step::new("app tests", "xvfb-run", args)
+            Step::new(APP_TESTS, "xvfb-run", args)
         }
-        Display::Session | Display::None => Step::new("app tests", cargo, test),
+        Display::Session | Display::None => Step::new(APP_TESTS, cargo, test),
     }
 }
 
@@ -131,11 +183,32 @@ mod tests {
             vec![
                 "format",
                 "clippy",
-                "kit tests",
-                "workspace checks",
-                "app tests"
+                "kit-tests",
+                "workspace-checks",
+                "app-tests"
             ]
         );
+    }
+
+    /// What `--step` and the workflow's job arguments are matched against.
+    #[test]
+    fn the_step_names_are_the_plans_labels() {
+        assert_eq!(step_names(), labels(Display::None));
+    }
+
+    /// A name with a space in it would need quoting in the workflow, where it
+    /// is an argument. Cheaper to keep the names shell-plain.
+    #[test]
+    fn every_step_name_is_a_single_word() {
+        for name in step_names() {
+            assert!(
+                !name.is_empty()
+                    && name
+                        .bytes()
+                        .all(|byte| byte.is_ascii_lowercase() || byte == b'-'),
+                "`{name}` is not a lowercase, hyphenated single word"
+            );
+        }
     }
 
     /// The reason the toolchain is pinned exactly. If this ever softens, a new
@@ -149,8 +222,29 @@ mod tests {
             .expect("the plan lints");
         assert_eq!(
             step.command_line(),
-            "cargo clippy --workspace --all-targets -- -D warnings"
+            "cargo clippy --locked --workspace --all-targets -- -D warnings"
         );
+    }
+
+    /// `Cargo.lock` is committed because distro packaging builds offline
+    /// against vendored crates. Without `--locked`, a dependency bump whose
+    /// lock update was never committed resolves silently in CI and passes,
+    /// then fails in `makepkg`'s `--frozen --offline` build — or worse, ships
+    /// versions nothing verified. `fmt` is exempt: it never resolves.
+    #[test]
+    fn every_resolving_step_refuses_to_update_the_lock_file() {
+        for step in plan("cargo", Display::Xvfb) {
+            if step.label == "format" {
+                assert!(!step.command_line().contains("--locked"));
+                continue;
+            }
+            assert!(
+                step.args.iter().any(|arg| arg == "--locked"),
+                "`{}` may rewrite Cargo.lock: {}",
+                step.label,
+                step.command_line()
+            );
+        }
     }
 
     #[test]
@@ -158,13 +252,31 @@ mod tests {
         let of = |display| {
             plan("cargo", display)
                 .into_iter()
-                .find(|step| step.label == "app tests")
+                .find(|step| step.label == APP_TESTS)
                 .expect("the plan tests the app")
                 .command_line()
         };
-        assert_eq!(of(Display::Xvfb), "xvfb-run -a cargo test -p cabalmail-gtk");
-        assert_eq!(of(Display::Session), "cargo test -p cabalmail-gtk");
-        assert_eq!(of(Display::None), "cargo test -p cabalmail-gtk");
+        assert_eq!(
+            of(Display::Xvfb),
+            "xvfb-run -a cargo test --locked -p cabalmail-gtk"
+        );
+        assert_eq!(of(Display::Session), "cargo test --locked -p cabalmail-gtk");
+        assert_eq!(of(Display::None), "cargo test --locked -p cabalmail-gtk");
+    }
+
+    /// The failure mode this guards is a job that runs nothing and reports
+    /// success. `parse` rejects an unknown step name first; this is what makes
+    /// the run itself refuse rather than print "0 steps passed".
+    #[test]
+    fn a_selection_that_matches_nothing_is_an_error() {
+        let error = run(Path::new("."), Some("no-such-step")).expect_err("nothing to run");
+        assert!(error.contains("no-such-step"), "{error}");
+        for name in step_names() {
+            assert!(
+                error.contains(name),
+                "the error should list `{name}`: {error}"
+            );
+        }
     }
 
     /// A session in hand beats a virtual one, and `xvfb-run` is only reached

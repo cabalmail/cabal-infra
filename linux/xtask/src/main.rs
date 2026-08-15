@@ -63,7 +63,12 @@ enum Status {
 #[derive(Debug, PartialEq, Eq)]
 enum Action {
     Help,
-    Ci,
+    /// The whole gate, or the single step named by `ci --step <name>`.
+    Ci {
+        only: Option<String>,
+    },
+    /// `ci --list`: the step names, one per line, for the workflow drift test.
+    CiSteps,
     SyncVendored,
     Pending {
         name: &'static str,
@@ -117,7 +122,13 @@ fn run(args: &[String]) -> Result<(), Failure> {
             print!("{}", usage());
             Ok(())
         }
-        Action::Ci => Ok(ci::run(&workspace_dir())?),
+        Action::Ci { only } => Ok(ci::run(&workspace_dir(), only.as_deref())?),
+        Action::CiSteps => {
+            for name in ci::step_names() {
+                println!("{name}");
+            }
+            Ok(())
+        }
         Action::SyncVendored => Ok(sync_vendored::run(&workspace_dir())?),
         Action::Pending { name, work_item } => Err(Failure {
             message: format!(
@@ -149,18 +160,47 @@ fn parse(args: &[String]) -> Result<Action, Failure> {
             name: subcommand.name,
             work_item,
         }),
-        Status::Live => {
-            if let Some(extra) = args.get(1) {
-                return Err(Failure::usage(format!(
-                    "`{name}` takes no arguments, got `{extra}`"
-                )));
+        Status::Live => match subcommand.name {
+            "ci" => parse_ci(&args[1..]),
+            "sync-vendored" => {
+                if let Some(extra) = args.get(1) {
+                    return Err(Failure::usage(format!(
+                        "`{name}` takes no arguments, got `{extra}`"
+                    )));
+                }
+                Ok(Action::SyncVendored)
             }
-            match subcommand.name {
-                "ci" => Ok(Action::Ci),
-                "sync-vendored" => Ok(Action::SyncVendored),
-                other => unreachable!("`{other}` is live but has no action"),
+            other => unreachable!("`{other}` is live but has no action"),
+        },
+    }
+}
+
+/// `ci` on its own runs the whole gate; `--step` and `--list` exist for the
+/// workflow, which gives each step its own job so a failure names itself.
+fn parse_ci(rest: &[String]) -> Result<Action, Failure> {
+    let known = ci::step_names();
+    match rest {
+        [] => Ok(Action::Ci { only: None }),
+        [flag] if flag == "--list" => Ok(Action::CiSteps),
+        [flag] if flag == "--step" => Err(Failure::usage(format!(
+            "`ci --step` needs a step name: {}",
+            known.join(", ")
+        ))),
+        [flag, step] if flag == "--step" => {
+            if known.contains(&step.as_str()) {
+                Ok(Action::Ci {
+                    only: Some(step.clone()),
+                })
+            } else {
+                Err(Failure::usage(format!(
+                    "no ci step named `{step}`. Steps: {}",
+                    known.join(", ")
+                )))
             }
         }
+        [extra, ..] => Err(Failure::usage(format!(
+            "`ci` takes no arguments, got `{extra}`"
+        ))),
     }
 }
 
@@ -180,6 +220,11 @@ fn usage() -> String {
             text.push_str(&format!("  {:width$}  (not yet — {work_item})\n", ""));
         }
     }
+    text.push_str(&format!(
+        "\nci runs every step; `ci --step <name>` runs one, which is how the\n\
+         workflow gives each its own job. `ci --list` prints the names:\n  {}\n",
+        ci::step_names().join(", ")
+    ));
     text
 }
 
@@ -255,12 +300,57 @@ mod tests {
 
     #[test]
     fn a_live_subcommand_rejects_arguments_it_would_ignore() {
-        let failure = parse_args(&["ci", "--fast"]).expect_err("no such flag");
-        assert!(
-            failure.message.contains("--fast"),
-            "the rejection should name what was typed: {}",
-            failure.message
-        );
+        for args in [["ci", "--fast"], ["sync-vendored", "--force"]] {
+            let failure = parse_args(&args).expect_err("no such flag");
+            assert!(
+                failure.message.contains(args[1]),
+                "the rejection should name what was typed: {}",
+                failure.message
+            );
+        }
+    }
+
+    #[test]
+    fn ci_on_its_own_runs_every_step() {
+        assert_eq!(parse_args(&["ci"]).ok(), Some(Action::Ci { only: None }));
+    }
+
+    /// The workflow passes these; a renamed step has to fail here rather than
+    /// as a mystery CI failure on a job that ran nothing.
+    #[test]
+    fn ci_selects_a_step_by_name() {
+        for name in ci::step_names() {
+            assert_eq!(
+                parse_args(&["ci", "--step", name]).ok(),
+                Some(Action::Ci {
+                    only: Some(name.to_owned())
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_ci_step_lists_the_real_ones() {
+        let failure = parse_args(&["ci", "--step", "lint"]).expect_err("no such step");
+        assert!(failure.message.contains("`lint`"));
+        for name in ci::step_names() {
+            assert!(
+                failure.message.contains(name),
+                "the rejection should list `{name}`: {}",
+                failure.message
+            );
+        }
+    }
+
+    #[test]
+    fn ci_step_without_a_name_says_so() {
+        let failure = parse_args(&["ci", "--step"]).expect_err("nothing to select");
+        assert!(failure.message.contains("needs a step name"));
+    }
+
+    #[test]
+    fn ci_list_prints_the_step_names() {
+        assert_eq!(parse_args(&["ci", "--list"]).ok(), Some(Action::CiSteps));
     }
 
     #[test]
