@@ -235,9 +235,13 @@ struct ComposeView: View {
                     // by default, so that took over a minute). "Drafts" is
                     // the mailbox `/save_draft` pins every draft to; see
                     // `MessageDetailViewModel.isDraftsFolder`.
-                    if let uid = model.supersededDraftUID {
-                        appState.signalDisposed(folderPath: "Drafts", uid: uid)
-                    }
+                    // Every UID the session held, not just the last: a 60s
+                    // autosave replaces the copy under a new UID and the
+                    // open list is still rendering the old one (#1071).
+                    appState.signalDisposed(
+                        folderPath: "Drafts",
+                        uids: model.supersededDraftUIDs
+                    )
                     // A reply left the device (or the outbox owns it now):
                     // mark the original `\Answered` so the list's replied
                     // arrow appears without waiting for a refresh.

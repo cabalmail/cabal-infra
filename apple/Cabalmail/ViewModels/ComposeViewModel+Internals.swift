@@ -196,7 +196,7 @@ extension ComposeViewModel {
             serverSaveInFlight = true
             defer { serverSaveInFlight = false }
             if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
-                serverDraftRef = ref
+                adoptServerDraftRef(ref)
             }
             try? await draftStore.remove(id: draftId)
             stop()
@@ -231,7 +231,7 @@ extension ComposeViewModel {
         defer { serverSaveInFlight = false }
         do {
             if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
-                serverDraftRef = ref
+                adoptServerDraftRef(ref)
             }
         } catch {
             // Swallowed: see the doc comment. A failed replace server-side
@@ -257,19 +257,35 @@ extension ComposeViewModel {
         "\(address.mailbox)@\(address.host)"
     }
 
-    /// UID of the server-side Drafts copy that a completed send has just
-    /// superseded, or nil when there's nothing for the Drafts list to
-    /// prune. `/send` discards that copy server-side as part of delivery,
-    /// so the row the user is looking at is stale the moment this returns
-    /// a value — the compose surface signals the list rather than leaving
-    /// it to the next background reconcile a minute later.
+    /// Every server-side Drafts UID a completed send has just superseded,
+    /// oldest first, or empty when there's nothing for the Drafts list to
+    /// prune. `/send` discards the current copy server-side as part of
+    /// delivery, so the row the user is looking at is stale the moment this
+    /// returns a value — the compose surface signals the list rather than
+    /// leaving it to the next background reconcile a minute later.
+    ///
+    /// It reports the whole chain, not just the current ref, because each
+    /// 60-second autosave replaces the copy with a *new* UID and nothing
+    /// tells an already-loaded Drafts list about the swap. Naming only the
+    /// survivor pruned a UID the list never had, leaving a phantom row for
+    /// the pre-autosave copy that could still be opened and re-sent (#1071).
     ///
     /// A queued send keeps its draft on purpose (the outbox hasn't
     /// delivered anything yet, and the ref is dropped rather than
     /// discarded), so it reports nothing.
-    var supersededDraftUID: UInt32? {
-        guard lastSendOutcome == .sent else { return nil }
-        return serverDraftRef?.uid
+    var supersededDraftUIDs: [UInt32] {
+        guard lastSendOutcome == .sent else { return [] }
+        return replacedServerDraftUIDs + (serverDraftRef.map { [$0.uid] } ?? [])
+    }
+
+    /// Takes on the ref `/save_draft` just returned, remembering the UID it
+    /// replaced. The old copy is expunged server-side by the replace, so
+    /// its row in an open Drafts list is already a phantom (#1071).
+    func adoptServerDraftRef(_ ref: DraftServerRef) {
+        if let previous = serverDraftRef?.uid, previous != ref.uid {
+            replacedServerDraftUIDs.append(previous)
+        }
+        serverDraftRef = ref
     }
 
     func describe(_ error: CabalmailError) -> String {

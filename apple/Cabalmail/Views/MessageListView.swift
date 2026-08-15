@@ -497,14 +497,25 @@ extension MessageListView {
             // back to the list), then prune the matching row so it
             // disappears immediately. Other folders ignore the signal.
             guard let signal, signal.folderPath == folder.path else { return }
-            let current = model?.envelopes.first { $0.uid == signal.uid }
+            // A send-from-draft names every UID its compose session held in
+            // Drafts (#1071); whichever of them this list actually loaded is
+            // the row on screen, so that's the one the advance walks from.
+            let current = model?.envelopes.first { signal.uids.contains($0.uid) }
+            // Drop the rest first: they're stale copies of the same draft,
+            // and leaving one in place would let the advance walk onto a row
+            // that's about to disappear.
+            for uid in signal.uids where uid != current?.uid {
+                model?.pruneEnvelope(uid: uid)
+            }
             // Compute the advance target before pruning - every advance
             // policy walks from `current`'s index, which disappears once
             // it's pruned.
             let next = current.flatMap {
                 model?.advanceTarget(after: $0, following: preferences.disposeAdvance)
             }
-            model?.pruneEnvelope(uid: signal.uid)
+            if let current {
+                model?.pruneEnvelope(uid: current.uid)
+            }
             if isWideLayout {
                 // Wide layouts drive the reading pane off `selectedUIDs`;
                 // advancing the set re-derives `selection` via the list's
