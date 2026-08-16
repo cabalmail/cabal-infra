@@ -209,14 +209,17 @@ sessions out of known potholes:
 - **First-run interruptions.** On a fresh simulator, expect an iPadOS
   "Copy and Paste" keyboard education overlay covering the form, and a
   "Save Password?" alert after sign-in (dismiss with `Not Now`). Script
-  their dismissal or pre-seed the simulator before measuring anything.
-  System alerts are *not* in the app's tree — dismiss them with a
-  system-scoped query (`tap systext:Not Now`), not `tap text:`.
-- **System-owned UI needs `sys` queries.** Permission alerts, AutoFill
-  and "Save Password?" sheets, edit menus and the visionOS keyboard all
-  live in a system process, so an app-scoped query reports them absent
-  and the app underneath stays inert until they are answered. Prefix the
-  query — `sysid:`, `systext:` — and use `sysdump` to see the tree.
+  their dismissal (`tap text:Not Now`) or pre-seed the simulator before
+  measuring anything.
+- **UI the app does not own needs `sys` queries.** Permission alerts,
+  AutoFill sheets, edit menus and the visionOS keyboard can live in a
+  system process rather than the app's hierarchy — and when they do, an
+  app-scoped query reports them absent while the app underneath stays
+  inert until they are answered, so a `tap`/`type` that "succeeds" and
+  changes nothing is the signature. Which UI lands where is not worth
+  predicting: try `text:`/`id:` first, and when the element is missing
+  but visible on a screenshot, re-run the query with the `sysid:` /
+  `systext:` prefix. `sysdump` shows the system-side tree.
   The hosting process is probed, not assumed, because it differs by
   platform: iOS and iPadOS have `com.apple.springboard`, while visionOS
   has no SpringBoard at all and splits the shell across
