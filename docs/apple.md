@@ -175,9 +175,9 @@ cd apple/Tools/SimDrive
 ./simdrive stop
 ```
 
-The full command grammar (`launch`, `activate`, `env`, `dump`, `focus`,
-`tap`, `type`, `cmdv`, `orient`, `drag`, `swiperow`, `exists`, `wait`)
-is documented at the top of
+The full command grammar (`launch`, `activate`, `env`, `dump`, `sysdump`,
+`sysapp`, `focus`, `tap`, `type`, `cmdv`, `orient`, `drag`, `swiperow`,
+`exists`, `wait`) is documented at the top of
 `Tools/SimDrive/SimDriveUITests/SimDriveTests.swift`. Notes that keep
 sessions out of known potholes:
 
@@ -209,8 +209,20 @@ sessions out of known potholes:
 - **First-run interruptions.** On a fresh simulator, expect an iPadOS
   "Copy and Paste" keyboard education overlay covering the form, and a
   "Save Password?" alert after sign-in (dismiss with `Not Now`). Script
-  their dismissal (`tap text:Not Now`) or pre-seed the simulator before
-  measuring anything.
+  their dismissal or pre-seed the simulator before measuring anything.
+  System alerts are *not* in the app's tree — dismiss them with a
+  system-scoped query (`tap systext:Not Now`), not `tap text:`.
+- **System-owned UI needs `sys` queries.** Permission alerts, AutoFill
+  and "Save Password?" sheets, edit menus and the visionOS keyboard all
+  live in a system process, so an app-scoped query reports them absent
+  and the app underneath stays inert until they are answered. Prefix the
+  query — `sysid:`, `systext:` — and use `sysdump` to see the tree.
+  The hosting process is probed, not assumed, because it differs by
+  platform: iOS and iPadOS have `com.apple.springboard`, while visionOS
+  has no SpringBoard at all and splits the shell across
+  `com.apple.Reality*` processes. Every result reports which one
+  answered (`tapped systext:Allow in com.apple.RealityNotifications`);
+  `sysapp <bundleid>` pins one when a host is not on the candidate list.
 - **MFA makes fresh simulators expensive.** Simulator keychains do not
   transfer between devices or runtimes, so every new simulator costs a
   full manual sign-in. Signed-in state *does* persist across reinstalls
