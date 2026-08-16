@@ -10,8 +10,9 @@ from admin_limits import ( # pylint: disable=import-error
     audit_log,
     rate_limit_response_or_none,
 )
-from helper import assert_zone_owns_apex  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
+from helper import publish_address_dns_records  # pylint: disable=import-error
+from helper import reserved_subdomain_response_or_none  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 from helper import validate_dns_apex  # pylint: disable=import-error
 from helper import validate_dns_subdomain  # pylint: disable=import-error
@@ -21,7 +22,6 @@ domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
 user_pool_id = os.environ['USER_POOL_ID']
 
-r53 = boto3.client('route53')
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
 cognito = boto3.client('cognito-idp')
@@ -59,6 +59,10 @@ def handler(event, _context):
             'statusCode': 400,
             'body': json.dumps({'Error': f'Invalid input: {err}'})
         }
+    reserved = reserved_subdomain_response_or_none(
+        body['subdomain'], body['tld'], control_domain)
+    if reserved:
+        return reserved
     # Derive the address server-side rather than trusting body['address']: it is
     # the DynamoDB primary key and the value user_authorized_for_sender matches
     # on, so it must equal the real routing identity. username/subdomain/tld are
@@ -81,7 +85,8 @@ def handler(event, _context):
                         )
                     })
                 }
-        create_dns_records(domains[body['tld']], body['subdomain'], body['tld'])
+        publish_address_dns_records(
+            domains[body['tld']], body['subdomain'], body['tld'], control_domain)
         record_address(usernames, body, address)
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
@@ -111,44 +116,6 @@ def cognito_user_exists(username):
         return True
     except cognito.exceptions.UserNotFoundException:
         return False
-
-
-def change_item(name, value, record_type):
-    '''Builds a Route 53 UPSERT change item'''
-    return {
-        'Action': 'UPSERT',
-        'ResourceRecordSet': {
-            'Name': name,
-            'ResourceRecords': [{'Value': value}],
-            'TTL': 3600,
-            'Type': record_type
-        }
-    }
-
-
-def create_dns_records(zone_id, subdomain, tld):
-    '''Creates the DNS records for a new email address'''
-    assert_zone_owns_apex(zone_id, tld)
-    params = {
-        'HostedZoneId': zone_id,
-        'ChangeBatch': {
-            'Changes': [
-                change_item(
-                    f'_dmarc.{subdomain}.{tld}',
-                    f'_dmarc.{control_domain}', 'CNAME'),
-                change_item(
-                    f'{subdomain}.{tld}',
-                    f'"v=spf1 include:{control_domain} ~all"', 'TXT'),
-                change_item(
-                    f'{subdomain}.{tld}',
-                    f'10 smtp-in.{control_domain}', 'MX'),
-                change_item(
-                    f'cabal._domainkey.{subdomain}.{tld}',
-                    f'cabal._domainkey.{control_domain}', 'CNAME'),
-            ]
-        }
-    }
-    r53.change_resource_record_sets(**params)
 
 
 def record_address(usernames, body, address):
