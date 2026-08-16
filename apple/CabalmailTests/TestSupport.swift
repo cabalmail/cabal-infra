@@ -250,15 +250,18 @@ enum TestFixtures {
     @MainActor
     static func makeComposeModel(
         seed: Draft = Draft(),
-        imap: FakeImapClient = FakeImapClient()
+        imap: FakeImapClient = FakeImapClient(),
+        signature: String = ""
     ) throws -> ComposeViewModel {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("cabalmail-compose-tests-\(UUID().uuidString)")
+        let preferences = Preferences(store: InMemoryPreferenceStore())
+        preferences.signature = signature
         return ComposeViewModel(
             seed: seed,
             client: try makeClient(imap: imap),
             draftStore: try DraftStore(directory: tmp),
-            preferences: Preferences(store: InMemoryPreferenceStore()),
+            preferences: preferences,
             onClose: {}
         )
     }

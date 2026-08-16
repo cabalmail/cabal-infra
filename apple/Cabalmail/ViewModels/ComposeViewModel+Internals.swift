@@ -130,27 +130,34 @@ extension ComposeViewModel {
         )
     }
 
-    /// Resolves the (text, html) MIME-part bodies using the same four-way
-    /// table the React composer applies. The mirror flag treats a rich
-    /// pane that's only ever been seeded from markdown as "empty," so a
-    /// pure-markdown compose doesn't ship the seed HTML as if the user
-    /// had hand-edited it.
+    /// Whether the markdown pane carries something the user wrote, as
+    /// opposed to a seed they never touched. Send-time provenance, not
+    /// emptiness — see `ComposeBodyPolicy.source` (#1091).
+    var markdownUserEdited: Bool { markdownBody != seededMarkdownBody }
+
+    /// Resolves the (text, html) MIME-part bodies. `ComposeBodyPolicy`
+    /// decides which pane the user authored; this does the WebKit
+    /// conversions that answer implies.
     func computeMessageBodies() async -> (text: String, html: String) {
         let richHtml = await editorController.getHTML()
-        let richEmpty = richHtml.isEmpty || richMirrorsMarkdown
-        let mdEmpty = markdownBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let source = ComposeBodyPolicy.source(
+            richHTML: richHtml,
+            richMirrorsMarkdown: richMirrorsMarkdown,
+            markdownBody: markdownBody,
+            markdownUserEdited: markdownUserEdited
+        )
 
-        switch (richEmpty, mdEmpty) {
-        case (true, true):
+        switch source {
+        case .empty:
             return ("", "")
-        case (false, true):
+        case .rich:
             let text = await editorController.htmlToMarkdown(richHtml)
             return (text, richHtml)
-        case (true, false):
+        case .markdown:
             let raw = await editorController.markdownToHtml(markdownBody)
             let styled = await editorController.styleParagraphs(raw)
             return (markdownBody, styled)
-        case (false, false):
+        case .both:
             return (markdownBody, richHtml)
         }
     }
