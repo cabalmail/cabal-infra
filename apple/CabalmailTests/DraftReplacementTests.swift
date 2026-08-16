@@ -31,7 +31,7 @@ final class DraftReplacementTests: XCTestCase {
         model.adoptServerDraftRef(DraftServerRef(uid: 626, uidValidity: 9))
 
         XCTAssertEqual(
-            model.savedDraftReplacement,
+            model.retiredDraftReplacement,
             DraftReplacement(retiredUIDs: [625], survivingUID: 626)
         )
     }
@@ -48,7 +48,7 @@ final class DraftReplacementTests: XCTestCase {
         }
 
         XCTAssertEqual(
-            model.savedDraftReplacement,
+            model.retiredDraftReplacement,
             DraftReplacement(retiredUIDs: [100, 101, 102], survivingUID: 103)
         )
     }
@@ -60,7 +60,7 @@ final class DraftReplacementTests: XCTestCase {
 
         model.adoptServerDraftRef(DraftServerRef(uid: 700, uidValidity: 9))
 
-        XCTAssertNil(model.savedDraftReplacement)
+        XCTAssertNil(model.retiredDraftReplacement)
     }
 
     /// A send reports through `supersededDraftUIDs` and its own dispose
@@ -73,7 +73,7 @@ final class DraftReplacementTests: XCTestCase {
 
         model.lastSendOutcome = .sent
 
-        XCTAssertNil(model.savedDraftReplacement)
+        XCTAssertNil(model.retiredDraftReplacement)
         XCTAssertEqual(model.supersededDraftUIDs, [625, 626])
     }
 
