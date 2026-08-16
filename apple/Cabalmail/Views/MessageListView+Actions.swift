@@ -250,4 +250,50 @@ extension MessageListView {
             endSelectionMode()
         }
     }
+
+    /// Swaps an open Drafts list — and whatever reader it is driving — from
+    /// the copies `/save_draft` just retired onto the one that survived.
+    ///
+    /// The prune is the easy half. The half that matters is the selection:
+    /// the reader Save Draft returns to still holds the retired copy's
+    /// fetched body, and Edit Draft from there seeds the pre-edit content
+    /// and pins the send's discard to an expunged UID, so the edit is
+    /// dropped and the saved copy orphaned (#1078). Re-pointing rebuilds
+    /// the reader against the survivor (the detail column is keyed on the
+    /// UID), which re-fetches and shows what was actually saved.
+    ///
+    /// The refresh comes first because the survivor landed under a UID this
+    /// list has never seen: Drafts is unsubscribed by default, so nothing
+    /// else would surface it for a minute or more.
+    func handleDraftReplaced(_ replacement: DraftReplacement) {
+        guard let model else { return }
+        for uid in replacement.retiredUIDs {
+            model.pruneEnvelope(uid: uid)
+        }
+        let displayed = isWideLayout ? model.selectedUIDs.first : selection?.uid
+        Task { @MainActor in
+            await model.refresh()
+            let target: Envelope?
+            switch DraftReplacementPolicy.resolve(
+                displayedUID: displayed,
+                replacement: replacement,
+                loadedUIDs: model.envelopes.map(\.uid)
+            ) {
+            case .ignore:
+                return
+            case .dismiss:
+                target = nil
+            case .repoint(let uid):
+                // A survivor the policy saw but the lookup misses can only
+                // mean the window moved under a concurrent refresh; letting
+                // the reader go is the same right answer as `.dismiss`.
+                target = model.envelopes.first { $0.uid == uid }
+            }
+            if isWideLayout {
+                model.selectedUIDs = target.map { [$0.uid] } ?? []
+            } else {
+                selection = target
+            }
+        }
+    }
 }
