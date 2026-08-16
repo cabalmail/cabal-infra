@@ -87,4 +87,63 @@ final class ComposeCancelPolicyTests: XCTestCase {
 
         XCTAssertFalse(model.hasDraftContent(bodies: (text: "", html: "")))
     }
+
+    // MARK: - Whether Cancel asks at all (#1094)
+
+    /// The reported flow: New Message, touch nothing, Cancel. Every branch
+    /// of the three-way dialog lands on `.discardEmpty` here, so there is
+    /// no decision to put to the user — the composer just closes.
+    func testAnUntouchedComposerIsClosedWithoutAsking() {
+        XCTAssertFalse(
+            ComposeCancelPolicy.needsDecision(bridgeFailed: false, hasContent: false)
+        )
+        XCTAssertEqual(
+            ComposeCancelPolicy.resolve(bridgeFailed: false, hasContent: false, hasFrom: false),
+            .discardEmpty,
+            "the outcome the silent close takes must be the one that keeps nothing"
+        )
+    }
+
+    /// Anything worth keeping puts the dialog back. Swept over the two
+    /// reasons a buffer can be worth keeping rather than one example: real
+    /// content, and a dead bridge whose empty bodies are a bug rather than
+    /// an empty compose (#745) — guessing "empty" there would drop text
+    /// silently, which is the #903 failure by another route.
+    func testAnythingWorthKeepingStillAsks() {
+        for (bridgeFailed, hasContent) in [(false, true), (true, false), (true, true)] {
+            XCTAssertTrue(
+                ComposeCancelPolicy.needsDecision(
+                    bridgeFailed: bridgeFailed,
+                    hasContent: hasContent
+                ),
+                "bridgeFailed=\(bridgeFailed) hasContent=\(hasContent) must still ask"
+            )
+        }
+    }
+
+    /// The two halves agree by construction: the composer is closed without
+    /// asking exactly when `cancel()` would resolve to `.discardEmpty`. A
+    /// future resolution that keeps something must not slip through the
+    /// silent path.
+    func testTheSilentCloseCoversExactlyTheDiscardEmptyCase() {
+        for bridgeFailed in [true, false] {
+            for hasContent in [true, false] {
+                for hasFrom in [true, false] {
+                    let resolution = ComposeCancelPolicy.resolve(
+                        bridgeFailed: bridgeFailed,
+                        hasContent: hasContent,
+                        hasFrom: hasFrom
+                    )
+                    XCTAssertEqual(
+                        ComposeCancelPolicy.needsDecision(
+                            bridgeFailed: bridgeFailed,
+                            hasContent: hasContent
+                        ),
+                        resolution != .discardEmpty,
+                        "bridgeFailed=\(bridgeFailed) hasContent=\(hasContent) hasFrom=\(hasFrom)"
+                    )
+                }
+            }
+        }
+    }
 }
