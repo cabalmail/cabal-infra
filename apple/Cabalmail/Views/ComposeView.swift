@@ -172,6 +172,18 @@ struct ComposeView: View {
                 closeCoordinator.allowsClose = true
                 #endif
                 await model.discard()
+                // The discard expunged the server copy an open Drafts list
+                // — and the reader this dismissal returns to — is still
+                // holding. Say so, or the row survives and Edit Draft on it
+                // reopens the discarded draft with Send live (#1081). Same
+                // signal as Save Draft; the replacement has no survivor, so
+                // the policy drops the reader rather than re-pointing it.
+                if let replacement = model.retiredDraftReplacement {
+                    appState.signalDraftReplaced(
+                        folderPath: "Drafts",
+                        replacement: replacement
+                    )
+                }
             }
         case .saveDraft:
             Task {
@@ -179,6 +191,19 @@ struct ComposeView: View {
                 closeCoordinator.allowsClose = true
                 #endif
                 let didClose = await model.cancel()
+                // The save replaced the server copy, expunging the UID an
+                // open Drafts list — and the reader this dismissal returns
+                // to — is still holding. Hand the list the whole chain plus
+                // the survivor so it can swap rather than strand the user
+                // on content the server no longer has (#1078). An emptied
+                // body takes the `.discardEmpty` exit through this same
+                // button and reports a chain with no survivor (#1081).
+                if didClose, let replacement = model.retiredDraftReplacement {
+                    appState.signalDraftReplaced(
+                        folderPath: "Drafts",
+                        replacement: replacement
+                    )
+                }
                 #if os(macOS)
                 // IMAP save failed: keep the user in the window so they can
                 // see the error banner and retry.
@@ -235,9 +260,13 @@ struct ComposeView: View {
                     // by default, so that took over a minute). "Drafts" is
                     // the mailbox `/save_draft` pins every draft to; see
                     // `MessageDetailViewModel.isDraftsFolder`.
-                    if let uid = model.supersededDraftUID {
-                        appState.signalDisposed(folderPath: "Drafts", uid: uid)
-                    }
+                    // Every UID the session held, not just the last: a 60s
+                    // autosave replaces the copy under a new UID and the
+                    // open list is still rendering the old one (#1071).
+                    appState.signalDisposed(
+                        folderPath: "Drafts",
+                        uids: model.supersededDraftUIDs
+                    )
                     // A reply left the device (or the outbox owns it now):
                     // mark the original `\Answered` so the list's replied
                     // arrow appears without waiting for a refresh.

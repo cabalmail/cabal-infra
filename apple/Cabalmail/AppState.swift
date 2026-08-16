@@ -137,6 +137,8 @@ final class AppState {
     /// `lastEnvelopeFlagChange` as usual.
     var lastReadAdvanceRequest: ReadAdvanceRequest?
     private var readAdvanceTick = 0
+    var lastDraftReplaced: DraftReplacedSignal?
+    private var draftReplacedTick = 0
 
     /// UIDs with a flag write in flight from the detail view, keyed by folder
     /// path (IMAP UIDs are only unique within a mailbox, so a bare UID set
@@ -466,10 +468,18 @@ final class AppState {
 // type-body budget as the other extensions in this file.
 extension AppState {
     func signalDisposed(folderPath: String, uid: UInt32, wasUnread: Bool = false) {
+        signalDisposed(folderPath: folderPath, uids: [uid], wasUnread: wasUnread)
+    }
+
+    /// Multi-UID form, for a sender that invalidates more than one row at
+    /// once: a send-from-draft retires every Drafts copy its compose
+    /// session created, not just the newest (#1071).
+    func signalDisposed(folderPath: String, uids: [UInt32], wasUnread: Bool = false) {
+        guard !uids.isEmpty else { return }
         disposedTick += 1
         lastDisposedEnvelope = DisposedEnvelope(
             folderPath: folderPath,
-            uid: uid,
+            uids: uids,
             tick: disposedTick
         )
         // Dispose marks the message `\Seen` before the move, so the source
@@ -481,6 +491,20 @@ extension AppState {
         if wasUnread {
             applyUnreadDelta(folderPath: folderPath, delta: -1)
         }
+    }
+
+    /// A compose session saved over the Drafts copy an open list may be
+    /// showing. The retired UIDs are already expunged server-side and the
+    /// survivor carries the content the user just saved, so the list prunes
+    /// the one and re-points at the other (#1078).
+    func signalDraftReplaced(folderPath: String, replacement: DraftReplacement) {
+        guard !replacement.retiredUIDs.isEmpty else { return }
+        draftReplacedTick += 1
+        lastDraftReplaced = DraftReplacedSignal(
+            folderPath: folderPath,
+            replacement: replacement,
+            tick: draftReplacedTick
+        )
     }
 
     /// Marks a replied-to message `\Answered` after its reply sends: signal

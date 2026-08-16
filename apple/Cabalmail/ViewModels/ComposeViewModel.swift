@@ -118,8 +118,21 @@ final class ComposeViewModel {
 
     /// Server-side Drafts copy the next save replaces (and a send
     /// discards). Seeded from the draft when resuming; updated after every
-    /// successful `/save_draft` round trip.
+    /// successful `/save_draft` round trip — go through
+    /// `adoptServerDraftRef` for that so the replaced UID is recorded.
     var serverDraftRef: DraftServerRef?
+    /// UIDs of the Drafts copies earlier `/save_draft` replaces expunged.
+    /// Each replace lands a new UID, but an open Drafts list keeps
+    /// rendering whichever one it loaded, so a send has to name the whole
+    /// chain to prune the row the user is actually looking at (#1071).
+    var replacedServerDraftUIDs: [UInt32] = []
+    /// Whether this session dropped its server-side copy on the way out —
+    /// "Discard draft", or a cancel whose body had gone empty. The Drafts
+    /// list has to hear about that too: the discard expunges the copy the
+    /// list is rendering, and Edit Draft on the row left behind resurrects
+    /// a draft the user threw away, Send and all (#1081). Set only once the
+    /// server has answered, so a failed request leaves the real row alone.
+    var didDiscardServerDraft = false
     /// Whether this surface opened on a draft that already exists in the
     /// server Drafts folder (Edit Draft), rather than on a new message, reply
     /// or forward. Captured at init rather than read off `serverDraftRef`,
@@ -445,7 +458,7 @@ final class ComposeViewModel {
             return true
         case .discardEmpty:
             if let ref = serverDraftRef {
-                _ = try? await client.discardDraft(ref)
+                recordServerDraftDiscard(try? await client.discardDraft(ref))
             }
             try? await draftStore.remove(id: draftId)
             stop()
@@ -466,7 +479,7 @@ final class ComposeViewModel {
     func discard() async {
         try? await draftStore.remove(id: draftId)
         if let ref = serverDraftRef {
-            _ = try? await client.discardDraft(ref)
+            recordServerDraftDiscard(try? await client.discardDraft(ref))
         }
         stop()
         onClose()

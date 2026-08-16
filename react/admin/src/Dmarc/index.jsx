@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import useApi from '../hooks/useApi';
 import usePagedReports from '../hooks/usePagedReports';
+import useSourceModal from '../hooks/useSourceModal';
 import { useAppMessage } from '../contexts/AppMessageContext';
 import XmlSourceModal from './XmlSourceModal';
 import DnsCheckModal from './DnsCheckModal';
@@ -54,12 +55,7 @@ function Dmarc() {
     errorLabel: 'DMARC',
   });
 
-  const [xmlOpen, setXmlOpen] = useState(false);
-  const [xmlTitle, setXmlTitle] = useState('');
-  const [xmlFile, setXmlFile] = useState('dmarc-report.xml');
-  const [xmlText, setXmlText] = useState('');
-  const [xmlLoading, setXmlLoading] = useState(false);
-  const [xmlError, setXmlError] = useState(false);
+  const { show: showXml, close: closeXml, modalProps: xmlProps } = useSourceModal('dmarc-report.xml');
 
   const [dnsOpen, setDnsOpen] = useState(false);
   const [dnsType, setDnsType] = useState('dkim');
@@ -70,23 +66,12 @@ function Dmarc() {
       setMessage('No XML stored for this report.', true);
       return;
     }
-    setXmlTitle(`${report.org_name || ''} - ${report.report_id || ''}`);
-    setXmlFile(xmlFilename(report));
-    setXmlText('');
-    setXmlError(false);
-    setXmlLoading(true);
-    setXmlOpen(true);
-    api.fetchDmarcXml(report.xml_url).then(
-      (r) => {
-        setXmlText(typeof r.data === 'string' ? r.data : String(r.data || ''));
-        setXmlLoading(false);
-      },
-      () => {
-        setXmlError(true);
-        setXmlLoading(false);
-      }
-    );
-  }, [api, setMessage]);
+    showXml({
+      title: `${report.org_name || ''} - ${report.report_id || ''}`,
+      filename: xmlFilename(report),
+      load: () => api.fetchDmarcXml(report.xml_url),
+    });
+  }, [api, setMessage, showXml]);
 
   const openDns = useCallback((domain, recordType) => {
     if (!domain) return;
@@ -177,15 +162,7 @@ function Dmarc() {
         </>
       )}
 
-      <XmlSourceModal
-        open={xmlOpen}
-        title={xmlTitle}
-        filename={xmlFile}
-        xmlText={xmlText}
-        loading={xmlLoading}
-        error={xmlError}
-        onClose={() => setXmlOpen(false)}
-      />
+      <XmlSourceModal {...xmlProps} onClose={() => closeXml()} />
       <DnsCheckModal
         open={dnsOpen}
         recordType={dnsType}
