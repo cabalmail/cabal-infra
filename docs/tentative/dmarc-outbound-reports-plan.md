@@ -84,8 +84,8 @@ stateless design avoids).
 
 **IAM note:** the smtp-in task role today only *reads* config state
 (`cabal-addresses` via `generate-config.sh`). Writing to the new stats
-table is a new permission — a real IAM delta, so this routes through
-stage, never direct-to-prod scaffolding.
+table is a new permission — a real IAM delta; like everything else it
+routes through stage, and its stage validation deserves care.
 
 ### Table: `cabal-dmarc-outbound-stats`
 

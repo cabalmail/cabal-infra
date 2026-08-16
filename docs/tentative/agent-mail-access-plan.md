@@ -246,8 +246,8 @@ not control the agent harness, so our design controls the *blast radius*:
   reading the content; revisit if grants ever become auditable-per-object.
 
 Process note: this feature adds IAM principals (authorizer + mcp Lambda
-roles), a new table, and a user-facing surface — it does **not** qualify
-for direct-to-prod scaffolding. Everything routes through stage.
+roles), a new table, and a user-facing surface. Everything routes
+through stage, and the stage validation pass deserves care.
 
 ## Infrastructure deltas (summary)
 

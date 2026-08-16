@@ -201,9 +201,7 @@ Lambdas are not yet directed at internal IMAP/SMTP targets — the public NLB st
 
 - **Public DNS deletion is hard to roll back precisely.** Deleting `imap.<control_domain>` and `smtp-out.<control_domain>` is reversible by reverting Phase 4, but DNS caches mean clients may briefly resolve stale entries. Coordinate the cutover with low traffic; no flag-day notification is required (no first-party client uses these records).
 
-- **Direct-to-prod eligibility.** Phase 1 (code-only, no contract change) and Phase 6 (docs) are candidates for direct-to-prod under the [project rules](../../CLAUDE.md#direct-to-prod-scaffolding). Phases 2, 3, 3.5, 4, and 5 touch IAM / data-plane / security surface and route through `stage` -> `main`.
-
-> **Erratum (2026-08-15):** The direct-to-prod scaffolding carve-out (and its CLAUDE.md anchor) was retired; Phases 1 and 6 route through `stage` -> `main` like the rest.
+- **Deployment routing.** Every phase routes through `stage` -> `main` per [the project rules](../../CLAUDE.md#promotion-to-prod). Phases 2, 3, 3.5, 4, and 5 touch IAM / data-plane / security surface, so give their stage validation particular care.
 
 - **Forward compatibility with the Android client roadmap.** The [Android client](../../docs/2.0.x) is planned as another first-party native client; it will also hit the Lambda API rather than IMAP directly. Privatizing IMAP/submission does not constrain that work.
 

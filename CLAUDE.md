@@ -35,7 +35,7 @@ Otherwise leave it quiesced. All work goes `stage` -> `main` with one deliberate
 
 The only route to `main` is promoting `stage`. The promotion is a formal release step: from a clean `stage` tree, `make promote VERSION=...` collates the pending changelog fragments, commits and pushes `stage`, and opens the `stage` -> `main` PR; merging that PR is a deliberate manual act, and `release.yml` tags and publishes the GitHub release on merge. See [docs/releasing.md](docs/releasing.md).
 
-Never open a PR to `main` from any other branch. An earlier "direct-to-prod scaffolding" carve-out allowed purely additive feature-branch -> `main` PRs to skip stage; it was retired 2026-08-15 — the automated release flow made promotion cheap enough that skipping stage no longer pays for the risk. Planning docs that relied on it carry errata.
+Never open a PR to `main` from any other branch. An earlier "direct-to-prod scaffolding" carve-out allowed purely additive feature-branch -> `main` PRs to skip stage; it was retired 2026-08-15 — the automated release flow made promotion cheap enough that skipping stage no longer pays for the risk. Shipped-era planning docs that relied on it carry errata.
 
 ### No PII in public artifacts
 
