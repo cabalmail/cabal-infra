@@ -5,12 +5,24 @@ import UIKit
 
 /// iPadOS-only scene bookkeeping for closing a compose window.
 ///
-/// `dismissWindow()` destroys the compose scene, but when that scene is
-/// the frontmost one iPadOS does not activate a sibling scene on its own —
-/// it drops the user on the home screen, which reads as a crash (the send
-/// keeps running as a background task). Re-activating the main mail scene
-/// before the dismissal keeps the app frontmost, so Send / Save Draft /
-/// Discard land back on the split view the way the iPhone sheet path does.
+/// `dismissWindow()` takes the compose window off screen, but when that
+/// window is the frontmost one iPadOS does not activate a sibling scene on
+/// its own — it drops the user on the home screen, which reads as a crash
+/// (the send keeps running as a background task). Re-activating the main
+/// mail scene before the dismissal keeps the app frontmost, so Send / Save
+/// Draft / Discard land back on the split view the way the iPhone sheet
+/// path does.
+///
+/// It does *not* retire the compose scene, contrary to what this comment
+/// used to claim. Measured on the iPad Pro 11" M5 sim (#1084): after
+/// `dismissWindow()` the window's `UISceneSession` is still connected, its
+/// whole accessibility subtree is still in the app's tree, and its
+/// `ComposeViewModel` + editor `WKWebView` are still alive — for the rest
+/// of the process, one set per compose session. Destroying the session
+/// explicitly (`requestSceneSessionDestruction`) does not release them
+/// either, so the retention sits in `WindowGroup(for:)`'s own
+/// presentation bookkeeping rather than in the scene session. Don't wire a
+/// remedy here without re-measuring; #1084 records both refuted attempts.
 ///
 /// The main scene has no stable, documented marker among
 /// `UIApplication.shared.openSessions` (SwiftUI owns the session
