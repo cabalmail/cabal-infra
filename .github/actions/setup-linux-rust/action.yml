@@ -1,0 +1,61 @@
+---
+name: Set up the Linux client toolchain
+description: >
+  Installs the Rust toolchain pinned by linux/rust-toolchain.toml and restores
+  the cargo caches. Every job in linux.yml starts with this, so the pin is read
+  from the file rather than restated in YAML where it could drift.
+
+inputs:
+  cache-key:
+    description: >
+      Suffix distinguishing this job's target directory from the others'. Jobs
+      that compile different crate sets (or against different system libraries)
+      must not share a cache entry.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the pinned toolchain
+      id: pin
+      shell: bash
+      # rustup would honour the file on its own, but only if a rustup is
+      # already installed - which is not true in a bare distro container. Both
+      # the channel and the component list are read out of that same file, so
+      # the pin is stated once: a component added there (llvm-tools, for the
+      # coverage job) arrives in CI without a second edit here, and cannot be
+      # installed here without being in the file.
+      run: |
+        set -euo pipefail
+        PIN=linux/rust-toolchain.toml
+        CHANNEL=$(sed -nE 's/^channel = "([^"]+)"$/\1/p' "$PIN")
+        if [ -z "$CHANNEL" ]; then
+          echo "::error::No channel found in $PIN"
+          exit 1
+        fi
+        COMPONENTS=$(sed -nE 's/^components = \[(.*)\]$/\1/p' "$PIN" | tr -d '" ')
+        if [ -z "$COMPONENTS" ]; then
+          echo "::error::No components found in $PIN"
+          exit 1
+        fi
+        echo "Pinned toolchain: $CHANNEL with $COMPONENTS"
+        echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+        echo "components=$COMPONENTS" >> "$GITHUB_OUTPUT"
+
+    - name: Install Rust ${{ steps.pin.outputs.channel }}
+      uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # v1
+      with:
+        toolchain: ${{ steps.pin.outputs.channel }}
+        components: ${{ steps.pin.outputs.components }}
+
+    - name: Restore cargo caches
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          linux/target
+        key: linux-${{ inputs.cache-key }}-${{ steps.pin.outputs.channel }}-${{ hashFiles('linux/Cargo.lock') }}
+        restore-keys: |
+          linux-${{ inputs.cache-key }}-${{ steps.pin.outputs.channel }}-

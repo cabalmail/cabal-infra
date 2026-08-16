@@ -1,0 +1,246 @@
+---
+name: Build and Test Linux Client
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    # Modelled on apple.yml: only the deploy branches build automatically, and
+    # an explicit branches filter keeps tag pushes out. Like apple.yml, this
+    # workflow deploys nothing to AWS.
+    branches:
+      - main
+      - stage
+    paths:
+      - 'linux/**'
+      - '.github/workflows/linux.yml'
+      - '.github/actions/setup-linux-rust/action.yml'
+      - '.github/scripts/install-linux-deps.sh'
+      # The workspace checks read the Lambda's APP_ALLOWED set and fail if the
+      # client's synced-preference keys have drifted from it. Without this
+      # path, a change to that handler would deploy green and the divergence
+      # would sit unreported until someone next touched linux/ - by which time
+      # the client is 400ing on every preference push.
+      - 'lambda/api/set_preferences/function.py'
+
+# A stale result is never worth finishing; keyed on the ref so the named
+# branches do not cancel each other.
+concurrency:
+  group: linux-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # A CI machine throws its target directory away between runs, so incremental
+  # artifacts are written and never read - they only make the cache bigger.
+  CARGO_INCREMENTAL: '0'
+
+# Every job runs exactly one step of `cargo xtask ci`, selected by name. The
+# list of steps lives in linux/xtask/src/ci.rs and nowhere else; a job that
+# named a step that does not exist, or a step no job runs, fails the drift test
+# in linux/xtask/tests/workflow_contract.rs rather than passing quietly.
+#
+# Still to come, each with the work item that owns it:
+#   package-arch  Phase 2, work item 4 - makepkg + namcap in an Arch container
+#   smoke         Phase 2, work item 3 - install the package, launch it headless
+#   coverage      Phase 2, work item 3 - cargo-llvm-cov on the kit, with a floor
+#   guards        Phase 2, work item 6 - cargo-deny, the GTK-free-kit tree check
+jobs:
+  # -----------------------------------------------------------------------
+  # Formatting only. No system libraries, because `cargo fmt` parses rather
+  # than compiles - which is also why this is the job that reports in
+  # seconds while the others are still installing GTK.
+  # -----------------------------------------------------------------------
+  lint:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-linux-rust
+        with:
+          cache-key: lint
+
+      - name: Check formatting
+        working-directory: linux
+        run: cargo xtask ci --step format
+
+  # -----------------------------------------------------------------------
+  # The kit's own tests: no display server, no network, no GUI dependency.
+  # That is the property that lets this job run on a bare runner, and the
+  # tree check in the guards job (work item 6) is what keeps it true.
+  # -----------------------------------------------------------------------
+  kit-test:
+    name: Test cabalmail-kit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-linux-rust
+        with:
+          cache-key: kit-test
+
+      - name: Test the kit
+        working-directory: linux
+        run: cargo xtask ci --step kit-tests
+
+  # -----------------------------------------------------------------------
+  # The checks that reach outside the workspace: the toolchain pin, the
+  # workspace shape, the generated documentation, and the synced-preference
+  # contract against lambda/api/set_preferences. They need the whole
+  # repository checked out but nothing installed, so they get their own job
+  # rather than hiding inside kit-test - a Lambda-drift failure and a kit
+  # regression are different problems for different people.
+  # -----------------------------------------------------------------------
+  workspace-checks:
+    name: Workspace and contract checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-linux-rust
+        with:
+          cache-key: workspace-checks
+
+      - name: Run the workspace checks
+        working-directory: linux
+        run: cargo xtask ci --step workspace-checks
+
+  # -----------------------------------------------------------------------
+  # The API floor. This job compiles the whole workspace inside a clean
+  # ubuntu:24.04 container - GTK 4.14, libadwaita 1.5 - so a call that needs
+  # newer API fails here, on every push, instead of surfacing as a Phase 8
+  # packaging failure months later.
+  #
+  # It runs the `clippy` step rather than a build of its own: `clippy
+  # --workspace --all-targets` is a full compile, so building on the floor
+  # and linting are the same work. Doing them on two images would double the
+  # slowest job in the run for one signal. A 4.16-only call therefore fails
+  # app-build and leaves lint green, which is the split the plan asks for.
+  # -----------------------------------------------------------------------
+  app-build:
+    name: Build against the API floor (Ubuntu 24.04)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    steps:
+      - name: Bootstrap the container
+        # actions/checkout needs git to clone (it falls back to a tarball
+        # download without one, losing .git), and the toolchain installer
+        # needs curl. Both run before the repository exists, so this list
+        # cannot come from packaging/deps.
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends git curl ca-certificates
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install GTK build dependencies
+        run: .github/scripts/install-linux-deps.sh ubuntu
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-linux-rust
+        with:
+          cache-key: app-build
+
+      - name: Verify the API floor
+        # Printing the versions documents the floor; asserting the GTK one is
+        # what keeps this job's whole reason for existing true. If the image
+        # ever carries something other than 4.14, this job has quietly stopped
+        # enforcing what the `v4_14` crate feature promises, and that should be
+        # a decision someone makes in a PR rather than a silent softening.
+        #
+        # libadwaita is only printed: 24.04 ships 1.5 while the floor is 1.4,
+        # so the `v1_4` feature - not the image - is what holds that line.
+        run: |
+          set -euo pipefail
+          GTK=$(pkg-config --modversion gtk4)
+          ADW=$(pkg-config --modversion libadwaita-1)
+          echo "gtk4 $GTK | libadwaita $ADW | $(blueprint-compiler --version)"
+          case "$GTK" in
+            4.14.*) ;;
+            *)
+              echo "::error::The floor image carries GTK $GTK, not 4.14.x - this job no longer enforces the API floor."
+              exit 1
+              ;;
+          esac
+
+      - name: Build and lint the workspace
+        working-directory: linux
+        run: cargo xtask ci --step clippy
+
+  # -----------------------------------------------------------------------
+  # Widget tests, on the floor image and under Xvfb. The app crate's tests
+  # skip themselves with a message when there is no display, so without
+  # xvfb-run this job would pass by running nothing.
+  # -----------------------------------------------------------------------
+  app-test:
+    name: Test cabalmail-gtk (Ubuntu 24.04, Xvfb)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    steps:
+      - name: Bootstrap the container
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends git curl ca-certificates
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install GTK build dependencies
+        run: .github/scripts/install-linux-deps.sh ubuntu
+
+      - name: Install Xvfb
+        # Not in packaging/deps: it is what CI supplies instead of a session,
+        # never something an installed client needs. `cargo xtask ci` picks
+        # xvfb-run up from PATH on its own.
+        #
+        # xauth is listed explicitly because these installs run with
+        # --no-install-recommends, and xvfb-run only Recommends it - without
+        # xauth the wrapper exits before it ever starts a server.
+        run: apt-get install -y --no-install-recommends xvfb xauth
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-linux-rust
+        with:
+          cache-key: app-test
+
+      - name: Test the app
+        working-directory: linux
+        # tee, so the next step can read what the run said. The widget tests
+        # skip themselves when there is no display, which is right on a bare
+        # SSH session and wrong here.
+        #
+        # The step refuses to run at all when it finds neither a display nor
+        # xvfb-run and CI is set, which is the missing-xvfb-run case. The grep
+        # below covers the rest: Xvfb on PATH but not serving. It can only see
+        # the message because the step passes --show-output - libtest replays a
+        # passing test's output for failures only, and a test that skips itself
+        # passes.
+        run: |
+          set -o pipefail
+          cargo xtask ci --step app-tests 2>&1 | tee "${RUNNER_TEMP:?}/app-tests.log"
+
+      - name: Fail if the widget tests skipped themselves
+        # A green job that tested nothing is worse than a red one: in this
+        # container a skip means Xvfb never came up. The string is pinned to
+        # the one the tests print by a case in xtask/tests/workflow_contract.rs,
+        # so rewording it on one side fails there rather than here.
+        run: |
+          set -euo pipefail
+          if grep -q 'skipping: no display server' "${RUNNER_TEMP:?}/app-tests.log"; then
+            echo "::error::The widget tests skipped themselves - Xvfb did not provide a display."
+            exit 1
+          fi

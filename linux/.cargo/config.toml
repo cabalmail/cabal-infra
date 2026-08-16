@@ -1,2 +1,8 @@
 [alias]
-xtask = "run --package xtask --"
+# `--locked` on the launcher, not only on the steps it runs. Cargo resolves the
+# whole workspace lock before building any package, so without it `cargo xtask`
+# rewrites a stale Cargo.lock on its way to starting, and the `--locked` on the
+# inner clippy/test commands then finds a freshly consistent file and passes. A
+# dependency bump committed without its lock update would reach `makepkg
+# --frozen --offline` instead of failing here.
+xtask = "run --locked --package xtask --"
