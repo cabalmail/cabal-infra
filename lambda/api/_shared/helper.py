@@ -788,24 +788,45 @@ RESERVED_CONTROL_SUBDOMAINS = frozenset({
     'cabal._domainkey', '_dmarc',
 })
 
+# Subdomains reserved on every domain, control or mail. `mail-admin` is the
+# system sender's own label: modules/app/dmarc_user.tf provisions it on
+# domains[0] - the first *mail* domain, not the control domain - with a full
+# MX/SPF/DKIM/DMARC/BIMI set, and CLAUDE.md names mail-admin.<first mail
+# domain> as the identity for all system-originated mail. A user address there
+# is not a clobber (the records address_dns_records() writes are byte-identical
+# to Terraform's, and revoke cannot delete them while the system rows hold the
+# subdomain), but its holder can send mail that DKIM-signs d=mail-admin.<first
+# mail domain> and SPF-aligns exactly like a real notification, which a
+# receiver cannot tell apart (#1097). Reserved on every domain rather than only
+# domains[0] because that index moves when TF_VAR_MAIL_DOMAINS is reordered,
+# which would hand the system identity to an existing squatter.
+RESERVED_SUBDOMAINS_EVERY_DOMAIN = frozenset({'mail-admin'})
+
 
 def reserved_subdomain_response_or_none(subdomain, tld, control_domain):
-    '''Returns a 400 response when `subdomain` is reserved on the control
-    domain, else None. Shared rather than owned by one handler so every path
-    that publishes address DNS applies the same guard: the admin create path
-    reached the identical UPSERT with no check at all (#1072).'''
-    if tld == control_domain and \
-            str(subdomain).lower().rstrip('.') in RESERVED_CONTROL_SUBDOMAINS:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({
-                'Error': (
-                    f'Subdomain "{subdomain}" is reserved on the '
-                    f'control domain "{control_domain}"'
-                )
-            })
-        }
+    '''Returns a 400 response when `subdomain` is reserved - on every domain
+    for RESERVED_SUBDOMAINS_EVERY_DOMAIN, on the control domain only for
+    RESERVED_CONTROL_SUBDOMAINS - else None. Shared rather than owned by one
+    handler so every path that publishes address DNS applies the same guard:
+    the admin create path reached the identical UPSERT with no check at all
+    (#1072).'''
+    label = str(subdomain).lower().rstrip('.')
+    if label in RESERVED_SUBDOMAINS_EVERY_DOMAIN:
+        return _reserved_response(subdomain, 'reserved on every mail domain')
+    if tld == control_domain and label in RESERVED_CONTROL_SUBDOMAINS:
+        return _reserved_response(
+            subdomain, f'reserved on the control domain "{control_domain}"')
     return None
+
+
+def _reserved_response(subdomain, scope):
+    '''Builds the 400 a reserved-label create is refused with.'''
+    return {
+        'statusCode': 400,
+        'body': json.dumps({
+            'Error': f'Subdomain "{subdomain}" is {scope}'
+        })
+    }
 
 
 def _route53():

@@ -15,9 +15,11 @@ so the cases below assert the two handlers agree -- against the canonical
 record set rather than a hand-copied list, so a sixth record added to
 address_dns_records() cannot pass while only one handler publishes it.
 
-The last case pins what these fixes deliberately do NOT change: the guard stays
-scoped to the control domain, so a reserved label on a mail domain is still
-accepted by both handlers, exactly as before.
+The guard is scoped by label, not applied wholesale: the collision-driven
+labels stay control-domain-only (a mail-domain zone carries none of the records
+they would hit), while `mail-admin` -- the label dmarc_user.tf provisions the
+system sender on, on the first *mail* domain -- is refused on every domain
+(#1097). The last two classes pin both halves of that split.
 '''
 import importlib.util
 import json
@@ -279,16 +281,57 @@ class ReservedSubdomainTests(_CreateCase):
         response = new_admin.handler(_event('MAIL-ADMIN.', 'control.example.com'), None)
         self.assertEqual(response['statusCode'], 400)
 
-    def test_reserved_label_on_a_mail_domain_is_still_accepted(self):
-        '''Pins what this fix deliberately leaves alone: the guard is scoped to
-        the control domain in both handlers, so `smtp-out.<mail domain>` is
-        accepted here exactly as it was before. Widening that scope is a
-        separate call (see the scope note on #1072).'''
+    def test_collision_label_on_a_mail_domain_is_still_accepted(self):
+        '''Pins what #1097 deliberately left alone. The rest of the reserved
+        set is there because those labels collide with control-zone records
+        (CloudFront/NLB aliases, the DKIM/DMARC selectors); a mail-domain zone
+        carries none of them, so `smtp-out.<mail domain>` is accepted exactly
+        as it was before. Only `mail-admin` widened -- see the case below.'''
         for handler in (new.handler, new_admin.handler):
             with self.subTest(handler=handler.__module__):
                 self.r53.batches.clear()
                 response = handler(_event('smtp-out', 'mail.example.net'), None)
                 self.assertEqual(response['statusCode'], 201)
+
+
+class SystemSenderSubdomainTests(_CreateCase):
+    '''`mail-admin` is refused on EVERY domain, not just the control one
+    (#1097): it is the label dmarc_user.tf provisions the system sender on, on
+    domains[0] -- a mail domain. An address there sends mail that DKIM-signs
+    and SPF-aligns as the system sender.'''
+
+    def test_new_rejects_mail_admin_on_a_mail_domain(self):
+        response = new.handler(_event('mail-admin', 'mail.example.net'), None)
+        self.assertEqual(response['statusCode'], 400)
+        self.assertIn('every mail domain', json.loads(response['body'])['Error'])
+
+    def test_admin_rejects_mail_admin_on_a_mail_domain(self):
+        response = new_admin.handler(_event('mail-admin', 'mail.example.net'), None)
+        self.assertEqual(response['statusCode'], 400)
+        self.assertIn('every mail domain', json.loads(response['body'])['Error'])
+
+    def test_rejection_on_a_mail_domain_writes_nothing(self):
+        '''Same shape as the control-domain refusal: the guard runs before
+        publish_address_dns_records, so neither an rrset nor a row is left.'''
+        for handler, table in ((new.handler, self.table),
+                               (new_admin.handler, self.admin_table)):
+            with self.subTest(handler=handler.__module__):
+                handler(_event('mail-admin', 'mail.example.net'), None)
+                self.assertEqual(self.r53.batches, [])
+                self.assertEqual(table.items, [])
+
+    def test_mail_admin_is_refused_on_every_configured_domain(self):
+        '''Sweep the real DOMAINS map rather than one example: the guard must
+        not depend on which entry is domains[0], because reordering
+        TF_VAR_MAIL_DOMAINS moves the system sender.'''
+        for tld in json.loads(os.environ['DOMAINS']):
+            with self.subTest(tld=tld):
+                response = new.handler(_event('mail-admin', tld), None)
+                self.assertEqual(response['statusCode'], 400)
+
+    def test_guard_is_case_and_trailing_dot_insensitive_off_control(self):
+        response = new_admin.handler(_event('MAIL-ADMIN.', 'mail.example.net'), None)
+        self.assertEqual(response['statusCode'], 400)
 
 
 if __name__ == '__main__':
