@@ -27,6 +27,11 @@ const FLOOR_IMAGE: &str = "image: ubuntu:24.04";
 /// quietly stop enforcing the floor the first time GitHub rolls the label.
 const STEPS_ON_THE_FLOOR: &[&str] = &["clippy", "app-tests"];
 
+/// What a widget test prints when it has nothing to draw on, and what the
+/// app-test job greps its log for. It is written in two places that cannot see
+/// each other - a Rust source file and a YAML file - so it is pinned here.
+const SKIP_MARKER: &str = "skipping: no display server";
+
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -201,6 +206,50 @@ fn the_floor_steps_run_on_the_floor_image() {
             job.name
         );
     }
+}
+
+/// The app-test job's last line of defence: a widget test that skips itself
+/// still passes, so the job reads the log for the message it printed. Reword
+/// that message in `cabalmail-gtk` alone and the grep matches nothing forever
+/// after, silently - the job would go green having tested no widget.
+#[test]
+fn the_skip_message_the_workflow_greps_for_is_the_one_the_tests_print() {
+    assert!(
+        workflow().contains(SKIP_MARKER),
+        "the app-test job no longer looks for `{SKIP_MARKER}`"
+    );
+
+    let sources = repo_root().join("linux").join("cabalmail-gtk").join("src");
+    let mut printed_in: Vec<PathBuf> = Vec::new();
+    for file in rust_sources(&sources) {
+        let text = std::fs::read_to_string(&file).expect("a source file is UTF-8");
+        if text.contains(SKIP_MARKER) {
+            printed_in.push(file);
+        }
+    }
+
+    assert!(
+        !printed_in.is_empty(),
+        "no test under {} prints `{SKIP_MARKER}`, so the app-test job's guard \
+         can never fire",
+        sources.display()
+    );
+}
+
+/// Every `.rs` file under `dir`, recursively.
+fn rust_sources(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let entries =
+        std::fs::read_dir(dir).unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()));
+    for entry in entries {
+        let path = entry.expect("a directory entry").path();
+        if path.is_dir() {
+            found.extend(rust_sources(&path));
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            found.push(path);
+        }
+    }
+    found
 }
 
 /// Every dependency list the workflow installs from has to exist: a typo'd

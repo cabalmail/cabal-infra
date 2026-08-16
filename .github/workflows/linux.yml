@@ -222,13 +222,22 @@ jobs:
         # tee, so the next step can read what the run said. The widget tests
         # skip themselves when there is no display, which is right on a bare
         # SSH session and wrong here.
+        #
+        # The step refuses to run at all when it finds neither a display nor
+        # xvfb-run and CI is set, which is the missing-xvfb-run case. The grep
+        # below covers the rest: Xvfb on PATH but not serving. It can only see
+        # the message because the step passes --show-output - libtest replays a
+        # passing test's output for failures only, and a test that skips itself
+        # passes.
         run: |
           set -o pipefail
           cargo xtask ci --step app-tests 2>&1 | tee "${RUNNER_TEMP:?}/app-tests.log"
 
       - name: Fail if the widget tests skipped themselves
         # A green job that tested nothing is worse than a red one: in this
-        # container a skip means Xvfb never came up.
+        # container a skip means Xvfb never came up. The string is pinned to
+        # the one the tests print by a case in xtask/tests/workflow_contract.rs,
+        # so rewording it on one side fails there rather than here.
         run: |
           set -euo pipefail
           if grep -q 'skipping: no display server' "${RUNNER_TEMP:?}/app-tests.log"; then

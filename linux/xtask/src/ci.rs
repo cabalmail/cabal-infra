@@ -54,11 +54,18 @@ pub fn run(workspace: &Path, only: Option<&str>) -> Result<(), String> {
         ));
     }
 
-    if display == Display::None && steps.iter().any(|step| step.label == APP_TESTS) {
-        eprintln!(
-            "[xtask] ci: no display server and no xvfb-run — the widget tests \
-             will skip themselves. Install xorg-server-xvfb to run them."
-        );
+    if steps.iter().any(|step| step.label == APP_TESTS) {
+        let shortfall = "no display server and no xvfb-run — the widget tests will skip themselves";
+        if missing_display_is_fatal(display, in_ci()) {
+            return Err(format!(
+                "{shortfall}, and CI is set. A job that tests no widgets and goes \
+                 green is worse than a red one: install xvfb and xauth, and make \
+                 sure `xvfb-run` is on PATH."
+            ));
+        }
+        if display == Display::None {
+            eprintln!("[xtask] ci: {shortfall}. Install xorg-server-xvfb to run them.");
+        }
     }
 
     let total = steps.len();
@@ -87,6 +94,20 @@ fn cargo() -> String {
 
 /// The one step name that cares whether there is a display to draw on.
 const APP_TESTS: &str = "app-tests";
+
+/// Whether starting the app tests with nothing to draw on should stop the run
+/// rather than warn. On a developer's machine a skip is the right answer — a
+/// bare SSH session should still get the rest of the app crate's tests. In CI
+/// there is no such thing as an acceptable skip: it means the job installed no
+/// virtual display and would report success having exercised no widget.
+fn missing_display_is_fatal(display: Display, in_ci: bool) -> bool {
+    display == Display::None && in_ci
+}
+
+/// Every CI provider sets this; GitHub Actions sets it to `true`.
+fn in_ci() -> bool {
+    std::env::var_os("CI").is_some_and(|value| !value.is_empty())
+}
 
 /// The steps, in order. Pure so the order and the flags are testable without
 /// running a two-minute build.
@@ -129,8 +150,20 @@ fn plan(cargo: &str, display: Display) -> Vec<Step> {
 /// The app tests, wrapped in `xvfb-run` when that is the only display going.
 /// `-a` picks a free server number, which matters on a runner where two jobs
 /// can overlap.
+///
+/// `--show-output` because libtest replays a passing test's output only for
+/// failures, and a widget test that skips itself passes. Without it the reason
+/// the run drew nothing is captured and thrown away — for a reader and for the
+/// workflow step that greps the log for exactly that.
 fn app_tests(cargo: &str, display: Display) -> Step {
-    let test = ["test", "--locked", "-p", "cabalmail-gtk"];
+    let test = [
+        "test",
+        "--locked",
+        "-p",
+        "cabalmail-gtk",
+        "--",
+        "--show-output",
+    ];
     match display {
         Display::Xvfb => {
             let mut args = vec!["-a".to_owned(), cargo.to_owned()];
@@ -231,6 +264,11 @@ mod tests {
     /// lock update was never committed resolves silently in CI and passes,
     /// then fails in `makepkg`'s `--frozen --offline` build — or worse, ships
     /// versions nothing verified. `fmt` is exempt: it never resolves.
+    ///
+    /// Necessary but not sufficient on its own: cargo resolves the lock before
+    /// it builds the launcher these steps run inside, so the `xtask` alias
+    /// needs its own `--locked`. That is asserted in
+    /// `tests/workspace_invariants.rs`.
     #[test]
     fn every_resolving_step_refuses_to_update_the_lock_file() {
         for step in plan("cargo", Display::Xvfb) {
@@ -258,10 +296,47 @@ mod tests {
         };
         assert_eq!(
             of(Display::Xvfb),
-            "xvfb-run -a cargo test --locked -p cabalmail-gtk"
+            "xvfb-run -a cargo test --locked -p cabalmail-gtk -- --show-output"
         );
-        assert_eq!(of(Display::Session), "cargo test --locked -p cabalmail-gtk");
-        assert_eq!(of(Display::None), "cargo test --locked -p cabalmail-gtk");
+        assert_eq!(
+            of(Display::Session),
+            "cargo test --locked -p cabalmail-gtk -- --show-output"
+        );
+        assert_eq!(
+            of(Display::None),
+            "cargo test --locked -p cabalmail-gtk -- --show-output"
+        );
+    }
+
+    /// libtest captures a passing test's output and replays it only on
+    /// failure, and a widget test that skips itself passes. Without this flag
+    /// the skip message never reaches the log, so the workflow step that greps
+    /// for it can never fire.
+    #[test]
+    fn the_app_tests_print_what_a_passing_test_said() {
+        for display in [Display::Session, Display::Xvfb, Display::None] {
+            assert!(
+                app_tests("cargo", display)
+                    .args
+                    .iter()
+                    .any(|arg| arg == "--show-output"),
+                "a skipped widget test would be silent under {display:?}"
+            );
+        }
+    }
+
+    /// The failure this exists for: `xvfb-run` missing from a container's
+    /// PATH. The step falls back to a plain `cargo test`, every widget test
+    /// skips itself, and the job goes green having tested no widget. A
+    /// developer on a bare SSH session gets the warning instead.
+    #[test]
+    fn a_ci_run_with_no_display_at_all_is_a_failure_rather_than_a_skip() {
+        assert!(missing_display_is_fatal(Display::None, true));
+        assert!(!missing_display_is_fatal(Display::None, false));
+        for display in [Display::Session, Display::Xvfb] {
+            assert!(!missing_display_is_fatal(display, true));
+            assert!(!missing_display_is_fatal(display, false));
+        }
     }
 
     /// The failure mode this guards is a job that runs nothing and reports

@@ -172,6 +172,24 @@ fn cargo_xtask_is_aliased() {
     );
 }
 
+/// The `--locked` on the steps `cargo xtask ci` runs is not enough on its own.
+/// Cargo resolves the whole workspace lock before it builds the launcher, so
+/// an alias without `--locked` rewrites a stale `Cargo.lock` first and the
+/// steps then find a consistent file and pass. The bump that never had its
+/// lock update committed would reach `makepkg --frozen --offline` instead.
+#[test]
+fn the_xtask_alias_cannot_rewrite_the_lock_file_on_its_way_in() {
+    let config = parse(".cargo/config.toml");
+    let alias = config["alias"]["xtask"]
+        .as_str()
+        .expect("the xtask alias is a string");
+    assert!(
+        alias.split_whitespace().any(|word| word == "--locked"),
+        "the `xtask` alias resolves before it runs anything, so it needs \
+         `--locked` of its own: {alias}"
+    );
+}
+
 /// The kit's freedom from GUI dependencies is what lets its tests run on a bare
 /// runner. Phase 2 adds the transitive `cargo tree` check in CI; this catches
 /// the direct case at the point someone types it.
