@@ -6,6 +6,7 @@ the request-input validators used across the handlers.'''
 # worthwhile but out of scope here, and would mean teaching build-api-one.sh a
 # new per-module bundling rule for every consumer zip.
 # pylint: disable=too-many-lines
+import base64
 import email
 import functools
 import io
@@ -904,6 +905,55 @@ def active_addresses_on_subdomain(subdomain, tld, address):
             break
         scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
     return False
+
+
+REPORT_PAGE_LIMIT = 50
+
+
+def paged_report_response(event, table, sort_key, project):
+    '''Returns one reverse-chronological page of records from a report table as
+    a complete handler response.
+
+    Reads the opaque `next_token` query parameter (base64 of the DynamoDB
+    ExclusiveStartKey), scans one page, sorts it descending on `sort_key` --
+    within the page only, which is what a scan of an unordered table can offer
+    -- and maps each item through `project` to build the `Reports` list. A
+    further page is advertised as `NextToken`. Any failure, including one raised
+    by `project`, becomes a 500 carrying the exception text.'''
+    try:
+        params = event.get('queryStringParameters') or {}
+        scan_kwargs = {
+            'Limit': REPORT_PAGE_LIMIT
+        }
+
+        next_token = params.get('next_token', '')
+        if next_token:
+            scan_kwargs['ExclusiveStartKey'] = json.loads(
+                base64.b64decode(next_token).decode('utf-8')
+            )
+
+        response = table.scan(**scan_kwargs)
+        items = response.get('Items', [])
+
+        items.sort(key=lambda x: x.get(sort_key, '0'), reverse=True)
+
+        result = {'Reports': [project(item) for item in items]}
+
+        last_key = response.get('LastEvaluatedKey')
+        if last_key:
+            result['NextToken'] = base64.b64encode(
+                json.dumps(last_key).encode('utf-8')
+            ).decode('utf-8')
+
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'Error': str(err)})
+        }
+    return {
+        'statusCode': 200,
+        'body': json.dumps(result)
+    }
 
 
 # Folder-size observability (Layer 4.1 of the large-mailbox hardening plan).

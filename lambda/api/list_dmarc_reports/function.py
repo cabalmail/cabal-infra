@@ -1,9 +1,7 @@
 '''Lists DMARC aggregate report records (admin only)'''
-# pylint: disable=duplicate-code
-import base64
-import json
 import os
 import boto3  # pylint: disable=import-error
+from helper import paged_report_response  # pylint: disable=import-error
 from helper import sign_url  # pylint: disable=import-error
 from admin_limits import admin_response_or_none  # pylint: disable=import-error
 
@@ -20,55 +18,23 @@ def handler(event, _context):
     denial = admin_response_or_none(event)
     if denial:
         return denial
-    try:
-        params = event.get('queryStringParameters') or {}
-        scan_kwargs = {
-            'Limit': 50
-        }
+    # Sorted on date_end for reverse chronological order
+    return paged_report_response(event, table, 'date_end', dmarc_report)
 
-        next_token = params.get('next_token', '')
-        if next_token:
-            scan_kwargs['ExclusiveStartKey'] = json.loads(
-                base64.b64decode(next_token).decode('utf-8')
-            )
 
-        response = table.scan(**scan_kwargs)
-        items = response.get('Items', [])
-
-        # Sort by date_end descending for reverse chronological order
-        items.sort(key=lambda x: x.get('date_end', '0'), reverse=True)
-
-        reports = []
-        for item in items:
-            xml_key = item.get('xml_key', '')
-            reports.append({
-                'org_name': item.get('org_name', ''),
-                'report_id': item.get('report_id', ''),
-                'date_begin': item.get('date_begin', ''),
-                'date_end': item.get('date_end', ''),
-                'source_ip': item.get('source_ip', ''),
-                'count': item.get('count', '0'),
-                'disposition': item.get('disposition', ''),
-                'dkim_result': item.get('dkim_result', ''),
-                'spf_result': item.get('spf_result', ''),
-                'header_from': item.get('header_from', ''),
-                'xml_url': sign_url(XML_BUCKET, xml_key) if xml_key else ''
-            })
-
-        result = {'Reports': reports}
-
-        last_key = response.get('LastEvaluatedKey')
-        if last_key:
-            result['NextToken'] = base64.b64encode(
-                json.dumps(last_key).encode('utf-8')
-            ).decode('utf-8')
-
-    except Exception as err:  # pylint: disable=broad-exception-caught
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'Error': str(err)})
-        }
+def dmarc_report(item):
+    '''Maps a stored DMARC report record onto its API shape'''
+    xml_key = item.get('xml_key', '')
     return {
-        'statusCode': 200,
-        'body': json.dumps(result)
+        'org_name': item.get('org_name', ''),
+        'report_id': item.get('report_id', ''),
+        'date_begin': item.get('date_begin', ''),
+        'date_end': item.get('date_end', ''),
+        'source_ip': item.get('source_ip', ''),
+        'count': item.get('count', '0'),
+        'disposition': item.get('disposition', ''),
+        'dkim_result': item.get('dkim_result', ''),
+        'spf_result': item.get('spf_result', ''),
+        'header_from': item.get('header_from', ''),
+        'xml_url': sign_url(XML_BUCKET, xml_key) if xml_key else ''
     }
