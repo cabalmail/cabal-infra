@@ -23,7 +23,7 @@ Eight phases: shared core; CI/CD (early, so every subsequent phase runs through 
 ### Guiding principles
 
 - **One codebase, two manifests.** Safari Web Extensions and Chrome MV3 share the same `manifest.json` schema, the same content-script model, the same `chrome.*`/`browser.*` API surface (Safari implements the WebExtensions API). The differences are real but localized: Safari packaging is an Xcode app extension target, Chrome packaging is a `.zip` uploaded to the Web Store. All extension *logic* lives in a single TypeScript codebase. Per-platform code is confined to packaging glue.
-- **API-backed, no direct IMAP/SMTP.** The extension only ever touches the Lambda API surface. It does not parse mail, it does not connect to IMAP, it does not generate DKIM. The eager-create-and-reap model does require additive backend work (Phase 3.1): one extension to `POST /new`, a new `POST /confirm_address` endpoint, a scheduled reaper Lambda, and a procmail-based clear-on-receive hook on the IMAP tier. All purely additive and direct-to-prod-scaffolding-eligible per CLAUDE.md.
+- **API-backed, no direct IMAP/SMTP.** The extension only ever touches the Lambda API surface. It does not parse mail, it does not connect to IMAP, it does not generate DKIM. The eager-create-and-reap model does require additive backend work (Phase 3.1): one extension to `POST /new`, a new `POST /confirm_address` endpoint, a scheduled reaper Lambda, and a procmail-based clear-on-receive hook on the IMAP tier. All purely additive, routed through `stage` -> `main` like everything else.
 - **Generate locally, create eagerly, reap on abandon.** Random address generation mirrors `react/admin/src/Addresses/Request.jsx` lines 69-71 exactly: 8-char local part (first/last alphanumeric, middle allows `._-`), 8-char subdomain (first/last alphanumeric, middle allows `-` only). Generation is pure client-side -- refreshing the suggestion does not hit the API. *Commit* (the user clicking "Use this address") creates the address immediately, ahead of form submit. This avoids the verification-email race: most sign-up backends send a verification mail within seconds of form submission, and a brand-new Cabalmail address needs DNS propagation + sendmail config reload before it can receive mail. Creating at commit time gives that pipeline runway -- typically tens of seconds while the user fills the rest of the form. Eagerly-created addresses are tagged `pending=true`; the extension issues a `confirm_address` call on actual form submit to clear the flag, and a server-side TTL reaper revokes any address that stays `pending` for longer than a window (default 24h). This handles the close-the-browser-without-submitting case the extension can't observe.
 - **Cognito Hosted UI + PKCE for auth.** The extension is a public client; embedding the Cognito SRP flow would require the user to type their password into a popup UI, which is worse for trust and worse for shared-device scenarios. PKCE via the platform's web-auth APIs (`chrome.identity.launchWebAuthFlow` on Chrome, `ASWebAuthenticationSession` via the Safari app extension host) is the right shape. Embedded SRP via `amazon-cognito-identity-js` is the fallback if Hosted UI work slips.
 - **Never block submission silently.** Any time the extension intercepts a form submit, the user sees a visible explanation (banner or popover) and an explicit "submit anyway" escape hatch. Surprise-blocking a form because of a Cabalmail decision is worse than letting a bad address through.
@@ -269,7 +269,7 @@ Marketing version derived from `CHANGELOG.md` (same `sed` pattern as `apple.yml`
 
 ### 1. Backend additions (Lambda + Terraform)
 
-The eager-create-and-reap model requires four additive server-side changes (a-d below). They have no impact on existing clients, so each can ship via the direct-to-prod-scaffolding path per CLAUDE.md.
+The eager-create-and-reap model requires four additive server-side changes (a-d below). They have no impact on existing clients; each routes through `stage` -> `main` per CLAUDE.md.
 
 **a. Extend `POST /new` to accept and store a `pending` flag.**
 
@@ -748,14 +748,14 @@ Document any per-platform divergences (popover positioning bugs, scroll behavior
 
 - **Chrome Web Store developer account** ($5 one-time registration). Cabalmail developer organization, not a personal account.
 - **Apple Developer Program enrollment** -- already in place for the existing Apple clients. The same membership covers the extension host apps.
-- **Cognito App Client provisioned for the extension** -- one new public client with OAuth flows enabled and Hosted UI callback URLs registered. Terraform change in `terraform/infra/modules/user_pool/`, applied via the standard CI/CD path. Direct-to-prod-scaffolding-eligible per CLAUDE.md if it's purely additive and no existing client references it.
+- **Cognito App Client provisioned for the extension** -- one new public client with OAuth flows enabled and Hosted UI callback URLs registered. Terraform change in `terraform/infra/modules/user_pool/`, applied via the standard CI/CD path.
 - **Hosted UI domain provisioned for the User Pool** -- if not already configured. Terraform change in `terraform/infra/modules/user_pool/`.
 - **Backend additions for eager-create / reap / clear-on-receive shipped before the extension does** (Phase 3.1):
   - `POST /new` extended to accept and store `pending` / `pending_since` (3.1.a)
   - New `POST /confirm_address` Lambda + API Gateway route (3.1.b)
   - New scheduled `reap_pending_addresses` Lambda + EventBridge rule (3.1.c)
   - Procmail-pending include file + helper script baked into the IMAP image, plus the `dynamodb:UpdateItem` IAM addition on the imap task role (3.1.d)
-  - Each is purely additive and direct-to-prod-scaffolding-eligible per CLAUDE.md.
+  - Each is purely additive and routes through `stage` -> `main` per CLAUDE.md.
 - **API Gateway CORS** -- the Cabalmail API already allows the React admin origin. Extensions running in Chrome and Safari send requests with the `Origin: chrome-extension://...` / `safari-web-extension://...` headers. Two paths:
   1. Declare `host_permissions` for the API URL in the manifest; the browser bypasses CORS for extension-initiated requests, no API-side change needed. (Preferred.)
   2. Add the extension origins to the API Gateway CORS allowlist. (Fallback if for some reason the host-permissions path fails for a specific endpoint.)
