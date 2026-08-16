@@ -18,6 +18,10 @@ name: Lint
 #                gate; no deploy workflow runs them).
 #   - Swift:     swiftlint --strict (from apple.yml).
 #   - React:     eslint (new for the PR gate; the deploy path only builds).
+#   - Rust:      cargo xtask ci (new for the PR gate; there is no Linux deploy
+#                workflow yet — the Phase 2 linux.yml will invoke this same
+#                subcommand, see linux/xtask/src/ci.rs, so the two can't
+#                drift).
 #
 # This is lint-only: no AWS credentials, no Terraform backend, no deploy. The
 # Terraform scanners read the committed source directly (exactly as the
@@ -49,6 +53,7 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       swift: ${{ steps.filter.outputs.swift }}
       react: ${{ steps.filter.outputs.react }}
+      rust: ${{ steps.filter.outputs.rust }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -75,6 +80,13 @@ jobs:
             - '.github/workflows/lint.yml'
           react:
             - 'react/admin/**'
+            - '.github/workflows/lint.yml'
+          rust:
+            - 'linux/**'
+            # The xtask repo-shape tests assert the client's synced-preference
+            # keys match this Lambda's APP_ALLOWED set, so an edit on the
+            # Lambda side must run the Rust gate too.
+            - 'lambda/api/set_preferences/function.py'
             - '.github/workflows/lint.yml'
 
   # ---------------------------------------------------------------------------
@@ -278,3 +290,50 @@ jobs:
       run: npm ci
     - name: eslint
       run: npm run lint
+
+  # ---------------------------------------------------------------------------
+  # Rust. `cargo xtask ci` is the single source of truth for the Linux client's
+  # gate (fmt --check, clippy -D warnings, kit tests, xtask repo-shape tests,
+  # app tests under xvfb — see linux/xtask/src/ci.rs); invoking the subcommand
+  # instead of restating its steps in YAML is what keeps this job and the
+  # pre-push gate from drifting. ubuntu-latest (24.04) is deliberately the
+  # GTK 4.14 / libadwaita 1.4 API floor that the gtk4/libadwaita crate
+  # features enforce — newer API must fail to compile here.
+  # ---------------------------------------------------------------------------
+  rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: linux
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+    - name: install-system-deps
+      # blueprint-compiler and the GTK dev packages are hard build
+      # requirements (build.rs compiles resources/*.blp with no .ui fallback);
+      # xvfb lets the cabalmail-gtk widget tests run instead of skipping
+      # themselves for want of a display.
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libgtk-4-dev libadwaita-1-dev blueprint-compiler xvfb
+    - name: install-toolchain
+      # rustup is preinstalled on the runner and reads linux/rust-toolchain.toml
+      # (the exact 1.97.1 pin, with clippy + rustfmt), so no third-party
+      # toolchain action is needed.
+      run: rustup toolchain install
+    - name: cache-cargo
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          linux/target
+        key: rust-${{ runner.os }}-${{ hashFiles('linux/Cargo.lock', 'linux/rust-toolchain.toml') }}
+        restore-keys: |
+          rust-${{ runner.os }}-
+    - name: xtask-ci
+      run: cargo xtask ci
