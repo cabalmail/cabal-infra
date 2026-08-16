@@ -1,0 +1,28 @@
+# Prompt-injection hardening for the agent pipelines: issues opened by the
+# machine account are working artifacts of the tester/fixer lifecycle whose
+# bodies and comment threads are read back into automated runs. Locking them at
+# creation restricts comments to collaborators, so outside text can never enter
+# that loop. Human-opened issues are left unlocked for public conversation.
+#
+# Note: `issues` events run the workflow from the default branch, so this file
+# is inert until it reaches `main`.
+name: Lock bot-created issues
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  lock:
+    if: github.event.issue.user.login == 'cabalmail-bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lock conversation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PUT \
+            "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/lock"
