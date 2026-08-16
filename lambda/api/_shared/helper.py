@@ -774,6 +774,40 @@ class ZoneMismatchError(Exception):
     env var maps it to. Signals operator/Terraform drift, not user error.'''
 
 
+# Subdomains reserved on the control domain. When the control domain doubles as
+# a mail domain (it appears in mail_domains), these labels already carry
+# infrastructure records in the control zone: CloudFront/NLB aliases (admin,
+# www, imap, smtp, smtp-in, smtp-out), the system mail user (mail-admin), and
+# the DKIM/DMARC selectors (cabal._domainkey, _dmarc). An address record at one
+# of these names would either fail (Route 53 rejects an MX/TXT alongside an
+# existing CNAME) or clobber an auth record (an SPF TXT UPSERT would overwrite
+# the apex DKIM/DMARC TXT). These collisions only exist on the control domain;
+# dedicated mail domains have no such records, so the guard is scoped to it.
+RESERVED_CONTROL_SUBDOMAINS = frozenset({
+    'admin', 'www', 'imap', 'smtp', 'smtp-in', 'smtp-out', 'mail-admin',
+    'cabal._domainkey', '_dmarc',
+})
+
+
+def reserved_subdomain_response_or_none(subdomain, tld, control_domain):
+    '''Returns a 400 response when `subdomain` is reserved on the control
+    domain, else None. Shared rather than owned by one handler so every path
+    that publishes address DNS applies the same guard: the admin create path
+    reached the identical UPSERT with no check at all (#1072).'''
+    if tld == control_domain and \
+            str(subdomain).lower().rstrip('.') in RESERVED_CONTROL_SUBDOMAINS:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({
+                'Error': (
+                    f'Subdomain "{subdomain}" is reserved on the '
+                    f'control domain "{control_domain}"'
+                )
+            })
+        }
+    return None
+
+
 def _route53():
     '''Lazily builds the shared Route 53 client (only the DNS handlers need it,
     so non-DNS lambdas importing helper never pay for it).'''
@@ -814,14 +848,23 @@ def assert_zone_owns_apex(zone_id, apex):
 
 def address_dns_records(subdomain, tld, control_domain):
     '''Canonical DNS record set for an address subdomain, as (name, type, value)
-    tuples. Must stay in lockstep with the records the `new` handler publishes:
-    suspend/revoke delete exactly these names and reinstate republishes them.'''
+    tuples. Every path that publishes address DNS goes through this set -- the
+    `new` and `new_address_admin` create paths via publish_address_dns_records,
+    reinstate the same way, suspend/revoke deleting exactly these names. A
+    handler keeping its own copy of the list is how the admin path came to
+    publish four of the five (#1073).'''
     return (
         (f'{subdomain}.{tld}', 'MX', f'10 smtp-in.{control_domain}'),
         (f'{subdomain}.{tld}', 'TXT', f'"v=spf1 include:{control_domain} ~all"'),
         (f'cabal._domainkey.{subdomain}.{tld}', 'CNAME',
          f'cabal._domainkey.{control_domain}'),
         (f'_dmarc.{subdomain}.{tld}', 'CNAME', f'_dmarc.{control_domain}'),
+        # BIMI: publish the Cabalmail mark for mail sent from this subdomain.
+        # The lookup name (default._bimi.<subdomain>.<tld>) has the per-address
+        # subdomain in the middle, so it cannot be served by a DNS wildcard (a
+        # wildcard only matches a leftmost label) - same reason _dmarc and
+        # _domainkey are written per address. Points at the SVG; receivers
+        # rasterize it.
         (f'default._bimi.{subdomain}.{tld}', 'TXT',
          f'"v=BIMI1; l=https://www.{control_domain}/assets/bimi/cabalmail.svg"'),
     )
