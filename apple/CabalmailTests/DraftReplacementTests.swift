@@ -54,13 +54,21 @@ final class DraftReplacementTests: XCTestCase {
     }
 
     /// A first save has no predecessor to retire, so there is no stale row
-    /// or stale reader anywhere and nothing to signal.
-    func testFirstSaveOfANewDraftReportsNothing() throws {
+    /// or stale reader anywhere — but the copy it just created is missing
+    /// from a list already showing Drafts, which otherwise waits out the
+    /// 30 s status poll to notice it. So it reports the survivor with an
+    /// empty chain (#1083); this case asserted nil until then. What the
+    /// arrival does and does not disturb is pinned in
+    /// `DraftFirstSaveSignalTests`.
+    func testFirstSaveOfANewDraftReportsTheCopyItCreated() throws {
         let model = try TestFixtures.makeComposeModel()
 
         model.adoptServerDraftRef(DraftServerRef(uid: 700, uidValidity: 9))
 
-        XCTAssertNil(model.retiredDraftReplacement)
+        XCTAssertEqual(
+            model.retiredDraftReplacement,
+            DraftReplacement(retiredUIDs: [], survivingUID: 700)
+        )
     }
 
     /// A send reports through `supersededDraftUIDs` and its own dispose

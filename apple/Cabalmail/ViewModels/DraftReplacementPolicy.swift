@@ -5,13 +5,19 @@ import Foundation
 // throwing it away. Lifted out of the view so it can be tested without a
 // list, a reader, or a server.
 
-/// The Drafts UIDs one compose session retired, and the copy that survived
-/// them. Every `/save_draft` replace expunges the copy it replaces and
-/// lands the new content under a fresh UID, so a session that was resumed
-/// and re-saved leaves a chain behind (#1071) with exactly one survivor.
+/// What one compose session left in Drafts: the UIDs it retired, and the
+/// copy that survived them. Every `/save_draft` replace expunges the copy it
+/// replaces and lands the new content under a fresh UID, so a session that
+/// was resumed and re-saved leaves a chain behind (#1071) with exactly one
+/// survivor.
 ///
 /// A discard retires the same chain with `survivingUID` nil: the whole
 /// point of "throw this away" is that nothing takes its place (#1081).
+///
+/// A first save is the mirror image — a survivor with an empty
+/// `retiredUIDs`. Nothing on screen is stale, but the new copy is *absent*
+/// from a list that is already showing Drafts, and an open list otherwise
+/// waits out the 30 s status poll to notice it (#1083).
 struct DraftReplacement: Equatable, Sendable {
     let retiredUIDs: [UInt32]
     let survivingUID: UInt32?
@@ -61,8 +67,8 @@ enum DraftReplacementPolicy {
     }
 
     /// What a closing compose session leaves for an open Drafts list, given
-    /// the chain of server copies it retired: nil when there is nothing
-    /// stale on screen to fix.
+    /// the chain of server copies it retired: nil when the session left
+    /// nothing on the server at all.
     ///
     /// The two closing exits that touch the server differ only in whether
     /// anything is left afterwards. Save Draft replaces, so the copies
@@ -71,14 +77,21 @@ enum DraftReplacementPolicy {
     /// current one — is retired with no survivor. Same rule for both
     /// discarding exits: the explicit "Discard draft" and the empty-body
     /// cancel that quietly drops the server copy (`.discardEmpty`).
+    ///
+    /// A save reports whether or not it retired anything. A first save
+    /// retires nothing, but it is still news: the list the user is sitting
+    /// in does not have the new copy, and its watcher polls `folderStatus`
+    /// on a 30 s cycle rather than being told (#1083). An empty
+    /// `retiredUIDs` prunes no rows and `resolve` reads it as `.ignore`, so
+    /// the only thing the signal buys is the refresh — which is exactly the
+    /// missing half.
     static func retirement(
         discarded: Bool,
         replacedUIDs: [UInt32],
         currentUID: UInt32?
     ) -> DraftReplacement? {
         guard discarded else {
-            // A first save retires nothing — no stale row, nothing to say.
-            guard !replacedUIDs.isEmpty, let currentUID else { return nil }
+            guard let currentUID else { return nil }
             return DraftReplacement(retiredUIDs: replacedUIDs, survivingUID: currentUID)
         }
         let chain = replacedUIDs + (currentUID.map { [$0] } ?? [])

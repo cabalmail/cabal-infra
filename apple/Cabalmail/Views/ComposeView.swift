@@ -197,7 +197,9 @@ struct ComposeView: View {
                 // the survivor so it can swap rather than strand the user
                 // on content the server no longer has (#1078). An emptied
                 // body takes the `.discardEmpty` exit through this same
-                // button and reports a chain with no survivor (#1081).
+                // button and reports a chain with no survivor (#1081); a
+                // first save reports the survivor with nothing retired, and
+                // rides the same refresh into the list (#1083).
                 if didClose, let replacement = model.retiredDraftReplacement {
                     appState.signalDraftReplaced(
                         folderPath: "Drafts",
