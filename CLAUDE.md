@@ -18,7 +18,7 @@ Three named branches map 1:1 to GitHub Environments and AWS accounts:
 
 | Branch        | Environment | Notes                                               |
 | ------------- | ----------- | --------------------------------------------------- |
-| `main`        | prod        | Protected. Merges via PR only.                      |
+| `main`        | prod        | Protected. Receives only `stage` promotion PRs.     |
 | `stage`       | stage       | Direct push allowed.                                |
 | `development` | development | Direct push allowed. Quiesced by default.           |
 
@@ -29,18 +29,13 @@ The `development` environment is a warm spare. It runs only when:
 - A change is too risky for stage (destructive infra changes, security-sensitive surface), or
 - Infra changes need to be applied to be validated.
 
-Otherwise leave it quiesced. Most work goes `stage` -> `main` with one deliberate promotion step. See [docs/quiesce.md](docs/quiesce.md).
+Otherwise leave it quiesced. All work goes `stage` -> `main` with one deliberate promotion step. See [docs/quiesce.md](docs/quiesce.md).
 
-### Direct-to-prod scaffolding
+### Promotion to prod
 
-Some features are too expensive to run in multiple environments and ship via a feature branch -> `main` PR, skipping stage. This is allowed only when **all** of the following are true:
+The only route to `main` is promoting `stage`. The promotion is a formal release step: from a clean `stage` tree, `make promote VERSION=...` collates the pending changelog fragments, commits and pushes `stage`, and opens the `stage` -> `main` PR; merging that PR is a deliberate manual act, and `release.yml` tags and publishes the GitHub release on merge. See [docs/releasing.md](docs/releasing.md).
 
-- No data plane impact (no schema changes, no message-flow changes, no DynamoDB writes).
-- No user-facing surface (no UI, API contract, or auth-flow changes).
-- No IAM or security implications (no new principals, no new permissions, no public surface).
-- The change is purely additive: new resources that no existing path references.
-
-If any of these is unclear, route through stage first.
+Never open a PR to `main` from any other branch. An earlier "direct-to-prod scaffolding" carve-out allowed purely additive feature-branch -> `main` PRs to skip stage; it was retired 2026-08-15 — the automated release flow made promotion cheap enough that skipping stage no longer pays for the risk. Planning docs that relied on it carry errata.
 
 ### No PII in public artifacts
 

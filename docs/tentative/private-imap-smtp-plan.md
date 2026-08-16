@@ -203,6 +203,8 @@ Lambdas are not yet directed at internal IMAP/SMTP targets — the public NLB st
 
 - **Direct-to-prod eligibility.** Phase 1 (code-only, no contract change) and Phase 6 (docs) are candidates for direct-to-prod under the [project rules](../../CLAUDE.md#direct-to-prod-scaffolding). Phases 2, 3, 3.5, 4, and 5 touch IAM / data-plane / security surface and route through `stage` -> `main`.
 
+> **Erratum (2026-08-15):** The direct-to-prod scaffolding carve-out (and its CLAUDE.md anchor) was retired; Phases 1 and 6 route through `stage` -> `main` like the rest.
+
 - **Forward compatibility with the Android client roadmap.** The [Android client](../../docs/2.0.x) is planned as another first-party native client; it will also hit the Lambda API rather than IMAP directly. Privatizing IMAP/submission does not constrain that work.
 
 - **Failure to terminate TLS in Dovecot at 993.** The Option 1 / Option 2 decision in Phase 4 hinges on Dovecot's cert wiring being correct. If the certbot-renewal Lambda's existing rollout doesn't put the cert where Dovecot expects, we fall back to Option 2 (internal NLB) without altering any of the earlier phases.
