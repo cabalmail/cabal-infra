@@ -493,12 +493,18 @@ extension AppState {
         }
     }
 
-    /// A compose session saved over the Drafts copy an open list may be
-    /// showing. The retired UIDs are already expunged server-side and the
-    /// survivor carries the content the user just saved, so the list prunes
-    /// the one and re-points at the other (#1078).
+    /// A compose session changed what is in Drafts. The retired UIDs are
+    /// already expunged server-side and the survivor carries the content the
+    /// user just saved, so the list prunes the one and re-points at the
+    /// other (#1078).
+    ///
+    /// A first save retires nothing and only adds: the survivor alone is
+    /// enough to send, because the refresh the list runs on this signal is
+    /// what surfaces the new row instead of leaving it to the 30 s status
+    /// poll (#1083). A signal with neither half is the one that says
+    /// nothing — an empty compose that never reached the server.
     func signalDraftReplaced(folderPath: String, replacement: DraftReplacement) {
-        guard !replacement.retiredUIDs.isEmpty else { return }
+        guard !replacement.retiredUIDs.isEmpty || replacement.survivingUID != nil else { return }
         draftReplacedTick += 1
         lastDraftReplaced = DraftReplacedSignal(
             folderPath: folderPath,

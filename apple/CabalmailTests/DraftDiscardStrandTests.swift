@@ -71,15 +71,34 @@ final class DraftDiscardStrandTests: XCTestCase {
     }
 
     /// A discard whose request threw says nothing about the server, so the
-    /// session keeps quiet: pruning here would yank a row whose message may
-    /// still exist. Nothing was ever saved either, so there is no chain.
-    func testADiscardThatNeverReachedTheServerReportsNothing() throws {
+    /// copy it aimed at is reported as surviving, not retired: nothing is
+    /// pruned and no reader moves (an empty chain resolves to `.ignore`), so
+    /// the row this session could not vouch for settles on the refresh the
+    /// signal triggers instead of on the next 30 s status poll.
+    ///
+    /// Before #1083 widened the channel to carry arrivals this reported nil
+    /// — the same outcome by a different route, since the only thing the
+    /// signal could have done back then was prune. The rule that mattered
+    /// then still holds now: a thrown discard never prunes.
+    func testADiscardThatNeverReachedTheServerPrunesNothing() throws {
         let model = try TestFixtures.makeComposeModel()
         model.serverDraftRef = DraftServerRef(uid: 639, uidValidity: 9)
 
         model.recordServerDraftDiscard(nil)
 
-        XCTAssertNil(model.retiredDraftReplacement)
+        XCTAssertEqual(
+            model.retiredDraftReplacement,
+            DraftReplacement(retiredUIDs: [], survivingUID: 639)
+        )
+        XCTAssertEqual(
+            DraftReplacementPolicy.resolve(
+                displayedUID: 639,
+                replacement: try XCTUnwrap(model.retiredDraftReplacement),
+                loadedUIDs: [639]
+            ),
+            .ignore,
+            "the reader on the copy a failed discard aimed at must stay put"
+        )
     }
 
     /// Discarding a compose that never reached the server (no ref, no
@@ -117,16 +136,34 @@ final class DraftDiscardStrandTests: XCTestCase {
         )
     }
 
-    /// A first save retires nothing, so a save-shaped session with only a
-    /// current ref stays silent — guard case, passing before and after the
-    /// fix, and deliberately so: it is what keeps a plain new-message
-    /// compose from yanking anybody's selection.
-    func testAFirstSaveStillReportsNothing() {
-        XCTAssertNil(
+    /// A first save retires nothing, but it still reports: the copy it
+    /// created is missing from a list already showing Drafts, and that list
+    /// otherwise waits out the 30 s status poll (#1083). Reported with an
+    /// empty chain, which is what keeps it from yanking anybody's selection
+    /// — see `testAFirstSaveLeavesEveryReaderAlone` below.
+    ///
+    /// This case used to assert nil (#1081, when the channel only carried
+    /// retirements); #1083 is the human accepting the arrival half.
+    func testAFirstSaveReportsTheNewCopyWithNothingRetired() {
+        XCTAssertEqual(
             DraftReplacementPolicy.retirement(
                 discarded: false,
                 replacedUIDs: [],
                 currentUID: 700
+            ),
+            DraftReplacement(retiredUIDs: [], survivingUID: 700)
+        )
+    }
+
+    /// A save-shaped session that never reached the server has no survivor
+    /// and nothing retired, and stays silent — an empty compose opened and
+    /// closed must not make an open list refresh.
+    func testASaveThatNeverReachedTheServerReportsNothing() {
+        XCTAssertNil(
+            DraftReplacementPolicy.retirement(
+                discarded: false,
+                replacedUIDs: [],
+                currentUID: nil
             )
         )
     }

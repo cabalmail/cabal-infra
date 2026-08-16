@@ -263,8 +263,15 @@ extension MessageListView {
     /// UID), which re-fetches and shows what was actually saved.
     ///
     /// The refresh comes first because the survivor landed under a UID this
-    /// list has never seen: Drafts is unsubscribed by default, so nothing
-    /// else would surface it for a minute or more.
+    /// list has never seen. Nothing else surfaces it promptly: the watcher
+    /// on an open folder has no real IDLE behind it, so it re-reads
+    /// `folderStatus` every 30 s and the row arrives somewhere in that
+    /// window (measured at t+5 s and t+32 s on two runs — #1083, correcting
+    /// this comment's earlier "a minute or more").
+    ///
+    /// A first save is that refresh and nothing else: no retired UID to
+    /// prune, and `resolve` reads an empty chain as `.ignore`, so whatever
+    /// the user was reading is left exactly where it was.
     func handleDraftReplaced(_ replacement: DraftReplacement) {
         guard let model else { return }
         for uid in replacement.retiredUIDs {
