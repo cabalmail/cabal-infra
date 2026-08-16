@@ -158,6 +158,43 @@ struct ComposeView: View {
 
     // MARK: - Cancel dialog
 
+    /// Cancel: put up the three-way dialog when there is a draft to decide
+    /// about, and otherwise just close.
+    ///
+    /// The dialog used to go up unconditionally, so closing a composer the
+    /// user had not typed in still demanded a Save / Discard / Keep Editing
+    /// answer over an empty buffer — every branch of which throws away
+    /// nothing (#1094). `ComposeCancelPolicy` owns the rule; the emptiness
+    /// it reads is the same `hasDraftContent(bodies:)` that `cancel()`
+    /// consults, computed the same way, so the question is asked exactly
+    /// when the answer could matter.
+    ///
+    /// Bodies come from the WebKit bridge, hence the `await` — and hence
+    /// this button being the only cancel path with the check. The macOS
+    /// window-close intercept (`closeCoordinator.onCloseAttempt`) answers
+    /// an `NSWindowDelegate` synchronously and cannot wait for the bridge,
+    /// so red-button-closing an untouched compose window still asks.
+    private func cancelOrAsk() async {
+        let bodies = await model.computeMessageBodies()
+        guard !ComposeCancelPolicy.needsDecision(
+            bridgeFailed: model.editorController.bridgeFailure != nil,
+            hasContent: model.hasDraftContent(bodies: bodies)
+        ) else {
+            showDiscardConfirm = true
+            return
+        }
+        #if os(macOS)
+        // Closing without the dialog still closes the window; pre-approve
+        // so the close intercept doesn't re-ask what we just decided not
+        // to ask.
+        closeCoordinator.allowsClose = true
+        #endif
+        // Re-resolves against the same emptiness and takes `.discardEmpty`:
+        // drops any server copy the autosave left, removes the local one,
+        // closes.
+        await model.cancel()
+    }
+
     /// Runs the outcome the user picked in the cancel-compose dialog. Stays
     /// in this file (rather than the `+Subviews` extension) because it
     /// touches the `private` close coordinator.
@@ -231,7 +268,7 @@ struct ComposeView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button("Cancel") {
-                showDiscardConfirm = true
+                Task { await cancelOrAsk() }
             }
             .accessibilityIdentifier("compose.cancel")
         }
