@@ -273,7 +273,14 @@ struct NotificationFolderPickerView: View {
                     Button {
                         toggle(folder.path)
                     } label: {
-                        row(for: folder)
+                        FolderPickerRow(folder: folder) {
+                            // Opacity, not conditional presence: the checkmark
+                            // keeps its slot so rows don't shift as folders are
+                            // (de)selected.
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.tint)
+                                .opacity(selection.contains(folder.path) ? 1 : 0)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -282,34 +289,6 @@ struct NotificationFolderPickerView: View {
                 #endif
             }
         )
-    }
-
-    @ViewBuilder
-    private func row(for folder: Folder) -> some View {
-        let depth = FolderTree.depth(for: folder)
-        HStack(spacing: 8) {
-            Image(systemName: icon(for: folder))
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(folder.name)
-                    .font(.body)
-                if depth > 0 {
-                    Text(folder.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            // Opacity, not conditional presence: the checkmark keeps its
-            // slot so rows don't shift as folders are (de)selected.
-            Image(systemName: "checkmark")
-                .foregroundStyle(.tint)
-                .opacity(selection.contains(folder.path) ? 1 : 0)
-        }
-        .padding(.leading, CGFloat(depth) * 16)
-        .contentShape(Rectangle())
     }
 
     private func toggle(_ path: String) {
@@ -323,18 +302,6 @@ struct NotificationFolderPickerView: View {
             selection.remove(path)
         } else {
             selection.insert(path)
-        }
-    }
-
-    private func icon(for folder: Folder) -> String {
-        switch folder.path {
-        case "INBOX":   return "tray"
-        case "Sent":    return "paperplane"
-        case "Drafts":  return "pencil.line"
-        case "Trash":   return "trash"
-        case "Junk":    return "exclamationmark.shield"
-        case "Archive": return "archivebox"
-        default:        return "folder"
         }
     }
 
