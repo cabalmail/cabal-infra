@@ -50,7 +50,6 @@ describe('clearListCaches', () => {
     localStorage.setItem(ADDRESS_LIST, '{}');
     localStorage.setItem(`${ADDRESS_LIST}:bob`, '{}');
     localStorage.setItem('state', '{"view":"Email"}');
-    localStorage.setItem('folder_collapsed_sub', 'true');
 
     clearListCaches();
 
@@ -59,6 +58,27 @@ describe('clearListCaches', () => {
     expect(localStorage.getItem(ADDRESS_LIST)).toBeNull();
     expect(localStorage.getItem(`${ADDRESS_LIST}:bob`)).toBeNull();
     expect(localStorage.getItem('state')).toBe('{"view":"Email"}');
-    expect(localStorage.getItem('folder_collapsed_sub')).toBe('true');
+  });
+
+  // Before #1117 this suite asserted the opposite for the bare collapse
+  // keys — that the sweep left them alone. It now takes the unscoped ones,
+  // which predate per-user scoping and carry the previous account's rail
+  // layout (and its folder names). The scoped ones stay: collapse state is
+  // a per-user preference, not a cache, and must survive its own owner's
+  // logout.
+  it('removes unscoped folder-collapse state but keeps each user\'s scoped copy', () => {
+    localStorage.setItem('folder_collapsed_sub', 'true');
+    localStorage.setItem('folder_collapsed_all', 'true');
+    localStorage.setItem('folder_collapsed_paths', '["Receipts"]');
+    localStorage.setItem('folder_collapsed_sub:alice', 'true');
+    localStorage.setItem('folder_collapsed_paths:alice', '["Receipts"]');
+
+    clearListCaches();
+
+    expect(localStorage.getItem('folder_collapsed_sub')).toBeNull();
+    expect(localStorage.getItem('folder_collapsed_all')).toBeNull();
+    expect(localStorage.getItem('folder_collapsed_paths')).toBeNull();
+    expect(localStorage.getItem('folder_collapsed_sub:alice')).toBe('true');
+    expect(localStorage.getItem('folder_collapsed_paths:alice')).toBe('["Receipts"]');
   });
 });

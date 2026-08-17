@@ -1,6 +1,25 @@
-import { ADDRESS_LIST, FOLDER_LIST } from '../constants';
+import {
+  ADDRESS_LIST,
+  FOLDER_COLLAPSED_ALL,
+  FOLDER_COLLAPSED_PATHS,
+  FOLDER_COLLAPSED_SUB,
+  FOLDER_LIST,
+} from '../constants';
 
 const CACHE_BASES = [ADDRESS_LIST, FOLDER_LIST];
+
+// Folder-rail collapse state is keyed per user like the caches above, but
+// it is a preference rather than a cache: the scoped keys are deliberately
+// NOT swept, so each account keeps its own rail layout across sessions.
+// Only the pre-scoping bare keys are removed — they belong to whoever last
+// used this browser and would otherwise sit here forever. The bare key is
+// also where state lands when the token yields no username, and that
+// unknown-user bucket is exactly what should not survive a session.
+const LEGACY_UI_STATE_KEYS = [
+  FOLDER_COLLAPSED_SUB,
+  FOLDER_COLLAPSED_ALL,
+  FOLDER_COLLAPSED_PATHS,
+];
 
 /**
  * Extract the Cognito username from an ID token. Returns null for a
@@ -22,11 +41,12 @@ export function usernameFromToken(token) {
 }
 
 /**
- * Compose the localStorage key for a cached list. Keys are scoped per
- * user so one account's cached folders/addresses can never be served to
- * another account signing in from the same browser.
+ * Compose a user-scoped localStorage key. Keys are scoped per user so one
+ * account's cached folders/addresses can never be served to another
+ * account signing in from the same browser, and so per-user UI state (the
+ * folder rail's collapse state) is never inherited by the next account.
  *
- * @param {string} base ADDRESS_LIST or FOLDER_LIST
+ * @param {string} base ADDRESS_LIST, FOLDER_LIST or a FOLDER_COLLAPSED_* key
  * @param {string|null} token Cognito ID token identifying the user
  * @returns {string} the user-scoped localStorage key
  */
@@ -37,14 +57,16 @@ export function listCacheKey(base, token) {
 
 /**
  * Remove every cached folder/address list — all users' scoped keys and
- * the legacy unscoped keys from before per-user scoping. Called on login
- * and logout; login must clear too because a login does not always
- * follow an explicit logout (e.g. after session expiry).
+ * the legacy unscoped keys from before per-user scoping — plus the
+ * unscoped folder-rail collapse state left behind by the same era. Called
+ * on login and logout; login must clear too because a login does not
+ * always follow an explicit logout (e.g. after session expiry).
  */
 export function clearListCaches() {
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
-    if (CACHE_BASES.some((b) => key === b || key.startsWith(`${b}:`))) {
+    const isCache = CACHE_BASES.some((b) => key === b || key.startsWith(`${b}:`));
+    if (isCache || LEGACY_UI_STATE_KEYS.includes(key)) {
       localStorage.removeItem(key);
     }
   }
