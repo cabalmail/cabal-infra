@@ -28,6 +28,12 @@ android {
             it.useJUnitPlatform()
         }
     }
+
+    lint {
+        warningsAsErrors = true
+        // Same rationale as app: dependabot owns version currency.
+        disable += listOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
+    }
 }
 
 kotlin {

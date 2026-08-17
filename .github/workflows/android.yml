@@ -1,0 +1,176 @@
+---
+name: Build and Deploy Android Client
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  # Unlike apple.yml, PRs run the test and build jobs too: these are free
+  # ubuntu runners (public repo), and the Android plan (Phase 2) wants every
+  # phase developed under green CI rather than discovering breakage at merge.
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  push:
+    # Only the deploy branches build automatically; an explicit branches
+    # filter keeps tag pushes out. Like apple.yml, this workflow deploys
+    # nothing to AWS — its only side effect is a Play Console upload.
+    branches:
+      - main
+      - stage
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+
+# A stale result is never worth finishing; keyed on the ref so the named
+# branches do not cancel each other.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Unit tests + ktlint + Android Lint. Lint warnings are errors
+  # (warningsAsErrors in both modules), so this is the whole quality gate.
+  # -----------------------------------------------------------------------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up JDK
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Run tests and lint
+        working-directory: android
+        run: ./gradlew :kit:test :app:testDebugUnitTest ktlintCheck lint
+
+  # -----------------------------------------------------------------------
+  # Unsigned release compile — proves the release variant builds without
+  # needing any secret, so PRs get the same signal as the deploy branches.
+  # -----------------------------------------------------------------------
+  build:
+    name: Build release
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up JDK
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Assemble release (unsigned)
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+  # -----------------------------------------------------------------------
+  # Signed AAB -> Play Console internal track. Deploy branches only. Until
+  # the operator finishes the runbook (upload keystore + Play service
+  # account in the environment's secrets), the job warns and exits green
+  # instead of failing every stage push — mirroring the TestFlight jobs'
+  # warn-green posture for absent-by-design conditions.
+  # -----------------------------------------------------------------------
+  upload:
+    name: Upload to Play Console
+    needs: [test, build]
+    if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up JDK
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # Secrets are not readable in a job-level `if`, so the gate is a step
+      # that every later step keys off.
+      - name: Check upload credentials
+        id: creds
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$SERVICE_ACCOUNT_JSON" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Android signing / Play secrets are not configured for this environment; skipping the Play Console upload. See the android dev runbook (sections 7-8)."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decode keystore
+        if: steps.creds.outputs.present == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+
+      - name: Derive versions
+        if: steps.creds.outputs.present == 'true'
+        run: |
+          # Marketing version tracks the most recent CHANGELOG entry, same
+          # derivation as apple.yml. Play Console accepts the same version
+          # name across many version codes.
+          VERSION_NAME=$(sed -nE '/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/{ s//\1/p; q; }' CHANGELOG.md)
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::Could not parse a version from CHANGELOG.md"
+            exit 1
+          fi
+          # run_number is monotonic per workflow name; a rename resets it. If
+          # this workflow is ever renamed, add the last pre-rename run number
+          # as an offset here instead of renaming back.
+          VERSION_CODE=${{ github.run_number }}
+          echo "Version: $VERSION_NAME ($VERSION_CODE)" >> "$GITHUB_STEP_SUMMARY"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+
+      - name: Build and publish signed bundle
+        if: steps.creds.outputs.present == 'true'
+        working-directory: android
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/upload.jks
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_PUBLISHER_CREDENTIALS: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: ./gradlew publishBundle

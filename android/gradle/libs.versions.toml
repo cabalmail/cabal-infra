@@ -21,6 +21,9 @@ amplify = "2.27.0"
 junit = "5.11.4"
 junitPlatform = "1.11.4"
 turbine = "1.2.0"
+# 4.x requires Gradle 9; 3.13.0 is the newest line for the Gradle 8 / AGP 8
+# pairing this project pins. Revisit alongside a Gradle major bump.
+tripletPlay = "3.13.0"
 
 [libraries]
 # AndroidX + Compose (app module)
@@ -71,4 +74,5 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+triplet-play = { id = "com.github.triplet.play", version.ref = "tripletPlay" }
 room = { id = "androidx.room", version.ref = "room" }
