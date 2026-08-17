@@ -17,4 +17,64 @@
     <string name="archive">Archive</string>
     <string name="purge">Delete permanently</string>
     <string name="load_remote_content">Load remote content</string>
+    <string name="cancel">Cancel</string>
+    <string name="more_actions">More actions</string>
+    <string name="active_option">Active</string>
+
+    <!-- Message list: selection, sort, filter -->
+    <string name="select_messages">Select messages</string>
+    <string name="done_selecting">Done selecting</string>
+    <string name="sort_date_received">Sort by date received</string>
+    <string name="sort_date_sent">Sort by date sent</string>
+    <string name="sort_from">Sort by sender</string>
+    <string name="sort_subject">Sort by subject</string>
+    <string name="sort_descending">Newest first</string>
+    <string name="filter_all">All</string>
+    <string name="filter_unread">Unread</string>
+    <string name="filter_flagged">Flagged</string>
+    <string name="mark_read">Mark read</string>
+    <string name="mark_unread">Mark unread</string>
+    <string name="add_flag">Flag</string>
+    <string name="remove_flag">Remove flag</string>
+    <string name="move_to">Move to…</string>
+    <string name="purge_confirm_title">Delete permanently?</string>
+    <plurals name="selected_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <plurals name="purge_confirm_body">
+        <item quantity="one">This permanently deletes %d message. It cannot be undone.</item>
+        <item quantity="other">This permanently deletes %d messages. It cannot be undone.</item>
+    </plurals>
+
+    <!-- Search -->
+    <string name="search">Search</string>
+    <string name="search_hint">Search mail</string>
+    <string name="search_filters">Search filters</string>
+    <string name="search_from">From</string>
+    <string name="search_to">To</string>
+    <string name="search_subject">Subject</string>
+    <string name="search_since">Since</string>
+    <string name="search_before">Before</string>
+    <string name="search_date_hint">YYYY-MM-DD</string>
+    <string name="search_has_attachment">Has attachment</string>
+    <string name="search_this_folder_only">Only in %1$s</string>
+    <string name="search_no_results">No messages found</string>
+    <string name="search_loading_more">Loading more…</string>
+
+    <!-- Reader -->
+    <string name="render_reader">Reader view</string>
+    <string name="render_original">Original view</string>
+    <string name="header_to">To: %1$s</string>
+    <string name="header_cc">Cc: %1$s</string>
+    <string name="priority_high">Important</string>
+    <string name="attachment_unnamed">(unnamed attachment)</string>
+
+    <!-- Folders -->
+    <string name="empty_trash">Empty Trash</string>
+    <string name="empty_trash_confirm">This permanently deletes every message in Trash. It cannot be undone.</string>
+
+    <!-- Resume cursor -->
+    <string name="resume_prompt">Pick up where you left off?</string>
+    <string name="resume_action">Resume</string>
 </resources>

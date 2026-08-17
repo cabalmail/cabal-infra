@@ -2,12 +2,14 @@ package com.cabalmail.android
 
 import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
+import com.cabalmail.android.navigation.NavCursor
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.CognitoAuthService
 import com.cabalmail.kit.auth.EncryptedTokenStore
 import com.cabalmail.kit.auth.TokenStore
 import com.cabalmail.kit.cache.AddressRepository
+import com.cabalmail.kit.cache.BimiRepository
 import com.cabalmail.kit.cache.BodyCache
 import com.cabalmail.kit.cache.EnvelopeCache
 import com.cabalmail.kit.cache.RoomEnvelopeCache
@@ -16,11 +18,17 @@ import com.cabalmail.kit.config.ConfigService
 import com.cabalmail.kit.config.DataStoreConfigCache
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 
 private val Context.configDataStore by preferencesDataStore(name = "config")
+
+// Per-install navigation identity (resume cursor); never backed up.
+private val Context.navDataStore by preferencesDataStore(name = "nav")
 
 /**
  * Manual constructor-injection graph (the plan's DI decision: no Hilt until
@@ -54,10 +62,28 @@ class AppContainer(
         BodyCache(File(appContext.filesDir, "body-cache"))
     }
 
+    /** Downloaded-attachment scratch space, served through the FileProvider. */
+    val attachmentDir: File by lazy {
+        File(appContext.cacheDir, "attachments").apply { mkdirs() }
+    }
+
+    /** App-lifetime work that outlives any one screen (nav-cursor pushes). */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    val navCursor: NavCursor by lazy {
+        NavCursor(appContext.navDataStore, appScope) { requireApi() }
+    }
+
+    /** BIMI lookups for avatar rows; safe before sign-in resolves (null). */
+    val bimiLookup: suspend (String) -> String? = { domain ->
+        runCatching { requireBimi().logoUrl(domain) }.getOrNull()
+    }
+
     private val authMutex = Mutex()
     private var authService: AuthService? = null
     private var apiClient: ApiClient? = null
     private var addressRepository: AddressRepository? = null
+    private var bimiRepository: BimiRepository? = null
 
     /**
      * The auth service, constructing it from the loaded config on first
@@ -97,6 +123,13 @@ class AppContainer(
         val api = requireApi()
         return authMutex.withLock {
             addressRepository ?: AddressRepository(api).also { addressRepository = it }
+        }
+    }
+
+    suspend fun requireBimi(): BimiRepository {
+        val api = requireApi()
+        return authMutex.withLock {
+            bimiRepository ?: BimiRepository(api).also { bimiRepository = it }
         }
     }
 }

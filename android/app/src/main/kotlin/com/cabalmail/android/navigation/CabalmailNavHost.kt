@@ -2,9 +2,14 @@ package com.cabalmail.android.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,6 +22,9 @@ import com.cabalmail.android.ui.mail.MessageDetailScreen
 import com.cabalmail.android.ui.mail.MessageDetailViewModel
 import com.cabalmail.android.ui.mail.MessageListScreen
 import com.cabalmail.android.ui.mail.MessageListViewModel
+import com.cabalmail.android.ui.mail.SearchScreen
+import com.cabalmail.android.ui.mail.SearchViewModel
+import com.cabalmail.kit.models.NavState
 
 /**
  * Phone navigation graph for the mail flow. Folder paths ride as encoded
@@ -29,6 +37,20 @@ fun CabalmailNavHost(
     onSignOut: () -> Unit,
 ) {
     val navController = rememberNavController()
+
+    // Resume cursor (plan §4.5): a cursor this install wrote restores
+    // silently; one from another device only offers a prompt on the folder
+    // list, so launch never yanks the user somewhere unexpected.
+    var resumePrompt by remember { mutableStateOf<NavState?>(null) }
+    LaunchedEffect(Unit) {
+        val cursor = container.navCursor.restoreOnce() ?: return@LaunchedEffect
+        if (cursor.local) {
+            navController.openCursor(cursor.state)
+        } else {
+            resumePrompt = cursor.state
+        }
+    }
+
     NavHost(navController = navController, startDestination = "folders") {
         composable("folders") {
             val viewModel: FoldersViewModel =
@@ -40,7 +62,15 @@ fun CabalmailNavHost(
                 onOpenFolder = { folder ->
                     navController.navigate("messages/${Uri.encode(folder)}")
                 },
+                onOpenSearch = { navController.navigate("search") },
+                onEmptyTrash = viewModel::emptyTrash,
                 onSignOut = onSignOut,
+                resumeAvailable = resumePrompt != null,
+                onResume = {
+                    resumePrompt?.let(navController::openCursor)
+                    resumePrompt = null
+                },
+                onResumeDismiss = { resumePrompt = null },
             )
         }
 
@@ -55,10 +85,40 @@ fun CabalmailNavHost(
             MessageListScreen(
                 folder = folder,
                 state = state,
-                onRefresh = viewModel::refresh,
-                onVisibleRange = viewModel::onVisibleRange,
+                viewModel = viewModel,
+                bimiLookup = container.bimiLookup,
                 onOpenMessage = { envelope ->
                     navController.navigate("message/${Uri.encode(folder)}/${envelope.id}")
+                },
+                onOpenSearch = { navController.navigate("search?folder=${Uri.encode(folder)}") },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = "search?folder={folder}",
+            arguments =
+                listOf(
+                    navArgument("folder") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+        ) { entry ->
+            val folder = entry.arguments?.getString("folder")?.let(Uri::decode)
+            val viewModel: SearchViewModel =
+                viewModel(factory = SearchViewModel.factory(container, folder))
+            val state by viewModel.state.collectAsState()
+            SearchScreen(
+                state = state,
+                viewModel = viewModel,
+                bimiLookup = container.bimiLookup,
+                onOpenMessage = { envelope ->
+                    // Search rows carry their source folder; route there.
+                    envelope.folder?.let { source ->
+                        navController.navigate("message/${Uri.encode(source)}/${envelope.id}")
+                    }
                 },
                 onBack = { navController.popBackStack() },
             )
@@ -79,17 +139,20 @@ fun CabalmailNavHost(
             val state by viewModel.state.collectAsState()
             MessageDetailScreen(
                 state = state,
-                isTrashFolder = viewModel.isTrashFolder,
-                onToggleSeen = {
-                    viewModel.setFlag("\\Seen", state.envelope?.isSeen != true)
-                },
-                onToggleFlag = {
-                    viewModel.setFlag("\\Flagged", state.envelope?.isFlagged != true)
-                },
-                onDispose = viewModel::dispose,
-                onAllowRemoteContent = viewModel::allowRemoteContent,
+                viewModel = viewModel,
+                bimiLookup = container.bimiLookup,
                 onBack = { navController.popBackStack() },
             )
         }
+    }
+}
+
+/** Builds the folder → message back stack a stored cursor points at. */
+private fun NavHostController.openCursor(state: NavState) {
+    val folder = state.folder ?: return
+    navigate("messages/${Uri.encode(folder)}")
+    val uid = state.uid
+    if (uid != null && uid > 0) {
+        navigate("message/${Uri.encode(folder)}/$uid")
     }
 }

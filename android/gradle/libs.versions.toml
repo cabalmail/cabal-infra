@@ -63,8 +63,10 @@ ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref =
 amplify-auth-cognito = { group = "com.amplifyframework", name = "aws-auth-cognito", version.ref = "amplify" }
 amplify-core-kotlin = { group = "com.amplifyframework", name = "core-kotlin", version.ref = "amplify" }
 
-# Images (Phase 4)
+# Images (Phase 4). Coil 3 splits network loading into its own artifact;
+# the okhttp one registers its fetcher automatically via ServiceLoader.
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 
 # Testing
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
