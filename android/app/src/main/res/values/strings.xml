@@ -9,5 +9,12 @@
     <string name="mfa_prompt_sms">Enter the code we just texted you.</string>
     <string name="mfa_code_label">Verification code</string>
     <string name="mfa_submit">Verify</string>
-    <string name="signed_in_as">Signed in as %1$s</string>
+    <string name="back">Back</string>
+    <string name="no_subject">(no subject)</string>
+    <string name="flagged">Flagged</string>
+    <string name="auth_warning">Authentication failed</string>
+    <string name="toggle_read">Toggle read</string>
+    <string name="archive">Archive</string>
+    <string name="purge">Delete permanently</string>
+    <string name="load_remote_content">Load remote content</string>
 </resources>
