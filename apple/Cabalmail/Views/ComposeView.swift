@@ -29,7 +29,12 @@ struct ComposeView: View {
     /// renders below whichever recipient field currently holds focus.
     enum Field: Hashable { case to, cc, bcc }
 
-    @State var model: ComposeViewModel
+    /// The compose model, built once per compose surface. It arrives as a
+    /// factory rather than a value so a view struct SwiftUI is about to
+    /// discard never constructs one — see `DeferredComposeModel` (#1102).
+    @State private var deferredModel: DeferredComposeModel
+    var model: ComposeViewModel { deferredModel.model }
+
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -57,6 +62,13 @@ struct ComposeView: View {
     /// or scene close gesture and don't need this hook.
     @State private var closeCoordinator = ComposeWindowCloseCoordinator()
     #endif
+
+    /// `@autoclosure` on purpose: the call sites read as
+    /// `ComposeView(model: ComposeViewModel(…))`, but the model is only
+    /// built when SwiftUI keeps the view (#1102).
+    init(model: @autoclosure @escaping () -> ComposeViewModel) {
+        _deferredModel = State(wrappedValue: DeferredComposeModel(model))
+    }
 
     var body: some View {
         NavigationStack {
