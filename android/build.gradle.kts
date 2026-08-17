@@ -1,0 +1,11 @@
+// Root build file: declares plugin versions (via the version catalog) without
+// applying them. Each module applies what it needs — no allprojects/subprojects
+// configuration injection.
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.ktlint) apply false
+}

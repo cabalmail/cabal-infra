@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws everything; this theme only hosts the window-level
+         attributes. Splash uses the platform Splash Screen API (built in
+         since API 31, the min SDK) — no androidx.core:core-splashscreen. -->
+    <style name="Theme.Cabalmail" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@color/ic_launcher_background</item>
+    </style>
+</resources>
