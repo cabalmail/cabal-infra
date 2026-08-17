@@ -4,10 +4,17 @@ import SwiftUI
 import AppKit
 
 /// macOS-only delegate that intercepts the standard red close button on the
-/// compose window so it routes through the same "Discard draft?" dialog as
-/// the toolbar Cancel button. Without this, clicking the close button (or
-/// hitting Cmd+W) bypasses the confirmation entirely and the user gets no
-/// chance to save the draft before the window disappears.
+/// compose window so it raises the "Discard draft?" dialog. Without this,
+/// clicking the close button (or hitting Cmd+W) bypasses the confirmation
+/// entirely and the user gets no chance to save the draft before the window
+/// disappears.
+///
+/// It is no longer the *same* question the toolbar Cancel button asks: since
+/// #1094, Cancel asks only when there is a draft to decide about, while this
+/// path still asks unconditionally (#1106). Closing that gap is possible from
+/// here — `windowShouldClose` declines the close and returns `false`, so the
+/// handler may await the WebKit bridge before deciding — but it hasn't been
+/// done, so an untouched composer closed with Cmd+W still gets the dialog.
 ///
 /// The coordinator is held as `@State` by `ComposeView` and re-bound to the
 /// hosting `NSWindow` via `ComposeWindowCloseInterceptor` (an
