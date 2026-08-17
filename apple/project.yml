@@ -535,13 +535,37 @@ targets:
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Cabalmail.app/Contents/MacOS/Cabalmail"
         BUNDLE_LOADER: "$(TEST_HOST)"
 
+  # Unit tests for the app-layer code the mac host cannot see: the UIKit
+  # side of files that are `#if os(macOS)`-branched, and the sources that
+  # only the iOS target compiles at all. CabalmailMacTests covers everything
+  # shared — which is most of it — so keep suites here only when they
+  # genuinely cannot live there (#1112). This bundle costs a simulator boot;
+  # that one does not.
+  CabalmailiOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: CabalmailiOSTests
+    dependencies:
+      - target: Cabalmail
+      - package: CabalmailKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailiOSTests
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   Cabalmail:
     build:
       targets:
         Cabalmail: all
+        CabalmailiOSTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - CabalmailiOSTests
     archive:
       config: Release
   CabalmailMac:
