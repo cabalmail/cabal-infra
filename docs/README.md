@@ -2,6 +2,8 @@
 
 [![Build and Deploy Apple Client](https://github.com/cabalmail/cabal-infra/actions/workflows/apple.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/apple.yml)
 
+[![Build and Test Linux Client](https://github.com/cabalmail/cabal-infra/actions/workflows/linux.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/linux.yml)
+
 [![Build and Deploy Application](https://github.com/cabalmail/cabal-infra/actions/workflows/app.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/app.yml)
 
 [![Nightly image scan](https://github.com/cabalmail/cabal-infra/actions/workflows/image-scan.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/image-scan.yml)
