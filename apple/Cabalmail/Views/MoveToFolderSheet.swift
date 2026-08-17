@@ -65,7 +65,7 @@ struct MoveToFolderSheet: View {
                         Button {
                             onSelect(folder)
                         } label: {
-                            row(for: folder)
+                            FolderPickerRow(folder: folder)
                         }
                         .buttonStyle(.plain)
                     }
@@ -75,41 +75,6 @@ struct MoveToFolderSheet: View {
                 }
             }
         )
-    }
-
-    @ViewBuilder
-    private func row(for folder: Folder) -> some View {
-        let depth = FolderTree.depth(for: folder)
-        HStack(spacing: 8) {
-            Image(systemName: icon(for: folder))
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(folder.name)
-                    .font(.body)
-                if depth > 0 {
-                    Text(folder.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, CGFloat(depth) * 16)
-        .contentShape(Rectangle())
-    }
-
-    private func icon(for folder: Folder) -> String {
-        switch folder.path {
-        case "INBOX":   return "tray"
-        case "Sent":    return "paperplane"
-        case "Drafts":  return "pencil.line"
-        case "Trash":   return "trash"
-        case "Junk":    return "exclamationmark.shield"
-        case "Archive": return "archivebox"
-        default:        return "folder"
-        }
     }
 
     private var visibleFolders: [Folder] {

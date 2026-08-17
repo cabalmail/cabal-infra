@@ -181,6 +181,10 @@ CLAUDE.md; Phases A and C qualify as direct-to-prod-eligible (no data
 plane impact, no user-facing surface change in isolation, no IAM
 implications, purely additive).
 
+> **Erratum (2026-08-15):** The direct-to-prod scaffolding carve-out was
+> retired from CLAUDE.md; Phases A and C also route through `stage` ->
+> `main`.
+
 ### Phase A: spec-correct `fetch_bimi`
 
 Goal: turn the Lambda into a defensive proxy that returns either a

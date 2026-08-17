@@ -175,9 +175,9 @@ cd apple/Tools/SimDrive
 ./simdrive stop
 ```
 
-The full command grammar (`launch`, `activate`, `env`, `dump`, `focus`,
-`tap`, `type`, `cmdv`, `orient`, `drag`, `swiperow`, `exists`, `wait`)
-is documented at the top of
+The full command grammar (`launch`, `activate`, `env`, `dump`, `sysdump`,
+`sysapp`, `focus`, `tap`, `type`, `cmdv`, `orient`, `drag`, `swiperow`,
+`exists`, `wait`) is documented at the top of
 `Tools/SimDrive/SimDriveUITests/SimDriveTests.swift`. Notes that keep
 sessions out of known potholes:
 
@@ -211,6 +211,21 @@ sessions out of known potholes:
   "Save Password?" alert after sign-in (dismiss with `Not Now`). Script
   their dismissal (`tap text:Not Now`) or pre-seed the simulator before
   measuring anything.
+- **UI the app does not own needs `sys` queries.** Permission alerts,
+  AutoFill sheets, edit menus and the visionOS keyboard can live in a
+  system process rather than the app's hierarchy — and when they do, an
+  app-scoped query reports them absent while the app underneath stays
+  inert until they are answered, so a `tap`/`type` that "succeeds" and
+  changes nothing is the signature. Which UI lands where is not worth
+  predicting: try `text:`/`id:` first, and when the element is missing
+  but visible on a screenshot, re-run the query with the `sysid:` /
+  `systext:` prefix. `sysdump` shows the system-side tree.
+  The hosting process is probed, not assumed, because it differs by
+  platform: iOS and iPadOS have `com.apple.springboard`, while visionOS
+  has no SpringBoard at all and splits the shell across
+  `com.apple.Reality*` processes. Every result reports which one
+  answered (`tapped systext:Allow in com.apple.RealityNotifications`);
+  `sysapp <bundleid>` pins one when a host is not on the candidate list.
 - **MFA makes fresh simulators expensive.** Simulator keychains do not
   transfer between devices or runtimes, so every new simulator costs a
   full manual sign-in. Signed-in state *does* persist across reinstalls

@@ -5,6 +5,117 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-08-17
+
+### Added
+- **BIMI backfill script.** `scripts/backfill-bimi-records.py` publishes the
+  standard `default._bimi` TXT record for address subdomains created before
+  BIMI publishing shipped. It reads the domain map and control domain from
+  the deployed `new` Lambda, skips subdomains whose DNS is not live, leaves
+  any existing BIMI record untouched, and is a dry run unless `--apply` is
+  passed. Intended to be run once per environment from CloudShell.
+- **Rust in the pull-request lint gate.** The `Lint` workflow now runs
+  `cargo xtask ci` — rustfmt, clippy `-D warnings`, the kit and repo-shape
+  tests, and the widget tests under xvfb — for PRs touching `linux/**`, on
+  Ubuntu 24.04 (the GTK 4.14 / libadwaita 1.4 API floor). Edits to
+  `lambda/api/set_preferences/function.py` trigger it too, so a
+  preference-key divergence between the Lambda and the Linux client fails
+  at review time rather than as a 400 at runtime.
+- **CI for the Linux client.** `linux.yml` gates every push to `main` and
+  `stage` under `linux/**`, running one `cargo xtask ci` step per job so the
+  workflow and the pre-push gate run the same commands: formatting, the kit
+  tests, the workspace and Lambda-contract checks, and — inside an
+  `ubuntu:24.04` container — the workspace build and the widget tests under
+  Xvfb. The container is what enforces the GTK 4.14 API floor on every push
+  rather than at packaging time, and the job asserts the version it got. A
+  test fails the build if a step has no job, a job names a step that does not
+  exist, a job spells a `cargo` command of its own, or a file a job reaches for
+  is missing from the workflow's path filter. See
+  [`docs/1.1.x/linux-client-plan.md`](docs/1.1.x/linux-client-plan.md).
+- **Lifecycle flow-chart on the triage dashboard.** An SVG diagram below the
+  issue table maps every lifecycle label and the routes between them — entry
+  via `needs-verification` or `tester-found`, the verify pass's verdicts,
+  triage, the `accepted`/`fix-in-review`/`needs-retest` chain, and each
+  terminal state — in the same label colors as the table, themed for light
+  and dark. The Accept button is now also disabled while an issue still
+  awaits verification, since accepting an unverified report wedges the
+  tester's verify pass (its verdict transitions are all forbidden on an
+  accepted issue).
+
+### Changed
+- **Stage-only promotion to prod.** The direct-to-prod scaffolding
+  carve-out is retired: every change now reaches `main` by promoting
+  `stage` through the release flow (`make promote`), with no
+  feature-branch -> `main` PRs.
+
+### Fixed
+- **BIMI record published for admin-created addresses.** The admin
+  address-create endpoint published four of the five canonical address DNS
+  records, omitting the `default._bimi` TXT, so mail sent from an address
+  created that way carried no Cabalmail mark — until a suspend/reinstate cycle
+  silently added the record it never had. Both create paths now publish the
+  canonical record set from one place, so a record added in future cannot reach
+  only one of them.
+- **Reserved infrastructure labels refused on both address-create endpoints.**
+  `/new` refuses to put an address on one of the control domain's
+  infrastructure labels (`admin`, `www`, `imap`, `smtp`, `smtp-in`, `smtp-out`,
+  `mail-admin`), where the record would either collide with an existing CNAME or
+  overwrite an auth record. The admin "create on behalf of a user" endpoint
+  reached the same Route 53 change through its own copy of the create path and
+  carried no such check. Both endpoints now apply one shared guard, and that
+  guard additionally refuses `mail-admin` on *every* mail domain, not just the
+  control domain: it is the subdomain the system sender is provisioned on, and
+  an address there could send mail that DKIM-signs and SPF-aligns exactly like
+  a Cabalmail notification.
+- Apple: **A discarded draft could be reopened and sent.** Discarding a draft
+  that had been opened from the Drafts list expunged the server copy but told
+  neither the list nor the reader, so the row stayed and the reader kept
+  rendering the thrown-away draft — and Edit Draft on it reopened the whole
+  message with Send live, which delivered. Cancelling a resumed draft whose
+  body had been emptied dropped its server copy just as quietly. Both exits
+  now prune the rows they retired and let the reader go.
+- Apple: **Cancelling an untouched composer no longer asks what to do with it.**
+  New Message → Cancel put up the three-way "Keep a copy of the draft for later,
+  discard it now, or go back to editing" dialog over an empty buffer, where every
+  answer keeps nothing. The composer now just closes; anything worth keeping —
+  including a body the editor failed to hand back — still asks.
+- Apple: **A newly saved draft appears in an open Drafts list at once.** Saving
+  a brand-new message while sitting in the Drafts folder left the list unchanged
+  until its status poll came round, anywhere up to 30 seconds later — the three
+  compose exits that already reported (send, save on a resumed draft, discard)
+  all announce a copy going away, and a first save only adds one. The save now
+  reports the copy it created, so the list refreshes on the spot; nothing is
+  pruned and whatever you were reading stays put.
+- Apple: **Taps on the trailing edge of an iPad message row.** The drag handle
+  that sizes the message-list column was a hit-testable strip, so the trailing
+  22pt of every row — including part of the date and the `Select` glyph —
+  silently swallowed taps and the row never opened. The handle now claims no
+  touches of its own: a pan recognizer above the list begins only for a
+  horizontal drag that starts at the column's edge, and everything else reaches
+  the row.
+- Apple: **Phantom Drafts row after sending an autosaved draft.** A draft left
+  open past the 60-second server autosave was saved back under a new UID, and
+  sending it only retired that newest copy — so the Drafts list kept showing a
+  row for the copy the autosave had already replaced. The row opened a fully
+  populated reader with Edit Draft, from which the message could be sent a
+  second time. Sending now retires every Drafts copy the compose session
+  created.
+- Apple: **Saving a draft from the reader dropped the edit you just saved.**
+  Save Draft on a draft opened from the Drafts list replaces the server copy
+  under a new UID, and neither the list nor the reader the app returns to
+  learned about the swap — so the reader kept rendering the retired copy.
+  Edit Draft from there reopened the pre-edit text, and sending it delivered
+  that stale version while leaving the newer saved copy behind in Drafts. The
+  list now prunes the retired copies and moves the reader onto the one that
+  survived.
+
+### Security
+- **Comment lockdown on pipeline-created issues.** A new workflow locks every
+  issue opened by the automation account at creation, so only repository
+  collaborators can comment on it. Issues the agent pipelines file and later
+  read back are no longer writable by arbitrary accounts on the public repo
+  (prompt-injection hardening); human-opened issues are unaffected.
+
 ## [1.2.2] - 2026-08-14
 
 ### Changed

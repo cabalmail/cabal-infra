@@ -25,9 +25,13 @@ native Issues UI:
     and its pill toggles the label, re-routing the issue at triage time
   * triage actions per row (these make real changes on GitHub): Accept adds
     the `accepted` label so the nightly fixer picks the issue up (disabled
-    while the issue is already accepted or awaiting retest); Close...
-    posts a required comment and then closes the issue as not-planned or
-    completed
+    while the issue is already accepted, awaiting retest, or still awaiting
+    verification - accepting an unverified report wedges the tester's verify
+    pass, whose verdict transitions are all forbidden on an accepted issue);
+    Close... posts a required comment and then closes the issue as
+    not-planned or completed
+  * a lifecycle flow-chart below the table maps every lifecycle label and the
+    routes between them, in the same label colors as the table
 
 All GitHub data is fetched live on each refresh through `gh api graphql`
 (uses your existing gh login); set GITHUB_TOKEN or GH_TOKEN to bypass the gh
@@ -134,8 +138,11 @@ REPO_SLUG = None
 STAGES = DEFAULT_STAGES
 ACCEPT_LABEL = "accepted"
 # Labels besides ACCEPT_LABEL itself that grey out the Accept button: an issue
-# awaiting retest already has its fix live, so there is nothing to queue.
-ACCEPT_BLOCK_LABELS = ["needs-retest"]
+# awaiting retest already has its fix live, so there is nothing to queue, and an
+# issue awaiting verification isn't triaged yet - accepting it would dispatch the
+# fixer on an unconfirmed report and wedge the verify pass, whose verdict label
+# transitions are all forbidden on an accepted issue (#962).
+ACCEPT_BLOCK_LABELS = ["needs-retest", "needs-verification"]
 # Pipeline-routing label: issues carrying it belong to the 27.x-beta tester/fixer
 # pair (Mac Studio); issues without it belong to the baseline pair (Mac Mini). The
 # route column's pill toggles it. Empty disables the column and the endpoint.
@@ -549,6 +556,19 @@ PAGE = r"""<!DOCTYPE html>
   .toast.bad{background:var(--critical)}
   .toast[hidden]{display:none}
   .empty{color:var(--muted); padding:30px 12px; text-align:center}
+  .lifecycle{margin-top:26px}
+  .lc-head{font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); font-weight:600; margin:0 0 8px}
+  .lifecycle svg{display:block; width:100%; height:auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius)}
+  .lc-note{color:var(--muted); font-size:12px; margin:8px 0 0}
+  .lc-lab{fill:var(--ink-2); font-size:12px; font-weight:600}
+  .lc-act{fill:var(--ink); font-size:12.5px; font-weight:600}
+  .lc-actbox{fill:var(--surface-2); stroke:var(--line); stroke-dasharray:4 3}
+  .lc-sub{fill:var(--muted); font-size:10.5px}
+  .lc-edge{stroke:var(--line); stroke-width:1.5; fill:none}
+  .lc-elab{fill:var(--muted); font-size:11px}
+  .lc-term-box{fill:var(--surface-2); stroke:var(--border)}
+  .lc-term{fill:var(--muted); font-size:11px; font-weight:600}
+  .lc-arrowhead{fill:var(--muted)}
   footer{margin-top:28px; color:var(--muted); font-size:12px; border-top:1px solid var(--grid); padding-top:14px}
   code{background:var(--surface-2); padding:1px 5px; border-radius:5px; font-size:12px}
 </style>
@@ -587,6 +607,99 @@ PAGE = r"""<!DOCTYPE html>
   </div>
   <div id="issue-table"></div>
 
+  <section class="lifecycle">
+    <h2 class="lc-head">Label lifecycle</h2>
+    <svg viewBox="0 0 1200 350" role="img"
+         aria-label="Flow-chart of the tester/fixer label lifecycle; the caption below and the footer describe the same routes in prose.">
+      <defs>
+        <marker id="lcarrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L8 4 L0 8 z" class="lc-arrowhead"/>
+        </marker>
+      </defs>
+
+      <!-- edges (drawn first so nodes sit on top) -->
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M192 110 H241"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M355 100 L426 82"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M355 120 L403 138"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M300 130 V193"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M509 76 L600 150"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M530 150 L576 160"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M174 312 L582 188"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M731 152 L766 125"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M655 191 V251"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M842 110 H890"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M1006 110 H1054"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M1110 123 V186"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M1110 230 V283"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M1055 203 C950 172, 848 168, 806 128"/>
+      <path class="lc-edge" marker-end="url(#lcarrow)" d="M1062 230 L976 282"/>
+
+      <!-- edge labels -->
+      <text class="lc-elab" text-anchor="middle" x="392" y="66">reproduced</text>
+      <text class="lc-elab" text-anchor="middle" x="420" y="176">can't settle by testing</text>
+      <text class="lc-elab" text-anchor="end" x="288" y="166">no repro — 2 tries + a variation</text>
+      <text class="lc-elab" text-anchor="middle" x="368" y="264">skips verification</text>
+      <text class="lc-elab" text-anchor="middle" x="867" y="90">fixer opens a PR</text>
+      <text class="lc-elab" text-anchor="middle" x="1030" y="72">merged + live on stage —</text>
+      <text class="lc-elab" text-anchor="middle" x="1030" y="86">reconcile swap</text>
+      <text class="lc-elab" text-anchor="middle" x="930" y="158">fix failed — accepted re-added</text>
+      <text class="lc-elab" text-anchor="start" x="1120" y="262">fix holds</text>
+
+      <!-- entry captions -->
+      <text class="lc-elab" text-anchor="middle" x="120" y="80">filed by you, the fixer, or an agent</text>
+      <text class="lc-elab" text-anchor="middle" x="112" y="294">filed by the tester — already reproduced</text>
+      <text class="lc-sub" text-anchor="middle" x="950" y="138">accepted stays on until the merge</text>
+
+      <!-- actor boxes -->
+      <rect class="lc-actbox" x="245" y="90" width="110" height="40" rx="8"/>
+      <text class="lc-act" text-anchor="middle" x="300" y="107">verify pass</text>
+      <text class="lc-sub" text-anchor="middle" x="300" y="121">(tester)</text>
+      <rect class="lc-actbox" x="580" y="145" width="150" height="46" rx="8"/>
+      <text class="lc-act" text-anchor="middle" x="655" y="164">you triage</text>
+      <text class="lc-sub" text-anchor="middle" x="655" y="180">Accept / Close…</text>
+      <rect class="lc-actbox" x="1055" y="190" width="110" height="40" rx="8"/>
+      <text class="lc-act" text-anchor="middle" x="1110" y="207">retest pass</text>
+      <text class="lc-sub" text-anchor="middle" x="1110" y="221">(tester)</text>
+
+      <!-- label pills (same colors and tint as the table's label chips) -->
+      <rect x="48" y="97" width="144" height="26" rx="13" style="stroke:#1D76DB; fill:color-mix(in srgb,#1D76DB 18%,transparent)"/>
+      <text class="lc-lab" text-anchor="middle" x="120" y="114">needs-verification</text>
+      <rect x="68" y="307" width="104" height="26" rx="13" style="stroke:#fbca04; fill:color-mix(in srgb,#fbca04 18%,transparent)"/>
+      <text class="lc-lab" text-anchor="middle" x="120" y="324">tester-found</text>
+      <rect x="431" y="59" width="78" height="26" rx="13" style="stroke:#C2E0C6; fill:color-mix(in srgb,#C2E0C6 18%,transparent)"/>
+      <text class="lc-lab" text-anchor="middle" x="470" y="76">verified</text>
+      <rect x="410" y="135" width="120" height="26" rx="13" style="stroke:#F9D0C4; fill:color-mix(in srgb,#F9D0C4 18%,transparent)"/>
+      <text class="lc-lab" text-anchor="middle" x="470" y="152">verify-blocked</text>
+      <rect x="758" y="97" width="84" height="26" rx="13" style="stroke:#5319e7; fill:color-mix(in srgb,#5319e7 18%,transparent)"/>
+      <text class="lc-lab" text-anchor="middle" x="800" y="114">accepted</text>
+      <rect x="894" y="97" width="112" height="26" rx="13" style="stroke:#e99695; fill:color-mix(in srgb,#e99695 18%,transparent)"/>
+      <text class="lc-lab" text-anchor="middle" x="950" y="114">fix-in-review</text>
+      <rect x="1058" y="97" width="104" height="26" rx="13" style="stroke:#0e8a16; fill:color-mix(in srgb,#0e8a16 18%,transparent)"/>
+      <text class="lc-lab" text-anchor="middle" x="1110" y="114">needs-retest</text>
+
+      <!-- terminal states -->
+      <rect class="lc-term-box" x="202" y="197" width="196" height="26" rx="13"/>
+      <text class="lc-term" text-anchor="middle" x="300" y="214">closed — cannot-reproduce</text>
+      <rect class="lc-term-box" x="617" y="255" width="76" height="26" rx="13"/>
+      <text class="lc-term" text-anchor="middle" x="655" y="272">closed</text>
+      <rect class="lc-term-box" x="1050" y="287" width="120" height="26" rx="13"/>
+      <text class="lc-term" text-anchor="middle" x="1110" y="304">closed — fixed</text>
+      <rect class="lc-term-box" x="795" y="285" width="190" height="32" rx="10"/>
+      <text class="lc-term" text-anchor="middle" x="890" y="299">left open — didn't reproduce</text>
+      <text class="lc-sub" text-anchor="middle" x="890" y="312">report was never real: your call</text>
+    </svg>
+    <p class="lc-note">
+      Colored pills are the GitHub lifecycle labels, in the table's colors; dashed boxes are
+      who acts; gray boxes are terminal. The table's <b>triage</b> column covers the four
+      pre-triage pills, <b>queued</b> covers <code>accepted</code> and <code>needs-retest</code>.
+      An issue carries one lifecycle label at a time, except <code>accepted</code> +
+      <code>fix-in-review</code> while the fixer's PR is open — which is why Accept is disabled
+      on an issue still awaiting verification. Not shown: <code>question</code> (the verify pass
+      needs better steps — back to you), <code>os27</code> (re-routes an issue to the 27.x
+      pipeline at any stage), and the type/platform labels, which ride along at every stage.
+    </p>
+  </section>
+
   <footer>
     Open issues bearing at least one lifecycle label, one column per pipeline state so each
     reads in a fixed position. The <b>triage</b> column is everything pre-triage, and its
@@ -606,7 +719,8 @@ PAGE = r"""<!DOCTYPE html>
     pill toggles the label to re-route it: retests, verification, and the fixer queues all
     follow that label.
     <b>Accept</b> adds the <code>accepted</code> label (the owning pipeline's fixer picks it
-    up) and is disabled while the issue is already accepted or awaiting retest;
+    up) and is disabled while the issue is already accepted, awaiting retest, or still
+    awaiting verification — accepting an unverified report wedges the tester's verify pass;
     <b>Close…</b> posts your comment and then closes the issue — the pill, Accept, and
     Close are all real GitHub changes.
   </footer>
@@ -726,6 +840,7 @@ function actCell(r){
   const blocked=r.accept_blocked;
   const why=blocked===MODEL.accept_label?'Already accepted'
     :blocked==='needs-retest'?'Fix live — awaiting retest'
+    :blocked==='needs-verification'?'Awaiting verification — accepting now would wedge the verify pass'
     :'Blocked by '+blocked;
   return `<div class="actcell">`+
     `<button class="abtn accept" type="button" ${blocked

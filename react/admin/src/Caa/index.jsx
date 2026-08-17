@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import useApi from '../hooks/useApi';
 import usePagedReports from '../hooks/usePagedReports';
+import useSourceModal from '../hooks/useSourceModal';
 import { useAppMessage } from '../contexts/AppMessageContext';
 import XmlSourceModal from '../Dmarc/XmlSourceModal';
 // Dmarc.css carries the shared modal scaffold (.source-*) that
@@ -34,35 +35,19 @@ function Caa() {
     errorLabel: 'CAA',
   });
 
-  const [rawOpen, setRawOpen] = useState(false);
-  const [rawTitle, setRawTitle] = useState('');
-  const [rawFile, setRawFile] = useState('caa-report.eml');
-  const [rawText, setRawText] = useState('');
-  const [rawLoading, setRawLoading] = useState(false);
-  const [rawError, setRawError] = useState(false);
+  const { show: showRaw, close: closeRaw, modalProps: rawProps } = useSourceModal('caa-report.eml');
 
   const openRaw = useCallback((report) => {
     if (!report.raw_url) {
       setMessage('No raw message stored for this report.', true);
       return;
     }
-    setRawTitle(`${report.from_addr || ''} - ${report.subject || ''}`);
-    setRawFile(rawFilename(report));
-    setRawText('');
-    setRawError(false);
-    setRawLoading(true);
-    setRawOpen(true);
-    api.fetchCaaReport(report.raw_url).then(
-      (r) => {
-        setRawText(typeof r.data === 'string' ? r.data : String(r.data || ''));
-        setRawLoading(false);
-      },
-      () => {
-        setRawError(true);
-        setRawLoading(false);
-      }
-    );
-  }, [api, setMessage]);
+    showRaw({
+      title: `${report.from_addr || ''} - ${report.subject || ''}`,
+      filename: rawFilename(report),
+      load: () => api.fetchCaaReport(report.raw_url),
+    });
+  }, [api, setMessage, showRaw]);
 
   if (loading && reports.length === 0) {
     return <div className="Caa"><div className="loading">Loading...</div></div>;
@@ -119,15 +104,7 @@ function Caa() {
         </>
       )}
 
-      <XmlSourceModal
-        open={rawOpen}
-        title={rawTitle}
-        filename={rawFile}
-        xmlText={rawText}
-        loading={rawLoading}
-        error={rawError}
-        onClose={() => setRawOpen(false)}
-      />
+      <XmlSourceModal {...rawProps} onClose={() => closeRaw()} />
     </div>
   );
 }

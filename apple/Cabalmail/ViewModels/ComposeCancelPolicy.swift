@@ -45,4 +45,22 @@ enum ComposeCancelPolicy {
         guard hasFrom else { return .refuseMissingFrom }
         return .saveToServer
     }
+
+    /// Whether Cancel has anything to ask the user about.
+    ///
+    /// The three-way dialog ("Keep a copy of the draft for later, discard it
+    /// now, or go back to editing") is a real question only when there is a
+    /// draft to keep. Over an untouched composer every answer lands on the
+    /// same outcome — `resolve` returns `.discardEmpty`, which throws away
+    /// nothing — so asking is a decision the user cannot get wrong and
+    /// cannot avoid making (#1094).
+    ///
+    /// A dead bridge counts as something to ask about even though the
+    /// buffer reads as empty: the body converted to `""` because the editor
+    /// is broken (#745), not because nothing was typed, and the answer
+    /// decides whether the local copy survives. Guessing "empty" there
+    /// would silently drop text the user cannot see we have.
+    static func needsDecision(bridgeFailed: Bool, hasContent: Bool) -> Bool {
+        bridgeFailed || hasContent
+    }
 }

@@ -64,7 +64,7 @@ by the workflow, so neither can drift from the other:
 
 | Subcommand | What it does |
 | --- | --- |
-| `cargo xtask ci` | `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace checks, app tests — in that order, stopping at the first failure. Wraps the app tests in `xvfb-run` when there is no session to use. |
+| `cargo xtask ci` | `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace checks, app tests — in that order, stopping at the first failure. Wraps the app tests in `xvfb-run` when there is no session to use. `--step <name>` runs one of them, which is how each CI job runs exactly one; `--list` prints the names. |
 | `cargo xtask sync-vendored` | Materializes marked and turndown into `cabalmail-gtk/resources/editor/` from `react/admin/node_modules`, running `npm ci` first if needed. Needs node and npm; the files it writes are gitignored. Wraps [`scripts/sync-vendored.sh`](scripts/sync-vendored.sh), the sibling of `apple/scripts/sync-vendored.sh`. |
 | `cargo xtask package <distro>` | Declared; lands with Arch packaging in Phase 2. |
 | `cargo xtask smoke` | Declared; lands with the test harness in Phase 2. |
@@ -97,6 +97,43 @@ drives:
 CABALMAIL_UPDATE_DOCS=1 cargo test -p xtask
 ```
 
+## Continuous integration
+
+[`.github/workflows/linux.yml`](../.github/workflows/linux.yml) runs on pushes
+to `main` and `stage` under `linux/**`, and on demand. Each job runs one step of
+`cargo xtask ci`, named with `--step`, so CI runs the same commands as the
+pre-push gate and a failure names itself:
+
+| Job | Step | Where |
+| --- | --- | --- |
+| `lint` | `format` | `ubuntu-latest` — `cargo fmt` parses rather than compiles, so it needs nothing installed |
+| `kit-test` | `kit-tests` | `ubuntu-latest` — no display, no network, no GUI dependency |
+| `workspace-checks` | `workspace-checks` | `ubuntu-latest` — the checks that reach outside the workspace, including the Lambda contract |
+| `app-build` | `clippy` | `ubuntu:24.04` container — the API floor |
+| `app-test` | `app-tests` | `ubuntu:24.04` container, under Xvfb |
+
+`app-build` runs clippy rather than a build of its own: `clippy --workspace
+--all-targets` is a full compile, so building against the floor and linting are
+the same work. A call needing GTK 4.16 therefore fails `app-build` and leaves
+`lint` green.
+
+Every step but `format` passes `--locked`: `Cargo.lock` is committed because
+distro packaging builds offline against vendored crates, so a dependency bump
+whose lock update was never committed has to fail in CI rather than resolve
+silently there and fail in `makepkg`.
+
+System packages come from [`packaging/deps/ubuntu.txt`](packaging/deps/ubuntu.txt)
+— one list, read by the CI containers now and by the Debian packaging in Phase
+8. `xtask/tests/workflow_contract.rs` holds the pieces together: a step with no
+job, a job naming a step that does not exist, a job spelling its own `cargo`
+command, a floor step that escaped the container, or a file a job reaches for
+that is missing from the workflow's `paths:` filter all fail there rather than
+passing quietly.
+
+Packaging (`package-arch`), the packaged-artifact smoke test, coverage, and the
+`cargo-deny`/dependency-tree guards are the remaining Phase 2 work items; the
+workflow names the item that owns each.
+
 ## Configuration
 
 Settings live in `$XDG_CONFIG_HOME/cabalmail/config.toml`, hand-editable, with
@@ -124,6 +161,9 @@ application shell (work item 4), and the `xtask` entry points (work item 5) are
 in place. `cargo run -p cabalmail-gtk` opens a window; there is nothing to sign
 in to yet, which is Phase 3.
 
-Next is Phase 2: the `linux.yml` workflow, Arch packaging, and the contract-test
-harness — which is also what fills in `cargo xtask package`, `smoke`, and
-`fixtures`.
+Phase 2 is under way. The `linux.yml` workflow (work item 1) is in place, so
+every push to a named branch is gated on the same steps a developer runs. Still
+to come: toolchain and dependency pinning for the packaging containers (item 2),
+the contract-test harness and fixtures (item 3), Arch packaging (item 4),
+release artifacts (item 5), and the guard rails (item 6) — which together fill
+in `cargo xtask package`, `smoke`, and `fixtures`.

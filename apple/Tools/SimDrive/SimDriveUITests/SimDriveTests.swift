@@ -17,14 +17,21 @@ import XCTest
 /// `/tmp/simdrive/config.json`.
 ///
 /// Command grammar (one command per file; `<query>` is `id:<identifier>`,
-/// `text:<label>`, or `xy:<x>,<y>`). A query runs to the end of the line
-/// apart from the trailing `name:value` options its verb accepts, so labels
-/// with spaces — `tap text:Save Draft` — need no quoting:
+/// `text:<label>`, or `xy:<x>,<y>`, and `sysid:`/`systext:` for the
+/// system-UI variants — see `systemAppCandidates`). A query runs to the
+/// end of the line apart from the trailing `name:value` options its verb
+/// accepts, so labels with spaces — `tap text:Save Draft` — need no
+/// quoting:
 ///
 ///   launch                     launch the target app (fresh process)
 ///   activate                   foreground the target app (no relaunch)
 ///   env KEY=VALUE ...          set launch environment for the NEXT launch
 ///   dump                       full accessibility-tree debug description
+///   sysdump [<bundleid>]       the same for the system-UI process: a
+///                              per-candidate summary line, then the tree
+///                              of the first one holding any UI
+///   sysapp [<bundleid>|auto]   pin the system-UI process `sys` queries
+///                              resolve against (default: auto-probe)
 ///   focus                      description of the keyboard-focused element
 ///   tap <query>                tap an element (or coordinate)
 ///   type <text>                type into the focused element (rest of line,
@@ -59,6 +66,34 @@ final class SimDriveTests: XCTestCase {
     private var app: XCUIApplication?
     private var pendingLaunchEnvironment: [String: String] = [:]
     private var targetBundleId = "com.cabalmail.Cabalmail"
+
+    /// System-owned UI — permission alerts, AutoFill sheets, edit menus —
+    /// lives outside the target app's hierarchy, so nothing scoped to the
+    /// target app can see it, let alone answer it (#1025). `sys` queries
+    /// resolve against the platform's system-UI process instead.
+    ///
+    /// Which process that is differs by platform, so it is probed rather
+    /// than hard-coded: the visionOS runtime ships no `SpringBoard.app` at
+    /// all (its shell is split across the `com.apple.Reality*` processes),
+    /// and a query scoped to a bundle id that does not exist reports every
+    /// element as absent — indistinguishable from a broken verb. `sysapp`
+    /// pins one explicitly when the host is known or not on this list.
+    private static let systemAppCandidates = [
+        "com.apple.springboard",           // iOS, iPadOS
+        "com.apple.RealityNotifications",  // visionOS: notifications, alerts
+        "com.apple.RealityChrome",         // visionOS: window chrome, sheets
+        "com.apple.RealityKeyboard",       // visionOS: the system keyboard
+        "com.apple.RealityCoverSheet",
+        "com.apple.RealityLauncher",
+        "com.apple.RealityHUD"
+    ]
+
+    /// Set by `sysapp`; when nil every candidate is probed in order.
+    private var pinnedSystemBundleId: String?
+    /// The candidate that last answered a `sys` query — reported back so a
+    /// session learns which process owns the UI it just drove, and tried
+    /// first on the next one.
+    private var resolvedSystemBundleId: String?
 
     func testDriveLoop() throws {
         continueAfterFailure = true
@@ -126,10 +161,19 @@ final class SimDriveTests: XCTestCase {
         "dump", "focus", "tap", "type", "cmdv", "key", "drag", "swiperow", "exists", "wait"
     ]
 
+    /// Verbs whose argument begins with a query, and which therefore may be
+    /// `sys`-scoped. Kept separate from a bare `remainder.hasPrefix("sys")`
+    /// test, which would also match the free text of `type system…`.
+    private static let queryingVerbs: Set<String> = ["tap", "exists", "wait", "swiperow"]
+
     private func execute(_ line: String, quit: inout Bool) throws -> String {
         let (verb, remainder) = splitVerb(line)
         let args = remainder.split(separator: " ").map(String.init)
-        if Self.appDependentVerbs.contains(verb) {
+        // A `sys` query reaches UI the target app does not own — the alert
+        // blocking a first launch is exactly the case — so it must work
+        // whether or not the app is running.
+        let systemScoped = Self.queryingVerbs.contains(verb) && remainder.hasPrefix("sys")
+        if Self.appDependentVerbs.contains(verb), !systemScoped {
             try requireRunningApp()
         }
         switch verb {
@@ -156,6 +200,10 @@ final class SimDriveTests: XCTestCase {
             return "env set for next launch (\(pendingLaunchEnvironment.count) keys)"
         case "dump":
             return targetApp().debugDescription
+        case "sysdump":
+            return systemDump(args.first)
+        case "sysapp":
+            return systemApp(args.first)
         case "focus":
             return focusedElement()?.debugDescription ?? "none"
         case "tap":
@@ -165,7 +213,7 @@ final class SimDriveTests: XCTestCase {
             } else {
                 try element(for: query).tap()
             }
-            return "tapped \(query)"
+            return "tapped \(query)\(hostNote(for: query))"
         case "type":
             // `typeText` with nothing focused raises an XCTest failure, which
             // takes the whole loop down with it (#902) — refuse first.
@@ -205,12 +253,15 @@ final class SimDriveTests: XCTestCase {
             let target = try element(for: query, requireExistence: false)
             let exists = target.exists
             return "exists=\(exists) hittable=\(exists ? target.isHittable : false)"
+                + (exists ? hostNote(for: query) : "")
         case "wait":
             let query = try selector(from: remainder, verb: "wait", options: ["timeout"])
             let timeout = value(named: "timeout", in: args).flatMap(Double.init) ?? 10
-            let appeared = try element(for: query, requireExistence: false)
-                .waitForExistence(timeout: timeout)
-            return "exists=\(appeared)"
+            let appeared = query.hasPrefix("sys")
+                ? try waitForSystemElement(query, timeout: timeout)
+                : try element(for: query, requireExistence: false)
+                    .waitForExistence(timeout: timeout)
+            return "exists=\(appeared)\(appeared ? hostNote(for: query) : "")"
         default:
             throw DriveError("unknown verb '\(verb)'")
         }
@@ -320,23 +371,150 @@ final class SimDriveTests: XCTestCase {
         return query
     }
 
-    private func element(for query: String, requireExistence: Bool = true) throws -> XCUIElement {
-        let target: XCUIElement
-        if query.hasPrefix("id:") {
-            target = targetApp().descendants(matching: .any)
-                .matching(identifier: String(query.dropFirst(3)))
-                .firstMatch
-        } else if query.hasPrefix("text:") {
-            target = targetApp().descendants(matching: .any)
-                .matching(NSPredicate(format: "label == %@", String(query.dropFirst(5))))
-                .firstMatch
-        } else {
-            throw DriveError("query must be id:<identifier>, text:<label>, or xy:<x>,<y>")
+    /// A parsed query: what to match on, and whether to look in the target
+    /// app or in the system-UI process (`sysid:` / `systext:`).
+    private struct ParsedQuery {
+        enum Kind { case identifier, label }
+        let kind: Kind
+        let value: String
+        let isSystem: Bool
+
+        init?(_ raw: String) {
+            var rest = raw
+            isSystem = rest.hasPrefix("sys")
+            if isSystem { rest = String(rest.dropFirst(3)) }
+            if rest.hasPrefix("id:") {
+                kind = .identifier
+                value = String(rest.dropFirst(3))
+            } else if rest.hasPrefix("text:") {
+                kind = .label
+                value = String(rest.dropFirst(5))
+            } else {
+                return nil
+            }
         }
+    }
+
+    private func element(for query: String, requireExistence: Bool = true) throws -> XCUIElement {
+        guard let parsed = ParsedQuery(query) else {
+            throw DriveError(
+                "query must be id:<identifier>, text:<label>, xy:<x>,<y>, "
+                + "or the system-UI forms sysid:/systext:"
+            )
+        }
+        if parsed.isSystem {
+            return try systemElement(for: parsed, query: query, requireExistence: requireExistence)
+        }
+        let target = match(parsed, in: targetApp())
         if requireExistence, !target.exists {
             throw DriveError("no element for '\(query)'")
         }
         return target
+    }
+
+    private func match(_ parsed: ParsedQuery, in root: XCUIApplication) -> XCUIElement {
+        switch parsed.kind {
+        case .identifier:
+            return root.descendants(matching: .any)
+                .matching(identifier: parsed.value)
+                .firstMatch
+        case .label:
+            return root.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", parsed.value))
+                .firstMatch
+        }
+    }
+
+    // MARK: - System UI
+
+    /// Candidate hosts in probe order: whichever answered last (or was
+    /// pinned by `sysapp`) first, then the platform defaults.
+    private func systemBundleIds() -> [String] {
+        if let pinnedSystemBundleId { return [pinnedSystemBundleId] }
+        guard let resolvedSystemBundleId else { return Self.systemAppCandidates }
+        return [resolvedSystemBundleId]
+            + Self.systemAppCandidates.filter { $0 != resolvedSystemBundleId }
+    }
+
+    private func systemElement(
+        for parsed: ParsedQuery,
+        query: String,
+        requireExistence: Bool
+    ) throws -> XCUIElement {
+        let candidates = systemBundleIds()
+        // Cleared up front so the host reported back always describes THIS
+        // probe rather than an earlier one that happened to succeed.
+        resolvedSystemBundleId = nil
+        var firstMiss: XCUIElement?
+        for bundleId in candidates {
+            let candidate = match(parsed, in: XCUIApplication(bundleIdentifier: bundleId))
+            if candidate.exists {
+                resolvedSystemBundleId = bundleId
+                return candidate
+            }
+            firstMiss = firstMiss ?? candidate
+        }
+        guard let firstMiss, !requireExistence else {
+            throw DriveError(
+                "no system element for '\(query)' "
+                + "(searched \(candidates.joined(separator: ", ")))"
+            )
+        }
+        return firstMiss
+    }
+
+    /// `waitForExistence` binds to one process's element, so a system wait
+    /// re-probes instead: the process hosting an alert may not even be
+    /// running when the wait starts.
+    private func waitForSystemElement(_ query: String, timeout: Double) throws -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if try element(for: query, requireExistence: false).exists { return true }
+            Thread.sleep(forTimeInterval: 0.5)
+        } while Date() < deadline
+        return false
+    }
+
+    /// Reports which system process answered, so a session that does not
+    /// know the platform's host — the visionOS case — learns it from the
+    /// first command that works.
+    private func hostNote(for query: String) -> String {
+        guard query.hasPrefix("sys"), let resolvedSystemBundleId else { return "" }
+        return " in \(resolvedSystemBundleId)"
+    }
+
+    /// One summary line per candidate, then the tree of the first one
+    /// holding any UI — enough to answer "which process owns this alert?"
+    /// in a single command without dumping six hierarchies.
+    private func systemDump(_ bundleId: String?) -> String {
+        let candidates = bundleId.map { [$0] } ?? systemBundleIds()
+        var summary: [String] = []
+        var tree: String?
+        for id in candidates {
+            let app = XCUIApplication(bundleIdentifier: id)
+            let populated = app.descendants(matching: .any).firstMatch.exists
+            summary.append("\(id): state=\(app.state.rawValue) elements=\(populated ? "yes" : "none")")
+            if tree == nil, populated || candidates.count == 1 {
+                resolvedSystemBundleId = id
+                tree = "\n=== \(id) ===\n\(app.debugDescription)"
+            }
+        }
+        return summary.joined(separator: "\n") + (tree ?? "\n(no candidate reported any UI)")
+    }
+
+    private func systemApp(_ bundleId: String?) -> String {
+        switch bundleId {
+        case .none:
+            return "system app: \(pinnedSystemBundleId ?? "auto")"
+                + " (last resolved: \(resolvedSystemBundleId ?? "none"))"
+        case "auto":
+            pinnedSystemBundleId = nil
+            return "system app: auto (\(Self.systemAppCandidates.count) candidates)"
+        case let .some(id):
+            pinnedSystemBundleId = id
+            resolvedSystemBundleId = nil
+            return "system app pinned to \(id)"
+        }
     }
 
     private func coordinate(from query: String) throws -> XCUICoordinate {

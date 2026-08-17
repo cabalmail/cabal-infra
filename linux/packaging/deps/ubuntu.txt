@@ -1,0 +1,21 @@
+# System packages needed to build cabalmail-gtk on Debian-family distributions.
+# One list, read by the CI containers today and by the Debian control file in
+# Phase 8, so a new dependency is added once rather than in three places.
+#
+# Blank lines and lines starting with `#` are comments; everything else is an
+# apt package name. Install with:
+#
+#   grep -vE '^\s*(#|$)' packaging/deps/ubuntu.txt | xargs apt-get install -y
+#
+# Versions here are Ubuntu 24.04's, which is the API floor: GTK 4.14,
+# libadwaita 1.5 (the crate features pin the floor at 1.4), blueprint-compiler
+# 0.12. webkitgtk joins the list in Phase 5, when the composer arrives.
+build-essential
+pkg-config
+libgtk-4-dev
+libadwaita-1-dev
+# `glib-compile-resources`, which build.rs runs to bundle the GResource.
+libglib2.0-dev-bin
+# Compiles resources/*.blp to GtkBuilder XML. Its absence is a hard build
+# failure, not a fallback — see cabalmail-gtk/build.rs.
+blueprint-compiler

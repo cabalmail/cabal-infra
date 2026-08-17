@@ -158,6 +158,43 @@ struct ComposeView: View {
 
     // MARK: - Cancel dialog
 
+    /// Cancel: put up the three-way dialog when there is a draft to decide
+    /// about, and otherwise just close.
+    ///
+    /// The dialog used to go up unconditionally, so closing a composer the
+    /// user had not typed in still demanded a Save / Discard / Keep Editing
+    /// answer over an empty buffer — every branch of which throws away
+    /// nothing (#1094). `ComposeCancelPolicy` owns the rule; the emptiness
+    /// it reads is the same `hasDraftContent(bodies:)` that `cancel()`
+    /// consults, computed the same way, so the question is asked exactly
+    /// when the answer could matter.
+    ///
+    /// Bodies come from the WebKit bridge, hence the `await` — and hence
+    /// this button being the only cancel path with the check. The macOS
+    /// window-close intercept (`closeCoordinator.onCloseAttempt`) answers
+    /// an `NSWindowDelegate` synchronously and cannot wait for the bridge,
+    /// so red-button-closing an untouched compose window still asks.
+    private func cancelOrAsk() async {
+        let bodies = await model.computeMessageBodies()
+        guard !ComposeCancelPolicy.needsDecision(
+            bridgeFailed: model.editorController.bridgeFailure != nil,
+            hasContent: model.hasDraftContent(bodies: bodies)
+        ) else {
+            showDiscardConfirm = true
+            return
+        }
+        #if os(macOS)
+        // Closing without the dialog still closes the window; pre-approve
+        // so the close intercept doesn't re-ask what we just decided not
+        // to ask.
+        closeCoordinator.allowsClose = true
+        #endif
+        // Re-resolves against the same emptiness and takes `.discardEmpty`:
+        // drops any server copy the autosave left, removes the local one,
+        // closes.
+        await model.cancel()
+    }
+
     /// Runs the outcome the user picked in the cancel-compose dialog. Stays
     /// in this file (rather than the `+Subviews` extension) because it
     /// touches the `private` close coordinator.
@@ -172,6 +209,18 @@ struct ComposeView: View {
                 closeCoordinator.allowsClose = true
                 #endif
                 await model.discard()
+                // The discard expunged the server copy an open Drafts list
+                // — and the reader this dismissal returns to — is still
+                // holding. Say so, or the row survives and Edit Draft on it
+                // reopens the discarded draft with Send live (#1081). Same
+                // signal as Save Draft; the replacement has no survivor, so
+                // the policy drops the reader rather than re-pointing it.
+                if let replacement = model.retiredDraftReplacement {
+                    appState.signalDraftReplaced(
+                        folderPath: "Drafts",
+                        replacement: replacement
+                    )
+                }
             }
         case .saveDraft:
             Task {
@@ -179,6 +228,21 @@ struct ComposeView: View {
                 closeCoordinator.allowsClose = true
                 #endif
                 let didClose = await model.cancel()
+                // The save replaced the server copy, expunging the UID an
+                // open Drafts list — and the reader this dismissal returns
+                // to — is still holding. Hand the list the whole chain plus
+                // the survivor so it can swap rather than strand the user
+                // on content the server no longer has (#1078). An emptied
+                // body takes the `.discardEmpty` exit through this same
+                // button and reports a chain with no survivor (#1081); a
+                // first save reports the survivor with nothing retired, and
+                // rides the same refresh into the list (#1083).
+                if didClose, let replacement = model.retiredDraftReplacement {
+                    appState.signalDraftReplaced(
+                        folderPath: "Drafts",
+                        replacement: replacement
+                    )
+                }
                 #if os(macOS)
                 // IMAP save failed: keep the user in the window so they can
                 // see the error banner and retry.
@@ -206,7 +270,7 @@ struct ComposeView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button("Cancel") {
-                showDiscardConfirm = true
+                Task { await cancelOrAsk() }
             }
             .accessibilityIdentifier("compose.cancel")
         }
@@ -235,9 +299,13 @@ struct ComposeView: View {
                     // by default, so that took over a minute). "Drafts" is
                     // the mailbox `/save_draft` pins every draft to; see
                     // `MessageDetailViewModel.isDraftsFolder`.
-                    if let uid = model.supersededDraftUID {
-                        appState.signalDisposed(folderPath: "Drafts", uid: uid)
-                    }
+                    // Every UID the session held, not just the last: a 60s
+                    // autosave replaces the copy under a new UID and the
+                    // open list is still rendering the old one (#1071).
+                    appState.signalDisposed(
+                        folderPath: "Drafts",
+                        uids: model.supersededDraftUIDs
+                    )
                     // A reply left the device (or the outbox owns it now):
                     // mark the original `\Answered` so the list's replied
                     // arrow appears without waiting for a refresh.
