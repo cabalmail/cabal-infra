@@ -47,6 +47,7 @@ dependencies {
     api(libs.kotlinx.serialization.json)
     api(libs.ktor.client.core)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.security.crypto)
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.turbine)

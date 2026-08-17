@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Cabalmail</string>
-    <string name="hello_cabalmail">Hello, Cabalmail</string>
+    <string name="username_label">Username</string>
+    <string name="password_label">Password</string>
+    <string name="sign_in">Sign In</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="mfa_prompt_totp">Enter the code from your authenticator app.</string>
+    <string name="mfa_prompt_sms">Enter the code we just texted you.</string>
+    <string name="mfa_code_label">Verification code</string>
+    <string name="mfa_submit">Verify</string>
+    <string name="signed_in_as">Signed in as %1$s</string>
 </resources>
