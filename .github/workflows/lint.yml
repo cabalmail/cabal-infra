@@ -22,6 +22,10 @@ name: Lint
 #                workflow yet — the Phase 2 linux.yml will invoke this same
 #                subcommand, see linux/xtask/src/ci.rs, so the two can't
 #                drift).
+#   - Kotlin:    the Android client's full quality gate — kit + app unit
+#                tests, ktlint, Android Lint with warnings-as-errors — the
+#                same single gradle invocation android.yml's test job runs at
+#                merge time, so the two can't drift.
 #
 # This is lint-only: no AWS credentials, no Terraform backend, no deploy. The
 # Terraform scanners read the committed source directly (exactly as the
@@ -54,6 +58,7 @@ jobs:
       swift: ${{ steps.filter.outputs.swift }}
       react: ${{ steps.filter.outputs.react }}
       rust: ${{ steps.filter.outputs.rust }}
+      kotlin: ${{ steps.filter.outputs.kotlin }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -87,6 +92,9 @@ jobs:
             # keys match this Lambda's APP_ALLOWED set, so an edit on the
             # Lambda side must run the Rust gate too.
             - 'lambda/api/set_preferences/function.py'
+            - '.github/workflows/lint.yml'
+          kotlin:
+            - 'android/**'
             - '.github/workflows/lint.yml'
 
   # ---------------------------------------------------------------------------
@@ -337,3 +345,37 @@ jobs:
           rust-${{ runner.os }}-
     - name: xtask-ci
       run: cargo xtask ci
+
+  # ---------------------------------------------------------------------------
+  # Kotlin. The Android client's whole quality gate in one gradle invocation:
+  # kit + app unit tests, ktlint, and Android Lint (warnings are errors in
+  # both modules — see the lint blocks in android/*/build.gradle.kts). This is
+  # deliberately the same command android.yml's test job runs on stage/main
+  # pushes, so the PR gate and the deploy gate can't drift. Cache key matches
+  # android.yml's so the two workflows share warm caches.
+  # ---------------------------------------------------------------------------
+  kotlin:
+    needs: changes
+    if: needs.changes.outputs.kotlin == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+    - name: setup-java
+      uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+      with:
+        distribution: temurin
+        java-version: '21'
+    - name: cache-gradle
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+        restore-keys: gradle-${{ runner.os }}-
+    - name: gradle-gate
+      run: ./gradlew :kit:test :app:testDebugUnitTest ktlintCheck lint

@@ -6,17 +6,12 @@ permissions:
 
 on:
   workflow_dispatch:
-  # Unlike apple.yml, PRs run the test and build jobs too: these are free
-  # ubuntu runners (public repo), and the Android plan (Phase 2) wants every
-  # phase developed under green CI rather than discovering breakage at merge.
-  pull_request:
-    paths:
-      - 'android/**'
-      - '.github/workflows/android.yml'
   push:
     # Only the deploy branches build automatically; an explicit branches
     # filter keeps tag pushes out. Like apple.yml, this workflow deploys
-    # nothing to AWS — its only side effect is a Play Console upload.
+    # nothing to AWS — its only side effect is a Play Console upload. PRs are
+    # gated by lint.yml's kotlin job, which runs the same gradle invocation
+    # as `test` below.
     branches:
       - main
       - stage
@@ -34,6 +29,8 @@ jobs:
   # -----------------------------------------------------------------------
   # Unit tests + ktlint + Android Lint. Lint warnings are errors
   # (warningsAsErrors in both modules), so this is the whole quality gate.
+  # Keep the gradle invocation identical to lint.yml's kotlin job — that
+  # job is the PR-time run of this same gate.
   # -----------------------------------------------------------------------
   test:
     name: Test
@@ -102,7 +99,9 @@ jobs:
   upload:
     name: Upload to Play Console
     needs: [test, build]
-    if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage')
+    # The ref check (not an event check) is what keeps a workflow_dispatch
+    # run on a feature branch from uploading.
+    if: github.ref_name == 'main' || github.ref_name == 'stage'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     steps:
