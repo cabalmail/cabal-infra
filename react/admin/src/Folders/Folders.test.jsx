@@ -440,5 +440,82 @@ describe('Folders rail', () => {
       await waitFor(() => expect(screen.getByText('Receipts')).toBeInTheDocument());
       expect(screen.queryByRole('button', { name: /collapse receipts/i })).not.toBeInTheDocument();
     });
+
+    // Two accounts, one browser (#1117). The tests above authenticate with
+    // an opaque token, which has no username to key on and so still reads
+    // and writes the bare keys; these use real (fake-signed) JWTs, which is
+    // what the app sends and what makes the scoping observable.
+    describe('per-user scoping', () => {
+      function jwtFor(username) {
+        return `header.${btoa(JSON.stringify({ 'cognito:username': username }))}.sig`;
+      }
+
+      function renderFoldersAs(username, props = {}) {
+        return render(
+          <AuthContext.Provider value={{ ...authValue, token: jwtFor(username) }}>
+            <Folders
+              folder="INBOX"
+              setFolder={vi.fn()}
+              setMessage={vi.fn()}
+              onNewMessage={vi.fn()}
+              {...props}
+            />
+          </AuthContext.Provider>
+        );
+      }
+
+      it('does not hand one account\'s section collapse to the next', async () => {
+        const first = renderFoldersAs('alice');
+        await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.click(screen.getByText(/^All folders$/i).closest('[role="button"]'));
+        });
+        expect(localStorage.getItem('folder_collapsed_all:alice')).toBe('true');
+        first.unmount();
+
+        renderFoldersAs('bob');
+        await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
+        expect(
+          screen.getByText(/^All folders$/i).closest('[role="button"]')
+        ).toHaveAttribute('aria-expanded', 'true');
+      });
+
+      it('does not hand one account\'s collapsed folder paths to the next', async () => {
+        mockGetFolderList.mockResolvedValue({
+          data: {
+            folders: ['INBOX', 'Work', 'Work/Q1'],
+            sub_folders: [],
+          },
+        });
+        const first = renderFoldersAs('alice');
+        await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: /collapse work/i }));
+        });
+        expect(screen.queryByText('Q1')).not.toBeInTheDocument();
+        expect(JSON.parse(localStorage.getItem('folder_collapsed_paths:alice'))).toEqual(['Work']);
+        first.unmount();
+
+        renderFoldersAs('bob');
+        await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument());
+        expect(screen.getByText('Q1')).toBeInTheDocument();
+      });
+
+      it('gives a returning account its own state back', async () => {
+        const first = renderFoldersAs('alice');
+        await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.click(screen.getByText(/^Subscribed$/i).closest('[role="button"]'));
+        });
+        first.unmount();
+
+        renderFoldersAs('alice');
+        await waitFor(() => {
+          expect(
+            screen.getByText(/^Subscribed$/i).closest('[role="button"]')
+          ).toHaveAttribute('aria-expanded', 'false');
+        });
+      });
+    });
   });
 });
