@@ -169,11 +169,14 @@ struct ComposeView: View {
     /// consults, computed the same way, so the question is asked exactly
     /// when the answer could matter.
     ///
-    /// Bodies come from the WebKit bridge, hence the `await` — and hence
-    /// this button being the only cancel path with the check. The macOS
-    /// window-close intercept (`closeCoordinator.onCloseAttempt`) answers
-    /// an `NSWindowDelegate` synchronously and cannot wait for the bridge,
-    /// so red-button-closing an untouched compose window still asks.
+    /// Bodies come from the WebKit bridge, hence the `await`. This button is
+    /// currently the only cancel path with the check: the macOS window-close
+    /// intercept (`closeCoordinator.onCloseAttempt`) still puts the dialog up
+    /// unconditionally, so Cmd+W and the red close button ask over an
+    /// untouched composer (#1106). That is a gap, not a constraint —
+    /// `windowShouldClose` already declines the close and returns `false`, so
+    /// its handler is free to await the bridge and then finish the close the
+    /// way the dialog buttons do (set `allowsClose`, run the model action).
     private func cancelOrAsk() async {
         let bodies = await model.computeMessageBodies()
         guard !ComposeCancelPolicy.needsDecision(
