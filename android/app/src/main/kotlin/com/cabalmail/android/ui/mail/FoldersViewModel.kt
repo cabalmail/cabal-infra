@@ -60,7 +60,24 @@ class FoldersViewModel(
         }
     }
 
+    /** Expunges everything in Trash (server-side trash-scoped). */
+    fun emptyTrash() {
+        viewModelScope.launch {
+            try {
+                container.requireApi().emptyTrash(TRASH_FOLDER)
+                container.envelopeCache.invalidateFolder(TRASH_FOLDER)
+                refresh()
+            } catch (exception: Exception) {
+                mutableState.update {
+                    it.copy(error = exception.message ?: "Could not empty Trash")
+                }
+            }
+        }
+    }
+
     companion object {
+        const val TRASH_FOLDER = "Trash"
+
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer { FoldersViewModel(container) }
