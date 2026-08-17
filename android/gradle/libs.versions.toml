@@ -6,6 +6,8 @@
 [versions]
 agp = "8.10.1"
 kotlin = "2.1.21"
+# KSP tracks the Kotlin version (first component must match).
+ksp = "2.1.21-2.0.2"
 ktlint = "12.1.1"
 coreKtx = "1.16.0"
 lifecycle = "2.9.0"
@@ -74,6 +76,7 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
 triplet-play = { id = "com.github.triplet.play", version.ref = "tripletPlay" }
 room = { id = "androidx.room", version.ref = "room" }
