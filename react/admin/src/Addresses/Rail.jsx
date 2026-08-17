@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pause, Play, Plus, Search, Star, X } from 'lucide-react';
 import useApi from '../hooks/useApi';
-import { ADDRESS_LIST } from '../constants';
 import ConfirmDialog from '../ConfirmDialog';
 import Request from './Request';
 import './Addresses.css';
@@ -77,11 +76,6 @@ function Addresses({ domains, setMessage }) {
 
   const refresh = useCallback(() => {
     api.getAddresses().then((data) => {
-      try {
-        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
-      } catch (e) {
-        console.log(e);
-      }
       setAddresses(sortAddresses(data.data.Items));
     }).catch((e) => {
       console.log(e);
@@ -113,10 +107,10 @@ function Addresses({ domains, setMessage }) {
 
   const onRequested = useCallback((newAddress) => {
     setShowRequest(false);
-    localStorage.removeItem(ADDRESS_LIST);
+    api.invalidateAddressList();
     refresh();
     setPendingScroll(newAddress);
-  }, [refresh]);
+  }, [api, refresh]);
 
   // After a successful new-address request, scroll the new row into view
   // once the refreshed list lands in state. block:'nearest' means we only
@@ -214,7 +208,7 @@ function Addresses({ domains, setMessage }) {
     setPendingRevoke(null);
     api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key).then(() => {
       setMessage && setMessage('Successfully revoked address.', false);
-      localStorage.removeItem(ADDRESS_LIST);
+      api.invalidateAddressList();
       setAddresses((prev) => prev.filter((x) => x.address !== a.address));
     }).catch(() => {
       setMessage && setMessage('Request to revoke address failed.', true);

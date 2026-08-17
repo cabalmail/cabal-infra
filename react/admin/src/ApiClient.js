@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { ONE_SECOND, ADDRESS_LIST, FOLDER_LIST } from './constants';
+import { listCacheKey } from './utils/listCache';
 const TIMEOUT = ONE_SECOND * 10;
 // Bulk IMAP mutations (move / flag / purge / empty-trash) run server-side as
 // chunked, sequential IMAP commands and can take far longer than a normal
@@ -25,6 +26,10 @@ export default class ApiClient {
     this.baseURL = baseURL;
     this.token = token;
     this.host = host;
+    // List caches are scoped per user so a second account logging in on
+    // the same browser never sees the first account's cached data.
+    this.addressListKey = listCacheKey(ADDRESS_LIST, token);
+    this.folderListKey = listCacheKey(FOLDER_LIST, token);
   }
 
   // Helper
@@ -41,10 +46,28 @@ export default class ApiClient {
     return p;
   }
 
+  // Cache only the response body: it is all the cached-read path serves,
+  // and the rest of the axios response does not survive JSON.stringify.
+  #writeCache(key, response) {
+    try {
+      localStorage.setItem(key, JSON.stringify({ data: response.data }));
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
+  invalidateAddressList() {
+    localStorage.removeItem(this.addressListKey);
+  }
+
+  invalidateFolderList() {
+    localStorage.removeItem(this.folderListKey);
+  }
+
   // Addresses
 
   newAddress(username, subdomain, tld, comment, address) {
-    localStorage.removeItem(ADDRESS_LIST);
+    this.invalidateAddressList();
     const response = axios.post(
       '/new',
       {
@@ -66,8 +89,8 @@ export default class ApiClient {
   }
 
   getAddresses() {
-    if (localStorage.getItem(ADDRESS_LIST) !== null) {
-      return this.#createPromise(ADDRESS_LIST);
+    if (localStorage.getItem(this.addressListKey) !== null) {
+      return this.#createPromise(this.addressListKey);
     }
     const response = axios.get('/list', {
       baseURL: this.baseURL,
@@ -76,11 +99,14 @@ export default class ApiClient {
       },
       timeout: TIMEOUT
     });
-    return response;
+    return response.then((resp) => {
+      this.#writeCache(this.addressListKey, resp);
+      return resp;
+    });
   }
 
   setFavorite(address, favorite) {
-    localStorage.removeItem(ADDRESS_LIST);
+    this.invalidateAddressList();
     const response = axios.put('/set_favorite',
       JSON.stringify({
         address: address,
@@ -98,7 +124,7 @@ export default class ApiClient {
   }
 
   deleteAddress(address, subdomain, tld, public_key) {
-    localStorage.removeItem(ADDRESS_LIST);
+    this.invalidateAddressList();
     const response = axios.delete('/revoke', {
       baseURL: this.baseURL,
       data: JSON.stringify({
@@ -116,7 +142,7 @@ export default class ApiClient {
   }
 
   suspendAddress(address) {
-    localStorage.removeItem(ADDRESS_LIST);
+    this.invalidateAddressList();
     const response = axios.put('/suspend_address',
       JSON.stringify({
         address: address
@@ -133,7 +159,7 @@ export default class ApiClient {
   }
 
   reinstateAddress(address) {
-    localStorage.removeItem(ADDRESS_LIST);
+    this.invalidateAddressList();
     const response = axios.put('/reinstate_address',
       JSON.stringify({
         address: address
@@ -171,7 +197,7 @@ export default class ApiClient {
   // IMAP Folders
 
   deleteFolder(name) {
-    localStorage.removeItem(FOLDER_LIST);
+    this.invalidateFolderList();
     const response = axios.delete('/delete_folder',
       {
         baseURL: this.baseURL,
@@ -189,7 +215,7 @@ export default class ApiClient {
   }
 
   newFolder(parent, name) {
-    localStorage.removeItem(FOLDER_LIST);
+    this.invalidateFolderList();
     const response = axios.put('/new_folder',
       JSON.stringify({
         host: this.host,
@@ -208,8 +234,8 @@ export default class ApiClient {
   }
 
   getFolderList() {
-    if (localStorage.getItem(FOLDER_LIST) !== null) {
-      return this.#createPromise(FOLDER_LIST);
+    if (localStorage.getItem(this.folderListKey) !== null) {
+      return this.#createPromise(this.folderListKey);
     }
     const response = axios.get('/list_folders', {
       params: {
@@ -221,7 +247,10 @@ export default class ApiClient {
       },
       timeout: TIMEOUT
     });
-    return response;
+    return response.then((resp) => {
+      this.#writeCache(this.folderListKey, resp);
+      return resp;
+    });
   }
 
   subscribeFolder(folder) {
@@ -784,7 +813,7 @@ export default class ApiClient {
   }
 
   assignAddress(address, username) {
-    localStorage.removeItem(ADDRESS_LIST);
+    this.invalidateAddressList();
     const response = axios.put('/assign_address',
       JSON.stringify({ address: address, username: username }),
       {
@@ -799,7 +828,7 @@ export default class ApiClient {
   }
 
   unassignAddress(address, username) {
-    localStorage.removeItem(ADDRESS_LIST);
+    this.invalidateAddressList();
     const response = axios.put('/unassign_address',
       JSON.stringify({ address: address, username: username }),
       {
@@ -814,7 +843,7 @@ export default class ApiClient {
   }
 
   newAddressAdmin(username, subdomain, tld, comment, address, usernames) {
-    localStorage.removeItem(ADDRESS_LIST);
+    this.invalidateAddressList();
     const response = axios.post('/new_address_admin',
       {
         username: username,

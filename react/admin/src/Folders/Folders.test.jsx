@@ -12,6 +12,7 @@ const mockEmptyTrash = vi.fn();
 
 const mockApi = {
   getFolderList: mockGetFolderList,
+  invalidateFolderList: vi.fn(),
   subscribeFolder: mockSubscribe,
   unsubscribeFolder: mockUnsubscribe,
   deleteFolder: mockDeleteFolder,

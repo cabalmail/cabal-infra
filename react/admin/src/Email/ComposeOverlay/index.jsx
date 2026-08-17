@@ -3,7 +3,7 @@ import {
   Minus, Maximize2, Minimize2, X, Paperclip,
 } from 'lucide-react';
 import './ComposeOverlay.css';
-import { ADDRESS_LIST, ANSWERED } from '../../constants';
+import { ANSWERED } from '../../constants';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
@@ -387,11 +387,6 @@ function ComposeOverlay({
 
   const loadAddresses = useCallback(() => (
     api.getAddresses().then(data => {
-      try {
-        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
-      } catch (e) {
-        console.log(e);
-      }
       const items = (data?.data?.Items || [])
         .slice()
         .sort((a, b) => (a.address > b.address ? 1 : a.address < b.address ? -1 : 0));
