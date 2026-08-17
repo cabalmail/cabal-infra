@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useApi from '../hooks/useApi';
-import { ADDRESS_LIST } from '../constants';
 import ConfirmDialog from '../ConfirmDialog';
 import Request from './Request';
 import './Admin.css';
@@ -58,13 +57,13 @@ function AdminAddresses({ domains, setMessage }) {
   }, [addresses, filter]);
 
   const handleRequested = useCallback((newAddress) => {
-    localStorage.removeItem(ADDRESS_LIST);
+    api.invalidateAddressList();
     setShowNew(false);
     if (newAddress) {
       setMessage && setMessage(`Address "${newAddress}" created.`, false);
     }
     loadData();
-  }, [setMessage, loadData]);
+  }, [api, setMessage, loadData]);
 
   const handleAssign = useCallback((address, username) => {
     if (!username) {
@@ -125,7 +124,7 @@ function AdminAddresses({ domains, setMessage }) {
     api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key).then(
       () => {
         setMessage && setMessage(`Revoked "${a.address}".`, false);
-        localStorage.removeItem(ADDRESS_LIST);
+        api.invalidateAddressList();
         loadData();
       },
       (err) => {

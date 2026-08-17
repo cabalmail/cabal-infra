@@ -21,7 +21,6 @@ import {
   FOLDER_COLLAPSED_ALL,
   FOLDER_COLLAPSED_PATHS,
   FOLDER_COLLAPSED_SUB,
-  FOLDER_LIST,
   PERMANENT_FOLDERS,
 } from '../constants';
 import { ancestorsOf, orderFolders } from '../utils/folderMeta';
@@ -197,11 +196,6 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
 
   const refresh = useCallback(() => {
     api.getFolderList().then(data => {
-      try {
-        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
-      } catch (e) {
-        console.log(e);
-      }
       const all = [...new Set([
         ...(data.data.folders),
         ...(data.data.sub_folders),
@@ -270,7 +264,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
       ? api.unsubscribeFolder(name)
       : api.subscribeFolder(name);
     p.then(() => {
-      localStorage.removeItem(FOLDER_LIST);
+      api.invalidateFolderList();
       refresh();
     });
   }, [api, subscribed, refresh]);
@@ -289,7 +283,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
     setPendingDelete(null);
     if (!name) return;
     api.deleteFolder(name).then(() => {
-      localStorage.removeItem(FOLDER_LIST);
+      api.invalidateFolderList();
       refresh();
     }).catch((err) => {
       // Show the API's own explanation when it sent one (a 404 for a folder
@@ -342,7 +336,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
     api.newFolder(parent, name).then(() => {
       setAddingParent(null);
       setNewName('');
-      localStorage.removeItem(FOLDER_LIST);
+      api.invalidateFolderList();
       refresh();
     }).catch((err) => {
       // The API describes what went wrong when it can — a name collision
@@ -457,7 +451,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
               aria-label="Reload folders"
               onClick={(e) => {
                 e.stopPropagation();
-                localStorage.removeItem(FOLDER_LIST);
+                api.invalidateFolderList();
                 refresh();
               }}
             >
