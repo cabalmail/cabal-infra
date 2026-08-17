@@ -32,6 +32,20 @@ data class Config(
 
     /** Bare domain names the deployment hosts mail for. */
     val mailDomains: List<String> get() = domains.map { it.domain }
+
+    /**
+     * IMAP hostname derived from the control domain — the `host` value the
+     * Lambda API expects on mail endpoints. Mirrors the Apple/React rule: a
+     * `dev.*` control domain swaps the prefix for `imap.`, everything else
+     * gets `imap.` prepended.
+     */
+    val imapHost: String
+        get() =
+            if (controlDomain.startsWith("dev.")) {
+                "imap." + controlDomain.removePrefix("dev.")
+            } else {
+                "imap.$controlDomain"
+            }
 }
 
 /**
