@@ -290,6 +290,111 @@ jobs:
         if: failure()
         run: .github/scripts/dump-xcodebuild-raw.sh
 
+  # -----------------------------------------------------------------------
+  # App-layer unit tests that the macOS host cannot compile — the UIKit side
+  # of `#if os(macOS)`-branched files, and sources only the iOS target
+  # builds. The CabalmailiOSTests bundle, hosted by the iOS app (#1112).
+  #
+  # This one does boot a simulator, which app-test deliberately avoids. That
+  # is the whole reason the split exists: everything testable without a
+  # simulator stays in CabalmailMacTests, and only what is invisible over
+  # there earns a place here. Destination resolution is the same dance as
+  # kit-test — runner images ship runtimes with no devices created on them,
+  # so a bare `platform=iOS Simulator` cannot resolve.
+  # -----------------------------------------------------------------------
+  ios-app-test:
+    name: Test app layer (iOS)
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
+          for pkg in xcodegen xcbeautify coreutils; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
+      - name: Resolve iOS simulator destination
+        id: dest
+        run: |
+          set -euo pipefail
+          RUNTIME_ID=$(xcrun simctl list runtimes --json | \
+            jq -r '
+              .runtimes
+              | map(select(.isAvailable and (.name | startswith("iOS "))))
+              | sort_by(.version | split(".") | map(tonumber))
+              | reverse | .[0].identifier // empty
+            ')
+          if [ -z "$RUNTIME_ID" ]; then
+            echo "::error::No installed iOS runtime."
+            xcrun simctl list runtimes
+            exit 1
+          fi
+          DEVICE_TYPE_ID=$(xcrun simctl list devicetypes --json | \
+            jq -r '
+              .devicetypes
+              | map(select(.name | startswith("iPhone")))
+              | .[0].identifier // empty
+            ')
+          if [ -z "$DEVICE_TYPE_ID" ]; then
+            echo "::error::No iPhone device type."
+            xcrun simctl list devicetypes
+            exit 1
+          fi
+          UDID=$(xcrun simctl create "ci-iOS-app" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
+          echo "Created iOS simulator $UDID"
+          echo "  runtime:    $RUNTIME_ID"
+          echo "  devicetype: $DEVICE_TYPE_ID"
+          echo "destination=platform=iOS Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-iOS-${{ hashFiles('apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-iOS-
+            spm-${{ runner.os }}-
+
+      - name: Test Cabalmail scheme (iOS-hosted app-layer unit tests)
+        working-directory: apple
+        run: |
+          set -o pipefail
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
+            -workspace Cabalmail.xcworkspace \
+            -scheme Cabalmail \
+            -destination '${{ steps.dest.outputs.destination }}' \
+            -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-test.log" \
+            | xcbeautify --renderer github-actions
+
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh
+
   # =======================================================================
   # TEMPORARY: forward-compatibility check against the next OS generation.
   #

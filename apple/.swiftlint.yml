@@ -9,6 +9,7 @@ included:
   - CabalmailKit/Sources
   - CabalmailKit/Tests
   - CabalmailTests
+  - CabalmailiOSTests
 
 excluded:
   - build
