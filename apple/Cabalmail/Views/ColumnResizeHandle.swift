@@ -146,9 +146,25 @@ final class ColumnResizePanCoordinator: NSObject, UIGestureRecognizerDelegate {
         recognizer = pan
     }
 
+    /// Last-resort detach, for a teardown that never routed through
+    /// `attach(to: nil)`.
+    ///
+    /// The window retains the recognizer while the recognizer holds this
+    /// coordinator only weakly (target and delegate both), so the coordinator
+    /// can go first and strand a recognizer on a live window — one whose nil
+    /// delegate stops rejecting touches outside the band and starts cancelling
+    /// drags anywhere in the app.
+    ///
+    /// Hopped onto the main actor because `deinit` is nonisolated and runs
+    /// wherever the last release lands, while `view` and
+    /// `removeGestureRecognizer` are main-actor isolated. The recognizer is
+    /// captured as a local — no part of `self` escapes a deallocation already
+    /// underway — and that capture keeps it alive until the hop runs.
     deinit {
         if let recognizer {
-            recognizer.view?.removeGestureRecognizer(recognizer)
+            Task { @MainActor in
+                recognizer.view?.removeGestureRecognizer(recognizer)
+            }
         }
     }
 
