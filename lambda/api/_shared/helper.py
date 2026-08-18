@@ -829,6 +829,35 @@ def _reserved_response(subdomain, scope):
     }
 
 
+def new_address_response_or_none(body, domains, control_domain):
+    '''Vets the address a create request asks for -- known domain, valid DNS
+    labels and local part, subdomain not reserved -- and returns the 400 to
+    send back, or None when the request may proceed.
+
+    Shared by the two create endpoints (`new` and `new_address_admin`) for the
+    same reason publish_address_dns_records is: they must accept exactly the
+    same set of addresses, and the admin copy of these guards is the one that
+    went missing (#1072). Everything past this point differs between them --
+    who the address is recorded for, and which authorization the caller needs.
+    '''
+    if body['tld'] not in domains:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f"Unknown domain \"{body['tld']}\""})
+        }
+    try:
+        validate_dns_apex(body['tld'])
+        validate_dns_subdomain(body['subdomain'])
+        validate_local_part(body['username'])
+    except ValueError as err:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f'Invalid input: {err}'})
+        }
+    return reserved_subdomain_response_or_none(
+        body['subdomain'], body['tld'], control_domain)
+
+
 def _route53():
     '''Lazily builds the shared Route 53 client (only the DNS handlers need it,
     so non-DNS lambdas importing helper never pay for it).'''

@@ -1,10 +1,10 @@
 ---
-name: Apple changelog
+name: Android changelog
 
-# Require an `Apple:`-prefixed changelog fragment when a PR changes the shipped
-# Apple client sources, so the change reaches the TestFlight "What to Test"
-# notes (set-testflight-notes.py filters those notes to Apple-scoped entries).
-# Opt out for non-user-facing Apple work with the `no-changelog` PR label. See
+# Require an `Android:`-prefixed changelog fragment when a PR changes the shipped
+# Android client sources, so the change reaches the Play Console release notes
+# (play-release-notes.py builds those from the Android-scoped headlines only).
+# Opt out for non-user-facing Android work with the `no-changelog` PR label. See
 # CLAUDE.md and changelog.d/README.md.
 #
 # Its own workflow - not a job in lint.yml - specifically so it can trigger on
@@ -12,7 +12,7 @@ name: Apple changelog
 # clear the failure. Wiring those events into lint.yml would rerun the heavy
 # Terraform/Swift/React scanners on every label toggle (including the
 # automation labels). The check is cheap and self-gating - the script exits 0
-# early when no Apple client source changed - so it runs on every PR with no
+# early when no Android client source changed - so it runs on every PR with no
 # path filter and reports a definite pass/fail rather than a skip.
 
 on:
@@ -25,11 +25,11 @@ permissions:
 # Supersede in-flight runs when the PR is updated or its labels change; keyed
 # on the PR number so concurrent PRs don't cancel each other.
 concurrency:
-  group: apple-changelog-${{ github.event.pull_request.number }}
+  group: android-changelog-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  apple-changelog:
+  android-changelog:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
@@ -38,12 +38,16 @@ jobs:
         # Full history so the script can diff the PR range (base...head) and
         # read the fragment files added on the branch.
         fetch-depth: 0
-    - name: require-apple-fragment
+    - name: require-android-fragment
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         OPT_OUT: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
-      # Scoped to shipped client code - not Tests/, project.yml, or apple/*.md -
-      # to keep the gate off PRs with no user-facing Apple surface. Keep in
-      # sync with the apple_src filter in lint.yml.
-      run: ./.github/scripts/check-client-changelog.sh Apple '^apple/(Cabalmail|CabalmailMac|CabalmailKit/Sources)/'
+      # Scoped to what is packaged into the app: the manifest, Kotlin/Java,
+      # resources, and assets of the app and kit modules' main source sets -
+      # not src/test, Gradle files, or CI, and not the Play Console metadata
+      # that also lives under app/src/main (the gradle-play-publisher `play/`
+      # listing/notes tree and the Play Store `ic_launcher-playstore.png`).
+      # A store-listing change alters nothing a tester sees in the app, so it
+      # gets no release-notes headline (PR #1149 tripped this four times).
+      run: ./.github/scripts/check-client-changelog.sh Android '^android/(app|kit)/src/main/(AndroidManifest\.xml|kotlin/|java/|res/|assets/)'

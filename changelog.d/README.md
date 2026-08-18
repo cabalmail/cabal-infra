@@ -59,6 +59,34 @@ A PR that touches the Apple client sources fails the
 For a genuinely non-user-facing Apple change (refactor, test-only, CI,
 xcodegen), apply the `no-changelog` label to the PR to opt out.
 
+## Android client entries
+
+Likewise, any fragment describing a change to the Android client (the
+manifest, Kotlin, resources, and assets under `android/app/src/main` and
+`android/kit/src/main` - not the Play Console listing metadata that also lives
+there) must prefix its entry with
+`Android:`, and the bold headline must not repeat the word "Android" - the
+prefix already says it, and the collated changelog reads
+`- Android: **Compose with on-the-fly From.**`, not `**Android compose ...**`.
+
+The Play Console release notes are built from the released `CHANGELOG.md`
+section by `.github/scripts/play-release-notes.py` on the prod upload. Google
+Play caps release notes at **500 characters** for the whole release, so, unlike
+TestFlight, **only the bold headline of each `Android:` entry survives** - the
+body never reaches testers. The notes lead with "See CHANGELOG.md for
+details." and then list the headlines under their category, so write the
+headline as the one line a tester will read on its own: a concrete
+noun-phrase, roughly 40 characters, no phase numbers or internal jargon (put
+those in the body). Every Android headline in a release shares that 500-char
+budget; if it overruns, whole trailing headlines are dropped with a CI
+warning. `scripts/tests/test_play_release_notes.py` renders the pending
+fragments and fails the PR when the pending set no longer fits - trim
+headlines, not bodies.
+
+A PR that touches the Android client sources fails the
+`.github/workflows/android-changelog.yml` check unless it adds such a
+fragment; opt out with the `no-changelog` label as for Apple.
+
 ## Releasing
 
 `scripts/promote.sh` (or `make promote VERSION=<x.y.z>`) runs the

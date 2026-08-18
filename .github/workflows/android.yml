@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up JDK
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961  # v5.7.0
         with:
           distribution: temurin
           java-version: '21'
@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up JDK
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961  # v5.7.0
         with:
           distribution: temurin
           java-version: '21'
@@ -109,7 +109,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up JDK
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961  # v5.7.0
         with:
           distribution: temurin
           java-version: '21'
@@ -162,6 +162,25 @@ jobs:
           echo "Version: $VERSION_NAME ($VERSION_CODE)" >> "$GITHUB_STEP_SUMMARY"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+
+      # Play Console release notes (prod only). gradle-play-publisher reads them
+      # from app/src/main/play/release-notes/<locale>/default.txt at publish
+      # time; there is no post-upload API hook, so the file is written here.
+      # Headlines of the `Android:`-prefixed CHANGELOG.md entries only, under
+      # Play's 500-character cap - see the script and changelog.d/README.md.
+      # Stage uploads ship without notes: on stage the top CHANGELOG.md section
+      # is still the previous release (fragments collate only at promotion).
+      - name: Derive Play release notes (prod only)
+        if: steps.creds.outputs.present == 'true' && github.ref_name == 'main'
+        run: |
+          python3 .github/scripts/play-release-notes.py \
+            --changelog CHANGELOG.md \
+            --out android/app/src/main/play/release-notes/en-US/default.txt
+          {
+            echo '```'
+            cat android/app/src/main/play/release-notes/en-US/default.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build and publish signed bundle
         if: steps.creds.outputs.present == 'true'

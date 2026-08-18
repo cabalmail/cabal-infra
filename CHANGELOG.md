@@ -5,6 +5,232 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-18
+
+### Added
+- Android: **First alpha - not yet for production use.** The native client
+  described in the entries below lands in this release for the first time.
+  It is an alpha: it builds, tests, and publishes to the Play Console
+  internal track from CI, but it is not yet ready for production use - keep
+  the Apple or web client as your primary mail access.
+- Android: **Automated Play internal-track uploads.** `lint.yml` gains a
+  `kotlin` job running the client's quality gate (unit tests, ktlint,
+  Android Lint with warnings promoted to errors) on every PR touching
+  `android/**`; the new `android.yml` runs the same gate plus an unsigned
+  release build on `stage`/`main` pushes, then uploads a signed bundle to
+  the Play Console internal track via gradle-play-publisher, warn-green
+  until the signing/Play secrets are seeded. Dependabot now also watches
+  the Android version catalog.
+- Android: **Material 3 app shell with dynamic color.** New `android/`
+  Gradle workspace starting the native client (Phase 1): `app` module
+  (Jetpack Compose + Material 3 shell with dynamic color and platform splash
+  screen) and `kit` module (runtime `config.json` fetch/cache service and
+  the placeholder `CabalmailClient`), Kotlin-only, min SDK 31, JUnit 5 unit
+  tests, and ktlint. See `docs/1.x/android-client-plan.md`.
+- Android: **Sign-in (TOTP/SMS) and the full API client.** Hand-rolled
+  Cognito `USER_PASSWORD_AUTH` client with TOTP/SMS challenge handling,
+  automatic token refresh, and Keystore-encrypted session storage; the full
+  Lambda API surface (`ApiClient` - folders, envelopes, search, messages,
+  attachments, flags/moves, compose/drafts, preferences, nav state) with
+  single-replay 401 recovery; and a working sign-in screen (Phase 3 core).
+  15 new unit tests pin the wire contract's quirks (uid-keyed envelope maps,
+  `REVERSE ` sort order, 409 duplicate-in-flight, maintenance 503s).
+- Android: **Envelope, body, and address caches.** Room-backed envelope
+  cache (LRU-bounded working window, UIDVALIDITY-mismatch invalidation),
+  disk LRU cache for fetched message bodies (200 MB default cap, atomic
+  writes), and an in-memory address repository whose favorites-first
+  ordering feeds both the address list and the compose From picker
+  (Phase 3 remainder).
+- Android: **Folder list, message list, and reader.** Folder list with
+  unread badges and pull-to-refresh; index-addressed sliding-window message
+  list (placeholder rows, band loading through the envelope cache) with
+  read/flagged emphasis, attachment, priority, and auth-failure indicators;
+  and a message reader - hardened WebView (no JavaScript, remote content
+  blocked until a per-message opt-in), plain-text fallback, flag/read
+  toggles, archive-or-purge dispose, and body caching (Phase 4 core).
+- Android: **Filters, sort, swipe/bulk actions, and search.** The message
+  list gains All/Unread/Flagged filter pills with live `/folder_status`
+  counts (patched locally as flags change), a sort menu (date received/
+  date sent/sender/subject, either direction), swipe actions (toggle read,
+  archive - or purge-with-confirmation in Trash), a long-press context
+  menu, and bulk multi-select with a contextual action bar (read/unread,
+  flag/unflag, move, dispose). Search arrives as a first-class cross-folder
+  scope over `/search_envelopes` with a structured filter sheet and
+  cursor paging; each result is labeled with, and operates on, its source
+  folder. The reader adds To/Cc headers, SPF/DKIM/DMARC and priority
+  chips, BIMI sender logos (colored-initials fallback, also in list rows),
+  an Original/Reader render-mode toggle, inline `cid:` images resolved to
+  data URIs, an attachment row that downloads via presigned URL and opens
+  through a scoped FileProvider, and a move action. The folder list gets
+  an Empty Trash action, and the cross-device resume cursor lands via
+  `/get_nav_state` / `/set_nav_state`: same-install cursors restore
+  silently on launch, foreign ones offer an opt-in "pick up where you
+  left off" prompt (Phase 4 remainder).
+- Android: **Compose with on-the-fly From and synced drafts.** The client
+  can now write mail (Phase 5). The compose screen leads with a From picker
+  that has no preselection - Send stays disabled until an owned address is
+  chosen - with favorites first and "Create new address..." as its last item
+  (a bottom sheet with local part, subdomain, permitted-domain picker,
+  comment, and a Random fill), so minting a fresh relationship-scoped
+  address is one tap away from every message. Recipients are chips with a
+  learned autocomplete; the body is Markdown-canonical (a formatting
+  toolbar over the Markdown buffer, rendered to the HTML part on the wire)
+  so drafts round-trip losslessly with the Apple and web clients; photos
+  and documents attach through the system pickers and stage to S3 via
+  `/upload_url`. Reply / reply-all / forward open from a new bottom bar in
+  the reader - From defaults to the owned address the original was sent
+  to, subjects prefix idempotently, replies thread through the fetched
+  body's headers overlaid on the envelope, and forward deliberately starts
+  a new thread; a sent reply marks the original answered. Drafts follow the
+  Apple sync model: a 5-second local buffer that survives a kill (offered
+  at the next launch), a 60-second `/save_draft` sync that replaces the
+  prior server copy, close-without-send saves to the server (or asks for a
+  From, or drops an empty draft), Discard removes both copies, and messages
+  in the Drafts folder offer Edit Draft with Bcc and threading recovered
+  from the raw headers. Sending mints a session-stable Message-ID so a
+  retry can never double-deliver, and hands the superseded draft to
+  `/send` for cleanup. Cabalmail also registers as a share target: text,
+  images, and files shared from other apps open a pre-filled compose.
+- Android: **Address/folder management, synced settings.** Three new
+  destinations behind the folder list's menu (Phase 6). **Addresses** lists
+  the user's addresses favorites-first with a star toggle, swipe or
+  long-press to revoke (behind a confirmation), pull-to-refresh, and a
+  "request new" action that reuses the compose picker's creation sheet - a
+  favorite sorts to the top of both this list and the From picker.
+  **Manage folders** shows every folder with a subscription switch and
+  message count, a "new folder" dialog with a parent picker, and delete for
+  empty user folders. **Settings** covers Account (display name, sign out),
+  Reading (mark as read, remote content, render mode, folder count display,
+  default sort), Composing (default From address, signature), Actions
+  (dispose to Archive or Trash), Appearance (theme, dynamic color, accent,
+  density) and About. The shared subset - display name, theme, accent,
+  density, and the per-client behaviours the Apple client already syncs -
+  round-trips through `/get_preferences` / `/set_preferences` (server wins
+  on launch; the server merges per key), so a change here shows up on the
+  web and Apple clients and vice versa; dynamic color and the default sort
+  stay on the device. Every consumer follows the setting live: theme and
+  system bars, accent seed when dynamic color is off, row density, folder
+  badges, default sort, dispose target and its labels, mark-read-on-open,
+  remote content "always", default render mode, and the default From and
+  signature seeded into new composes.
+- Android: **Tablet split view, offline mode, and notifications.** The
+  client grows into each form factor (Phase 7): Mail / Addresses / Folders /
+  Settings become top-level destinations in a bottom navigation bar on
+  phones and a navigation rail from medium widths up; on tablets and
+  foldables the message list and the open message sit side by side
+  (hinge-aware), the open row is highlighted, and the resume cursor lands in
+  that split with the message preselected. Hardware keyboards get Ctrl+N
+  (compose), Ctrl+R / Ctrl+Shift+R (reply / reply-all), Ctrl+Shift+U /
+  Ctrl+Shift+L (toggle read / flag) and a j/k row cursor with Enter to
+  open. Visible lists poll quietly every minute; an "Offline - showing
+  cached mail" banner appears while there is no validated internet path,
+  cached messages stay readable, and a send that fails offline is queued
+  with a stable Message-ID and sent automatically on reconnect (the server
+  deduplicates a retry it already delivered). Optional new-mail
+  notifications check INBOX in the background about every 15 minutes (opt
+  in from Settings; the permission is requested on Android 13+); tapping
+  one opens the message. Reader-side flag and dispose changes now mirror
+  into the list without a refresh, every failure gets a plain-language
+  message, an expired session returns to sign-in with a reason, predictive
+  back is enabled, and release builds are shrunk and obfuscated with R8
+  (37.8 MB debug -> 4.9 MB release).
+- **Play Console release notes from the changelog.** The prod Android upload
+  in `android.yml` now writes release notes for gradle-play-publisher from
+  the released `CHANGELOG.md` section: the bold headline of every
+  `Android:`-prefixed entry, grouped by category under a "See CHANGELOG.md
+  for details." lead, trimmed on whole lines to Google Play's 500-character
+  cap (`.github/scripts/play-release-notes.py`). The `Android:` prefix is
+  the Android counterpart of `Apple:` - a new `android-changelog.yml` gate
+  requires it on PRs touching the client sources (both gates now share
+  `check-client-changelog.sh`), and `scripts-tests.yml` fails a PR whose
+  pending Android headlines no longer fit the budget.
+
+### Changed
+- Apple: **Narrower reader-view margins.** The reader-mode stylesheet's
+  side padding is halved (20px to 10px per side), giving the message body
+  more width; vertical padding and the reading-width cap are unchanged.
+
+### Fixed
+- **Cached message bodies now really go away when a message does.** The API
+  Lambdas share one IAM policy that granted only `s3:GetObject`/`s3:PutObject`
+  on the raw-message cache bucket, so every endpoint that retires a cached
+  body — `send` discarding a superseded draft, `save_draft` replacing or
+  discarding one, `purge_messages`, and `empty_trash` — had its delete refused.
+  An expunged draft or purged message stayed readable through `fetch_message`
+  until the bucket lifecycle rule aged it out. Those four endpoints now hold
+  `s3:DeleteObject` on that bucket; the rest of the fleet is unchanged.
+  `empty_trash` failed silently on top of this, because the batch delete it
+  uses reports a refused key inside a successful response instead of raising —
+  that response is now inspected, so a future failure is logged rather than
+  reported as success.
+- Apple: **Column-resize handle detaches its pan recognizer on the main actor.**
+  The iPad message-list resize coordinator removed its window-level gesture
+  recognizer from `deinit`, which runs on whichever thread drops the last
+  reference — a UIKit call with no main-thread guarantee. The teardown now
+  hops to the main actor, so a coordinator released off the main thread can
+  no longer leave a recognizer installed on a live window, where it would
+  cancel drags anywhere in the app.
+- Apple: **A signature on its own no longer counts as a draft.** With a
+  signature configured in Settings, every new message the composer opened
+  arrived with the signature already in the body — so abandoning one raised
+  the "Discard draft?" dialog on macOS and iPad, and leaving one open long
+  enough saved a draft to the server containing nothing but the signature.
+  The composer now asks whether the *user* wrote anything rather than whether
+  the body is empty. A reply's quoted original and a resumed draft's body are
+  still content, as they were.
+- Apple: **One compose model per composer.** Opening a compose window or
+  sheet built the compose view model twice — and with it a second WebKit
+  rich-text editor — before SwiftUI discarded the extra copy, so every
+  composer cost twice the memory and startup work it needed. The model is
+  now built once, on every platform.
+- Apple: **Editing in the Rich Text pane no longer sends a stale plain-text
+  part.** A composer that opens with a body already in it — a resumed draft,
+  a reply, or any message at all once a signature preference is set — used to
+  ship that untouched seed as the message's `text/plain` part while the
+  `text/html` part carried what was actually typed. A plain-text recipient
+  read text the sender never wrote, and reopening the draft (which prefers
+  the plain part) brought back the pre-edit body, so the edit looked lost.
+  The two parts now agree: the pane the user actually wrote in wins.
+- Apple: **Compose windows stop accumulating.** On macOS, iPadOS, and
+  visionOS the compose scene group was keyed by the seed draft, and every
+  compose session mints a new one, so SwiftUI retained a whole composer —
+  view model, rich-text editor, and its web view — per session for the life
+  of the app. Compose windows now take a recycled slot instead, which keeps
+  a reply and a forward open side by side while bounding what is retained
+  by how many composers are open at once. Measured on macOS: the per-session
+  cost drops from ~8 MB to under 1 MB, flat across ten sessions.
+- Apple: **Closing an untouched compose window no longer demands a decision.**
+  On macOS, Cmd+W and the red close button put up the three-way "Discard
+  draft?" dialog even over a composer nobody had typed in, where every answer
+  threw away the same nothing. Both now run the same check the toolbar Cancel
+  button does and close straight away, and still ask whenever there is a draft
+  worth deciding about.
+- **Web app: the folder rail no longer opens in the previous account's
+  shape.** Collapse state for the Subscribed and All folders sections, and
+  for individual folders, is now stored per user rather than under one
+  browser-wide key, so a second account signing in gets its own rail
+  instead of inheriting the first account's collapsed sections. The old
+  unscoped keys — which also held the previous account's folder names — are
+  cleared at the next login or logout.
+- **Web app: cached folder and address lists no longer leak between
+  accounts on a shared browser.** The localStorage caches are now keyed
+  per user and swept at login as well as logout, so signing in as a
+  different account fetches that account's data instead of serving the
+  previous user's cache (which login only cleared if the previous user
+  had used the Logout button).
+- Apple: **Ghost folder row over the sidebar section header.** On macOS, creating or
+  deleting a folder left the selected folder's row image painted over the "All folders"
+  header, hiding the header text until the app was relaunched. The sidebar's two sections
+  are now list sections rather than disclosure groups holding the rows, so a section
+  header is no longer part of the row-recycling pool.
+- **Triage dashboard finds PRs on locked issues.** The PR column relied on
+  GitHub cross-reference events, and GitHub records none on a locked
+  conversation - so once bot-opened issues began locking at creation
+  (`lock-bot-issues.yml`, 2026-08-16) every fixer PR vanished from the board
+  (e.g. #1129 showed no PR although #1135 addressed it). The dashboard now
+  also scans the repo's PRs for a closing reference, a `#N` mention in the
+  body, or a `fixer/N-...` head branch, and unions that with the timeline.
+
 ## [1.2.3] - 2026-08-17
 
 ### Added
