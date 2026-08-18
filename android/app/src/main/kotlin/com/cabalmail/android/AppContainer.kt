@@ -9,7 +9,7 @@ import com.cabalmail.android.ui.compose.ShareIntake
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.CognitoAuthService
-import com.cabalmail.kit.auth.EncryptedTokenStore
+import com.cabalmail.kit.auth.KeystoreTokenStore
 import com.cabalmail.kit.auth.TokenStore
 import com.cabalmail.kit.cache.AddressRepository
 import com.cabalmail.kit.cache.BimiRepository
@@ -66,7 +66,7 @@ class AppContainer(
             cache = DataStoreConfigCache(appContext.configDataStore),
         )
 
-    val tokenStore: TokenStore by lazy { EncryptedTokenStore(appContext) }
+    val tokenStore: TokenStore by lazy { KeystoreTokenStore(appContext) }
 
     val envelopeCache: EnvelopeCache by lazy {
         RoomEnvelopeCache.open(appContext)
