@@ -7,6 +7,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -16,6 +17,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.ui.compose.ComposeLaunch
+import com.cabalmail.android.ui.compose.ComposeScreen
+import com.cabalmail.android.ui.compose.ComposeViewModel
 import com.cabalmail.android.ui.mail.FolderListScreen
 import com.cabalmail.android.ui.mail.FoldersViewModel
 import com.cabalmail.android.ui.mail.MessageDetailScreen
@@ -25,6 +29,7 @@ import com.cabalmail.android.ui.mail.MessageListViewModel
 import com.cabalmail.android.ui.mail.SearchScreen
 import com.cabalmail.android.ui.mail.SearchViewModel
 import com.cabalmail.kit.models.NavState
+import kotlinx.coroutines.launch
 
 /**
  * Phone navigation graph for the mail flow. Folder paths ride as encoded
@@ -37,6 +42,33 @@ fun CabalmailNavHost(
     onSignOut: () -> Unit,
 ) {
     val navController = rememberNavController()
+    val scope = rememberCoroutineScope()
+
+    // Every compose entry stages a seed draft in the local buffer first and
+    // navigates by id (see ComposeLaunch).
+    val openCompose: (String) -> Unit = { draftId -> navController.navigate("compose/$draftId") }
+    val composeNew: () -> Unit = {
+        scope.launch { openCompose(ComposeLaunch.stage(container, ComposeLaunch.blank())) }
+    }
+
+    // Shared content (ACTION_SEND) lands in a fresh compose, once.
+    LaunchedEffect(Unit) {
+        container.shareIntake.pending.collect { pending ->
+            if (pending != null) {
+                val content = container.shareIntake.consume() ?: return@collect
+                val draft = ComposeLaunch.fromShare(container, content)
+                openCompose(ComposeLaunch.stage(container, draft))
+            }
+        }
+    }
+
+    // A local draft left behind by a kill mid-compose (or a close whose
+    // server save failed) is offered once per launch, like the resume
+    // cursor — never opened unbidden.
+    var localDraftPrompt by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        localDraftPrompt = container.draftStore.list().firstOrNull { !it.isEmpty }?.id
+    }
 
     // Resume cursor (plan §4.5): a cursor this install wrote restores
     // silently; one from another device only offers a prompt on the folder
@@ -65,12 +97,19 @@ fun CabalmailNavHost(
                 onOpenSearch = { navController.navigate("search") },
                 onEmptyTrash = viewModel::emptyTrash,
                 onSignOut = onSignOut,
+                onCompose = composeNew,
                 resumeAvailable = resumePrompt != null,
                 onResume = {
                     resumePrompt?.let(navController::openCursor)
                     resumePrompt = null
                 },
                 onResumeDismiss = { resumePrompt = null },
+                localDraftAvailable = localDraftPrompt != null,
+                onOpenLocalDraft = {
+                    localDraftPrompt?.let(openCompose)
+                    localDraftPrompt = null
+                },
+                onLocalDraftDismiss = { localDraftPrompt = null },
             )
         }
 
@@ -92,6 +131,7 @@ fun CabalmailNavHost(
                 },
                 onOpenSearch = { navController.navigate("search?folder=${Uri.encode(folder)}") },
                 onBack = { navController.popBackStack() },
+                onCompose = composeNew,
             )
         }
 
@@ -142,6 +182,22 @@ fun CabalmailNavHost(
                 viewModel = viewModel,
                 bimiLookup = container.bimiLookup,
                 onBack = { navController.popBackStack() },
+                onCompose = openCompose,
+            )
+        }
+
+        composable(
+            route = "compose/{draftId}",
+            arguments = listOf(navArgument("draftId") { type = NavType.StringType }),
+        ) { entry ->
+            val draftId = entry.arguments?.getString("draftId").orEmpty()
+            val viewModel: ComposeViewModel =
+                viewModel(factory = ComposeViewModel.factory(container, draftId))
+            val state by viewModel.state.collectAsState()
+            ComposeScreen(
+                state = state,
+                viewModel = viewModel,
+                onDismiss = { navController.popBackStack() },
             )
         }
     }

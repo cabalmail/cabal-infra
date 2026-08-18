@@ -13,6 +13,7 @@ import com.cabalmail.kit.models.FolderList
 import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.models.MessageContent
 import com.cabalmail.kit.models.MessagePage
+import com.cabalmail.kit.models.MyDomains
 import com.cabalmail.kit.models.NavState
 import com.cabalmail.kit.models.Preferences
 import com.cabalmail.kit.models.PreferencesUpdate
@@ -20,8 +21,11 @@ import com.cabalmail.kit.models.SaveDraftResult
 import com.cabalmail.kit.models.SearchFilters
 import com.cabalmail.kit.models.SearchResult
 import com.cabalmail.kit.models.SendOutcome
+import com.cabalmail.kit.models.UploadGrant
+import com.cabalmail.kit.models.UploadGrantList
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
+import io.ktor.client.request.put
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -35,7 +39,9 @@ import io.ktor.http.isSuccess
 import io.ktor.http.takeFrom
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
@@ -194,6 +200,13 @@ class ApiClient(
     suspend fun revokeAddress(address: String) {
         call(HttpMethod.Delete, "revoke", body = buildJsonObject { put("address", address) })
     }
+
+    /**
+     * Mail apexes the caller is entitled to mint addresses on (the `/new`
+     * Lambda rejects the rest). Intersect with `Config.mailDomains` for
+     * the picker.
+     */
+    suspend fun listMyDomains(): List<String> = decode<MyDomains>(call(HttpMethod.Get, "list_my_domains")).domains
 
     /** BIMI logo URL for a sender domain, or null when there is none. */
     suspend fun fetchBimi(senderDomain: String): String? {
@@ -574,6 +587,62 @@ class ApiClient(
                     },
             )
         return decode(call(HttpMethod.Put, "save_draft", body = body))
+    }
+
+    // ---------------------------------------------------------- attachments
+
+    /**
+     * Presigned S3 PUT grants for outbound attachments, one per file in
+     * order. API Gateway caps a proxy request at 10 MB, so attachment
+     * bytes bypass `/send` entirely: PUT each file to its grant URL, then
+     * reference the returned key in `ComposeFields.attachments`. Grants
+     * expire in about two minutes — upload promptly.
+     */
+    suspend fun requestUploadUrls(files: List<Pair<String, String>>): List<UploadGrant> {
+        if (files.isEmpty()) {
+            return emptyList()
+        }
+        val body =
+            buildJsonObject {
+                put("host", host)
+                put(
+                    "files",
+                    buildJsonArray {
+                        files.forEach { (filename, mimeType) ->
+                            add(
+                                buildJsonObject {
+                                    put("filename", filename)
+                                    put("mime_type", mimeType)
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+        return decode<UploadGrantList>(call(HttpMethod.Put, "upload_url", body = body)).uploads
+    }
+
+    /**
+     * PUTs [bytes] to a presigned grant URL. No Authorization header — the
+     * URL carries its own signature — and the exact Content-Type the grant
+     * was requested with.
+     */
+    suspend fun uploadToGrant(
+        url: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ) {
+        val response =
+            httpClient.put(url) {
+                contentType(ContentType.parse(mimeType.ifBlank { "application/octet-stream" }))
+                setBody(bytes)
+            }
+        if (!response.status.isSuccess()) {
+            throw CabalmailException.ApiError(
+                httpStatus = response.status.value,
+                message = "Attachment upload failed (${response.status.value})",
+            )
+        }
     }
 
     // ------------------------------------------- preferences and nav state

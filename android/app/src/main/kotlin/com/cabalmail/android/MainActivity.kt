@@ -1,5 +1,6 @@
 package com.cabalmail.android
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,10 +15,17 @@ import com.cabalmail.android.ui.auth.SignInViewModel
 import com.cabalmail.android.ui.theme.CabalmailTheme
 
 class MainActivity : ComponentActivity() {
+    private val container: AppContainer get() = (application as CabalmailApp).container
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val container = (application as CabalmailApp).container
+        // Share-target intake (plan §5.4). Only on a fresh create: a
+        // configuration change redelivers the same intent, and the share
+        // must compose exactly once.
+        if (savedInstanceState == null) {
+            container.shareIntake.offer(intent)
+        }
         setContent {
             CabalmailTheme {
                 val viewModel: SignInViewModel =
@@ -39,5 +47,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** `singleTop` relaunches (a share while already open) arrive here. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        container.shareIntake.offer(intent)
     }
 }

@@ -3,6 +3,7 @@ package com.cabalmail.android
 import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
 import com.cabalmail.android.navigation.NavCursor
+import com.cabalmail.android.ui.compose.ShareIntake
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.CognitoAuthService
@@ -11,7 +12,9 @@ import com.cabalmail.kit.auth.TokenStore
 import com.cabalmail.kit.cache.AddressRepository
 import com.cabalmail.kit.cache.BimiRepository
 import com.cabalmail.kit.cache.BodyCache
+import com.cabalmail.kit.cache.DraftStore
 import com.cabalmail.kit.cache.EnvelopeCache
+import com.cabalmail.kit.cache.RecipientHistory
 import com.cabalmail.kit.cache.RoomEnvelopeCache
 import com.cabalmail.kit.config.Config
 import com.cabalmail.kit.config.ConfigService
@@ -43,6 +46,9 @@ class AppContainer(
 ) {
     private val appContext = context.applicationContext
 
+    /** For ContentResolver work (share intake, attachment import). */
+    val applicationContext: Context get() = appContext
+
     val httpClient: HttpClient = HttpClient(OkHttp)
 
     val configService: ConfigService =
@@ -67,8 +73,28 @@ class AppContainer(
         File(appContext.cacheDir, "attachments").apply { mkdirs() }
     }
 
-    /** App-lifetime work that outlives any one screen (nav-cursor pushes). */
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /**
+     * The local draft buffer (plan §5.3) — internal storage, so attachment
+     * copies and half-written mail never leave the sandbox.
+     */
+    val draftStore: DraftStore by lazy {
+        DraftStore(File(appContext.filesDir, "drafts"))
+    }
+
+    /** Learned recipient list for compose autocomplete. */
+    val recipientHistory: RecipientHistory by lazy {
+        RecipientHistory(File(appContext.filesDir, "recipients.json"))
+    }
+
+    /** Content shared into the app (ACTION_SEND) awaiting a compose screen. */
+    val shareIntake = ShareIntake()
+
+    /**
+     * App-lifetime work that outlives any one screen: nav-cursor pushes, and
+     * the close-without-send draft save that must finish after the compose
+     * screen's own scope is gone.
+     */
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val navCursor: NavCursor by lazy {
         NavCursor(appContext.navDataStore, appScope) { requireApi() }

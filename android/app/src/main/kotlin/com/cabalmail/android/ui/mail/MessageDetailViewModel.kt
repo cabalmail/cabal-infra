@@ -6,14 +6,20 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.kit.compose.DraftResume
+import com.cabalmail.kit.compose.ReplyBuilder
+import com.cabalmail.kit.mime.RawHeaders
 import com.cabalmail.kit.models.Attachment
+import com.cabalmail.kit.models.DraftServerRef
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.MessageContent
 import com.cabalmail.kit.models.inlineContentIds
 import com.cabalmail.kit.models.resolveInlineImages
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.contentType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +52,10 @@ data class MessageDetailUiState(
     val error: String? = null,
     /** Set after a dispose/purge/move so the screen can navigate back. */
     val departed: Boolean = false,
+    /** A compose seed is staged under this draft id; the screen navigates. */
+    val composeDraftId: String? = null,
+    /** A reply / edit-draft seed is being built. */
+    val seedingCompose: Boolean = false,
 )
 
 class MessageDetailViewModel(
@@ -59,6 +69,9 @@ class MessageDetailViewModel(
     private val json = Json { ignoreUnknownKeys = true }
 
     val isTrashFolder: Boolean = folder == "Trash"
+
+    /** Messages here are the user's own drafts: offer Edit Draft (plan §5.3). */
+    val isDraftsFolder: Boolean = folder == DRAFTS_FOLDER
 
     init {
         load()
@@ -268,6 +281,89 @@ class MessageDetailViewModel(
         }
     }
 
+    // -------------------------------------------------------------- compose
+
+    /**
+     * Seeds a reply / reply-all / forward draft (plan §5.2) into the local
+     * buffer and hands the screen its id. From defaults to the owned address
+     * the original was addressed to; threading comes from the fetched body's
+     * headers overlaid on the envelope.
+     */
+    fun startReply(mode: ReplyBuilder.Mode) {
+        val envelope = mutableState.value.envelope ?: return
+        if (mutableState.value.seedingCompose) {
+            return
+        }
+        mutableState.update { it.copy(seedingCompose = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val repository = container.requireAddressRepository()
+                val owned = (repository.addresses.value ?: repository.refresh()).map { it.address }
+                val draft =
+                    ReplyBuilder.build(
+                        envelope = envelope,
+                        content = mutableState.value.content,
+                        mode = mode,
+                        ownedAddresses = owned,
+                        sourceFolder = folder,
+                    )
+                container.draftStore.save(draft)
+                mutableState.update { it.copy(seedingCompose = false, composeDraftId = draft.id) }
+            } catch (exception: Exception) {
+                mutableState.update {
+                    it.copy(seedingCompose = false, error = exception.message ?: "Could not start reply")
+                }
+            }
+        }
+    }
+
+    /**
+     * Edit Draft: seeds compose from this Drafts-folder message. Bcc lives
+     * only in the raw headers, so the top of the raw message is fetched
+     * (presigned URL, no auth header, ranged) and parsed; the seed points
+     * at this UID so the first re-save replaces it and a send discards it.
+     */
+    fun editDraft() {
+        val envelope = mutableState.value.envelope ?: return
+        val content = mutableState.value.content ?: return
+        if (mutableState.value.seedingCompose) {
+            return
+        }
+        mutableState.update { it.copy(seedingCompose = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val api = container.requireApi()
+                val headers =
+                    runCatching {
+                        val response: HttpResponse =
+                            container.httpClient.get(content.messageRawUrl) {
+                                header("Range", "bytes=0-${RAW_HEADER_BYTES - 1}")
+                            }
+                        RawHeaders.parse(response.bodyAsText())
+                    }.getOrDefault(emptyList())
+                val validity = runCatching { api.folderStatus(folder).uidValidity }.getOrNull()
+                val draft =
+                    DraftResume.seed(
+                        envelope = envelope,
+                        content = content,
+                        rawHeaders = headers,
+                        serverRef = validity?.let { DraftServerRef(uid, it) },
+                    )
+                container.draftStore.save(draft)
+                mutableState.update { it.copy(seedingCompose = false, composeDraftId = draft.id) }
+            } catch (exception: Exception) {
+                mutableState.update {
+                    it.copy(seedingCompose = false, error = exception.message ?: "Could not open draft")
+                }
+            }
+        }
+    }
+
+    /** The screen navigated to the staged compose draft. */
+    fun consumeCompose() {
+        mutableState.update { it.copy(composeDraftId = null) }
+    }
+
     /** Lazily loads the move-destination folder list. */
     fun loadFolderChoices() {
         if (mutableState.value.folderChoices != null) {
@@ -286,6 +382,11 @@ class MessageDetailViewModel(
     }
 
     companion object {
+        const val DRAFTS_FOLDER = "Drafts"
+
+        /** Enough of a raw message to cover any sane header block. */
+        private const val RAW_HEADER_BYTES = 64 * 1024
+
         fun factory(
             container: AppContainer,
             folder: String,

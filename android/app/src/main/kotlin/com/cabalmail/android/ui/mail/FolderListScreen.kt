@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,11 +49,16 @@ fun FolderListScreen(
     onOpenSearch: () -> Unit,
     onEmptyTrash: () -> Unit,
     onSignOut: () -> Unit,
+    onCompose: () -> Unit,
     modifier: Modifier = Modifier,
     /** A foreign-device resume cursor is available (plan §4.5). */
     resumeAvailable: Boolean = false,
     onResume: () -> Unit = {},
     onResumeDismiss: () -> Unit = {},
+    /** An unsent local draft is available to reopen (plan §5.3). */
+    localDraftAvailable: Boolean = false,
+    onOpenLocalDraft: () -> Unit = {},
+    onLocalDraftDismiss: () -> Unit = {},
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -72,10 +79,32 @@ fun FolderListScreen(
             }
         }
     }
+    val localDraftMessage = stringResource(R.string.local_draft_prompt)
+    val localDraftAction = stringResource(R.string.local_draft_resume)
+    LaunchedEffect(localDraftAvailable) {
+        if (localDraftAvailable) {
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = localDraftMessage,
+                    actionLabel = localDraftAction,
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Indefinite,
+                )
+            when (result) {
+                SnackbarResult.ActionPerformed -> onOpenLocalDraft()
+                SnackbarResult.Dismissed -> onLocalDraftDismiss()
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onCompose) {
+                Icon(Icons.Default.Create, contentDescription = stringResource(R.string.compose_new))
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
