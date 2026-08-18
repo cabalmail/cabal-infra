@@ -40,5 +40,6 @@ fun userMessage(
 
 /** True for failures a retry after reconnecting can plausibly fix. */
 fun isTransient(error: Throwable): Boolean =
-    error is IOException || error is CabalmailException.Maintenance ||
+    error is IOException ||
+        error is CabalmailException.Maintenance ||
         (error is CabalmailException.ApiError && error.httpStatus in 500..599)

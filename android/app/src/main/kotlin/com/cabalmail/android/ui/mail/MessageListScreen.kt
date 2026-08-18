@@ -525,7 +525,9 @@ private fun InteractiveRow(
     // the surface, composited here so the swipe backing stays opaque.
     val rowColor =
         if (highlighted) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f).compositeOver(MaterialTheme.colorScheme.surface)
+            MaterialTheme.colorScheme.primary
+                .copy(alpha = 0.12f)
+                .compositeOver(MaterialTheme.colorScheme.surface)
         } else {
             MaterialTheme.colorScheme.surface
         }

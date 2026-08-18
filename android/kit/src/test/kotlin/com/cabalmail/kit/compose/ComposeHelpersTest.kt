@@ -53,7 +53,11 @@ class ComposeHelpersTest {
                 "me@sub.example.com",
                 staged = listOf(OutgoingAttachment("f", "text/plain", "k")),
             )
-        assertTrue(save.otherHeaders.messageId.orEmpty().isEmpty())
+        assertTrue(
+            save.otherHeaders.messageId
+                .orEmpty()
+                .isEmpty(),
+        )
         assertEquals("k", save.attachments.single().s3Key)
     }
 

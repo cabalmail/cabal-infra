@@ -102,7 +102,10 @@ class AddressesViewModel(
             return
         }
         viewModelScope.launch {
-            val all = container.configService.config.value?.mailDomains.orEmpty()
+            val all =
+                container.configService.config.value
+                    ?.mailDomains
+                    .orEmpty()
             val allowed =
                 runCatching { container.requireApi().listMyDomains() }
                     .getOrNull()
