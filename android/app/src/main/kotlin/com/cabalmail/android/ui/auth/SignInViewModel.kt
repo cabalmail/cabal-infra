@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.userMessage
 import com.cabalmail.kit.auth.MfaMethod
 import com.cabalmail.kit.auth.SignInResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +47,19 @@ class SignInViewModel(
         )
     val state: StateFlow<SignInUiState> = mutableState.asStateFlow()
 
+    init {
+        // A refreshed token the API still rejects means the session is
+        // over: drop to the sign-in screen with a reason (plan §7.5).
+        viewModelScope.launch {
+            container.authExpired.collect {
+                runCatching { container.requireAuth().signOut() }
+                mutableState.update {
+                    SignInUiState(phase = AuthPhase.SignedOut, error = "Your session expired — sign in again")
+                }
+            }
+        }
+    }
+
     fun signIn(
         username: String,
         password: String,
@@ -81,7 +95,7 @@ class SignInViewModel(
                 mutableState.update { SignInUiState(phase = phase) }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(busy = false, error = exception.message ?: "Something went wrong")
+                    it.copy(busy = false, error = userMessage(exception, "Something went wrong"))
                 }
             }
         }

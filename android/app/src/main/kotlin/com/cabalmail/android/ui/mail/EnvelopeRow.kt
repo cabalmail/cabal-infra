@@ -226,6 +226,8 @@ internal fun SwipeRow(
     onDispose: () -> Unit,
     /** Inside Trash the dispose swipe purges; the label says so. */
     isTrashFolder: Boolean = false,
+    /** Opaque backing so the swipe reveal never bleeds through; the list tints it for a highlighted row. */
+    containerColor: Color = MaterialTheme.colorScheme.surface,
     content: @Composable () -> Unit,
 ) {
     val currentToggleSeen by rememberUpdatedState(onToggleSeen)
@@ -277,7 +279,7 @@ internal fun SwipeRow(
             }
         },
     ) {
-        Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
+        Box(modifier = Modifier.background(containerColor)) {
             content()
         }
     }

@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.userMessage
 import com.cabalmail.kit.CabalmailException
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.compose.ComposePayload
@@ -155,7 +156,7 @@ class ComposeViewModel(
                     edit { it.copy(fromAddress = null) }
                 }
             }.onFailure { exception ->
-                mutableState.update { it.copy(error = exception.message ?: "Could not load addresses") }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not load addresses")) }
             }
         }
     }
@@ -200,7 +201,10 @@ class ComposeViewModel(
                 onCreated()
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(creatingAddress = false, newAddressError = exception.message ?: "Could not create address")
+                    it.copy(
+                        creatingAddress = false,
+                        newAddressError = userMessage(exception, "Could not create address"),
+                    )
                 }
             }
         }
@@ -462,7 +466,7 @@ class ComposeViewModel(
                 }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(sending = false, error = exception.message ?: "Could not send message")
+                    it.copy(sending = false, error = userMessage(exception, "Could not send message"))
                 }
             }
         }
@@ -521,7 +525,7 @@ class ComposeViewModel(
                         mutableState.update { it.copy(dismissed = true) }
                     } catch (exception: Exception) {
                         mutableState.update {
-                            it.copy(closeSaveFailure = exception.message ?: "Could not save draft")
+                            it.copy(closeSaveFailure = userMessage(exception, "Could not save draft"))
                         }
                     }
                 }

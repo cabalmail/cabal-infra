@@ -55,7 +55,8 @@ import com.cabalmail.android.R
 fun FoldersAdminScreen(
     state: FoldersAdminUiState,
     viewModel: FoldersAdminViewModel,
-    onBack: () -> Unit,
+    /** Null when hosted as a top-level destination (no back arrow). */
+    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -75,8 +76,13 @@ fun FoldersAdminScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.folders_admin_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
                     }
                 },
             )

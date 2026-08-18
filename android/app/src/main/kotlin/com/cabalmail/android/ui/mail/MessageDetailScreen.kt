@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import com.cabalmail.android.R
+import com.cabalmail.android.Shortcut
 import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
@@ -76,7 +77,27 @@ fun MessageDetailScreen(
     /** Open compose on the staged draft; `replaceMessage` pops this reader first (Edit Draft). */
     onCompose: (draftId: String, replaceMessage: Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /** False inside a side-by-side pane, where the list already has one. */
+    showBack: Boolean = true,
+    /** Keyboard chords (plan §7.2): reply, reply-all, toggle read / flag. */
+    handleShortcuts: Boolean = true,
 ) {
+    LaunchedEffect(handleShortcuts) {
+        if (!handleShortcuts) {
+            return@LaunchedEffect
+        }
+        viewModel.container.shortcuts.events.collect { shortcut ->
+            // Live state, not the parameter captured when the effect began.
+            val envelope = viewModel.state.value.envelope ?: return@collect
+            when (shortcut) {
+                Shortcut.REPLY -> viewModel.startReply(ReplyBuilder.Mode.REPLY)
+                Shortcut.REPLY_ALL -> viewModel.startReply(ReplyBuilder.Mode.REPLY_ALL)
+                Shortcut.TOGGLE_READ -> viewModel.setFlag("\\Seen", !envelope.isSeen)
+                Shortcut.TOGGLE_FLAG -> viewModel.setFlag("\\Flagged", !envelope.isFlagged)
+                Shortcut.COMPOSE -> Unit
+            }
+        }
+    }
     LaunchedEffect(state.departed) {
         if (state.departed) {
             onBack()
@@ -116,11 +137,13 @@ fun MessageDetailScreen(
             TopAppBar(
                 title = {},
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                        )
+                    if (showBack) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
                     }
                 },
                 actions = {

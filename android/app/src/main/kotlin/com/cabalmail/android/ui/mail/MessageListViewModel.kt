@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.MailEvent
+import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.DefaultSort
@@ -115,7 +117,7 @@ internal fun compactWindow(
  * for indices whose band hasn't landed.
  */
 class MessageListViewModel(
-    private val container: AppContainer,
+    internal val container: AppContainer,
     private val folder: String,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(MessageListUiState())
@@ -123,6 +125,7 @@ class MessageListViewModel(
 
     private val requestedBands = mutableSetOf<Int>()
     private var uidValidity: Long? = null
+    private var lastUidNext: Long? = null
 
     val isTrashFolder: Boolean = folder == "Trash"
 
@@ -142,6 +145,18 @@ class MessageListViewModel(
             )
         }
         refresh()
+        // Mirror reader-side changes (flags, disposals) into the window.
+        viewModelScope.launch {
+            container.mailEvents.events.collect { event ->
+                if (event.folder != folder) {
+                    return@collect
+                }
+                when (event) {
+                    is MailEvent.FlagChanged -> patchFlags(event.uids, event.flag, event.value, writeCache = false)
+                    is MailEvent.Removed -> removeFromWindow(event.uids)
+                }
+            }
+        }
     }
 
     /** The "Dispose action" preference's target folder (plan §6.3). */
@@ -155,6 +170,7 @@ class MessageListViewModel(
                 val api = container.requireApi()
                 val status = api.folderStatus(folder, includeFlagged = true)
                 uidValidity = status.uidValidity
+                lastUidNext = status.uidNext
                 status.uidValidity?.let { container.envelopeCache.reconcile(folder, it) }
                 mutableState.update { state ->
                     state.copy(
@@ -174,7 +190,41 @@ class MessageListViewModel(
                 ensureBand(0)
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(refreshing = false, error = exception.message ?: "Could not load $folder")
+                    it.copy(refreshing = false, error = userMessage(exception, "Could not load $folder"))
+                }
+            }
+        }
+    }
+
+    /**
+     * Foreground poll (plan §7.3): a cheap STATUS, and a real reload only
+     * when the folder changed underneath us. Never disturbs a selection.
+     */
+    fun poll() {
+        val current = mutableState.value
+        if (current.refreshing || current.busy || current.selecting) {
+            return
+        }
+        viewModelScope.launch {
+            val status =
+                runCatching { container.requireApi().folderStatus(folder, includeFlagged = true) }.getOrNull()
+                    ?: return@launch
+            val changed =
+                status.uidNext != lastUidNext ||
+                    status.uidValidity != uidValidity ||
+                    status.messages != current.total
+            if (changed) {
+                refresh()
+            } else {
+                mutableState.update {
+                    it.copy(
+                        counts =
+                            FolderCounts(
+                                all = status.messages ?: 0,
+                                unseen = status.unseen ?: 0,
+                                flagged = status.flagged ?: 0,
+                            ),
+                    )
                 }
             }
         }
@@ -266,7 +316,7 @@ class MessageListViewModel(
                 // A failed band may be retried on the next scroll past it.
                 requestedBands.remove(band)
                 mutableState.update {
-                    it.copy(error = exception.message ?: "Could not load messages")
+                    it.copy(error = userMessage(exception, "Could not load messages"))
                 }
             }
         }
@@ -306,7 +356,7 @@ class MessageListViewModel(
                 container.requireApi().setFlag(folder, uids.toList(), flag, value)
                 patchFlags(uids, flag, value)
             } catch (exception: Exception) {
-                mutableState.update { it.copy(error = exception.message ?: "Could not update flags") }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not update flags")) }
             }
         }
     }
@@ -330,7 +380,7 @@ class MessageListViewModel(
                 removeFromWindow(uids)
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(busy = false, error = exception.message ?: "Could not move messages")
+                    it.copy(busy = false, error = userMessage(exception, "Could not move messages"))
                 }
             }
         }
@@ -354,7 +404,7 @@ class MessageListViewModel(
                 removeFromWindow(uids)
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(busy = false, error = exception.message ?: "Could not delete messages")
+                    it.copy(busy = false, error = userMessage(exception, "Could not delete messages"))
                 }
             }
         }
@@ -372,7 +422,7 @@ class MessageListViewModel(
                     state.copy(folderChoices = folders.filterNot { it == folder })
                 }
             } catch (exception: Exception) {
-                mutableState.update { it.copy(error = exception.message ?: "Could not load folders") }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not load folders")) }
             }
         }
     }
@@ -381,6 +431,7 @@ class MessageListViewModel(
         uids: Set<Long>,
         flag: String,
         value: Boolean,
+        writeCache: Boolean = true,
     ) {
         mutableState.update { state ->
             // Count actual transitions so the pill counts track the server
@@ -408,9 +459,11 @@ class MessageListViewModel(
                 counts = state.counts?.adjustedFor(flag, gained),
             )
         }
-        val patched = mutableState.value.envelopes.values.filter { it.id in uids }
-        viewModelScope.launch {
-            container.envelopeCache.write(folder, patched)
+        if (writeCache) {
+            val patched = mutableState.value.envelopes.values.filter { it.id in uids }
+            viewModelScope.launch {
+                container.envelopeCache.write(folder, patched)
+            }
         }
     }
 

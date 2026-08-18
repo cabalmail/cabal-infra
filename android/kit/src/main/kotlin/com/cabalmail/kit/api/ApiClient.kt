@@ -65,6 +65,8 @@ class ApiClient(
     private val host: String,
     private val authService: AuthService,
     private val httpClient: HttpClient,
+    /** Invoked when a request fails 401 even after a forced refresh. */
+    private val onAuthExpired: (() -> Unit)? = null,
 ) {
     private val baseUrl = baseUrl.trimEnd('/')
 
@@ -95,6 +97,7 @@ class ApiClient(
             token = authService.forceRefreshedIdToken()
             response = execute(method, path, query, body, token)
             if (response.status == HttpStatusCode.Unauthorized) {
+                onAuthExpired?.invoke()
                 throw CabalmailException.AuthExpired()
             }
         }

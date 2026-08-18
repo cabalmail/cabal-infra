@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.SearchFilters
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -108,7 +109,7 @@ class SearchViewModel(
                 }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(searching = false, error = exception.message ?: "Search failed")
+                    it.copy(searching = false, error = userMessage(exception, "Search failed"))
                 }
             }
         }
@@ -156,7 +157,7 @@ class SearchViewModel(
                     state.copy(results = state.results.filterNot { it.id == envelope.id && it.folder == folder })
                 }
             } catch (exception: Exception) {
-                mutableState.update { it.copy(error = exception.message ?: "Could not move message") }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not move message")) }
             }
         }
     }
@@ -187,7 +188,7 @@ class SearchViewModel(
                     )
                 }
             } catch (exception: Exception) {
-                mutableState.update { it.copy(error = exception.message ?: "Could not update flags") }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not update flags")) }
             }
         }
     }

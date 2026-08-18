@@ -1,6 +1,8 @@
 package com.cabalmail.android.ui.mail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,16 +45,28 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.android.Shortcut
 import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.models.Envelope
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,8 +80,53 @@ fun MessageListScreen(
     onBack: () -> Unit,
     onCompose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** False when a side-by-side reader owns the keyboard chords (plan §7.2). */
+    handleShortcuts: Boolean = true,
+    /** The message open in an adjacent detail pane, if any. */
+    highlightedUid: Long? = null,
 ) {
     val listState = rememberLazyListState()
+    ForegroundPolling(viewModel::poll)
+
+    // Keyboard row cursor (plan §7.2): j/k (or the arrows) move it, Enter
+    // opens it, and Ctrl+Shift+U / Ctrl+Shift+L act on it. Plain letters
+    // only reach here while the list holds focus, so text fields keep theirs.
+    var cursor by remember(state.filter) { mutableStateOf<Int?>(null) }
+    val rowCount = if (state.filter == MessageFilter.ALL) state.total ?: 0 else state.filteredRows.size
+
+    // Reads the view model's live state so the shortcut collector (a
+    // long-lived coroutine) never acts on the parameter it captured.
+    fun envelopeAt(index: Int?): Envelope? =
+        index?.let {
+            val live = viewModel.state.value
+            if (live.filter == MessageFilter.ALL) live.envelopes[it] else live.filteredRows.getOrNull(it)
+        }
+    val scope = rememberCoroutineScope()
+
+    fun moveCursor(delta: Int) {
+        if (rowCount == 0) {
+            return
+        }
+        val next = ((cursor ?: -1) + delta).coerceIn(0, rowCount - 1)
+        cursor = next
+        scope.launch { listState.animateScrollToItem(next) }
+    }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+    val container = viewModel.container
+    LaunchedEffect(handleShortcuts) {
+        if (!handleShortcuts) {
+            return@LaunchedEffect
+        }
+        container.shortcuts.events.collect { shortcut ->
+            val envelope = envelopeAt(cursor) ?: return@collect
+            when (shortcut) {
+                Shortcut.TOGGLE_READ -> viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen)
+                Shortcut.TOGGLE_FLAG -> viewModel.setFlag(setOf(envelope.id), "\\Flagged", !envelope.isFlagged)
+                else -> Unit
+            }
+        }
+    }
     LaunchedEffect(listState, state.filter) {
         snapshotFlow {
             val info = listState.layoutInfo
@@ -103,7 +162,30 @@ fun MessageListScreen(
     }
 
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown || event.isCtrlPressed) {
+                        return@onPreviewKeyEvent false
+                    }
+                    when (event.key) {
+                        Key.J, Key.DirectionDown -> {
+                            moveCursor(1)
+                            true
+                        }
+                        Key.K, Key.DirectionUp -> {
+                            moveCursor(-1)
+                            true
+                        }
+                        Key.Enter, Key.NumPadEnter -> {
+                            envelopeAt(cursor)?.let(onOpenMessage) != null
+                        }
+                        else -> false
+                    }
+                },
         floatingActionButton = {
             if (!state.selecting) {
                 FloatingActionButton(onClick = onCompose) {
@@ -162,6 +244,7 @@ fun MessageListScreen(
                                     state = state,
                                     viewModel = viewModel,
                                     bimiLookup = bimiLookup,
+                                    highlighted = index == cursor || envelope.id == highlightedUid,
                                     menuOpen = menuUid == envelope.id,
                                     onMenuChange = { open -> menuUid = if (open) envelope.id else null },
                                     onOpen = { onOpenMessage(envelope) },
@@ -175,12 +258,13 @@ fun MessageListScreen(
                             HorizontalDivider()
                         }
                     } else {
-                        itemsIndexed(state.filteredRows, key = { _, it -> it.id }) { _, envelope ->
+                        itemsIndexed(state.filteredRows, key = { _, it -> it.id }) { index, envelope ->
                             InteractiveRow(
                                 envelope = envelope,
                                 state = state,
                                 viewModel = viewModel,
                                 bimiLookup = bimiLookup,
+                                highlighted = index == cursor || envelope.id == highlightedUid,
                                 menuOpen = menuUid == envelope.id,
                                 onMenuChange = { open -> menuUid = if (open) envelope.id else null },
                                 onOpen = { onOpenMessage(envelope) },
@@ -430,13 +514,22 @@ private fun InteractiveRow(
     state: MessageListUiState,
     viewModel: MessageListViewModel,
     bimiLookup: suspend (String) -> String?,
+    highlighted: Boolean,
     menuOpen: Boolean,
     onMenuChange: (Boolean) -> Unit,
     onOpen: () -> Unit,
     onDispose: () -> Unit,
     onMove: () -> Unit,
 ) {
-    Box {
+    // A keyboard-cursor or open-in-pane row gets a primary state layer over
+    // the surface, composited here so the swipe backing stays opaque.
+    val rowColor =
+        if (highlighted) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f).compositeOver(MaterialTheme.colorScheme.surface)
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
+    Box(modifier = Modifier.background(rowColor)) {
         if (state.selecting) {
             EnvelopeRow(
                 envelope = envelope,
@@ -450,6 +543,7 @@ private fun InteractiveRow(
                 onToggleSeen = { viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen) },
                 onDispose = onDispose,
                 isTrashFolder = viewModel.isTrashFolder,
+                containerColor = rowColor,
             ) {
                 EnvelopeRow(
                     envelope = envelope,

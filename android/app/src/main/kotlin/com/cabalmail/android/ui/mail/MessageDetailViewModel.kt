@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.MailEvent
+import com.cabalmail.android.userMessage
 import com.cabalmail.kit.compose.DraftResume
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.compose.SignatureFormatter
@@ -68,7 +70,7 @@ data class MessageDetailUiState(
 )
 
 class MessageDetailViewModel(
-    private val container: AppContainer,
+    internal val container: AppContainer,
     private val folder: String,
     private val uid: Long,
 ) : ViewModel() {
@@ -140,7 +142,7 @@ class MessageDetailViewModel(
                 }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(busy = false, error = exception.message ?: "Could not load message")
+                    it.copy(busy = false, error = userMessage(exception, "Could not load message"))
                 }
             }
         }
@@ -226,7 +228,7 @@ class MessageDetailViewModel(
                 mutableState.update {
                     it.copy(
                         downloading = it.downloading - attachment.id,
-                        error = exception.message ?: "Could not download attachment",
+                        error = userMessage(exception, "Could not download attachment"),
                     )
                 }
             }
@@ -266,8 +268,9 @@ class MessageDetailViewModel(
                         }
                     }
                 }
+                container.mailEvents.emit(MailEvent.FlagChanged(folder, setOf(uid), flag, value))
             } catch (exception: Exception) {
-                mutableState.update { it.copy(error = exception.message ?: "Could not update flag") }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not update flag")) }
             }
         }
     }
@@ -289,10 +292,11 @@ class MessageDetailViewModel(
                 }
                 container.envelopeCache.invalidateFolder(folder)
                 container.bodyCache.remove(folder, uid)
+                container.mailEvents.emit(MailEvent.Removed(folder, setOf(uid)))
                 mutableState.update { it.copy(busy = false, departed = true) }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(busy = false, error = exception.message ?: "Could not move message")
+                    it.copy(busy = false, error = userMessage(exception, "Could not move message"))
                 }
             }
         }
@@ -306,10 +310,11 @@ class MessageDetailViewModel(
                 container.requireApi().moveMessages(folder, destination, listOf(uid))
                 container.envelopeCache.invalidateFolder(folder)
                 container.bodyCache.remove(folder, uid)
+                container.mailEvents.emit(MailEvent.Removed(folder, setOf(uid)))
                 mutableState.update { it.copy(busy = false, departed = true) }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(busy = false, error = exception.message ?: "Could not move message")
+                    it.copy(busy = false, error = userMessage(exception, "Could not move message"))
                 }
             }
         }
@@ -348,7 +353,7 @@ class MessageDetailViewModel(
                 mutableState.update { it.copy(seedingCompose = false, composeDraftId = draft.id) }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(seedingCompose = false, error = exception.message ?: "Could not start reply")
+                    it.copy(seedingCompose = false, error = userMessage(exception, "Could not start reply"))
                 }
             }
         }
@@ -392,7 +397,7 @@ class MessageDetailViewModel(
                 }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(seedingCompose = false, error = exception.message ?: "Could not open draft")
+                    it.copy(seedingCompose = false, error = userMessage(exception, "Could not open draft"))
                 }
             }
         }
@@ -415,7 +420,7 @@ class MessageDetailViewModel(
                     state.copy(folderChoices = folders.filterNot { it == folder })
                 }
             } catch (exception: Exception) {
-                mutableState.update { it.copy(error = exception.message ?: "Could not load folders") }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not load folders")) }
             }
         }
     }

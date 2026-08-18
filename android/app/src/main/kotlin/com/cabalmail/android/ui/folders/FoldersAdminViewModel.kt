@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.FolderList
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -49,7 +50,7 @@ class FoldersAdminViewModel(
                 loadCounts()
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(refreshing = false, error = exception.message ?: "Could not load folders")
+                    it.copy(refreshing = false, error = userMessage(exception, "Could not load folders"))
                 }
             }
         }
@@ -114,7 +115,7 @@ class FoldersAdminViewModel(
                 loadCounts()
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(creating = false, error = exception.message ?: "Could not create folder")
+                    it.copy(creating = false, error = userMessage(exception, "Could not create folder"))
                 }
             }
         }
@@ -134,7 +135,7 @@ class FoldersAdminViewModel(
                 block(container.requireApi())
                 mutableState.update { it.copy(busy = it.busy - folder) }
             } catch (exception: Exception) {
-                mutableState.update { it.copy(busy = it.busy - folder, error = exception.message ?: failure) }
+                mutableState.update { it.copy(busy = it.busy - folder, error = userMessage(exception, failure)) }
             }
         }
     }

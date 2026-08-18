@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.Address
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,7 +56,7 @@ class AddressesViewModel(
                 mutableState.update { it.copy(refreshing = false) }
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(refreshing = false, error = exception.message ?: "Could not load addresses")
+                    it.copy(refreshing = false, error = userMessage(exception, "Could not load addresses"))
                 }
             }
         }
@@ -90,7 +91,7 @@ class AddressesViewModel(
                 block(container.requireAddressRepository())
                 mutableState.update { it.copy(busy = it.busy - address) }
             } catch (exception: Exception) {
-                mutableState.update { it.copy(busy = it.busy - address, error = exception.message ?: failure) }
+                mutableState.update { it.copy(busy = it.busy - address, error = userMessage(exception, failure)) }
             }
         }
     }
@@ -126,7 +127,7 @@ class AddressesViewModel(
                 onCreated()
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(creating = false, createError = exception.message ?: "Could not create address")
+                    it.copy(creating = false, createError = userMessage(exception, "Could not create address"))
                 }
             }
         }

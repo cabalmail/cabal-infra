@@ -133,6 +133,12 @@
     <string name="new_address_no_domains">No domains available to you</string>
     <string name="new_address_preview">%1$s@%2$s.%3$s</string>
 
+    <!-- Shell -->
+    <string name="nav_mail">Mail</string>
+    <string name="nav_folders">Folders</string>
+    <string name="offline_banner">Offline — showing cached mail</string>
+    <string name="detail_placeholder">Select a message to read it</string>
+
     <!-- Addresses -->
     <string name="addresses_title">Addresses</string>
     <string name="addresses_request_new">Request new address</string>

@@ -63,7 +63,8 @@ fun SettingsScreen(
     preferences: AppPreferences,
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
     onSignOut: () -> Unit,
-    onBack: () -> Unit,
+    /** Null when hosted as a top-level destination (no back arrow). */
+    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -73,8 +74,13 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
                     }
                 },
             )
