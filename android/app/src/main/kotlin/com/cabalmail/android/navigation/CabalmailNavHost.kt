@@ -1,6 +1,14 @@
 package com.cabalmail.android.navigation
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -9,6 +17,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -17,6 +29,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.R
 import com.cabalmail.android.ui.compose.ComposeLaunch
 import com.cabalmail.android.ui.compose.ComposeScreen
 import com.cabalmail.android.ui.compose.ComposeViewModel
@@ -64,10 +77,24 @@ fun CabalmailNavHost(
 
     // A local draft left behind by a kill mid-compose (or a close whose
     // server save failed) is offered once per launch, like the resume
-    // cursor — never opened unbidden.
-    var localDraftPrompt by remember { mutableStateOf<String?>(null) }
+    // cursor — never opened unbidden. Hosted here rather than on the folder
+    // screen because a same-install resume cursor may land elsewhere.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val localDraftMessage = stringResource(R.string.local_draft_prompt)
+    val localDraftAction = stringResource(R.string.local_draft_resume)
     LaunchedEffect(Unit) {
-        localDraftPrompt = container.draftStore.list().firstOrNull { !it.isEmpty }?.id
+        container.draftStore.pruneEmpty()
+        val draftId = container.draftStore.list().firstOrNull()?.id ?: return@LaunchedEffect
+        val result =
+            snackbarHostState.showSnackbar(
+                message = localDraftMessage,
+                actionLabel = localDraftAction,
+                withDismissAction = true,
+                duration = SnackbarDuration.Indefinite,
+            )
+        if (result == SnackbarResult.ActionPerformed) {
+            openCompose(draftId)
+        }
     }
 
     // Resume cursor (plan §4.5): a cursor this install wrote restores
@@ -83,6 +110,38 @@ fun CabalmailNavHost(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
+        MailNavGraph(
+            navController = navController,
+            container = container,
+            onSignOut = onSignOut,
+            resumePrompt = resumePrompt,
+            onResumeConsumed = { resumePrompt = null },
+            composeNew = composeNew,
+            openCompose = openCompose,
+        )
+        // Sits above the compose FAB / reader bottom bar rather than over them.
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 88.dp),
+        )
+    }
+}
+
+@Composable
+private fun MailNavGraph(
+    navController: NavHostController,
+    container: AppContainer,
+    onSignOut: () -> Unit,
+    resumePrompt: NavState?,
+    onResumeConsumed: () -> Unit,
+    composeNew: () -> Unit,
+    openCompose: (String) -> Unit,
+) {
     NavHost(navController = navController, startDestination = "folders") {
         composable("folders") {
             val viewModel: FoldersViewModel =
@@ -101,15 +160,9 @@ fun CabalmailNavHost(
                 resumeAvailable = resumePrompt != null,
                 onResume = {
                     resumePrompt?.let(navController::openCursor)
-                    resumePrompt = null
+                    onResumeConsumed()
                 },
-                onResumeDismiss = { resumePrompt = null },
-                localDraftAvailable = localDraftPrompt != null,
-                onOpenLocalDraft = {
-                    localDraftPrompt?.let(openCompose)
-                    localDraftPrompt = null
-                },
-                onLocalDraftDismiss = { localDraftPrompt = null },
+                onResumeDismiss = onResumeConsumed,
             )
         }
 
@@ -182,7 +235,12 @@ fun CabalmailNavHost(
                 viewModel = viewModel,
                 bimiLookup = container.bimiLookup,
                 onBack = { navController.popBackStack() },
-                onCompose = openCompose,
+                onCompose = { draftId, replaceMessage ->
+                    if (replaceMessage) {
+                        navController.popBackStack()
+                    }
+                    openCompose(draftId)
+                },
             )
         }
 

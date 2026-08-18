@@ -63,7 +63,7 @@ data class ComposeUiState(
 ) {
     val recipientCount: Int get() = draft.to.size + draft.cc.size + draft.bcc.size
 
-    val canSend: Boolean get() = draft.fromAddress != null && recipientCount > 0 && !sending && !savingToServer
+    val canSend: Boolean get() = draft.fromAddress != null && recipientCount > 0 && !sending
 }
 
 /**
@@ -92,6 +92,15 @@ class ComposeViewModel(
     private val edits = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private var loaded = false
     private var dirtyForServer = false
+
+    /**
+     * Set once the session has ended (sent, closed, discarded). The 5 s
+     * local-autosave debounce can fire after the buffer was deleted and
+     * would otherwise resurrect a sent draft — which then shows up as an
+     * "unsent draft" at the next launch.
+     */
+    @Volatile
+    private var finished = false
     private var suggestionJob: Job? = null
 
     /**
@@ -313,7 +322,7 @@ class ComposeViewModel(
     }
 
     private suspend fun persistLocal() {
-        if (!loaded) {
+        if (!loaded || finished) {
             return
         }
         val draft = mutableState.value.draft
@@ -420,13 +429,21 @@ class ComposeViewModel(
         mutableState.update { it.copy(sending = true, error = null) }
         viewModelScope.launch {
             try {
-                val api = container.requireApi()
-                val staged = stageAttachments(api, draft.attachments)
-                val host = from.substringAfter('@', missingDelimiterValue = "cabalmail")
-                val messageId = pendingMessageId ?: MessageIds.generate(host).also { pendingMessageId = it }
-                val fields = ComposePayload.build(draft, from, messageId = messageId, staged = staged)
-                when (api.send(fields, draft.serverUid, draft.serverUidValidity)) {
+                // Wait for any in-flight server save so the discard names
+                // the copy that save produced, not a stale one.
+                val outcome =
+                    serverSaveMutex.withLock {
+                        val api = container.requireApi()
+                        val staged = stageAttachments(api, draft.attachments)
+                        val host = from.substringAfter('@', missingDelimiterValue = "cabalmail")
+                        val messageId = pendingMessageId ?: MessageIds.generate(host).also { pendingMessageId = it }
+                        val fields = ComposePayload.build(draft, from, messageId = messageId, staged = staged)
+                        val ref = mutableState.value.draft.serverRef
+                        api.send(fields, ref?.uid, ref?.uidValidity)
+                    }
+                when (outcome) {
                     is SendOutcome.Submitted -> {
+                        finished = true
                         markAnswered(draft)
                         container.recipientHistory.record(draft.to + draft.cc + draft.bcc)
                         container.draftStore.delete(draftId)
@@ -481,6 +498,7 @@ class ComposeViewModel(
             persistLocal()
             when {
                 draft.isEmpty -> {
+                    finished = true
                     discardServerCopy(draft.serverRef)
                     container.draftStore.delete(draftId)
                     mutableState.update { it.copy(dismissed = true) }
@@ -492,6 +510,7 @@ class ComposeViewModel(
                 else -> {
                     try {
                         pushDraftToServer(draft, from)
+                        finished = true
                         container.draftStore.delete(draftId)
                         mutableState.update { it.copy(dismissed = true) }
                     } catch (exception: Exception) {
@@ -511,12 +530,17 @@ class ComposeViewModel(
 
     /** After a failed close-save: leave, keeping the local copy for later. */
     fun closeKeepingLocalCopy() {
-        mutableState.update { it.copy(closeSaveFailure = null, dismissed = true) }
+        viewModelScope.launch {
+            persistLocal()
+            finished = true
+            mutableState.update { it.copy(closeSaveFailure = null, dismissed = true) }
+        }
     }
 
     /** Deletes the local buffer and the server copy (if any), then dismisses. */
     fun discard() {
         val ref = mutableState.value.draft.serverRef
+        finished = true
         viewModelScope.launch {
             container.draftStore.delete(draftId)
             mutableState.update { it.copy(dismissed = true) }
@@ -554,7 +578,7 @@ class ComposeViewModel(
         // The debounce coroutine dies with the scope; do a last synchronous
         // best-effort flush so an edit inside the 5 s window is not lost.
         val draft = mutableState.value.draft
-        if (loaded && !mutableState.value.dismissed && !(draft.isEmpty && draft.serverRef == null)) {
+        if (loaded && !finished && !mutableState.value.dismissed && !(draft.isEmpty && draft.serverRef == null)) {
             container.appScope.launch { container.draftStore.save(draft) }
         }
     }

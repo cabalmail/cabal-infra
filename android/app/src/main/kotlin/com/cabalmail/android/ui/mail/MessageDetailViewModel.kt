@@ -54,6 +54,11 @@ data class MessageDetailUiState(
     val departed: Boolean = false,
     /** A compose seed is staged under this draft id; the screen navigates. */
     val composeDraftId: String? = null,
+    /**
+     * The staged compose *is* this message (Edit Draft): the reader should
+     * be popped, since closing compose replaces the copy it shows.
+     */
+    val composeReplacesMessage: Boolean = false,
     /** A reply / edit-draft seed is being built. */
     val seedingCompose: Boolean = false,
 )
@@ -350,7 +355,9 @@ class MessageDetailViewModel(
                         serverRef = validity?.let { DraftServerRef(uid, it) },
                     )
                 container.draftStore.save(draft)
-                mutableState.update { it.copy(seedingCompose = false, composeDraftId = draft.id) }
+                mutableState.update {
+                    it.copy(seedingCompose = false, composeDraftId = draft.id, composeReplacesMessage = true)
+                }
             } catch (exception: Exception) {
                 mutableState.update {
                     it.copy(seedingCompose = false, error = exception.message ?: "Could not open draft")
@@ -361,7 +368,7 @@ class MessageDetailViewModel(
 
     /** The screen navigated to the staged compose draft. */
     fun consumeCompose() {
-        mutableState.update { it.copy(composeDraftId = null) }
+        mutableState.update { it.copy(composeDraftId = null, composeReplacesMessage = false) }
     }
 
     /** Lazily loads the move-destination folder list. */

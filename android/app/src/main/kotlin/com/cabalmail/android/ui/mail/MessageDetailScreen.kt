@@ -72,7 +72,8 @@ fun MessageDetailScreen(
     viewModel: MessageDetailViewModel,
     bimiLookup: suspend (String) -> String?,
     onBack: () -> Unit,
-    onCompose: (String) -> Unit,
+    /** Open compose on the staged draft; `replaceMessage` pops this reader first (Edit Draft). */
+    onCompose: (draftId: String, replaceMessage: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(state.departed) {
@@ -82,8 +83,9 @@ fun MessageDetailScreen(
     }
     LaunchedEffect(state.composeDraftId) {
         val draftId = state.composeDraftId ?: return@LaunchedEffect
+        val replace = state.composeReplacesMessage
         viewModel.consumeCompose()
-        onCompose(draftId)
+        onCompose(draftId, replace)
     }
 
     val context = LocalContext.current

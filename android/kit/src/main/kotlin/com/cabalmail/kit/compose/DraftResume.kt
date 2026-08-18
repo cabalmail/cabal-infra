@@ -51,9 +51,17 @@ object DraftResume {
         )
     }
 
-    /** Prefer the Markdown-source plain part; fall back to raw HTML. */
+    /**
+     * Prefer the Markdown-source plain part; fall back to raw HTML. Line
+     * endings are normalized to LF and the trailing newline the MIME
+     * encoder appends is dropped, so re-editing does not accrete blank
+     * lines.
+     */
     fun body(
         plainText: String?,
         htmlBody: String?,
-    ): String = plainText?.takeIf { it.isNotBlank() } ?: htmlBody.orEmpty()
+    ): String {
+        val source = plainText?.takeIf { it.isNotBlank() } ?: htmlBody.orEmpty()
+        return source.replace("\r\n", "\n").trimEnd()
+    }
 }

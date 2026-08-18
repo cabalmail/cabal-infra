@@ -55,6 +55,14 @@ class DraftStore(
         }
     }
 
+    /**
+     * Drops blank drafts that never gained content or a server copy —
+     * the seed a "new message" tap stages and the user then backs out of.
+     */
+    suspend fun pruneEmpty() {
+        list().filter { it.isEmpty && it.serverRef == null }.forEach { delete(it.id) }
+    }
+
     /** Removes the draft and every attachment copy it owned. */
     suspend fun delete(id: String) {
         withContext(Dispatchers.IO) {

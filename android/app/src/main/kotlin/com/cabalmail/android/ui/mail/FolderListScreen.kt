@@ -55,10 +55,6 @@ fun FolderListScreen(
     resumeAvailable: Boolean = false,
     onResume: () -> Unit = {},
     onResumeDismiss: () -> Unit = {},
-    /** An unsent local draft is available to reopen (plan §5.3). */
-    localDraftAvailable: Boolean = false,
-    onOpenLocalDraft: () -> Unit = {},
-    onLocalDraftDismiss: () -> Unit = {},
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -76,23 +72,6 @@ fun FolderListScreen(
             when (result) {
                 SnackbarResult.ActionPerformed -> onResume()
                 SnackbarResult.Dismissed -> onResumeDismiss()
-            }
-        }
-    }
-    val localDraftMessage = stringResource(R.string.local_draft_prompt)
-    val localDraftAction = stringResource(R.string.local_draft_resume)
-    LaunchedEffect(localDraftAvailable) {
-        if (localDraftAvailable) {
-            val result =
-                snackbarHostState.showSnackbar(
-                    message = localDraftMessage,
-                    actionLabel = localDraftAction,
-                    withDismissAction = true,
-                    duration = SnackbarDuration.Indefinite,
-                )
-            when (result) {
-                SnackbarResult.ActionPerformed -> onOpenLocalDraft()
-                SnackbarResult.Dismissed -> onLocalDraftDismiss()
             }
         }
     }

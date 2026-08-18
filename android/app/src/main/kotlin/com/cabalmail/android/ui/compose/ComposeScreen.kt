@@ -111,18 +111,18 @@ fun ComposeScreen(
         }
 
     val toFocus = remember { FocusRequester() }
-    val bodyFocus = remember { FocusRequester() }
     var focusedOnce by remember { mutableStateOf(false) }
     val draftLoaded = state.draft.updatedAt != 0L
     LaunchedEffect(draftLoaded) {
-        // Initial focus once the draft has loaded: To for a fresh compose,
-        // the body for a reply whose recipients are already set.
+        // Initial focus once the draft has loaded: To for a fresh compose.
+        // Replies leave focus alone — focusing the (tall) body scrolls the
+        // From row off the top, and the From default is the thing to check.
         if (focusedOnce || !draftLoaded) {
             return@LaunchedEffect
         }
         focusedOnce = true
-        runCatching {
-            if (state.draft.to.isEmpty()) toFocus.requestFocus() else bodyFocus.requestFocus()
+        if (state.draft.to.isEmpty()) {
+            runCatching { toFocus.requestFocus() }
         }
     }
 
@@ -275,8 +275,7 @@ fun ComposeScreen(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 240.dp)
-                            .focusRequester(bodyFocus),
+                            .heightIn(min = 240.dp),
                 )
             }
         }

@@ -79,14 +79,14 @@ fun RecipientField(
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         ) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.widthIn(min = 48.dp),
+                modifier = Modifier.widthIn(min = 48.dp).padding(top = 12.dp),
             )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -108,8 +108,8 @@ fun RecipientField(
                 }
                 val fieldModifier =
                     Modifier
-                        .widthIn(min = 120.dp)
-                        .padding(vertical = 8.dp)
+                        .widthIn(min = 96.dp)
+                        .padding(vertical = 12.dp)
                         .onFocusChanged { state ->
                             if (focused && !state.isFocused) {
                                 commit()
