@@ -50,6 +50,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.models.Envelope
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -325,7 +326,7 @@ private fun SelectionTopBar(
                     Icons.Default.Delete,
                     contentDescription =
                         stringResource(
-                            if (viewModel.isTrashFolder) R.string.purge else R.string.archive,
+                            disposeLabelRes(viewModel.isTrashFolder),
                         ),
                 )
             }
@@ -448,6 +449,7 @@ private fun InteractiveRow(
                 isSeen = envelope.isSeen,
                 onToggleSeen = { viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen) },
                 onDispose = onDispose,
+                isTrashFolder = viewModel.isTrashFolder,
             ) {
                 EnvelopeRow(
                     envelope = envelope,
@@ -495,7 +497,7 @@ private fun InteractiveRow(
                 text = {
                     Text(
                         stringResource(
-                            if (viewModel.isTrashFolder) R.string.purge else R.string.archive,
+                            disposeLabelRes(viewModel.isTrashFolder),
                         ),
                     )
                 },

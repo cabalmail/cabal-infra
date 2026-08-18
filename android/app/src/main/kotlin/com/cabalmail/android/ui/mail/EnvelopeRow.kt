@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.LocalRowPadding
+import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.hasAuthFailure
 import com.cabalmail.kit.models.mailboxAddress
@@ -72,7 +74,7 @@ fun EnvelopeRow(
             modifier
                 .fillMaxWidth()
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = LocalRowPadding.current),
     ) {
         if (checked != null) {
             Checkbox(checked = checked, onCheckedChange = { onClick() })
@@ -222,6 +224,8 @@ internal fun SwipeRow(
     isSeen: Boolean,
     onToggleSeen: () -> Unit,
     onDispose: () -> Unit,
+    /** Inside Trash the dispose swipe purges; the label says so. */
+    isTrashFolder: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val currentToggleSeen by rememberUpdatedState(onToggleSeen)
@@ -266,7 +270,7 @@ internal fun SwipeRow(
                             if (swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
                                 if (isSeen) R.string.mark_unread else R.string.mark_read
                             } else {
-                                R.string.archive
+                                disposeLabelRes(isTrashFolder)
                             },
                         ),
                 )

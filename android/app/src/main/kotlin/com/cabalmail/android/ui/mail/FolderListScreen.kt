@@ -9,9 +9,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -39,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.kit.settings.FolderCountDisplay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,13 +54,19 @@ fun FolderListScreen(
     onEmptyTrash: () -> Unit,
     onSignOut: () -> Unit,
     onCompose: () -> Unit,
+    onOpenAddresses: () -> Unit,
+    onOpenFolders: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** What the per-folder badge shows (plan §6.3 "Folder count display"). */
+    countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
     /** A foreign-device resume cursor is available (plan §4.5). */
     resumeAvailable: Boolean = false,
     onResume: () -> Unit = {},
     onResumeDismiss: () -> Unit = {},
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val resumeMessage = stringResource(R.string.resume_prompt)
     val resumeAction = stringResource(R.string.resume_action)
@@ -91,8 +101,38 @@ fun FolderListScreen(
                     IconButton(onClick = onOpenSearch) {
                         Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
                     }
-                    TextButton(onClick = onSignOut) {
-                        Text(stringResource(R.string.sign_out))
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_actions))
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.addresses_title)) },
+                            onClick = {
+                                menuOpen = false
+                                onOpenAddresses()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.folders_admin_title)) },
+                            onClick = {
+                                menuOpen = false
+                                onOpenFolders()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.settings_title)) },
+                            onClick = {
+                                menuOpen = false
+                                onOpenSettings()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.sign_out)) },
+                            onClick = {
+                                menuOpen = false
+                                onSignOut()
+                            },
+                        )
                     }
                 },
             )
@@ -119,9 +159,18 @@ fun FolderListScreen(
                         headlineContent = { Text(folder) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                val unseen = state.statuses[folder]?.unseen ?: 0
-                                if (unseen > 0) {
-                                    Badge { Text(unseen.toString()) }
+                                val status = state.statuses[folder]
+                                val unseen = status?.unseen ?: 0
+                                val total = status?.messages ?: 0
+                                val badge =
+                                    when (countDisplay) {
+                                        FolderCountDisplay.UNREAD -> unseen.takeIf { it > 0 }?.toString()
+                                        FolderCountDisplay.TOTAL -> total.takeIf { it > 0 }?.toString()
+                                        FolderCountDisplay.BOTH ->
+                                            if (total > 0) "$unseen / $total" else null
+                                    }
+                                if (badge != null) {
+                                    Badge { Text(badge) }
                                 }
                                 if (folder == FoldersViewModel.TRASH_FOLDER) {
                                     IconButton(onClick = { confirmingEmptyTrash = true }) {

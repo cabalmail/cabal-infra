@@ -148,6 +148,12 @@ class ComposeViewModel(
                 repository.addresses.value ?: repository.refresh()
             }.onSuccess { addresses ->
                 mutableState.update { it.copy(addresses = addresses) }
+                // A preselected/resumed From the user no longer owns (revoked
+                // since) cannot send; clear it so the picker leads again.
+                val from = mutableState.value.draft.fromAddress
+                if (from != null && addresses.none { it.address.equals(from, ignoreCase = true) }) {
+                    edit { it.copy(fromAddress = null) }
+                }
             }.onFailure { exception ->
                 mutableState.update { it.copy(error = exception.message ?: "Could not load addresses") }
             }

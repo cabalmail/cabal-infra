@@ -77,6 +77,12 @@ data class Draft(
     val replySourceFolder: String? = null,
     val replySourceUid: Long? = null,
     val attachments: List<DraftAttachment> = emptyList(),
+    /**
+     * The body as seeded (signature scaffold, reply quote, forward banner)
+     * so an untouched seed still counts as [isEmpty]. Empty for resumed
+     * server drafts, whose body is user content by definition.
+     */
+    val seedBody: String = "",
 ) {
     /** The server coordinates when both halves are present. */
     val serverRef: DraftServerRef?
@@ -89,9 +95,10 @@ data class Draft(
     fun withServerRef(ref: DraftServerRef?): Draft = copy(serverUid = ref?.uid, serverUidValidity = ref?.uidValidity)
 
     /**
-     * Nothing worth keeping: no recipients, subject, body, or attachments.
-     * A selected From alone does not make a draft (the picker is the first
-     * thing every compose touches).
+     * Nothing worth keeping: no recipients, subject, or attachments, and a
+     * body the user has not touched since it was seeded. A selected From
+     * alone does not make a draft (the picker is the first thing every
+     * compose touches), and neither does an untouched signature or quote.
      */
     val isEmpty: Boolean
         get() =
@@ -99,6 +106,6 @@ data class Draft(
                 cc.isEmpty() &&
                 bcc.isEmpty() &&
                 subject.isBlank() &&
-                body.isBlank() &&
-                attachments.isEmpty()
+                attachments.isEmpty() &&
+                (body.isBlank() || body.trim() == seedBody.trim())
 }
