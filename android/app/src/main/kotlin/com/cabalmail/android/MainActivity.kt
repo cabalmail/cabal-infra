@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
         // must compose exactly once.
         if (savedInstanceState == null) {
             container.shareIntake.offer(intent)
+            container.openIntake.offer(intent)
         }
         setContent {
             val preferences by container.preferences.preferences.collectAsState()
@@ -114,5 +115,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         container.shareIntake.offer(intent)
+        container.openIntake.offer(intent)
     }
 }

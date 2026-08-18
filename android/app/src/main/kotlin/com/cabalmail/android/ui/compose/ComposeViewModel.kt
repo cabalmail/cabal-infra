@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.isTransient
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.CabalmailException
 import com.cabalmail.kit.api.ApiClient
@@ -437,7 +438,15 @@ class ComposeViewModel(
             return
         }
         mutableState.update { it.copy(sending = true, error = null) }
+        val host = from.substringAfter('@', missingDelimiterValue = "cabalmail")
+        val messageId = pendingMessageId ?: MessageIds.generate(host).also { pendingMessageId = it }
         viewModelScope.launch {
+            // Offline: straight to the outbox (plan §7.4); it sends on
+            // reconnect under this same Message-ID.
+            if (!container.connectivity.online.value) {
+                queueForLater(messageId)
+                return@launch
+            }
             try {
                 // Wait for any in-flight server save so the discard names
                 // the copy that save produced, not a stale one.
@@ -445,8 +454,6 @@ class ComposeViewModel(
                     serverSaveMutex.withLock {
                         val api = container.requireApi()
                         val staged = stageAttachments(api, draft.attachments)
-                        val host = from.substringAfter('@', missingDelimiterValue = "cabalmail")
-                        val messageId = pendingMessageId ?: MessageIds.generate(host).also { pendingMessageId = it }
                         val fields = ComposePayload.build(draft, from, messageId = messageId, staged = staged)
                         val ref = mutableState.value.draft.serverRef
                         api.send(fields, ref?.uid, ref?.uidValidity)
@@ -465,11 +472,23 @@ class ComposeViewModel(
                         }
                 }
             } catch (exception: Exception) {
-                mutableState.update {
-                    it.copy(sending = false, error = userMessage(exception, "Could not send message"))
+                if (isTransient(exception)) {
+                    // Network trouble mid-send: park it rather than make the
+                    // user babysit a retry.
+                    queueForLater(messageId)
+                } else {
+                    mutableState.update {
+                        it.copy(sending = false, error = userMessage(exception, "Could not send message"))
+                    }
                 }
             }
         }
+    }
+
+    private suspend fun queueForLater(messageId: String) {
+        finished = true
+        container.sendQueue.enqueue(mutableState.value.draft, messageId)
+        mutableState.update { it.copy(sending = false, dismissed = true) }
     }
 
     /** Best-effort `\Answered` on the replied-to message. */

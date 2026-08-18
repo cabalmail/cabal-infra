@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Offline banner and send-queue reconnect trigger (plan §7.4). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- New-mail notifications (plan §7.3), requested at runtime on API 33+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- enableOnBackInvokedCallback: predictive back (plan §7.1) on API 33+;
          ignored below, which lint flags against the API 31 floor. -->

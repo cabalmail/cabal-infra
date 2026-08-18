@@ -3,6 +3,8 @@ package com.cabalmail.android
 import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
 import com.cabalmail.android.navigation.NavCursor
+import com.cabalmail.android.ui.compose.OpenIntake
+import com.cabalmail.android.ui.compose.SendQueue
 import com.cabalmail.android.ui.compose.ShareIntake
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
@@ -95,6 +97,9 @@ class AppContainer(
     /** Content shared into the app (ACTION_SEND) awaiting a compose screen. */
     val shareIntake = ShareIntake()
 
+    /** A notification tap's target message awaiting the navigation host. */
+    val openIntake = OpenIntake()
+
     /** Hardware-keyboard chords from the activity to whichever screen is up. */
     val shortcuts = ShortcutBus()
 
@@ -106,6 +111,9 @@ class AppContainer(
 
     /** Fires when the API rejects a refreshed token: the session is gone. */
     val authExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** The outbox: queued sends retried on reconnect and at launch (plan §7.4). */
+    val sendQueue: SendQueue by lazy { SendQueue(this).also { it.start() } }
 
     /**
      * App-lifetime work that outlives any one screen: nav-cursor pushes, and

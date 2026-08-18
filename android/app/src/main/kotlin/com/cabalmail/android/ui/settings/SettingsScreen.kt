@@ -1,6 +1,10 @@
 package com.cabalmail.android.ui.settings
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.cabalmail.android.BuildConfig
 import com.cabalmail.android.R
+import com.cabalmail.android.notifications.NewMailSync
 import com.cabalmail.kit.settings.Accent
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.AppTheme
@@ -169,6 +174,12 @@ fun SettingsScreen(
                 onSelect = { value -> onUpdate { it.copy(disposeAction = value) } },
             )
 
+            SectionHeader(stringResource(R.string.settings_notifications))
+            NotificationsRow(
+                enabled = preferences.notificationsEnabled,
+                onChange = { value -> onUpdate { it.copy(notificationsEnabled = value) } },
+            )
+
             SectionHeader(stringResource(R.string.settings_appearance))
             EnumRow(
                 title = stringResource(R.string.settings_theme),
@@ -217,6 +228,48 @@ fun SettingsScreen(
 }
 
 // --------------------------------------------------------------- rows
+
+/**
+ * The new-mail toggle (plan §7.3): turning it on asks for the notification
+ * permission on API 33+ and schedules the periodic sync; off cancels it.
+ */
+@Composable
+private fun NotificationsRow(
+    enabled: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    val context = LocalContext.current
+    var denied by remember { mutableStateOf(false) }
+    val enable = {
+        NewMailSync.clearBaseline(context)
+        NewMailSync.schedule(context, enabled = true)
+        onChange(true)
+    }
+    val permission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) enable() else denied = true
+        }
+    ToggleRow(
+        title = stringResource(R.string.settings_new_mail_notifications),
+        checked = enabled,
+        supporting =
+            if (denied) {
+                stringResource(R.string.settings_notifications_denied)
+            } else {
+                stringResource(R.string.settings_new_mail_notifications_hint)
+            },
+        onChange = { value ->
+            if (!value) {
+                NewMailSync.schedule(context, enabled = false)
+                onChange(false)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !NewMailSync.canPost(context)) {
+                permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                enable()
+            }
+        },
+    )
+}
 
 @Composable
 private fun SectionHeader(title: String) {

@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -52,6 +53,7 @@ import androidx.window.core.layout.WindowWidthSizeClass
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
+import com.cabalmail.android.notifications.NewMailSync
 import com.cabalmail.android.ui.addresses.AddressesScreen
 import com.cabalmail.android.ui.addresses.AddressesViewModel
 import com.cabalmail.android.ui.compose.ComposeLaunch
@@ -119,7 +121,13 @@ fun CabalmailNavHost(
 
     // Preferences (plan §6.3): the synced subset is re-pulled on every
     // launch so web/Apple changes apply here (server wins).
-    LaunchedEffect(Unit) { container.preferences.refreshFromServer() }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        container.preferences.refreshFromServer()
+        // Keep the background sync scheduled to match the preference (a
+        // fresh install or a cleared WorkManager DB would otherwise drift).
+        NewMailSync.schedule(context, container.preferences.current().notificationsEnabled)
+    }
 
     // Ctrl+N from anywhere but an open compose (plan §7.2).
     LaunchedEffect(Unit) {
@@ -164,6 +172,23 @@ fun CabalmailNavHost(
         if (result == SnackbarResult.ActionPerformed) {
             openCompose(draftId)
         }
+    }
+
+    // Notification taps (plan §7.3) open the message: in the pane on wide
+    // windows, pushed on phones.
+    LaunchedEffect(Unit) {
+        container.openIntake.pending.collect { pending ->
+            if (pending != null) {
+                val request = container.openIntake.consume() ?: return@collect
+                navController.openCursor(NavState(folder = request.folder, uid = request.uid), compactWidth)
+            }
+        }
+    }
+
+    // Outbox (plan §7.4): retry queued sends at launch and surface outcomes.
+    LaunchedEffect(Unit) { container.sendQueue.flush() }
+    LaunchedEffect(Unit) {
+        container.sendQueue.notices.collect { notice -> snackbarHostState.showSnackbar(notice) }
     }
 
     // Resume cursor (plan §4.5): a cursor this install wrote restores

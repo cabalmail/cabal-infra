@@ -47,6 +47,7 @@ class PreferencesRepository(
         val DEFAULT_FROM_ADDRESS = stringPreferencesKey("default_from_address")
         val SIGNATURE = stringPreferencesKey("signature")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         val DEFAULT_SORT = stringPreferencesKey("default_sort")
         val DEFAULT_SORT_DESCENDING = booleanPreferencesKey("default_sort_descending")
     }
@@ -64,6 +65,9 @@ class PreferencesRepository(
             pushRequests.debounce(PUSH_DEBOUNCE_MS).collect { pushToServer() }
         }
     }
+
+    /** The persisted preferences, read now (not the eagerly-shared snapshot). */
+    suspend fun current(): AppPreferences = decode(dataStore.data.first())
 
     /** Applies a local change and schedules the server push. */
     suspend fun update(transform: (AppPreferences) -> AppPreferences) {
@@ -105,6 +109,7 @@ class PreferencesRepository(
             defaultFromAddress = store[Keys.DEFAULT_FROM_ADDRESS]?.ifEmpty { null },
             signature = store[Keys.SIGNATURE] ?: defaults.signature,
             dynamicColor = store[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
+            notificationsEnabled = store[Keys.NOTIFICATIONS_ENABLED] ?: defaults.notificationsEnabled,
             defaultSort = wireEnum<DefaultSort>(store[Keys.DEFAULT_SORT]) ?: defaults.defaultSort,
             defaultSortDescending = store[Keys.DEFAULT_SORT_DESCENDING] ?: defaults.defaultSortDescending,
         )
@@ -126,6 +131,7 @@ class PreferencesRepository(
         store[Keys.DEFAULT_FROM_ADDRESS] = value.defaultFromAddress.orEmpty()
         store[Keys.SIGNATURE] = value.signature
         store[Keys.DYNAMIC_COLOR] = value.dynamicColor
+        store[Keys.NOTIFICATIONS_ENABLED] = value.notificationsEnabled
         store[Keys.DEFAULT_SORT] = value.defaultSort.wire
         store[Keys.DEFAULT_SORT_DESCENDING] = value.defaultSortDescending
     }

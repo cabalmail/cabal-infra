@@ -53,15 +53,22 @@ android {
 
     buildTypes {
         release {
-            // R8 stays off until Phase 7 (baseline profiles + full mode land
-            // together, with keep rules written against real usage).
-            isMinifyEnabled = false
+            // Plan §7.6: R8 (full mode is AGP 8's default) with resource
+            // shrinking; keep rules live in proguard-rules.pro. Baseline
+            // profiles are still to come — see the Phase 7 PR.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            if (keystorePath != null) {
-                signingConfig = signingConfigs.getByName("upload")
+            when {
+                keystorePath != null -> signingConfig = signingConfigs.getByName("upload")
+                // Local smoke-testing of the shrunk build: sign with the debug
+                // key so it installs (`-Pcabalmail.debugSignRelease=true`).
+                // Never set in CI; the unsigned artifact stays the default.
+                providers.gradleProperty("cabalmail.debugSignRelease").isPresent ->
+                    signingConfig = signingConfigs.getByName("debug")
             }
         }
     }
@@ -119,6 +126,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.ktor.client.okhttp)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
