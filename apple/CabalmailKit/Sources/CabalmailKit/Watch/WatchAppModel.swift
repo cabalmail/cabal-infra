@@ -1,6 +1,22 @@
-import CabalmailKit
 import Foundation
-import WatchConnectivity
+
+/// The two Kit services a hand-off turns into: the client the model talks to,
+/// and the adopt step that seeds this device's keychain from the phone's
+/// tokens. Bundled so `WatchAppModel` can take both through one injection
+/// point — tests supply a fake pair and never touch the network or the
+/// keychain (see `WatchAppModelTests`).
+public struct WatchSession {
+    public let apiClient: any ApiClient
+    public let adopt: (AuthTokens, String) async throws -> Void
+
+    public init(
+        apiClient: any ApiClient,
+        adopt: @escaping (AuthTokens, String) async throws -> Void
+    ) {
+        self.apiClient = apiClient
+        self.adopt = adopt
+    }
+}
 
 /// Observable root for the watch app: owns the credential lifecycle and the
 /// address list.
@@ -13,10 +29,18 @@ import WatchConnectivity
 /// after which it refreshes ID tokens autonomously for the refresh token's
 /// lifetime. When that expires (or the phone signs out) the app falls back
 /// to `.waiting`, which tells the user to open Cabalmail on their iPhone.
+///
+/// Lives in the Kit rather than the watch app target so `swift test` can
+/// reach it (#1124): every service it depends on is already a Kit type, and
+/// the one piece that is genuinely watchOS-bound — the `WCSession` delegate
+/// that feeds `apply`/`clear` — stays behind in `CabalmailWatch` as
+/// `WatchSessionRelay`. That split is the same one `WatchHandoff` already
+/// makes: the codec is pure Foundation so it can be tested, and only the
+/// transport imports WatchConnectivity.
 @MainActor
 @Observable
-final class WatchAppModel {
-    enum Phase {
+public final class WatchAppModel {
+    public enum Phase {
         /// No credentials — ask the user to open the iPhone app.
         case waiting
         case loading
@@ -24,21 +48,21 @@ final class WatchAppModel {
         case failed(String)
     }
 
-    private(set) var phase: Phase = .waiting
+    public private(set) var phase: Phase = .waiting
 
     /// Deployment configuration from the last hand-off; drives the domain
     /// picker in the new-address flow.
-    private(set) var configuration: Configuration?
+    public private(set) var configuration: Configuration?
 
     /// Apex domains the signed-in user is entitled to mint on, per the
     /// `/list_my_domains` Lambda. Nil means "not yet fetched"; the
     /// new-address view refreshes it on appear.
-    private(set) var allowedDomainNames: Set<String>?
+    public private(set) var allowedDomainNames: Set<String>?
 
     /// Configured domains intersected with the caller's `/list_my_domains`
     /// allow list — the picker in `NewAddressView` reads this so the wrist
     /// never offers an apex the `/new` Lambda would then reject.
-    var domains: [MailDomain] {
+    public var domains: [MailDomain] {
         let all = configuration?.domains ?? []
         guard let allowed = allowedDomainNames else { return all }
         return all.filter { allowed.contains($0.domain) }
@@ -46,38 +70,57 @@ final class WatchAppModel {
 
     private let secureStore: any SecureStore
     private let defaults: UserDefaults
-    private var apiClient: URLSessionApiClient?
-    /// Retains the WCSession delegate (the session holds it weakly).
-    private var sessionRelay: SessionRelay?
+    private let makeSession: @MainActor (Configuration, any SecureStore) -> WatchSession
+    private var apiClient: (any ApiClient)?
 
     private static let configurationDefaultsKey = "cabalmail.watch.configuration"
 
-    init(secureStore: any SecureStore = KeychainSecureStore(), defaults: UserDefaults = .standard) {
+    /// - Parameter makeSession: How a `Configuration` becomes a live session.
+    ///   Defaults to the real Cognito/URLSession pair; tests inject a fake.
+    public init(
+        secureStore: any SecureStore = KeychainSecureStore(),
+        defaults: UserDefaults = .standard,
+        makeSession: @escaping @MainActor (Configuration, any SecureStore) -> WatchSession = WatchAppModel.liveSession
+    ) {
         self.secureStore = secureStore
         self.defaults = defaults
+        self.makeSession = makeSession
     }
 
-    /// Launch entry point: arm the WCSession receiver and try to restore a
-    /// previously handed-off session from local storage. Idempotent, so the
-    /// app's `.task` can call it across scene re-attaches.
-    func start() {
+    /// The shipping session: a Cognito auth service and the URLSession API
+    /// client that authenticates against it.
+    public static func liveSession(
+        configuration: Configuration,
+        secureStore: any SecureStore
+    ) -> WatchSession {
+        let auth = CognitoAuthService(configuration: configuration, secureStore: secureStore)
+        return WatchSession(
+            apiClient: URLSessionApiClient(configuration: configuration, authService: auth),
+            adopt: { tokens, username in try await auth.adopt(tokens: tokens, username: username) }
+        )
+    }
+
+    /// Launch entry point: try to restore a previously handed-off session
+    /// from local storage. Idempotent, so the app's `.task` can call it
+    /// across scene re-attaches. Arming the WCSession receiver is the app
+    /// target's job (`WatchSessionRelay`).
+    public func start() {
         #if DEBUG
         if seedPreviewStateIfRequested() { return }
         #endif
-        activateSessionIfPossible()
         if apiClient == nil {
             restoreFromStorage()
         }
     }
 
-    func refresh() async {
+    public func refresh() async {
         await loadAddresses()
     }
 
     /// Populates `allowedDomainNames` from the API. Silent-fails to "trust
     /// the configured list" so a transient error leaves the wrist usable —
     /// the `/new` Lambda is the authoritative gate either way.
-    func loadAllowedDomains() async {
+    public func loadAllowedDomains() async {
         guard let apiClient else { return }
         do {
             let list = try await apiClient.listMyDomains()
@@ -89,21 +132,15 @@ final class WatchAppModel {
 
     // MARK: - Hand-off intake
 
-    func apply(_ handoff: WatchHandoff) {
+    public func apply(_ handoff: WatchHandoff) {
         guard let data = try? JSONEncoder().encode(handoff.configuration) else { return }
         defaults.set(data, forKey: Self.configurationDefaultsKey)
         configuration = handoff.configuration
-        let auth = CognitoAuthService(
-            configuration: handoff.configuration,
-            secureStore: secureStore
-        )
-        apiClient = URLSessionApiClient(
-            configuration: handoff.configuration,
-            authService: auth
-        )
+        let session = makeSession(handoff.configuration, secureStore)
+        apiClient = session.apiClient
         Task {
             do {
-                try await auth.adopt(tokens: handoff.tokens, username: handoff.username)
+                try await session.adopt(handoff.tokens, handoff.username)
                 await loadAddresses()
             } catch {
                 phase = .failed("Couldn't store the credentials from your iPhone.")
@@ -112,7 +149,7 @@ final class WatchAppModel {
     }
 
     /// The phone signed out (or the session died): drop everything local.
-    func clear() {
+    public func clear() {
         try? secureStore.remove(SecureStoreKey.authTokens)
         try? secureStore.remove(SecureStoreKey.imapUsername)
         defaults.removeObject(forKey: Self.configurationDefaultsKey)
@@ -126,7 +163,7 @@ final class WatchAppModel {
     /// Mints a new relationship-scoped address and returns the composed
     /// string for the confirmation screen. The list refreshes in the
     /// background so it's current when the user dismisses.
-    func createAddress(
+    public func createAddress(
         username: String,
         subdomain: String,
         domain: String,
@@ -147,7 +184,7 @@ final class WatchAppModel {
     /// Revokes a burned address. The row is pruned locally only after the
     /// call succeeds (mirroring the iOS view model) — a failed revoke must
     /// not make the address look gone while it still delivers.
-    func revoke(_ address: Address) async {
+    public func revoke(_ address: Address) async {
         guard let apiClient else { return }
         do {
             try await apiClient.revokeAddress(
@@ -169,7 +206,7 @@ final class WatchAppModel {
     /// Suspends or reinstates an address. The row is updated locally only
     /// after the call succeeds (same rationale as revoke): a failed suspend
     /// must not make the address look paused while it still delivers.
-    func setSuspended(_ address: Address, to suspended: Bool) async {
+    public func setSuspended(_ address: Address, to suspended: Bool) async {
         guard let apiClient else { return }
         do {
             if suspended {
@@ -194,15 +231,6 @@ final class WatchAppModel {
 
     // MARK: - Internals
 
-    private func activateSessionIfPossible() {
-        guard WCSession.isSupported(), sessionRelay == nil else { return }
-        let relay = SessionRelay(model: self)
-        sessionRelay = relay
-        let session = WCSession.default
-        session.delegate = relay
-        session.activate()
-    }
-
     private func restoreFromStorage() {
         guard
             let data = defaults.data(forKey: Self.configurationDefaultsKey),
@@ -213,8 +241,7 @@ final class WatchAppModel {
             return
         }
         self.configuration = configuration
-        let auth = CognitoAuthService(configuration: configuration, secureStore: secureStore)
-        apiClient = URLSessionApiClient(configuration: configuration, authService: auth)
+        apiClient = makeSession(configuration, secureStore).apiClient
         Task { await loadAddresses() }
     }
 
@@ -252,13 +279,13 @@ extension WatchAppModel {
     /// with CABAL_WATCH_PREVIEW=list (or =new, which additionally auto-pushes
     /// the new-address flow) seeds a fake signed-in session instead. The API
     /// client stays nil, so nothing can reach the network from this state.
-    var previewAutoPushNewAddress: Bool {
+    public var previewAutoPushNewAddress: Bool {
         ["new", "created"].contains(
             ProcessInfo.processInfo.environment["CABAL_WATCH_PREVIEW"] ?? ""
         )
     }
 
-    var previewAutoPushDetail: Bool {
+    public var previewAutoPushDetail: Bool {
         ProcessInfo.processInfo.environment["CABAL_WATCH_PREVIEW"] == "detail"
     }
 
@@ -297,42 +324,3 @@ extension WatchAppModel {
     }
 }
 #endif
-
-/// WCSession delegate. Split out of the model because WCSession requires an
-/// NSObject delegate and calls it on its own queue; the relay decodes the
-/// context off the main actor (`WatchHandoff` is Sendable, the raw context
-/// dictionary is not) and hops to the model with the typed result.
-private final class SessionRelay: NSObject, WCSessionDelegate {
-    private weak var model: WatchAppModel?
-
-    init(model: WatchAppModel) {
-        self.model = model
-    }
-
-    func session(
-        _ session: WCSession,
-        activationDidCompleteWith activationState: WCSessionActivationState,
-        error: (any Error)?
-    ) {
-        guard activationState == .activated else { return }
-        // A context pushed while this app was dead is waiting on the
-        // session rather than being redelivered through the delegate.
-        let context = session.receivedApplicationContext
-        guard !context.isEmpty else { return }
-        dispatch(context)
-    }
-
-    func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
-        dispatch(context)
-    }
-
-    private func dispatch(_ context: [String: Any]) {
-        if let handoff = WatchHandoff.from(applicationContext: context) {
-            Task { @MainActor [weak model] in model?.apply(handoff) }
-        } else if WatchHandoff.isSignedOut(applicationContext: context) {
-            Task { @MainActor [weak model] in model?.clear() }
-        }
-        // Unknown version → ignore. An out-of-step phone app shouldn't
-        // wipe a working watch session.
-    }
-}
