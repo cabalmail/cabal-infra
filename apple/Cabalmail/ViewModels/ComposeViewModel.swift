@@ -56,7 +56,9 @@ final class ComposeViewModel {
     let client: CabalmailClient
     private(set) var draftId: UUID
     let draftStore: DraftStore
-    private let preferences: Preferences
+    /// Internal rather than private: `+Internals` derives `signatureOnlySeed`
+    /// from `signature`, and that extension is a different file.
+    let preferences: Preferences
     /// Dismisses the compose surface (sheet on iPhone, window elsewhere).
     /// Internal rather than private so the close-without-send legs in
     /// `ComposeViewModel+Internals.swift` can reach it.

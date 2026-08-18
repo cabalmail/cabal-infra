@@ -1,4 +1,5 @@
 import Foundation
+import CabalmailKit
 
 /// Which pane the outgoing MIME parts are built from.
 ///
@@ -58,5 +59,33 @@ enum ComposeBodyPolicy {
         case (true, true):
             return markdownUserEdited ? .both : .rich
         }
+    }
+
+    /// Whether the body panes hold nothing but the signature the composer
+    /// inserted itself.
+    ///
+    /// `hasDraftContent` used to ask whether the bodies were *empty*, and a
+    /// signature-seeded compose is not: `SignatureFormatter.seedBody` fills
+    /// the Markdown pane from `init`, before the user can type. So every
+    /// new message a user with a signature abandoned raised the "Discard
+    /// draft?" dialog that #1099 set out to remove, and every one they left
+    /// open long enough autosaved a server draft containing their own
+    /// signature and nothing else (#1132).
+    ///
+    /// Comparing against the seed rather than trusting a flag keeps this
+    /// honest through `importFromRichText`, which re-seeds the Markdown
+    /// pane with the user's own copy and resets the mirror: that body is
+    /// not the signature seed, so it still counts.
+    ///
+    /// Deliberately narrow. A reply's quoted original and a resumed draft's
+    /// fetched body are seeds too, and both stay content — discarding
+    /// either is the data loss this check exists to avoid.
+    static func bodyIsUntouchedSignature(
+        markdownBody: String,
+        richMirrorsMarkdown: Bool,
+        signatureOnlySeed: String
+    ) -> Bool {
+        guard !signatureOnlySeed.isEmpty, richMirrorsMarkdown else { return false }
+        return markdownBody == signatureOnlySeed
     }
 }
