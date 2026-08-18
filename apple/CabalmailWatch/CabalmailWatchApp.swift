@@ -1,3 +1,4 @@
+import CabalmailKit
 import SwiftUI
 
 /// Entry point for the watch companion app.
@@ -8,14 +9,18 @@ import SwiftUI
 @main
 struct CabalmailWatchApp: App {
     @State private var model = WatchAppModel()
+    @State private var relay = WatchSessionRelay()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(model)
                 .task {
-                    // Arms the WCSession receiver and restores a previously
-                    // handed-off session. Idempotent across `.task` re-fires.
+                    // Arms the WCSession receiver, then restores a previously
+                    // handed-off session. Both are idempotent across `.task`
+                    // re-fires. The receiver lives in this target because
+                    // WatchConnectivity has no macOS surface (#1124).
+                    relay.activate(model: model)
                     model.start()
                 }
         }

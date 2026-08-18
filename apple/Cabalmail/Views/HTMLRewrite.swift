@@ -106,7 +106,7 @@ private let readerStylesheet = """
     line-height: 1.6 !important;
   }
   body {
-    padding: 20px !important;
+    padding: 20px 10px !important;
     max-width: 680px !important;
     margin: 0 auto !important;
   }

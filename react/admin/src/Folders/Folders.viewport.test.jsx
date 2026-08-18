@@ -9,6 +9,7 @@ import { setViewport, PHONE, DESKTOP } from '../test/viewport';
 const mockGetFolderList = vi.fn();
 const mockApi = {
   getFolderList: mockGetFolderList,
+  invalidateFolderList: vi.fn(),
   subscribeFolder: vi.fn(),
   unsubscribeFolder: vi.fn(),
   deleteFolder: vi.fn(),

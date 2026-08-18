@@ -108,18 +108,27 @@ struct FolderListView: View {
                     activeSelection: selection?.path
                 )
                 if !model.subscribedFolders.isEmpty {
-                    DisclosureGroup(isExpanded: $subscribedExpanded) {
+                    // `Section(_:isExpanded:)`, not a `DisclosureGroup` holding
+                    // the rows: a `DisclosureGroup` is itself a row of the
+                    // enclosing `List`, so its header shares the row-view
+                    // recycling pool with the folder rows, and on macOS the
+                    // header slot inherits a stale row image when a section's
+                    // content count changes (#1070 — the "All folders" header
+                    // drawn as a ghost of the selected folder after a create or
+                    // delete). A `Section` header is list chrome instead, so it
+                    // is not a recycling candidate.
+                    Section(isExpanded: $subscribedExpanded) {
                         ForEach(subscribedRows) { row in
                             folderRow(row, model: model, collapsed: collapsedSet)
                         }
-                    } label: {
+                    } header: {
                         Text("Subscribed")
                     }
-                    DisclosureGroup(isExpanded: $allExpanded) {
+                    Section(isExpanded: $allExpanded) {
                         ForEach(allRows) { row in
                             folderRow(row, model: model, collapsed: collapsedSet)
                         }
-                    } label: {
+                    } header: {
                         Text("All folders")
                     }
                 } else {

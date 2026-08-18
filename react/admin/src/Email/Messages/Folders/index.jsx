@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useApi from '../../../hooks/useApi';
-import { FOLDER_LIST } from '../../../constants';
 
 /**
  * Fetches folders for current users and displays them in the email filter context
@@ -16,11 +15,6 @@ function Folders({ setFolder: setFolderProp, folder, setMessage, label }) {
 
     api.getFolderList().then(data => {
       if (cancelled) return;
-      try {
-        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
-      } catch (e) {
-        console.log(e);
-      }
       const allFolders = [...new Set([
         ...(data.data.folders),
         ...(data.data.sub_folders)

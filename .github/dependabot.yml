@@ -41,6 +41,27 @@ updates:
         patterns:
           - "*"
 
+  # The Android client's version catalog (android/gradle/libs.versions.toml).
+  # Android Lint's freshness checks (GradleDependency /
+  # AndroidGradlePluginVersion) are disabled in the Gradle lint config
+  # because this updater owns version currency; if this block is ever
+  # removed, re-enable those checks.
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "stage"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps(android)"
+    groups:
+      android-gradle:
+        patterns:
+          - "*"
+
   - package-ecosystem: "docker"
     directories:
       - "/docker/*"

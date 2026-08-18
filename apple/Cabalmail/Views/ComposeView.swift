@@ -29,7 +29,12 @@ struct ComposeView: View {
     /// renders below whichever recipient field currently holds focus.
     enum Field: Hashable { case to, cc, bcc }
 
-    @State var model: ComposeViewModel
+    /// The compose model, built once per compose surface. It arrives as a
+    /// factory rather than a value so a view struct SwiftUI is about to
+    /// discard never constructs one — see `DeferredComposeModel` (#1102).
+    @State private var deferredModel: DeferredComposeModel
+    var model: ComposeViewModel { deferredModel.model }
+
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -58,6 +63,13 @@ struct ComposeView: View {
     @State private var closeCoordinator = ComposeWindowCloseCoordinator()
     #endif
 
+    /// `@autoclosure` on purpose: the call sites read as
+    /// `ComposeView(model: ComposeViewModel(…))`, but the model is only
+    /// built when SwiftUI keeps the view (#1102).
+    init(model: @autoclosure @escaping () -> ComposeViewModel) {
+        _deferredModel = State(wrappedValue: DeferredComposeModel(model))
+    }
+
     var body: some View {
         NavigationStack {
             composeContent
@@ -68,10 +80,10 @@ struct ComposeView: View {
             .toolbar { toolbarContent }
             .task {
                 // Pick up forwarded attachments stashed by the forward
-                // action. They hand off out-of-band because the seed
-                // `Draft` travels through `openWindow` as a Codable
-                // value. Pop-once: a system-restored compose scene finds
-                // nothing and simply composes without them.
+                // action. They hand off out-of-band, keyed by seed id,
+                // rather than riding the seed itself. Pop-once: a
+                // system-restored compose scene finds nothing and simply
+                // composes without them.
                 let forwarded = appState.consumeComposeAttachments(for: model.draftId)
                 if !forwarded.isEmpty {
                     model.seedForwardedAttachments(forwarded)
@@ -83,14 +95,13 @@ struct ComposeView: View {
                 // typing doesn't take a CNContactStore hit per character.
                 recipientCandidates = await appState.contactsStore.allEntries()
                 #if os(macOS)
-                // Capture the projected Binding so the closure can flip
-                // dialog state from outside the view body. @State storage
-                // outlives the View struct, so the binding stays valid
-                // even when SwiftUI re-renders.
-                let dialogBinding = $showDiscardConfirm
-                closeCoordinator.onCloseAttempt = {
-                    dialogBinding.wrappedValue = true
-                }
+                // Cmd+W and the red close button run exactly what the
+                // toolbar Cancel button runs, so all three ask only when
+                // there is a draft to decide about (#1106). The close has
+                // already been declined by the time this fires, so the
+                // await on the WebKit bridge inside costs nothing but a
+                // window that stays up a moment longer.
+                closeCoordinator.onCloseAttempt = { await cancelOrAsk() }
                 #endif
                 if model.shouldFocusBodyOnAppear {
                     // Clear the SwiftUI focus binding so the Form can't
@@ -169,11 +180,13 @@ struct ComposeView: View {
     /// consults, computed the same way, so the question is asked exactly
     /// when the answer could matter.
     ///
-    /// Bodies come from the WebKit bridge, hence the `await` — and hence
-    /// this button being the only cancel path with the check. The macOS
-    /// window-close intercept (`closeCoordinator.onCloseAttempt`) answers
-    /// an `NSWindowDelegate` synchronously and cannot wait for the bridge,
-    /// so red-button-closing an untouched compose window still asks.
+    /// Bodies come from the WebKit bridge, hence the `await`. Every cancel
+    /// gesture runs this: the toolbar button, and on macOS the window-close
+    /// intercept that Cmd+W and the red close button go through
+    /// (`closeCoordinator.onCloseAttempt`). Wiring the intercept here is
+    /// what stopped those two asking over an untouched composer (#1106);
+    /// they can afford the bridge round trip because `windowShouldClose`
+    /// has already declined the close and returned `false`.
     private func cancelOrAsk() async {
         let bodies = await model.computeMessageBodies()
         guard !ComposeCancelPolicy.needsDecision(

@@ -95,6 +95,15 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - The app crate builds the `cabalmail` binary
 - CI: `linux.yml` runs one `cargo xtask ci` step per job. `clippy` and the widget tests run inside an `ubuntu:24.04` container — that is where the API floor is enforced, so a call needing GTK 4.16 fails `app-build` and leaves the format job green. System packages come from `linux/packaging/deps/<distro>.txt` via `.github/scripts/install-linux-deps.sh`, the same list the Debian packaging reads in Phase 8. Packaging, smoke, coverage, and the cargo-deny/tree guards are still to come; the workflow names the work item that owns each
 
+### Android Client (`android/`)
+- Toolchain: JDK 17+ on `JAVA_HOME` (CI uses Temurin 21) and an Android SDK (`local.properties` or `ANDROID_HOME`); Gradle fetches missing SDK components itself
+- Build: `cd android && ./gradlew assembleDebug`
+- Kit tests: `cd android && ./gradlew :kit:test` (JUnit 5; the `kit` module is the UI-free sibling of `CabalmailKit` — keep it free of Compose/UI dependencies)
+- App tests: `cd android && ./gradlew :app:testDebugUnitTest`
+- Lint: `cd android && ./gradlew ktlintCheck lint` (`ktlintFormat` auto-fixes). Android Lint warnings are **errors** in both modules; version-freshness checks are disabled because dependabot owns the version catalog
+- The control domain is the only build-time value (`BuildConfig.CONTROL_DOMAIN`); point local builds at a live environment via `cabalmail.controlDomain` in `~/.gradle/gradle.properties` — never commit a real domain, the checked-in default is a placeholder
+- CI: `lint.yml`'s `kotlin` job runs the same gradle gate on PRs; `android.yml` runs it again on `stage`/`main` pushes and deploys nothing to AWS (its only side effect is a Play Console upload)
+
 ### Terraform
 - Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)
 - Two stacks: `terraform/dns` (bootstrap) and `terraform/infra` (main), both owned by `infra.yml`
@@ -121,6 +130,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 | `destroy_terraform.yml` | Manual (`workflow_dispatch`) | Tears down `terraform/infra` for the selected environment. |
 | `apple.yml` | `apple/**` | Builds and tests the iOS app on a macOS runner. Deploys nothing to AWS. |
 | `linux.yml` | `linux/**` | Runs the Linux client's gate, one `cargo xtask ci` step per job; the workspace build and widget tests run in an `ubuntu:24.04` container (the GTK 4.14 API floor). Deploys nothing to AWS. |
+| `android.yml` | `android/**` | On `main`/`stage` pushes: tests (unit + ktlint + Android Lint with warnings-as-errors), an unsigned release build, then a signed AAB upload to the Play Console internal track via gradle-play-publisher (warn-green while the Play/signing secrets are absent); on `main` the upload carries Play release notes generated from the `Android:` changelog headlines by `play-release-notes.py`. PR-time linting lives in `lint.yml`'s `kotlin` job, which runs the same gradle gate. Deploys nothing to AWS. |
 | `dependabot.yml` | Schedule (daily) | Dependency update PRs. |
 Deploy workflows select environment based on branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys (see "Branches and environments" above).
 
@@ -253,6 +263,8 @@ Use semantic versioning. Record changelog entries as **fragments**, not by editi
 Don't repeat the category subheading word (or a close synonym) in the fragment text - the collator already prints it as an `### Added:`/`### Removed:`/etc. heading, so "Added a new UI element for X" reads as redundant under `### Added:`. Instead, lead with a bold noun-phrase summary followed by details: `- **New UI element for X.** <details>`. Same for `Removed`, `Deprecated`, `Changed`, `Fixed`, `Security`.
 
 Any fragment describing a change to the **Apple clients** (`apple/Cabalmail`, `apple/CabalmailMac`, `apple/CabalmailKit/Sources`) **must** prefix its entry with `Apple:` - right after the leading `- ` and before the bold summary: `- Apple: **Threaded reader.** <details>`. This prefix scopes the entry into the TestFlight "What to Test" notes: `set-testflight-notes.py` keeps only `Apple:`-prefixed entries (stripping the prefix, since it's redundant in an Apple app) and drops the rest, so an Apple change without the prefix silently vanishes from the notes testers read. A PR that touches the Apple client sources fails the `apple-changelog.yml` gate unless it adds such a fragment; opt out for non-user-facing Apple work (refactors, test-only, CI) with the `no-changelog` PR label.
+
+Likewise, a fragment describing a change to the **Android client** (`android/app/src/main`, `android/kit/src/main`) **must** prefix its entry with `Android:` - and the headline must not then repeat "Android": `- Android: **Compose with on-the-fly From.** <details>`. The Android notes budget is far tighter than Apple's: Google Play caps release notes at **500 characters for the whole release**, so `play-release-notes.py` (run on the prod upload in `android.yml`) emits **only each `Android:` entry's bold headline** - never the body - after a "See CHANGELOG.md for details." lead line, grouped by category. Write the headline as the one line a tester reads on its own: a concrete noun-phrase, ~40 characters, phase numbers and internals in the body. All of a release's Android headlines share the 500-char budget; overrun drops whole trailing headlines with a CI warning, and `scripts/tests/test_play_release_notes.py` (run by `scripts-tests.yml` on any `changelog.d/**` change) fails the PR if the pending set no longer fits. `android-changelog.yml` gates Android-source PRs the same way `apple-changelog.yml` gates Apple ones; same `no-changelog` opt-out.
 
 ## Roadmap
 

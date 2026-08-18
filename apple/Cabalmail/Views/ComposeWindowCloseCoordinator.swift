@@ -4,10 +4,17 @@ import SwiftUI
 import AppKit
 
 /// macOS-only delegate that intercepts the standard red close button on the
-/// compose window so it routes through the same "Discard draft?" dialog as
-/// the toolbar Cancel button. Without this, clicking the close button (or
-/// hitting Cmd+W) bypasses the confirmation entirely and the user gets no
-/// chance to save the draft before the window disappears.
+/// compose window so it raises the "Discard draft?" dialog. Without this,
+/// clicking the close button (or hitting Cmd+W) bypasses the confirmation
+/// entirely and the user gets no chance to save the draft before the window
+/// disappears.
+///
+/// It asks the *same* question the toolbar Cancel button asks: since #1094
+/// that question is only worth putting to the user when there is a draft to
+/// decide about, and since #1106 this path resolves it the same way. That
+/// works because `windowShouldClose` declines the close and returns `false`,
+/// so `onCloseAttempt` runs after the close has already been deferred and
+/// may await the WebKit bridge before deciding — hence its `async` type.
 ///
 /// The coordinator is held as `@State` by `ComposeView` and re-bound to the
 /// hosting `NSWindow` via `ComposeWindowCloseInterceptor` (an
@@ -20,8 +27,13 @@ import AppKit
 final class ComposeWindowCloseCoordinator: NSObject, NSWindowDelegate {
     /// Called from `windowShouldClose` when the user attempts a close and
     /// the action hasn't been pre-approved. `ComposeView` binds this to
-    /// flipping `showDiscardConfirm = true`.
-    var onCloseAttempt: (() -> Void)?
+    /// `cancelOrAsk()`, the same routine the toolbar Cancel button runs.
+    ///
+    /// `async` because that routine has to ask the WebKit bridge whether
+    /// anything was typed before it knows whether the dialog is worth
+    /// raising. The close is already declined by the time this runs, so the
+    /// window simply stays up for the round trip (#1106).
+    var onCloseAttempt: (@MainActor () async -> Void)?
     /// Set true by the dialog buttons (or by `send()` succeeding) before
     /// they invoke the model's close action, so the close call that comes
     /// next isn't intercepted. One-shot — the coordinator is thrown away
@@ -30,7 +42,11 @@ final class ComposeWindowCloseCoordinator: NSObject, NSWindowDelegate {
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if allowsClose { return true }
-        onCloseAttempt?()
+        // Decline first, decide after. AppKit gets its answer on this turn
+        // of the runloop; the handler is free to suspend, and whatever it
+        // settles on either raises the dialog or closes the window itself.
+        guard let onCloseAttempt else { return false }
+        Task { await onCloseAttempt() }
         return false
     }
 }

@@ -17,9 +17,16 @@ native Issues UI:
     "in the cycle, waiting on you", and accepted/needs-retest - mutually
     exclusive, since the fixer's reconcile swaps one for the other - both mean
     "queued for an agent, nothing to triage"; the row names which one applies
-  * related PRs (discovered via cross-reference events, since the fixer does
-    not use closing keywords) are shown per row with their open/merged/closed
-    state, linked directly - no drilling into the issue to find them
+  * related PRs are shown per row with their open/merged/closed state, linked
+    directly - no drilling into the issue to find them. They are discovered
+    two ways, unioned: GitHub's cross-reference events on the issue, and a
+    scan of the repo's PRs for a closing reference, a `#N` mention in the
+    body, or a `fixer/N-...` head branch. The scan exists because bot-opened
+    issues are locked at creation (lock-bot-issues.yml) and GitHub records no
+    cross-reference events on a locked conversation, so for those - the bulk
+    of the table - the timeline alone shows nothing (the fixer's "Addresses
+    #N" is a mention, not a closing keyword, so the "linked PR" field is
+    empty too)
   * a route column shows which pipeline owns each issue - the baseline
     tester/fixer pair (Mini) or the 27.x-beta pair (Studio, `os27` label) -
     and its pill toggles the label, re-routing the issue at triage time
@@ -134,6 +141,27 @@ query($owner: String!, $name: String!, $cursor: String) {
 }
 """
 
+# PR scan, newest first. Paged until the numbers fall below the oldest issue on
+# the board: issue and PR numbers share one sequence, so a PR that references
+# an issue is always numbered above it.
+PR_QUERY = """
+query($owner: String!, $name: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(first: 100, after: $cursor,
+                 orderBy: {field: CREATED_AT, direction: DESC}) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number title url state isDraft headRefName body
+        closingIssuesReferences(first: 20) { nodes { number } }
+      }
+    }
+  }
+}
+"""
+# Safety cap on the PR scan (pages of 100). Far above what an open board needs;
+# only reached if a stage-labelled issue is very old.
+PR_SCAN_MAX_PAGES = 25
+
 REPO_SLUG = None
 STAGES = DEFAULT_STAGES
 ACCEPT_LABEL = "accepted"
@@ -184,8 +212,8 @@ def detect_repo_slug(repo_path):
     return f"{match.group(1)}/{match.group(2)}" if match else None
 
 
-def graphql(variables):
-    """Run QUERY against the GitHub GraphQL API and return the `data` dict.
+def graphql(query, variables):
+    """Run a GraphQL query against the GitHub API and return the `data` dict.
 
     Prefers a token in GITHUB_TOKEN/GH_TOKEN (direct HTTPS call); otherwise
     shells out to `gh api graphql` so the user's normal gh login is used.
@@ -194,7 +222,7 @@ def graphql(variables):
     if token:
         req = urllib.request.Request(
             "https://api.github.com/graphql",
-            data=json.dumps({"query": QUERY, "variables": variables}).encode(),
+            data=json.dumps({"query": query, "variables": variables}).encode(),
             headers={"Authorization": f"bearer {token}",
                      "Content-Type": "application/json"},
         )
@@ -206,7 +234,7 @@ def graphql(variables):
                 "Neither GITHUB_TOKEN/GH_TOKEN is set nor is the `gh` CLI on PATH. "
                 "Install gh and run `gh auth login`, or export a token."
             )
-        cmd = ["gh", "api", "graphql", "-f", f"query={QUERY}"]
+        cmd = ["gh", "api", "graphql", "-f", f"query={query}"]
         for key, value in variables.items():
             if value is not None:
                 cmd += ["-f", f"{key}={value}"]
@@ -258,6 +286,64 @@ def rest(method, path, payload=None):
         raise RuntimeError(f"gh api failed: {proc.stderr.strip() or proc.stdout.strip()}")
 
 
+def pr_row(src):
+    """Shape a PR node (timeline source or scan node) for the row's PR list."""
+    return {
+        "number": src["number"],
+        "title": src.get("title", ""),
+        "url": src.get("url", ""),
+        "state": "draft" if (src.get("isDraft") and src.get("state") == "OPEN")
+                 else src.get("state", "").lower(),
+    }
+
+
+def referenced_issues(node, repo_slug):
+    """Issue numbers a PR node refers to: closing refs, body mentions, branch.
+
+    Body mentions follow GitHub's own autolink forms - `#N`, `owner/repo#N`, and
+    the issue/PR URL for this repo - which is what would have produced a
+    cross-reference event had the issue not been locked. `fixer/N-...` is the
+    fixer's branch convention and catches a PR whose body omits the mention.
+    """
+    refs = {n["number"] for n in (node.get("closingIssuesReferences") or {}).get("nodes", [])}
+    body = node.get("body") or ""
+    refs.update(int(n) for n in re.findall(r"(?<![\w/&])#(\d+)\b", body))
+    slug = re.escape(repo_slug)
+    refs.update(int(n) for n in re.findall(rf"(?<![\w/]){slug}#(\d+)\b", body))
+    refs.update(int(n) for n in re.findall(
+        rf"github\.com/{slug}/(?:issues|pull)/(\d+)\b", body))
+    match = re.match(r"fixer/(\d+)-", node.get("headRefName") or "")
+    if match:
+        refs.add(int(match.group(1)))
+    return refs
+
+
+def scan_prs(owner, name, wanted):
+    """Map issue number -> PR rows for every PR that references an issue in `wanted`.
+
+    Pages newest-first and stops once the PR numbers drop below the smallest
+    wanted issue number (nothing older can reference it). Returns the map and
+    whether the page cap cut the scan short.
+    """
+    found = {}
+    if not wanted:
+        return found, False
+    floor, cursor, pages = min(wanted), None, 0
+    while True:
+        data = graphql(PR_QUERY, {"owner": owner, "name": name, "cursor": cursor})
+        prs = data["repository"]["pullRequests"]
+        pages += 1
+        for node in prs["nodes"]:
+            for issue in referenced_issues(node, f"{owner}/{name}") & wanted:
+                found.setdefault(issue, []).append(pr_row(node))
+        numbers = [n["number"] for n in prs["nodes"]]
+        if not prs["pageInfo"]["hasNextPage"] or (numbers and min(numbers) < floor):
+            return found, False
+        if pages >= PR_SCAN_MAX_PAGES:
+            return found, True
+        cursor = prs["pageInfo"]["endCursor"]
+
+
 def build_model():
     """Fetch open issues and shape the triage model served at /api/data."""
     owner, name = REPO_SLUG.split("/", 1)
@@ -265,7 +351,7 @@ def build_model():
     repo_labels, all_labels_seen = set(), True
     nodes, cursor, total = [], None, 0
     while True:
-        data = graphql({"owner": owner, "name": name, "cursor": cursor})
+        data = graphql(QUERY, {"owner": owner, "name": name, "cursor": cursor})
         repo = data["repository"]
         for lab in repo["labels"]["nodes"]:
             label_colors[lab["name"]] = lab["color"]
@@ -289,19 +375,13 @@ def build_model():
         stages = [key for key, _ in STAGES if marks[key]]
         if not stages:
             continue
-        prs, seen = [], set()
+        # Cross-reference events: present only for unlocked (human-opened)
+        # issues; the PR scan below fills in the locked ones. Union of both.
+        prs = {}
         for item in node["timelineItems"]["nodes"]:
             src = (item or {}).get("source") or {}
-            if src.get("number") and src["number"] not in seen:
-                seen.add(src["number"])
-                prs.append({
-                    "number": src["number"],
-                    "title": src.get("title", ""),
-                    "url": src.get("url", ""),
-                    "state": "draft" if (src.get("isDraft") and src.get("state") == "OPEN")
-                             else src.get("state", "").lower(),
-                })
-        prs.sort(key=lambda p: p["number"])
+            if src.get("number"):
+                prs.setdefault(src["number"], pr_row(src))
         rows.append({
             "number": node["number"],
             "title": node["title"],
@@ -322,6 +402,15 @@ def build_model():
                              if n not in stage_labels and n != ROUTE_LABEL],
             "prs": prs,
         })
+
+    scanned, scan_truncated = scan_prs(owner, name, {r["number"] for r in rows})
+    for row in rows:
+        for pr in scanned.get(row["number"], []):
+            row["prs"].setdefault(pr["number"], pr)
+        row["prs"] = sorted(row["prs"].values(), key=lambda p: p["number"])
+    if scan_truncated:
+        sys.stderr.write(f"triage-dashboard: PR scan stopped after {PR_SCAN_MAX_PAGES} "
+                         "pages; PRs on the oldest issues may be missing.\n")
 
     counts = {key: sum(1 for r in rows if key in r["stages"]) for key, _ in STAGES}
     return {
@@ -710,9 +799,12 @@ PAGE = r"""<!DOCTYPE html>
     <code>accepted</code> (waiting on the fixer) or <code>needs-retest</code> (fix live,
     waiting on the tester's retest), never both, since the fixer's reconcile swaps one for
     the other around <code>fix-in-review</code>. Other open issues (and everything
-    closed) are omitted. <b>PRs</b> are discovered from GitHub cross-reference events (the
-    fixer links issues without closing keywords, so GitHub's "linked PR" field stays empty);
-    a PR that merely mentions the issue also appears here. Click a stat tile to filter to
+    closed) are omitted. <b>PRs</b> come from GitHub's cross-reference events plus a scan of
+    the repo's PRs for a closing reference, a <code>#N</code> mention, or a
+    <code>fixer/N-…</code> branch — the scan is what finds them on bot-opened issues, which
+    are locked at creation and so record no cross-reference events (and the fixer links
+    without closing keywords, so the "linked PR" field stays empty). A PR that merely
+    mentions the issue also appears here. Click a stat tile to filter to
     that stage; click it again to clear. All links open in a new tab.
     The <b>pipeline</b> column shows which tester/fixer pair owns the issue — <i>base</i>
     (the Mini, current-OS) or the route label (the Studio, 27.x-beta) — and clicking the

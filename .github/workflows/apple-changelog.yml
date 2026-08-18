@@ -43,4 +43,7 @@ jobs:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         OPT_OUT: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
-      run: ./.github/scripts/check-apple-changelog.sh
+      # Scoped to shipped client code - not Tests/, project.yml, or apple/*.md -
+      # to keep the gate off PRs with no user-facing Apple surface. Keep in
+      # sync with the apple_src filter in lint.yml.
+      run: ./.github/scripts/check-client-changelog.sh Apple '^apple/(Cabalmail|CabalmailMac|CabalmailKit/Sources)/'

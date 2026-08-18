@@ -829,6 +829,35 @@ def _reserved_response(subdomain, scope):
     }
 
 
+def new_address_response_or_none(body, domains, control_domain):
+    '''Vets the address a create request asks for -- known domain, valid DNS
+    labels and local part, subdomain not reserved -- and returns the 400 to
+    send back, or None when the request may proceed.
+
+    Shared by the two create endpoints (`new` and `new_address_admin`) for the
+    same reason publish_address_dns_records is: they must accept exactly the
+    same set of addresses, and the admin copy of these guards is the one that
+    went missing (#1072). Everything past this point differs between them --
+    who the address is recorded for, and which authorization the caller needs.
+    '''
+    if body['tld'] not in domains:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f"Unknown domain \"{body['tld']}\""})
+        }
+    try:
+        validate_dns_apex(body['tld'])
+        validate_dns_subdomain(body['subdomain'])
+        validate_local_part(body['username'])
+    except ValueError as err:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f'Invalid input: {err}'})
+        }
+    return reserved_subdomain_response_or_none(
+        body['subdomain'], body['tld'], control_domain)
+
+
 def _route53():
     '''Lazily builds the shared Route 53 client (only the DNS handlers need it,
     so non-DNS lambdas importing helper never pay for it).'''
@@ -1166,9 +1195,19 @@ def delete_prefix(bucket, prefix):
     if not prefix or not prefix.endswith('/'):
         raise ValueError(f'invalid delete prefix: {prefix!r}')
     try:
-        s3r.Bucket(bucket).objects.filter(Prefix=prefix).delete()
+        responses = s3r.Bucket(bucket).objects.filter(Prefix=prefix).delete()
     except ClientError as e:
         logging.error(e)
+        return False
+    # The batch DeleteObjects API authorizes per key and reports a refused key
+    # inside a 200 response instead of raising, so a permissions failure here
+    # is silent unless the Errors array is read back.
+    responses = responses or []
+    errors = [err for response in responses for err in response.get('Errors', [])]
+    if errors:
+        deleted = sum(len(response.get('Deleted', [])) for response in responses)
+        logging.error('delete_prefix %s/%s: %s keys refused (%s deleted), first: %s',
+                      bucket, prefix, len(errors), deleted, errors[0])
         return False
     return True
 

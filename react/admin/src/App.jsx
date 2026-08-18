@@ -55,7 +55,8 @@ import useResendThrottle from './hooks/useResendThrottle';
 // media-gated dark rules win by source order at equal specificity.
 import './AppLight.css';
 import './AppDark.css';
-import { ADDRESS_LIST, FOLDER_LIST, DATE, DESC } from './constants';
+import { DATE, DESC } from './constants';
+import { clearListCaches } from './utils/listCache';
 import { viewWhenLoggedOut } from './authViews';
 import './App.css';
 
@@ -573,6 +574,10 @@ function App() {
   // mfaVerified skips the enrollment probe when the login itself just
   // answered a TOTP challenge - that user is enrolled by definition.
   const finishLogin = useCallback((data, user, mfaVerified = false) => {
+    // A login does not always follow an explicit logout (session expiry
+    // lands on the login form directly), so stale cached lists from a
+    // previous account must be dropped here, not just in doLogout.
+    clearListCaches();
     _token = data.getIdToken().getJwtToken();
     _expires = data.getIdToken().getExpiration();
     const payload = JSON.parse(atob(_token.split('.')[1]));
@@ -905,8 +910,7 @@ function App() {
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) cognitoUser.signOut();
     }
-    localStorage.removeItem(ADDRESS_LIST);
-    localStorage.removeItem(FOLDER_LIST);
+    clearListCaches();
     setIsAdmin(false);
     pendingMfaUserRef.current = null;
     setEmailGate(null);

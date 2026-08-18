@@ -13,6 +13,7 @@ const mockReinstateAddress = vi.fn();
 
 const mockApi = {
   getAddresses: mockGetAddresses,
+  invalidateAddressList: vi.fn(),
   deleteAddress: mockDeleteAddress,
   newAddress: mockNewAddress,
   setFavorite: mockSetFavorite,

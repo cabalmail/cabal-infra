@@ -1,17 +1,13 @@
 '''Creates a new email address'''
-# pylint: disable=duplicate-code,too-many-return-statements
 import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
 from address_events import notify_containers  # pylint: disable=import-error
+from helper import new_address_response_or_none  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import publish_address_dns_records  # pylint: disable=import-error
-from helper import reserved_subdomain_response_or_none  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
-from helper import validate_dns_apex  # pylint: disable=import-error
-from helper import validate_dns_subdomain  # pylint: disable=import-error
-from helper import validate_local_part  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -26,24 +22,9 @@ def handler(event, _context):
     if error:
         return error
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    if body['tld'] not in domains:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': f"Unknown domain \"{body['tld']}\""})
-        }
-    try:
-        validate_dns_apex(body['tld'])
-        validate_dns_subdomain(body['subdomain'])
-        validate_local_part(body['username'])
-    except ValueError as err:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': f'Invalid input: {err}'})
-        }
-    reserved = reserved_subdomain_response_or_none(
-        body['subdomain'], body['tld'], control_domain)
-    if reserved:
-        return reserved
+    refusal = new_address_response_or_none(body, domains, control_domain)
+    if refusal:
+        return refusal
     if not user_authorized_for_domain(user, body['tld']):
         return {
             'statusCode': 403,

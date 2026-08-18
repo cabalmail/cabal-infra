@@ -17,14 +17,15 @@ import {
 } from 'lucide-react';
 import ConfirmDialog from '../ConfirmDialog';
 import useApi from '../hooks/useApi';
+import { useAuth } from '../contexts/AuthContext';
 import {
   FOLDER_COLLAPSED_ALL,
   FOLDER_COLLAPSED_PATHS,
   FOLDER_COLLAPSED_SUB,
-  FOLDER_LIST,
   PERMANENT_FOLDERS,
 } from '../constants';
 import { ancestorsOf, orderFolders } from '../utils/folderMeta';
+import { listCacheKey } from '../utils/listCache';
 import styles from './Folders.module.css';
 
 function readBool(key, fallback) {
@@ -184,24 +185,27 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
   const api = useApi();
   const [folders, setFolders] = useState([]);
   const [subscribed, setSubscribed] = useState([]);
-  const [collapsedSub, setCollapsedSub] = useState(() => readBool(FOLDER_COLLAPSED_SUB, false));
-  const [collapsedAll, setCollapsedAll] = useState(() => readBool(FOLDER_COLLAPSED_ALL, false));
-  const [collapsedFolders, setCollapsedFolders] = useState(() => readPathSet(FOLDER_COLLAPSED_PATHS));
+  // Collapse state is per-user: keyed like the list caches so a second
+  // account signing in from this browser gets its own rail layout rather
+  // than inheriting the previous account's — including its folder names,
+  // which live in the collapsed-paths key.
+  const { token } = useAuth();
+  const subKey = listCacheKey(FOLDER_COLLAPSED_SUB, token);
+  const allKey = listCacheKey(FOLDER_COLLAPSED_ALL, token);
+  const pathsKey = listCacheKey(FOLDER_COLLAPSED_PATHS, token);
+  const [collapsedSub, setCollapsedSub] = useState(() => readBool(subKey, false));
+  const [collapsedAll, setCollapsedAll] = useState(() => readBool(allKey, false));
+  const [collapsedFolders, setCollapsedFolders] = useState(() => readPathSet(pathsKey));
   // null = not adding; '' = adding at root; folder id = adding under that folder
   const [addingParent, setAddingParent] = useState(null);
   const [newName, setNewName] = useState('');
 
-  useEffect(() => { writeJson(FOLDER_COLLAPSED_SUB, collapsedSub); }, [collapsedSub]);
-  useEffect(() => { writeJson(FOLDER_COLLAPSED_ALL, collapsedAll); }, [collapsedAll]);
-  useEffect(() => { writeJson(FOLDER_COLLAPSED_PATHS, Array.from(collapsedFolders)); }, [collapsedFolders]);
+  useEffect(() => { writeJson(subKey, collapsedSub); }, [subKey, collapsedSub]);
+  useEffect(() => { writeJson(allKey, collapsedAll); }, [allKey, collapsedAll]);
+  useEffect(() => { writeJson(pathsKey, Array.from(collapsedFolders)); }, [pathsKey, collapsedFolders]);
 
   const refresh = useCallback(() => {
     api.getFolderList().then(data => {
-      try {
-        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
-      } catch (e) {
-        console.log(e);
-      }
       const all = [...new Set([
         ...(data.data.folders),
         ...(data.data.sub_folders),
@@ -270,7 +274,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
       ? api.unsubscribeFolder(name)
       : api.subscribeFolder(name);
     p.then(() => {
-      localStorage.removeItem(FOLDER_LIST);
+      api.invalidateFolderList();
       refresh();
     });
   }, [api, subscribed, refresh]);
@@ -289,7 +293,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
     setPendingDelete(null);
     if (!name) return;
     api.deleteFolder(name).then(() => {
-      localStorage.removeItem(FOLDER_LIST);
+      api.invalidateFolderList();
       refresh();
     }).catch((err) => {
       // Show the API's own explanation when it sent one (a 404 for a folder
@@ -342,7 +346,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
     api.newFolder(parent, name).then(() => {
       setAddingParent(null);
       setNewName('');
-      localStorage.removeItem(FOLDER_LIST);
+      api.invalidateFolderList();
       refresh();
     }).catch((err) => {
       // The API describes what went wrong when it can — a name collision
@@ -457,7 +461,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
               aria-label="Reload folders"
               onClick={(e) => {
                 e.stopPropagation();
-                localStorage.removeItem(FOLDER_LIST);
+                api.invalidateFolderList();
                 refresh();
               }}
             >

@@ -130,27 +130,41 @@ extension ComposeViewModel {
         )
     }
 
-    /// Resolves the (text, html) MIME-part bodies using the same four-way
-    /// table the React composer applies. The mirror flag treats a rich
-    /// pane that's only ever been seeded from markdown as "empty," so a
-    /// pure-markdown compose doesn't ship the seed HTML as if the user
-    /// had hand-edited it.
+    /// The body a compose seeded with nothing but the signature preference
+    /// ends up holding; empty when the user has no signature set. Read
+    /// through `ComposeBodyPolicy.bodyIsUntouchedSignature` (#1132).
+    var signatureOnlySeed: String {
+        SignatureFormatter.seedBody(base: "", signature: preferences.signature)
+    }
+
+    /// Whether the markdown pane carries something the user wrote, as
+    /// opposed to a seed they never touched. Send-time provenance, not
+    /// emptiness — see `ComposeBodyPolicy.source` (#1091).
+    var markdownUserEdited: Bool { markdownBody != seededMarkdownBody }
+
+    /// Resolves the (text, html) MIME-part bodies. `ComposeBodyPolicy`
+    /// decides which pane the user authored; this does the WebKit
+    /// conversions that answer implies.
     func computeMessageBodies() async -> (text: String, html: String) {
         let richHtml = await editorController.getHTML()
-        let richEmpty = richHtml.isEmpty || richMirrorsMarkdown
-        let mdEmpty = markdownBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let source = ComposeBodyPolicy.source(
+            richHTML: richHtml,
+            richMirrorsMarkdown: richMirrorsMarkdown,
+            markdownBody: markdownBody,
+            markdownUserEdited: markdownUserEdited
+        )
 
-        switch (richEmpty, mdEmpty) {
-        case (true, true):
+        switch source {
+        case .empty:
             return ("", "")
-        case (false, true):
+        case .rich:
             let text = await editorController.htmlToMarkdown(richHtml)
             return (text, richHtml)
-        case (true, false):
+        case .markdown:
             let raw = await editorController.markdownToHtml(markdownBody)
             let styled = await editorController.styleParagraphs(raw)
             return (markdownBody, styled)
-        case (false, false):
+        case .both:
             return (markdownBody, richHtml)
         }
     }
@@ -175,13 +189,26 @@ extension ComposeViewModel {
     }
 
     /// True when the compose buffer carries anything worth keeping — the
-    /// shared emptiness check behind close-without-send and the server-save
-    /// debounce. Takes the converted bodies rather than an assembled
-    /// message so it can answer before a `From` address is in hand.
+    /// shared check behind close-without-send and the server-save debounce.
+    /// Takes the converted bodies rather than an assembled message so it can
+    /// answer before a `From` address is in hand.
+    ///
+    /// Emptiness, not authorship, was the original rule, and a signature
+    /// preference broke it: the composer seeds the Markdown pane before the
+    /// user can type, so a brand-new message read as content (#1132). The
+    /// body clause now asks who wrote it; every other clause is still a
+    /// plain emptiness test, because nothing seeds those fields.
     func hasDraftContent(bodies: (text: String, html: String)) -> Bool {
-        !subject.isEmpty
-            || !bodies.text.isEmpty
-            || !bodies.html.isEmpty
+        // Non-empty bodies are not automatically the user's: a signature
+        // seeds the Markdown pane from `init` (#1132).
+        let bodyAuthored = (!bodies.text.isEmpty || !bodies.html.isEmpty)
+            && !ComposeBodyPolicy.bodyIsUntouchedSignature(
+                markdownBody: markdownBody,
+                richMirrorsMarkdown: richMirrorsMarkdown,
+                signatureOnlySeed: signatureOnlySeed
+            )
+        return !subject.isEmpty
+            || bodyAuthored
             || !parseRecipients(toText).isEmpty
             || !parseRecipients(ccText).isEmpty
             || !parseRecipients(bccText).isEmpty

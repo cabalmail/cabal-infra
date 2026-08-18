@@ -12,10 +12,16 @@ import CabalmailKit
 /// marked + turndown libraries used for conversion. At send time the same
 /// rules React applies decide which MIME part is empty and convert the other:
 ///
-///   - both empty  -> both empty
-///   - rich only   -> html = rich, text = turndown(rich)
-///   - md only     -> text = md, html = styleParagraphs(marked(md))
-///   - both filled -> send each as the author wrote it
+///   - both empty    -> both empty
+///   - rich only     -> html = rich, text = turndown(rich)
+///   - md only       -> text = md, html = styleParagraphs(marked(md))
+///   - both authored -> send each as the author wrote it
+///
+/// "Authored" is the load-bearing word in that last line: the Markdown
+/// buffer starts out holding a seed (resumed draft, quoted reply, signature)
+/// that the user never wrote, and shipping *that* beside a hand-edited rich
+/// pane is how one message came to carry two different bodies (#1091). The
+/// provenance rule lives in `ComposeBodyPolicy`.
 ///
 /// Drafts persist locally via `DraftStore` (autosave every 5 s) and store the
 /// Markdown source plus the user's editor-mode preference. Cross-device sync
@@ -50,7 +56,9 @@ final class ComposeViewModel {
     let client: CabalmailClient
     private(set) var draftId: UUID
     let draftStore: DraftStore
-    private let preferences: Preferences
+    /// Internal rather than private: `+Internals` derives `signatureOnlySeed`
+    /// from `signature`, and that extension is a different file.
+    let preferences: Preferences
     /// Dismisses the compose surface (sheet on iPhone, window elsewhere).
     /// Internal rather than private so the close-without-send legs in
     /// `ComposeViewModel+Internals.swift` can reach it.
@@ -150,6 +158,12 @@ final class ComposeViewModel {
     /// send logic treats them as "rich is empty" so single-mode markdown
     /// composes don't double-up the text part.
     var richMirrorsMarkdown: Bool = true
+    /// The markdown source as it was last written *for* the user rather than
+    /// *by* them: the seed at init, or an "Import from Rich Text" result.
+    /// The `TextEditor` in the markdown pane is the only other writer, so
+    /// anything else is the user typing.
+    /// Read through `markdownUserEdited`.
+    var seededMarkdownBody: String = ""
 
     struct ComposeAttachment: Identifiable, Hashable {
         let id: UUID
@@ -198,10 +212,9 @@ final class ComposeViewModel {
         // signature goes *above* that block so the user's reply text lands
         // with the signature on the line above the quoted original (the
         // same shape every UNIX mail client has produced since Pine).
-        self.markdownBody = SignatureFormatter.seedBody(
-            base: seed.body,
-            signature: preferences.signature
-        )
+        let seededBody = SignatureFormatter.seedBody(base: seed.body, signature: preferences.signature)
+        self.markdownBody = seededBody
+        self.seededMarkdownBody = seededBody
         self.editorController = RichTextEditorController(placeholder: "Compose your message…")
         self.editorMode = .rich
         self.editorController.onSelectionChanged = { [weak self] selection in
@@ -349,6 +362,10 @@ final class ComposeViewModel {
         let html = await editorController.getHTML()
         let markdown = await editorController.htmlToMarkdown(html)
         markdownBody = markdown
+        // Turndown's output is a conversion, not typing: the user's copy
+        // still lives in the rich pane. If they go back and edit it, that
+        // edit wins over this derivation rather than shipping beside it.
+        seededMarkdownBody = markdown
         richMirrorsMarkdown = true
         editorMode = .markdown
     }

@@ -1,0 +1,49 @@
+---
+name: Android changelog
+
+# Require an `Android:`-prefixed changelog fragment when a PR changes the shipped
+# Android client sources, so the change reaches the Play Console release notes
+# (play-release-notes.py builds those from the Android-scoped headlines only).
+# Opt out for non-user-facing Android work with the `no-changelog` PR label. See
+# CLAUDE.md and changelog.d/README.md.
+#
+# Its own workflow - not a job in lint.yml - specifically so it can trigger on
+# `labeled`/`unlabeled`: applying the opt-out label must re-run the check to
+# clear the failure. Wiring those events into lint.yml would rerun the heavy
+# Terraform/Swift/React scanners on every label toggle (including the
+# automation labels). The check is cheap and self-gating - the script exits 0
+# early when no Android client source changed - so it runs on every PR with no
+# path filter and reports a definite pass/fail rather than a skip.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+# Supersede in-flight runs when the PR is updated or its labels change; keyed
+# on the PR number so concurrent PRs don't cancel each other.
+concurrency:
+  group: android-changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  android-changelog:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        # Full history so the script can diff the PR range (base...head) and
+        # read the fragment files added on the branch.
+        fetch-depth: 0
+    - name: require-android-fragment
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        OPT_OUT: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+      # Scoped to shipped client code (the app and kit modules' main source
+      # sets) - not src/test, Gradle files, or CI - to keep the gate off PRs
+      # with no user-facing Android surface.
+      run: ./.github/scripts/check-client-changelog.sh Android '^android/(app|kit)/src/main/'

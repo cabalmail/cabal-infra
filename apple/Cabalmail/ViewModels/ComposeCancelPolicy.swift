@@ -17,9 +17,13 @@ enum ComposeCancelResolution: Equatable {
     case saveToServer
 }
 
-/// Pure decision behind Cancel -> "Save Draft" (and the macOS window-close
-/// intercept). Split out of the view model so the order of the three
-/// preconditions is unit testable without a WebKit bridge in the loop.
+/// Pure decision behind Cancel -> "Save Draft". Split out of the view model
+/// so the order of the three preconditions is unit testable without a WebKit
+/// bridge in the loop. Every cancel gesture consults `needsDecision` first,
+/// including the macOS window-close intercept behind Cmd+W and the red close
+/// button (#1106); `resolve` then runs underneath whichever answer the
+/// dialog gets, or underneath the silent close when there was nothing to
+/// ask about.
 enum ComposeCancelPolicy {
     /// Banner copy for a save refused because no From address is selected.
     /// `/save_draft` has no envelope to authorize against without one, so

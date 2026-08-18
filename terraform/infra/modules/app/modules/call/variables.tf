@@ -98,3 +98,9 @@ variable "smtp_internal_host" {
   type        = string
   description = "Cloud Map DNS name of the smtp-out task. When set, smtp_session dials it on 465 instead of the public submission listener."
 }
+
+variable "deletes_cache_objects" {
+  type        = bool
+  default     = false
+  description = "Grant s3:DeleteObject on the raw-message cache bucket. Set for the endpoints that retire a cached body once its message is gone: send (discarding a superseded draft), save_draft, purge_messages and empty_trash."
+}

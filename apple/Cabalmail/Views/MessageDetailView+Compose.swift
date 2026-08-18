@@ -35,7 +35,7 @@ extension MessageDetailView {
     /// Forwarding includes the original message's attachments. The detail
     /// view model decoded them to temp files during the MIME parse, so
     /// re-read the bytes and stash them on `AppState` keyed by the seed
-    /// id — they can't ride the Codable `Draft` through `openWindow`, and
+    /// id — the window value is a recycled slot, not the draft, and
     /// `ComposeView` consumes the stash on appearance. Inline `cid:`
     /// images stay behind: they live in the quoted body, not the
     /// attachment strip, matching the React composer's scope.
