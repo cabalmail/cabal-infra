@@ -29,6 +29,15 @@ full plan and phase breakdown.
 ./gradlew ktlintCheck          # lint (ktlintFormat to auto-fix)
 ```
 
+## App icon
+
+`app/src/main/ic_launcher-playstore.png` (the 512×512 Google Play listing
+icon) is **generated** from the repo-wide brand vector by `make logo` at the
+repo root — never edit it by hand; see [`vector/README.md`](../vector/README.md).
+It sits beside `res/` so it is uploaded to the Play Console but not packaged
+into the APK. The in-app launcher icon is the adaptive icon under
+`res/mipmap-anydpi/`.
+
 ## Runtime configuration
 
 The only build-time value is the control domain; everything else (API URL,
