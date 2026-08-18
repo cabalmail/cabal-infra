@@ -5,7 +5,10 @@ name: Scripts Tests
 # at review time) and again on pushes to the three named branches (so a merge
 # that combined cleanly-passing PRs is still verified). scripts/ has no deploy
 # workflow, so unlike the areas lint.yml mirrors there is no merge-time check
-# to duplicate — this workflow is the only gate for scripts/**.
+# to duplicate — this workflow is the only gate for scripts/**. It also runs on
+# changelog.d/** and the Play release-notes generator: one suite renders the
+# pending `Android:` fragments as Play Console notes and fails if their
+# headlines overrun Google Play's 500-character cap.
 #
 # The suites are stdlib-only (scripts/apple-release-dashboard.py imports its
 # third-party ASC deps lazily), so no pip install is needed — just a pinned
@@ -16,6 +19,8 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'scripts/**'
+      - '.github/scripts/play-release-notes.py'
+      - 'changelog.d/**'
       - '.github/workflows/scripts-tests.yml'
   push:
     branches:
@@ -24,6 +29,8 @@ on:
       - development
     paths:
       - 'scripts/**'
+      - '.github/scripts/play-release-notes.py'
+      - 'changelog.d/**'
       - '.github/workflows/scripts-tests.yml'
 
 permissions:
