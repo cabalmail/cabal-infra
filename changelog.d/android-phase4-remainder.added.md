@@ -1,8 +1,8 @@
-- **Android mail-reading interactions (Phase 4 remainder).** The message
+- Android: **Filters, sort, swipe/bulk actions, and search.** The message
   list gains All/Unread/Flagged filter pills with live `/folder_status`
   counts (patched locally as flags change), a sort menu (date received/
   date sent/sender/subject, either direction), swipe actions (toggle read,
-  archive — or purge-with-confirmation in Trash), a long-press context
+  archive - or purge-with-confirmation in Trash), a long-press context
   menu, and bulk multi-select with a contextual action bar (read/unread,
   flag/unflag, move, dispose). Search arrives as a first-class cross-folder
   scope over `/search_envelopes` with a structured filter sheet and
@@ -15,4 +15,4 @@
   an Empty Trash action, and the cross-device resume cursor lands via
   `/get_nav_state` / `/set_nav_state`: same-install cursors restore
   silently on launch, foreign ones offer an opt-in "pick up where you
-  left off" prompt.
+  left off" prompt (Phase 4 remainder).

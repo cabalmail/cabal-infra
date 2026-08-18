@@ -7,3 +7,6 @@ captures/
 *.iml
 *.jks
 *.keystore
+# Play Console release notes are generated at upload time by
+# .github/scripts/play-release-notes.py from CHANGELOG.md; never hand-written.
+app/src/main/play/release-notes/
