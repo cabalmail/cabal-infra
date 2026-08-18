@@ -67,7 +67,9 @@ struct ComposeRequestRouter: ViewModifier {
     /// hosted by this modifier.
     private func present(seed: Draft) {
         if composeOpensInWindow {
-            openWindow(id: composeWindowID, value: seed)
+            // Recycled slot, not the seed itself: keying the group by the
+            // seed leaks one retained presentation per session (#1084).
+            openWindow(id: composeWindowID, value: appState.composeSlots.acquire(seed: seed))
             #if canImport(AppKit)
             // SwiftUI's openWindow occasionally drops the new compose
             // scene behind the main mail window when triggered from a
