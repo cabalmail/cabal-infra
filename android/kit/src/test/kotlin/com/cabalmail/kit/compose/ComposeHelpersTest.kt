@@ -111,6 +111,10 @@ class ComposeHelpersTest {
     @Test
     fun `draft emptiness ignores From alone`() {
         assertTrue(Draft(id = "d", updatedAt = 0, fromAddress = "me@x").isEmpty)
+        val seeded = "\n\n-- \nsig"
+        assertTrue(Draft(id = "d", updatedAt = 0, body = seeded, seedBody = seeded).isEmpty)
+        assertFalse(Draft(id = "d", updatedAt = 0, body = "hi$seeded", seedBody = seeded).isEmpty)
+        assertFalse(Draft(id = "d", updatedAt = 0, body = "kept").isEmpty)
         assertFalse(Draft(id = "d", updatedAt = 0, subject = "x").isEmpty)
         assertFalse(Draft(id = "d", updatedAt = 0, to = listOf("a@x")).isEmpty)
     }

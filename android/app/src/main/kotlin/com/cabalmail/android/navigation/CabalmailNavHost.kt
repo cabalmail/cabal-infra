@@ -30,9 +30,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.addresses.AddressesScreen
+import com.cabalmail.android.ui.addresses.AddressesViewModel
 import com.cabalmail.android.ui.compose.ComposeLaunch
 import com.cabalmail.android.ui.compose.ComposeScreen
 import com.cabalmail.android.ui.compose.ComposeViewModel
+import com.cabalmail.android.ui.folders.FoldersAdminScreen
+import com.cabalmail.android.ui.folders.FoldersAdminViewModel
 import com.cabalmail.android.ui.mail.FolderListScreen
 import com.cabalmail.android.ui.mail.FoldersViewModel
 import com.cabalmail.android.ui.mail.MessageDetailScreen
@@ -41,6 +45,8 @@ import com.cabalmail.android.ui.mail.MessageListScreen
 import com.cabalmail.android.ui.mail.MessageListViewModel
 import com.cabalmail.android.ui.mail.SearchScreen
 import com.cabalmail.android.ui.mail.SearchViewModel
+import com.cabalmail.android.ui.settings.SettingsScreen
+import com.cabalmail.android.ui.settings.SettingsViewModel
 import com.cabalmail.kit.models.NavState
 import kotlinx.coroutines.launch
 
@@ -61,8 +67,12 @@ fun CabalmailNavHost(
     // navigates by id (see ComposeLaunch).
     val openCompose: (String) -> Unit = { draftId -> navController.navigate("compose/$draftId") }
     val composeNew: () -> Unit = {
-        scope.launch { openCompose(ComposeLaunch.stage(container, ComposeLaunch.blank())) }
+        scope.launch { openCompose(ComposeLaunch.stage(container, ComposeLaunch.blank(container))) }
     }
+
+    // Preferences (plan §6.3): the synced subset is re-pulled on every
+    // launch so web/Apple changes apply here (server wins).
+    LaunchedEffect(Unit) { container.preferences.refreshFromServer() }
 
     // Shared content (ACTION_SEND) lands in a fresh compose, once.
     LaunchedEffect(Unit) {
@@ -147,8 +157,10 @@ private fun MailNavGraph(
             val viewModel: FoldersViewModel =
                 viewModel(factory = FoldersViewModel.factory(container))
             val state by viewModel.state.collectAsState()
+            val preferences by container.preferences.preferences.collectAsState()
             FolderListScreen(
                 state = state,
+                countDisplay = preferences.folderCountDisplay,
                 onRefresh = viewModel::refresh,
                 onOpenFolder = { folder ->
                     navController.navigate("messages/${Uri.encode(folder)}")
@@ -157,6 +169,9 @@ private fun MailNavGraph(
                 onEmptyTrash = viewModel::emptyTrash,
                 onSignOut = onSignOut,
                 onCompose = composeNew,
+                onOpenAddresses = { navController.navigate("addresses") },
+                onOpenFolders = { navController.navigate("folders_admin") },
+                onOpenSettings = { navController.navigate("settings") },
                 resumeAvailable = resumePrompt != null,
                 onResume = {
                     resumePrompt?.let(navController::openCursor)
@@ -241,6 +256,34 @@ private fun MailNavGraph(
                     }
                     openCompose(draftId)
                 },
+            )
+        }
+
+        composable("addresses") {
+            val viewModel: AddressesViewModel =
+                viewModel(factory = AddressesViewModel.factory(container))
+            val state by viewModel.state.collectAsState()
+            AddressesScreen(state = state, viewModel = viewModel, onBack = { navController.popBackStack() })
+        }
+
+        composable("folders_admin") {
+            val viewModel: FoldersAdminViewModel =
+                viewModel(factory = FoldersAdminViewModel.factory(container))
+            val state by viewModel.state.collectAsState()
+            FoldersAdminScreen(state = state, viewModel = viewModel, onBack = { navController.popBackStack() })
+        }
+
+        composable("settings") {
+            val viewModel: SettingsViewModel =
+                viewModel(factory = SettingsViewModel.factory(container))
+            val state by viewModel.state.collectAsState()
+            val preferences by viewModel.preferences.collectAsState()
+            SettingsScreen(
+                state = state,
+                preferences = preferences,
+                onUpdate = viewModel::update,
+                onSignOut = onSignOut,
+                onBack = { navController.popBackStack() },
             )
         }
 

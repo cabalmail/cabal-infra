@@ -7,6 +7,9 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.kit.models.Envelope
+import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.DefaultSort
+import com.cabalmail.kit.settings.DisposeAction
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -124,8 +127,25 @@ class MessageListViewModel(
     val isTrashFolder: Boolean = folder == "Trash"
 
     init {
+        // Default sort (plan §6.3): a local preference seeds the first load.
+        val prefs = container.preferences.preferences.value
+        mutableState.update {
+            it.copy(
+                sortField =
+                    when (prefs.defaultSort) {
+                        DefaultSort.RECEIVED -> MessageSortField.DATE_RECEIVED
+                        DefaultSort.SENT -> MessageSortField.DATE_SENT
+                        DefaultSort.FROM -> MessageSortField.FROM
+                        DefaultSort.SUBJECT -> MessageSortField.SUBJECT
+                    },
+                sortDescending = prefs.defaultSortDescending,
+            )
+        }
         refresh()
     }
+
+    /** The "Dispose action" preference's target folder (plan §6.3). */
+    private fun disposeFolder(): String = disposeTarget(container.preferences.preferences.value)
 
     fun refresh() {
         viewModelScope.launch {
@@ -322,7 +342,7 @@ class MessageListViewModel(
             return
         }
         if (!isTrashFolder) {
-            move(uids, ARCHIVE_FOLDER)
+            move(uids, disposeFolder())
             return
         }
         viewModelScope.launch {
@@ -421,6 +441,14 @@ class MessageListViewModel(
     companion object {
         const val BAND_SIZE = 50
         const val ARCHIVE_FOLDER = "Archive"
+        const val TRASH_FOLDER = "Trash"
+
+        /** The dispose target for a non-Trash folder under [prefs]. */
+        fun disposeTarget(prefs: AppPreferences): String =
+            when (prefs.disposeAction) {
+                DisposeAction.ARCHIVE -> ARCHIVE_FOLDER
+                DisposeAction.TRASH -> TRASH_FOLDER
+            }
 
         fun factory(
             container: AppContainer,

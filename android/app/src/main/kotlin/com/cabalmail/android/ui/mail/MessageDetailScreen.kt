@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.AuthResults
@@ -158,7 +159,7 @@ fun MessageDetailScreen(
                             Icons.Default.Delete,
                             contentDescription =
                                 stringResource(
-                                    if (viewModel.isTrashFolder) R.string.purge else R.string.archive,
+                                    disposeLabelRes(viewModel.isTrashFolder),
                                 ),
                             tint =
                                 if (viewModel.isTrashFolder) {
