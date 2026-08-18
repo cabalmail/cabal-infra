@@ -1,5 +1,5 @@
 '''Creates a new email address assigned to one or more users (admin only)'''
-# pylint: disable=duplicate-code,too-many-return-statements
+# pylint: disable=too-many-return-statements
 import json
 import os
 from datetime import datetime, timezone
@@ -10,13 +10,10 @@ from admin_limits import ( # pylint: disable=import-error
     audit_log,
     rate_limit_response_or_none,
 )
+from helper import new_address_response_or_none  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import publish_address_dns_records  # pylint: disable=import-error
-from helper import reserved_subdomain_response_or_none  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
-from helper import validate_dns_apex  # pylint: disable=import-error
-from helper import validate_dns_subdomain  # pylint: disable=import-error
-from helper import validate_local_part  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -45,24 +42,9 @@ def handler(event, _context):
             'statusCode': 400,
             'body': json.dumps({'Error': 'At least one username is required'})
         }
-    if body['tld'] not in domains:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': f"Unknown domain \"{body['tld']}\""})
-        }
-    try:
-        validate_dns_apex(body['tld'])
-        validate_dns_subdomain(body['subdomain'])
-        validate_local_part(body['username'])
-    except ValueError as err:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': f'Invalid input: {err}'})
-        }
-    reserved = reserved_subdomain_response_or_none(
-        body['subdomain'], body['tld'], control_domain)
-    if reserved:
-        return reserved
+    refusal = new_address_response_or_none(body, domains, control_domain)
+    if refusal:
+        return refusal
     # Derive the address server-side rather than trusting body['address']: it is
     # the DynamoDB primary key and the value user_authorized_for_sender matches
     # on, so it must equal the real routing identity. username/subdomain/tld are

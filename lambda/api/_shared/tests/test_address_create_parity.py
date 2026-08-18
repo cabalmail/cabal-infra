@@ -10,10 +10,11 @@ through its own private copy of the change list and its own (or, in the admin
 case, absent) input guards. The copies drifted: the admin path published four
 of the five canonical records, omitting BIMI (#1073), and never carried the
 reserved-control-subdomain check at all (#1072). Both now go through
-helper.publish_address_dns_records and helper.reserved_subdomain_response_or_none,
-so the cases below assert the two handlers agree -- against the canonical
-record set rather than a hand-copied list, so a sixth record added to
-address_dns_records() cannot pass while only one handler publishes it.
+helper.publish_address_dns_records and helper.new_address_response_or_none (the
+reserved check among them), so the cases below assert the two handlers agree --
+against the canonical record set rather than a hand-copied list, so a sixth
+record added to address_dns_records() cannot pass while only one handler
+publishes it.
 
 The guard is scoped by label, not applied wholesale: the collision-driven
 labels stay control-domain-only (a mail-domain zone carries none of the records
@@ -332,6 +333,71 @@ class SystemSenderSubdomainTests(_CreateCase):
     def test_guard_is_case_and_trailing_dot_insensitive_off_control(self):
         response = new_admin.handler(_event('MAIL-ADMIN.', 'mail.example.net'), None)
         self.assertEqual(response['statusCode'], 400)
+
+
+class SharedInputVettingTests(_CreateCase):
+    '''helper.new_address_response_or_none is the one copy of the checks that
+    run before either handler's own authorization: known domain, valid DNS
+    labels, valid local part, subdomain not reserved.'''
+
+    DOMAINS = {'control.example.com': 'ZCONTROL', 'mail.example.net': 'ZMAIL'}
+
+    def _vet(self, subdomain='sales', tld='mail.example.net', username='someone'):
+        return helper.new_address_response_or_none(
+            {'username': username, 'subdomain': subdomain, 'tld': tld},
+            self.DOMAINS, 'control.example.com')
+
+    def test_a_clean_request_is_not_refused(self):
+        self.assertIsNone(self._vet())
+
+    def test_an_unknown_domain_is_refused(self):
+        refusal = self._vet(tld='nope.example.org')
+        self.assertEqual(refusal['statusCode'], 400)
+        self.assertIn('Unknown domain', json.loads(refusal['body'])['Error'])
+
+    def test_an_invalid_local_part_is_refused(self):
+        refusal = self._vet(username='has space')
+        self.assertEqual(refusal['statusCode'], 400)
+        self.assertIn('Invalid input', json.loads(refusal['body'])['Error'])
+
+    def test_an_invalid_subdomain_is_refused(self):
+        refusal = self._vet(subdomain='')
+        self.assertEqual(refusal['statusCode'], 400)
+        self.assertIn('Invalid input', json.loads(refusal['body'])['Error'])
+
+    def test_a_reserved_subdomain_is_refused(self):
+        refusal = self._vet(subdomain='mail-admin')
+        self.assertEqual(refusal['statusCode'], 400)
+        self.assertIn('reserved', json.loads(refusal['body'])['Error'])
+
+    def test_the_unknown_domain_check_runs_before_the_validators(self):
+        '''A malformed label on an unknown domain reports the domain, not the
+        label: the order the two 400s are produced in is observable.'''
+        refusal = self._vet(subdomain='', tld='nope.example.org')
+        self.assertIn('Unknown domain', json.loads(refusal['body'])['Error'])
+
+    def test_the_validators_run_before_the_reserved_guard(self):
+        '''`mail-admin` with a bad local part reports the local part. The
+        reserved guard reads a label the validators have already accepted.'''
+        refusal = self._vet(subdomain='mail-admin', username='has space')
+        self.assertIn('Invalid input', json.loads(refusal['body'])['Error'])
+
+    def test_both_handlers_refuse_identically(self):
+        '''The point of the shared copy: byte-identical refusals from the two
+        endpoints, so neither can drift the way the admin path did (#1072).'''
+        for subdomain, tld, username in (
+            ('sales', 'nope.example.org', 'someone'),
+            ('', 'mail.example.net', 'someone'),
+            ('sales', 'mail.example.net', 'has space'),
+            ('mail-admin', 'mail.example.net', 'someone'),
+            ('imap', 'control.example.com', 'someone'),
+        ):
+            with self.subTest(subdomain=subdomain, tld=tld, username=username):
+                event = _event(subdomain, tld)
+                event['body'] = json.dumps(
+                    dict(json.loads(event['body']), username=username))
+                self.assertEqual(new.handler(event, None),
+                                 new_admin.handler(event, None))
 
 
 if __name__ == '__main__':
