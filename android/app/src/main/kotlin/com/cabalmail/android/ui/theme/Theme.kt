@@ -14,16 +14,30 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.cabalmail.android.R
 import com.cabalmail.kit.settings.Accent
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.AppTheme
 import com.cabalmail.kit.settings.Density
+import com.cabalmail.kit.settings.DisposeAction
 
 /**
  * Row density (plan §6.3 "Density"): the vertical padding list rows use.
  * Provided by [CabalmailTheme] from the synced preference.
  */
 val LocalRowPadding = staticCompositionLocalOf { 10.dp }
+
+/** True when the "Dispose action" preference targets Trash (labels follow it). */
+val LocalDisposeToTrash = staticCompositionLocalOf { false }
+
+/** The dispose affordance's label: purge inside Trash, else the preference's target. */
+@Composable
+fun disposeLabelRes(isTrashFolder: Boolean): Int =
+    when {
+        isTrashFolder -> R.string.purge
+        LocalDisposeToTrash.current -> R.string.dispose_to_trash
+        else -> R.string.archive
+    }
 
 fun Density.rowPadding(): Dp =
     when (this) {
@@ -89,6 +103,14 @@ private fun Color.lighten(amount: Float): Color =
 private fun Color.darken(amount: Float): Color =
     Color(red = red * (1f - amount), green = green * (1f - amount), blue = blue * (1f - amount), alpha = alpha)
 
+/** Whether the theme preference resolves to dark, given the platform's answer. */
+fun AppPreferences.resolvesDark(systemDark: Boolean): Boolean =
+    when (theme) {
+        AppTheme.SYSTEM -> systemDark
+        AppTheme.LIGHT -> false
+        AppTheme.DARK -> true
+    }
+
 /**
  * Material 3 theme driven by [preferences] (plan §6.3 "Appearance"): the
  * theme mode (System defers to the platform), Material You dynamic colour
@@ -100,12 +122,7 @@ fun CabalmailTheme(
     preferences: AppPreferences = AppPreferences(),
     content: @Composable () -> Unit,
 ) {
-    val darkTheme =
-        when (preferences.theme) {
-            AppTheme.SYSTEM -> isSystemInDarkTheme()
-            AppTheme.LIGHT -> false
-            AppTheme.DARK -> true
-        }
+    val darkTheme = preferences.resolvesDark(isSystemInDarkTheme())
     val context = LocalContext.current
     val colorScheme =
         when {
@@ -113,7 +130,10 @@ fun CabalmailTheme(
             preferences.dynamicColor -> dynamicLightColorScheme(context)
             else -> accentScheme(preferences.accent, darkTheme)
         }
-    CompositionLocalProvider(LocalRowPadding provides preferences.density.rowPadding()) {
+    CompositionLocalProvider(
+        LocalRowPadding provides preferences.density.rowPadding(),
+        LocalDisposeToTrash provides (preferences.disposeAction == DisposeAction.TRASH),
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             content = content,

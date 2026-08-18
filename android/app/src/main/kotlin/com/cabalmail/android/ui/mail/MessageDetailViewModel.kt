@@ -342,7 +342,8 @@ class MessageDetailViewModel(
                         sourceFolder = folder,
                     )
                 val signature = container.preferences.preferences.value.signature
-                val draft = seed.copy(body = SignatureFormatter.seedBody(seed.body, signature))
+                val body = SignatureFormatter.seedBody(seed.body, signature)
+                val draft = seed.copy(body = body, seedBody = body)
                 container.draftStore.save(draft)
                 mutableState.update { it.copy(seedingCompose = false, composeDraftId = draft.id) }
             } catch (exception: Exception) {

@@ -15,6 +15,7 @@
     <string name="auth_warning">Authentication failed</string>
     <string name="toggle_read">Toggle read</string>
     <string name="archive">Archive</string>
+    <string name="dispose_to_trash">Move to Trash</string>
     <string name="purge">Delete permanently</string>
     <string name="load_remote_content">Load remote content</string>
     <string name="cancel">Cancel</string>
