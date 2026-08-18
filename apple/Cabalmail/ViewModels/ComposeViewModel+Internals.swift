@@ -114,7 +114,7 @@ extension ComposeViewModel {
     /// with, and each conversion is a WebKit round trip worth not repeating.
     func buildOutgoingMessage(
         from: EmailAddress,
-        bodies: (text: String, html: String)
+        bodies: ComposeBodies
     ) -> OutgoingMessage {
         OutgoingMessage(
             from: from,
@@ -145,7 +145,7 @@ extension ComposeViewModel {
     /// Resolves the (text, html) MIME-part bodies. `ComposeBodyPolicy`
     /// decides which pane the user authored; this does the WebKit
     /// conversions that answer implies.
-    func computeMessageBodies() async -> (text: String, html: String) {
+    func computeMessageBodies() async -> ComposeBodies {
         let richHtml = await editorController.getHTML()
         let source = ComposeBodyPolicy.source(
             richHTML: richHtml,
@@ -156,16 +156,16 @@ extension ComposeViewModel {
 
         switch source {
         case .empty:
-            return ("", "")
+            return ComposeBodies(text: "", html: "", source: source)
         case .rich:
             let text = await editorController.htmlToMarkdown(richHtml)
-            return (text, richHtml)
+            return ComposeBodies(text: text, html: richHtml, source: source)
         case .markdown:
             let raw = await editorController.markdownToHtml(markdownBody)
             let styled = await editorController.styleParagraphs(raw)
-            return (markdownBody, styled)
+            return ComposeBodies(text: markdownBody, html: styled, source: source)
         case .both:
-            return (markdownBody, richHtml)
+            return ComposeBodies(text: markdownBody, html: richHtml, source: source)
         }
     }
 
@@ -198,13 +198,18 @@ extension ComposeViewModel {
     /// user can type, so a brand-new message read as content (#1132). The
     /// body clause now asks who wrote it; every other clause is still a
     /// plain emptiness test, because nothing seeds those fields.
-    func hasDraftContent(bodies: (text: String, html: String)) -> Bool {
+    ///
+    /// Authorship is a question about *now*, not about history — a rich pane
+    /// typed into and then emptied is back to holding nothing, so `bodies`
+    /// carries the live `source` decision rather than the mirror flag, which
+    /// only ever recorded the first keystroke (#1138).
+    func hasDraftContent(bodies: ComposeBodies) -> Bool {
         // Non-empty bodies are not automatically the user's: a signature
         // seeds the Markdown pane from `init` (#1132).
         let bodyAuthored = (!bodies.text.isEmpty || !bodies.html.isEmpty)
             && !ComposeBodyPolicy.bodyIsUntouchedSignature(
                 markdownBody: markdownBody,
-                richMirrorsMarkdown: richMirrorsMarkdown,
+                richPaneAuthored: bodies.source.richPaneAuthored,
                 signatureOnlySeed: signatureOnlySeed
             )
         return !subject.isEmpty

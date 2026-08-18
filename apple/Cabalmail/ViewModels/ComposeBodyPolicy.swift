@@ -18,6 +18,27 @@ enum ComposeBodySource: Equatable {
     case markdown
     /// Both panes were authored independently — ship each as written.
     case both
+
+    /// Whether the rich pane is the surface holding the user's copy.
+    /// `ComposeBodyPolicy.source` reaches `.rich` and `.both` exactly when
+    /// the rich pane is non-empty and not a mirror of the Markdown seed, so
+    /// this is that condition, carried forward for callers that see the
+    /// converted parts rather than the panes (#1138).
+    var richPaneAuthored: Bool { self == .rich || self == .both }
+}
+
+/// The converted `text/plain` + `text/html` parts, plus the provenance
+/// decision that produced them.
+///
+/// The decision has to travel with the bytes because it cannot be recovered
+/// from them: a rich pane the user emptied converts to `("", "")` and then
+/// falls through to `.markdown`, whose parts are the *seed* — non-empty HTML
+/// over an editor showing its placeholder. `hasDraftContent` reading only the
+/// parts is what kept a cleared composer asking "Discard draft?" (#1138).
+struct ComposeBodies: Equatable {
+    let text: String
+    let html: String
+    let source: ComposeBodySource
 }
 
 /// Pure decision behind "which pane wins at send time". Split out of the
@@ -77,15 +98,22 @@ enum ComposeBodyPolicy {
     /// pane with the user's own copy and resets the mirror: that body is
     /// not the signature seed, so it still counts.
     ///
+    /// The rich pane is read the same way, and for the same reason. This
+    /// used to require `richMirrorsMarkdown`, i.e. that the user had never
+    /// typed in the rich pane — which made one keystroke, however
+    /// thoroughly deleted afterwards, dirty the composer for good (#1138).
+    /// What matters is whether the rich pane *currently* holds a second
+    /// copy, and `source` already answers that.
+    ///
     /// Deliberately narrow. A reply's quoted original and a resumed draft's
     /// fetched body are seeds too, and both stay content — discarding
     /// either is the data loss this check exists to avoid.
     static func bodyIsUntouchedSignature(
         markdownBody: String,
-        richMirrorsMarkdown: Bool,
+        richPaneAuthored: Bool,
         signatureOnlySeed: String
     ) -> Bool {
-        guard !signatureOnlySeed.isEmpty, richMirrorsMarkdown else { return false }
+        guard !signatureOnlySeed.isEmpty, !richPaneAuthored else { return false }
         return markdownBody == signatureOnlySeed
     }
 }

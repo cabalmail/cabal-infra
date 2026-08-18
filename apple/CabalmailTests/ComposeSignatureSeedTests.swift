@@ -29,8 +29,12 @@ final class ComposeSignatureSeedTests: XCTestCase {
 
     /// Stands in for what `computeMessageBodies()` returns for a `.markdown`
     /// source: the Markdown buffer verbatim plus its rendered HTML.
-    private static func renderedBodies(_ markdown: String) -> (text: String, html: String) {
-        (text: markdown, html: "<p><br></p><p>-- <br>\(signature)</p>")
+    private static func renderedBodies(_ markdown: String) -> ComposeBodies {
+        ComposeBodies(
+            text: markdown,
+            html: "<p><br></p><p>-- <br>\(signature)</p>",
+            source: .markdown
+        )
     }
 
     // MARK: - The reported flow
@@ -73,7 +77,11 @@ final class ComposeSignatureSeedTests: XCTestCase {
         model.richMirrorsMarkdown = false
 
         XCTAssertEqual(model.markdownBody, Self.signatureSeed, "precondition: Markdown pane untouched")
-        XCTAssertTrue(model.hasDraftContent(bodies: (text: "typed richly", html: "<p>typed richly</p>")))
+        XCTAssertTrue(
+            model.hasDraftContent(
+                bodies: ComposeBodies(text: "typed richly", html: "<p>typed richly</p>", source: .rich)
+            )
+        )
     }
 
     // MARK: - Seeds that must keep counting as content
@@ -103,8 +111,12 @@ final class ComposeSignatureSeedTests: XCTestCase {
         let model = try TestFixtures.makeComposeModel()
 
         XCTAssertEqual(model.markdownBody, "")
-        XCTAssertFalse(model.hasDraftContent(bodies: (text: "", html: "")))
-        XCTAssertTrue(model.hasDraftContent(bodies: (text: "typed", html: "<p>typed</p>")))
+        XCTAssertFalse(model.hasDraftContent(bodies: ComposeBodies(text: "", html: "", source: .empty)))
+        XCTAssertTrue(
+            model.hasDraftContent(
+                bodies: ComposeBodies(text: "typed", html: "<p>typed</p>", source: .rich)
+            )
+        )
     }
 
     // MARK: - The pure rule
@@ -113,7 +125,7 @@ final class ComposeSignatureSeedTests: XCTestCase {
         XCTAssertTrue(
             ComposeBodyPolicy.bodyIsUntouchedSignature(
                 markdownBody: Self.signatureSeed,
-                richMirrorsMarkdown: true,
+                richPaneAuthored: false,
                 signatureOnlySeed: Self.signatureSeed
             )
         )
@@ -123,7 +135,7 @@ final class ComposeSignatureSeedTests: XCTestCase {
         XCTAssertFalse(
             ComposeBodyPolicy.bodyIsUntouchedSignature(
                 markdownBody: Self.signatureSeed,
-                richMirrorsMarkdown: false,
+                richPaneAuthored: true,
                 signatureOnlySeed: Self.signatureSeed
             ),
             "the rich pane was typed in"
@@ -131,7 +143,7 @@ final class ComposeSignatureSeedTests: XCTestCase {
         XCTAssertFalse(
             ComposeBodyPolicy.bodyIsUntouchedSignature(
                 markdownBody: "words\n" + Self.signatureSeed,
-                richMirrorsMarkdown: true,
+                richPaneAuthored: false,
                 signatureOnlySeed: Self.signatureSeed
             ),
             "the markdown pane was typed in"
@@ -144,7 +156,7 @@ final class ComposeSignatureSeedTests: XCTestCase {
         XCTAssertFalse(
             ComposeBodyPolicy.bodyIsUntouchedSignature(
                 markdownBody: "",
-                richMirrorsMarkdown: true,
+                richPaneAuthored: false,
                 signatureOnlySeed: ""
             )
         )
@@ -158,7 +170,7 @@ final class ComposeSignatureSeedTests: XCTestCase {
         XCTAssertFalse(
             ComposeBodyPolicy.bodyIsUntouchedSignature(
                 markdownBody: "words the user wrote in the rich pane",
-                richMirrorsMarkdown: true,
+                richPaneAuthored: false,
                 signatureOnlySeed: Self.signatureSeed
             )
         )
