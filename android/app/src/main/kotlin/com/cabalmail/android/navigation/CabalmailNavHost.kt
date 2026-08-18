@@ -3,10 +3,13 @@ package com.cabalmail.android.navigation
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -159,6 +162,11 @@ fun CabalmailNavHost(
     val localDraftMessage = stringResource(R.string.local_draft_prompt)
     val localDraftAction = stringResource(R.string.local_draft_resume)
     LaunchedEffect(Unit) {
+        if (container.launchOneShotsDone) {
+            return@LaunchedEffect
+        }
+        container.launchOneShotsDone = true
+        container.sendQueue.flush()
         container.draftStore.pruneEmpty()
         val unsent = container.draftStore.list().firstOrNull { it.queuedMessageId == null }
         val draftId = unsent?.id ?: return@LaunchedEffect
@@ -185,8 +193,7 @@ fun CabalmailNavHost(
         }
     }
 
-    // Outbox (plan §7.4): retry queued sends at launch and surface outcomes.
-    LaunchedEffect(Unit) { container.sendQueue.flush() }
+    // Outbox (plan §7.4): outcomes surface here (the launch flush is above).
     LaunchedEffect(Unit) {
         container.sendQueue.notices.collect { notice -> snackbarHostState.showSnackbar(notice) }
     }
@@ -243,16 +250,25 @@ fun CabalmailNavHost(
                 if (!online) {
                     OfflineBanner()
                 }
-                MailNavGraph(
-                    navController = navController,
-                    container = container,
-                    compactWidth = compactWidth,
-                    onSignOut = onSignOut,
-                    resumePrompt = resumePrompt,
-                    onResumeConsumed = { resumePrompt = null },
-                    composeNew = composeNew,
-                    openCompose = openCompose,
-                )
+                // The banner already sits under the status bar; tell the
+                // screens' Scaffolds not to pad for it a second time.
+                Box(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .then(if (!online) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
+                ) {
+                    MailNavGraph(
+                        navController = navController,
+                        container = container,
+                        compactWidth = compactWidth,
+                        onSignOut = onSignOut,
+                        resumePrompt = resumePrompt,
+                        onResumeConsumed = { resumePrompt = null },
+                        composeNew = composeNew,
+                        openCompose = openCompose,
+                    )
+                }
             }
             // Sits above the compose FAB / reader bottom bar rather than over them.
             SnackbarHost(

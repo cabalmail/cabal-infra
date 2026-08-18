@@ -47,7 +47,7 @@ class FoldersViewModel(
             try {
                 val api = container.requireApi()
                 val folders = api.listFolders().folders
-                mutableState.update { it.copy(folders = folders, refreshing = false) }
+                mutableState.update { it.copy(folders = folders, refreshing = false, error = null) }
                 // Unread badges arrive as their STATUS calls land; a folder
                 // whose STATUS fails just shows no badge.
                 val statuses =

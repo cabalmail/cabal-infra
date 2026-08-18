@@ -109,6 +109,14 @@ class AppContainer(
     /** Connectivity for the offline banner and the send queue. */
     val connectivity: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }
 
+    /**
+     * Launch-time one-shots (unsent-draft prompt, outbox flush) run once
+     * per process, not once per Activity — a rotation recreates the
+     * navigation host, and re-prompting about the draft that is open would
+     * be absurd.
+     */
+    var launchOneShotsDone: Boolean = false
+
     /** Fires when the API rejects a refreshed token: the session is gone. */
     val authExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
