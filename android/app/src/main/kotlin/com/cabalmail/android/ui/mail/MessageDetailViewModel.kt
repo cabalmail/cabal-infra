@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.kit.compose.DraftResume
 import com.cabalmail.kit.compose.ReplyBuilder
+import com.cabalmail.kit.compose.SignatureFormatter
 import com.cabalmail.kit.mime.RawHeaders
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.DraftServerRef
@@ -15,6 +16,9 @@ import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.MessageContent
 import com.cabalmail.kit.models.inlineContentIds
 import com.cabalmail.kit.models.resolveInlineImages
+import com.cabalmail.kit.settings.BodyRenderMode
+import com.cabalmail.kit.settings.LoadRemoteContent
+import com.cabalmail.kit.settings.MarkAsRead
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -79,6 +83,20 @@ class MessageDetailViewModel(
     val isDraftsFolder: Boolean = folder == DRAFTS_FOLDER
 
     init {
+        // Reading preferences (plan §6.3): the reader's initial render mode
+        // and remote-content posture come from settings; a per-message
+        // toggle still overrides them for the open message.
+        val prefs = container.preferences.preferences.value
+        mutableState.update {
+            it.copy(
+                renderMode =
+                    when (prefs.bodyRenderMode) {
+                        BodyRenderMode.ORIGINAL -> RenderMode.ORIGINAL
+                        BodyRenderMode.READER -> RenderMode.READER
+                    },
+                loadRemoteContent = prefs.loadRemoteContent == LoadRemoteContent.ALWAYS,
+            )
+        }
         load()
     }
 
@@ -109,6 +127,13 @@ class MessageDetailViewModel(
                     uid = uid,
                     messageId = envelope?.messageId?.firstOrNull(),
                 )
+                // "Mark as read: On open" (default Manual never touches \Seen).
+                if (container.preferences.preferences.value.markAsRead == MarkAsRead.ON_OPEN &&
+                    envelope != null &&
+                    !envelope.isSeen
+                ) {
+                    setFlag("\\Seen", true)
+                }
                 resolveInlineImagesAsync(content.bodyHtml)
                 if (envelope?.hasAttachments == true) {
                     loadAttachments()
@@ -256,7 +281,11 @@ class MessageDetailViewModel(
                 if (isTrashFolder) {
                     api.purgeMessages(folder, listOf(uid))
                 } else {
-                    api.moveMessages(folder, MessageListViewModel.ARCHIVE_FOLDER, listOf(uid))
+                    api.moveMessages(
+                        folder,
+                        MessageListViewModel.disposeTarget(container.preferences.preferences.value),
+                        listOf(uid),
+                    )
                 }
                 container.envelopeCache.invalidateFolder(folder)
                 container.bodyCache.remove(folder, uid)
@@ -304,7 +333,7 @@ class MessageDetailViewModel(
             try {
                 val repository = container.requireAddressRepository()
                 val owned = (repository.addresses.value ?: repository.refresh()).map { it.address }
-                val draft =
+                val seed =
                     ReplyBuilder.build(
                         envelope = envelope,
                         content = mutableState.value.content,
@@ -312,6 +341,8 @@ class MessageDetailViewModel(
                         ownedAddresses = owned,
                         sourceFolder = folder,
                     )
+                val signature = container.preferences.preferences.value.signature
+                val draft = seed.copy(body = SignatureFormatter.seedBody(seed.body, signature))
                 container.draftStore.save(draft)
                 mutableState.update { it.copy(seedingCompose = false, composeDraftId = draft.id) }
             } catch (exception: Exception) {

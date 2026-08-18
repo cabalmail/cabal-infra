@@ -131,4 +131,89 @@
     <string name="new_address_loading_domains">Loading domains…</string>
     <string name="new_address_no_domains">No domains available to you</string>
     <string name="new_address_preview">%1$s@%2$s.%3$s</string>
+
+    <!-- Addresses -->
+    <string name="addresses_title">Addresses</string>
+    <string name="addresses_request_new">Request new address</string>
+    <string name="addresses_empty">No addresses yet. Tap + to create one.</string>
+    <string name="addresses_favorite">Favorite</string>
+    <string name="addresses_unfavorite">Remove favorite</string>
+    <string name="addresses_revoke">Revoke</string>
+    <string name="addresses_revoke_confirm_title">Revoke this address?</string>
+    <string name="addresses_revoke_confirm_body">%1$s stops receiving mail immediately. This cannot be undone.</string>
+    <string name="addresses_suspended">Suspended</string>
+
+    <!-- Folders admin -->
+    <string name="folders_admin_title">Manage folders</string>
+    <string name="folders_new">New folder</string>
+    <string name="folders_name">Name</string>
+    <string name="folders_parent">Parent</string>
+    <string name="folders_parent_top_level">(top level)</string>
+    <string name="folders_create">Create</string>
+    <string name="folders_delete">Delete folder</string>
+    <string name="folders_delete_confirm_title">Delete folder?</string>
+    <string name="folders_delete_confirm_body">%1$s is removed from your mailbox. Only empty folders can be deleted.</string>
+    <string name="folders_subscribed">Subscribed</string>
+    <string name="folders_unsubscribed">Not subscribed</string>
+    <plurals name="folders_message_count">
+        <item quantity="one">%d message</item>
+        <item quantity="other">%d messages</item>
+    </plurals>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_signed_in_as">Signed in</string>
+    <string name="settings_display_name">Display name</string>
+    <string name="settings_display_name_empty">None — messages show only the address</string>
+    <string name="settings_reading">Reading</string>
+    <string name="settings_mark_as_read">Mark as read</string>
+    <string name="settings_load_remote_content">Load remote content</string>
+    <string name="settings_render_mode">Body render mode</string>
+    <string name="settings_folder_count">Folder count display</string>
+    <string name="settings_default_sort">Default sort</string>
+    <string name="settings_composing">Composing</string>
+    <string name="settings_default_from">Default From address</string>
+    <string name="settings_default_from_none">None — choose each time</string>
+    <string name="settings_signature">Signature</string>
+    <string name="settings_signature_empty">None</string>
+    <string name="settings_actions">Actions</string>
+    <string name="settings_dispose_action">Dispose action</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_dynamic_color">Dynamic color</string>
+    <string name="settings_dynamic_color_hint">Colors from your wallpaper (Material You). When off, the Accent below is used.</string>
+    <string name="settings_accent">Accent</string>
+    <string name="settings_density">Density</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_report_issue">Report an issue</string>
+    <string name="settings_save">Save</string>
+    <string name="opt_mark_read_manual">Manual</string>
+    <string name="opt_mark_read_on_open">On open</string>
+    <string name="opt_off">Off</string>
+    <string name="opt_ask">Ask</string>
+    <string name="opt_always">Always</string>
+    <string name="opt_render_original">Original</string>
+    <string name="opt_render_reader">Reader</string>
+    <string name="opt_count_unread">Unread</string>
+    <string name="opt_count_total">Total</string>
+    <string name="opt_count_both">Both</string>
+    <string name="opt_sort_received">Date received</string>
+    <string name="opt_sort_sent">Date sent</string>
+    <string name="opt_sort_from">Sender</string>
+    <string name="opt_sort_subject">Subject</string>
+    <string name="opt_dispose_trash">Trash</string>
+    <string name="opt_theme_system">System</string>
+    <string name="opt_theme_light">Light</string>
+    <string name="opt_theme_dark">Dark</string>
+    <string name="opt_accent_ink">Ink</string>
+    <string name="opt_accent_oxblood">Oxblood</string>
+    <string name="opt_accent_forest">Forest</string>
+    <string name="opt_accent_azure">Azure</string>
+    <string name="opt_accent_amber">Amber</string>
+    <string name="opt_accent_plum">Plum</string>
+    <string name="opt_density_compact">Compact</string>
+    <string name="opt_density_normal">Normal</string>
+    <string name="opt_density_roomy">Roomy</string>
 </resources>

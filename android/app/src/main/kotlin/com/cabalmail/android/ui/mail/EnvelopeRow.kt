@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.LocalRowPadding
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.hasAuthFailure
 import com.cabalmail.kit.models.mailboxAddress
@@ -72,7 +73,7 @@ fun EnvelopeRow(
             modifier
                 .fillMaxWidth()
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = LocalRowPadding.current),
     ) {
         if (checked != null) {
             Checkbox(checked = checked, onCheckedChange = { onClick() })

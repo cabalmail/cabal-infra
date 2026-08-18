@@ -27,7 +27,8 @@ class MainActivity : ComponentActivity() {
             container.shareIntake.offer(intent)
         }
         setContent {
-            CabalmailTheme {
+            val preferences by container.preferences.preferences.collectAsState()
+            CabalmailTheme(preferences = preferences) {
                 val viewModel: SignInViewModel =
                     viewModel(factory = SignInViewModel.factory(container))
                 val state by viewModel.state.collectAsState()

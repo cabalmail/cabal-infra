@@ -145,7 +145,11 @@ class SearchViewModel(
                     api.purgeMessages(folder, listOf(envelope.id))
                     container.bodyCache.remove(folder, envelope.id)
                 } else {
-                    api.moveMessages(folder, MessageListViewModel.ARCHIVE_FOLDER, listOf(envelope.id))
+                    api.moveMessages(
+                        folder,
+                        MessageListViewModel.disposeTarget(container.preferences.preferences.value),
+                        listOf(envelope.id),
+                    )
                 }
                 container.envelopeCache.invalidateFolder(folder)
                 mutableState.update { state ->

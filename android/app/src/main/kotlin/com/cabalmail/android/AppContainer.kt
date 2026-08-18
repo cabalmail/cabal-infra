@@ -19,6 +19,7 @@ import com.cabalmail.kit.cache.RoomEnvelopeCache
 import com.cabalmail.kit.config.Config
 import com.cabalmail.kit.config.ConfigService
 import com.cabalmail.kit.config.DataStoreConfigCache
+import com.cabalmail.kit.settings.PreferencesRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +33,10 @@ private val Context.configDataStore by preferencesDataStore(name = "config")
 
 // Per-install navigation identity (resume cursor); never backed up.
 private val Context.navDataStore by preferencesDataStore(name = "nav")
+
+// Local cache of the user's preferences (plan §6.3); the synced subset is
+// re-pulled from the server on every launch.
+private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 /**
  * Manual constructor-injection graph (the plan's DI decision: no Hilt until
@@ -95,6 +100,11 @@ class AppContainer(
      * screen's own scope is gone.
      */
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Preferences: DataStore cache + server sync (plan §6.3). */
+    val preferences: PreferencesRepository by lazy {
+        PreferencesRepository(appContext.settingsDataStore, appScope) { requireApi() }
+    }
 
     val navCursor: NavCursor by lazy {
         NavCursor(appContext.navDataStore, appScope) { requireApi() }
