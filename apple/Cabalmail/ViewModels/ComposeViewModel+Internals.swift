@@ -130,6 +130,13 @@ extension ComposeViewModel {
         )
     }
 
+    /// The body a compose seeded with nothing but the signature preference
+    /// ends up holding; empty when the user has no signature set. Read
+    /// through `ComposeBodyPolicy.bodyIsUntouchedSignature` (#1132).
+    var signatureOnlySeed: String {
+        SignatureFormatter.seedBody(base: "", signature: preferences.signature)
+    }
+
     /// Whether the markdown pane carries something the user wrote, as
     /// opposed to a seed they never touched. Send-time provenance, not
     /// emptiness — see `ComposeBodyPolicy.source` (#1091).
@@ -182,13 +189,26 @@ extension ComposeViewModel {
     }
 
     /// True when the compose buffer carries anything worth keeping — the
-    /// shared emptiness check behind close-without-send and the server-save
-    /// debounce. Takes the converted bodies rather than an assembled
-    /// message so it can answer before a `From` address is in hand.
+    /// shared check behind close-without-send and the server-save debounce.
+    /// Takes the converted bodies rather than an assembled message so it can
+    /// answer before a `From` address is in hand.
+    ///
+    /// Emptiness, not authorship, was the original rule, and a signature
+    /// preference broke it: the composer seeds the Markdown pane before the
+    /// user can type, so a brand-new message read as content (#1132). The
+    /// body clause now asks who wrote it; every other clause is still a
+    /// plain emptiness test, because nothing seeds those fields.
     func hasDraftContent(bodies: (text: String, html: String)) -> Bool {
-        !subject.isEmpty
-            || !bodies.text.isEmpty
-            || !bodies.html.isEmpty
+        // Non-empty bodies are not automatically the user's: a signature
+        // seeds the Markdown pane from `init` (#1132).
+        let bodyAuthored = (!bodies.text.isEmpty || !bodies.html.isEmpty)
+            && !ComposeBodyPolicy.bodyIsUntouchedSignature(
+                markdownBody: markdownBody,
+                richMirrorsMarkdown: richMirrorsMarkdown,
+                signatureOnlySeed: signatureOnlySeed
+            )
+        return !subject.isEmpty
+            || bodyAuthored
             || !parseRecipients(toText).isEmpty
             || !parseRecipients(ccText).isEmpty
             || !parseRecipients(bccText).isEmpty
