@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols "edit_note" glyph (Apache 2.0). Compose's material-icons-core
+     ships only the base set; a vector drawable beats pulling the full
+     extended artifact into an unminified debug APK. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M3,10h11v2H3v-2zm0,-2h11V6H3v2zm0,8h7v-2H3v2zm15.01,-3.13l0.71,-0.71c0.39,-0.39 1.02,-0.39 1.41,0l0.71,0.71c0.39,0.39 0.39,1.02 0,1.41l-0.71,0.71 -2.12,-2.12zm-0.71,0.71l-5.3,5.3V21h2.12l5.3,-5.3 -2.12,-2.12z" />
+</vector>

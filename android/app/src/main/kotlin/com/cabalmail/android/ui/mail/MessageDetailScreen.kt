@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,11 +48,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import com.cabalmail.android.R
+import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.AuthResults
 import com.cabalmail.kit.models.Envelope
@@ -69,12 +72,20 @@ fun MessageDetailScreen(
     viewModel: MessageDetailViewModel,
     bimiLookup: suspend (String) -> String?,
     onBack: () -> Unit,
+    /** Open compose on the staged draft; `replaceMessage` pops this reader first (Edit Draft). */
+    onCompose: (draftId: String, replaceMessage: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(state.departed) {
         if (state.departed) {
             onBack()
         }
+    }
+    LaunchedEffect(state.composeDraftId) {
+        val draftId = state.composeDraftId ?: return@LaunchedEffect
+        val replace = state.composeReplacesMessage
+        viewModel.consumeCompose()
+        onCompose(draftId, replace)
     }
 
     val context = LocalContext.current
@@ -191,6 +202,16 @@ fun MessageDetailScreen(
                 },
             )
         },
+        bottomBar = {
+            ComposeActionsBar(
+                isDraftsFolder = viewModel.isDraftsFolder,
+                enabled = state.envelope != null && !state.busy && !state.seedingCompose,
+                onReply = { viewModel.startReply(ReplyBuilder.Mode.REPLY) },
+                onReplyAll = { viewModel.startReply(ReplyBuilder.Mode.REPLY_ALL) },
+                onForward = { viewModel.startReply(ReplyBuilder.Mode.FORWARD) },
+                onEditDraft = viewModel::editDraft,
+            )
+        },
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             state.envelope?.let { envelope ->
@@ -278,6 +299,43 @@ fun MessageDetailScreen(
             },
             onDismiss = { showMoveSheet = false },
         )
+    }
+}
+
+// -------------------------------------------------------------- compose bar
+
+/**
+ * Reply / reply-all / forward (plan §5.2), or Edit Draft in the Drafts
+ * folder (plan §5.3). A bottom bar so the top bar's existing controls keep
+ * their footprint.
+ */
+@Composable
+private fun ComposeActionsBar(
+    isDraftsFolder: Boolean,
+    enabled: Boolean,
+    onReply: () -> Unit,
+    onReplyAll: () -> Unit,
+    onForward: () -> Unit,
+    onEditDraft: () -> Unit,
+) {
+    BottomAppBar {
+        if (isDraftsFolder) {
+            TextButton(onClick = onEditDraft, enabled = enabled, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Icon(painterResource(R.drawable.ic_edit_note), contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.edit_draft))
+            }
+        } else {
+            IconButton(onClick = onReply, enabled = enabled) {
+                Icon(painterResource(R.drawable.ic_reply), contentDescription = stringResource(R.string.reply))
+            }
+            IconButton(onClick = onReplyAll, enabled = enabled) {
+                Icon(painterResource(R.drawable.ic_reply_all), contentDescription = stringResource(R.string.reply_all))
+            }
+            IconButton(onClick = onForward, enabled = enabled) {
+                Icon(painterResource(R.drawable.ic_forward), contentDescription = stringResource(R.string.forward))
+            }
+        }
     }
 }
 

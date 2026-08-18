@@ -204,12 +204,31 @@ data class OtherHeaders(
     val references: List<String>? = null,
 )
 
-/** Pre-uploaded S3 attachment reference (`/upload_url` flow, Phase 5). */
+/** Pre-uploaded S3 attachment reference (`/upload_url` flow). */
 @Serializable
 data class OutgoingAttachment(
     val filename: String,
     @SerialName("mime_type") val mimeType: String,
     @SerialName("s3_key") val s3Key: String,
+)
+
+/** One `/upload_url` grant: PUT the bytes to [url], then reference [key]. */
+@Serializable
+data class UploadGrant(
+    val key: String,
+    val url: String,
+    @SerialName("expires_in") val expiresIn: Int = 0,
+)
+
+@Serializable
+data class UploadGrantList(
+    val uploads: List<UploadGrant> = emptyList(),
+)
+
+/** `/list_my_domains`: the mail apexes the caller may mint addresses on. */
+@Serializable
+data class MyDomains(
+    @SerialName("Domains") val domains: List<String> = emptyList(),
 )
 
 /** `/send` outcome. */

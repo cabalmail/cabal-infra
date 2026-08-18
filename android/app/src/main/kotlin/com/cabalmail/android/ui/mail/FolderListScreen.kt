@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,6 +49,7 @@ fun FolderListScreen(
     onOpenSearch: () -> Unit,
     onEmptyTrash: () -> Unit,
     onSignOut: () -> Unit,
+    onCompose: () -> Unit,
     modifier: Modifier = Modifier,
     /** A foreign-device resume cursor is available (plan §4.5). */
     resumeAvailable: Boolean = false,
@@ -76,6 +79,11 @@ fun FolderListScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onCompose) {
+                Icon(Icons.Default.Create, contentDescription = stringResource(R.string.compose_new))
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },

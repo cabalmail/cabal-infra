@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols "forward" glyph (Apache 2.0). Compose's material-icons-core
+     ships only the base set; a vector drawable beats pulling the full
+     extended artifact into an unminified debug APK. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,8V4l8,8 -8,8v-4H4V8z" />
+</vector>

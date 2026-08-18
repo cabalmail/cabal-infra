@@ -77,4 +77,58 @@
     <!-- Resume cursor -->
     <string name="resume_prompt">Pick up where you left off?</string>
     <string name="resume_action">Resume</string>
+
+    <!-- Compose -->
+    <string name="compose_new">New message</string>
+    <string name="compose_title_new">New message</string>
+    <string name="compose_title_reply">Reply</string>
+    <string name="compose_title_forward">Forward</string>
+    <string name="compose_close">Close</string>
+    <string name="compose_send">Send</string>
+    <string name="compose_from">From</string>
+    <string name="compose_from_placeholder">Choose a From address</string>
+    <string name="compose_create_address">Create new address…</string>
+    <string name="compose_to">To</string>
+    <string name="compose_cc">Cc</string>
+    <string name="compose_bcc">Bcc</string>
+    <string name="compose_cc_bcc_toggle">Cc/Bcc</string>
+    <string name="compose_subject">Subject</string>
+    <string name="compose_body_hint">Write your message (Markdown)</string>
+    <string name="compose_attach">Attach</string>
+    <string name="compose_attach_photos">Photos and videos</string>
+    <string name="compose_attach_files">Files</string>
+    <string name="compose_remove_attachment">Remove attachment</string>
+    <string name="compose_remove_recipient">Remove %1$s</string>
+    <string name="compose_discard">Discard draft</string>
+    <string name="compose_discard_confirm_title">Discard this draft?</string>
+    <string name="compose_discard_confirm_body">The draft is deleted from this device and from your Drafts folder.</string>
+    <string name="compose_close_save_failed_title">Couldn\'t save draft</string>
+    <string name="compose_close_save_failed_body">%1$s\n\nA copy stays on this device; you\'ll be offered it next time you open Cabalmail.</string>
+    <string name="compose_keep_editing">Keep editing</string>
+    <string name="compose_close_anyway">Close anyway</string>
+    <string name="format_bold">Bold</string>
+    <string name="format_italic">Italic</string>
+    <string name="format_link">Link</string>
+    <string name="format_bullets">Bulleted list</string>
+    <string name="format_numbers">Numbered list</string>
+    <string name="format_quote">Quote</string>
+    <string name="format_code">Code</string>
+    <string name="reply">Reply</string>
+    <string name="reply_all">Reply all</string>
+    <string name="forward">Forward</string>
+    <string name="edit_draft">Edit draft</string>
+    <string name="local_draft_prompt">You have an unsent draft on this device.</string>
+    <string name="local_draft_resume">Open</string>
+
+    <!-- New address sheet -->
+    <string name="new_address_title">Create address</string>
+    <string name="new_address_username">Local part</string>
+    <string name="new_address_subdomain">Subdomain</string>
+    <string name="new_address_domain">Domain</string>
+    <string name="new_address_comment">Comment (optional)</string>
+    <string name="new_address_random">Random</string>
+    <string name="new_address_create">Create</string>
+    <string name="new_address_loading_domains">Loading domains…</string>
+    <string name="new_address_no_domains">No domains available to you</string>
+    <string name="new_address_preview">%1$s@%2$s.%3$s</string>
 </resources>
