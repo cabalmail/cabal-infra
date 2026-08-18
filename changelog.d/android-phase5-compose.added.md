@@ -1,7 +1,7 @@
-- **Android mail composition with on-the-fly From (Phase 5).** The Android
-  client can now write mail. The compose screen leads with a From picker
-  that has no preselection — Send stays disabled until an owned address is
-  chosen — with favorites first and "Create new address…" as its last item
+- Android: **Compose with on-the-fly From and synced drafts.** The client
+  can now write mail (Phase 5). The compose screen leads with a From picker
+  that has no preselection - Send stays disabled until an owned address is
+  chosen - with favorites first and "Create new address..." as its last item
   (a bottom sheet with local part, subdomain, permitted-domain picker,
   comment, and a Random fill), so minting a fresh relationship-scoped
   address is one tap away from every message. Recipients are chips with a
@@ -10,7 +10,7 @@
   so drafts round-trip losslessly with the Apple and web clients; photos
   and documents attach through the system pickers and stage to S3 via
   `/upload_url`. Reply / reply-all / forward open from a new bottom bar in
-  the reader — From defaults to the owned address the original was sent
+  the reader - From defaults to the owned address the original was sent
   to, subjects prefix idempotently, replies thread through the fetched
   body's headers overlaid on the envelope, and forward deliberately starts
   a new thread; a sent reply marks the original answered. Drafts follow the

@@ -163,6 +163,25 @@ jobs:
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
 
+      # Play Console release notes (prod only). gradle-play-publisher reads them
+      # from app/src/main/play/release-notes/<locale>/default.txt at publish
+      # time; there is no post-upload API hook, so the file is written here.
+      # Headlines of the `Android:`-prefixed CHANGELOG.md entries only, under
+      # Play's 500-character cap - see the script and changelog.d/README.md.
+      # Stage uploads ship without notes: on stage the top CHANGELOG.md section
+      # is still the previous release (fragments collate only at promotion).
+      - name: Derive Play release notes (prod only)
+        if: steps.creds.outputs.present == 'true' && github.ref_name == 'main'
+        run: |
+          python3 .github/scripts/play-release-notes.py \
+            --changelog CHANGELOG.md \
+            --out android/app/src/main/play/release-notes/en-US/default.txt
+          {
+            echo '```'
+            cat android/app/src/main/play/release-notes/en-US/default.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build and publish signed bundle
         if: steps.creds.outputs.present == 'true'
         working-directory: android
