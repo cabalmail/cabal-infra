@@ -4,30 +4,30 @@
 # module actually references.
 
 [versions]
-agp = "8.10.1"
-kotlin = "2.1.21"
-# KSP tracks the Kotlin version (first component must match).
-ksp = "2.1.21-2.0.2"
-ktlint = "12.1.1"
-coreKtx = "1.16.0"
+agp = "9.3.1"
+kotlin = "2.4.10"
+# KSP2 (2.3.x+) versions independently of Kotlin; check the KSP release notes for
+# the supported Kotlin range when bumping either.
+ksp = "2.3.11"
+ktlint = "14.2.0"
+coreKtx = "1.19.0"
 lifecycle = "2.9.0"
-activityCompose = "1.10.1"
-composeBom = "2025.05.00"
-coroutines = "1.10.2"
-serialization = "1.8.1"
-ktor = "3.1.3"
+activityCompose = "1.13.0"
+composeBom = "2026.08.00"
+coroutines = "1.11.0"
+serialization = "1.11.0"
+ktor = "3.5.2"
 datastore = "1.1.6"
-room = "2.7.1"
-coil = "3.1.0"
-amplify = "2.27.0"
-junit = "5.11.4"
-junitPlatform = "1.11.4"
-turbine = "1.2.0"
-# 4.x requires Gradle 9; 3.13.0 is the newest line for the Gradle 8 / AGP 8
-# pairing this project pins. Revisit alongside a Gradle major bump.
-tripletPlay = "3.13.0"
+room = "2.8.4"
+coil = "3.5.0"
+amplify = "2.39.0"
+junit = "6.1.3"
+junitPlatform = "6.1.3"
+turbine = "1.2.1"
+# 4.x requires Gradle 9 (this project is on Gradle 9 / AGP 9).
+tripletPlay = "4.1.1"
 # Markdown → HTML for the compose body (Phase 5). Pure Kotlin/JVM, no UI.
-jetbrainsMarkdown = "0.7.3"
+jetbrainsMarkdown = "0.7.8"
 # Background new-mail sync (Phase 7).
 work = "2.10.1"
 
@@ -44,6 +44,9 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+# material3 stopped depending on material-icons-core transitively (Compose 1.12 /
+# BOM 2026.08); every `Icons.*` reference in app needs it declared explicitly.
+androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 # Adaptive layouts (Phase 7): navigation suite (bar/rail by window size), list-detail panes.
 androidx-compose-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite" }
 androidx-compose-material3-adaptive = { group = "androidx.compose.material3.adaptive", name = "adaptive" }
@@ -52,7 +55,7 @@ androidx-compose-material3-adaptive-navigation = { group = "androidx.compose.mat
 
 # Persistence + secure storage
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
-androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version = "1.0.0" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version = "1.1.0" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }

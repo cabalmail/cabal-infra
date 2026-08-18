@@ -215,7 +215,12 @@ class ApiClientTest {
 
             val page = server.api.listMessages("INBOX", sortField = "DATE", descending = true)
 
-            assertEquals("REVERSE ", server.requests.single().url.parameters["sort_order"])
+            assertEquals(
+                "REVERSE ",
+                server.requests
+                    .single()
+                    .url.parameters["sort_order"],
+            )
             assertEquals(listOf(3L, 2L, 1L), page.messageIds)
         }
 

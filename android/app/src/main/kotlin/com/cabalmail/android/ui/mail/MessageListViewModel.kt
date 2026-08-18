@@ -96,7 +96,10 @@ internal fun compactWindow(
     removed: Set<Long>,
 ): Map<Int, Envelope> {
     val removedIndices =
-        envelopes.entries.filter { it.value.id in removed }.map { it.key }.sorted()
+        envelopes.entries
+            .filter { it.value.id in removed }
+            .map { it.key }
+            .sorted()
     if (removedIndices.isEmpty()) {
         return envelopes
     }
@@ -460,7 +463,9 @@ class MessageListViewModel(
             )
         }
         if (writeCache) {
-            val patched = mutableState.value.envelopes.values.filter { it.id in uids }
+            val patched =
+                mutableState.value.envelopes.values
+                    .filter { it.id in uids }
             viewModelScope.launch {
                 container.envelopeCache.write(folder, patched)
             }

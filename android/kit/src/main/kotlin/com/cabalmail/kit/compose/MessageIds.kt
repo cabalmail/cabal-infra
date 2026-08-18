@@ -12,7 +12,12 @@ object MessageIds {
     private val TOKEN = Regex("""<[^<>\s]+>""")
 
     /** Strips one pair of surrounding angle brackets and whitespace. */
-    fun bare(id: String): String = id.trim().removePrefix("<").removeSuffix(">").trim()
+    fun bare(id: String): String =
+        id
+            .trim()
+            .removePrefix("<")
+            .removeSuffix(">")
+            .trim()
 
     /**
      * Wraps a bare id in angle brackets unless it already carries them;
