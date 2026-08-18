@@ -47,7 +47,10 @@ struct MenuBarExtraMenu: View {
             // Same route as the File menu / toolbar: the compose window
             // scene both app targets install. If the user is signed out
             // the scene shows its own "Sign in required" placeholder.
-            openWindow(id: composeWindowID, value: Draft())
+            openWindow(
+                id: composeWindowID,
+                value: appState.composeSlots.acquire(seed: Draft())
+            )
             NSApp.activate()
         }
         Divider()

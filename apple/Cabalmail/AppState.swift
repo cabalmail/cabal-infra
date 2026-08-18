@@ -69,11 +69,17 @@ final class AppState {
     /// that lands while an iPhone compose sheet is already up (drained
     /// when that sheet dismisses, so it never clobbers a draft).
     var pendingComposeSeed: Draft?
+    /// Window identities for the compose scene group, recycled rather
+    /// than minted per session (issue #1084). Lives on `AppState` because
+    /// all three compose entry points — the request router, the compose
+    /// scene itself, and the macOS menu-bar extra — already read it.
+    /// `@ObservationIgnored` because the registry is its own observable;
+    /// the reference never changes.
+    @ObservationIgnored let composeSlots = ComposeSlotRegistry()
     /// Forwarded-message attachments awaiting pickup by the compose
     /// surface, keyed by seed draft id. The forward action stashes the
-    /// original message's decoded attachments here — they're too big to
-    /// ride the Codable `Draft` through `openWindow` — and `ComposeView`
-    /// consumes them in its `.task`. In-memory only: like hand-picked
+    /// original message's decoded attachments here rather than on the
+    /// seed itself — and `ComposeView` consumes them in its `.task`. In-memory only: like hand-picked
     /// compose attachments, they don't survive a relaunch or a resumed
     /// draft. `@ObservationIgnored` because no view renders this
     /// directly; it's a one-shot handoff, and consuming it during view

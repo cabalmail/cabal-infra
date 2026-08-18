@@ -80,10 +80,10 @@ struct ComposeView: View {
             .toolbar { toolbarContent }
             .task {
                 // Pick up forwarded attachments stashed by the forward
-                // action. They hand off out-of-band because the seed
-                // `Draft` travels through `openWindow` as a Codable
-                // value. Pop-once: a system-restored compose scene finds
-                // nothing and simply composes without them.
+                // action. They hand off out-of-band, keyed by seed id,
+                // rather than riding the seed itself. Pop-once: a
+                // system-restored compose scene finds nothing and simply
+                // composes without them.
                 let forwarded = appState.consumeComposeAttachments(for: model.draftId)
                 if !forwarded.isEmpty {
                     model.seedForwardedAttachments(forwarded)
