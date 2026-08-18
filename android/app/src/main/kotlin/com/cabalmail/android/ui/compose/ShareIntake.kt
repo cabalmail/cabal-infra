@@ -70,3 +70,28 @@ class ShareIntake {
             getParcelableArrayListExtra<Uri>(key).orEmpty()
         }
 }
+
+/** A message a notification tap asked to open (plan §7.3). */
+data class OpenRequest(
+    val folder: String,
+    val uid: Long,
+)
+
+/** Same hand-off pattern as [ShareIntake], for notification taps. */
+class OpenIntake {
+    private val mutablePending = MutableStateFlow<OpenRequest?>(null)
+    val pending: StateFlow<OpenRequest?> = mutablePending.asStateFlow()
+
+    fun offer(intent: Intent?): Boolean {
+        intent ?: return false
+        val folder = intent.getStringExtra(com.cabalmail.android.notifications.NewMailSync.EXTRA_FOLDER) ?: return false
+        val uid = intent.getLongExtra(com.cabalmail.android.notifications.NewMailSync.EXTRA_UID, -1L)
+        if (uid <= 0) {
+            return false
+        }
+        mutablePending.value = OpenRequest(folder, uid)
+        return true
+    }
+
+    fun consume(): OpenRequest? = mutablePending.getAndUpdate { null }
+}

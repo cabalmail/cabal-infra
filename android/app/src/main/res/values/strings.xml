@@ -133,6 +133,24 @@
     <string name="new_address_no_domains">No domains available to you</string>
     <string name="new_address_preview">%1$s@%2$s.%3$s</string>
 
+    <!-- Shell -->
+    <string name="nav_mail">Mail</string>
+    <string name="nav_folders">Folders</string>
+    <string name="offline_banner">Offline — showing cached mail</string>
+    <string name="detail_placeholder">Select a message to read it</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_new_mail">New mail</string>
+    <string name="notification_new_mail">New mail</string>
+    <plurals name="notification_new_count">
+        <item quantity="one">%d new message</item>
+        <item quantity="other">%d new messages</item>
+    </plurals>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_new_mail_notifications">New mail notifications</string>
+    <string name="settings_new_mail_notifications_hint">Checks INBOX about every 15 minutes in the background.</string>
+    <string name="settings_notifications_denied">Notification permission was denied. Allow it in system settings to turn this on.</string>
+
     <!-- Addresses -->
     <string name="addresses_title">Addresses</string>
     <string name="addresses_request_new">Request new address</string>

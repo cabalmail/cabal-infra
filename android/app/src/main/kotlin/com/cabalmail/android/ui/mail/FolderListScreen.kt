@@ -9,12 +9,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -52,12 +49,10 @@ fun FolderListScreen(
     onOpenFolder: (String) -> Unit,
     onOpenSearch: () -> Unit,
     onEmptyTrash: () -> Unit,
-    onSignOut: () -> Unit,
     onCompose: () -> Unit,
-    onOpenAddresses: () -> Unit,
-    onOpenFolders: () -> Unit,
-    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Silent refresh, driven every minute while resumed (plan §7.3). */
+    onPoll: () -> Unit = {},
     /** What the per-folder badge shows (plan §6.3 "Folder count display"). */
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
     /** A foreign-device resume cursor is available (plan §4.5). */
@@ -66,7 +61,7 @@ fun FolderListScreen(
     onResumeDismiss: () -> Unit = {},
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
-    var menuOpen by remember { mutableStateOf(false) }
+    ForegroundPolling(onPoll)
     val snackbarHostState = remember { SnackbarHostState() }
     val resumeMessage = stringResource(R.string.resume_prompt)
     val resumeAction = stringResource(R.string.resume_action)
@@ -100,39 +95,6 @@ fun FolderListScreen(
                 actions = {
                     IconButton(onClick = onOpenSearch) {
                         Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
-                    }
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_actions))
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.addresses_title)) },
-                            onClick = {
-                                menuOpen = false
-                                onOpenAddresses()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.folders_admin_title)) },
-                            onClick = {
-                                menuOpen = false
-                                onOpenFolders()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.settings_title)) },
-                            onClick = {
-                                menuOpen = false
-                                onOpenSettings()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.sign_out)) },
-                            onClick = {
-                                menuOpen = false
-                                onSignOut()
-                            },
-                        )
                     }
                 },
             )

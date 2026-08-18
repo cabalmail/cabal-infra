@@ -59,7 +59,8 @@ import com.cabalmail.kit.models.Address
 fun AddressesScreen(
     state: AddressesUiState,
     viewModel: AddressesViewModel,
-    onBack: () -> Unit,
+    /** Null when hosted as a top-level destination (no back arrow). */
+    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -79,8 +80,13 @@ fun AddressesScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.addresses_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
                     }
                 },
             )

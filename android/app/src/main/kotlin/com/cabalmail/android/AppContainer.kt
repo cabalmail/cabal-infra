@@ -3,6 +3,8 @@ package com.cabalmail.android
 import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
 import com.cabalmail.android.navigation.NavCursor
+import com.cabalmail.android.ui.compose.OpenIntake
+import com.cabalmail.android.ui.compose.SendQueue
 import com.cabalmail.android.ui.compose.ShareIntake
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
@@ -25,6 +27,7 @@ import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -94,6 +97,32 @@ class AppContainer(
     /** Content shared into the app (ACTION_SEND) awaiting a compose screen. */
     val shareIntake = ShareIntake()
 
+    /** A notification tap's target message awaiting the navigation host. */
+    val openIntake = OpenIntake()
+
+    /** Hardware-keyboard chords from the activity to whichever screen is up. */
+    val shortcuts = ShortcutBus()
+
+    /** Reader-side mutations the message list mirrors without a refetch. */
+    val mailEvents = MailEventBus()
+
+    /** Connectivity for the offline banner and the send queue. */
+    val connectivity: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }
+
+    /**
+     * Launch-time one-shots (unsent-draft prompt, outbox flush) run once
+     * per process, not once per Activity — a rotation recreates the
+     * navigation host, and re-prompting about the draft that is open would
+     * be absurd.
+     */
+    var launchOneShotsDone: Boolean = false
+
+    /** Fires when the API rejects a refreshed token: the session is gone. */
+    val authExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** The outbox: queued sends retried on reconnect and at launch (plan §7.4). */
+    val sendQueue: SendQueue by lazy { SendQueue(this).also { it.start() } }
+
     /**
      * App-lifetime work that outlives any one screen: nav-cursor pushes, and
      * the close-without-send draft save that must finish after the compose
@@ -150,6 +179,7 @@ class AppContainer(
                     host = config.imapHost,
                     authService = auth,
                     httpClient = httpClient,
+                    onAuthExpired = { authExpired.tryEmit(Unit) },
                 ).also { apiClient = it }
             }
         }

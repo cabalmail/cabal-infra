@@ -83,6 +83,12 @@ data class Draft(
      * server drafts, whose body is user content by definition.
      */
     val seedBody: String = "",
+    /**
+     * Set when a send failed for a transient reason and the draft waits in
+     * the outbox: the Message-ID it will be sent with, kept stable so the
+     * server's dedupe claim recognizes the retry.
+     */
+    val queuedMessageId: String? = null,
 ) {
     /** The server coordinates when both halves are present. */
     val serverRef: DraftServerRef?

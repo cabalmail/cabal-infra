@@ -117,6 +117,8 @@ data class AppPreferences(
     val signature: String = "",
     // ---- local only
     val dynamicColor: Boolean = true,
+    /** Background new-mail notifications (plan §7.3); off until the user opts in. */
+    val notificationsEnabled: Boolean = false,
     val defaultSort: DefaultSort = DefaultSort.RECEIVED,
     val defaultSortDescending: Boolean = true,
 )

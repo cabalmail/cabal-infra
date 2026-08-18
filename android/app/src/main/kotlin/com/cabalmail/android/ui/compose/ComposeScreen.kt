@@ -52,6 +52,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -111,7 +112,8 @@ fun ComposeScreen(
         }
 
     val toFocus = remember { FocusRequester() }
-    var focusedOnce by remember { mutableStateOf(false) }
+    // Saveable so a rotation does not re-focus (and pop the keyboard).
+    var focusedOnce by rememberSaveable { mutableStateOf(false) }
     val draftLoaded = state.draft.updatedAt != 0L
     LaunchedEffect(draftLoaded) {
         // Initial focus once the draft has loaded: To for a fresh compose.

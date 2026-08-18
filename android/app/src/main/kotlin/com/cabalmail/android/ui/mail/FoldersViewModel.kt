@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.FolderStatus
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -33,13 +34,20 @@ class FoldersViewModel(
         refresh()
     }
 
-    fun refresh() {
+    fun refresh() = refresh(quiet = false)
+
+    /** Foreground poll (plan §7.3): same reload, no spinner, errors stay silent. */
+    fun poll() = refresh(quiet = true)
+
+    private fun refresh(quiet: Boolean) {
         viewModelScope.launch {
-            mutableState.update { it.copy(refreshing = true, error = null) }
+            if (!quiet) {
+                mutableState.update { it.copy(refreshing = true, error = null) }
+            }
             try {
                 val api = container.requireApi()
                 val folders = api.listFolders().folders
-                mutableState.update { it.copy(folders = folders, refreshing = false) }
+                mutableState.update { it.copy(folders = folders, refreshing = false, error = null) }
                 // Unread badges arrive as their STATUS calls land; a folder
                 // whose STATUS fails just shows no badge.
                 val statuses =
@@ -53,8 +61,10 @@ class FoldersViewModel(
                         .toMap()
                 mutableState.update { it.copy(statuses = statuses) }
             } catch (exception: Exception) {
-                mutableState.update {
-                    it.copy(refreshing = false, error = exception.message ?: "Could not load folders")
+                if (!quiet) {
+                    mutableState.update {
+                        it.copy(refreshing = false, error = userMessage(exception, "Could not load folders"))
+                    }
                 }
             }
         }
@@ -69,7 +79,7 @@ class FoldersViewModel(
                 refresh()
             } catch (exception: Exception) {
                 mutableState.update {
-                    it.copy(error = exception.message ?: "Could not empty Trash")
+                    it.copy(error = userMessage(exception, "Could not empty Trash"))
                 }
             }
         }
