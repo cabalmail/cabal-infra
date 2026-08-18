@@ -113,10 +113,11 @@ fun ComposeScreen(
     val toFocus = remember { FocusRequester() }
     val bodyFocus = remember { FocusRequester() }
     var focusedOnce by remember { mutableStateOf(false) }
-    LaunchedEffect(state.draft.id, state.addresses) {
+    val draftLoaded = state.draft.updatedAt != 0L
+    LaunchedEffect(draftLoaded) {
         // Initial focus once the draft has loaded: To for a fresh compose,
         // the body for a reply whose recipients are already set.
-        if (focusedOnce || state.draft.updatedAt == 0L) {
+        if (focusedOnce || !draftLoaded) {
             return@LaunchedEffect
         }
         focusedOnce = true

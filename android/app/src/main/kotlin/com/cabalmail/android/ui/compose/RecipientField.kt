@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -100,8 +101,7 @@ fun RecipientField(
                         trailingIcon = {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = stringResourceRemove(address),
-                                modifier = Modifier.padding(0.dp),
+                                contentDescription = stringResource(R.string.compose_remove_recipient, address),
                             )
                         },
                     )
@@ -174,7 +174,3 @@ fun RecipientField(
         HorizontalDivider()
     }
 }
-
-@Composable
-private fun stringResourceRemove(address: String): String =
-    androidx.compose.ui.res.stringResource(R.string.compose_remove_recipient, address)
