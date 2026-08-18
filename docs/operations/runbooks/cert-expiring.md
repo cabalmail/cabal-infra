@@ -8,8 +8,11 @@ The alert's `instance` label identifies which endpoint is expiring. Two distinct
 
 | `instance` | Cert | Termination point | Renewal path |
 | --- | --- | --- | --- |
-| `imap.<control-domain>:993` | ACM `*.<control-domain>` (wildcard) | NLB | AWS auto-renewal (DNS validation) |
+| `https://<control-domain>/` | ACM `*.<control-domain>` (wildcard) | CloudFront | AWS auto-renewal (DNS validation) |
 | `smtp-out.<control-domain>:465` | Let's Encrypt (per-host) | smtp-out container | `cabal-certbot-renewal` Lambda |
+| `imap.cabal.internal:143` | Let's Encrypt (per-host) | imap container (STARTTLS) | `cabal-certbot-renewal` Lambda |
+
+(The ACM row used to read `imap.<control-domain>:993`. That NLB listener was removed; CloudFront fronts the same wildcard cert, so the ACM signal moved to the `blackbox-http` probe. The imap row is new for the same reason: the tier now terminates its own TLS on 143+STARTTLS with the Let's Encrypt cert, the same material smtp-out serves.)
 
 (There used to be a parallel pair of `CertExpiringSoon{Warning,Critical}` rules sourced from `aws_certificatemanager_days_to_expiry_minimum`. cloudwatch_exporter v0.16.0 silently dropped that metric under every configuration we tried; the blackbox path measures the same cert from a more honest place — what's actually on the wire — so the CloudWatch source was removed. The runbook below covers both renewal pipelines because either alert can fire from a different cause.)
 
@@ -20,14 +23,14 @@ The TLS certificate serving `{{ $labels.instance }}` is approaching expiry. ACM 
 ## Who/what is impacted
 
 When a cert actually expires:
-- **ACM wildcard (`:993` and everything else fronted by the wildcard)** — admin app (CloudFront), API Gateway, monitoring ALB (Kuma, ntfy, Healthchecks, Grafana), IMAP listener on the NLB. Mail-domain entries in `TF_VAR_MAIL_DOMAINS` have no certs by design (they are address namespaces only) — only the control domain has one.
-- **Let's Encrypt cert (`:465`/`:587`)** — SMTP submission to smtp-out fails TLS handshake. Outbound delivery via port 25 to peer MXes continues since most peers don't validate, but customer-side submission stops.
+- **ACM wildcard (everything fronted by the wildcard)** — admin app (CloudFront), API Gateway, monitoring ALB (Kuma, ntfy, Healthchecks, Grafana). Mail-domain entries in `TF_VAR_MAIL_DOMAINS` have no certs by design (they are address namespaces only) — only the control domain has one.
+- **Let's Encrypt cert (`:465`/`:587`/imap `:143`)** — SMTP submission to smtp-out fails TLS handshake. Outbound delivery via port 25 to peer MXes continues since most peers don't validate, but customer-side submission stops. The imap tier serves the same cert on 143, and the API Lambdas verify it on every STARTTLS, so mailbox access fails too.
 
 ## First three things to check
 
 Which pipeline depends on which endpoint the alert names.
 
-### If `instance` ends in `:993` (ACM cert)
+### If `instance` is the control-domain HTTPS probe (ACM cert)
 
 1. **Why has ACM not renewed?** ACM uses DNS validation. If the validation CNAME records were deleted from Route 53 or the wildcard's domain validation went stale, renewal halts:
    ```sh

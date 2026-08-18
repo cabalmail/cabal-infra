@@ -21,7 +21,7 @@ variable "cidr_block" {
 
 variable "login_trusted_cidrs" {
   type        = list(string)
-  description = "Source CIDRs Dovecot treats as already-secured for auth (the NLB public-subnet CIDRs). Joined into the LOGIN_TRUSTED_NETWORKS env on the imap/smtp-out task defs; with disable_plaintext_auth = yes the entrypoint uses these and falls back to cidr_block if empty (fail open, no lockout). Phase 4 of docs/0.10.x/container-runtime-hardening-plan.md."
+  description = "Source CIDRs Dovecot treats as already-secured for auth (the NLB public-subnet CIDRs). Joined into the LOGIN_TRUSTED_NETWORKS env on the smtp-out task def; with disable_plaintext_auth = yes the entrypoint uses these and falls back to cidr_block if empty (fail open, no lockout). Phase 4 of docs/0.10.x/container-runtime-hardening-plan.md. The imap tier dropped it in issue #779 - no NLB IMAPS listener forwards plain TCP there any more, so it requires TLS and trusts only loopback."
   default     = []
 }
 

@@ -17,14 +17,14 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "TCP probe — IMAP 993",
+      "title": "TCP probe — IMAP 143 (STARTTLS)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "targets": [
         {
-          "expr": "probe_success{instance=~\".*:993\"}",
+          "expr": "probe_success{job=\"blackbox-imap-starttls\"}",
           "refId": "A"
         }
       ],
@@ -80,15 +80,15 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "TLS days to expiry — IMAP 993 (ACM)",
-      "description": "Cert is served by the NLB (TLS terminated there) using the ACM-managed *.cabalmail.net cert. Observed via blackbox-tls tcp_tls probe. Thresholds match the BlackboxTLSCertExpiringSoon{Warning,Critical} alert thresholds (21d warning, 7d critical).",
+      "title": "TLS days to expiry — control domain (ACM)",
+      "description": "ACM-managed *.cabalmail.net cert, observed on the CloudFront edge via the blackbox-http probe of https://<control-domain>/. It was measured at imap.<control-domain>:993 until #778 removed that NLB listener; CloudFront serves the same certificate. Thresholds match the BlackboxTLSCertExpiringSoon{Warning,Critical} alert thresholds (21d warning, 7d critical).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "targets": [
         {
-          "expr": "(probe_ssl_earliest_cert_expiry{instance=~\".*:993\"} - time()) / 86400",
+          "expr": "(probe_ssl_earliest_cert_expiry{job=\"blackbox-http\",instance=~\"https://[^/]+/\"} - time()) / 86400",
           "refId": "A"
         }
       ],
