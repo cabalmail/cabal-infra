@@ -31,8 +31,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
-import java.util.UUID
 
 /** Which recipient row a chip edit targets. */
 enum class RecipientField { TO, CC, BCC }
@@ -91,8 +92,14 @@ class ComposeViewModel(
     private val edits = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private var loaded = false
     private var dirtyForServer = false
-    private var serverSaveJob: Job? = null
     private var suggestionJob: Job? = null
+
+    /**
+     * Serializes server saves so a close-save cannot race the 60 s tick:
+     * two concurrent replaces of the same UID would leave a duplicate
+     * draft (safe, but avoidable).
+     */
+    private val serverSaveMutex = Mutex()
 
     /** The Message-ID this session sends with; stable across retries. */
     private var pendingMessageId: String? = null
@@ -343,6 +350,17 @@ class ComposeViewModel(
     private suspend fun pushDraftToServer(
         draft: Draft,
         from: String,
+    ): DraftServerRef? =
+        serverSaveMutex.withLock {
+            // Re-read the coordinates: a save that just finished ahead of
+            // us may have moved the server copy.
+            val current = mutableState.value.draft
+            pushDraftToServerLocked(draft.withServerRef(current.serverRef), from)
+        }
+
+    private suspend fun pushDraftToServerLocked(
+        draft: Draft,
+        from: String,
     ): DraftServerRef? {
         mutableState.update { it.copy(savingToServer = true) }
         try {
@@ -559,7 +577,5 @@ class ComposeViewModel(
             viewModelFactory {
                 initializer { ComposeViewModel(container, draftId) }
             }
-
-        fun newDraftId(): String = UUID.randomUUID().toString()
     }
 }
