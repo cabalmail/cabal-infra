@@ -56,6 +56,9 @@ module "cabal_method" {
   # cardinality (large-mailbox hardening plan, Layer 4.3).
   alarm_on_latency  = contains(["list_messages", "list_envelopes"], each.key)
   imap_pool_enabled = var.imap_pool_enabled
+  # Endpoints that expunge a message (or replace a draft) also drop its cached
+  # raw body, so the expunged copy stays unreadable through fetch_message.
+  deletes_cache_objects = contains(["send", "save_draft", "purge_messages", "empty_trash"], each.key)
 
   # Private-IMAP replumb: every endpoint runs inside the VPC (uniform posture;
   # the DynamoDB-only functions ride along) and IMAP consumers dial the imap

@@ -1,6 +1,15 @@
 locals {
   hosted_zone_arns = join(",", [for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
+
+  # Every endpoint reads and writes the raw-message cache; only the endpoints
+  # that retire a cached body (expunge, purge, draft replacement) also delete.
+  cache_object_actions = join(",\n", [
+    for action in concat(
+      ["s3:PutObject", "s3:GetObject"],
+      var.deletes_cache_objects ? ["s3:DeleteObject"] : []
+    ) : "              \"${action}\""
+  ])
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -84,8 +93,7 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": [
-              "s3:PutObject",
-              "s3:GetObject"
+${local.cache_object_actions}
             ],
             "Resource": "arn:aws:s3:::cache.${var.control_domain}/${local.wildcard}"
         },

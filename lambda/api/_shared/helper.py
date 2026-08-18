@@ -1166,9 +1166,19 @@ def delete_prefix(bucket, prefix):
     if not prefix or not prefix.endswith('/'):
         raise ValueError(f'invalid delete prefix: {prefix!r}')
     try:
-        s3r.Bucket(bucket).objects.filter(Prefix=prefix).delete()
+        responses = s3r.Bucket(bucket).objects.filter(Prefix=prefix).delete()
     except ClientError as e:
         logging.error(e)
+        return False
+    # The batch DeleteObjects API authorizes per key and reports a refused key
+    # inside a 200 response instead of raising, so a permissions failure here
+    # is silent unless the Errors array is read back.
+    responses = responses or []
+    errors = [err for response in responses for err in response.get('Errors', [])]
+    if errors:
+        deleted = sum(len(response.get('Deleted', [])) for response in responses)
+        logging.error('delete_prefix %s/%s: %s keys refused (%s deleted), first: %s',
+                      bucket, prefix, len(errors), deleted, errors[0])
         return False
     return True
 
