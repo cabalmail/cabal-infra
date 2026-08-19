@@ -41,6 +41,10 @@ Never open a PR to `main` from any other branch. An earlier "direct-to-prod scaf
 
 This repository is public. Never put PII — real names, production email addresses, phone numbers, or anything else identifying a real person — in code comments, commit messages, issue titles/descriptions, PR titles/descriptions/comments, changelog fragments, docs, test fixtures, or anywhere else that is or might be publicly exposed. When a live example is required, use a stage-environment address instead of a production one.
 
+### No hard-wrapping in GitHub-posted text
+
+Anything posted to GitHub — issue bodies and comments, PR bodies, reviews, and comments — must not contain hard line breaks inside paragraphs. Write each paragraph as one long line and let the renderer wrap it. The maintainer reads these threads in email, where hard-wrapped paragraphs re-wrap at a different width and become very hard to track. Blank lines between paragraphs, lists, tables, and code fences are structure, not wrapping — those are fine. This rule is about GitHub-posted prose only; files in the repository (docs, changelog fragments) keep their own conventions.
+
 ## Repository Structure
 
 ```
