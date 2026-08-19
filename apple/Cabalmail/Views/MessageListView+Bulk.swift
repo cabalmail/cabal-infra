@@ -77,14 +77,14 @@ extension MessageListView {
     private func bulkActionButtons(model: MessageListViewModel, count: Int) -> some View {
         let hasUnread = bulkSelectionContainsUnread(model)
         let hasUnflagged = bulkSelectionContainsUnflagged(model)
-        let restoring = model.archiveIntent == .restore
+        let archive = BulkArchiveButtonPolicy.button(in: model.folder.path)
         bulkActionButton(
-            systemImage: restoring ? restoreSymbol : "archivebox",
-            label: restoring ? "Restore" : "Archive",
-            accessibilityLabel: "\(restoring ? "Restore" : "Archive") \(messageCount(count))",
+            systemImage: archive.systemImage,
+            label: archive.title,
+            accessibilityLabel: "\(archive.title) \(messageCount(count))",
             identifier: "bulk.archive"
         ) {
-            bulkArchive(model: model)
+            bulkArchive(model: model, intent: archive.intent)
         }
         bulkActionButton(
             systemImage: "folder",
@@ -125,30 +125,35 @@ extension MessageListView {
         }
     }
 
-    /// The bar's Archive action. Inside Trash the dispose preference may
-    /// point back at Trash itself (a same-folder no-op); Archive on this
-    /// bar is the rescue path, so send the selection to the real Archive
-    /// folder there. Inside Archive the button restores instead — an
-    /// archive would move the selection onto its own folder. Both are
-    /// plain moves (non-destructive), so they skip the large-selection
-    /// confirmation that requestDispose applies.
-    private func bulkArchive(model: MessageListViewModel) {
-        switch model.archiveIntent {
+    /// The bar's Archive action, running the intent its caption came from
+    /// (`BulkArchiveButtonPolicy`) so the two can't diverge. Inside Archive
+    /// the button restores instead — an archive would move the selection
+    /// onto its own folder. The remaining folder test picks the *transport*,
+    /// not the destination: inside Trash this is the rescue path out of the
+    /// deleted pile, a plain move that leaves unread state alone and skips
+    /// the large-selection confirmation, where elsewhere an archive is an
+    /// ordinary dispose.
+    private func bulkArchive(model: MessageListViewModel, intent: DisposeIntent) {
+        switch intent {
         case .restore:
             restoreSelection(uids: model.selectedUIDs, model: model)
             endSelectionMode()
-        default:
+        case .move(let action):
             if model.isTrashFolder {
-                Task { await model.bulkMove(to: DisposeAction.archive.destinationFolder) }
+                Task { await model.bulkMove(to: action.destinationFolder) }
                 endSelectionMode()
             } else {
                 requestDispose(
                     uids: model.selectedUIDs,
-                    action: model.disposeAction,
+                    action: action,
                     exitBulk: true,
                     model: model
                 )
             }
+        case .purge:
+            // `archiving(in:)` never yields a purge; the bar draws its own
+            // destructive Delete for that, inside Trash only.
+            break
         }
     }
 
