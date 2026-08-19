@@ -61,8 +61,10 @@ xcodegen), apply the `no-changelog` label to the PR to opt out.
 
 ## Android client entries
 
-Likewise, any fragment describing a change to the Android client
-(`android/app/src/main`, `android/kit/src/main`) must prefix its entry with
+Likewise, any fragment describing a change to the Android client (the
+manifest, Kotlin, resources, and assets under `android/app/src/main` and
+`android/kit/src/main` - not the Play Console listing metadata that also lives
+there) must prefix its entry with
 `Android:`, and the bold headline must not repeat the word "Android" - the
 prefix already says it, and the collated changelog reads
 `- Android: **Compose with on-the-fly From.**`, not `**Android compose ...**`.

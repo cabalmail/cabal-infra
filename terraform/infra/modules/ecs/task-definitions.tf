@@ -65,8 +65,14 @@ locals {
 #     stops NLB health checks entirely (targets sit in Target.NotInUse),
 #     so without this probe a task that starts but never listens would
 #     pass deploys and never be replaced.
+# v8 (issue #779, the cleanup #778 deliberately left out): drop the 993
+#     port mapping and the LOGIN_TRUSTED_NETWORKS env. With no NLB IMAPS
+#     listener there is nothing to forward plain TCP into 143, so the
+#     image now sets ssl = required and trusts only loopback; the env
+#     would be read no more but the mapping and the wider trust list
+#     would keep shipping to running tasks without this bump.
 resource "terraform_data" "imap_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v7+hc" : "imap-taskdef-v7"
+  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v8+hc" : "imap-taskdef-v8"
 }
 
 resource "aws_ecs_task_definition" "imap" {
@@ -93,7 +99,9 @@ resource "aws_ecs_task_definition" "imap" {
 
     portMappings = [
       { containerPort = 143, protocol = "tcp" },
-      { containerPort = 993, protocol = "tcp" },
+      # No 993: the NLB's IMAPS listener was removed in #778 and the image
+      # switches the in-container listener off (#779). Consumers dial 143
+      # and issue STARTTLS.
       { containerPort = 25, protocol = "tcp" },
     ]
 
@@ -122,7 +130,6 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
-      { name = "LOGIN_TRUSTED_NETWORKS", value = join(" ", var.login_trusted_cidrs) },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["imap"].url },
       { name = "PUSH_QUEUE_URL", value = aws_sqs_queue.push.url },
     ]
@@ -145,7 +152,7 @@ resource "aws_ecs_task_definition" "imap" {
     # tree actually needs. This is the analyzed working set; the mandated
     # dev soak should TIGHTEN it - remove any cap that proves unnecessary
     # under load before promoting to stage/prod.
-    #   NET_BIND_SERVICE  dovecot binds 143/993, sendmail binds 25 (all <1024)
+    #   NET_BIND_SERVICE  dovecot binds 143, sendmail binds 25 (both <1024)
     #   SETUID, SETGID    dovecot forks imap workers as the logged-in user;
     #                     sendmail runs delivery agents as mail/smmsp; procmail
     #                     delivers as the recipient

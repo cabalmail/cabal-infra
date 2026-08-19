@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Cabalmail</string>
+    <string name="control_domain_label">Control domain</string>
+    <string name="control_domain_hint">admin.example.com</string>
+    <string name="control_domain_supporting">The host that serves the admin web app, e.g. admin.example.com</string>
     <string name="username_label">Username</string>
     <string name="password_label">Password</string>
     <string name="sign_in">Sign In</string>
@@ -183,6 +186,7 @@
     <string name="settings_title">Settings</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as">Signed in</string>
+    <string name="settings_server">Server</string>
     <string name="settings_display_name">Display name</string>
     <string name="settings_display_name_empty">None — messages show only the address</string>
     <string name="settings_reading">Reading</string>

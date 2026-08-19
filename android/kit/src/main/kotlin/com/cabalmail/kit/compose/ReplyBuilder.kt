@@ -157,9 +157,11 @@ object ReplyBuilder {
         envelope.from.firstOrNull()?.let { header.append("From: ").append(it).append('\n') }
         header.append("Subject: ").append(envelope.subject).append('\n')
         envelope.sentInstant()?.let {
-            header.append(
-                "Date: ",
-            ).append(RFC_5322_DATE.withZone(zone).format(it)).append('\n')
+            header
+                .append(
+                    "Date: ",
+                ).append(RFC_5322_DATE.withZone(zone).format(it))
+                .append('\n')
         }
         if (envelope.to.isNotEmpty()) {
             header.append("To: ").append(envelope.to.joinToString(", ")).append('\n')

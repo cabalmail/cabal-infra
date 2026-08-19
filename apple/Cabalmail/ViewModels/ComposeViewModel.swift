@@ -147,9 +147,11 @@ final class ComposeViewModel {
     /// which also becomes non-nil once a fresh compose autosaves: the title
     /// describes what the user opened, not what has since been saved.
     let isResumedServerDraft: Bool
-    /// Serializes server saves so the debounce loop and an in-progress
-    /// close-without-send can't append racing copies.
-    var serverSaveInFlight = false
+    /// Serializes every server-side Drafts mutation this session makes —
+    /// the debounce loop, a close-without-send, and the discard — so two
+    /// can't race over the same copy, and so a discard closes the session
+    /// against a save that would resurrect it (#1163).
+    let serverDraftQueue = ServerDraftMutationQueue()
 
     private var autosaveTask: Task<Void, Never>?
     private var serverAutosaveTask: Task<Void, Never>?
@@ -474,9 +476,7 @@ final class ComposeViewModel {
             onClose()
             return true
         case .discardEmpty:
-            if let ref = serverDraftRef {
-                recordServerDraftDiscard(try? await client.discardDraft(ref))
-            }
+            await discardServerDraftCopy()
             try? await draftStore.remove(id: draftId)
             stop()
             onClose()
@@ -495,9 +495,7 @@ final class ComposeViewModel {
     /// discarding on one device should discard everywhere.
     func discard() async {
         try? await draftStore.remove(id: draftId)
-        if let ref = serverDraftRef {
-            recordServerDraftDiscard(try? await client.discardDraft(ref))
-        }
+        await discardServerDraftCopy()
         stop()
         onClose()
     }

@@ -26,6 +26,7 @@ struct ComposerBody: View {
             .labelsHidden()
             .padding(.horizontal, 6)
             .padding(.top, 6)
+            .accessibilityIdentifier("compose.body.mode")
 
             switch model.editorMode {
             case .rich:
@@ -52,6 +53,11 @@ struct ComposerBody: View {
             #endif
             RichTextEditorView(controller: model.editorController)
                 .frame(minHeight: 180)
+                // The pane's only addressable descendants are web content,
+                // which publishes no identifier and is not hittable. Without
+                // an identifier here the body is reachable only by coordinate
+                // tap, which is fatal to the test harness on visionOS (#1157).
+                .accessibilityIdentifier("compose.body.rich")
                 #if os(iOS) || os(visionOS)
                 // On iPadOS/visionOS, UIKit resolves ⌘-chords at the
                 // key-command layer before web content ever sees a keydown,
@@ -93,6 +99,9 @@ struct ComposerBody: View {
             TextEditor(text: $model.markdownBody)
                 .font(.body.monospaced())
                 .frame(minHeight: 180)
+                // Same reason as the rich pane: a bare TextEditor lands as an
+                // unlabelled, unidentified text view (#1157).
+                .accessibilityIdentifier("compose.body.markdown")
                 #if os(iOS) || os(visionOS)
                 .textInputAutocapitalization(.sentences)
                 #endif

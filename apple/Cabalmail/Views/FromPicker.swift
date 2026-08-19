@@ -44,9 +44,11 @@ struct FromPicker: View {
                 Text(model.fromAddress ?? "Select an address…")
                     .foregroundStyle(model.fromAddress == nil ? .secondary : .primary)
                 Spacer()
-                Image(systemName: "chevron.down")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if FromPickerChevronPolicy.labelDrawsChevron(on: .current) {
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .contentShape(Rectangle())
         }

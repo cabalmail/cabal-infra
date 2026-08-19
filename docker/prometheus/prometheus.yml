@@ -108,13 +108,40 @@ scrape_configs:
     # is what populates probe_ssl_earliest_cert_expiry for the Mail
     # Tiers dashboard's "TLS days to expiry" panels and the
     # BlackboxTLSCertExpiringSoon{Warning,Critical} alerts.
+    #
+    # imap.<control-domain>:993 used to be the second target here. That
+    # listener was removed from the NLB (#778) and the IMAP tier is now
+    # reached on 143+STARTTLS from inside the VPC, which the
+    # blackbox-imap-starttls job below probes instead. smtp-out:465
+    # serves the same Let's Encrypt wildcard the imap tier does, so this
+    # job still verifies that certificate's chain and name for real.
     metrics_path: /probe
     params:
       module: [tcp_tls]
     static_configs:
       - targets:
-          - imap.__CONTROL_DOMAIN__:993
           - smtp-out.__CONTROL_DOMAIN__:465
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter.cabal-monitoring.cabal.internal:9115
+
+  - job_name: blackbox-imap-starttls
+    # The IMAP tier no longer has a public implicit-TLS endpoint: the NLB
+    # listener is gone and every consumer (the API Lambdas, and therefore
+    # both clients) dials the Cloud Map name on 143 and issues STARTTLS.
+    # Probe what production actually exercises. The target is the private
+    # Cloud Map name, not imap.<control-domain>, because the latter still
+    # resolves to the NLB - which has no IMAP listener to answer.
+    metrics_path: /probe
+    params:
+      module: [imap_starttls]
+    static_configs:
+      - targets:
+          - imap.cabal.internal:143
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

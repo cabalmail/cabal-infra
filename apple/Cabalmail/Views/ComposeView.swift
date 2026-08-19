@@ -390,11 +390,21 @@ struct ComposeView: View {
     private func ingestPhotoItems(_ items: [PhotosPickerItem]) async {
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-            let filename = "photo-\(UUID().uuidString.prefix(8)).jpg"
-            model.addAttachment(filename: filename, mimeType: "image/jpeg", data: data)
+            // `Data` is the asset's *native* encoding — PNG for a screenshot,
+            // HEIC for most camera captures — so the label has to follow the
+            // bytes. It used to be the constant pair `.jpg` / `image/jpeg`,
+            // which happened to be right only for assets that were already
+            // JPEG (#1140).
+            let (mime, ext) = photoTypeLabels(for: item, data: data)
+            model.addAttachment(
+                filename: "photo-\(UUID().uuidString.prefix(8)).\(ext)",
+                mimeType: mime,
+                data: data
+            )
         }
         photoSelection = []
     }
+
     #endif
 
     // MARK: - Contacts

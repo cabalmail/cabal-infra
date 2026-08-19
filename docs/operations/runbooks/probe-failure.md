@@ -1,13 +1,14 @@
 # Runbook: probe failure (Kuma or blackbox)
 
 Fired by:
-- Kuma monitors: IMAP TLS (993), SMTP relay (25), Submission STARTTLS (587), Submission TLS (465), Admin app HTTP, API round-trip (`/list`), ntfy server health.
+- Kuma monitors: IMAP internal (143), SMTP relay (25), Submission STARTTLS (587), Submission TLS (465), Admin app HTTP, API round-trip (`/list`), ntfy server health.
 - Prometheus rule [`BlackboxProbeFailure`](../../../docker/prometheus/rules/alerts.yml) (any blackbox target).
 
 ## What this means
 
 A synthetic probe to a user-facing endpoint is failing. The probe is one of:
-- **Mail port (993/25/587/465)** — the NLB-fronted mail-tier listener didn't accept a TCP/TLS handshake within the timeout.
+- **Mail port (25/587/465)** — the NLB-fronted mail-tier listener didn't accept a TCP/TLS handshake within the timeout.
+- **IMAP (143)** — the imap container didn't accept a TCP connection, or didn't complete the STARTTLS upgrade, within the timeout. This one is probed inside the VPC at `imap.cabal.internal`: the NLB has carried no IMAP listener since #778, so there is no public path to test from outside.
 - **Admin app (`https://admin.<control-domain>/`)** — CloudFront → S3 returned non-2xx, or DNS broke.
 - **API round-trip (`/list`)** — API Gateway → Lambda failed, or the seeded Cognito JWT in the Kuma monitor expired.
 - **ntfy (`/v1/health`)** — the monitoring ALB or the ntfy ECS task is down. *If this is the only thing failing, the alert that delivered it came in via Pushover; ntfy push will be missing.*
@@ -16,7 +17,7 @@ A synthetic probe to a user-facing endpoint is failing. The probe is one of:
 
 | Probe | User impact |
 | --- | --- |
-| 993 (IMAP) | Mail clients can't read mail. |
+| 143 (IMAP) | Mail clients can't read mail — the API Lambdas dial this port for every mailbox operation. |
 | 25 (SMTP relay) | Inbound mail bounces or queues remotely. |
 | 587 / 465 (Submission) | Mail clients can't send. |
 | Admin app | The browser admin client is unreachable. Mail itself unaffected. |
@@ -29,10 +30,13 @@ The label `instance` (Prometheus) or the monitor name (Kuma) tells you which pro
 
 1. **Is the symptom external or internal?** Test from outside AWS:
    ```sh
-   nc -zv imap.<control-domain> 993        # mail ports
+   nc -zv smtp-in.<control-domain> 25      # relay
+   nc -zv smtp-out.<control-domain> 587    # submission
    curl -I https://admin.<control-domain>/ # admin app
    curl -I https://ntfy.<control-domain>/v1/health
    ```
+   IMAP has no public listener to test this way — probe it from inside the
+   VPC (`nc -zv imap.cabal.internal 143` under `aws ecs execute-command`).
    Compare with `aws ecs execute-command` into a task in the same VPC. If the in-VPC test passes and the public test fails, the issue is at the load balancer or DNS layer. If both fail, the issue is in the service itself.
 2. **Is the ECS service healthy?**
    ```sh

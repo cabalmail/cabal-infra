@@ -97,6 +97,10 @@ fun SettingsScreen(
                 headlineContent = { Text(state.username ?: "") },
                 supportingContent = { Text(stringResource(R.string.settings_signed_in_as)) },
             )
+            ListItem(
+                headlineContent = { Text(state.controlDomain ?: "") },
+                supportingContent = { Text(stringResource(R.string.settings_server)) },
+            )
             TextRow(
                 title = stringResource(R.string.settings_display_name),
                 value = preferences.displayName,

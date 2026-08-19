@@ -215,7 +215,12 @@ class ApiClientTest {
 
             val page = server.api.listMessages("INBOX", sortField = "DATE", descending = true)
 
-            assertEquals("REVERSE ", server.requests.single().url.parameters["sort_order"])
+            assertEquals(
+                "REVERSE ",
+                server.requests
+                    .single()
+                    .url.parameters["sort_order"],
+            )
             assertEquals(listOf(3L, 2L, 1L), page.messageIds)
         }
 
@@ -233,6 +238,20 @@ class ApiClientTest {
             assertTrue(result.isPartial)
             assertEquals(listOf(2L), result.failedIds)
             assertTrue(server.body(0).contains("\"op\":\"set\""))
+        }
+
+    @Test
+    fun `moveMessages sends mark_seen only when asked`() =
+        runTest {
+            val submitted = HttpStatusCode.OK to """{"status": "submitted"}"""
+            val server = Server(submitted, submitted)
+
+            server.api.moveMessages("INBOX", "Archive", listOf(7L), markSeen = true)
+            server.api.moveMessages("INBOX", "Archive", listOf(8L))
+
+            assertTrue(server.body(0).contains("\"mark_seen\":true"))
+            assertTrue(server.body(0).contains("\"destination\":\"Archive\""))
+            assertFalse(server.body(1).contains("mark_seen"))
         }
 
     @Test

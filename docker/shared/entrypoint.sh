@@ -17,7 +17,7 @@
 #
 # Required env vars: TIER, CERT_DOMAIN, AWS_REGION, COGNITO_CLIENT_ID,
 #                    COGNITO_POOL_ID, TLS_CA_BUNDLE, TLS_CERT, TLS_KEY
-# Optional:          NETWORK_CIDR (VPC CIDR for Dovecot login_trusted_networks)
+# Optional:          NETWORK_CIDR (VPC CIDR; smtp-out login_trusted_networks fallback)
 #                    PREFLIGHT (=1: run all preparation steps, then exit 0
 #                    instead of starting services - deploy validation)
 #                    PUSH_QUEUE_URL (imap: consumed by the push-spool-drain
@@ -107,17 +107,21 @@ if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
       > "/etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt"
 
   echo "[entrypoint] Generating dovecot SSL config..."
-  # IMAP tier: NLB terminates TLS (993→143), so Dovecot must accept
-  # plain-TCP connections from the NLB. Use "ssl = yes" (available but
-  # not required) so auth is allowed on the forwarded plain connection.
+  # Both tiers require TLS before any credential crosses the wire.
   #
   # SMTP-OUT tier: NLB does TCP passthrough for submission (587/465),
-  # so Dovecot handles TLS directly. Use "ssl = required".
-  if [ "$TIER" = "imap" ]; then
-    _ssl_mode="yes"
-  else
-    _ssl_mode="required"
-  fi
+  # so Dovecot handles TLS directly.
+  #
+  # IMAP tier: this was "ssl = yes" (available but not required) for as
+  # long as the NLB terminated TLS on 993 and forwarded plain TCP to 143,
+  # because auth had to be allowed on that forwarded plain connection.
+  # That listener is gone (#778/#779) and every consumer - the API
+  # Lambdas, and so both clients - dials 143 and issues STARTTLS before
+  # LOGIN (lambda/api/_shared/imap_session.py), so nothing legitimately
+  # authenticates in the clear any more. "required" closes the residual
+  # allowance rather than leaving it available to whatever else can reach
+  # the port.
+  _ssl_mode="required"
   cat > /etc/dovecot/conf.d/10-ssl.conf <<SSLCONF
 ssl = ${_ssl_mode}
 ssl_cert = </etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt
@@ -126,16 +130,26 @@ ssl_min_protocol = TLSv1.2
 SSLCONF
 
   # Set Dovecot login_trusted_networks: the source networks whose sessions
-  # count as "secured" for auth. With disable_plaintext_auth = yes (Phase 4,
-  # 10-auth.conf) only these may auth over the plain connection the imap NLB
-  # forwards (993 -> TLS-terminated -> 143); anything reaching Dovecot from
-  # elsewhere in the VPC must use real TLS. LOGIN_TRUSTED_NETWORKS is the NLB
-  # public-subnet CIDRs (injected per-env by the task definition). It falls
-  # back to NETWORK_CIDR (the whole VPC CIDR) so a missing/empty value fails
-  # OPEN - no lockout of legitimate NLB-forwarded logins - rather than closed.
-  # This also suppresses the noisy "Disconnected (no auth attempts)" logs from
-  # the NLB's TCP health probes.
-  _login_trusted="${LOGIN_TRUSTED_NETWORKS:-${NETWORK_CIDR:-}}"
+  # count as "secured" for auth, and whose connect-and-drop probes stop
+  # producing "Disconnected (no auth attempts)" log lines.
+  #
+  # SMTP-OUT tier: LOGIN_TRUSTED_NETWORKS is the NLB public-subnet CIDRs
+  # (injected per-env by the task definition). It falls back to NETWORK_CIDR
+  # (the whole VPC CIDR) so a missing/empty value fails OPEN - no lockout of
+  # legitimate NLB-forwarded logins - rather than closed.
+  #
+  # IMAP tier: loopback only. The NLB's 993 listener is gone (#778/#779), so
+  # the NLB forwards nothing here and the only thing that connects without
+  # authenticating is the task definition's own TCP health check, which runs
+  # inside the container. Trusting the public-subnet CIDRs was what made
+  # "anything in the public subnets may attempt plaintext auth" true; with
+  # ssl = required above and this list narrowed to 127.0.0.1, that allowance
+  # is closed while the health-probe log suppression is kept.
+  if [ "$TIER" = "imap" ]; then
+    _login_trusted="127.0.0.1"
+  else
+    _login_trusted="${LOGIN_TRUSTED_NETWORKS:-${NETWORK_CIDR:-}}"
+  fi
   if [ -n "${_login_trusted}" ]; then
     echo "[entrypoint] Setting Dovecot login_trusted_networks = ${_login_trusted}"
     cat > /etc/dovecot/conf.d/05-login.conf <<LOGINCONF

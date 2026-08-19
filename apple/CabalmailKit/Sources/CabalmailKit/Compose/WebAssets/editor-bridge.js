@@ -5,7 +5,7 @@
 //
 //   window.cabal.getHTML()                -> HTML in the editor
 //   window.cabal.setHTML(html)            -> replace editor content
-//   window.cabal.isEmpty()                -> true for <p></p> / ''
+//   window.cabal.isEmpty()                -> true when nothing is visible
 //   window.cabal.markdownToHtml(md)       -> uses marked + flattenParagraphs
 //   window.cabal.htmlToMarkdown(html)     -> uses turndown w/ React's custom
 //                                            paragraph + lineBreak rules,
@@ -77,9 +77,19 @@
 
   // --- editor surface -------------------------------------------------------
 
+  // Elements that are content without contributing text. An emptiness test
+  // that only read text would throw an image-only or rule-only body away.
+  const NON_TEXT_CONTENT = 'img, hr, table, iframe, video, audio, object, embed';
+
   function isEmpty() {
     const html = editor.innerHTML;
-    return !html || html === '<p></p>' || html === '<br>';
+    if (!html) return true;
+    if (editor.querySelector(NON_TEXT_CONTENT)) return false;
+    // Select-all + delete does not leave the element empty: WebKit keeps the
+    // block scaffolding behind, `<p><br></p>` on a document that had
+    // paragraphs and `<br>` on one that never did. Ask what the user can see
+    // rather than enumerating the shapes WebKit leaves behind (#1138).
+    return editor.textContent.trim() === '';
   }
 
   function getHTML() {
