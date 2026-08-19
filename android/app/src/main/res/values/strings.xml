@@ -2,7 +2,8 @@
 <resources>
     <string name="app_name">Cabalmail</string>
     <string name="control_domain_label">Control domain</string>
-    <string name="control_domain_hint">mail.example.com</string>
+    <string name="control_domain_hint">admin.example.com</string>
+    <string name="control_domain_supporting">The host that serves the admin web app, e.g. admin.example.com</string>
     <string name="username_label">Username</string>
     <string name="password_label">Password</string>
     <string name="sign_in">Sign In</string>
