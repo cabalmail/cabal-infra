@@ -286,14 +286,19 @@ groups:
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/sendmail-bounced-spike.md"
 
       - alert: IMAPAuthFailureSpike
-        # Dovecot login failures on the imap tier. Most common cause is a
-        # brute-force attempt; expect fail2ban to dampen this when
-        # re-enabled. Until then, sustained spikes warrant manual SG block.
+        # Dovecot credential rejections on the imap tier. Not an internet
+        # brute force: the tier serves 143 only, inside the VPC (#778/#779
+        # removed the NLB's IMAPS listener and the container's own), so the
+        # likely cause is the API Lambdas failing to authenticate - master
+        # password or user sync - and the alternative is an in-VPC source
+        # that should not be speaking IMAP. Neither is fixed by blocking an
+        # address at the edge. fail2ban is gone for good (0.10.x); Dovecot's
+        # own auth_failure_delay and per-service limits replaced it.
         expr: sum(increase(aws_cabalmail_logs_imap_auth_failures_sum[5m])) > 25
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Dovecot auth-failed rate > 5/min for 5 min"
-          description: "More than 25 \"auth failed\" log lines on the imap tier in the last 5 min, sustained 5 min. Likely a brute-force attempt."
+          description: "More than 25 \"auth failed\" log lines on the imap tier in the last 5 min, sustained 5 min. The tier has no public listener - check whether the API Lambdas are failing to authenticate, or whether an unexpected in-VPC source is attempting logins."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/imap-auth-failure-spike.md"
