@@ -92,10 +92,12 @@ jobs:
   # -----------------------------------------------------------------------
   # Manual approval gate before the Play Console upload, mirroring the
   # other mainline deploy workflows (apple.yml's TestFlight gate,
-  # app.yml/infra.yml): the gate-${env} environments carry the required
-  # reviewers, so the run pauses here until an operator approves. Guarded
-  # by the same ref check as upload so a workflow_dispatch run on a
-  # feature branch (where upload would skip anyway) never waits at a gate.
+  # app.yml/infra.yml). Whether the run actually pauses depends on the
+  # gate-${env} environment's protection rules: with required reviewers
+  # (gate-prod) it waits for an operator; without them (gate-stage,
+  # currently) the job passes on its own. Guarded by the same ref check
+  # as upload so a workflow_dispatch run on a feature branch (where
+  # upload would skip anyway) never waits at a gate.
   # -----------------------------------------------------------------------
   approval:
     needs: [test, build]
