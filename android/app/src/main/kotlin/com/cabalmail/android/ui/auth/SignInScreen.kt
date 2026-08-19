@@ -108,6 +108,11 @@ fun SignInScreen(
                         onValueChange = { controlDomain = it },
                         label = { Text(stringResource(R.string.control_domain_label)) },
                         placeholder = { Text(stringResource(R.string.control_domain_hint)) },
+                        // Always visible, unlike the placeholder: the admin
+                        // host is the one domain a user has no reason to know
+                        // by heart (mail lives on other domains), and nothing
+                        // else on this screen says what shape it takes.
+                        supportingText = { Text(stringResource(R.string.control_domain_supporting)) },
                         keyboardOptions =
                             KeyboardOptions(
                                 keyboardType = KeyboardType.Uri,

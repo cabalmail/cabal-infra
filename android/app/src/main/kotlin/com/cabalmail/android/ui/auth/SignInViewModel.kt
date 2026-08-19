@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.net.UnknownHostException
 
 /** Where the sign-in flow currently stands. */
 sealed interface AuthPhase {
@@ -111,7 +112,7 @@ class SignInViewModel(
         return try {
             container.requireAuth(domain)
         } catch (exception: IOException) {
-            throw ConfigException("Couldn't reach $domain — check the control domain and your connection", exception)
+            throw ConfigException(controlDomainFailureMessage(domain, exception), exception)
         }
     }
 
@@ -157,3 +158,25 @@ class SignInViewModel(
             }
     }
 }
+
+/**
+ * Wording for a config fetch that failed before the server answered. A
+ * name that does not resolve is almost certainly a mistyped control domain
+ * (the admin host lives on a domain the user has no reason to know by
+ * heart), so say so and show the expected shape instead of blaming the
+ * connection; everything else stays the generic reach-or-connection line.
+ */
+internal fun controlDomainFailureMessage(
+    domain: String,
+    exception: IOException,
+): String =
+    if (exception.isUnknownHost()) {
+        "No such host: $domain — check the control domain (it looks like admin.example.com)"
+    } else {
+        "Couldn't reach $domain — check the control domain and your connection"
+    }
+
+// OkHttp surfaces a DNS miss as an UnknownHostException directly, but a
+// retried/wrapped failure can carry it as the cause; look down the chain.
+private fun IOException.isUnknownHost(): Boolean =
+    generateSequence<Throwable>(this) { it.cause }.any { it is UnknownHostException }
