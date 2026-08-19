@@ -90,6 +90,23 @@ jobs:
         run: ./gradlew assembleRelease
 
   # -----------------------------------------------------------------------
+  # Manual approval gate before the Play Console upload, mirroring the
+  # other mainline deploy workflows (apple.yml's TestFlight gate,
+  # app.yml/infra.yml): the gate-${env} environments carry the required
+  # reviewers, so the run pauses here until an operator approves. Guarded
+  # by the same ref check as upload so a workflow_dispatch run on a
+  # feature branch (where upload would skip anyway) never waits at a gate.
+  # -----------------------------------------------------------------------
+  approval:
+    needs: [test, build]
+    if: github.ref_name == 'main' || github.ref_name == 'stage'
+    environment: gate-${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: approve
+        run: echo "Approved"
+
+  # -----------------------------------------------------------------------
   # Signed AAB -> Play Console internal track. Deploy branches only. Until
   # the operator finishes the runbook (upload keystore + Play service
   # account in the environment's secrets), the job warns and exits green
@@ -98,7 +115,7 @@ jobs:
   # -----------------------------------------------------------------------
   upload:
     name: Upload to Play Console
-    needs: [test, build]
+    needs: approval
     # The ref check (not an event check) is what keeps a workflow_dispatch
     # run on a feature branch from uploading.
     if: github.ref_name == 'main' || github.ref_name == 'stage'
