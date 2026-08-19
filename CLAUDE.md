@@ -43,7 +43,7 @@ This repository is public. Never put PII — real names, production email addres
 
 ### No hard-wrapping in anything posted to GitHub
 
-Issue bodies, PR bodies, comments, reviews, digests: write each paragraph and each bullet as one physical line and let the renderer wrap. Blank lines between paragraphs, lists, tables, and fenced code are structure, not wrapping, and are fine. Hard-wrapped prose reads fine on github.com but arrives in the maintainer's mail client — where most of it is read — as ragged short lines that are hard to track. This applies to every agent and script that posts to GitHub, including heredocs fed to `gh issue create` / `gh pr create` / `gh pr comment`.
+Issue bodies, PR bodies, comments, reviews, digests: write each paragraph and each bullet as one physical line and let the renderer wrap. Line breaks that end a paragraph or bullet, blank lines between paragraphs, lists, tables, and fenced code are structure, not wrapping, and are fine — only a break in the middle of a paragraph or bullet is the problem. Hard-wrapped prose reads fine on github.com but arrives in the maintainer's mail client — where most of it is read — as ragged short lines that are hard to track. This applies to every agent and script that posts to GitHub, including heredocs fed to `gh issue create` / `gh pr create` / `gh pr comment`.
 
 ## Repository Structure
 
