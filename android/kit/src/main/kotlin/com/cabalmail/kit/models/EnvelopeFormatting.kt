@@ -49,7 +49,12 @@ fun mailboxDisplayName(mailbox: String): String {
     if (angle < 0) {
         return mailbox.trim()
     }
-    val name = mailbox.substring(0, angle).trim().removeSurrounding("\"").trim()
+    val name =
+        mailbox
+            .substring(0, angle)
+            .trim()
+            .removeSurrounding("\"")
+            .trim()
     return name.ifEmpty { mailboxAddress(mailbox) ?: mailbox.trim() }
 }
 
