@@ -225,10 +225,10 @@ extension ComposeViewModel {
     /// copy is still on disk either way, so nothing is lost by retrying.
     func pushDraftToServer(_ message: OutgoingMessage) async -> Bool {
         do {
-            serverSaveInFlight = true
-            defer { serverSaveInFlight = false }
-            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
-                adoptServerDraftRef(ref)
+            try await serverDraftQueue.runThrowing {
+                if let ref = try await self.client.saveDraft(message, replacing: self.serverDraftRef) {
+                    self.adoptServerDraftRef(ref)
+                }
             }
             try? await draftStore.remove(id: draftId)
             stop()
@@ -250,7 +250,7 @@ extension ComposeViewModel {
     /// close-without-send — retries, which is the offline behavior the
     /// plan calls for without a second persistent queue.
     func autosaveToServer() async {
-        guard !isSending, !serverSaveInFlight else { return }
+        guard !isSending, serverDraftQueue.acceptsAutosave else { return }
         // Same reasoning as `cancel()`: with the bridge dead every body
         // converts to "", and a debounced push of that would overwrite the
         // server copy with an empty draft (#745).
@@ -259,16 +259,29 @@ extension ComposeViewModel {
         let bodies = await computeMessageBodies()
         guard hasDraftContent(bodies: bodies) else { return }
         let message = buildOutgoingMessage(from: fromEmail, bodies: bodies)
-        serverSaveInFlight = true
-        defer { serverSaveInFlight = false }
-        do {
-            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
-                adoptServerDraftRef(ref)
+        await serverDraftQueue.run {
+            do {
+                if let ref = try await self.client.saveDraft(message, replacing: self.serverDraftRef) {
+                    self.adoptServerDraftRef(ref)
+                }
+            } catch {
+                // Swallowed: see the doc comment. A failed replace server-side
+                // already degrades to save-as-new, so the worst outcome here is
+                // a duplicate draft copy, never a lost one.
             }
-        } catch {
-            // Swallowed: see the doc comment. A failed replace server-side
-            // already degrades to save-as-new, so the worst outcome here is
-            // a duplicate draft copy, never a lost one.
+        }
+    }
+
+    /// Drops this session's server-side Drafts copy, behind any save still
+    /// in flight and with the session closed to later ones (#1163).
+    ///
+    /// `serverDraftRef` is read *inside* the queued block on purpose: a save
+    /// that completes while the discard waits its turn adopts a new UID, and
+    /// the copy that has to go is that one, not the one it superseded.
+    func discardServerDraftCopy() async {
+        await serverDraftQueue.close {
+            guard let ref = self.serverDraftRef else { return }
+            self.recordServerDraftDiscard(try? await self.client.discardDraft(ref))
         }
     }
 

@@ -200,7 +200,10 @@ enum TestFixtures {
     /// Full client around the fake IMAP transport. Caches land in a
     /// per-invocation temp directory (the bulk paths prune them; empty
     /// caches make that a no-op).
-    static func makeClient(imap: FakeImapClient) throws -> CabalmailClient {
+    static func makeClient(
+        imap: FakeImapClient,
+        transport: HTTPTransport = NullHTTPTransport()
+    ) throws -> CabalmailClient {
         let config = makeConfiguration()
         let auth = NullAuthService()
         let tmp = FileManager.default.temporaryDirectory
@@ -211,7 +214,7 @@ enum TestFixtures {
             apiClient: URLSessionApiClient(
                 configuration: config,
                 authService: auth,
-                transport: NullHTTPTransport()
+                transport: transport
             ),
             imapClient: imap,
             smtpClient: NullSmtpClient(),
@@ -251,7 +254,8 @@ enum TestFixtures {
     static func makeComposeModel(
         seed: Draft = Draft(),
         imap: FakeImapClient = FakeImapClient(),
-        signature: String = ""
+        signature: String = "",
+        transport: HTTPTransport = NullHTTPTransport()
     ) throws -> ComposeViewModel {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("cabalmail-compose-tests-\(UUID().uuidString)")
@@ -259,7 +263,7 @@ enum TestFixtures {
         preferences.signature = signature
         return ComposeViewModel(
             seed: seed,
-            client: try makeClient(imap: imap),
+            client: try makeClient(imap: imap, transport: transport),
             draftStore: try DraftStore(directory: tmp),
             preferences: preferences,
             onClose: {}
