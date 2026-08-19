@@ -27,9 +27,13 @@ from imap_pool import ImapConnectionPool  # pylint: disable=import-error
 # Private-IMAP replumb: Cloud Map name of the imap task (imap.cabal.internal),
 # set by Terraform on every IMAP-consuming function now that they run inside
 # the VPC. When present, connections dial it on 143 and upgrade with STARTTLS
-# instead of using the public NLB's IMAPS listener (993), which is slated for
-# removal. Unset (e.g. local `python -m function` runs), the public path is
-# byte-for-byte what it always was.
+# instead of using the public NLB's IMAPS listener (993). That listener has
+# since been removed (#778), so in every deployed environment this variable is
+# set and the branch below that reads it is the only live path. Unset (local
+# `python -m function` runs against a host that does serve implicit TLS) the
+# public path is byte-for-byte what it always was; it is kept for that, not as
+# a production fallback - against real infrastructure it now fails, because
+# imap.<control-domain> resolves to an NLB with no IMAP listener behind it.
 INTERNAL_HOST = os.environ.get('IMAP_INTERNAL_HOST', '')
 INTERNAL_PORT = 143
 
@@ -55,9 +59,11 @@ class _InternalRouteImapClient(IMAPClient):  # pylint: disable=too-few-public-me
     Map, no NLB), while self.host stays the public name, which starttls()
     passes as server_hostname, so certificate verification is the real thing.
     Dovecot's disable_plaintext_auth is satisfied because LOGIN only happens
-    after the TLS upgrade - no login_trusted_networks widening needed. Note
-    this is end-to-end TLS into Dovecot, strictly better than the public
-    path, where the NLB terminates TLS and forwards cleartext to 143.
+    after the TLS upgrade - no login_trusted_networks widening needed, and
+    since #779 the imap tier sets ssl = required and trusts only loopback, so
+    this upgrade is mandatory rather than merely preferred. Note this is
+    end-to-end TLS into Dovecot, strictly better than the public path was,
+    where the NLB terminated TLS and forwarded cleartext to 143.
 
     _create_IMAP4 is internal imapclient API; imapclient is pinned (2.3.1)
     in every consumer's requirements.txt, so it cannot drift underneath us.'''
@@ -72,8 +78,11 @@ def dial_imap(host, timeout=None):
     '''Returns a connected (not yet authenticated) IMAPClient.
 
     Internal path (IMAP_INTERNAL_HOST set): plain TCP to the Cloud Map name
-    on 143, upgraded with STARTTLS before any credentials are sent.
-    Public path (unset): implicit TLS to host:993 via the NLB listener.
+    on 143, upgraded with STARTTLS before any credentials are sent. This is
+    the only path any deployed environment takes.
+    Public path (unset): implicit TLS to host:993. The NLB listener that
+    served that port is gone (#778), so this is a local-development
+    affordance, not a fallback that can succeed against real infrastructure.
 
     Public because process_dmarc dials its own (login-only, dmarc-user)
     session rather than going through open_imap_client's login+select.'''

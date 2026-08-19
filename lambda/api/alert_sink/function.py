@@ -63,8 +63,8 @@ _RUNBOOK_BASE = (
     'https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/'
 )
 _RUNBOOK_MAP = {
-    # Kuma monitor names — match the names in docs/monitoring.md §9.
-    'kuma/IMAP TLS handshake':       _RUNBOOK_BASE + 'probe-failure.md',
+    # Kuma monitor names — match the names in docs/monitoring.md §10.
+    'kuma/IMAP reachable (internal)': _RUNBOOK_BASE + 'probe-failure.md',
     'kuma/SMTP relay (STARTTLS)':    _RUNBOOK_BASE + 'probe-failure.md',
     'kuma/Submission (STARTTLS)':    _RUNBOOK_BASE + 'probe-failure.md',
     'kuma/Submission (implicit TLS)':_RUNBOOK_BASE + 'probe-failure.md',

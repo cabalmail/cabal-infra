@@ -151,7 +151,7 @@ In the Kuma dashboard, add one monitor for each row below. Attach the webhook no
 
 | Monitor                        | Type        | Target                                     | Interval | Retries |
 | ------------------------------ | ----------- | ------------------------------------------ | -------- | ------- |
-| IMAP TLS handshake             | TCP port    | `imap.<control-domain>:993`                | 60 s     | 2       |
+| IMAP reachable (internal)      | TCP port    | `imap.cabal.internal:143`                  | 60 s     | 2       |
 | SMTP relay (STARTTLS)          | TCP port    | `smtp-in.<control-domain>:25`              | 60 s     | 2       |
 | Submission (STARTTLS)          | TCP port    | `smtp-out.<control-domain>:587`            | 60 s     | 2       |
 | Submission (implicit TLS)      | TCP port    | `smtp-out.<control-domain>:465`            | 60 s     | 2       |
@@ -297,7 +297,7 @@ aws ecs execute-command --cluster "$CLUSTER" --task "$TASK" --container promethe
 wget -qO- http://localhost:9090/api/v1/targets | head
 ```
 
-Every target listed in `prometheus.yml` should be `health: up`. Targets to expect: 1x prometheus self-scrape, 1x alertmanager, 2x cloudwatch-exporter (primary + us-east-1), 4x blackbox probes (1x HTTP + 2x TCP for plaintext/STARTTLS + 2x TLS for implicit-TLS), and 1+x node-exporter (one per cluster EC2 instance).
+Every target listed in `prometheus.yml` should be `health: up`. Targets to expect: 1x prometheus self-scrape, 1x alertmanager, 2x cloudwatch-exporter (primary + us-east-1), 6x blackbox probes (2x HTTP, 2x TCP for plaintext/STARTTLS, 1x implicit-TLS for submission :465, 1x IMAP 143+STARTTLS), and 1+x node-exporter (one per cluster EC2 instance).
 
 ## 19. Acceptance checklist
 
@@ -305,7 +305,7 @@ Every target listed in `prometheus.yml` should be `health: up`. Targets to expec
 - [ ] `https://ntfy.<control-domain>/alerts` returns `401` without a bearer token.
 - [ ] `https://heartbeat.<control-domain>/` is unreachable without a Cognito session.
 - [ ] `https://metrics.<control-domain>/` is unreachable without a Cognito session.
-- [ ] Temporarily blocking port 993 on the dev account (security group) produces a Pushover push **and** a ntfy push within ~2 minutes. Unblocking it produces a recovery push.
+- [ ] Temporarily blocking port 143 on the dev account (the `cabal-ecs-imap-sg` ingress rule) produces a Pushover push **and** a ntfy push within ~2 minutes. Unblocking it produces a recovery push.
 - [ ] Every uptime monitor from step 10 shows green in the Kuma dashboard.
 - [ ] `aws lambda invoke --function-name cabal-healthchecks-iac /tmp/out.json` returns `status: ok` with `reconciled: 6`.
 - [ ] All six `/cabal/healthcheck_ping_*` SSM parameters hold real `https://heartbeat.<control-domain>/ping/...` URLs (not placeholders).
@@ -326,7 +326,7 @@ Every alert that can fire a push notification has a runbook in [docs/operations/
 How the runbook URL reaches your phone:
 
 - **Prometheus / Alertmanager**: each rule in [docker/prometheus/rules/alerts.yml](../docker/prometheus/rules/alerts.yml) carries a `runbook_url` annotation. Alertmanager forwards it as part of its native webhook body; the `alert_sink` Lambda's translator surfaces it (`_translate_alertmanager`) and attaches it to outbound pushes.
-- **Kuma & Healthchecks**: their webhook bodies don't carry a per-monitor runbook URL natively. The `alert_sink` Lambda has a static `_RUNBOOK_MAP` keyed by `source` (e.g. `kuma/IMAP TLS handshake`, `healthchecks/certbot-renewal`). When you add or rename a Kuma monitor or a Healthchecks check, update the keys in [`lambda/api/alert_sink/function.py`](../lambda/api/alert_sink/function.py) to match, or the push will arrive without a runbook link.
+- **Kuma & Healthchecks**: their webhook bodies don't carry a per-monitor runbook URL natively. The `alert_sink` Lambda has a static `_RUNBOOK_MAP` keyed by `source` (e.g. `kuma/IMAP reachable (internal)`, `healthchecks/certbot-renewal`). When you add or rename a Kuma monitor or a Healthchecks check, update the keys in [`lambda/api/alert_sink/function.py`](../lambda/api/alert_sink/function.py) to match, or the push will arrive without a runbook link.
 
 When a push includes a runbook URL, you'll see:
 
@@ -444,7 +444,7 @@ Each of these produces a single datapoint that should appear in Grafana within ~
 | **DynamoDB ThrottledRequests** | Hard to trigger on-demand without sustained load. Skip unless you're explicitly testing throttling behavior. |
 | **EFS I/O bytes** | ECS-Exec into an `imap` task and `dd if=/dev/zero of=/var/spool/mail/canary bs=1M count=10 oflag=direct ; rm /var/spool/mail/canary`. The 10 MiB write produces a visible spike on `DataWriteIOBytes`. |
 | **CloudFront request count / 5xx** | `for i in $(seq 1 20); do curl -fsS -o /dev/null https://<control-domain>/ ; done` for the request-count panel. CloudFront 5xx is harder; temporarily mis-configure the origin (e.g. block CloudFront's egress to S3 with a bucket policy deny for ~5 min) to force a real 5xx. Easier: just confirm the panel populates with `Requests` traffic before chasing the 5xx case. |
-| **TLS days to expiry -- IMAP 993** | No injection needed -- once the new `blackbox-tls` job runs, `probe_ssl_earliest_cert_expiry{instance=~".*:993"}` populates within one scrape (30 s). If still empty after 5 min, check that the `blackbox-tls` target is `up` and that the cert chain returned by port 993 is parseable. |
+| **TLS days to expiry -- control domain** | No injection needed -- once the `blackbox-http` job runs, `probe_ssl_earliest_cert_expiry{job="blackbox-http",instance=~"https://[^/]+/"}` populates within one scrape (30 s). If still empty after 5 min, check that the `blackbox-http` target is `up` and that the cert chain CloudFront returns is parseable. (This panel read `imap.<control-domain>:993` until that NLB listener was removed; CloudFront serves the same ACM cert.) |
 | **ECS RunningTaskCount** | No injection needed once the namespace fix lands -- Container Insights reports running-task counts per service every minute regardless of activity. |
 
 If any of the synthetic triggers above produces CloudWatch data (visible in the AWS Console under Metrics, or via the `aws cloudwatch get-metric-statistics` template above) but Grafana still shows no data, the pipeline is broken between cloudwatch_exporter and Prometheus, not at CloudWatch. Re-run the §1 commands above to localize the gap.

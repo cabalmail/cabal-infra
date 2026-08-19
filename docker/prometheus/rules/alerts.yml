@@ -170,11 +170,17 @@ groups:
           description: "Probe via {{ $labels.job }} for {{ $labels.instance }} has failed for 2 minutes."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/probe-failure.md"
 
-      # Cert-expiry alerts are sourced exclusively from blackbox-tls
-      # probes (probe_ssl_earliest_cert_expiry) of the live TLS
-      # endpoints serving each cert: the ACM *.cabalmail.net cert via
-      # imap.<control_domain>:993 (NLB-terminated), the Let's Encrypt
-      # cert via smtp-out.<control_domain>:465 (container-terminated).
+      # Cert-expiry alerts are sourced from blackbox probes
+      # (probe_ssl_earliest_cert_expiry) of the live TLS endpoints
+      # serving each cert: the ACM *.cabalmail.net cert via the
+      # blackbox-http probe of https://<control_domain>/ (CloudFront),
+      # and the Let's Encrypt cert via smtp-out.<control_domain>:465
+      # (container-terminated). Until #778 removed the NLB's IMAPS
+      # listener the ACM cert was measured at imap.<control_domain>:993
+      # instead; the CloudFront probe observes the same certificate, so
+      # both tiers of this alert keep full coverage. The imap tier's own
+      # 143+STARTTLS probe (blackbox-imap-starttls) also emits a series
+      # here - the same Let's Encrypt cert as :465, name-unverified.
       # There used to be parallel CertExpiringSoon{Warning,Critical}
       # rules sourced from aws_certificatemanager_days_to_expiry, but
       # cloudwatch_exporter v0.16.0 silently dropped that metric under
@@ -190,7 +196,7 @@ groups:
           severity: warning
         annotations:
           summary: "TLS cert at {{ $labels.instance }} expires in <21 days"
-          description: "Cert renewal is usually well in hand by 21 days out; a sustained value below this threshold means the renewal pipeline (ACM auto-renewal for :993, cabal-certbot-renewal Lambda for :465/:587) needs investigation."
+          description: "Cert renewal is usually well in hand by 21 days out; a sustained value below this threshold means the renewal pipeline (ACM auto-renewal for the CloudFront/control-domain cert, cabal-certbot-renewal Lambda for the mail tiers' :143/:465/:587) needs investigation."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 
       - alert: BlackboxTLSCertExpiringSoonCritical
@@ -200,7 +206,7 @@ groups:
           severity: critical
         annotations:
           summary: "TLS cert at {{ $labels.instance }} expires in <7 days"
-          description: "Manual intervention required - the cert serving {{ $labels.instance }} expires within 7 days and the upstream renewal path (ACM for :993, cabal-certbot-renewal Lambda for :465/:587) hasn't refreshed it."
+          description: "Manual intervention required - the cert serving {{ $labels.instance }} expires within 7 days and the upstream renewal path (ACM for the control domain, cabal-certbot-renewal Lambda for the mail tiers' :143/:465/:587) hasn't refreshed it."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 
   - name: platform

@@ -66,7 +66,7 @@ inhibit_rules:
   # When a cert is critically expiring, suppress the warning-level
   # variant on the same TLS endpoint — both rules fire on the same
   # cert and we only need one push. Equal on `instance` (the
-  # blackbox-tls scrape label, e.g. `imap.cabalmail.net:993`).
+  # blackbox-tls scrape label, e.g. `smtp-out.cabalmail.net:465`).
   - source_matchers:
       - alertname = BlackboxTLSCertExpiringSoonCritical
     target_matchers:

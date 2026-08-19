@@ -211,10 +211,11 @@ metrics:
   # infrequently-emitted metrics; worth filing upstream.
   #
   # Operational workaround: the same cert-expiry signal is captured
-  # by the blackbox-tls job (probe_ssl_earliest_cert_expiry) on the
-  # live TLS endpoints serving each cert - the ACM cert at
-  # imap.<control_domain>:993, the Let's Encrypt cert at
-  # smtp-out.<control_domain>:465. Mail Tiers dashboard hosts both
+  # by the blackbox jobs (probe_ssl_earliest_cert_expiry) on the live
+  # TLS endpoints serving each cert - the ACM cert at
+  # https://<control_domain>/ (CloudFront; it used to be measured at
+  # imap.<control_domain>:993, until #778 removed that NLB listener),
+  # the Let's Encrypt cert at smtp-out.<control_domain>:465. Mail Tiers dashboard hosts both
   # stat tiles; the BlackboxTLSCertExpiringSoon{Warning,Critical}
   # alerts cover both endpoints. No CloudWatch-side cert metric is
   # needed.
