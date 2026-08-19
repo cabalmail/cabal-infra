@@ -66,9 +66,16 @@ private struct MessageMenuAvailabilityReporter: ViewModifier {
             .onChange(of: availability, initial: true) { _, new in
                 appState.messageMenuAvailability = new
             }
+            // The macOS Mailbox menu asks a coarser question — is a list on
+            // screen at all — because Refresh is dead with no window open,
+            // whatever the selection (#1162).
+            .onAppear { appState.mailboxMenuAvailability.surfaceAppeared() }
             // A mail surface going away (sign-out, scene teardown) leaves
             // nothing for the commands to act on.
-            .onDisappear { appState.messageMenuAvailability = .none }
+            .onDisappear {
+                appState.messageMenuAvailability = .none
+                appState.mailboxMenuAvailability.surfaceDisappeared()
+            }
     }
 }
 

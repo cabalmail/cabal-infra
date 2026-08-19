@@ -22,11 +22,23 @@ import CabalmailKit
 /// iPadOS hardware-keyboard menu carries the same chords.
 struct CabalmailCommands: Commands {
     let appState: AppState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Message") {
-                appState.requestCompose()
+                // Opens the compose scene itself rather than bumping
+                // `requestCompose()`: that tick's only consumer is
+                // `ComposeRequestRouter`, installed on `SignedInRootView`
+                // inside the main window, so with every window closed the
+                // item stayed enabled and silently did nothing (#1162).
+                // `MenuBarExtraMenu`'s identically-named item already took
+                // this route, which is why it kept working there; both now
+                // share `ComposeWindowCommand` so they cannot drift.
+                ComposeWindowCommand.openNewMessage(
+                    appState: appState,
+                    openWindow: openWindow
+                )
             }
             .keyboardShortcut("n", modifiers: .command)
         }
@@ -46,6 +58,12 @@ struct CabalmailCommands: Commands {
             Button("Refresh") {
                 appState.requestRefresh()
             }
+            // Unlike New Message, this one has nowhere to go with no mail
+            // window on screen: `refreshRequestTick`'s only consumer is the
+            // on-screen `MessageListView`. Dim it rather than advertise a
+            // dead command — the rule `MessageMenuAvailability` already
+            // applies to the Message menu (#985, #1162).
+            .disabled(!appState.mailboxMenuAvailability.canRefresh)
         }
     }
 }
