@@ -152,6 +152,8 @@ The Apple client fetches `https://{control_domain}/config.json` at first launch 
 
 The control domain itself is the one value that must be baked in at build time. Store it in `app/build.gradle.kts` as a `buildConfigField`:
 
+> **Erratum (2026-08-18):** Retired. Baking the domain in meant one build per environment and left the Play Console upload — which sets no property — pointed at the placeholder, unable to sign in anywhere. The client now asks for the control domain on the sign-in screen and remembers it per install (with the cached `config.json`), the same as the Apple client; `BuildConfig.CONTROL_DOMAIN` survives only as an optional developer prefill (empty by default) and no build-type or flavor variants exist.
+
 ```kotlin
 buildConfigField("String", "CONTROL_DOMAIN", "\"admin.example.com\"")
 ```

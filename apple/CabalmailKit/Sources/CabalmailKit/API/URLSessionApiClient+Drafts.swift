@@ -8,30 +8,7 @@ import Foundation
 
 extension URLSessionApiClient {
     public func saveDraft(_ request: SaveDraftRequest) async throws -> ApiSaveDraftResponse {
-        let headersJson: [String: Any] = [
-            "message_id": request.otherHeaders.messageId,
-            "in_reply_to": request.otherHeaders.inReplyTo,
-            "references": request.otherHeaders.references,
-        ]
-        let attachmentsJson: [[String: Any]] = request.attachments.map { attachment in
-            [
-                "filename": attachment.filename,
-                "mime_type": attachment.mimeType,
-                "s3_key": attachment.s3Key,
-            ]
-        }
-        var json: [String: Any] = [
-            "host": request.host,
-            "sender": request.sender,
-            "to_list": request.toList,
-            "cc_list": request.ccList,
-            "bcc_list": request.bccList,
-            "subject": request.subject,
-            "other_headers": headersJson,
-            "html": request.htmlBody,
-            "text": request.textBody,
-            "attachments": attachmentsJson,
-        ]
+        var json = request.composeJson
         if let uid = request.replacesUid, let validity = request.replacesUidValidity {
             json["replaces_uid"] = Int(uid)
             json["replaces_uidvalidity"] = Int(validity)

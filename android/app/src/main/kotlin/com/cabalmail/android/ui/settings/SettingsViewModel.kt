@@ -16,6 +16,8 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val username: String? = null,
+    /** The control domain this session is signed in to. */
+    val controlDomain: String? = null,
     /** Owned addresses for the Default From picker; null until loaded. */
     val addresses: List<Address>? = null,
 )
@@ -38,6 +40,7 @@ class SettingsViewModel(
             mutableState.update {
                 it.copy(
                     username = runCatching { container.requireAuth().currentUsername() }.getOrNull(),
+                    controlDomain = container.configService.controlDomain.value,
                 )
             }
             val repository = runCatching { container.requireAddressRepository() }.getOrNull() ?: return@launch

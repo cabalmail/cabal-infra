@@ -44,14 +44,14 @@ struct MenuBarExtraMenu: View {
             NSApp.activate()
         }
         Button("New Message") {
-            // Same route as the File menu / toolbar: the compose window
-            // scene both app targets install. If the user is signed out
-            // the scene shows its own "Sign in required" placeholder.
-            openWindow(
-                id: composeWindowID,
-                value: appState.composeSlots.acquire(seed: Draft())
+            // Same route as the File menu: the compose window scene both app
+            // targets install, opened directly so it works with every window
+            // closed (`ComposeWindowCommand`, #1162). If the user is signed
+            // out the scene shows its own "Sign in required" placeholder.
+            ComposeWindowCommand.openNewMessage(
+                appState: appState,
+                openWindow: openWindow
             )
-            NSApp.activate()
         }
         Divider()
         Button("Quit Cabalmail") {

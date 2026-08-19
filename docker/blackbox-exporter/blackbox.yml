@@ -27,3 +27,37 @@ modules:
       tls: true
       tls_config:
         insecure_skip_verify: false
+
+  imap_starttls:
+    # The IMAP tier's real production path since the NLB's implicit-TLS
+    # 993 listener was removed (#778): plain TCP to 143 inside the VPC,
+    # upgraded with STARTTLS before anything sensitive crosses the wire.
+    # This is exactly what the API Lambdas do (see
+    # lambda/api/_shared/imap_session.py), so a green probe here means the
+    # path that actually carries mail is healthy.
+    #
+    # insecure_skip_verify is deliberate and is NOT a downgrade of the
+    # cert monitoring: the probe dials the Cloud Map private name
+    # (imap.cabal.internal) while the container serves the wildcard cert
+    # for the *public* control domain, and blackbox takes server_name from
+    # the module - which is not templated per environment - so the names
+    # cannot be made to match here. Validity/chain of that same certificate
+    # is verified by the tcp_tls probe of smtp-out.<control-domain>:465,
+    # which serves the identical /cabal/control_domain_ssl_cert material.
+    # probe_ssl_earliest_cert_expiry is still populated by the STARTTLS
+    # handshake, so the cert-expiry alerts keep a series here too.
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      query_response:
+        - expect: "^\\* OK"
+        - send: "a001 STARTTLS"
+        - expect: "^a001 OK"
+        - starttls: true
+        - send: "a002 CAPABILITY"
+        - expect: "^\\* CAPABILITY"
+        - send: "a003 LOGOUT"
+      tls_config:
+        insecure_skip_verify: true

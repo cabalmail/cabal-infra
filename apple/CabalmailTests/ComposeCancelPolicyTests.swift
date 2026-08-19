@@ -79,13 +79,13 @@ final class ComposeCancelPolicyTests: XCTestCase {
         model.toText = "recipient@example.com"
         model.subject = "t27-0803 draft probe"
 
-        XCTAssertTrue(model.hasDraftContent(bodies: (text: "", html: "")))
+        XCTAssertTrue(model.hasDraftContent(bodies: ComposeBodies(text: "", html: "", source: .empty)))
     }
 
     func testABlankComposeHasNothingToKeep() throws {
         let model = try TestFixtures.makeComposeModel()
 
-        XCTAssertFalse(model.hasDraftContent(bodies: (text: "", html: "")))
+        XCTAssertFalse(model.hasDraftContent(bodies: ComposeBodies(text: "", html: "", source: .empty)))
     }
 
     // MARK: - Whether Cancel asks at all (#1094)

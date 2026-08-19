@@ -46,12 +46,17 @@ class ConfigServiceTest {
         """.trimIndent()
 
     private class InMemoryConfigCache(
-        var stored: String? = null,
+        var stored: CachedConfig? = null,
     ) : ConfigCache {
-        override suspend fun read(): String? = stored
+        constructor(controlDomain: String, raw: String) : this(CachedConfig(controlDomain, raw))
 
-        override suspend fun write(raw: String) {
-            stored = raw
+        override suspend fun read(): CachedConfig? = stored
+
+        override suspend fun write(
+            controlDomain: String,
+            raw: String,
+        ) {
+            stored = CachedConfig(controlDomain, raw)
         }
     }
 
@@ -73,9 +78,9 @@ class ConfigServiceTest {
     fun `refresh decodes the wire shape and exposes the derived accessors`() =
         runTest {
             val cache = InMemoryConfigCache()
-            val service = ConfigService("admin.example.com", clientReturning(sampleJson), cache)
+            val service = ConfigService(clientReturning(sampleJson), cache)
 
-            val config = service.refresh()
+            val config = service.refresh("admin.example.com")
 
             assertEquals("https://api.example.com/v1", config.apiUrl)
             assertEquals("admin.example.com", config.host)
@@ -83,19 +88,20 @@ class ConfigServiceTest {
             assertEquals("1234567890abcdefghijklmnop", config.cognitoClientId)
             assertEquals(listOf("example-mail.com"), config.mailDomains)
             assertEquals("us-east-1", config.cognito.region)
-            // The raw payload — not a re-serialization — lands in the cache.
-            assertEquals(sampleJson, cache.stored)
+            // The raw payload — not a re-serialization — lands in the cache,
+            // tagged with the domain it came from.
+            assertEquals(CachedConfig("admin.example.com", sampleJson), cache.stored)
+            assertEquals("admin.example.com", service.controlDomain.value)
         }
 
     @Test
     fun `config flow emits null then the loaded value`() =
         runTest {
-            val service =
-                ConfigService("admin.example.com", clientReturning(sampleJson), InMemoryConfigCache())
+            val service = ConfigService(clientReturning(sampleJson), InMemoryConfigCache())
 
             service.config.test {
                 assertNull(awaitItem())
-                service.load()
+                service.load("admin.example.com")
                 assertEquals("admin.example.com", awaitItem()?.controlDomain)
             }
         }
@@ -105,24 +111,77 @@ class ConfigServiceTest {
         runTest {
             val failingClient = HttpClient(MockEngine { throw IOException("offline") })
             val service =
-                ConfigService("admin.example.com", failingClient, InMemoryConfigCache(sampleJson))
+                ConfigService(failingClient, InMemoryConfigCache("admin.example.com", sampleJson))
 
-            val config = service.load()
+            val config = service.load("admin.example.com")
 
             assertEquals("admin.example.com", config.controlDomain)
             assertEquals(config, service.config.value)
         }
 
     @Test
-    fun `load rethrows when the network fails and nothing is cached`() =
+    fun `a cached config for a different control domain is not a fallback`() =
         runTest {
             val failingClient = HttpClient(MockEngine { throw IOException("offline") })
-            val service = ConfigService("admin.example.com", failingClient, InMemoryConfigCache())
+            val service =
+                ConfigService(failingClient, InMemoryConfigCache("admin.example.com", sampleJson))
 
-            val exception = runCatching { service.load() }.exceptionOrNull()
+            val exception = runCatching { service.load("admin.other.example") }.exceptionOrNull()
 
             assertTrue(exception is IOException)
             assertNull(service.config.value)
+            assertNull(service.controlDomain.value)
+        }
+
+    @Test
+    fun `load rethrows when the network fails and nothing is cached`() =
+        runTest {
+            val failingClient = HttpClient(MockEngine { throw IOException("offline") })
+            val service = ConfigService(failingClient, InMemoryConfigCache())
+
+            val exception = runCatching { service.load("admin.example.com") }.exceptionOrNull()
+
+            assertTrue(exception is IOException)
+            assertNull(service.config.value)
+        }
+
+    @Test
+    fun `the remembered control domain is the cached one, then the build default, then nothing`() =
+        runTest {
+            val cached = InMemoryConfigCache("admin.example.com", sampleJson)
+            assertEquals(
+                "admin.example.com",
+                ConfigService(clientReturning(sampleJson), cached, "admin.default.example").rememberedControlDomain(),
+            )
+            assertEquals(
+                "admin.default.example",
+                ConfigService(clientReturning(sampleJson), InMemoryConfigCache(), " https://admin.default.example/ ")
+                    .rememberedControlDomain(),
+            )
+            assertNull(ConfigService(clientReturning(sampleJson), InMemoryConfigCache(), "").rememberedControlDomain())
+            assertNull(ConfigService(clientReturning(sampleJson), InMemoryConfigCache()).rememberedControlDomain())
+        }
+
+    @Test
+    fun `no-arg load resumes the remembered domain and fails cleanly without one`() =
+        runTest {
+            var requestedUrl: String? = null
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requestedUrl = request.url.toString()
+                        respond(
+                            content = sampleJson,
+                            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                        )
+                    },
+                )
+
+            ConfigService(client, InMemoryConfigCache("admin.example.com", sampleJson)).load()
+            assertEquals("https://admin.example.com/config.json", requestedUrl)
+
+            val exception = runCatching { ConfigService(client, InMemoryConfigCache()).load() }.exceptionOrNull()
+            assertTrue(exception is ConfigException)
         }
 
     @Test
@@ -130,12 +189,11 @@ class ConfigServiceTest {
         runTest {
             val service =
                 ConfigService(
-                    "admin.example.com",
                     clientReturning("nope", HttpStatusCode.ServiceUnavailable),
                     InMemoryConfigCache(),
                 )
 
-            val exception = runCatching { service.refresh() }.exceptionOrNull()
+            val exception = runCatching { service.refresh("admin.example.com") }.exceptionOrNull()
 
             assertTrue(exception is ConfigException)
             assertTrue(exception!!.message!!.contains("503"))
@@ -156,20 +214,24 @@ class ConfigServiceTest {
                     },
                 )
 
-            ConfigService(" http://admin.example.com/ ", client, InMemoryConfigCache()).refresh()
+            val cache = InMemoryConfigCache()
+            ConfigService(client, cache).refresh(" http://Admin.Example.com/ ")
 
             assertEquals("https://admin.example.com/config.json", requestedUrl)
+            // The normalized form is what gets remembered, so a later
+            // paste-with-scheme still matches the cache entry.
+            assertEquals("admin.example.com", cache.stored?.controlDomain)
         }
 
     @Test
     fun `an undecodable cache entry is ignored and the network result wins`() =
         runTest {
-            val cache = InMemoryConfigCache("{not json")
-            val service = ConfigService("admin.example.com", clientReturning(sampleJson), cache)
+            val cache = InMemoryConfigCache("admin.example.com", "{not json")
+            val service = ConfigService(clientReturning(sampleJson), cache)
 
-            val config = service.load()
+            val config = service.load("admin.example.com")
 
             assertEquals("admin.example.com", config.controlDomain)
-            assertEquals(sampleJson, cache.stored)
+            assertEquals(CachedConfig("admin.example.com", sampleJson), cache.stored)
         }
 }

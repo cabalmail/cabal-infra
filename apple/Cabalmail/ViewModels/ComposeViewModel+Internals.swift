@@ -114,7 +114,7 @@ extension ComposeViewModel {
     /// with, and each conversion is a WebKit round trip worth not repeating.
     func buildOutgoingMessage(
         from: EmailAddress,
-        bodies: (text: String, html: String)
+        bodies: ComposeBodies
     ) -> OutgoingMessage {
         OutgoingMessage(
             from: from,
@@ -145,7 +145,7 @@ extension ComposeViewModel {
     /// Resolves the (text, html) MIME-part bodies. `ComposeBodyPolicy`
     /// decides which pane the user authored; this does the WebKit
     /// conversions that answer implies.
-    func computeMessageBodies() async -> (text: String, html: String) {
+    func computeMessageBodies() async -> ComposeBodies {
         let richHtml = await editorController.getHTML()
         let source = ComposeBodyPolicy.source(
             richHTML: richHtml,
@@ -156,16 +156,16 @@ extension ComposeViewModel {
 
         switch source {
         case .empty:
-            return ("", "")
+            return ComposeBodies(text: "", html: "", source: source)
         case .rich:
             let text = await editorController.htmlToMarkdown(richHtml)
-            return (text, richHtml)
+            return ComposeBodies(text: text, html: richHtml, source: source)
         case .markdown:
             let raw = await editorController.markdownToHtml(markdownBody)
             let styled = await editorController.styleParagraphs(raw)
-            return (markdownBody, styled)
+            return ComposeBodies(text: markdownBody, html: styled, source: source)
         case .both:
-            return (markdownBody, richHtml)
+            return ComposeBodies(text: markdownBody, html: richHtml, source: source)
         }
     }
 
@@ -198,13 +198,18 @@ extension ComposeViewModel {
     /// user can type, so a brand-new message read as content (#1132). The
     /// body clause now asks who wrote it; every other clause is still a
     /// plain emptiness test, because nothing seeds those fields.
-    func hasDraftContent(bodies: (text: String, html: String)) -> Bool {
+    ///
+    /// Authorship is a question about *now*, not about history — a rich pane
+    /// typed into and then emptied is back to holding nothing, so `bodies`
+    /// carries the live `source` decision rather than the mirror flag, which
+    /// only ever recorded the first keystroke (#1138).
+    func hasDraftContent(bodies: ComposeBodies) -> Bool {
         // Non-empty bodies are not automatically the user's: a signature
         // seeds the Markdown pane from `init` (#1132).
         let bodyAuthored = (!bodies.text.isEmpty || !bodies.html.isEmpty)
             && !ComposeBodyPolicy.bodyIsUntouchedSignature(
                 markdownBody: markdownBody,
-                richMirrorsMarkdown: richMirrorsMarkdown,
+                richPaneAuthored: bodies.source.richPaneAuthored,
                 signatureOnlySeed: signatureOnlySeed
             )
         return !subject.isEmpty
@@ -220,10 +225,10 @@ extension ComposeViewModel {
     /// copy is still on disk either way, so nothing is lost by retrying.
     func pushDraftToServer(_ message: OutgoingMessage) async -> Bool {
         do {
-            serverSaveInFlight = true
-            defer { serverSaveInFlight = false }
-            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
-                adoptServerDraftRef(ref)
+            try await serverDraftQueue.runThrowing {
+                if let ref = try await self.client.saveDraft(message, replacing: self.serverDraftRef) {
+                    self.adoptServerDraftRef(ref)
+                }
             }
             try? await draftStore.remove(id: draftId)
             stop()
@@ -245,7 +250,7 @@ extension ComposeViewModel {
     /// close-without-send — retries, which is the offline behavior the
     /// plan calls for without a second persistent queue.
     func autosaveToServer() async {
-        guard !isSending, !serverSaveInFlight else { return }
+        guard !isSending, serverDraftQueue.acceptsAutosave else { return }
         // Same reasoning as `cancel()`: with the bridge dead every body
         // converts to "", and a debounced push of that would overwrite the
         // server copy with an empty draft (#745).
@@ -254,16 +259,29 @@ extension ComposeViewModel {
         let bodies = await computeMessageBodies()
         guard hasDraftContent(bodies: bodies) else { return }
         let message = buildOutgoingMessage(from: fromEmail, bodies: bodies)
-        serverSaveInFlight = true
-        defer { serverSaveInFlight = false }
-        do {
-            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
-                adoptServerDraftRef(ref)
+        await serverDraftQueue.run {
+            do {
+                if let ref = try await self.client.saveDraft(message, replacing: self.serverDraftRef) {
+                    self.adoptServerDraftRef(ref)
+                }
+            } catch {
+                // Swallowed: see the doc comment. A failed replace server-side
+                // already degrades to save-as-new, so the worst outcome here is
+                // a duplicate draft copy, never a lost one.
             }
-        } catch {
-            // Swallowed: see the doc comment. A failed replace server-side
-            // already degrades to save-as-new, so the worst outcome here is
-            // a duplicate draft copy, never a lost one.
+        }
+    }
+
+    /// Drops this session's server-side Drafts copy, behind any save still
+    /// in flight and with the session closed to later ones (#1163).
+    ///
+    /// `serverDraftRef` is read *inside* the queued block on purpose: a save
+    /// that completes while the discard waits its turn adopts a new UID, and
+    /// the copy that has to go is that one, not the one it superseded.
+    func discardServerDraftCopy() async {
+        await serverDraftQueue.close {
+            guard let ref = self.serverDraftRef else { return }
+            self.recordServerDraftDiscard(try? await self.client.discardDraft(ref))
         }
     }
 

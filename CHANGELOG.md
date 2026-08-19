@@ -5,6 +5,139 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-08-19
+
+### Added
+- Android: **Play Store listing icon.** `make logo` (and the Logo Assets
+  workflow) now also renders `android/app/src/main/ic_launcher-playstore.png`,
+  the 512×512 opaque PNG the Google Play Console requires for the store
+  listing, from `vector/cabalmail-logo.svg` alongside the Apple, React, docs,
+  and front-door derivatives.
+
+### Changed
+- Android: **Targets Android API 37; build toolchain refresh.** The client
+  now compiles against and targets API 37 (Android 17 compatibility-mode
+  behaviour applies) — forced by the Compose BOM 2026.08 line, whose
+  artifacts require compileSdk 37 and whose `OldTargetApi` lint check the
+  build treats as an error. Alongside: Gradle 8.14 → 9.7, AGP 8.10 → 9.3
+  (built-in Kotlin support, so the standalone `org.jetbrains.kotlin.android`
+  plugin is gone), Kotlin 2.1 → 2.4, KSP 2.3, ktlint plugin 14, JUnit 6,
+  Room 2.8, ktor 3.5, coroutines 1.11, kotlinx-serialization 1.11, Amplify
+  2.39, coil 3.5, and gradle-play-publisher 4.1. `material-icons-core` is now
+  an explicit dependency (material3 no longer pulls it in transitively).
+  Supersedes the dependabot group PR #1147, which could not build as-is.
+- Android: **Sign-in says what the control domain looks like.** The
+  sign-in form now carries always-visible supporting text under "Control
+  domain" naming the expected shape (`admin.example.com` — the host that
+  serves the admin web app), and a domain that does not resolve is reported
+  as "No such host" with that shape, instead of the generic
+  check-your-connection line that also covers being offline. A tester
+  typing a mail domain instead of the control domain had no way to tell
+  which of the two was wrong.
+- Android: **Sign-in asks for the server.** The sign-in screen now takes the
+  control domain alongside the username and password, the same as the Apple
+  client, and remembers it per install so it is prefilled next time. Nothing
+  environment-specific is baked into the build any more: one build works
+  against any Cabalmail deployment, and Settings shows the server under
+  Account. Existing installs whose build carried a domain keep their session;
+  any other install is asked to sign in once, entering the server.
+- Android: **Sign-in tokens now use an Android Keystore key the app manages
+  itself.** The library the client relied on for at-rest token encryption,
+  `androidx.security:security-crypto`, has been retired upstream rather than
+  replaced, so its `EncryptedSharedPreferences` is gone from the auth path.
+  Tokens are now encrypted with an AES-GCM key held in the Android Keystore —
+  the same protection, without an abandoned dependency guarding the session.
+  An existing session is migrated on the first launch after updating, so
+  signing in again should not be necessary.
+- **Monitoring probes the IMAP path that carries mail.** The blackbox job that
+  probed the removed `imap.<control-domain>:993` listener is replaced by an
+  `imap_starttls` probe of `imap.cabal.internal:143` - plain TCP upgraded with
+  STARTTLS, which is what the API Lambdas do. Cert-expiry coverage is
+  unchanged: the ACM control-domain cert is observed on the CloudFront HTTPS
+  probe and the Let's Encrypt mail cert on submission `:465`. The Kuma
+  monitor, its `alert_sink` runbook key, the Mail Tiers dashboard panels, the
+  cert-expiry and probe-failure runbooks, and `docs/monitoring.md` follow;
+  a new unit test pins the monitor names in the docs to the runbook map so
+  the two cannot drift apart silently again.
+
+### Fixed
+- Android: **Archive marks read; no duplicate moves.** Archiving (swipe,
+  reader, bulk, search) now marks the message read in the same
+  `/move_messages` call, as the Apple and React clients do — it was being
+  moved unread. The swipe surface fired its action twice when a row was
+  dragged all the way to its edge (foundation invokes `confirmValueChange`
+  both as the drag ends and again from settle), and the view models accepted
+  the repeat; Dovecot runs two concurrent MOVEs of one message
+  independently, so the archive gained a duplicate copy, or the later MOVE
+  failed with "Could not move message" after the first had already expunged
+  the source. Swipes now fire once per gesture, and a move or purge already
+  in flight for a UID drops any repeat request.
+- Apple: **Bulk "Archive" button no longer trashes the selection.** The
+  multi-select action bar's first button drew "Archive" but ran the
+  account's *Dispose action* preference, so with that set to Trash it
+  deleted the selection instead of filing it — on iPhone, iPad and macOS,
+  with no confirmation for a small selection. Its caption, glyph and
+  operation now come from one rule that reads the folder and not the
+  preference; Restore inside Archive and the rescue out of Trash are
+  unchanged, and the preference-driven surfaces (row swipe, reader dispose
+  button, Cmd+Delete) still follow it.
+- Apple: **Clearing the body now clears the draft.** Typing in the composer's
+  Rich Text pane and then deleting it all left the composer dirty for the rest
+  of the session: Cancel still raised "Discard draft?" over a visibly empty
+  message, autosave still wrote one to the server, and sending it carried
+  WebKit's leftover block markup as the body. The composer now asks whether
+  the pane holds anything *now* rather than whether it was ever touched, and
+  an emptied pane is treated as empty. A reply's quoted original and a resumed
+  draft's body are still content, as they were.
+- Apple: **Discard Draft no longer leaves the draft on the server.** Pressing
+  Discard while the 60-second background save was mid-round-trip expunged the
+  copy the composer was holding and then let the completing save append a
+  fresh one, so a draft the user had explicitly thrown away stayed in Drafts —
+  and Edit Draft on it reopened the message with Send live. Discarding now
+  waits for any save already in flight and drops the copy that save landed,
+  and a save that arrives after a discard is refused outright.
+- Apple: **One disclosure chevron on the compose From pop-up.** On macOS the
+  control drew two side by side inside the same capsule — the label's own, plus
+  the one AppKit's bordered menu adds. The label now draws its chevron only on
+  the platforms whose menus don't supply one.
+- **IMAPAuthFailureSpike runbook and alert text describing a threat that no
+  longer exists.** Both told the operator that a spike is most likely an
+  internet brute force against the public IMAP listener, and the runbook's
+  remediation blocked port 993 at a security group and a NACL — controls that
+  have been dead since that listener was removed. The runbook now names the two
+  causes that remain (the API Lambdas failing to authenticate, or an unexpected
+  in-VPC source attempting logins), points at the task-ENI security group as
+  the control surface, and records that a plaintext-dialling consumer locks
+  itself out *without* firing this alert. A new unit test pins every port a
+  runbook prescribes acting on to a port the mail tiers actually publish.
+- Apple: **macOS File ▸ New Message with every window closed.** ⌘N and the File menu item reported themselves enabled and silently did nothing once the last window was closed — the state the menu-bar residency exists to make ordinary. Both now open the compose window directly, the way the menu-bar extra's identically-named item already did. Mailbox ▸ Refresh, which shared the fault and has no list to reload in that state, dims instead of advertising a dead command.
+- Apple: **Photo attachments keep their real format.** Pictures attached from
+  the photo library on iPhone, iPad and Vision Pro went out announced as
+  `image/jpeg` with a `.jpg` name whatever they actually were — the bytes
+  were never converted, so a PNG or a camera HEIC arrived intact inside a
+  part describing it as something else. Recipients that trust the declared
+  type could fail to render it, and "save attachment" wrote a `.jpg` that was
+  not a JPEG. The composer now reads the format out of the bytes it is about
+  to send.
+- Apple: **Settings pickers that name a setting now show that name.** The
+  dispose-action row rendered as a bare `Archive | Trash` segmented control on
+  iOS and iPadOS — the two rows directly beneath it were labelled, so it read
+  as a heading-less oddity, and VoiceOver announced "Trash, selected" with no
+  indication of what was being set. The Appearance theme row had the same
+  problem. Both now carry their label, on every platform.
+
+### Security
+- **IMAP tier requires TLS and trusts only loopback.** Dovecot on the `imap`
+  container now sets `ssl = required` instead of `ssl = yes`, and its
+  `login_trusted_networks` narrows from the NLB public-subnet CIDRs to
+  `127.0.0.1`. Both settings existed to let the load balancer's
+  TLS-terminated 993 listener forward plain TCP to 143 and still
+  authenticate; that listener was removed in 0.11.x, and every consumer now
+  dials 143 and issues STARTTLS before LOGIN. This closes the residual
+  allowance that anything in the public subnets could attempt plaintext auth.
+  The in-container IMAPS listener on 993 is switched off and its task-def
+  port mapping and `LOGIN_TRUSTED_NETWORKS` env are gone.
+
 ## [1.3.0] - 2026-08-18
 
 ### Added

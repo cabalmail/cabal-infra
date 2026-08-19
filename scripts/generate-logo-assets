@@ -3,8 +3,9 @@
 # Regenerate every Cabalmail logo derivative from the single authoritative
 # vector at vector/cabalmail-logo.svg. Nothing under the "generated" paths
 # below is ever hand-edited: edit the source vector (or a constant in this
-# script) and re-run. One command regenerates all Apple icons, the React
-# client favicon/logo set, the docs images, and the front-door favicon.
+# script) and re-run. One command regenerates all Apple icons, the Android
+# Play Store icon, the React client favicon/logo set, the docs images, and
+# the front-door favicon.
 #
 #   scripts/generate-logo-assets            # regenerate everything
 #   scripts/generate-logo-assets --help     # usage + inventory
@@ -99,6 +100,7 @@ Regenerated outputs (all committed; never hand-edit):
           apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset   (watchOS single 1024)
           apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset
           apple/CabalmailMac/Assets.xcassets/MenuBarMark.imageset      (menu-bar status item)
+  Android — android/app/src/main/ic_launcher-playstore.png           (Play Store listing icon, 512x512)
   React — react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}
           react/admin/src/assets/logo.svg
   Docs  — docs/logo.png, docs/mask.png
@@ -315,7 +317,8 @@ emit_derived() {
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/menu-bar-mark.svg"
 
   # 2. Light app-icon art — forest glyph on cream gradient, full-bleed 1024.
-  #    Feeds watchOS (single slot), the React logo PNGs, and docs/logo.png.
+  #    Feeds watchOS (single slot), the Android Play Store icon, the React
+  #    logo PNGs, and docs/logo.png.
   #    The macOS/iOS square icons are the Liquid Glass .icon instead, whose
   #    Default/Dark fills come straight from the color constants (see
   #    write_icon), so no separate dark/tinted full-bleed art is rendered.
@@ -498,6 +501,14 @@ generate_all() {
 
   # --- Apple: macOS menu-bar status-item mark (template imageset) ---
   install -m 0644 "${d}/menu-bar-mark.svg" "${REPO_ROOT}/apple/CabalmailMac/Assets.xcassets/MenuBarMark.imageset/menu-bar-mark.svg"
+
+  # --- Android: Google Play Store listing icon. Play wants a 512x512 PNG,
+  #     full-bleed and fully opaque — Play applies its own corner rounding,
+  #     so no mask, no transparency, no baked shadow. This lives beside (not
+  #     inside) res/ per the Android Studio convention, so it is uploaded to
+  #     the Play Console but never packaged into the APK; the in-app launcher
+  #     icon is the adaptive icon under res/mipmap-anydpi/. ---
+  render "${d}/AppIcon-ios-light.svg" 512 512 "${REPO_ROOT}/android/app/src/main/ic_launcher-playstore.png" opaque
 
   # --- React client ---
   install -m 0644 "${d}/favicon.svg"  "${pub}/favicon.svg"

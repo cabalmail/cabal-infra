@@ -96,7 +96,10 @@ internal fun compactWindow(
     removed: Set<Long>,
 ): Map<Int, Envelope> {
     val removedIndices =
-        envelopes.entries.filter { it.value.id in removed }.map { it.key }.sorted()
+        envelopes.entries
+            .filter { it.value.id in removed }
+            .map { it.key }
+            .sorted()
     if (removedIndices.isEmpty()) {
         return envelopes
     }
@@ -124,6 +127,16 @@ class MessageListViewModel(
     val state: StateFlow<MessageListUiState> = mutableState.asStateFlow()
 
     private val requestedBands = mutableSetOf<Int>()
+
+    /**
+     * UIDs with a move or purge already in flight. A second request for the
+     * same UID is dropped rather than sent: Dovecot runs concurrent MOVEs of
+     * one message independently, so two overlapping requests land two copies
+     * in the destination (or the later one fails once the first has expunged
+     * the source), and the swipe surface can fire its callback more than once
+     * per gesture.
+     */
+    private val removing = mutableSetOf<Long>()
     private var uidValidity: Long? = null
     private var lastUidNext: Long? = null
 
@@ -363,51 +376,72 @@ class MessageListViewModel(
 
     /**
      * Moves [uids] to [destination] and compacts the window. Selection
-     * clears afterwards, per the plan's bulk-selection semantics.
+     * clears afterwards, per the plan's bulk-selection semantics. UIDs
+     * already being moved or purged are skipped (see [removing]).
      */
     fun move(
         uids: Set<Long>,
         destination: String,
+        markSeen: Boolean = false,
     ) {
-        if (uids.isEmpty()) {
-            return
-        }
+        val fresh = claimForRemoval(uids) ?: return
         viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
             try {
-                container.requireApi().moveMessages(folder, destination, uids.toList())
+                container.requireApi().moveMessages(folder, destination, fresh.toList(), markSeen = markSeen)
                 container.envelopeCache.invalidateFolder(folder)
-                removeFromWindow(uids)
+                removeFromWindow(fresh)
             } catch (exception: Exception) {
                 mutableState.update {
                     it.copy(busy = false, error = userMessage(exception, "Could not move messages"))
                 }
+            } finally {
+                removing.removeAll(fresh)
             }
         }
     }
 
-    /** The dispose action: archive, or (from Trash, post-confirmation) purge. */
+    /**
+     * The dispose action: archive, or (from Trash, post-confirmation) purge.
+     * A disposed message is also marked read — archived == read, matching the
+     * Apple and React clients — in the same server call, so the flag lands
+     * before the MOVE takes the UID out of the source folder.
+     */
     fun dispose(uids: Set<Long>) {
-        if (uids.isEmpty()) {
-            return
-        }
         if (!isTrashFolder) {
-            move(uids, disposeFolder())
+            move(uids, disposeFolder(), markSeen = true)
             return
         }
+        val fresh = claimForRemoval(uids) ?: return
         viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
             try {
-                container.requireApi().purgeMessages(folder, uids.toList())
+                container.requireApi().purgeMessages(folder, fresh.toList())
                 container.envelopeCache.invalidateFolder(folder)
-                uids.forEach { container.bodyCache.remove(folder, it) }
-                removeFromWindow(uids)
+                fresh.forEach { container.bodyCache.remove(folder, it) }
+                removeFromWindow(fresh)
             } catch (exception: Exception) {
                 mutableState.update {
                     it.copy(busy = false, error = userMessage(exception, "Could not delete messages"))
                 }
+            } finally {
+                removing.removeAll(fresh)
             }
         }
+    }
+
+    /**
+     * Reserves the UIDs in [uids] that have no removal in flight, or null
+     * when nothing is left to do. Runs on the main thread (all entry points
+     * are UI callbacks), so the check-and-insert is not racy.
+     */
+    private fun claimForRemoval(uids: Set<Long>): Set<Long>? {
+        val fresh = uids - removing
+        if (fresh.isEmpty()) {
+            return null
+        }
+        removing.addAll(fresh)
+        return fresh
     }
 
     /** Lazily loads the move-destination folder list. */
@@ -460,7 +494,9 @@ class MessageListViewModel(
             )
         }
         if (writeCache) {
-            val patched = mutableState.value.envelopes.values.filter { it.id in uids }
+            val patched =
+                mutableState.value.envelopes.values
+                    .filter { it.id in uids }
             viewModelScope.launch {
                 container.envelopeCache.write(folder, patched)
             }
