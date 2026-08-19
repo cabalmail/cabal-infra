@@ -241,6 +241,20 @@ class ApiClientTest {
         }
 
     @Test
+    fun `moveMessages sends mark_seen only when asked`() =
+        runTest {
+            val submitted = HttpStatusCode.OK to """{"status": "submitted"}"""
+            val server = Server(submitted, submitted)
+
+            server.api.moveMessages("INBOX", "Archive", listOf(7L), markSeen = true)
+            server.api.moveMessages("INBOX", "Archive", listOf(8L))
+
+            assertTrue(server.body(0).contains("\"mark_seen\":true"))
+            assertTrue(server.body(0).contains("\"destination\":\"Archive\""))
+            assertFalse(server.body(1).contains("mark_seen"))
+        }
+
+    @Test
     fun `send maps 409 to DuplicateInFlight and 200 to Submitted`() =
         runTest {
             val server =

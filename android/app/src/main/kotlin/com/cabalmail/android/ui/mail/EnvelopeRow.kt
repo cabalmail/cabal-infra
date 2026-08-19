@@ -26,9 +26,13 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -232,17 +236,38 @@ internal fun SwipeRow(
 ) {
     val currentToggleSeen by rememberUpdatedState(onToggleSeen)
     val currentDispose by rememberUpdatedState(onDispose)
+    // confirmValueChange is not once-per-gesture: when a row is dragged all
+    // the way to its anchor, foundation's AnchoredDraggableState invokes it
+    // both as the drag ends (offset sitting on the anchor) and again from
+    // settle(). Latch the first call per gesture; the latch clears once the
+    // row is back at rest (offset 0, i.e. dismissDirection == Settled), so
+    // each swipe fires its action exactly once. A repeat dispose would
+    // otherwise move the same message twice concurrently, which Dovecot
+    // resolves as two copies in the destination.
+    val fired = remember { mutableStateOf(false) }
     val swipeState =
         rememberSwipeToDismissBoxState(
             confirmValueChange = { value ->
-                when (value) {
-                    SwipeToDismissBoxValue.StartToEnd -> currentToggleSeen()
-                    SwipeToDismissBoxValue.EndToStart -> currentDispose()
-                    SwipeToDismissBoxValue.Settled -> Unit
+                if (value != SwipeToDismissBoxValue.Settled && !fired.value) {
+                    fired.value = true
+                    when (value) {
+                        SwipeToDismissBoxValue.StartToEnd -> currentToggleSeen()
+                        SwipeToDismissBoxValue.EndToStart -> currentDispose()
+                        SwipeToDismissBoxValue.Settled -> Unit
+                    }
                 }
                 false
             },
         )
+    LaunchedEffect(swipeState) {
+        // snapshotFlow: observe the offset without recomposing the row per frame.
+        snapshotFlow { swipeState.dismissDirection }
+            .collect { direction ->
+                if (direction == SwipeToDismissBoxValue.Settled) {
+                    fired.value = false
+                }
+            }
+    }
     SwipeToDismissBox(
         state = swipeState,
         backgroundContent = {
