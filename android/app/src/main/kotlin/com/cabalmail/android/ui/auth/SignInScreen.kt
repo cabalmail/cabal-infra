@@ -14,6 +14,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -21,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -28,7 +30,9 @@ import com.cabalmail.android.R
 import com.cabalmail.kit.auth.MfaMethod
 
 /**
- * Username/password sign-in with the TOTP/SMS challenge leg. Sign-up,
+ * Control-domain/username/password sign-in with the TOTP/SMS challenge
+ * leg. Capture is three-field like the Apple client's: the server (the
+ * control domain, remembered across launches), then the account. Sign-up,
  * confirmation, and forgot-password flows arrive with the full auth UI
  * work; this is the Phase 3 surface that makes the kit auth stack usable
  * on-device.
@@ -36,13 +40,22 @@ import com.cabalmail.kit.auth.MfaMethod
 @Composable
 fun SignInScreen(
     state: SignInUiState,
-    onSignIn: (username: String, password: String) -> Unit,
+    onSignIn: (controlDomain: String, username: String, password: String) -> Unit,
     onSubmitMfaCode: (code: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var controlDomain by rememberSaveable { mutableStateOf("") }
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var mfaCode by rememberSaveable { mutableStateOf("") }
+
+    // Prefill the server once it is known, but never over something the
+    // user has already typed (the read is async and may land mid-edit).
+    LaunchedEffect(state.rememberedControlDomain) {
+        if (controlDomain.isEmpty()) {
+            controlDomain = state.rememberedControlDomain.orEmpty()
+        }
+    }
 
     Scaffold(modifier = modifier.fillMaxSize()) { innerPadding ->
         Column(
@@ -91,6 +104,21 @@ fun SignInScreen(
 
                 else -> {
                     OutlinedTextField(
+                        value = controlDomain,
+                        onValueChange = { controlDomain = it },
+                        label = { Text(stringResource(R.string.control_domain_label)) },
+                        placeholder = { Text(stringResource(R.string.control_domain_hint)) },
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                capitalization = KeyboardCapitalization.None,
+                                autoCorrectEnabled = false,
+                            ),
+                        singleLine = true,
+                        enabled = !state.busy,
+                        modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+                    )
+                    OutlinedTextField(
                         value = username,
                         onValueChange = { username = it },
                         label = { Text(stringResource(R.string.username_label)) },
@@ -109,8 +137,12 @@ fun SignInScreen(
                         modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
                     )
                     Button(
-                        onClick = { onSignIn(username, password) },
-                        enabled = !state.busy && username.isNotBlank() && password.isNotBlank(),
+                        onClick = { onSignIn(controlDomain, username, password) },
+                        enabled =
+                            !state.busy &&
+                                controlDomain.isNotBlank() &&
+                                username.isNotBlank() &&
+                                password.isNotBlank(),
                     ) {
                         Text(stringResource(R.string.sign_in))
                     }

@@ -101,7 +101,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - Kit tests: `cd android && ./gradlew :kit:test` (JUnit 5; the `kit` module is the UI-free sibling of `CabalmailKit` — keep it free of Compose/UI dependencies)
 - App tests: `cd android && ./gradlew :app:testDebugUnitTest`
 - Lint: `cd android && ./gradlew ktlintCheck lint` (`ktlintFormat` auto-fixes). Android Lint warnings are **errors** in both modules; version-freshness checks are disabled because dependabot owns the version catalog
-- The control domain is the only build-time value (`BuildConfig.CONTROL_DOMAIN`); point local builds at a live environment via `cabalmail.controlDomain` in `~/.gradle/gradle.properties` — never commit a real domain, the checked-in default is a placeholder
+- The control domain is typed on the sign-in screen and remembered per install (like the Apple client); nothing environment-specific is baked in. `BuildConfig.CONTROL_DOMAIN` (`cabalmail.controlDomain` in `~/.gradle/gradle.properties`) is only a developer prefill for an install that has never signed in — never commit a real domain, the checked-in default is empty
 - CI: `lint.yml`'s `kotlin` job runs the same gradle gate on PRs; `android.yml` runs it again on `stage`/`main` pushes and deploys nothing to AWS (its only side effect is a Play Console upload)
 
 ### Terraform

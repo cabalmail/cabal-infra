@@ -47,7 +47,8 @@ private val Context.settingsDataStore by preferencesDataStore(name = "settings")
  *
  * [AuthService] construction is deferred behind [requireAuth] because it
  * needs the Cognito pool coordinates from `config.json`; everything after
- * the first successful [ConfigService.load] is memoized.
+ * the first successful [ConfigService.load] is memoized, and rebuilt when a
+ * sign-in points the app at a different control domain.
  */
 class AppContainer(
     context: Context,
@@ -59,11 +60,16 @@ class AppContainer(
 
     val httpClient: HttpClient = HttpClient(OkHttp)
 
+    /**
+     * The control domain comes from the sign-in form and is remembered per
+     * install; `BuildConfig.CONTROL_DOMAIN` is only a developer's build-time
+     * seed for an install that has never signed in (empty in CI builds).
+     */
     val configService: ConfigService =
         ConfigService(
-            controlDomain = BuildConfig.CONTROL_DOMAIN,
             httpClient = httpClient,
             cache = DataStoreConfigCache(appContext.configDataStore),
+            defaultControlDomain = BuildConfig.CONTROL_DOMAIN,
         )
 
     val tokenStore: TokenStore by lazy { KeystoreTokenStore(appContext) }
@@ -150,15 +156,33 @@ class AppContainer(
     private var addressRepository: AddressRepository? = null
     private var bimiRepository: BimiRepository? = null
 
+    /** The control domain the memoized auth/API stack was built for. */
+    private var stackControlDomain: String? = null
+
     /**
      * The auth service, constructing it from the loaded config on first
      * use. Suspends on the config fetch when neither cache nor network has
      * produced a config yet.
+     *
+     * Pass [controlDomain] from the sign-in form to (re)load that server's
+     * config first; when it differs from the domain the current stack was
+     * built for, the Cognito client, API client, and per-session
+     * repositories are rebuilt against the new pool. Without it, the
+     * remembered domain is used (session resume).
      */
-    suspend fun requireAuth(): AuthService =
+    suspend fun requireAuth(controlDomain: String? = null): AuthService =
         authMutex.withLock {
-            authService ?: run {
-                val config: Config = configService.config.value ?: configService.load()
+            val config: Config =
+                when {
+                    controlDomain != null -> configService.load(controlDomain)
+                    else -> configService.config.value ?: configService.load()
+                }
+            val domain = configService.controlDomain.value
+            authService?.takeIf { stackControlDomain == domain } ?: run {
+                apiClient = null
+                addressRepository = null
+                bimiRepository = null
+                stackControlDomain = domain
                 CognitoAuthService(
                     clientId = config.cognitoClientId,
                     region = config.cognito.region,
