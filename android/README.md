@@ -40,15 +40,22 @@ into the APK. The in-app launcher icon is the adaptive icon under
 
 ## Runtime configuration
 
-The only build-time value is the control domain; everything else (API URL,
-Cognito pool, mail domains) is fetched from
-`https://{CONTROL_DOMAIN}/config.json` at runtime and cached. The checked-in
-default is a placeholder — point a local build at a live environment with a
-user-level Gradle property (never committed):
+Nothing environment-specific is baked into the build. The sign-in screen asks
+for the control domain (the host serving the admin app, e.g.
+`admin.your-control-domain.example`), the same as the Apple client; everything
+else (API URL, Cognito pool, mail domains) is fetched from
+`https://{control_domain}/config.json` at runtime and cached, and the domain
+is remembered per install so it is prefilled on the next sign-in. One build
+works against dev, stage, and prod.
+
+For local development the form can be prefilled with a user-level Gradle
+property (never committed; the checked-in default is empty, and CI builds set
+nothing):
 
 ```sh
 # ~/.gradle/gradle.properties
 cabalmail.controlDomain=admin.your-control-domain.example
 ```
 
-or `./gradlew assembleDebug -Pcabalmail.controlDomain=...`.
+or `./gradlew assembleDebug -Pcabalmail.controlDomain=...`. It only applies
+to an install that has never signed in; a domain typed on the form wins.
