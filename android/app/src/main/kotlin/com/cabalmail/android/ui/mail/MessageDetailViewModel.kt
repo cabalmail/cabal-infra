@@ -275,10 +275,18 @@ class MessageDetailViewModel(
         }
     }
 
-    /** Archive (default dispose), or permanent purge from Trash. */
+    /**
+     * Archive (default dispose), or permanent purge from Trash. Disposing
+     * also marks the message read (archived == read, as on Apple and React),
+     * folded into the move call so the flag is set before the UID leaves the
+     * source folder. Ignored while a move or purge is already in flight: a
+     * second concurrent MOVE of the same message duplicates it server-side.
+     */
     fun dispose() {
+        if (!claimBusy()) {
+            return
+        }
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null) }
             try {
                 val api = container.requireApi()
                 if (isTrashFolder) {
@@ -288,6 +296,7 @@ class MessageDetailViewModel(
                         folder,
                         MessageListViewModel.disposeTarget(container.preferences.preferences.value),
                         listOf(uid),
+                        markSeen = mutableState.value.envelope?.isSeen != true,
                     )
                 }
                 container.envelopeCache.invalidateFolder(folder)
@@ -302,10 +311,25 @@ class MessageDetailViewModel(
         }
     }
 
+    /**
+     * Marks the screen busy for a move/purge, or returns false when one is
+     * already in flight (or the message has already departed).
+     */
+    private fun claimBusy(): Boolean {
+        val current = mutableState.value
+        if (current.busy || current.departed) {
+            return false
+        }
+        mutableState.update { it.copy(busy = true, error = null) }
+        return true
+    }
+
     /** Moves the open message to [destination] and departs. */
     fun move(destination: String) {
+        if (!claimBusy()) {
+            return
+        }
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null) }
             try {
                 container.requireApi().moveMessages(folder, destination, listOf(uid))
                 container.envelopeCache.invalidateFolder(folder)
