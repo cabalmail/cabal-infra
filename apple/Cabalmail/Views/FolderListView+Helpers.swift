@@ -33,6 +33,43 @@ extension FolderListView {
         )
     }
 
+    /// A sidebar section header carrying its own disclosure control.
+    ///
+    /// `Section(_:isExpanded:)` draws no usable one on any of the three
+    /// platforms (#1184), so the header draws the chevron the folder rows
+    /// already use — same glyph, same rotation, same "Expand X" / "Collapse X"
+    /// phrasing — and `FolderSectionDisclosure` decides what the section
+    /// shows. The binding arrives as a parameter because the `@AppStorage`
+    /// properties behind it are `private` to `FolderListView.swift`.
+    func sectionHeader(_ title: String, key: String, isExpanded: Binding<Bool>) -> some View {
+        Button {
+            isExpanded.wrappedValue.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .rotationEffect(
+                        .degrees(FolderSectionDisclosure.chevronRotation(isExpanded: isExpanded.wrappedValue))
+                    )
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14, height: 14)
+                Text(title)
+                Spacer()
+            }
+            // The header spans the sidebar but its glyph and word occupy the
+            // first inch of it; without this the transparent remainder is not
+            // a tap target, which in a sidebar is most of the control.
+            .contentShape(Rectangle())
+        }
+        // Plain keeps the header looking like list chrome rather than a
+        // control; borderless (what the row chevrons use) is about not
+        // triggering the surrounding row's selection, and a header has none.
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            FolderSectionDisclosure.accessibilityLabel(title: title, isExpanded: isExpanded.wrappedValue)
+        )
+        .accessibilityIdentifier("folder.section.disclose.\(key)")
+    }
+
     /// Raises the "New folder" sheet from an empty form. The form outlives
     /// the sheet (see `newFolderForm`), so it is cleared on the way in rather
     /// than by the sheet's own state going away.
