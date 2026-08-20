@@ -52,6 +52,11 @@ import XCTest
 ///   swiperow <query> edge:leading|trailing [hold:<s>]
 ///                              horizontal swipe within an element to
 ///                              reveal its swipe actions
+///   scroll <query> dir:up|down [amount:<fraction>] [press:<s>]
+///                              vertical swipe within an element to bring
+///                              content into view: `dir:down` reveals what
+///                              is below it. Anchored in the element, so it
+///                              works on visionOS where `drag` does not
 ///   exists <query>             "exists=<bool> hittable=<bool>"
 ///   wait <query> [timeout:<s>] wait for existence (default 10s)
 ///   quit                       end the loop (the test finishes)
@@ -158,13 +163,13 @@ final class SimDriveTests: XCTestCase {
     /// REPL rather than answering the command (#902). Checking the app's
     /// state first turns that into an ordinary error result.
     private static let appDependentVerbs: Set<String> = [
-        "dump", "focus", "tap", "type", "cmdv", "key", "drag", "swiperow", "exists", "wait"
+        "dump", "focus", "tap", "type", "cmdv", "key", "drag", "swiperow", "scroll", "exists", "wait"
     ]
 
     /// Verbs whose argument begins with a query, and which therefore may be
     /// `sys`-scoped. Kept separate from a bare `remainder.hasPrefix("sys")`
     /// test, which would also match the free text of `type system…`.
-    private static let queryingVerbs: Set<String> = ["tap", "exists", "wait", "swiperow"]
+    private static let queryingVerbs: Set<String> = ["tap", "exists", "wait", "swiperow", "scroll"]
 
     private func execute(_ line: String, quit: inout Bool) throws -> String {
         let (verb, remainder) = splitVerb(line)
@@ -248,6 +253,8 @@ final class SimDriveTests: XCTestCase {
             return try drag(args)
         case "swiperow":
             return try swipeRow(remainder)
+        case "scroll":
+            return try scroll(remainder)
         case "exists":
             let query = try selector(from: remainder, verb: "exists")
             let target = try element(for: query, requireExistence: false)
@@ -305,6 +312,58 @@ final class SimDriveTests: XCTestCase {
             thenHoldForDuration: hold
         )
         return "swiped \(query) \(edge) (hold \(hold)s)"
+    }
+
+    /// Vertical swipe *within* an element, to bring content below (or above)
+    /// the fold into view.
+    ///
+    /// Anchored in the element rather than in the application, which is the
+    /// whole point: visionOS refuses to synthesize an event for an
+    /// application-anchored coordinate ("Failed to synthesize event: Received
+    /// invalid scene ID (nil) from Accessibility") and kills the runner with
+    /// it, so `drag`'s `xy:` route cannot scroll there — and an unscrolled
+    /// SwiftUI list has not realized its off-screen rows, so no
+    /// identifier-addressed command reaches them either (#1182). Element-
+    /// anchored press-and-drag is the same API on the code path `swiperow`
+    /// already rides, and visionOS accepts it.
+    ///
+    /// The press is short by default: a long press before the drag is a
+    /// drag-and-drop or text-selection gesture on the touch platforms, not a
+    /// scroll.
+    private func scroll(_ remainder: String) throws -> String {
+        let query = try selector(from: remainder, verb: "scroll", options: ["dir", "amount", "press"])
+        let args = remainder.split(separator: " ").map(String.init)
+        let direction = value(named: "dir", in: args) ?? "down"
+        guard direction == "down" || direction == "up" else {
+            throw DriveError("scroll expects dir:up|down, got '\(direction)'")
+        }
+        let amount = min(max(value(named: "amount", in: args).flatMap(Double.init) ?? 0.5, 0.05), 0.9)
+        let press = value(named: "press", in: args).flatMap(Double.init) ?? 0.05
+        let target = try element(for: query)
+        // Travel is a fraction of the WINDOW, not of the anchor element: the
+        // natural thing to hand this verb is a row or a section header, and
+        // a drag scaled to a 20-point label moves nothing (measured on
+        // visionOS — the runner survived and the list did not budge).
+        let window = targetApp().frame
+        let travel = CGFloat(amount) * window.height
+        // `dir:down` means "show me what is below", so the finger travels UP.
+        let sign: CGFloat = direction == "down" ? 1 : -1
+        // Re-centre the anchor vertically on the window first, so both ends
+        // of a long travel stay on screen wherever the anchor happens to sit.
+        // The x stays at the anchor's own centre, which is what keeps the
+        // gesture inside the scroll view the caller named rather than
+        // whatever occupies the middle of the window.
+        let centre = target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let toWindowCentre = window.midY - target.frame.midY
+        let start = centre.withOffset(CGVector(dx: 0, dy: toWindowCentre + sign * travel / 2))
+        let end = centre.withOffset(CGVector(dx: 0, dy: toWindowCentre - sign * travel / 2))
+        start.press(
+            forDuration: press,
+            thenDragTo: end,
+            withVelocity: .default,
+            thenHoldForDuration: 0
+        )
+        return "scrolled \(query) \(direction) (\(Int(travel))pt, press \(press)s)"
     }
 
     private func orient(_ name: String) throws {
