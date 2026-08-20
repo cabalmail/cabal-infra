@@ -45,6 +45,7 @@ overwritten on every run.
 | macOS | `apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset` (16→1024 ladder) |
 | App sidebar | `apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset` |
 | Android (Play Store) | `android/app/src/main/ic_launcher-playstore.png` (512×512 opaque PNG for the Play Console listing; not packaged into the APK) |
+| Android (launcher) | `android/app/src/main/res/drawable/ic_launcher_{foreground,background}.xml` (adaptive-icon layers, vector drawables), `android/app/src/main/res/values/logo.xml` (brand color tokens, e.g. the splash background) |
 | React client | `react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}`, `react/admin/src/assets/logo.svg` |
 | Repo docs | `docs/logo.png`, `docs/mask.png` |
 | Landing site | `front-door/assets/cabalmail-mark.svg` |
