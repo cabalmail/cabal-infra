@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AuthShell from '../Login/AuthShell';
+import PasswordField from '../Login/PasswordField';
 import ResendPrompt from '../Login/ResendPrompt';
 import VerificationCodeField from '../Login/VerificationCodeField';
 
@@ -32,31 +33,14 @@ function ResetPassword({
           value={code}
           onChange={onCodeChange}
         />
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="password">New password</label>
-          </div>
-          <div className="auth__field-adorn">
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="new-password"
-              placeholder="••••••••"
-              onChange={onPasswordChange}
-              value={password || ''}
-              required
-            />
-            <button
-              type="button"
-              className="auth__field-adorn-btn"
-              onClick={() => setShowPassword(s => !s)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-            >
-              {showPassword ? 'Hide' : 'Show'}
-            </button>
-          </div>
-        </div>
+        <PasswordField
+          label="New password"
+          autoComplete="new-password"
+          value={password}
+          onChange={onPasswordChange}
+          visible={showPassword}
+          onToggleVisible={() => setShowPassword(s => !s)}
+        />
         <button type="submit" className="auth__btn-primary">Reset password</button>
       </form>
       <ResendPrompt

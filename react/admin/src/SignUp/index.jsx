@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import AuthShell from '../Login/AuthShell';
+import PasswordField from '../Login/PasswordField';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -178,30 +179,14 @@ function SignUp({
             </p>
           </div>
         ) : null}
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="password">Password</label>
-          </div>
-          <div className="auth__field-adorn">
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="new-password"
-              placeholder="••••••••"
-              onChange={onPasswordChange}
-              value={password || ''}
-              required
-            />
-            <button
-              type="button"
-              className="auth__field-adorn-btn"
-              onClick={() => setShowPassword(s => !s)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-            >
-              {showPassword ? 'Hide' : 'Show'}
-            </button>
-          </div>
+        <PasswordField
+          label="Password"
+          autoComplete="new-password"
+          value={password}
+          onChange={onPasswordChange}
+          visible={showPassword}
+          onToggleVisible={() => setShowPassword(s => !s)}
+        >
           <div
             className="auth__strength"
             aria-label={`Password strength: ${score} of 4`}
@@ -220,7 +205,7 @@ function SignUp({
           <p className="auth__field-help">
             At least 12 characters. A passphrase is better than a clever one.
           </p>
-        </div>
+        </PasswordField>
         <div className="auth__field">
           <div className="auth__field-header">
             <label className="auth__field-label" htmlFor="passwordConfirm">Confirm password</label>
