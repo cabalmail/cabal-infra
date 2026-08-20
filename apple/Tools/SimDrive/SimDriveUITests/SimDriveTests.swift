@@ -56,7 +56,11 @@ import XCTest
 ///                              vertical swipe within an element to bring
 ///                              content into view: `dir:down` reveals what
 ///                              is below it. Anchored in the element, so it
-///                              works on visionOS where `drag` does not
+///                              works on visionOS where `drag` does not.
+///                              `amount:` is a fraction of the window, spent
+///                              in as many sweeps as the enclosing scroll
+///                              view can take without a finger straying onto
+///                              its chrome (#1188)
 ///   exists <query>             "exists=<bool> hittable=<bool>"
 ///   wait <query> [timeout:<s>] wait for existence (default 10s)
 ///   quit                       end the loop (the test finishes)
@@ -345,26 +349,80 @@ final class SimDriveTests: XCTestCase {
         // a drag scaled to a 20-point label moves nothing (measured on
         // visionOS — the runner survived and the list did not budge).
         let window = targetApp().frame
-        let travel = CGFloat(amount) * window.height
-        // `dir:down` means "show me what is below", so the finger travels UP.
-        let sign: CGFloat = direction == "down" ? 1 : -1
-        // Re-centre the anchor vertically on the window first, so both ends
-        // of a long travel stay on screen wherever the anchor happens to sit.
-        // The x stays at the anchor's own centre, which is what keeps the
-        // gesture inside the scroll view the caller named rather than
-        // whatever occupies the middle of the window.
-        let centre = target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        let toWindowCentre = window.midY - target.frame.midY
-        let start = centre.withOffset(CGVector(dx: 0, dy: toWindowCentre + sign * travel / 2))
-        let end = centre.withOffset(CGVector(dx: 0, dy: toWindowCentre - sign * travel / 2))
-        start.press(
-            forDuration: press,
-            thenDragTo: end,
-            withVelocity: .default,
-            thenHoldForDuration: 0
-        )
-        return "scrolled \(query) \(direction) (\(Int(travel))pt, press \(press)s)"
+        let requested = CGFloat(amount) * window.height
+        // ... but the ENDPOINTS have to stay inside the scrollable thing the
+        // caller named, which is usually a good deal smaller than the window
+        // (#1188). That container is also the better anchor for the gesture:
+        // it puts the x inside the scroll view by construction, and it holds
+        // still while its content — the target — scrolls out from under it.
+        // No container found falls back to what this verb did before: the
+        // target as the anchor, the window as the bound.
+        let container = scrollContainer(enclosing: target)
+        let gestureAnchor = container ?? target
+        let bounds = container?.frame ?? window
+        let plan = ScrollGesture.plan(requestedTravel: requested, containerHeight: bounds.height)
+        let (pressOffset, releaseOffset) = plan.offsets(goingDown: direction == "down")
+        var completed = 0
+        for _ in 0..<plan.sweeps {
+            // Only reachable on the fallback path, where the anchor is the
+            // target and the target can scroll clean out of the tree. Reading
+            // `frame` off an element that no longer matches fails the whole
+            // XCUITest, taking the REPL with it — so ask first, and report the
+            // sweeps that did happen rather than the ones that were planned.
+            guard gestureAnchor.exists else { break }
+            let frame = gestureAnchor.frame
+            guard !frame.isEmpty else { break }
+            let centre = gestureAnchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let toCentre = bounds.midY - frame.midY
+            let start = centre.withOffset(CGVector(dx: 0, dy: toCentre + pressOffset))
+            let end = centre.withOffset(CGVector(dx: 0, dy: toCentre + releaseOffset))
+            start.press(
+                forDuration: press,
+                thenDragTo: end,
+                withVelocity: .default,
+                thenHoldForDuration: 0
+            )
+            completed += 1
+        }
+        let travelled = Int(CGFloat(completed) * plan.sweepTravel)
+        let sweepNote = plan.sweeps == 1 ? "" : " in \(completed) sweeps"
+        let shortfall = travelled < Int(requested) ? " of \(Int(requested))pt requested" : ""
+        return "scrolled \(query) \(direction) (\(travelled)pt\(shortfall)\(sweepNote), press \(press)s)"
     }
+
+    /// The scrollable element a `scroll` gesture on `target` has to stay
+    /// inside, or nil when nothing plausible encloses it.
+    ///
+    /// XCUITest exposes no parent pointer, so the candidates are enumerated
+    /// and the smallest one whose frame holds the anchor's centre wins —
+    /// smallest, because the app nests scroll views (every message row is its
+    /// own one-row `List`, which is why the size floor below is not optional).
+    private func scrollContainer(enclosing target: XCUIElement) -> XCUIElement? {
+        let anchor = target.frame
+        guard !anchor.isEmpty else { return nil }
+        let centre = CGPoint(x: anchor.midX, y: anchor.midY)
+        // A container shorter than a fifth of the window cannot absorb a
+        // scroll gesture, and one barely taller than its own anchor is the
+        // per-row `List` rather than the list the caller means.
+        let floor = max(targetApp().frame.height * 0.2, anchor.height * 2)
+        var best: XCUIElement?
+        for type in Self.scrollContainerTypes {
+            for candidate in targetApp().descendants(matching: type).allElementsBoundByIndex {
+                let frame = candidate.frame
+                guard frame.contains(centre), frame.height >= floor else { continue }
+                if let current = best, current.frame.height <= frame.height { continue }
+                best = candidate
+            }
+        }
+        return best
+    }
+
+    /// The element types a SwiftUI scrolling container turns up as: a
+    /// `ScrollView` for the plain one, a `CollectionView` or `Table` for a
+    /// `List` or a `Form`, depending on platform and inset style.
+    private static let scrollContainerTypes: [XCUIElement.ElementType] = [
+        .scrollView, .collectionView, .table
+    ]
 
     private func orient(_ name: String) throws {
         switch name {

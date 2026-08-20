@@ -80,9 +80,12 @@ cmd_start() {
   printf '{"dir": "%s", "app": "%s"}\n' "$DIR" "$APP" > /tmp/simdrive/config.json
 
   log "starting runner on $udid ($platform; log: $DIR/xcodebuild.log)"
+  # Only the REPL class: the bundle also carries ScrollGestureTests, which is
+  # plain arithmetic and has no business running every time a session starts.
   nohup xcodebuild test \
     -project SimDrive.xcodeproj \
     -scheme SimDrive \
+    -only-testing:SimDriveUITests/SimDriveTests \
     -destination "platform=$platform,id=$udid" \
     TEST_RUNNER_SIMDRIVE_DIR="$DIR" \
     TEST_RUNNER_SIMDRIVE_APP="$APP" \
