@@ -27,23 +27,36 @@ fun resolveInlineImages(
         resolved[match.groupValues[1]]?.let { "src=\"$it\"" } ?: match.value
     }
 
+private val AUTHOR_STYLE_BLOCK =
+    Regex("""<style\b[^>]*>[\s\S]*?</style\s*>""", RegexOption.IGNORE_CASE)
+private val AUTHOR_STYLESHEET_LINK =
+    Regex("""<link\b[^>]*\brel\s*=\s*["']?\s*stylesheet\b[^>]*>""", RegexOption.IGNORE_CASE)
+
 /**
- * The Reader render mode: author markup kept, author styling overridden
+ * The Reader render mode: author markup kept, author styling replaced
  * with a system-font, capped-line-length, [darkMode]-aware stylesheet.
- * Appended as a trailing style element so the cascade (with `!important`)
- * wins over author stylesheets and inline styles without parsing the
- * document.
+ * Author `<style>` blocks and stylesheet `<link>`s are removed rather
+ * than out-cascaded: a trailing `!important` element selector only beats
+ * author rules of equal specificity, and marketing emails routinely carry
+ * `@media (max-width: ...)` class rules (`.wrapper { background: #fff
+ * !important }`) that would win at phone widths and paint light
+ * backgrounds under the dark palette. Inline `style=` attributes stay and
+ * are overridden by the trailing `!important` stylesheet.
  */
 fun readerModeHtml(
     html: String,
     darkMode: Boolean,
 ): String {
+    val stripped =
+        html
+            .replace(AUTHOR_STYLE_BLOCK, "")
+            .replace(AUTHOR_STYLESHEET_LINK, "")
     val foreground = if (darkMode) "#e4e2dd" else "#1a1c1a"
     val background = if (darkMode) "#121412" else "#fdfcf8"
     val link = if (darkMode) "#9ccc9c" else "#2e6b30"
     return """
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        $html
+        $stripped
         <style>
           html { background: $background !important; }
           body {
