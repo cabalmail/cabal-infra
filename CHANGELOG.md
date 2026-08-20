@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2026-08-20
+
+### Changed
+- **Approval gate before the Play Console upload.** `android.yml` now
+  runs its upload behind the same `gate-prod`/`gate-stage` environments
+  as the Terraform, app-deploy, and TestFlight workflows, so a prod
+  upload waits for the gate environment's required reviewers; a gate
+  environment with no protection rules (currently `gate-stage`) passes
+  on its own.
+
+### Fixed
+- Android: **Brand launcher icon.** The installed app now shows the
+  Cabalmail mark instead of a placeholder envelope glyph: an adaptive icon
+  (forest glyph on the cream plate, with a monochrome layer for themed
+  icons) generated as vector drawables from the authoritative brand vector,
+  matching the Play Store listing icon. The splash screen background now
+  uses the brand forest green.
+- Android: **Reader mode stays dark at phone widths.** The reader
+  stylesheet was appended after the author's styles and relied on cascade
+  order to win, but that only beats author rules of equal CSS specificity.
+  Marketing emails carry `@media (max-width: ...)` class rules with
+  `!important` white backgrounds for their "mobile" layout, so the reader
+  went light-text-on-white on phones (and narrow windows) while looking
+  fine at tablet width. Reader mode now strips author `<style>` blocks and
+  stylesheet links outright; inline styles are still overridden by the
+  reader stylesheet.
+- Apple: **Sidebar sections can be collapsed and reopened again.** The
+  Folders list's "Subscribed" and "All folders" headers now carry their own
+  disclosure control. "All folders" ships collapsed, and on macOS and
+  visionOS there was nothing to open it with, so `Sent`, `Trash` and
+  `Drafts` could not be reached at all; on iPadOS the header was equally
+  inert but every folder was drawn whatever the stored state said. All
+  three now honour the same rule and the same control.
+
 ## [1.3.1] - 2026-08-19
 
 ### Added
