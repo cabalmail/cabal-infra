@@ -46,6 +46,8 @@ readonly PLACEMENT="translate(94.8 145.52) scale(2.036)"
 readonly FOREST="#2E5235"       # primary green
 readonly FOREST_DEEP="#1E3A24"  # secondary green (visionOS front layer)
 readonly PARCHMENT="#E8DFC8"    # secondary light; dark-mode glyph
+readonly MINT="#8DC899"         # dark-mode in-app mark tint (the Apple LogoTint
+                                # colorset's dark appearance — keep in sync)
 
 # Icon-backplate gradient tones. These are tints/shades of the cream and ink
 # tokens used only for the app-icon backplates; they match the design
@@ -119,7 +121,8 @@ Regenerated outputs (all committed; never hand-edit):
   Android — android/app/src/main/ic_launcher-playstore.png           (Play Store listing icon, 512x512)
             android/app/src/main/res/drawable/ic_launcher_foreground.xml  (adaptive launcher glyph layer)
             android/app/src/main/res/drawable/ic_launcher_background.xml  (adaptive launcher plate layer)
-            android/app/src/main/res/values/logo.xml                  (brand colors, e.g. splash background)
+            android/app/src/main/res/drawable/cabalmail_mark.xml      (in-app brand mark, folder-list top bar)
+            android/app/src/main/res/values/logo.xml                  (brand colors: splash background, mark tints)
   React — react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}
           react/admin/src/assets/logo.svg
   Docs  — docs/logo.png, docs/mask.png
@@ -463,18 +466,18 @@ EOF
 }
 
 # --------------------------------------------------------------------------
-# Android adaptive launcher icon (vector drawables)
+# Android vector assets (adaptive launcher icon + in-app mark)
 # --------------------------------------------------------------------------
 #
 # The in-app launcher icon is an adaptive icon: res/mipmap-anydpi/ic_launcher.xml
 # (hand-maintained wiring) layers a background plate, a foreground glyph, and
 # a monochrome layer (the foreground reused — themed icons take only its
-# alpha). The art layers are generated here as vector drawables: Android's
-# pathData grammar is the SVG path grammar, so the source paths embed
-# unchanged, no rasterization and no committed binaries. A VectorDrawable
-# <group> applies translate after scale about a (0,0) default pivot — the
-# same composition as the SVG treatments' translate(...) scale(...).
-write_android_launcher() {
+# alpha). The art layers — and the in-app brand mark — are generated here as
+# vector drawables: Android's pathData grammar is the SVG path grammar, so the
+# source paths embed unchanged, no rasterization and no committed binaries. A
+# VectorDrawable <group> applies translate after scale about a (0,0) default
+# pivot — the same composition as the SVG treatments' translate(...) scale(...).
+write_android_assets() {
   local res="${REPO_ROOT}/android/app/src/main/res"
 
   # Foreground: forest glyph placed per the ANDROID_GLYPH_* spec, tangent to
@@ -530,13 +533,42 @@ EOF
 </vector>
 EOF
 
-  # Brand color resources for non-icon consumers (the splash-screen window
-  # background references logo_forest from values/themes.xml).
+  # In-app brand mark, shown above the folder list like the Apple sidebar
+  # mark: the glyph on the web logo's 2:1 brand-tile frame (native 400x192
+  # glyph, 4px vertical pad), translated up since a VectorDrawable viewport
+  # has no viewBox offset. The intrinsic size is the display size (like the
+  # macOS menu-bar mark's 32x16pt); Compose tints it per theme via
+  # LocalLogoTint, so the baked forest fill only shows in previews.
+  cat > "${res}/drawable/cabalmail_mark.xml" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ${BANNER} -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="88dp"
+    android:height="44dp"
+    android:viewportWidth="400"
+    android:viewportHeight="200">
+    <group android:translateY="-80">
+        <path
+            android:fillColor="${FOREST}"
+            android:fillType="evenOdd"
+            android:pathData="${PATH1}" />
+        <path
+            android:fillColor="${FOREST}"
+            android:pathData="${PATH2}" />
+    </group>
+</vector>
+EOF
+
+  # Brand color resources for non-icon consumers: the splash-screen window
+  # background references logo_forest from values/themes.xml, and the theme's
+  # LocalLogoTint tints the in-app mark logo_forest / logo_mint (light/dark,
+  # mirroring the Apple LogoTint colorset).
   cat > "${res}/values/logo.xml" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <!-- ${BANNER} -->
 <resources>
     <color name="logo_forest">${FOREST}</color>
+    <color name="logo_mint">${MINT}</color>
 </resources>
 EOF
 }
@@ -608,9 +640,9 @@ generate_all() {
   #     icon is the adaptive icon under res/mipmap-anydpi/. ---
   render "${d}/AppIcon-ios-light.svg" 512 512 "${REPO_ROOT}/android/app/src/main/ic_launcher-playstore.png" opaque
 
-  # --- Android: adaptive launcher icon layers (vector drawables) + brand
-  #     color resources. See write_android_launcher. ---
-  write_android_launcher
+  # --- Android: adaptive launcher icon layers, in-app brand mark (vector
+  #     drawables) + brand color resources. See write_android_assets. ---
+  write_android_assets
 
   # --- React client ---
   install -m 0644 "${d}/favicon.svg"  "${pub}/favicon.svg"
