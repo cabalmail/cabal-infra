@@ -3,6 +3,8 @@
   the full destination URL with copy, open (in the browser, or the handling
   app for `mailto:` and other schemes), and share actions. Previously the
   reader's hardened WebView swallowed link taps outright, leaving links
-  inert. Executable and local schemes (`javascript:`, `data:`, `file:`,
-  `intent:`, …) stay silently swallowed, and the body no longer reloads —
-  losing the reading position — when unrelated screen state changes.
+  inert. Plain-text bodies get the same treatment: web URLs, `www.` hosts,
+  and email addresses are detected and feed the same menu. Executable and
+  local schemes (`javascript:`, `data:`, `file:`, `intent:`, …) stay
+  silently swallowed, and the HTML body no longer reloads — losing the
+  reading position — when unrelated screen state changes.
