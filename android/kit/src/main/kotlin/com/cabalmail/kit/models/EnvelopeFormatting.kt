@@ -69,6 +69,25 @@ fun mailboxAddress(mailbox: String): String? {
 }
 
 /**
+ * The address this message was delivered to — the key triage signal in
+ * Cabalmail, where a distinct address is handed to each vendor. A message
+ * can carry several recipients (To first, then Cc), so prefer one on a
+ * deployment mail domain — matched subdomain-aware, since Cabalmail
+ * addresses live on subdomains — and fall back to the first recipient.
+ * Null when there are no recipients (e.g. a draft), which drops the
+ * destination from the row.
+ */
+fun Envelope.deliveredToAddress(mailDomains: List<String>): String? {
+    val recipients = (to + cc).mapNotNull(::mailboxAddress)
+    val owned =
+        recipients.firstOrNull { address ->
+            val host = address.substringAfterLast('@')
+            mailDomains.any { host == it || host.endsWith(".$it") }
+        }
+    return owned ?: recipients.firstOrNull()
+}
+
+/**
  * True when any present SPF/DKIM/DMARC verdict failed outright. Absence of
  * results is "not verified", which is not a warning state.
  */

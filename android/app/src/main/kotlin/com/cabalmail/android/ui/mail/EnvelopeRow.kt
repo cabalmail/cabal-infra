@@ -38,8 +38,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cabalmail.android.R
@@ -47,6 +50,7 @@ import com.cabalmail.android.ui.theme.LocalRowPadding
 import com.cabalmail.android.ui.theme.disposeIconPainter
 import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.models.Envelope
+import com.cabalmail.kit.models.deliveredToAddress
 import com.cabalmail.kit.models.hasAuthFailure
 import com.cabalmail.kit.models.mailboxAddress
 import com.cabalmail.kit.models.mailboxDisplayName
@@ -59,7 +63,8 @@ import java.time.format.DateTimeFormatter
  * One message row, shared by the folder window and search results.
  * [checked] non-null renders the selection-mode checkbox; [folderLabel]
  * names the source folder on cross-folder search results; [bimiLookup]
- * resolves a sender domain to a BIMI logo URL (initials render meanwhile).
+ * resolves a sender domain to a BIMI logo URL (initials render meanwhile);
+ * [mailDomains] picks the delivered-to address for the route line.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -71,6 +76,7 @@ fun EnvelopeRow(
     checked: Boolean? = null,
     folderLabel: String? = null,
     bimiLookup: (suspend (String) -> String?)? = null,
+    mailDomains: List<String> = emptyList(),
 ) {
     val emphasis = if (envelope.isSeen) FontWeight.Normal else FontWeight.Bold
     Row(
@@ -92,10 +98,25 @@ fun EnvelopeRow(
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // "source → destination", matching the Apple rows: the
+                // destination is the address the message was delivered to —
+                // the key triage signal in Cabalmail — dimmed so the sender
+                // stays the primary read. No recipients drops the arrow.
+                val sender = envelope.from.firstOrNull()?.let(::mailboxDisplayName) ?: "(unknown sender)"
+                val destination = envelope.deliveredToAddress(mailDomains)
+                val dimmed = MaterialTheme.colorScheme.outline
                 Text(
-                    text = envelope.from.firstOrNull()?.let(::mailboxDisplayName) ?: "(unknown sender)",
+                    text =
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(fontWeight = emphasis)) { append(sender) }
+                            if (destination != null) {
+                                withStyle(SpanStyle(color = dimmed, fontWeight = FontWeight.Normal)) {
+                                    append(" → ")
+                                    append(destination)
+                                }
+                            }
+                        },
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = emphasis,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),

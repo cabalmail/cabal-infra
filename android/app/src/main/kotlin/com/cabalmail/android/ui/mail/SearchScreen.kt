@@ -52,6 +52,8 @@ fun SearchScreen(
     state: SearchUiState,
     viewModel: SearchViewModel,
     bimiLookup: suspend (String) -> String?,
+    /** Deployment mail domains, for the row's delivered-to address. */
+    mailDomains: List<String>,
     onOpenMessage: (Envelope) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -131,6 +133,7 @@ fun SearchScreen(
                         onLongClick = { viewModel.toggleFlag(envelope) },
                         folderLabel = envelope.folder,
                         bimiLookup = bimiLookup,
+                        mailDomains = mailDomains,
                     )
                 }
                 HorizontalDivider()
