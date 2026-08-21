@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up JDK
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961  # v5.7.0
         with:
           distribution: temurin
           java-version: '21'
@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up JDK
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961  # v5.7.0
         with:
           distribution: temurin
           java-version: '21'
@@ -90,6 +90,25 @@ jobs:
         run: ./gradlew assembleRelease
 
   # -----------------------------------------------------------------------
+  # Manual approval gate before the Play Console upload, mirroring the
+  # other mainline deploy workflows (apple.yml's TestFlight gate,
+  # app.yml/infra.yml). Whether the run actually pauses depends on the
+  # gate-${env} environment's protection rules: with required reviewers
+  # (gate-prod) it waits for an operator; without them (gate-stage,
+  # currently) the job passes on its own. Guarded by the same ref check
+  # as upload so a workflow_dispatch run on a feature branch (where
+  # upload would skip anyway) never waits at a gate.
+  # -----------------------------------------------------------------------
+  approval:
+    needs: [test, build]
+    if: github.ref_name == 'main' || github.ref_name == 'stage'
+    environment: gate-${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: approve
+        run: echo "Approved"
+
+  # -----------------------------------------------------------------------
   # Signed AAB -> Play Console internal track. Deploy branches only. Until
   # the operator finishes the runbook (upload keystore + Play service
   # account in the environment's secrets), the job warns and exits green
@@ -98,7 +117,7 @@ jobs:
   # -----------------------------------------------------------------------
   upload:
     name: Upload to Play Console
-    needs: [test, build]
+    needs: approval
     # The ref check (not an event check) is what keeps a workflow_dispatch
     # run on a feature branch from uploading.
     if: github.ref_name == 'main' || github.ref_name == 'stage'
@@ -109,7 +128,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up JDK
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00  # v4.7.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961  # v5.7.0
         with:
           distribution: temurin
           java-version: '21'

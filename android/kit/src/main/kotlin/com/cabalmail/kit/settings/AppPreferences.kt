@@ -32,6 +32,16 @@ enum class DisposeAction(
     TRASH("trash"),
 }
 
+/** Which message the reader opens after a dispose; falls back to the list when none fits. */
+enum class DisposeAdvance(
+    override val wire: String,
+) : WireEnum {
+    NEXT("next"),
+    NEXT_UNREAD("next_unread"),
+    PREVIOUS_UNREAD("previous_unread"),
+    FIRST_UNREAD("first_unread"),
+}
+
 /** `SYSTEM` defers to the platform; the web's flat `theme` knows only light/dark. */
 enum class AppTheme(
     override val wire: String,
@@ -112,6 +122,7 @@ data class AppPreferences(
     val bodyRenderMode: BodyRenderMode = BodyRenderMode.ORIGINAL,
     val folderCountDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
     val disposeAction: DisposeAction = DisposeAction.ARCHIVE,
+    val disposeAdvance: DisposeAdvance = DisposeAdvance.NEXT_UNREAD,
     /** Null = From picker starts empty (wire encoding: empty string). */
     val defaultFromAddress: String? = null,
     val signature: String = "",

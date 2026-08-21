@@ -136,6 +136,43 @@ final class RichTextEditorControllerTests: XCTestCase {
         XCTAssertFalse(empty)
     }
 
+    /// Select-all + delete does not empty the element. WebKit keeps the
+    /// block scaffolding, and on a document that had paragraphs in it —
+    /// which is every compose with a signature, a reply or a resumed draft
+    /// — what is left is `<p><br></p>`. `isEmpty()` used to match only
+    /// `''`, `'<p></p>'` and `'<br>'`, so `getHTML()` handed those 12
+    /// characters to the send path as authored copy and the composer went
+    /// on asking "Discard draft?" over a visibly empty pane (#1138).
+    func testClearedParagraphScaffoldingReportsEmpty() async {
+        for residue in ["<p><br></p>", "<br>", "<p></p>", "<div><br></div>", "<p><br></p><p><br></p>"] {
+            await controller.setHTML(residue)
+            let empty = await controller.isEmpty()
+            XCTAssertTrue(empty, "\(residue) is scaffolding, not content")
+            let html = await controller.getHTML()
+            XCTAssertEqual(html, "", "\(residue) must not reach the wire")
+        }
+    }
+
+    /// Whitespace-only is the same answer, and matches how the Markdown
+    /// pane is already read (`ComposeBodyPolicy.source` trims before
+    /// deciding whether that buffer is filled).
+    func testWhitespaceOnlyBodyReportsEmpty() async {
+        await controller.setHTML("<p>   </p>")
+        let empty = await controller.isEmpty()
+        XCTAssertTrue(empty)
+    }
+
+    /// The negative control the text-based test needs: content that carries
+    /// no text at all still counts, so an image-only or rule-only body is
+    /// never silently dropped.
+    func testNonTextContentIsNotEmpty() async {
+        for markup in ["<p><img src=\"cid:x\"></p>", "<hr>"] {
+            await controller.setHTML(markup)
+            let empty = await controller.isEmpty()
+            XCTAssertFalse(empty, "\(markup) is content")
+        }
+    }
+
     // MARK: - Round-trips
 
     /// Source of truth: round-tripping markdown through the editor produces

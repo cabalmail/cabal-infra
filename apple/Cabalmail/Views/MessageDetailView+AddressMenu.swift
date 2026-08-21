@@ -229,7 +229,7 @@ struct RevokeAddressConfirmation: ViewModifier {
                 pending = nil
                 perform(address)
             }
-            Button("Cancel", role: .cancel) { pending = nil }
+            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) { pending = nil }
         } message: { address in
             Text("Mail sent to \(address.address) will be rejected. This can't be undone.")
         }

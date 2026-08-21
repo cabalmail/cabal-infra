@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Forest, the shared default accent across web and Apple; used only for
-         the launcher-icon background and splash until the Phase 6 accent
-         plumbing lands. In-app color comes from Material You dynamic color. -->
-    <color name="ic_launcher_background">#1B5E20</color>
-</resources>

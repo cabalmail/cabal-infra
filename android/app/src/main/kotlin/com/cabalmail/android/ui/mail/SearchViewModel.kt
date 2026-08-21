@@ -47,6 +47,13 @@ class SearchViewModel(
     private val mutableState = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = mutableState.asStateFlow()
 
+    /**
+     * Folder/UID pairs with a dispose in flight; a repeat request is dropped
+     * so a message is never moved twice concurrently (Dovecot would land two
+     * copies in the destination).
+     */
+    private val disposing = mutableSetOf<Pair<String, Long>>()
+
     fun setQuery(query: String) {
         mutableState.update { it.copy(query = query) }
     }
@@ -136,9 +143,16 @@ class SearchViewModel(
         setFlag(envelope, "\\Flagged", !envelope.isFlagged)
     }
 
-    /** Archive, or (post-confirmation) purge when the source is Trash. */
+    /**
+     * Archive, or (post-confirmation) purge when the source is Trash. An
+     * archived message is also marked read (archived == read), in the same
+     * server call so the flag is set before the MOVE drops the source UID.
+     */
     fun dispose(envelope: Envelope) {
         val folder = envelope.folder ?: return
+        if (!disposing.add(folder to envelope.id)) {
+            return
+        }
         viewModelScope.launch {
             try {
                 val api = container.requireApi()
@@ -150,6 +164,7 @@ class SearchViewModel(
                         folder,
                         MessageListViewModel.disposeTarget(container.preferences.preferences.value),
                         listOf(envelope.id),
+                        markSeen = true,
                     )
                 }
                 container.envelopeCache.invalidateFolder(folder)
@@ -158,6 +173,8 @@ class SearchViewModel(
                 }
             } catch (exception: Exception) {
                 mutableState.update { it.copy(error = userMessage(exception, "Could not move message")) }
+            } finally {
+                disposing.remove(folder to envelope.id)
             }
         }
     }

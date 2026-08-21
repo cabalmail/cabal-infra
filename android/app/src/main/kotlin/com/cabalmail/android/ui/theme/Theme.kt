@@ -1,6 +1,8 @@
 package com.cabalmail.android.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -11,7 +13,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
@@ -30,6 +36,14 @@ val LocalRowPadding = staticCompositionLocalOf { 10.dp }
 /** True when the "Dispose action" preference targets Trash (labels follow it). */
 val LocalDisposeToTrash = staticCompositionLocalOf { false }
 
+/**
+ * Tint for the in-app brand mark (drawable/cabalmail_mark): logo_forest in
+ * light, logo_mint in dark, mirroring the Apple clients' LogoTint colorset.
+ * Deliberately a fixed brand ink, not the scheme's primary — the mark keeps
+ * its color even under Material You.
+ */
+val LocalLogoTint = staticCompositionLocalOf { Color(0xFF2E5235) }
+
 /** The dispose affordance's label: purge inside Trash, else the preference's target. */
 @Composable
 fun disposeLabelRes(isTrashFolder: Boolean): Int =
@@ -37,6 +51,16 @@ fun disposeLabelRes(isTrashFolder: Boolean): Int =
         isTrashFolder -> R.string.purge
         LocalDisposeToTrash.current -> R.string.dispose_to_trash
         else -> R.string.archive
+    }
+
+/** The dispose affordance's icon, branching with [disposeLabelRes]: a trashcan
+ *  only when the dispose deletes (purge, or the preference targets Trash). */
+@Composable
+fun disposeIconPainter(isTrashFolder: Boolean): Painter =
+    if (isTrashFolder || LocalDisposeToTrash.current) {
+        rememberVectorPainter(Icons.Default.Delete)
+    } else {
+        painterResource(R.drawable.ic_archive)
     }
 
 fun Density.rowPadding(): Dp =
@@ -133,6 +157,7 @@ fun CabalmailTheme(
     CompositionLocalProvider(
         LocalRowPadding provides preferences.density.rowPadding(),
         LocalDisposeToTrash provides (preferences.disposeAction == DisposeAction.TRASH),
+        LocalLogoTint provides colorResource(if (darkTheme) R.color.logo_mint else R.color.logo_forest),
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

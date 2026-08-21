@@ -31,9 +31,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.LocalLogoTint
 import com.cabalmail.kit.settings.FolderCountDisplay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,7 +65,15 @@ fun FolderListScreen(
         },
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
+                // The brand mark stands in for the title, as in the Apple
+                // clients' sidebar; its drawable carries the display size.
+                title = {
+                    Icon(
+                        painterResource(R.drawable.cabalmail_mark),
+                        contentDescription = stringResource(R.string.app_name),
+                        tint = LocalLogoTint.current,
+                    )
+                },
                 actions = {
                     IconButton(onClick = onOpenSearch) {
                         Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search))

@@ -17,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -63,6 +62,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
+import com.cabalmail.android.ui.theme.disposeIconPainter
 import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.models.Envelope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -407,7 +407,7 @@ private fun SelectionTopBar(
                 enabled = state.selected.isNotEmpty() && !state.busy,
             ) {
                 Icon(
-                    Icons.Default.Delete,
+                    disposeIconPainter(viewModel.isTrashFolder),
                     contentDescription =
                         stringResource(
                             disposeLabelRes(viewModel.isTrashFolder),
@@ -525,7 +525,9 @@ private fun InteractiveRow(
     // the surface, composited here so the swipe backing stays opaque.
     val rowColor =
         if (highlighted) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f).compositeOver(MaterialTheme.colorScheme.surface)
+            MaterialTheme.colorScheme.primary
+                .copy(alpha = 0.12f)
+                .compositeOver(MaterialTheme.colorScheme.surface)
         } else {
             MaterialTheme.colorScheme.surface
         }

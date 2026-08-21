@@ -13,7 +13,7 @@
 #   https://github.com/slusarz/dovecot-fts-flatcurve (v1.0.5)
 # Licences are preserved at /usr/share/doc/{xapian,fts-flatcurve}/
 # in the runtime image; see docs/operations.md.
-FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568 AS fts-builder
+FROM amazonlinux:2023@sha256:181f98c48832fe926f8ca3b6ffeafcce128e96e77b93d08fbe9a9bc9403ce284 AS fts-builder
 
 ARG XAPIAN_VERSION=1.4.31
 ARG FTS_FLATCURVE_VERSION=v1.0.5
@@ -85,7 +85,7 @@ RUN rm -rf /staging/usr/local \
 # ───────────────────────────────────────────────────────────────
 # Runtime image
 # ───────────────────────────────────────────────────────────────
-FROM amazonlinux:2023@sha256:694092ae18877ed4e3cb9b643759ba95df1f12af12528fefa18f60f79d4c1568
+FROM amazonlinux:2023@sha256:181f98c48832fe926f8ca3b6ffeafcce128e96e77b93d08fbe9a9bc9403ce284
 
 # System packages
 RUN dnf install -y \
@@ -123,6 +123,7 @@ COPY imap/configs/dovecot/20-imap.conf       /etc/dovecot/conf.d/20-imap.conf
 COPY imap/configs/dovecot/auth-master.conf   /etc/dovecot/conf.d/auth-master.conf.ext
 COPY imap/configs/dovecot/10-logging.conf    /etc/dovecot/conf.d/10-logging.conf
 COPY imap/configs/dovecot/90-fts.conf        /etc/dovecot/conf.d/90-fts.conf
+COPY imap/configs/dovecot/99-no-imaps.conf   /etc/dovecot/conf.d/99-no-imaps.conf
 
 # PAM for dovecot (Cognito auth)
 COPY imap/configs/pam/dovecot               /etc/pam.d/dovecot
@@ -167,6 +168,8 @@ COPY imap/supervisord.conf                 /etc/supervisord.conf
 RUN chmod +x /entrypoint.sh /usr/local/bin/*.sh \
     && ldconfig
 
-EXPOSE 143 993 25
+# 993 is not exposed: the IMAPS listener is switched off in
+# conf.d/99-no-imaps.conf and no security group admits the port.
+EXPOSE 143 25
 
 ENTRYPOINT ["/entrypoint.sh"]

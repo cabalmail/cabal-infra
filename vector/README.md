@@ -3,8 +3,9 @@
 `cabalmail-logo.svg` is the **single source of truth** for the Cabalmail
 mark. It is a tight-bounds glyph (viewBox `0 84 400 192`, `currentColor`
 fill) whose header comment documents the geometry. Every logo derivative in
-the repo — Apple app icons, the React client favicon/logo set, the docs
-images, and the front-door favicon — is generated from this one file.
+the repo — Apple app icons, the Android Play Store icon, the React client
+favicon/logo set, the docs images, and the front-door favicon — is generated
+from this one file.
 
 **Do not hand-edit any derivative.** Edit this vector (or a constant in the
 generator), then regenerate:
@@ -43,6 +44,9 @@ overwritten on every run.
 | visionOS | `apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack` (back / middle / front) |
 | macOS | `apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset` (16→1024 ladder) |
 | App sidebar | `apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset` |
+| Android (Play Store) | `android/app/src/main/ic_launcher-playstore.png` (512×512 opaque PNG for the Play Console listing; not packaged into the APK) |
+| Android (launcher) | `android/app/src/main/res/drawable/ic_launcher_{foreground,background}.xml` (adaptive-icon layers, vector drawables), `android/app/src/main/res/values/logo.xml` (brand color tokens: splash background, mark tints) |
+| Android (in-app mark) | `android/app/src/main/res/drawable/cabalmail_mark.xml` (folder-list top-bar mark, vector drawable; tinted at runtime via the theme's `LocalLogoTint`) |
 | React client | `react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}`, `react/admin/src/assets/logo.svg` |
 | Repo docs | `docs/logo.png`, `docs/mask.png` |
 | Landing site | `front-door/assets/cabalmail-mark.svg` |

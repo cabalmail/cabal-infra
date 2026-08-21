@@ -147,9 +147,11 @@ final class ComposeViewModel {
     /// which also becomes non-nil once a fresh compose autosaves: the title
     /// describes what the user opened, not what has since been saved.
     let isResumedServerDraft: Bool
-    /// Serializes server saves so the debounce loop and an in-progress
-    /// close-without-send can't append racing copies.
-    var serverSaveInFlight = false
+    /// Serializes every server-side Drafts mutation this session makes —
+    /// the debounce loop, a close-without-send, and the discard — so two
+    /// can't race over the same copy, and so a discard closes the session
+    /// against a save that would resurrect it (#1163).
+    let serverDraftQueue = ServerDraftMutationQueue()
 
     private var autosaveTask: Task<Void, Never>?
     private var serverAutosaveTask: Task<Void, Never>?
@@ -420,8 +422,23 @@ final class ComposeViewModel {
             // (best-effort, server-side). A queued send drops the ref; the
             // stale copy survives, which beats discarding a draft for a
             // message that hasn't actually left yet.
-            let outcome = try await client.send(message, discardingDraft: serverDraftRef)
-            lastSendOutcome = outcome
+            //
+            // Delivery ends this session's server draft, so it goes through
+            // the mutation queue the way Discard does (#1163): the session
+            // closes before `/send` starts, and the send waits behind any
+            // save already in flight. `serverDraftRef` is read *inside* the
+            // block for the same reason the discard reads it there — the UID
+            // to expunge is the one a completing save adopted, not the one it
+            // superseded. Without both halves an autosave tick that cleared
+            // its guard and then suspended in the WebKit bridge replaces a
+            // UID the send has already consumed, leaving a full copy of the
+            // sent message in Drafts for good (#1198).
+            try await serverDraftQueue.close(runningThrowing: {
+                self.lastSendOutcome = try await self.client.send(
+                    message,
+                    discardingDraft: self.serverDraftRef
+                )
+            })
             // Whether the message left the device or got queued, the draft
             // is no longer authoritative — the outbox owns it from here.
             try? await draftStore.remove(id: draftId)
@@ -474,9 +491,7 @@ final class ComposeViewModel {
             onClose()
             return true
         case .discardEmpty:
-            if let ref = serverDraftRef {
-                recordServerDraftDiscard(try? await client.discardDraft(ref))
-            }
+            await discardServerDraftCopy()
             try? await draftStore.remove(id: draftId)
             stop()
             onClose()
@@ -495,9 +510,7 @@ final class ComposeViewModel {
     /// discarding on one device should discard everywhere.
     func discard() async {
         try? await draftStore.remove(id: draftId)
-        if let ref = serverDraftRef {
-            recordServerDraftDiscard(try? await client.discardDraft(ref))
-        }
+        await discardServerDraftCopy()
         stop()
         onClose()
     }

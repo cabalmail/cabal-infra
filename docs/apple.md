@@ -177,7 +177,7 @@ cd apple/Tools/SimDrive
 
 The full command grammar (`launch`, `activate`, `env`, `dump`, `sysdump`,
 `sysapp`, `focus`, `tap`, `type`, `cmdv`, `orient`, `drag`, `swiperow`,
-`exists`, `wait`) is documented at the top of
+`scroll`, `exists`, `wait`) is documented at the top of
 `Tools/SimDrive/SimDriveUITests/SimDriveTests.swift`. Notes that keep
 sessions out of known potholes:
 
@@ -202,6 +202,16 @@ sessions out of known potholes:
 
   This keeps secrets out of the command files and the harness logs,
   which is the required handling.
+- **Scrolling, and the visionOS restriction.** `scroll <query>
+  dir:up|down` swipes *within* the element you name (`dir:down` reveals
+  what is below it), which is the only scroll visionOS accepts: an
+  application-anchored coordinate — what `drag from:… to:…` and `tap
+  xy:…` use — fails there with `Failed to synthesize event: Received
+  invalid scene ID (nil)` and takes the runner with it. Off-screen
+  SwiftUI rows are `exists=false`, not merely unhittable, so no
+  identifier reaches them until something scrolls them into existence.
+  Travel is a fraction of the window (`amount:`, default 0.5), not of
+  the element, so a section header is a perfectly good anchor.
 - **Gestures hold the runner's main thread.** A swipe reveal cannot be
   observed from inside the runner mid-gesture. Use `drag ... hold:<s>`
   or `swiperow ... hold:<s>` and screenshot from *outside* during the

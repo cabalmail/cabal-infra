@@ -1,18 +1,21 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.triplet.play)
 }
 
-// The control domain is the one value baked in at build time; everything else
-// comes from https://{CONTROL_DOMAIN}/config.json at runtime (see
-// kit's ConfigService). The repo is public, so the real domain never appears
-// here — set `cabalmail.controlDomain` in ~/.gradle/gradle.properties (or pass
-// -Pcabalmail.controlDomain=...) to point a local build at a live environment.
+// The control domain is typed on the sign-in screen and remembered per
+// install, like the Apple client; everything else comes from
+// https://{control_domain}/config.json at runtime (see kit's ConfigService).
+// This build-time value is only a developer convenience: it prefills the
+// sign-in form (and keeps an existing debug session valid) on an install that
+// has never signed in. Nothing baked in by default — the repo is public and CI
+// builds must not point at any one deployment — set `cabalmail.controlDomain`
+// in ~/.gradle/gradle.properties (or pass -Pcabalmail.controlDomain=...) for a
+// local build.
 val controlDomain: String =
-    providers.gradleProperty("cabalmail.controlDomain").getOrElse("admin.example.com")
+    providers.gradleProperty("cabalmail.controlDomain").getOrElse("")
 
 // CI signing (android.yml upload job): the workflow decodes the upload
 // keystore to a temp file and passes everything via environment. When
@@ -23,12 +26,12 @@ val keystorePath: String? = System.getenv("KEYSTORE_PATH")
 
 android {
     namespace = "com.cabalmail.android"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.cabalmail.android"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         // CI overrides both (android.yml upload job): versionCode from
         // github.run_number — Play only needs a monotonically increasing
         // integer, but that means a workflow *rename* resets it; if that ever
@@ -53,7 +56,7 @@ android {
 
     buildTypes {
         release {
-            // Plan §7.6: R8 (full mode is AGP 8's default) with resource
+            // Plan §7.6: R8 (full mode is the default since AGP 8) with resource
             // shrinking; keep rules live in proguard-rules.pro. Baseline
             // profiles are still to come — see the Phase 7 PR.
             isMinifyEnabled = true
@@ -132,6 +135,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.androidx.compose.material3.adaptive)
     implementation(libs.androidx.compose.material3.adaptive.layout)

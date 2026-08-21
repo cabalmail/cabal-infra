@@ -3,8 +3,9 @@
 # Regenerate every Cabalmail logo derivative from the single authoritative
 # vector at vector/cabalmail-logo.svg. Nothing under the "generated" paths
 # below is ever hand-edited: edit the source vector (or a constant in this
-# script) and re-run. One command regenerates all Apple icons, the React
-# client favicon/logo set, the docs images, and the front-door favicon.
+# script) and re-run. One command regenerates all Apple icons, the Android
+# icons (Play Store listing + adaptive launcher), the React client
+# favicon/logo set, the docs images, and the front-door favicon.
 #
 #   scripts/generate-logo-assets            # regenerate everything
 #   scripts/generate-logo-assets --help     # usage + inventory
@@ -45,6 +46,8 @@ readonly PLACEMENT="translate(94.8 145.52) scale(2.036)"
 readonly FOREST="#2E5235"       # primary green
 readonly FOREST_DEEP="#1E3A24"  # secondary green (visionOS front layer)
 readonly PARCHMENT="#E8DFC8"    # secondary light; dark-mode glyph
+readonly MINT="#8DC899"         # dark-mode in-app mark tint (the Apple LogoTint
+                                # colorset's dark appearance — keep in sync)
 
 # Icon-backplate gradient tones. These are tints/shades of the cream and ink
 # tokens used only for the app-icon backplates; they match the design
@@ -58,6 +61,22 @@ readonly PLATE_0="#FAF4E4"      PLATE_1="#EFE2C0"      PLATE_2="#D9C890"
 # Screen / Dock. 0.85 matches neighboring icons' visual weight while keeping
 # the M's right edge clear of the squircle mask (0.90 crowds it).
 readonly ICON_GLYPH_SCALE="0.95"
+
+# Android adaptive-launcher placement: the glyph's native coordinates (tight
+# bounds x 0-400, y 84-276, center 200,180) mapped onto the 108dp adaptive
+# viewport, sized so the glyph exactly fills the 66dp-diameter safe-zone
+# circle (radius 33 around 54,54) that every launcher mask is guaranteed to
+# keep. With the -10px/2.036 = -4.912-native-unit optical x correction from
+# PLACEMENT applied, the binding extreme is the envelope's top-right corner
+# (400,84), at sqrt((200-4.912)^2 + 96^2) = 217.429 native units from the
+# viewport center:
+#   scale = 33 / 217.429            = 0.151773
+#   tx    = 54 - scale*(200+4.912)  = 22.8999
+#   ty    = 54 - scale*180          = 26.6808
+# Do not re-derive by eye — these numbers are the spec.
+readonly ANDROID_GLYPH_SCALE="0.151773"
+readonly ANDROID_GLYPH_TX="22.8999"
+readonly ANDROID_GLYPH_TY="26.6808"
 
 # The docs masthead logo is a solid silhouette (composited over a dark
 # animated plate by docs/_sass) — black preserves its established look.
@@ -99,6 +118,11 @@ Regenerated outputs (all committed; never hand-edit):
           apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset   (watchOS single 1024)
           apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset
           apple/CabalmailMac/Assets.xcassets/MenuBarMark.imageset      (menu-bar status item)
+  Android — android/app/src/main/ic_launcher-playstore.png           (Play Store listing icon, 512x512)
+            android/app/src/main/res/drawable/ic_launcher_foreground.xml  (adaptive launcher glyph layer)
+            android/app/src/main/res/drawable/ic_launcher_background.xml  (adaptive launcher plate layer)
+            android/app/src/main/res/drawable/cabalmail_mark.xml      (in-app brand mark, folder-list top bar)
+            android/app/src/main/res/values/logo.xml                  (brand colors: splash background, mark tints)
   React — react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}
           react/admin/src/assets/logo.svg
   Docs  — docs/logo.png, docs/mask.png
@@ -315,7 +339,8 @@ emit_derived() {
     printf '  </g>\n</svg>\n'; } > "${DERIVED}/menu-bar-mark.svg"
 
   # 2. Light app-icon art — forest glyph on cream gradient, full-bleed 1024.
-  #    Feeds watchOS (single slot), the React logo PNGs, and docs/logo.png.
+  #    Feeds watchOS (single slot), the Android Play Store icon, the React
+  #    logo PNGs, and docs/logo.png.
   #    The macOS/iOS square icons are the Liquid Glass .icon instead, whose
   #    Default/Dark fills come straight from the color constants (see
   #    write_icon), so no separate dark/tinted full-bleed art is rendered.
@@ -441,6 +466,114 @@ EOF
 }
 
 # --------------------------------------------------------------------------
+# Android vector assets (adaptive launcher icon + in-app mark)
+# --------------------------------------------------------------------------
+#
+# The in-app launcher icon is an adaptive icon: res/mipmap-anydpi/ic_launcher.xml
+# (hand-maintained wiring) layers a background plate, a foreground glyph, and
+# a monochrome layer (the foreground reused — themed icons take only its
+# alpha). The art layers — and the in-app brand mark — are generated here as
+# vector drawables: Android's pathData grammar is the SVG path grammar, so the
+# source paths embed unchanged, no rasterization and no committed binaries. A
+# VectorDrawable <group> applies translate after scale about a (0,0) default
+# pivot — the same composition as the SVG treatments' translate(...) scale(...).
+write_android_assets() {
+  local res="${REPO_ROOT}/android/app/src/main/res"
+
+  # Foreground: forest glyph placed per the ANDROID_GLYPH_* spec, tangent to
+  # the 66dp safe-zone circle so no launcher mask ever clips it.
+  cat > "${res}/drawable/ic_launcher_foreground.xml" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ${BANNER} -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="${ANDROID_GLYPH_SCALE}"
+        android:scaleY="${ANDROID_GLYPH_SCALE}"
+        android:translateX="${ANDROID_GLYPH_TX}"
+        android:translateY="${ANDROID_GLYPH_TY}">
+        <path
+            android:fillColor="${FOREST}"
+            android:fillType="evenOdd"
+            android:pathData="${PATH1}" />
+        <path
+            android:fillColor="${FOREST}"
+            android:pathData="${PATH2}" />
+    </group>
+</vector>
+EOF
+
+  # Background: the light icon backplate gradient, full-bleed — the launcher
+  # applies its own mask, mirroring the other platforms' cream plate.
+  cat > "${res}/drawable/ic_launcher_background.xml" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ${BANNER} -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0 H108 V108 H0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="0"
+                android:endX="54"
+                android:endY="108">
+                <item android:offset="0" android:color="${LIGHT_TOP}" />
+                <item android:offset="1" android:color="${LIGHT_BOTTOM}" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
+EOF
+
+  # In-app brand mark, shown above the folder list like the Apple sidebar
+  # mark: the glyph on the web logo's 2:1 brand-tile frame (native 400x192
+  # glyph, 4px vertical pad), translated up since a VectorDrawable viewport
+  # has no viewBox offset. The intrinsic size is the display size (like the
+  # macOS menu-bar mark's 32x16pt); Compose tints it per theme via
+  # LocalLogoTint, so the baked forest fill only shows in previews.
+  cat > "${res}/drawable/cabalmail_mark.xml" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ${BANNER} -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="88dp"
+    android:height="44dp"
+    android:viewportWidth="400"
+    android:viewportHeight="200">
+    <group android:translateY="-80">
+        <path
+            android:fillColor="${FOREST}"
+            android:fillType="evenOdd"
+            android:pathData="${PATH1}" />
+        <path
+            android:fillColor="${FOREST}"
+            android:pathData="${PATH2}" />
+    </group>
+</vector>
+EOF
+
+  # Brand color resources for non-icon consumers: the splash-screen window
+  # background references logo_forest from values/themes.xml, and the theme's
+  # LocalLogoTint tints the in-app mark logo_forest / logo_mint (light/dark,
+  # mirroring the Apple LogoTint colorset).
+  cat > "${res}/values/logo.xml" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ${BANNER} -->
+<resources>
+    <color name="logo_forest">${FOREST}</color>
+    <color name="logo_mint">${MINT}</color>
+</resources>
+EOF
+}
+
+# --------------------------------------------------------------------------
 # favicon.ico assembly (embeds 16/32/48 PNG frames — deterministic)
 # --------------------------------------------------------------------------
 assemble_ico() {  # assemble_ico <out.ico> <png16> <png32> <png48>
@@ -498,6 +631,18 @@ generate_all() {
 
   # --- Apple: macOS menu-bar status-item mark (template imageset) ---
   install -m 0644 "${d}/menu-bar-mark.svg" "${REPO_ROOT}/apple/CabalmailMac/Assets.xcassets/MenuBarMark.imageset/menu-bar-mark.svg"
+
+  # --- Android: Google Play Store listing icon. Play wants a 512x512 PNG,
+  #     full-bleed and fully opaque — Play applies its own corner rounding,
+  #     so no mask, no transparency, no baked shadow. This lives beside (not
+  #     inside) res/ per the Android Studio convention, so it is uploaded to
+  #     the Play Console but never packaged into the APK; the in-app launcher
+  #     icon is the adaptive icon under res/mipmap-anydpi/. ---
+  render "${d}/AppIcon-ios-light.svg" 512 512 "${REPO_ROOT}/android/app/src/main/ic_launcher-playstore.png" opaque
+
+  # --- Android: adaptive launcher icon layers, in-app brand mark (vector
+  #     drawables) + brand color resources. See write_android_assets. ---
+  write_android_assets
 
   # --- React client ---
   install -m 0644 "${d}/favicon.svg"  "${pub}/favicon.svg"

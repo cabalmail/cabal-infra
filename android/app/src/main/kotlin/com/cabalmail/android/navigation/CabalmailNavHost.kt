@@ -71,6 +71,7 @@ import com.cabalmail.android.ui.mail.MessageListScreen
 import com.cabalmail.android.ui.mail.MessageListViewModel
 import com.cabalmail.android.ui.mail.SearchScreen
 import com.cabalmail.android.ui.mail.SearchViewModel
+import com.cabalmail.android.ui.mail.disposeAdvanceTarget
 import com.cabalmail.android.ui.settings.SettingsScreen
 import com.cabalmail.android.ui.settings.SettingsViewModel
 import com.cabalmail.kit.models.NavState
@@ -441,6 +442,24 @@ private fun MailNavGraph(
             val viewModel: MessageDetailViewModel =
                 viewModel(factory = MessageDetailViewModel.factory(container, folder, uid))
             val state by viewModel.state.collectAsState()
+            // The list entry below owns the window the after-dispose advance
+            // walks; a reader opened from search (or a mismatched folder)
+            // has no such context and disposes fall back to popping.
+            val listEntry =
+                remember(entry) {
+                    runCatching {
+                        navController.getBackStackEntry("messages/{folder}?uid={uid}")
+                    }.getOrNull()?.takeIf { candidate ->
+                        Uri.decode(candidate.arguments?.getString("folder").orEmpty()) == folder
+                    }
+                }
+            val listViewModel: MessageListViewModel? =
+                listEntry?.let { owner ->
+                    viewModel(
+                        viewModelStoreOwner = owner,
+                        factory = MessageListViewModel.factory(container, folder),
+                    )
+                }
             MessageDetailScreen(
                 state = state,
                 viewModel = viewModel,
@@ -451,6 +470,17 @@ private fun MailNavGraph(
                         navController.popBackStack()
                     }
                     openCompose(draftId)
+                },
+                computeAdvance =
+                    listViewModel?.let { list ->
+                        { disposedUid, advance ->
+                            disposeAdvanceTarget(list.state.value.filteredRows, disposedUid, advance)?.id
+                        }
+                    },
+                onOpenMessage = { target ->
+                    navController.navigate("message/${Uri.encode(folder)}/$target") {
+                        popUpTo("message/{folder}/{uid}") { inclusive = true }
+                    }
                 },
             )
         }

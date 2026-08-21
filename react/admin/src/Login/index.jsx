@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AuthShell from './AuthShell';
+import PasswordField from './PasswordField';
 
 /**
  * Sign-in screen per redesign §1: narrow card, eyebrow + title + subtitle,
@@ -50,40 +51,23 @@ function Login({
             required
           />
         </div>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="password">Password</label>
-            {onForgotPassword ? (
-              <button
-                type="button"
-                className="auth__field-hint"
-                onClick={onForgotPassword}
-              >
-                Forgot password?
-              </button>
-            ) : null}
-          </div>
-          <div className="auth__field-adorn">
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              onChange={onPasswordChange}
-              value={password || ''}
-              required
-            />
+        <PasswordField
+          label="Password"
+          autoComplete="current-password"
+          value={password}
+          onChange={onPasswordChange}
+          visible={showPassword}
+          onToggleVisible={() => setShowPassword(s => !s)}
+          headerHint={onForgotPassword ? (
             <button
               type="button"
-              className="auth__field-adorn-btn"
-              onClick={() => setShowPassword(s => !s)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="auth__field-hint"
+              onClick={onForgotPassword}
             >
-              {showPassword ? 'Hide' : 'Show'}
+              Forgot password?
             </button>
-          </div>
-        </div>
+          ) : null}
+        />
         <button type="submit" className="auth__btn-primary">Sign in</button>
       </form>
       {onSignUp ? (

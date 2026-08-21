@@ -185,47 +185,6 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func actionsSection(bindable preferences: Preferences) -> some View {
-        @Bindable var preferences = preferences
-        Section {
-            Picker("Dispose action", selection: $preferences.disposeAction) {
-                Text("Archive").tag(DisposeAction.archive)
-                Text("Trash").tag(DisposeAction.trash)
-            }
-            .pickerStyle(.segmented)
-            Picker("After disposing", selection: $preferences.disposeAdvance) {
-                Text("Go to next message").tag(DisposeAdvance.next)
-                Text("Go to next unread").tag(DisposeAdvance.nextUnread)
-                Text("Go to previous unread").tag(DisposeAdvance.previousUnread)
-                Text("Go to first unread").tag(DisposeAdvance.firstUnread)
-            }
-            Picker("After marking read", selection: $preferences.markReadAdvance) {
-                Text("Stay here").tag(MarkReadAdvance.stay)
-                Text("Go to next unread").tag(MarkReadAdvance.nextUnread)
-                Text("Go to previous unread").tag(MarkReadAdvance.previousUnread)
-                Text("Go to first unread").tag(MarkReadAdvance.firstUnread)
-            }
-        } header: {
-            Text("Actions")
-        } footer: {
-            Text("Which message the reading pane opens after you archive, delete, or mark read from it.")
-        }
-    }
-
-    @ViewBuilder
-    private func appearanceSection(bindable preferences: Preferences) -> some View {
-        @Bindable var preferences = preferences
-        Section("Appearance") {
-            Picker("Theme", selection: $preferences.theme) {
-                Text("System").tag(AppTheme.system)
-                Text("Light").tag(AppTheme.light)
-                Text("Dark").tag(AppTheme.dark)
-            }
-            .pickerStyle(.segmented)
-        }
-    }
-
-    @ViewBuilder
     private func diagnosticsSection(bindable preferences: Preferences) -> some View {
         @Bindable var preferences = preferences
         Section("Diagnostics") {
@@ -305,6 +264,69 @@ struct SettingsView: View {
                 lastSavedDisplayName = value
             } catch {
                 // Transient failure - the next edit (or settings visit) retries.
+            }
+        }
+    }
+}
+
+// The dispose-action and theme rows, split out of `SettingsView` so the
+// struct body stays under SwiftLint's 250-line ceiling. Same reason as
+// `ComposeViewModel+Internals`; no behaviour rides on the split.
+extension SettingsView {
+    @ViewBuilder
+    private func actionsSection(bindable preferences: Preferences) -> some View {
+        @Bindable var preferences = preferences
+        Section {
+            // A segmented picker drops its own title on iOS/iPadOS, so the
+            // row that names the setting has to supply it — the two rows
+            // below keep the default style and so keep their labels, and
+            // macOS renders this one's label either way. `LabeledContent`
+            // fixes the platform that loses it without restyling the one
+            // that doesn't. The title stays on the `Picker` for VoiceOver,
+            // the same split `ComposerBody` and `MessageSourceSheet`
+            // already make.
+            LabeledContent("Dispose action") {
+                Picker("Dispose action", selection: $preferences.disposeAction) {
+                    Text("Archive").tag(DisposeAction.archive)
+                    Text("Trash").tag(DisposeAction.trash)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            Picker("After disposing", selection: $preferences.disposeAdvance) {
+                Text("Go to next message").tag(DisposeAdvance.next)
+                Text("Go to next unread").tag(DisposeAdvance.nextUnread)
+                Text("Go to previous unread").tag(DisposeAdvance.previousUnread)
+                Text("Go to first unread").tag(DisposeAdvance.firstUnread)
+            }
+            Picker("After marking read", selection: $preferences.markReadAdvance) {
+                Text("Stay here").tag(MarkReadAdvance.stay)
+                Text("Go to next unread").tag(MarkReadAdvance.nextUnread)
+                Text("Go to previous unread").tag(MarkReadAdvance.previousUnread)
+                Text("Go to first unread").tag(MarkReadAdvance.firstUnread)
+            }
+        } header: {
+            Text("Actions")
+        } footer: {
+            Text("Which message the reading pane opens after you archive, delete, or mark read from it.")
+        }
+    }
+
+    @ViewBuilder
+    private func appearanceSection(bindable preferences: Preferences) -> some View {
+        @Bindable var preferences = preferences
+        Section("Appearance") {
+            // Same as the dispose-action row above: the section header is
+            // the only thing naming this control on iOS, and VoiceOver
+            // reads the segments bare.
+            LabeledContent("Theme") {
+                Picker("Theme", selection: $preferences.theme) {
+                    Text("System").tag(AppTheme.system)
+                    Text("Light").tag(AppTheme.light)
+                    Text("Dark").tag(AppTheme.dark)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
         }
     }

@@ -1,5 +1,8 @@
 import SwiftUI
 import CabalmailKit
+#if os(iOS) || os(visionOS)
+import PhotosUI
+#endif
 import UniformTypeIdentifiers
 
 /// Stateless subview builders + the file-import attachment ingest path
@@ -75,4 +78,26 @@ extension ComposeView {
         }
         return "application/octet-stream"
     }
+
+    #if os(iOS) || os(visionOS)
+    /// `(mimeType, filenameExtension)` for an asset picked out of Photos.
+    /// The bytes decide, because the bytes are what goes on the wire; the
+    /// picker's own declared type is the fallback for a format
+    /// `ImageDataFormat` does not know, and `application/octet-stream` the
+    /// fallback for that (#1140).
+    func photoTypeLabels(
+        for item: PhotosPickerItem,
+        data: Data
+    ) -> (mime: String, ext: String) {
+        if let format = ImageDataFormat.detect(data) {
+            return (format.mimeType, format.filenameExtension)
+        }
+        if let declared = item.supportedContentTypes.first,
+           let mime = declared.preferredMIMEType,
+           let ext = declared.preferredFilenameExtension {
+            return (mime, ext)
+        }
+        return ("application/octet-stream", "dat")
+    }
+    #endif
 }

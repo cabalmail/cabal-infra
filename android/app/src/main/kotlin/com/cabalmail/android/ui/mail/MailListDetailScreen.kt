@@ -100,6 +100,14 @@ fun MailListDetailScreen(
                             onBack = { scope.launch { navigator.navigateBack() } },
                             onCompose = { draftId, _ -> openCompose(draftId) },
                             showBack = false,
+                            computeAdvance = { disposedUid, advance ->
+                                disposeAdvanceTarget(listState.filteredRows, disposedUid, advance)?.id
+                            },
+                            onOpenMessage = { target ->
+                                scope.launch {
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, target)
+                                }
+                            },
                         )
                     }
                 }

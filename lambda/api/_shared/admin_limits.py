@@ -123,3 +123,51 @@ def rate_limit_response_or_none(caller, action):
         'statusCode': 429,
         'body': json.dumps({'Error': 'Rate limit exceeded; slow down and retry shortly'})
     }
+
+
+def admin_user_action_response(event, action, status, operate):
+    '''Runs one admin user-management mutation end to end and returns its
+    response: admin guard, rate limit, JSON-object body, then `operate` on the
+    body's `username`, audit-logged either way.
+
+    `operate` is called with the username and its return value is ignored --
+    all a handler varies is `action` (the rate-limit and audit name), `status`
+    (the word echoed back on success) and the one API call itself.
+
+    Shared by disable_user and enable_user, whose handlers were byte-identical
+    apart from those three tokens. delete_user keeps its own copy: it refuses a
+    self-delete part way through and purges the user's domain-access rows inside
+    the same try, so folding it in would mean a second callback with exactly one
+    caller. confirm_user and set_user_domain_access differ further still -- the
+    first runs neither the rate limit nor the audit log, the second reads a
+    three-field body and reports allowed/denied rather than a status word.
+
+    A body carrying no `username` stays a 500 with a failure audit line rather
+    than a 400: the KeyError is raised inside the try, exactly where it was
+    raised when each handler carried this envelope itself.
+    '''
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
+    caller = event['requestContext']['authorizer']['claims']['cognito:username']
+    limited = rate_limit_response_or_none(caller, action)
+    if limited:
+        return limited
+    body, invalid = parse_json_object_body(event)
+    if invalid:
+        return invalid
+    username = ''
+    try:
+        username = body['username']
+        operate(username)
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        audit_log(caller, action, username, 'failure')
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'Error': str(err)})
+        }
+    audit_log(caller, action, username, 'success')
+    return {
+        'statusCode': 200,
+        'body': json.dumps({'status': status, 'username': username})
+    }

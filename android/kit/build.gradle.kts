@@ -5,7 +5,6 @@
 // consume it without dragging UI along.
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.ktlint)
@@ -13,7 +12,7 @@ plugins {
 
 android {
     namespace = "com.cabalmail.kit"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 31

@@ -107,6 +107,12 @@ final class AppState {
     /// reported by the mail surface via `reportsMessageMenuAvailability`. The
     /// menu dims a command that would be a no-op instead of advertising it.
     var messageMenuAvailability: MessageMenuAvailability = .none
+    /// What the macOS `Mailbox` menu can act on, reported by the mail surfaces
+    /// themselves. Separate from `messageMenuAvailability` because it answers a
+    /// different question — "is a list on screen at all", not "what is
+    /// selected" — and Refresh is dead in a state where the whole selection
+    /// question is moot (#1162).
+    var mailboxMenuAvailability: MailboxMenuAvailability = .none
     /// Intent to open the iOS / iPadOS / visionOS settings sheet (General /
     /// Addresses / Folders). Bumped by the sidebar gear button and the ⌘,
     /// app command; `SignedInRootView` observes it and presents the sheet.

@@ -44,6 +44,7 @@ class PreferencesRepository(
         val BODY_RENDER_MODE = stringPreferencesKey("body_render_mode")
         val FOLDER_COUNT_DISPLAY = stringPreferencesKey("folder_count_display")
         val DISPOSE_ACTION = stringPreferencesKey("dispose_action")
+        val DISPOSE_ADVANCE = stringPreferencesKey("dispose_advance")
         val DEFAULT_FROM_ADDRESS = stringPreferencesKey("default_from_address")
         val SIGNATURE = stringPreferencesKey("signature")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
@@ -106,6 +107,7 @@ class PreferencesRepository(
             folderCountDisplay =
                 wireEnum<FolderCountDisplay>(store[Keys.FOLDER_COUNT_DISPLAY]) ?: defaults.folderCountDisplay,
             disposeAction = wireEnum<DisposeAction>(store[Keys.DISPOSE_ACTION]) ?: defaults.disposeAction,
+            disposeAdvance = wireEnum<DisposeAdvance>(store[Keys.DISPOSE_ADVANCE]) ?: defaults.disposeAdvance,
             defaultFromAddress = store[Keys.DEFAULT_FROM_ADDRESS]?.ifEmpty { null },
             signature = store[Keys.SIGNATURE] ?: defaults.signature,
             dynamicColor = store[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
@@ -128,6 +130,7 @@ class PreferencesRepository(
         store[Keys.BODY_RENDER_MODE] = value.bodyRenderMode.wire
         store[Keys.FOLDER_COUNT_DISPLAY] = value.folderCountDisplay.wire
         store[Keys.DISPOSE_ACTION] = value.disposeAction.wire
+        store[Keys.DISPOSE_ADVANCE] = value.disposeAdvance.wire
         store[Keys.DEFAULT_FROM_ADDRESS] = value.defaultFromAddress.orEmpty()
         store[Keys.SIGNATURE] = value.signature
         store[Keys.DYNAMIC_COLOR] = value.dynamicColor
