@@ -155,24 +155,27 @@ final class DraftDiscardSaveRaceTests: XCTestCase {
     )
 }
 
-/// `/save_draft` stand-in that can hold either leg open on the wire, which
-/// is what makes the race drivable at all: the strand only exists while a
-/// round trip is outstanding.
+/// `/save_draft` and `/send` stand-in that can hold any leg open on the
+/// wire, which is what makes these races drivable at all: the strand only
+/// exists while a round trip is outstanding.
 ///
-/// Both save and discard are PUTs to the same path, told apart by `op` —
-/// see `URLSessionApiClient+Drafts.swift`.
+/// Save and discard are PUTs to the same `/save_draft` path, told apart by
+/// `op` — see `URLSessionApiClient+Drafts.swift`. Send is a PUT to `/send`.
 actor DraftRaceTransport: HTTPTransport {
 
-    enum DraftOp: String, Equatable { case save, discard }
+    enum DraftOp: String, Equatable { case save, discard, send }
 
     struct Call: Equatable {
         let kind: DraftOp
+        /// The Drafts UID this call acts on: `replaces_uid` for a save or a
+        /// discard, `discard_draft_uid` for a send.
         let replacesUid: UInt32?
     }
 
     private(set) var calls: [Call] = []
 
     private let nextSaveUid: UInt32
+    private var failingOps: Set<DraftOp> = []
     private var heldOp: DraftOp?
     private var release: CheckedContinuation<Void, Never>?
     private var started: [DraftOp: CheckedContinuation<Void, Never>] = [:]
@@ -184,18 +187,34 @@ actor DraftRaceTransport: HTTPTransport {
 
     func holdNextSave() { heldOp = .save }
     func holdNextDiscard() { heldOp = .discard }
+    func holdNextSend() { heldOp = .send }
 
     func waitUntilSaveStarted() async { await waitUntilStarted(.save) }
     func waitUntilDiscardStarted() async { await waitUntilStarted(.discard) }
+    func waitUntilSendStarted() async { await waitUntilStarted(.send) }
 
     func releaseHeldSave() { releaseHeld() }
     func releaseHeldDiscard() { releaseHeld() }
+    func releaseHeldSend() { releaseHeld() }
+
+    /// Makes `op` answer 500. A 500 is an application-level rejection, so
+    /// `CabalmailClient.send` throws it rather than parking the message in
+    /// the outbox — which is the arm where the composer stays open.
+    func fail(_ kind: DraftOp) { failingOps.insert(kind) }
 
     func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let json = (try? JSONSerialization.jsonObject(with: request.httpBody ?? Data()))
             as? [String: Any] ?? [:]
-        let kind: DraftOp = (json["op"] as? String) == "discard" ? .discard : .save
-        calls.append(Call(kind: kind, replacesUid: (json["replaces_uid"] as? Int).map(UInt32.init)))
+        let kind: DraftOp
+        let actsOn: Int?
+        if request.url?.path.hasSuffix("/send") == true {
+            kind = .send
+            actsOn = json["discard_draft_uid"] as? Int
+        } else {
+            kind = (json["op"] as? String) == "discard" ? .discard : .save
+            actsOn = json["replaces_uid"] as? Int
+        }
+        calls.append(Call(kind: kind, replacesUid: actsOn.map(UInt32.init)))
 
         alreadyStarted.insert(kind)
         started.removeValue(forKey: kind)?.resume()
@@ -204,16 +223,30 @@ actor DraftRaceTransport: HTTPTransport {
             await withCheckedContinuation { release = $0 }
         }
 
-        let body: [String: Any] = kind == .discard
-            ? ["status": "ok", "discarded": true]
-            : ["status": "ok", "uid": Int(nextSaveUid), "uidvalidity": 9, "replaced": true]
+        let body: [String: Any]
+        switch kind {
+        case .discard: body = ["status": "ok", "discarded": true]
+        case .send: body = ["status": "ok"]
+        case .save: body = ["status": "ok", "uid": Int(nextSaveUid), "uidvalidity": 9, "replaced": true]
+        }
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: 200,
+            statusCode: failingOps.contains(kind) ? 500 : 200,
             httpVersion: nil,
             headerFields: nil
         )!
         return (try JSONSerialization.data(withJSONObject: body), response)
+    }
+
+    /// Waits for `kind` to reach the wire, giving up after `within` seconds,
+    /// and reports whether it arrived. A bounded wait is the only way to
+    /// assert a call did *not* go out while another leg is held open.
+    func waitForCall(_ kind: DraftOp, within seconds: Double) async -> Bool {
+        for _ in 0..<Int(seconds / 0.01) {
+            if calls.contains(where: { $0.kind == kind }) { return true }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return calls.contains(where: { $0.kind == kind })
     }
 
     private func waitUntilStarted(_ kind: DraftOp) async {
