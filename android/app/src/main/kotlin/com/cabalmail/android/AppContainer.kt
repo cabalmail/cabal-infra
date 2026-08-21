@@ -117,6 +117,13 @@ class AppContainer(
      */
     var launchOneShotsDone: Boolean = false
 
+    /**
+     * Whether this process already decided the launch destination (the
+     * phone-width INBOX push) — separate from [launchOneShotsDone] because
+     * the effects race, and process-scoped for the same rotation reason.
+     */
+    var launchDestinationDone: Boolean = false
+
     /** Fires when the API rejects a refreshed token: the session is gone. */
     val authExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 

@@ -20,16 +20,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,35 +50,12 @@ fun FolderListScreen(
     onPoll: () -> Unit = {},
     /** What the per-folder badge shows (plan §6.3 "Folder count display"). */
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
-    /** A foreign-device resume cursor is available (plan §4.5). */
-    resumeAvailable: Boolean = false,
-    onResume: () -> Unit = {},
-    onResumeDismiss: () -> Unit = {},
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
     ForegroundPolling(onPoll)
-    val snackbarHostState = remember { SnackbarHostState() }
-    val resumeMessage = stringResource(R.string.resume_prompt)
-    val resumeAction = stringResource(R.string.resume_action)
-    LaunchedEffect(resumeAvailable) {
-        if (resumeAvailable) {
-            val result =
-                snackbarHostState.showSnackbar(
-                    message = resumeMessage,
-                    actionLabel = resumeAction,
-                    withDismissAction = true,
-                    duration = SnackbarDuration.Indefinite,
-                )
-            when (result) {
-                SnackbarResult.ActionPerformed -> onResume()
-                SnackbarResult.Dismissed -> onResumeDismiss()
-            }
-        }
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = onCompose) {
                 Icon(Icons.Default.Create, contentDescription = stringResource(R.string.compose_new))

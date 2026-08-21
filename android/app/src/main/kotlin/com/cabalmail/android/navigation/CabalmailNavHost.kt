@@ -32,10 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -97,6 +95,9 @@ enum class TopLevel(
 /** Routes that belong to the Mail tab even though they are nested. */
 private val MAIL_ROUTES =
     setOf("folders", "messages/{folder}?uid={uid}", "search?folder={folder}", "message/{folder}/{uid}")
+
+/** The folder phone-width launches open into. */
+private const val INBOX = "INBOX"
 
 /**
  * Navigation shell: the suite (bar / rail), the graph, and the app-wide
@@ -198,16 +199,41 @@ fun CabalmailNavHost(
         container.sendQueue.notices.collect { notice -> snackbarHostState.showSnackbar(notice) }
     }
 
+    // Phones launch straight into INBOX, with the folder list beneath it on
+    // the back stack; wide windows keep the folder list as the hub.
+    // Process-scoped (like the one-shots above) so an activity recreation
+    // doesn't push a second copy onto the restored stack, and consumed even
+    // on wide windows so a later resize to compact doesn't yank mid-session.
+    LaunchedEffect(Unit) {
+        if (!container.launchDestinationDone) {
+            container.launchDestinationDone = true
+            if (compactWidth) {
+                navController.navigate("messages/${Uri.encode(INBOX)}")
+            }
+        }
+    }
+
     // Resume cursor (plan §4.5): a cursor this install wrote restores
-    // silently; one from another device only offers a prompt on the folder
-    // list, so launch never yanks the user somewhere unexpected.
-    var resumePrompt by remember { mutableStateOf<NavState?>(null) }
+    // silently; one from another device only offers a prompt — hosted on the
+    // app-wide snackbar (like the unsent-draft prompt) so it shows over the
+    // INBOX launch view too — and launch never yanks the user unbidden.
+    val resumeMessage = stringResource(R.string.resume_prompt)
+    val resumeAction = stringResource(R.string.resume_action)
     LaunchedEffect(Unit) {
         val cursor = container.navCursor.restoreOnce() ?: return@LaunchedEffect
         if (cursor.local) {
             navController.openCursor(cursor.state, compactWidth)
-        } else {
-            resumePrompt = cursor.state
+            return@LaunchedEffect
+        }
+        val result =
+            snackbarHostState.showSnackbar(
+                message = resumeMessage,
+                actionLabel = resumeAction,
+                withDismissAction = true,
+                duration = SnackbarDuration.Indefinite,
+            )
+        if (result == SnackbarResult.ActionPerformed) {
+            navController.openCursor(cursor.state, compactWidth)
         }
     }
 
@@ -263,8 +289,6 @@ fun CabalmailNavHost(
                         container = container,
                         compactWidth = compactWidth,
                         onSignOut = onSignOut,
-                        resumePrompt = resumePrompt,
-                        onResumeConsumed = { resumePrompt = null },
                         composeNew = composeNew,
                         openCompose = openCompose,
                     )
@@ -305,8 +329,6 @@ private fun MailNavGraph(
     container: AppContainer,
     compactWidth: Boolean,
     onSignOut: () -> Unit,
-    resumePrompt: NavState?,
-    onResumeConsumed: () -> Unit,
     composeNew: () -> Unit,
     openCompose: (String) -> Unit,
 ) {
@@ -327,12 +349,6 @@ private fun MailNavGraph(
                 onOpenSearch = { navController.navigate("search") },
                 onEmptyTrash = viewModel::emptyTrash,
                 onCompose = composeNew,
-                resumeAvailable = resumePrompt != null,
-                onResume = {
-                    resumePrompt?.let { navController.openCursor(it, compactWidth) }
-                    onResumeConsumed()
-                },
-                onResumeDismiss = onResumeConsumed,
             )
         }
 
@@ -494,11 +510,14 @@ private fun NavHostController.openCursor(
 ) {
     val folder = state.folder ?: return
     val uid = state.uid?.takeIf { it > 0 }
+    // singleTop: the target list may already be on top (the INBOX launch
+    // view, or the list the user is looking at) — reuse it rather than
+    // stacking a duplicate.
     if (!compactWidth && uid != null) {
-        navigate("messages/${Uri.encode(folder)}?uid=$uid")
+        navigate("messages/${Uri.encode(folder)}?uid=$uid") { launchSingleTop = true }
         return
     }
-    navigate("messages/${Uri.encode(folder)}")
+    navigate("messages/${Uri.encode(folder)}") { launchSingleTop = true }
     if (uid != null) {
         navigate("message/${Uri.encode(folder)}/$uid")
     }
