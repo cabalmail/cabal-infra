@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-08-21
+
+### Added
+- Android: **Dispose button honors its settings.** The reader's dispose
+  button now shows what it will do — an archive box when the preference is
+  Archive (previously always a trash can), red trash only for Trash-bound
+  actions, restore inside Archive, and permanent delete inside Trash — and
+  afterwards opens the message your "After disposing" preference names
+  (next, next unread, previous unread, or first unread; new Settings row,
+  synced with the Apple clients) instead of always bouncing to the list.
+  Long-pressing the button opens the Apple-style split menu of every
+  action-and-advance pair; picking one makes it the new default and runs
+  it immediately.
+- Android: **Brand mark above the folder list.** The folder list's top bar
+  now shows the Cabalmail mark in place of the app-name text — forest in
+  light, mint in dark — matching the Apple clients' sidebar branding. The
+  drawable is generated from the shared source vector by
+  scripts/generate-logo-assets.
+- Android: **Link menu in the reader.** Tapping a link in a message body now
+  opens an action sheet — matching the Apple clients' link popover — showing
+  the full destination URL with copy, open (in the browser, or the handling
+  app for `mailto:` and other schemes), and share actions. Previously the
+  reader's hardened WebView swallowed link taps outright, leaving links
+  inert. Plain-text bodies get the same treatment: web URLs, `www.` hosts,
+  and email addresses are detected and feed the same menu. Executable and
+  local schemes (`javascript:`, `data:`, `file:`, `intent:`, …) stay
+  silently swallowed, and the HTML body no longer reloads — losing the
+  reading position — when unrelated screen state changes.
+
+### Changed
+- Android: **Phones launch into the INBOX list.** On phone-width windows the
+  app now opens straight to the INBOX message list, with the folder list one
+  Back press beneath it; wide windows keep the folder-list hub. The
+  pick-up-where-you-left-off prompt moves to the app-wide snackbar so it
+  still appears over the launch view.
+
+### Fixed
+- Android: **Dispose icons match the action.** The dispose swipe's reveal
+  and the selection toolbar's dispose button always showed a trashcan;
+  they now show the archive box unless the dispose actually deletes
+  (preference set to Trash, or purging inside Trash), matching their
+  labels and the reader's dispose button.
+- Apple: **Confirmation dialogs offer a labelled way out again.** On iPhone
+  and visionOS, "Revoke <address>?", "Suspend <address>?", "Delete Forever?",
+  "Empty Trash?", the folder-delete prompt and the large-selection guard each
+  rendered as a popover showing only their destructive button — SwiftUI drops
+  a cancel-role button in popover presentation, so the sole labelled control
+  was the irreversible one. All nine dialogs now take the back-out role from
+  one shared rule, which macOS still resolves to a proper cancel for Escape.
+- Apple: **A send that races the draft autosave no longer leaves a copy in
+  Drafts.** Tapping Send while the 60-second server autosave was mid-round
+  trip delivered the message and kept a full, re-sendable copy of it in
+  `Drafts` for good. `/send` carries the draft cleanup, so a send ends the
+  session's server copy exactly as Discard does — it now runs through the
+  same mutation queue, waiting behind any save in flight and refusing every
+  tick that follows. A send that *fails* leaves the composer up and the
+  session open, so the close-without-send push still reaches the server.
+
+### Security
+- **Refreshed the pinned `amazonlinux:2023` base digest again.** The `imap`,
+  `smtp-in`, `smtp-out`, and `sinkhole` Dockerfiles now pin the latest
+  upstream `amazonlinux:2023` multi-arch index digest, picking up patched
+  `python3`, `python3-libs`, `glib2`, and `gawk` packages on next rebuild.
+
 ## [1.3.2] - 2026-08-20
 
 ### Changed
@@ -33,11 +97,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reader stylesheet.
 - Apple: **Sidebar sections can be collapsed and reopened again.** The
   Folders list's "Subscribed" and "All folders" headers now carry their own
-  disclosure control. "All folders" ships collapsed, and on macOS and
-  visionOS there was nothing to open it with, so `Sent`, `Trash` and
-  `Drafts` could not be reached at all; on iPadOS the header was equally
-  inert but every folder was drawn whatever the stored state said. All
-  three now honour the same rule and the same control.
+  disclosure control. "All folders" ships collapsed, and neither macOS nor
+  visionOS drew anything to open it with — on visionOS that stranded `Sent`,
+  `Trash` and `Drafts`, and on macOS only an unmarked click on the header
+  text would reach them; on iPadOS the header was equally inert but every
+  folder was drawn whatever the stored state said. All three now honour the
+  same rule and the same control.
 
 ## [1.3.1] - 2026-08-19
 

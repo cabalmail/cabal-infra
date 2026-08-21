@@ -35,7 +35,7 @@ extension FolderListView {
 
     /// A sidebar section header carrying its own disclosure control.
     ///
-    /// `Section(_:isExpanded:)` draws no usable one on any of the three
+    /// `Section(_:isExpanded:)` draws no visible one on any of the three
     /// platforms (#1184), so the header draws the chevron the folder rows
     /// already use — same glyph, same rotation, same "Expand X" / "Collapse X"
     /// phrasing — and `FolderSectionDisclosure` decides what the section
@@ -312,7 +312,7 @@ extension FolderListView {
                 )
             }
         }
-        Button("Cancel", role: .cancel) {
+        Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
             pendingDelete = nil
         }
     }

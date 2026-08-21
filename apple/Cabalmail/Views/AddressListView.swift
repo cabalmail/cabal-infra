@@ -199,7 +199,7 @@ extension AddressListView {
             pendingRevoke = nil
             Task { await model?.revoke(target) }
         }
-        Button("Cancel", role: .cancel) {
+        Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
             pendingRevoke = nil
         }
     }
@@ -234,7 +234,7 @@ extension AddressListView {
             pendingSuspend = nil
             Task { await model?.setSuspended(target, to: true) }
         }
-        Button("Cancel", role: .cancel) {
+        Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
             pendingSuspend = nil
         }
     }

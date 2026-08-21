@@ -234,7 +234,7 @@ struct FolderListView: View {
             Button("Empty Trash", role: .destructive) {
                 Task { await model?.emptyTrash() }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
         } message: {
             Text("All messages in Trash will be permanently deleted. This can't be undone.")
         }

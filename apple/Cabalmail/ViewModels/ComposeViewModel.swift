@@ -422,8 +422,23 @@ final class ComposeViewModel {
             // (best-effort, server-side). A queued send drops the ref; the
             // stale copy survives, which beats discarding a draft for a
             // message that hasn't actually left yet.
-            let outcome = try await client.send(message, discardingDraft: serverDraftRef)
-            lastSendOutcome = outcome
+            //
+            // Delivery ends this session's server draft, so it goes through
+            // the mutation queue the way Discard does (#1163): the session
+            // closes before `/send` starts, and the send waits behind any
+            // save already in flight. `serverDraftRef` is read *inside* the
+            // block for the same reason the discard reads it there — the UID
+            // to expunge is the one a completing save adopted, not the one it
+            // superseded. Without both halves an autosave tick that cleared
+            // its guard and then suspended in the WebKit bridge replaces a
+            // UID the send has already consumed, leaving a full copy of the
+            // sent message in Drafts for good (#1198).
+            try await serverDraftQueue.close(runningThrowing: {
+                self.lastSendOutcome = try await self.client.send(
+                    message,
+                    discardingDraft: self.serverDraftRef
+                )
+            })
             // Whether the message left the device or got queued, the draft
             // is no longer authoritative — the outbox owns it from here.
             try? await draftStore.remove(id: draftId)
