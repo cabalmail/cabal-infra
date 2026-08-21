@@ -60,10 +60,14 @@ import XCTest
 ///                              `amount:` is a fraction of the window, spent
 ///                              in as many sweeps as the enclosing scroll
 ///                              view can take without a finger straying onto
-///                              its chrome (#1188). Where a press-drag moves
-///                              nothing at all — visionOS — it falls back to
-///                              element swipes, whose step is fixed, so the
-///                              reported travel is what was measured (#1191)
+///                              its chrome (#1188). Every sweep is measured
+///                              against the named element and the next one is
+///                              sized for what is left, so `amount:` buys
+///                              that much CONTENT movement and the reported
+///                              travel is always what was measured (#1193).
+///                              Where a press-drag moves nothing at all —
+///                              visionOS — it falls back to element swipes
+///                              (#1191)
 ///   exists <query>             "exists=<bool> hittable=<bool>"
 ///   wait <query> [timeout:<s>] wait for existence (default 10s)
 ///   quit                       end the loop (the test finishes)
@@ -365,12 +369,23 @@ final class SimDriveTests: XCTestCase {
         let bounds = container?.frame ?? window
         let plan = ScrollGesture.plan(requestedTravel: requested, containerHeight: bounds.height)
         let goingDown = direction == "down"
-        let (pressOffset, releaseOffset) = plan.offsets(goingDown: goingDown)
-        // The witness for whether any of this worked is the element the
-        // caller named: the container holds still while its content moves.
-        let before = position(of: target)
+        // The witness for whether any of this worked — and, since #1193, for
+        // how far it worked — is the element the caller named: the container
+        // holds still while its content moves. Each sweep is measured, and
+        // the next one is sized for what is left at the rate the last one
+        // achieved, so the request is spent in content points rather than in
+        // finger points (a sweep moves rather more than it drags).
+        var measured: CGFloat = 0
+        var dragged: CGFloat = 0
         var completed = 0
-        for _ in 0..<plan.sweeps {
+        var anchorLeftView = false
+        while completed < plan.sweeps,
+              let travel = ScrollFeedback.nextSweepTravel(
+                  requested: requested,
+                  measured: measured,
+                  dragged: dragged,
+                  cap: plan.sweepTravel
+              ) {
             // Only reachable on the fallback path, where the anchor is the
             // target and the target can scroll clean out of the tree. Reading
             // `frame` off an element that no longer matches fails the whole
@@ -379,6 +394,11 @@ final class SimDriveTests: XCTestCase {
             guard gestureAnchor.exists else { break }
             let frame = gestureAnchor.frame
             guard !frame.isEmpty else { break }
+            guard let before = position(of: target) else { break }
+            let (pressOffset, releaseOffset) = ScrollGesture.offsets(
+                travel: travel,
+                goingDown: goingDown
+            )
             let centre = gestureAnchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             let toCentre = bounds.midY - frame.midY
             let start = centre.withOffset(CGVector(dx: 0, dy: toCentre + pressOffset))
@@ -390,8 +410,23 @@ final class SimDriveTests: XCTestCase {
                 thenHoldForDuration: 0
             )
             completed += 1
+            dragged += travel
+            let after = position(of: target)
+            let progressed = ScrollProgress.moved(from: before, to: after)
+            guard let after else {
+                // The witness scrolled out of the tree. That is the strongest
+                // evidence of a scroll there is, and it also ends the
+                // measurement — so stop, and say so rather than print the
+                // request back as if it had been measured.
+                anchorLeftView = progressed
+                break
+            }
+            measured += abs(after - before)
+            // A list that has reached the end of its content rubber-bands
+            // back; spending the rest of the budget on it buys nothing.
+            guard progressed else { break }
         }
-        if !ScrollProgress.moved(from: before, to: position(of: target)) {
+        guard measured >= ScrollProgress.stillThreshold || anchorLeftView else {
             return swipeFallback(
                 query: query,
                 target: target,
@@ -400,10 +435,19 @@ final class SimDriveTests: XCTestCase {
                 requested: requested
             )
         }
-        let travelled = Int(CGFloat(completed) * plan.sweepTravel)
-        let sweepNote = plan.sweeps == 1 ? "" : " in \(completed) sweeps"
-        let shortfall = travelled < Int(requested) ? " of \(Int(requested))pt requested" : ""
-        return "scrolled \(query) \(direction) (\(travelled)pt\(shortfall)\(sweepNote), press \(press)s)"
+        let sweepNote = completed == 1 ? "" : " in \(completed) sweeps"
+        if anchorLeftView {
+            // Naming the element that scrolls away is the natural thing to do
+            // — it is what the caller wants gone — but it costs the
+            // measurement, so the answer says which question it is answering.
+            return "scrolled \(query) \(direction) (\(Int(dragged))pt dragged\(sweepNote); "
+                + "\(query) left the view, so the distance it moved is not measurable — "
+                + "anchor on something that stays to get one, press \(press)s)"
+        }
+        let shortfall = measured + ScrollFeedback.minimumSweepTravel < requested
+            ? " of \(Int(requested))pt requested"
+            : ""
+        return "scrolled \(query) \(direction) (\(Int(measured))pt\(shortfall)\(sweepNote), press \(press)s)"
     }
 
     /// `XCUIElement.swipeUp()`/`swipeDown()`, for the platforms where a
