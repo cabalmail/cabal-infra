@@ -6,10 +6,13 @@ import Foundation
 /// A pure rule rather than a `Section(_:isExpanded:)` because the list style
 /// decides both halves and no two platforms decide them the same way: on
 /// macOS and visionOS the binding is honoured but the header draws no
-/// disclosure control at all, so a section collapsed by default is a one-way
-/// door (#1184 — `All folders` defaults collapsed, so `Sent`, `Trash` and
-/// `Drafts` could not be reached); on iPadOS the header is equally inert but
-/// the rows are drawn regardless, so the stored expansion state does nothing.
+/// disclosure control at all, so a section collapsed by default has nothing
+/// marked to open it (#1184 — `All folders` defaults collapsed; on visionOS
+/// that stranded `Sent`, `Trash` and `Drafts`, and on macOS 26 and 27 alike
+/// the header *text* was still a live click target that toggled the section
+/// both ways, so there it was a discoverability bug rather than a dead end);
+/// on iPadOS the header is equally inert but the rows are drawn regardless,
+/// so the stored expansion state does nothing.
 /// Owning the gating and the control here makes the three agree, and makes
 /// them testable: `FolderListView`'s body isn't reachable from a unit test,
 /// this is.
