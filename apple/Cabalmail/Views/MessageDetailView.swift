@@ -187,7 +187,7 @@ struct MessageDetailView: View {
             Button("Delete Forever", role: .destructive) {
                 runPurge()
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
         } message: {
             Text("This message will be permanently deleted. This can't be undone.")
         }

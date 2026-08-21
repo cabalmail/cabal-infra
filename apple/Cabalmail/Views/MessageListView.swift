@@ -361,7 +361,7 @@ extension MessageListView {
                     Task { await model.purgeMessages(uids: candidate.uids) }
                 }
             }
-            Button("Cancel", role: .cancel) {
+            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
                 purgeCandidate = nil
             }
         } message: { candidate in
@@ -389,7 +389,7 @@ extension MessageListView {
                     commitDispose(candidate, model: model)
                 }
             }
-            Button("Cancel", role: .cancel) {
+            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
                 disposeCandidate = nil
             }
         } message: { candidate in

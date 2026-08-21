@@ -33,16 +33,16 @@ enum ComposeCancelChoice: CaseIterable {
             // iOS/visionOS render this dialog as a popover, where SwiftUI
             // suppresses cancel-role buttons and treats an outside tap as
             // the cancel — so a cancel-roled "Keep Editing" would be
-            // invisible, exactly the hole this fix is closing. Leaving it
+            // invisible, exactly the hole this fix closed. Leaving it
             // roleless keeps it on screen; the outside tap still resolves
             // to the system's implicit cancel, which is the same no-op.
             // macOS shows every button in an alert and maps Escape to the
             // cancel-roled one, so there the role is worth having.
-            #if os(macOS)
-            return .cancel
-            #else
-            return nil
-            #endif
+            //
+            // The rule now lives in `ConfirmationDialogPolicy`, shared with
+            // the eight other dialogs that were still getting it wrong
+            // (#1201) — this asks it rather than keeping a second copy.
+            return ConfirmationDialogPolicy.backOutRole
         }
     }
 }
