@@ -20,6 +20,9 @@
     <string name="archive">Archive</string>
     <string name="dispose_to_trash">Move to Trash</string>
     <string name="purge">Delete permanently</string>
+    <string name="restore">Restore</string>
+    <string name="dispose_options">Dispose options</string>
+    <string name="dispose_then">%1$s, then %2$s</string>
     <string name="load_remote_content">Load remote content</string>
     <string name="cancel">Cancel</string>
     <string name="more_actions">More actions</string>
@@ -231,6 +234,11 @@
     <string name="opt_sort_from">Sender</string>
     <string name="opt_sort_subject">Subject</string>
     <string name="opt_dispose_trash">Trash</string>
+    <string name="settings_dispose_advance">After disposing</string>
+    <string name="opt_advance_next">Next message</string>
+    <string name="opt_advance_next_unread">Next unread</string>
+    <string name="opt_advance_previous_unread">Previous unread</string>
+    <string name="opt_advance_first_unread">First unread</string>
     <string name="opt_theme_system">System</string>
     <string name="opt_theme_light">Light</string>
     <string name="opt_theme_dark">Dark</string>

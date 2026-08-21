@@ -16,6 +16,7 @@ object PreferencesWire {
         const val DEFAULT_FROM_ADDRESS = "default_from_address"
         const val SIGNATURE = "signature"
         const val DISPOSE_ACTION = "dispose_action"
+        const val DISPOSE_ADVANCE = "dispose_advance"
         const val THEME = "theme"
         const val DEFAULT_BODY_RENDER_MODE = "default_body_render_mode"
         const val FOLDER_COUNT_DISPLAY = "folder_count_display"
@@ -41,6 +42,7 @@ object PreferencesWire {
                     AppKey.DEFAULT_FROM_ADDRESS to preferences.defaultFromAddress.orEmpty(),
                     AppKey.SIGNATURE to preferences.signature,
                     AppKey.DISPOSE_ACTION to preferences.disposeAction.wire,
+                    AppKey.DISPOSE_ADVANCE to preferences.disposeAdvance.wire,
                     AppKey.THEME to preferences.theme.wire,
                     AppKey.DEFAULT_BODY_RENDER_MODE to preferences.bodyRenderMode.wire,
                     AppKey.FOLDER_COUNT_DISPLAY to preferences.folderCountDisplay.wire,
@@ -73,6 +75,7 @@ object PreferencesWire {
             folderCountDisplay =
                 wireEnum<FolderCountDisplay>(app[AppKey.FOLDER_COUNT_DISPLAY]) ?: current.folderCountDisplay,
             disposeAction = wireEnum<DisposeAction>(app[AppKey.DISPOSE_ACTION]) ?: current.disposeAction,
+            disposeAdvance = wireEnum<DisposeAdvance>(app[AppKey.DISPOSE_ADVANCE]) ?: current.disposeAdvance,
             defaultFromAddress =
                 if (app.containsKey(AppKey.DEFAULT_FROM_ADDRESS)) {
                     app.getValue(AppKey.DEFAULT_FROM_ADDRESS).ifEmpty { null }

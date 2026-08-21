@@ -29,12 +29,14 @@ class PreferencesWireTest {
                 "default_from_address",
                 "signature",
                 "dispose_action",
+                "dispose_advance",
                 "theme",
                 "default_body_render_mode",
                 "folder_count_display",
             ),
             app.keys,
         )
+        assertEquals("next_unread", app["dispose_advance"])
         assertNull(PreferencesWire.toUpdate(AppPreferences(theme = AppTheme.SYSTEM)).theme)
     }
 
@@ -72,6 +74,31 @@ class PreferencesWireTest {
         )
         // absent default_from_address leaves the current value
         assertEquals("old@x", PreferencesWire.applyRemote(current, Preferences()).defaultFromAddress)
+    }
+
+    @Test
+    fun `dispose advance round-trips and survives an absent or bogus remote value`() {
+        val current = AppPreferences(disposeAdvance = DisposeAdvance.PREVIOUS_UNREAD)
+        assertEquals(
+            DisposeAdvance.PREVIOUS_UNREAD,
+            PreferencesWire.applyRemote(current, Preferences()).disposeAdvance,
+        )
+        assertEquals(
+            DisposeAdvance.PREVIOUS_UNREAD,
+            PreferencesWire
+                .applyRemote(current, Preferences(app = mapOf("dispose_advance" to "nonsense")))
+                .disposeAdvance,
+        )
+        assertEquals(
+            DisposeAdvance.FIRST_UNREAD,
+            PreferencesWire
+                .applyRemote(current, Preferences(app = mapOf("dispose_advance" to "first_unread")))
+                .disposeAdvance,
+        )
+        assertEquals(
+            "previous_unread",
+            PreferencesWire.toUpdate(current).app!!["dispose_advance"],
+        )
     }
 
     @Test
