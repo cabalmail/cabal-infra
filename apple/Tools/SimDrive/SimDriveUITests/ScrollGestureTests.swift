@@ -202,3 +202,101 @@ final class ScrollProgressTests: XCTestCase {
         ))
     }
 }
+
+/// Regression coverage for issue #1193: after #1192 spread a `scroll` over
+/// several sweeps, the verb moved about 2.3x the travel it reported. Each
+/// sweep is a separate press-and-drag carrying its own momentum, so n short
+/// sweeps move considerably more content than one sweep of the same total
+/// length — and the command still printed the number it was asked for. Every
+/// recorded recipe that steps by default-amount scrolls therefore landed
+/// somewhere else, failing on the *next* command rather than on the scroll.
+///
+/// The verb now measures each sweep against the element the caller named and
+/// sizes the next one for what is left at that rate — closing the loop the
+/// swipe fallback already closed, and whose doc comment already claimed the
+/// contract for the whole verb ("reports what it measured rather than what it
+/// planned").
+final class ScrollFeedbackTests: XCTestCase {
+
+    
+    /// The reported measurement, as arithmetic. iPhone 26.5, Settings at the
+    /// top: the default `dir:down` plans 437 points of finger travel across 3
+    /// sweeps of 145.7, and the first one moves the form about 335 — a gain
+    /// of roughly 2.3. Open-loop, sweeps 2 and 3 then take it to ~1005 while
+    /// the verb prints 437. With feedback the second sweep is sized for the
+    /// 102 points still owed at that rate, which is 44 of finger travel.
+    func testASweepIsSizedForWhatIsLeftAtTheRateAlreadyMeasured() throws {
+        let plan = ScrollGesture.plan(requestedTravel: 437, containerHeight: 874)
+        let travel = try XCTUnwrap(ScrollFeedback.nextSweepTravel(
+            requested: 437, measured: 335, dragged: plan.sweepTravel, cap: plan.sweepTravel
+        ))
+        XCTAssertEqual(travel, 44.3, accuracy: 1.0)
+        XCTAssertLessThan(travel, plan.sweepTravel)
+    }
+
+    /// The first sweep has nothing to learn from, so it must be exactly what
+    /// the plan says — the pre-#1193 geometry, unchanged. Anything else would
+    /// be a silent behaviour change on the very first gesture.
+    func testTheFirstSweepTakesThePlanUnchanged() {
+        let plan = ScrollGesture.plan(requestedTravel: 437, containerHeight: 874)
+        XCTAssertEqual(
+            ScrollFeedback.nextSweepTravel(
+                requested: 437, measured: 0, dragged: 0, cap: plan.sweepTravel
+            ),
+            plan.sweepTravel
+        )
+    }
+
+    /// Once the request is covered there is nothing left to do — this is the
+    /// clause that stops the overshoot, and the whole of #1193 in one line.
+    func testAMetRequestAsksForNoFurtherSweep() {
+        XCTAssertNil(ScrollFeedback.nextSweepTravel(
+            requested: 437, measured: 437, dragged: 145.7, cap: 145.7
+        ))
+        XCTAssertNil(
+            ScrollFeedback.nextSweepTravel(
+                requested: 437, measured: 1005, dragged: 437, cap: 145.7
+            ),
+            "the open-loop outcome: three planned sweeps moved 2.3x the request"
+        )
+    }
+
+    /// A remainder smaller than a gesture is worth is not worth a gesture.
+    func testATinyRemainderIsNotWorthASweep() {
+        XCTAssertNil(ScrollFeedback.nextSweepTravel(
+            requested: 437, measured: 434, dragged: 145.7, cap: 145.7
+        ))
+    }
+
+    /// The per-sweep ceiling is #1188's safety property and feedback may only
+    /// lower it. A sweep that under-delivered would otherwise ask the next
+    /// one to travel a multiple of the container and put an endpoint back on
+    /// the chrome that dismissed an iPad sheet.
+    func testFeedbackNeverRaisesThePerSweepCeiling() {
+        let cap: CGFloat = 145.7
+        XCTAssertEqual(
+            ScrollFeedback.nextSweepTravel(
+                requested: 1200, measured: 5, dragged: cap, cap: cap
+            ),
+            cap
+        )
+        XCTAssertEqual(
+            ScrollFeedback.nextSweepTravel(
+                requested: 1200, measured: 0, dragged: cap, cap: cap
+            ),
+            cap,
+            "a sweep that moved nothing must not be read as infinite gain"
+        )
+    }
+
+    /// Sweeping the whole plan is still right where the gesture under-delivers
+    /// — the pre-#1192 platforms are not the only callers, and a gain below 1
+    /// must spend the budget rather than give up early.
+    func testAnUnderDeliveringSweepKeepsGoing() {
+        let cap: CGFloat = 145.7
+        let next = ScrollFeedback.nextSweepTravel(
+            requested: 437, measured: 70, dragged: cap, cap: cap
+        )
+        XCTAssertEqual(next, cap, "still 367 points owed at a gain of 0.48")
+    }
+}
