@@ -312,7 +312,7 @@ extension FolderListView {
                 )
             }
         }
-        Button("Cancel", role: .cancel) {
+        Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
             pendingDelete = nil
         }
     }
