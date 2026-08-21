@@ -60,7 +60,10 @@ import XCTest
 ///                              `amount:` is a fraction of the window, spent
 ///                              in as many sweeps as the enclosing scroll
 ///                              view can take without a finger straying onto
-///                              its chrome (#1188)
+///                              its chrome (#1188). Where a press-drag moves
+///                              nothing at all — visionOS — it falls back to
+///                              element swipes, whose step is fixed, so the
+///                              reported travel is what was measured (#1191)
 ///   exists <query>             "exists=<bool> hittable=<bool>"
 ///   wait <query> [timeout:<s>] wait for existence (default 10s)
 ///   quit                       end the loop (the test finishes)
@@ -361,7 +364,11 @@ final class SimDriveTests: XCTestCase {
         let gestureAnchor = container ?? target
         let bounds = container?.frame ?? window
         let plan = ScrollGesture.plan(requestedTravel: requested, containerHeight: bounds.height)
-        let (pressOffset, releaseOffset) = plan.offsets(goingDown: direction == "down")
+        let goingDown = direction == "down"
+        let (pressOffset, releaseOffset) = plan.offsets(goingDown: goingDown)
+        // The witness for whether any of this worked is the element the
+        // caller named: the container holds still while its content moves.
+        let before = position(of: target)
         var completed = 0
         for _ in 0..<plan.sweeps {
             // Only reachable on the fallback path, where the anchor is the
@@ -384,10 +391,82 @@ final class SimDriveTests: XCTestCase {
             )
             completed += 1
         }
+        if !ScrollProgress.moved(from: before, to: position(of: target)) {
+            return swipeFallback(
+                query: query,
+                target: target,
+                container: container,
+                goingDown: goingDown,
+                requested: requested
+            )
+        }
         let travelled = Int(CGFloat(completed) * plan.sweepTravel)
         let sweepNote = plan.sweeps == 1 ? "" : " in \(completed) sweeps"
         let shortfall = travelled < Int(requested) ? " of \(Int(requested))pt requested" : ""
         return "scrolled \(query) \(direction) (\(travelled)pt\(shortfall)\(sweepNote), press \(press)s)"
+    }
+
+    /// `XCUIElement.swipeUp()`/`swipeDown()`, for the platforms where a
+    /// press-and-drag moves nothing (#1191 — visionOS 26.5 is the measured
+    /// one). Repeated until the requested travel is covered, the content
+    /// stops moving, or the sweep budget runs out.
+    ///
+    /// The anchor must be on screen: swiping an element whose visible frame
+    /// is empty is an XCTest *failure*, which unwinds the REPL rather than
+    /// answering the command — the same hazard as reading `frame` off a
+    /// vanished element (#1188). A target that has already scrolled out of
+    /// view has no enclosing container either, so that case reports rather
+    /// than gambles.
+    private func swipeFallback(
+        query: String,
+        target: XCUIElement,
+        container: XCUIElement?,
+        goingDown: Bool,
+        requested: CGFloat
+    ) -> String {
+        let anchor = container ?? target
+        guard anchor.exists, anchor.isHittable else {
+            return "scrolled \(query) \(goingDown ? "down" : "up") (0pt — the drag moved nothing "
+                + "and there is no on-screen container to swipe instead)"
+        }
+        var travelled: CGFloat = 0
+        var swipes = 0
+        var lastStep = ScrollProgress.stillThreshold
+        while ScrollProgress.shouldSwipeAgain(
+            travelled: travelled,
+            requested: requested,
+            swipes: swipes,
+            lastStep: lastStep
+        ) {
+            let before = position(of: target)
+            if goingDown { anchor.swipeUp() } else { anchor.swipeDown() }
+            swipes += 1
+            let after = position(of: target)
+            guard let before else { break }
+            guard let after else {
+                // The witness scrolled out of the tree, so the distance is no
+                // longer measurable — count the request as met and stop.
+                travelled = max(travelled, requested)
+                break
+            }
+            lastStep = abs(after - before)
+            travelled += lastStep
+        }
+        let plural = swipes == 1 ? "" : "s"
+        return "scrolled \(query) \(goingDown ? "down" : "up") "
+            + "(\(Int(travelled))pt in \(swipes) swipe\(plural), drag fallback — "
+            + "a press-drag moved nothing here)"
+    }
+
+    /// The anchor's vertical position, or nil once it has left the tree.
+    ///
+    /// Reading `frame` off an element that no longer matches fails the whole
+    /// XCUITest, so existence is asked first every time.
+    private func position(of element: XCUIElement) -> CGFloat? {
+        guard element.exists else { return nil }
+        let frame = element.frame
+        guard !frame.isEmpty else { return nil }
+        return frame.midY
     }
 
     /// The scrollable element a `scroll` gesture on `target` has to stay

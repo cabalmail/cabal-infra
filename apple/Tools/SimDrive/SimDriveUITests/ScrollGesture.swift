@@ -68,3 +68,59 @@ struct ScrollGesture: Equatable {
         return (sign * sweepTravel / 2, -sign * sweepTravel / 2)
     }
 }
+
+/// Whether a `scroll` gesture achieved anything, and whether another one is
+/// worth making — the rule behind the swipe fallback (#1191).
+///
+/// A synthesized press-and-drag scrolls nothing at all on visionOS. Measured
+/// there on 26.5 against both the message list and the Settings form, in
+/// every shape the verb can produce: endpoints derived with `withOffset`,
+/// endpoints given as plain normalized offsets inside the container, one
+/// sweep of a fifth of the container, one sweep of nine tenths of it, and a
+/// quarter-second press dragged at `.slow` with a hold at the end. All of
+/// them left every row on the point, and all of them reported a plausible
+/// travel — the silent failure #1188 was also about.
+///
+/// `XCUIElement.swipeUp()` does scroll there, so the verb keeps the
+/// press-drag it has (which is precise, and which iPadOS honours) and falls
+/// back to a swipe when it measures that nothing moved. Nothing here asks
+/// what platform it is on: the fallback is chosen by what the gesture did,
+/// which is also what makes it self-retiring if a future visionOS starts
+/// honouring the drag.
+///
+/// A swipe's travel is not adjustable — `.slow`, `.default` and `.fast` all
+/// moved the visionOS message list by exactly 435 points in a 393-point
+/// container — so `amount:` can only be honoured by swiping more than once,
+/// and the verb reports what it measured rather than what it planned.
+enum ScrollProgress {
+
+    /// Displacements below this are the tree settling, not a scroll.
+    static let stillThreshold: CGFloat = 1
+
+    /// Whether the anchor moved between two readings.
+    ///
+    /// `nil` means the element left the accessibility tree, which on this
+    /// path is the strongest evidence of a scroll there is: it scrolled far
+    /// enough to stop being rendered.
+    static func moved(from before: CGFloat?, to after: CGFloat?) -> Bool {
+        guard let before else { return false }
+        guard let after else { return true }
+        return abs(after - before) >= stillThreshold
+    }
+
+    /// Whether to swipe again: only while there is travel left to cover, the
+    /// sweep budget is unspent, and the last swipe actually moved something.
+    ///
+    /// The last clause is what stops a list that has reached the end of its
+    /// content from spending the whole budget rubber-banding.
+    static func shouldSwipeAgain(
+        travelled: CGFloat,
+        requested: CGFloat,
+        swipes: Int,
+        lastStep: CGFloat
+    ) -> Bool {
+        guard swipes < ScrollGesture.maxSweeps else { return false }
+        guard lastStep >= stillThreshold else { return false }
+        return travelled < requested
+    }
+}
