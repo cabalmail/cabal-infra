@@ -74,6 +74,36 @@ class MessageListWindowTest {
     }
 
     @Test
+    fun `refetched server copy wins over the loaded window`() {
+        // The window still shows a star another client already cleared.
+        val fetched = mapOf(1L to Envelope(id = 1, flags = emptyList()))
+        val window = listOf(Envelope(id = 1, flags = listOf("\\Flagged")))
+        val byUid = shieldPendingWrites(fetched, window) { false }
+        assertEquals(emptyList<String>(), byUid[1L]?.flags)
+    }
+
+    @Test
+    fun `rows with an in-flight flag write keep their optimistic copy`() {
+        val fetched = mapOf(1L to Envelope(id = 1), 2L to Envelope(id = 2))
+        val window =
+            listOf(
+                Envelope(id = 1, flags = listOf("\\Flagged")),
+                Envelope(id = 2, flags = listOf("\\Flagged")),
+            )
+        val byUid = shieldPendingWrites(fetched, window) { it == 1L }
+        assertEquals(listOf("\\Flagged"), byUid[1L]?.flags)
+        assertEquals(emptyList<String>(), byUid[2L]?.flags)
+    }
+
+    @Test
+    fun `shield never adds window rows absent from the fetched band`() {
+        val fetched = mapOf(1L to Envelope(id = 1))
+        val window = listOf(Envelope(id = 99, flags = listOf("\\Flagged")))
+        val byUid = shieldPendingWrites(fetched, window) { true }
+        assertEquals(setOf(1L), byUid.keys)
+    }
+
+    @Test
     fun `pill counts track local flag mutations and clamp at zero`() {
         val counts = FolderCounts(all = 4, unseen = 2, flagged = 0)
         assertEquals(1, counts.adjustedFor("\\Seen", gained = 1).unseen)

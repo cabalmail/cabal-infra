@@ -270,7 +270,7 @@ class MessageDetailViewModel(
         val patched = envelope.copy(flags = flags)
         mutableState.update { it.copy(envelope = patched) }
         container.mailEvents.emit(MailEvent.FlagChanged(folder, setOf(uid), flag, value))
-        container.mailEvents.beginWrite()
+        container.mailEvents.beginFlagWrite(folder, listOf(uid))
         container.appScope.launch {
             try {
                 container.requireApi().setFlag(folder, listOf(uid), flag, value)
@@ -279,7 +279,7 @@ class MessageDetailViewModel(
                 mutableState.update { it.copy(error = userMessage(exception, "Could not update flag")) }
                 container.mailEvents.emit(MailEvent.Reconcile(folder))
             } finally {
-                container.mailEvents.endWrite()
+                container.mailEvents.endFlagWrite(folder, listOf(uid))
             }
         }
     }

@@ -209,7 +209,7 @@ class SearchViewModel(
                     },
             )
         }
-        container.mailEvents.beginWrite()
+        container.mailEvents.beginFlagWrite(folder, listOf(envelope.id))
         viewModelScope.launch {
             try {
                 container.requireApi().setFlag(folder, listOf(envelope.id), flag, value)
@@ -218,7 +218,7 @@ class SearchViewModel(
                 mutableState.update { it.copy(error = userMessage(exception, "Could not update flags")) }
                 container.mailEvents.emit(MailEvent.Reconcile(folder))
             } finally {
-                container.mailEvents.endWrite()
+                container.mailEvents.endFlagWrite(folder, listOf(envelope.id))
             }
         }
     }

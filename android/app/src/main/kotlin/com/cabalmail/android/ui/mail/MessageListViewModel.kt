@@ -133,11 +133,32 @@ internal fun mergeBand(
 }
 
 /**
+ * The server copy of a refetched band wins over the loaded window — except
+ * rows whose own flag write is still in flight, where the optimistic local
+ * copy stands until the write settles (the Apple client's pending-write
+ * shield). Without the shield, a refetch racing the user's tap would
+ * briefly revert the star, and the confirmed write would then persist the
+ * reverted copy.
+ */
+internal fun shieldPendingWrites(
+    fetched: Map<Long, Envelope>,
+    window: Collection<Envelope>,
+    inFlight: (Long) -> Boolean,
+): Map<Long, Envelope> =
+    fetched +
+        window
+            .filter { it.id in fetched && inFlight(it.id) }
+            .associateBy { it.id }
+
+/**
  * Index-addressed sliding window over one folder, mirroring the Apple
  * client's virtualization: `/list_messages` (server-side SORT) supplies the
- * total plus per-band UID pages, `/list_envelopes` fills the band, and the
- * envelope cache short-circuits both on revisit. Placeholder rows render
- * for indices whose band hasn't landed.
+ * total plus per-band UID pages and `/list_envelopes` fills the band. A
+ * revisited band paints from the envelope cache while the fill is in
+ * flight, but the fill always completes and the server copy wins: flags
+ * change underneath the cache (another client marking a message read, or
+ * clearing a star), so a cached envelope is a warm start, never the
+ * answer. Placeholder rows render for indices whose band hasn't landed.
  */
 class MessageListViewModel(
     internal val container: AppContainer,
@@ -329,17 +350,24 @@ class MessageListViewModel(
                     )
                 val uids = page.messageIds
                 val cached = container.envelopeCache.read(folder, uids)
-                val missing = uids.filterNot(cached::containsKey)
-                val fetched =
-                    if (missing.isEmpty()) {
-                        emptyMap()
-                    } else {
-                        api.listEnvelopes(folder, missing).also { fresh ->
-                            container.envelopeCache.write(folder, fresh.values)
-                        }
+                if (cached.isNotEmpty()) {
+                    mutableState.update { state ->
+                        state.copy(
+                            total = page.total,
+                            envelopes = mergeBand(state.envelopes, offset, uids, cached),
+                        )
                     }
-                val byUid = cached + fetched
+                }
+                val fetched = api.listEnvelopes(folder, uids)
+                container.envelopeCache.write(
+                    folder,
+                    fetched.values.filterNot { container.mailEvents.flagWriteInFlight(folder, it.id) },
+                )
                 mutableState.update { state ->
+                    val byUid =
+                        shieldPendingWrites(fetched, state.envelopes.values) {
+                            container.mailEvents.flagWriteInFlight(folder, it)
+                        }
                     state.copy(
                         total = page.total,
                         envelopes = mergeBand(state.envelopes, offset, uids, byUid),
@@ -390,7 +418,7 @@ class MessageListViewModel(
             return
         }
         patchFlags(uids, flag, value)
-        container.mailEvents.beginWrite()
+        container.mailEvents.beginFlagWrite(folder, uids)
         viewModelScope.launch {
             try {
                 container.requireApi().setFlag(folder, uids.toList(), flag, value)
@@ -399,7 +427,7 @@ class MessageListViewModel(
                 mutableState.update { it.copy(error = userMessage(exception, "Could not update flags")) }
                 refresh()
             } finally {
-                container.mailEvents.endWrite()
+                container.mailEvents.endFlagWrite(folder, uids)
             }
         }
     }
