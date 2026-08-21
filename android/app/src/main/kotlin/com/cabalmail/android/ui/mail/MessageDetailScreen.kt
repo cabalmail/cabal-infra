@@ -17,11 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
@@ -42,9 +40,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,7 +56,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
-import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.AuthResults
@@ -63,6 +63,9 @@ import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.mailboxDisplayName
 import com.cabalmail.kit.models.readerModeHtml
 import com.cabalmail.kit.models.sentInstant
+import com.cabalmail.kit.settings.DisposeAction
+import com.cabalmail.kit.settings.DisposeAdvance
+import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -81,7 +84,51 @@ fun MessageDetailScreen(
     showBack: Boolean = true,
     /** Keyboard chords (plan §7.2): reply, reply-all, toggle read / flag. */
     handleShortcuts: Boolean = true,
+    /**
+     * Resolves the after-dispose target from the surrounding list, evaluated
+     * at action time (before the disposal prunes the window). Null when the
+     * reader has no list context (e.g. opened from search) — disposes then
+     * fall back to [onBack].
+     */
+    computeAdvance: ((disposedUid: Long, advance: DisposeAdvance) -> Long?)? = null,
+    /** Opens the advance target in this reader's place. */
+    onOpenMessage: ((Long) -> Unit)? = null,
 ) {
+    val preferencesRepository = viewModel.container.preferences
+    val preferences by preferencesRepository.preferences.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    /** The advance target, resolved when a dispose starts (pre-prune). */
+    val pendingAdvanceUid = remember { mutableStateOf<Long?>(null) }
+
+    /** A purge awaiting confirmation, carrying its menu pick (null = primary tap). */
+    var pendingPurge by remember { mutableStateOf<Pair<DisposeAction?, DisposeAdvance>?>(null) }
+
+    /**
+     * Runs a dispose: a menu pick ([action] non-null) becomes the new
+     * preference pair first, mirroring the Apple split menu; purges detour
+     * through the confirmation dialog.
+     */
+    val beginDispose: (DisposeAction?, DisposeAdvance) -> Unit = { action, advance ->
+        if (action != null) {
+            scope.launch {
+                preferencesRepository.update {
+                    it.copy(disposeAction = action, disposeAdvance = advance)
+                }
+            }
+        }
+        val intent =
+            action?.let { DisposeIntent.explicit(it, viewModel.folderName) }
+                ?: DisposeIntent.standard(preferences.disposeAction, viewModel.folderName)
+        if (intent == DisposeIntent.Purge) {
+            pendingPurge = action to advance
+        } else {
+            pendingAdvanceUid.value =
+                state.envelope?.id?.let { uid -> computeAdvance?.invoke(uid, advance) }
+            viewModel.dispose(action)
+        }
+    }
+
     LaunchedEffect(handleShortcuts) {
         if (!handleShortcuts) {
             return@LaunchedEffect
@@ -100,7 +147,12 @@ fun MessageDetailScreen(
     }
     LaunchedEffect(state.departed) {
         if (state.departed) {
-            onBack()
+            val target = pendingAdvanceUid.value
+            if (target != null && onOpenMessage != null) {
+                onOpenMessage(target)
+            } else {
+                onBack()
+            }
         }
     }
     LaunchedEffect(state.composeDraftId) {
@@ -127,9 +179,9 @@ fun MessageDetailScreen(
         }
     }
 
-    var confirmingPurge by remember { mutableStateOf(false) }
     var showMoveSheet by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    var linkTarget by remember { mutableStateOf<LinkMenuTarget?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -168,30 +220,13 @@ fun MessageDetailScreen(
                                 },
                         )
                     }
-                    IconButton(
-                        onClick = {
-                            if (viewModel.isTrashFolder) {
-                                confirmingPurge = true
-                            } else {
-                                viewModel.dispose()
-                            }
-                        },
+                    DisposeSplitButton(
+                        folder = viewModel.folderName,
+                        preferredAction = preferences.disposeAction,
+                        preferredAdvance = preferences.disposeAdvance,
                         enabled = !state.busy,
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription =
-                                stringResource(
-                                    disposeLabelRes(viewModel.isTrashFolder),
-                                ),
-                            tint =
-                                if (viewModel.isTrashFolder) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                        )
-                    }
+                        onDispose = beginDispose,
+                    )
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_actions))
                     }
@@ -283,35 +318,39 @@ fun MessageDetailScreen(
                                 RenderMode.READER -> readerModeHtml(html, darkMode)
                             },
                         allowRemoteContent = state.loadRemoteContent,
+                        onLinkTap = { url -> LinkMenuTarget.from(url)?.let { linkTarget = it } },
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
-                    SelectionContainer(
+                    PlainTextBody(
+                        text = content.bodyPlain,
+                        onLinkTap = { url -> LinkMenuTarget.from(url)?.let { linkTarget = it } },
                         modifier =
                             Modifier
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
                                 .padding(16.dp),
-                    ) {
-                        Text(
-                            text = content.bodyPlain,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                    )
                 }
             }
         }
     }
 
-    if (confirmingPurge) {
+    pendingPurge?.let { (action, advance) ->
         PurgeConfirmDialog(
             count = 1,
             onConfirm = {
-                confirmingPurge = false
-                viewModel.dispose()
+                pendingPurge = null
+                pendingAdvanceUid.value =
+                    state.envelope?.id?.let { uid -> computeAdvance?.invoke(uid, advance) }
+                viewModel.dispose(action)
             },
-            onDismiss = { confirmingPurge = false },
+            onDismiss = { pendingPurge = null },
         )
+    }
+
+    linkTarget?.let { target ->
+        LinkMenuSheet(target = target, onDismiss = { linkTarget = null })
     }
 
     if (showMoveSheet) {
@@ -496,14 +535,18 @@ private fun AttachmentRow(
 /**
  * Hardened HTML rendering, mirroring the plan's WKWebView-equivalent
  * posture: no JavaScript, remote loads blocked until the per-message
- * opt-in, all navigation swallowed.
+ * opt-in, all navigation swallowed. A user tap on a link (the only
+ * gestured navigation with JavaScript off) is surfaced via [onLinkTap]
+ * instead of being silently dropped.
  */
 @Composable
 private fun HtmlBody(
     html: String,
     allowRemoteContent: Boolean,
+    onLinkTap: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val currentOnLinkTap by rememberUpdatedState(onLinkTap)
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -517,13 +560,26 @@ private fun HtmlBody(
                         override fun shouldOverrideUrlLoading(
                             view: WebView?,
                             request: WebResourceRequest?,
-                        ): Boolean = true
+                        ): Boolean {
+                            // Gesture-gated so a meta refresh can't pop the menu.
+                            if (request?.hasGesture() == true) {
+                                currentOnLinkTap(request.url.toString())
+                            }
+                            return true
+                        }
                     }
             }
         },
         update = { webView ->
             webView.settings.blockNetworkLoads = !allowRemoteContent
-            webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+            // Reload only when the document actually changed; unrelated
+            // recompositions (the link sheet opening, flag toggles) must
+            // not reset the reading position.
+            val loadKey = allowRemoteContent to html
+            if (webView.tag != loadKey) {
+                webView.tag = loadKey
+                webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+            }
         },
     )
 }

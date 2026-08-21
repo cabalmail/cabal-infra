@@ -42,6 +42,7 @@ import androidx.core.net.toUri
 import com.cabalmail.android.BuildConfig
 import com.cabalmail.android.R
 import com.cabalmail.android.notifications.NewMailSync
+import com.cabalmail.android.ui.mail.advanceLabelRes
 import com.cabalmail.kit.settings.Accent
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.AppTheme
@@ -49,6 +50,7 @@ import com.cabalmail.kit.settings.BodyRenderMode
 import com.cabalmail.kit.settings.DefaultSort
 import com.cabalmail.kit.settings.Density
 import com.cabalmail.kit.settings.DisposeAction
+import com.cabalmail.kit.settings.DisposeAdvance
 import com.cabalmail.kit.settings.FolderCountDisplay
 import com.cabalmail.kit.settings.LoadRemoteContent
 import com.cabalmail.kit.settings.MarkAsRead
@@ -176,6 +178,13 @@ fun SettingsScreen(
                 options = DisposeAction.entries,
                 label = { it.label() },
                 onSelect = { value -> onUpdate { it.copy(disposeAction = value) } },
+            )
+            EnumRow(
+                title = stringResource(R.string.settings_dispose_advance),
+                value = preferences.disposeAdvance,
+                options = DisposeAdvance.entries,
+                label = { it.label() },
+                onSelect = { value -> onUpdate { it.copy(disposeAdvance = value) } },
             )
 
             SectionHeader(stringResource(R.string.settings_notifications))
@@ -480,6 +489,9 @@ private fun DisposeAction.label(): String =
             DisposeAction.TRASH -> R.string.opt_dispose_trash
         },
     )
+
+@Composable
+private fun DisposeAdvance.label(): String = stringResource(advanceLabelRes(this))
 
 @Composable
 private fun AppTheme.label(): String =
