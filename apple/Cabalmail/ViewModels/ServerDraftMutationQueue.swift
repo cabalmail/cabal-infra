@@ -22,6 +22,13 @@ import Foundation
 /// `close(runningDiscard:)` marks the session closed *before* its first
 /// suspension point, so a tick that fires during the discard declines rather
 /// than resurrecting the draft.
+///
+/// **Send terminates the session the same way** (#1198). `/send` carries
+/// `discardingDraft:`, so both orderings above read identically with "the
+/// discard" replaced by "the send" — the copy the send names is expunged
+/// server-side, and a save that lands either side of it strands the copy it
+/// appends. Send therefore runs through `close(runningThrowing:)` rather
+/// than going round the queue.
 @MainActor
 final class ServerDraftMutationQueue {
 
@@ -71,6 +78,26 @@ final class ServerDraftMutationQueue {
     func close(runningDiscard work: @escaping @MainActor () async -> Void) async {
         isClosed = true
         await enqueue(work)
+    }
+
+    /// Throwing variant of `close(runningDiscard:)`, for Send.
+    ///
+    /// `/send` carries `discardingDraft:`, so a delivery ends this session's
+    /// server-side copy exactly as a discard does and belongs behind the same
+    /// interlock (#1198). What differs is the failure: a send that throws
+    /// leaves the composer up with the message still in it, so the session
+    /// *reopens* — otherwise the close-without-send push, and every autosave
+    /// after it, would silently stop reaching the server.
+    func close(runningThrowing work: @escaping @MainActor () async throws -> Void) async throws {
+        isClosed = true
+        let box = ErrorBox()
+        await enqueue {
+            do { try await work() } catch { box.error = error }
+        }
+        if let error = box.error {
+            isClosed = false
+            throw error
+        }
     }
 
     private func enqueue(_ work: @escaping @MainActor () async -> Void) async {
