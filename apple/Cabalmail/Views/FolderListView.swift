@@ -108,28 +108,38 @@ struct FolderListView: View {
                     activeSelection: selection?.path
                 )
                 if !model.subscribedFolders.isEmpty {
-                    // `Section(_:isExpanded:)`, not a `DisclosureGroup` holding
-                    // the rows: a `DisclosureGroup` is itself a row of the
-                    // enclosing `List`, so its header shares the row-view
-                    // recycling pool with the folder rows, and on macOS the
-                    // header slot inherits a stale row image when a section's
-                    // content count changes (#1070 — the "All folders" header
-                    // drawn as a ghost of the selected folder after a create or
-                    // delete). A `Section` header is list chrome instead, so it
-                    // is not a recycling candidate.
-                    Section(isExpanded: $subscribedExpanded) {
-                        ForEach(subscribedRows) { row in
+                    // A plain `Section` with the expansion applied by us, not
+                    // `Section(_:isExpanded:)`: that hands the list style both
+                    // the gating and the control, and no two platforms decide
+                    // them alike — macOS and visionOS honoured the binding and
+                    // drew no control, stranding the user in a section that
+                    // defaults collapsed, while iPadOS drew the rows whatever
+                    // the binding said (#1184). `FolderSectionDisclosure` holds
+                    // the rule; `sectionHeader` draws the chevron.
+                    //
+                    // Still not a `DisclosureGroup` holding the rows: that is
+                    // itself a row of the enclosing `List`, so its header shares
+                    // the row-view recycling pool with the folder rows, and on
+                    // macOS the header slot inherits a stale row image when a
+                    // section's content count changes (#1070 — the "All folders"
+                    // header drawn as a ghost of the selected folder after a
+                    // create or delete). A `Section` header is list chrome
+                    // instead, so it is not a recycling candidate.
+                    Section {
+                        ForEach(
+                            FolderSectionDisclosure.visibleRows(subscribedRows, isExpanded: subscribedExpanded)
+                        ) { row in
                             folderRow(row, model: model, collapsed: collapsedSet)
                         }
                     } header: {
-                        Text("Subscribed")
+                        sectionHeader("Subscribed", key: "subscribed", isExpanded: $subscribedExpanded)
                     }
-                    Section(isExpanded: $allExpanded) {
-                        ForEach(allRows) { row in
+                    Section {
+                        ForEach(FolderSectionDisclosure.visibleRows(allRows, isExpanded: allExpanded)) { row in
                             folderRow(row, model: model, collapsed: collapsedSet)
                         }
                     } header: {
-                        Text("All folders")
+                        sectionHeader("All folders", key: "all", isExpanded: $allExpanded)
                     }
                 } else {
                     ForEach(allRows) { row in

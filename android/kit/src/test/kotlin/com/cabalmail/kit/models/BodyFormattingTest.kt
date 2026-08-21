@@ -1,6 +1,7 @@
 package com.cabalmail.kit.models
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -34,5 +35,37 @@ class BodyFormattingTest {
         assertTrue(dark.contains(html))
         assertTrue(light.contains("!important"))
         assertNotEquals(light, dark)
+    }
+
+    @Test
+    fun `reader mode strips author style blocks including mobile media queries`() {
+        val html =
+            """
+            <html><head>
+            <STYLE type="text/css">
+              @media (max-width: 600px) { .wrapper { background: #ffffff !important; } }
+            </STYLE>
+            </head><body><div class="wrapper"><p>Hello</p></div></body></html>
+            """.trimIndent()
+        val out = readerModeHtml(html, darkMode = true)
+        assertFalse(out.contains("max-width: 600px"))
+        assertFalse(out.contains("#ffffff"))
+        assertTrue(out.contains("""<div class="wrapper"><p>Hello</p></div>"""))
+        // The reader's own trailing stylesheet must survive the strip.
+        assertTrue(out.contains("!important"))
+    }
+
+    @Test
+    fun `reader mode strips stylesheet links but keeps other links and inline styles`() {
+        val html =
+            """
+            <link rel="stylesheet" href="https://example.com/mail.css">
+            <link rel=icon href="https://example.com/favicon.ico">
+            <p style="color: #333333">Hello</p>
+            """.trimIndent()
+        val out = readerModeHtml(html, darkMode = false)
+        assertFalse(out.contains("mail.css"))
+        assertTrue(out.contains("favicon.ico"))
+        assertTrue(out.contains("""<p style="color: #333333">Hello</p>"""))
     }
 }

@@ -52,6 +52,15 @@ import XCTest
 ///   swiperow <query> edge:leading|trailing [hold:<s>]
 ///                              horizontal swipe within an element to
 ///                              reveal its swipe actions
+///   scroll <query> dir:up|down [amount:<fraction>] [press:<s>]
+///                              vertical swipe within an element to bring
+///                              content into view: `dir:down` reveals what
+///                              is below it. Anchored in the element, so it
+///                              works on visionOS where `drag` does not.
+///                              `amount:` is a fraction of the window, spent
+///                              in as many sweeps as the enclosing scroll
+///                              view can take without a finger straying onto
+///                              its chrome (#1188)
 ///   exists <query>             "exists=<bool> hittable=<bool>"
 ///   wait <query> [timeout:<s>] wait for existence (default 10s)
 ///   quit                       end the loop (the test finishes)
@@ -158,13 +167,13 @@ final class SimDriveTests: XCTestCase {
     /// REPL rather than answering the command (#902). Checking the app's
     /// state first turns that into an ordinary error result.
     private static let appDependentVerbs: Set<String> = [
-        "dump", "focus", "tap", "type", "cmdv", "key", "drag", "swiperow", "exists", "wait"
+        "dump", "focus", "tap", "type", "cmdv", "key", "drag", "swiperow", "scroll", "exists", "wait"
     ]
 
     /// Verbs whose argument begins with a query, and which therefore may be
     /// `sys`-scoped. Kept separate from a bare `remainder.hasPrefix("sys")`
     /// test, which would also match the free text of `type system…`.
-    private static let queryingVerbs: Set<String> = ["tap", "exists", "wait", "swiperow"]
+    private static let queryingVerbs: Set<String> = ["tap", "exists", "wait", "swiperow", "scroll"]
 
     private func execute(_ line: String, quit: inout Bool) throws -> String {
         let (verb, remainder) = splitVerb(line)
@@ -248,6 +257,8 @@ final class SimDriveTests: XCTestCase {
             return try drag(args)
         case "swiperow":
             return try swipeRow(remainder)
+        case "scroll":
+            return try scroll(remainder)
         case "exists":
             let query = try selector(from: remainder, verb: "exists")
             let target = try element(for: query, requireExistence: false)
@@ -306,6 +317,112 @@ final class SimDriveTests: XCTestCase {
         )
         return "swiped \(query) \(edge) (hold \(hold)s)"
     }
+
+    /// Vertical swipe *within* an element, to bring content below (or above)
+    /// the fold into view.
+    ///
+    /// Anchored in the element rather than in the application, which is the
+    /// whole point: visionOS refuses to synthesize an event for an
+    /// application-anchored coordinate ("Failed to synthesize event: Received
+    /// invalid scene ID (nil) from Accessibility") and kills the runner with
+    /// it, so `drag`'s `xy:` route cannot scroll there — and an unscrolled
+    /// SwiftUI list has not realized its off-screen rows, so no
+    /// identifier-addressed command reaches them either (#1182). Element-
+    /// anchored press-and-drag is the same API on the code path `swiperow`
+    /// already rides, and visionOS accepts it.
+    ///
+    /// The press is short by default: a long press before the drag is a
+    /// drag-and-drop or text-selection gesture on the touch platforms, not a
+    /// scroll.
+    private func scroll(_ remainder: String) throws -> String {
+        let query = try selector(from: remainder, verb: "scroll", options: ["dir", "amount", "press"])
+        let args = remainder.split(separator: " ").map(String.init)
+        let direction = value(named: "dir", in: args) ?? "down"
+        guard direction == "down" || direction == "up" else {
+            throw DriveError("scroll expects dir:up|down, got '\(direction)'")
+        }
+        let amount = min(max(value(named: "amount", in: args).flatMap(Double.init) ?? 0.5, 0.05), 0.9)
+        let press = value(named: "press", in: args).flatMap(Double.init) ?? 0.05
+        let target = try element(for: query)
+        // Travel is a fraction of the WINDOW, not of the anchor element: the
+        // natural thing to hand this verb is a row or a section header, and
+        // a drag scaled to a 20-point label moves nothing (measured on
+        // visionOS — the runner survived and the list did not budge).
+        let window = targetApp().frame
+        let requested = CGFloat(amount) * window.height
+        // ... but the ENDPOINTS have to stay inside the scrollable thing the
+        // caller named, which is usually a good deal smaller than the window
+        // (#1188). That container is also the better anchor for the gesture:
+        // it puts the x inside the scroll view by construction, and it holds
+        // still while its content — the target — scrolls out from under it.
+        // No container found falls back to what this verb did before: the
+        // target as the anchor, the window as the bound.
+        let container = scrollContainer(enclosing: target)
+        let gestureAnchor = container ?? target
+        let bounds = container?.frame ?? window
+        let plan = ScrollGesture.plan(requestedTravel: requested, containerHeight: bounds.height)
+        let (pressOffset, releaseOffset) = plan.offsets(goingDown: direction == "down")
+        var completed = 0
+        for _ in 0..<plan.sweeps {
+            // Only reachable on the fallback path, where the anchor is the
+            // target and the target can scroll clean out of the tree. Reading
+            // `frame` off an element that no longer matches fails the whole
+            // XCUITest, taking the REPL with it — so ask first, and report the
+            // sweeps that did happen rather than the ones that were planned.
+            guard gestureAnchor.exists else { break }
+            let frame = gestureAnchor.frame
+            guard !frame.isEmpty else { break }
+            let centre = gestureAnchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let toCentre = bounds.midY - frame.midY
+            let start = centre.withOffset(CGVector(dx: 0, dy: toCentre + pressOffset))
+            let end = centre.withOffset(CGVector(dx: 0, dy: toCentre + releaseOffset))
+            start.press(
+                forDuration: press,
+                thenDragTo: end,
+                withVelocity: .default,
+                thenHoldForDuration: 0
+            )
+            completed += 1
+        }
+        let travelled = Int(CGFloat(completed) * plan.sweepTravel)
+        let sweepNote = plan.sweeps == 1 ? "" : " in \(completed) sweeps"
+        let shortfall = travelled < Int(requested) ? " of \(Int(requested))pt requested" : ""
+        return "scrolled \(query) \(direction) (\(travelled)pt\(shortfall)\(sweepNote), press \(press)s)"
+    }
+
+    /// The scrollable element a `scroll` gesture on `target` has to stay
+    /// inside, or nil when nothing plausible encloses it.
+    ///
+    /// XCUITest exposes no parent pointer, so the candidates are enumerated
+    /// and the smallest one whose frame holds the anchor's centre wins —
+    /// smallest, because the app nests scroll views (every message row is its
+    /// own one-row `List`, which is why the size floor below is not optional).
+    private func scrollContainer(enclosing target: XCUIElement) -> XCUIElement? {
+        let anchor = target.frame
+        guard !anchor.isEmpty else { return nil }
+        let centre = CGPoint(x: anchor.midX, y: anchor.midY)
+        // A container shorter than a fifth of the window cannot absorb a
+        // scroll gesture, and one barely taller than its own anchor is the
+        // per-row `List` rather than the list the caller means.
+        let floor = max(targetApp().frame.height * 0.2, anchor.height * 2)
+        var best: XCUIElement?
+        for type in Self.scrollContainerTypes {
+            for candidate in targetApp().descendants(matching: type).allElementsBoundByIndex {
+                let frame = candidate.frame
+                guard frame.contains(centre), frame.height >= floor else { continue }
+                if let current = best, current.frame.height <= frame.height { continue }
+                best = candidate
+            }
+        }
+        return best
+    }
+
+    /// The element types a SwiftUI scrolling container turns up as: a
+    /// `ScrollView` for the plain one, a `CollectionView` or `Table` for a
+    /// `List` or a `Form`, depending on platform and inset style.
+    private static let scrollContainerTypes: [XCUIElement.ElementType] = [
+        .scrollView, .collectionView, .table
+    ]
 
     private func orient(_ name: String) throws {
         switch name {
