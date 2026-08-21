@@ -3,6 +3,7 @@ package com.cabalmail.android
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -60,6 +61,41 @@ class MailEventBus {
     fun endWrite() {
         pendingWrites.decrementAndGet()
     }
+
+    /**
+     * Flag writes still in flight, keyed by (folder, uid) with a depth
+     * count for overlapping writes to the same message. A band refetch
+     * that lands mid-write must not clobber the optimistic patch with the
+     * server's pre-write flags, so the list shields these rows until the
+     * write settles.
+     */
+    private val pendingFlagWrites = ConcurrentHashMap<Pair<String, Long>, Int>()
+
+    /** [beginWrite], plus shields [uids] from concurrent band refetches. */
+    fun beginFlagWrite(
+        folder: String,
+        uids: Collection<Long>,
+    ) {
+        uids.forEach { pendingFlagWrites.merge(folder to it, 1, Int::plus) }
+        beginWrite()
+    }
+
+    fun endFlagWrite(
+        folder: String,
+        uids: Collection<Long>,
+    ) {
+        uids.forEach { uid ->
+            pendingFlagWrites.computeIfPresent(folder to uid) { _, depth ->
+                (depth - 1).takeIf { it > 0 }
+            }
+        }
+        endWrite()
+    }
+
+    fun flagWriteInFlight(
+        folder: String,
+        uid: Long,
+    ): Boolean = pendingFlagWrites.containsKey(folder to uid)
 
     fun emit(event: MailEvent) {
         mutable.tryEmit(event)
