@@ -39,6 +39,7 @@
     <string name="filter_all">All</string>
     <string name="filter_unread">Unread</string>
     <string name="filter_flagged">Flagged</string>
+    <string name="unread">Unread</string>
     <string name="mark_read">Mark read</string>
     <string name="mark_unread">Mark unread</string>
     <string name="add_flag">Flag</string>

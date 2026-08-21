@@ -62,8 +62,6 @@ data class MessageListUiState(
     /** Selection mode: rows become checkboxes, the top bar turns contextual. */
     val selecting: Boolean = false,
     val selected: Set<Long> = emptySet(),
-    /** A bulk mutation is in flight. */
-    val busy: Boolean = false,
     /** Move-destination choices; null until requested. */
     val folderChoices: List<String>? = null,
 ) {
@@ -113,11 +111,54 @@ internal fun compactWindow(
 }
 
 /**
+ * Merges a fetched band ([uids] in server order at [offset], envelopes in
+ * [byUid]) into an index-keyed window. Any stale copy of the band's UIDs is
+ * evicted first: when the folder shifted underneath the window (new mail, a
+ * removal), a refetched band re-places a UID at a new index, and the old
+ * entry would leave the same message at two indices — a duplicate row, and
+ * a duplicate key for the UID-keyed list. UIDs missing from [byUid] leave
+ * their index unloaded (a placeholder row).
+ */
+internal fun mergeBand(
+    envelopes: Map<Int, Envelope>,
+    offset: Int,
+    uids: List<Long>,
+    byUid: Map<Long, Envelope>,
+): Map<Int, Envelope> {
+    val bandUids = uids.toSet()
+    return envelopes.filterNot { it.value.id in bandUids } +
+        uids.mapIndexedNotNull { i, uid ->
+            byUid[uid]?.let { (offset + i) to it }
+        }
+}
+
+/**
+ * The server copy of a refetched band wins over the loaded window — except
+ * rows whose own flag write is still in flight, where the optimistic local
+ * copy stands until the write settles (the Apple client's pending-write
+ * shield). Without the shield, a refetch racing the user's tap would
+ * briefly revert the star, and the confirmed write would then persist the
+ * reverted copy.
+ */
+internal fun shieldPendingWrites(
+    fetched: Map<Long, Envelope>,
+    window: Collection<Envelope>,
+    inFlight: (Long) -> Boolean,
+): Map<Long, Envelope> =
+    fetched +
+        window
+            .filter { it.id in fetched && inFlight(it.id) }
+            .associateBy { it.id }
+
+/**
  * Index-addressed sliding window over one folder, mirroring the Apple
  * client's virtualization: `/list_messages` (server-side SORT) supplies the
- * total plus per-band UID pages, `/list_envelopes` fills the band, and the
- * envelope cache short-circuits both on revisit. Placeholder rows render
- * for indices whose band hasn't landed.
+ * total plus per-band UID pages and `/list_envelopes` fills the band. A
+ * revisited band paints from the envelope cache while the fill is in
+ * flight, but the fill always completes and the server copy wins: flags
+ * change underneath the cache (another client marking a message read, or
+ * clearing a star), so a cached envelope is a warm start, never the
+ * answer. Placeholder rows render for indices whose band hasn't landed.
  */
 class MessageListViewModel(
     internal val container: AppContainer,
@@ -165,8 +206,9 @@ class MessageListViewModel(
                     return@collect
                 }
                 when (event) {
-                    is MailEvent.FlagChanged -> patchFlags(event.uids, event.flag, event.value, writeCache = false)
+                    is MailEvent.FlagChanged -> patchFlags(event.uids, event.flag, event.value)
                     is MailEvent.Removed -> removeFromWindow(event.uids)
+                    is MailEvent.Reconcile -> refresh()
                 }
             }
         }
@@ -215,7 +257,10 @@ class MessageListViewModel(
      */
     fun poll() {
         val current = mutableState.value
-        if (current.refreshing || current.busy || current.selecting) {
+        // writesInFlight: an optimistic mutation (from any screen) hasn't
+        // been confirmed yet, so a STATUS now would read as a folder change
+        // and the reload would resurrect rows the user watched leave.
+        if (current.refreshing || current.selecting || container.mailEvents.writesInFlight) {
             return
         }
         viewModelScope.launch {
@@ -305,24 +350,27 @@ class MessageListViewModel(
                     )
                 val uids = page.messageIds
                 val cached = container.envelopeCache.read(folder, uids)
-                val missing = uids.filterNot(cached::containsKey)
-                val fetched =
-                    if (missing.isEmpty()) {
-                        emptyMap()
-                    } else {
-                        api.listEnvelopes(folder, missing).also { fresh ->
-                            container.envelopeCache.write(folder, fresh.values)
-                        }
+                if (cached.isNotEmpty()) {
+                    mutableState.update { state ->
+                        state.copy(
+                            total = page.total,
+                            envelopes = mergeBand(state.envelopes, offset, uids, cached),
+                        )
                     }
-                val byUid = cached + fetched
+                }
+                val fetched = api.listEnvelopes(folder, uids)
+                container.envelopeCache.write(
+                    folder,
+                    fetched.values.filterNot { container.mailEvents.flagWriteInFlight(folder, it.id) },
+                )
                 mutableState.update { state ->
+                    val byUid =
+                        shieldPendingWrites(fetched, state.envelopes.values) {
+                            container.mailEvents.flagWriteInFlight(folder, it)
+                        }
                     state.copy(
                         total = page.total,
-                        envelopes =
-                            state.envelopes +
-                                uids.mapIndexedNotNull { i, uid ->
-                                    byUid[uid]?.let { (offset + i) to it }
-                                },
+                        envelopes = mergeBand(state.envelopes, offset, uids, byUid),
                     )
                 }
             } catch (exception: Exception) {
@@ -354,6 +402,11 @@ class MessageListViewModel(
     }
 
     // ------------------------------------------------------------ mutations
+    // All of these apply optimistically: the window, pills, and total move
+    // before the server confirms, because success is the overwhelmingly
+    // common case. The envelope cache is only written (or invalidated) once
+    // the server has agreed, and a failure surfaces the error and refetches
+    // true state.
 
     /** Sets or clears one flag on [uids] and patches the loaded copies. */
     fun setFlag(
@@ -364,20 +417,25 @@ class MessageListViewModel(
         if (uids.isEmpty()) {
             return
         }
+        patchFlags(uids, flag, value)
+        container.mailEvents.beginFlagWrite(folder, uids)
         viewModelScope.launch {
             try {
                 container.requireApi().setFlag(folder, uids.toList(), flag, value)
-                patchFlags(uids, flag, value)
+                writeWindowToCache(uids)
             } catch (exception: Exception) {
                 mutableState.update { it.copy(error = userMessage(exception, "Could not update flags")) }
+                refresh()
+            } finally {
+                container.mailEvents.endFlagWrite(folder, uids)
             }
         }
     }
 
     /**
      * Moves [uids] to [destination] and compacts the window. Selection
-     * clears afterwards, per the plan's bulk-selection semantics. UIDs
-     * already being moved or purged are skipped (see [removing]).
+     * clears with the removal, per the plan's bulk-selection semantics.
+     * UIDs already being moved or purged are skipped (see [removing]).
      */
     fun move(
         uids: Set<Long>,
@@ -385,17 +443,17 @@ class MessageListViewModel(
         markSeen: Boolean = false,
     ) {
         val fresh = claimForRemoval(uids) ?: return
+        removeFromWindow(fresh)
+        container.mailEvents.beginWrite()
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null) }
             try {
                 container.requireApi().moveMessages(folder, destination, fresh.toList(), markSeen = markSeen)
                 container.envelopeCache.invalidateFolder(folder)
-                removeFromWindow(fresh)
             } catch (exception: Exception) {
-                mutableState.update {
-                    it.copy(busy = false, error = userMessage(exception, "Could not move messages"))
-                }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not move messages")) }
+                refresh()
             } finally {
+                container.mailEvents.endWrite()
                 removing.removeAll(fresh)
             }
         }
@@ -413,18 +471,18 @@ class MessageListViewModel(
             return
         }
         val fresh = claimForRemoval(uids) ?: return
+        removeFromWindow(fresh)
+        container.mailEvents.beginWrite()
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null) }
             try {
                 container.requireApi().purgeMessages(folder, fresh.toList())
                 container.envelopeCache.invalidateFolder(folder)
                 fresh.forEach { container.bodyCache.remove(folder, it) }
-                removeFromWindow(fresh)
             } catch (exception: Exception) {
-                mutableState.update {
-                    it.copy(busy = false, error = userMessage(exception, "Could not delete messages"))
-                }
+                mutableState.update { it.copy(error = userMessage(exception, "Could not delete messages")) }
+                refresh()
             } finally {
+                container.mailEvents.endWrite()
                 removing.removeAll(fresh)
             }
         }
@@ -465,7 +523,6 @@ class MessageListViewModel(
         uids: Set<Long>,
         flag: String,
         value: Boolean,
-        writeCache: Boolean = true,
     ) {
         mutableState.update { state ->
             // Count actual transitions so the pill counts track the server
@@ -493,13 +550,19 @@ class MessageListViewModel(
                 counts = state.counts?.adjustedFor(flag, gained),
             )
         }
-        if (writeCache) {
-            val patched =
-                mutableState.value.envelopes.values
-                    .filter { it.id in uids }
-            viewModelScope.launch {
-                container.envelopeCache.write(folder, patched)
-            }
+    }
+
+    /**
+     * Persists the loaded copies of [uids] to the envelope cache — called
+     * only after the server confirms a flag write, so an optimistic patch
+     * that fails never poisons the cache.
+     */
+    private fun writeWindowToCache(uids: Set<Long>) {
+        val patched =
+            mutableState.value.envelopes.values
+                .filter { it.id in uids }
+        viewModelScope.launch {
+            container.envelopeCache.write(folder, patched)
         }
     }
 
@@ -522,7 +585,6 @@ class MessageListViewModel(
                     },
                 selected = emptySet(),
                 selecting = false,
-                busy = false,
             )
         }
     }

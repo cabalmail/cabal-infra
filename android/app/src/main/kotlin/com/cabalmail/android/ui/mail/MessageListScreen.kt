@@ -236,7 +236,14 @@ fun MessageListScreen(
                         }
                     }
                     if (state.filter == MessageFilter.ALL) {
-                        items(state.total ?: 0, key = { it }) { index ->
+                        // Loaded rows are keyed by UID so per-row state (the
+                        // swipe offset especially) travels with the message:
+                        // an optimistic removal shifts the window down while
+                        // the swiped row is still displaced, and an
+                        // index-keyed slot would hand that displacement to
+                        // whichever message moves up into it. Placeholders
+                        // key by slot (negative, so no UID collision).
+                        items(state.total ?: 0, key = { state.envelopes[it]?.id ?: -(it + 1L) }) { index ->
                             val envelope = state.envelopes[index]
                             if (envelope == null) {
                                 PlaceholderRow()
@@ -396,19 +403,19 @@ private fun SelectionTopBar(
         actions = {
             IconButton(
                 onClick = { viewModel.setFlag(state.selected, "\\Seen", true) },
-                enabled = state.selected.isNotEmpty() && !state.busy,
+                enabled = state.selected.isNotEmpty(),
             ) {
                 Icon(Icons.Default.MailOutline, contentDescription = stringResource(R.string.mark_read))
             }
             IconButton(
                 onClick = { viewModel.setFlag(state.selected, "\\Flagged", true) },
-                enabled = state.selected.isNotEmpty() && !state.busy,
+                enabled = state.selected.isNotEmpty(),
             ) {
                 Icon(Icons.Default.Star, contentDescription = stringResource(R.string.add_flag))
             }
             IconButton(
                 onClick = onDispose,
-                enabled = state.selected.isNotEmpty() && !state.busy,
+                enabled = state.selected.isNotEmpty(),
             ) {
                 Icon(
                     disposeIconPainter(viewModel.isTrashFolder),

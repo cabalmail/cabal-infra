@@ -41,6 +41,69 @@ class MessageListWindowTest {
     }
 
     @Test
+    fun `band merge places envelopes at their offset and leaves gaps for missing uids`() {
+        val merged =
+            mergeBand(
+                envelopes = window(10, 11),
+                offset = 2,
+                uids = listOf(12L, 13L, 14L),
+                byUid = mapOf(12L to Envelope(id = 12), 14L to Envelope(id = 14)),
+            )
+        assertEquals(
+            mapOf(0 to 10L, 1 to 11L, 2 to 12L, 4 to 14L),
+            merged.mapValues { it.value.id },
+        )
+    }
+
+    @Test
+    fun `band merge evicts a stale copy of a uid the band re-places`() {
+        // The folder shifted underneath the window: uid 11 used to sit at
+        // index 1 and the refetched band now places it at index 0. The stale
+        // entry must go, or the UID-keyed list would see a duplicate key.
+        val merged =
+            mergeBand(
+                envelopes = window(10, 11, 12),
+                offset = 0,
+                uids = listOf(11L, 12L),
+                byUid = mapOf(11L to Envelope(id = 11), 12L to Envelope(id = 12)),
+            )
+        assertEquals(
+            mapOf(0 to 11L, 1 to 12L),
+            merged.mapValues { it.value.id },
+        )
+    }
+
+    @Test
+    fun `refetched server copy wins over the loaded window`() {
+        // The window still shows a star another client already cleared.
+        val fetched = mapOf(1L to Envelope(id = 1, flags = emptyList()))
+        val window = listOf(Envelope(id = 1, flags = listOf("\\Flagged")))
+        val byUid = shieldPendingWrites(fetched, window) { false }
+        assertEquals(emptyList<String>(), byUid[1L]?.flags)
+    }
+
+    @Test
+    fun `rows with an in-flight flag write keep their optimistic copy`() {
+        val fetched = mapOf(1L to Envelope(id = 1), 2L to Envelope(id = 2))
+        val window =
+            listOf(
+                Envelope(id = 1, flags = listOf("\\Flagged")),
+                Envelope(id = 2, flags = listOf("\\Flagged")),
+            )
+        val byUid = shieldPendingWrites(fetched, window) { it == 1L }
+        assertEquals(listOf("\\Flagged"), byUid[1L]?.flags)
+        assertEquals(emptyList<String>(), byUid[2L]?.flags)
+    }
+
+    @Test
+    fun `shield never adds window rows absent from the fetched band`() {
+        val fetched = mapOf(1L to Envelope(id = 1))
+        val window = listOf(Envelope(id = 99, flags = listOf("\\Flagged")))
+        val byUid = shieldPendingWrites(fetched, window) { true }
+        assertEquals(setOf(1L), byUid.keys)
+    }
+
+    @Test
     fun `pill counts track local flag mutations and clamp at zero`() {
         val counts = FolderCounts(all = 4, unseen = 2, flagged = 0)
         assertEquals(1, counts.adjustedFor("\\Seen", gained = 1).unseen)
