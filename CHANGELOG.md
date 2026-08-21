@@ -33,11 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reader stylesheet.
 - Apple: **Sidebar sections can be collapsed and reopened again.** The
   Folders list's "Subscribed" and "All folders" headers now carry their own
-  disclosure control. "All folders" ships collapsed, and on macOS and
-  visionOS there was nothing to open it with, so `Sent`, `Trash` and
-  `Drafts` could not be reached at all; on iPadOS the header was equally
-  inert but every folder was drawn whatever the stored state said. All
-  three now honour the same rule and the same control.
+  disclosure control. "All folders" ships collapsed, and neither macOS nor
+  visionOS drew anything to open it with — on visionOS that stranded `Sent`,
+  `Trash` and `Drafts`, and on macOS only an unmarked click on the header
+  text would reach them; on iPadOS the header was equally inert but every
+  folder was drawn whatever the stored state said. All three now honour the
+  same rule and the same control.
 
 ## [1.3.1] - 2026-08-19
 
