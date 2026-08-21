@@ -73,6 +73,10 @@
     <string name="header_cc">Cc: %1$s</string>
     <string name="priority_high">Important</string>
     <string name="attachment_unnamed">(unnamed attachment)</string>
+    <string name="link_menu_copy">Copy link address</string>
+    <string name="link_menu_open_web">Open in browser</string>
+    <string name="link_menu_open">Open link</string>
+    <string name="link_menu_share">Share…</string>
 
     <!-- Folders -->
     <string name="empty_trash">Empty Trash</string>

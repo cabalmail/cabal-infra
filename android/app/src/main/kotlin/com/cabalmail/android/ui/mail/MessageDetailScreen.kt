@@ -45,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -130,6 +131,7 @@ fun MessageDetailScreen(
     var confirmingPurge by remember { mutableStateOf(false) }
     var showMoveSheet by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    var linkTarget by remember { mutableStateOf<LinkMenuTarget?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -283,6 +285,7 @@ fun MessageDetailScreen(
                                 RenderMode.READER -> readerModeHtml(html, darkMode)
                             },
                         allowRemoteContent = state.loadRemoteContent,
+                        onLinkTap = { url -> LinkMenuTarget.from(url)?.let { linkTarget = it } },
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
@@ -312,6 +315,10 @@ fun MessageDetailScreen(
             },
             onDismiss = { confirmingPurge = false },
         )
+    }
+
+    linkTarget?.let { target ->
+        LinkMenuSheet(target = target, onDismiss = { linkTarget = null })
     }
 
     if (showMoveSheet) {
@@ -496,14 +503,18 @@ private fun AttachmentRow(
 /**
  * Hardened HTML rendering, mirroring the plan's WKWebView-equivalent
  * posture: no JavaScript, remote loads blocked until the per-message
- * opt-in, all navigation swallowed.
+ * opt-in, all navigation swallowed. A user tap on a link (the only
+ * gestured navigation with JavaScript off) is surfaced via [onLinkTap]
+ * instead of being silently dropped.
  */
 @Composable
 private fun HtmlBody(
     html: String,
     allowRemoteContent: Boolean,
+    onLinkTap: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val currentOnLinkTap by rememberUpdatedState(onLinkTap)
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -517,13 +528,26 @@ private fun HtmlBody(
                         override fun shouldOverrideUrlLoading(
                             view: WebView?,
                             request: WebResourceRequest?,
-                        ): Boolean = true
+                        ): Boolean {
+                            // Gesture-gated so a meta refresh can't pop the menu.
+                            if (request?.hasGesture() == true) {
+                                currentOnLinkTap(request.url.toString())
+                            }
+                            return true
+                        }
                     }
             }
         },
         update = { webView ->
             webView.settings.blockNetworkLoads = !allowRemoteContent
-            webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+            // Reload only when the document actually changed; unrelated
+            // recompositions (the link sheet opening, flag toggles) must
+            // not reset the reading position.
+            val loadKey = allowRemoteContent to html
+            if (webView.tag != loadKey) {
+                webView.tag = loadKey
+                webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+            }
         },
     )
 }
