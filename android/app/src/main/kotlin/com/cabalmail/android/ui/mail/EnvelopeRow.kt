@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
@@ -37,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.theme.LocalRowPadding
+import com.cabalmail.android.ui.theme.disposeIconPainter
 import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.hasAuthFailure
@@ -276,13 +277,13 @@ internal fun SwipeRow(
                     SwipeToDismissBoxValue.StartToEnd ->
                         Triple(
                             MaterialTheme.colorScheme.secondaryContainer,
-                            Icons.Default.Email,
+                            rememberVectorPainter(Icons.Default.Email),
                             Alignment.CenterStart,
                         )
                     else ->
                         Triple(
                             MaterialTheme.colorScheme.errorContainer,
-                            Icons.Default.Delete,
+                            disposeIconPainter(isTrashFolder),
                             Alignment.CenterEnd,
                         )
                 }
