@@ -20,6 +20,14 @@ explicit retention. Neither half is visible in a plan once the config is
 written, and the failure mode is silent -- a `destination_arn` pointed back at
 `api_logs` is a one-token edit that plans clean and re-entangles the two.
 
+The second half of #1233 spends that separation: the execution log drops to 30
+days so the body history ages out, while the access log keeps the year. That
+asymmetry is the whole point of splitting the groups, so it is pinned here too
+-- along with the `#checkov:skip=CKV_AWS_338` it needs, because the IaC gate
+enforces a one-year floor and a retention below it without a co-located,
+reasoned skip fails CI. A skip written against the wrong group would both fail
+the gate and leave that group unscanned.
+
 No handler import and no third-party deps - this reads one file off disk.
 '''
 import os
@@ -43,6 +51,12 @@ _DESTINATION = re.compile(
 )
 _NAME = re.compile(r'name\s*=\s*"([^"]*)"')
 _RETENTION = re.compile(r'retention_in_days\s*=\s*(\d+)')
+_SKIP = re.compile(r'#\s*checkov:skip=([A-Za-z0-9_]+):\s*(\S.*?)\s*$', re.MULTILINE)
+
+# The decision recorded on #1233. The execution log carries the bodies, so it
+# ages out; the access log is the per-request record worth keeping.
+_EXECUTION_RETENTION = 30
+_RETENTION_FLOOR_CHECK = 'CKV_AWS_338'
 
 
 def _read(path):
@@ -83,6 +97,20 @@ def _log_groups(source):
     return found
 
 
+def _skips(source):
+    '''Maps each declared log group's local name to its {check id: reason}.
+
+    Read per block rather than per file: a skip is only effective where it is
+    co-located with the resource it excuses, and one on the wrong group would
+    leave that group unscanned while the intended one still fails the gate.
+    '''
+    found = {}
+    for match in _LOG_GROUP.finditer(source):
+        body = _brace_block(source, match.end() - 1)
+        found[match.group(1)] = dict(_SKIP.findall(body))
+    return found
+
+
 def _access_log_destinations(source):
     '''The local names every access_log_settings block points at.'''
     return [match.group(1) for match in _DESTINATION.finditer(source)]
@@ -95,6 +123,7 @@ class ApiGatewayLogGroupSplitTests(unittest.TestCase):
         self.source = _read(_MAIN_TF)
         self.groups = _log_groups(self.source)
         self.destinations = _access_log_destinations(self.source)
+        self.skips = _skips(self.source)
 
     def test_the_module_is_parsed(self):
         '''A floor: an empty parse would pass every assertion below.'''
@@ -124,6 +153,58 @@ class ApiGatewayLogGroupSplitTests(unittest.TestCase):
         retention question answerable at all.'''
         for local, (_, retention) in self.groups.items():
             self.assertIsNotNone(retention, f'{local} has no retention_in_days')
+
+    def test_the_execution_log_ages_out(self):
+        """The decision on #1233: 30 days on the group that held the bodies."""
+        self.assertEqual(self.groups['api_logs'][1], _EXECUTION_RETENTION)
+
+    def test_the_access_log_outlives_the_execution_log(self):
+        """What separating the groups bought. Raising the execution log back to
+        match would plan clean, keep every other assertion here green, and
+        quietly restore the entanglement the split exists to end."""
+        destination = self.destinations[0]
+        self.assertLess(
+            self.groups['api_logs'][1], self.groups[destination][1],
+            'the execution log is retained at least as long as the access log, so '
+            'the split is declared but unspent (#1233)'
+        )
+
+    def test_the_retention_floor_is_skipped_where_it_is_broken(self):
+        """A retention under a year fails the IaC gate, and the skip has to sit
+        on this group and carry its reason -- one written against the access
+        log would fail the gate anyway and unscan the wrong resource."""
+        self.assertIn(
+            _RETENTION_FLOOR_CHECK, self.skips['api_logs'],
+            f'{_RETENTION_FLOOR_CHECK} is not skipped on the group that breaks its floor'
+        )
+        self.assertGreater(len(self.skips['api_logs'][_RETENTION_FLOOR_CHECK]), 40,
+                           'the skip carries no rationale')
+        for local, (_, retention) in self.groups.items():
+            if retention is not None and retention >= 365:
+                self.assertNotIn(
+                    _RETENTION_FLOOR_CHECK, self.skips[local],
+                    f'{local} meets the one-year floor and does not need the skip'
+                )
+
+    def test_detector_catches_an_unspent_split(self):
+        """The detector self-test for the retention half: two groups at the same
+        retention are the shape this suite exists to reject, and a skip on a
+        group that does not need one must be visible."""
+        unspent = '''
+        resource "aws_cloudwatch_log_group" "api_logs" {
+          #checkov:skip=CKV_AWS_338:a reason long enough to look deliberate but on the wrong group
+          name              = "API-Gateway-Execution-Logs_${id}/${var.stage_name}"
+          retention_in_days = 365
+        }
+        resource "aws_cloudwatch_log_group" "api_access_logs" {
+          name              = "/cabal/apigateway/access/x"
+          retention_in_days = 365
+        }
+        '''
+        groups = _log_groups(unspent)
+        self.assertEqual(groups['api_logs'][1], groups['api_access_logs'][1])
+        self.assertIn(_RETENTION_FLOOR_CHECK, _skips(unspent)['api_logs'])
+        self.assertEqual(_skips(unspent)['api_access_logs'], {})
 
     def test_detector_catches_a_shared_group(self):
         '''The detector self-test: a synthetic config with the pre-fix wiring
