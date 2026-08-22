@@ -4,7 +4,9 @@ import os
 import boto3  # pylint: disable=import-error
 from admin_limits import ( # pylint: disable=import-error
     admin_response_or_none,
+    audit_log,
     parse_json_object_body,
+    rate_limit_response_or_none,
 )
 
 cognito = boto3.client('cognito-idp')
@@ -16,9 +18,14 @@ def handler(event, _context):
     denial = admin_response_or_none(event)
     if denial:
         return denial
+    caller = event['requestContext']['authorizer']['claims']['cognito:username']
+    limited = rate_limit_response_or_none(caller, 'confirm_user')
+    if limited:
+        return limited
     body, invalid = parse_json_object_body(event)
     if invalid:
         return invalid
+    username = ''
     try:
         username = body['username']
         cognito.admin_confirm_sign_up(
@@ -26,10 +33,12 @@ def handler(event, _context):
             Username=username
         )
     except Exception as err:  # pylint: disable=broad-exception-caught
+        audit_log(caller, 'confirm_user', username, 'failure')
         return {
             'statusCode': 500,
             'body': json.dumps({'Error': str(err)})
         }
+    audit_log(caller, 'confirm_user', username, 'success')
     return {
         'statusCode': 200,
         'body': json.dumps({'status': 'confirmed', 'username': username})
