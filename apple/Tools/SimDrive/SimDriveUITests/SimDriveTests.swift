@@ -53,10 +53,18 @@ import XCTest
 ///                              horizontal swipe within an element to
 ///                              reveal its swipe actions
 ///   scroll <query> dir:up|down [amount:<fraction>] [press:<s>]
+///   scroll <query> dir:up|down [press:<s>] until:<query>
 ///                              vertical swipe within an element to bring
 ///                              content into view: `dir:down` reveals what
 ///                              is below it. Anchored in the element, so it
 ///                              works on visionOS where `drag` does not.
+///                              PREFER `until:` — it says what a recipe
+///                              actually wants (sweep until that element is
+///                              on screen, up to the sweep budget), and it
+///                              is unaffected by both of `amount:`'s
+///                              limitations below. It has to come last: the
+///                              rest of the line is its query, so a label
+///                              with spaces works there.
 ///                              `amount:` is a fraction of the window, spent
 ///                              in as many sweeps as the enclosing scroll
 ///                              view can take without a finger straying onto
@@ -65,6 +73,16 @@ import XCTest
 ///                              sized for what is left, so `amount:` buys
 ///                              that much CONTENT movement and the reported
 ///                              travel is always what was measured (#1193).
+///                              Two things it cannot buy (#1208): one sweep
+///                              is the granularity and a synthesized
+///                              press-drag always flicks, so ~270pt of
+///                              content on an 874pt window is the FLOOR and
+///                              every `amount:` under ~0.3 is the same
+///                              command; and the sweep count depends on
+///                              whether <query> survives, because the
+///                              measurement ends when its witness leaves the
+///                              tree. `until:` ends on the destination
+///                              instead, so it does not care.
 ///                              Where a press-drag moves nothing at all —
 ///                              visionOS — it falls back to element swipes
 ///                              (#1191)
@@ -342,15 +360,39 @@ final class SimDriveTests: XCTestCase {
     /// drag-and-drop or text-selection gesture on the touch platforms, not a
     /// scroll.
     private func scroll(_ remainder: String) throws -> String {
-        let query = try selector(from: remainder, verb: "scroll", options: ["dir", "amount", "press"])
-        let args = remainder.split(separator: " ").map(String.init)
+        // `until:` takes the whole rest of the line, so its query may carry
+        // spaces exactly as the anchor's may. That is also why it has to come
+        // last — the option parser splits on spaces and cannot tell a label's
+        // second word from another option.
+        let (head, until) = ScrollCommand.splitUntilClause(remainder)
+        let query = try selector(from: head, verb: "scroll", options: ["dir", "amount", "press"])
+        let args = head.split(separator: " ").map(String.init)
         let direction = value(named: "dir", in: args) ?? "down"
         guard direction == "down" || direction == "up" else {
             throw DriveError("scroll expects dir:up|down, got '\(direction)'")
         }
-        let amount = min(max(value(named: "amount", in: args).flatMap(Double.init) ?? 0.5, 0.05), 0.9)
+        let amountArg = value(named: "amount", in: args)
+        if let until, !until.isEmpty, amountArg != nil {
+            throw DriveError(
+                "scroll takes amount: or until:, not both — amount: says how far to travel, "
+                + "until: says what to travel to"
+            )
+        }
+        if let until, until.isEmpty {
+            throw DriveError("scroll's until: expects a query, e.g. until:text:Appearance")
+        }
+        let amount = min(max(amountArg.flatMap(Double.init) ?? 0.5, 0.05), 0.9)
         let press = value(named: "press", in: args).flatMap(Double.init) ?? 0.05
         let target = try element(for: query)
+        if let until {
+            return try scrollUntil(
+                query: query,
+                target: target,
+                until: until,
+                goingDown: direction == "down",
+                press: press
+            )
+        }
         // Travel is a fraction of the WINDOW, not of the anchor element: the
         // natural thing to hand this verb is a row or a section header, and
         // a drag scaled to a 20-point label moves nothing (measured on
@@ -448,6 +490,122 @@ final class SimDriveTests: XCTestCase {
             ? " of \(Int(requested))pt requested"
             : ""
         return "scrolled \(query) \(direction) (\(Int(measured))pt\(shortfall)\(sweepNote), press \(press)s)"
+    }
+
+    /// `scroll … until:<query>`: sweep until the named element is on screen,
+    /// bounded by the same sweep budget (#1208).
+    ///
+    /// This is what a recorded recipe means. `amount:` cannot express it, for
+    /// two reasons that are both about the gesture rather than the
+    /// arithmetic. A synthesized press-drag always flicks, so one sweep moves
+    /// roughly 270 points of content on an 874-point window whatever it was
+    /// asked for, and every `amount:` below about 0.3 is the same command
+    /// with different arithmetic in front of it. And the `amount:` path ends
+    /// its measurement when its witness leaves the tree — which is the usual
+    /// case, because the natural thing to name is the thing you want gone —
+    /// so the same `amount:0.5` spent one sweep or two depending on a choice
+    /// the caller made for unrelated reasons.
+    ///
+    /// Here the anchor is only the gesture's origin and its movement
+    /// detector; the *stop* condition is the destination, so the anchor
+    /// scrolling away is no longer an ending. When the anchor does leave the
+    /// tree there is nothing left to measure movement with, so end-of-content
+    /// can no longer be detected and the budget is what stops a list that has
+    /// run out — the answer says so.
+    private func scrollUntil(
+        query: String,
+        target: XCUIElement,
+        until: String,
+        goingDown: Bool,
+        press: Double
+    ) throws -> String {
+        let destination = try element(for: until, requireExistence: false)
+        let container = scrollContainer(enclosing: target)
+        let gestureAnchor = container ?? target
+        let bounds = container?.frame ?? targetApp().frame
+        // One sweep, sized so both endpoints stay in the middle fifth of the
+        // container — the #1188 property, which nothing here may relax. There
+        // is no travel to divide up, so every sweep is the full safe span.
+        let span = max(bounds.height * ScrollGesture.sweepSpanFraction, 1)
+        let arrived = { ScrollDestination.isOnScreen(
+            element: self.onScreenFrame(of: destination),
+            container: bounds
+        ) }
+
+        var sweeps = 0
+        var usingSwipe = false
+        var witnessGone = false
+        var stalled = false
+        while !arrived(), sweeps < ScrollGesture.maxSweeps {
+            guard gestureAnchor.exists else { break }
+            let frame = gestureAnchor.frame
+            guard !frame.isEmpty else { break }
+            let before = position(of: target)
+            if usingSwipe {
+                // #1191: a press-drag moves nothing on visionOS, and the only
+                // way to know is to have tried one. Once it has, stay swiped.
+                guard gestureAnchor.isHittable else { break }
+                if goingDown { gestureAnchor.swipeUp() } else { gestureAnchor.swipeDown() }
+            } else {
+                let (pressOffset, releaseOffset) = ScrollGesture.offsets(
+                    travel: span,
+                    goingDown: goingDown
+                )
+                let centre = gestureAnchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                let toCentre = bounds.midY - frame.midY
+                let start = centre.withOffset(CGVector(dx: 0, dy: toCentre + pressOffset))
+                let end = centre.withOffset(CGVector(dx: 0, dy: toCentre + releaseOffset))
+                start.press(
+                    forDuration: press,
+                    thenDragTo: end,
+                    withVelocity: .default,
+                    thenHoldForDuration: 0
+                )
+            }
+            sweeps += 1
+            let after = position(of: target)
+            if before != nil, after == nil { witnessGone = true }
+            // With the witness gone there is nothing left to read movement
+            // off, so every remaining sweep is taken on faith — which is the
+            // trade `until:` makes deliberately, and the answer names it.
+            guard !witnessGone else { continue }
+            guard !ScrollProgress.moved(from: before, to: after) else { continue }
+            // Nothing moved. Once from a press-drag means try swipes instead;
+            // once from a swipe means the content is not going anywhere.
+            if usingSwipe { stalled = true; break }
+            usingSwipe = true
+        }
+
+        let note = usingSwipe ? ", drag fallback — a press-drag moved nothing here" : ""
+        let plural = sweeps == 1 ? "" : "s"
+        guard arrived() else {
+            let why: String
+            if stalled {
+                why = "the content stopped moving"
+            } else if sweeps >= ScrollGesture.maxSweeps {
+                why = "the \(ScrollGesture.maxSweeps)-sweep budget ran out"
+                    + (witnessGone ? ", and \(query) had left the view, so end-of-content was undetectable" : "")
+            } else {
+                why = "there was nothing left to sweep from — \(query) left the view "
+                    + "and had no enclosing scroll view to anchor on"
+            }
+            return "scrolled \(query) \(goingDown ? "down" : "up") "
+                + "('\(until)' not on screen after \(sweeps) sweep\(plural)\(note); \(why), press \(press)s)"
+        }
+        guard sweeps > 0 else {
+            return "scrolled \(query) \(goingDown ? "down" : "up") "
+                + "('\(until)' was already on screen, 0 sweeps)"
+        }
+        return "scrolled \(query) \(goingDown ? "down" : "up") "
+            + "('\(until)' on screen after \(sweeps) sweep\(plural)\(note), press \(press)s)"
+    }
+
+    /// An element's frame, or nil once it has left the tree — reading `frame`
+    /// off one that no longer matches fails the whole XCUITest (#1188).
+    private func onScreenFrame(of element: XCUIElement) -> CGRect? {
+        guard element.exists else { return nil }
+        let frame = element.frame
+        return frame.isEmpty ? nil : frame
     }
 
     /// `XCUIElement.swipeUp()`/`swipeDown()`, for the platforms where a
