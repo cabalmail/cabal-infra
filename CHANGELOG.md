@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2026-08-22
+
+### Changed
+- Android: **Message rows show the delivered-to address.** The first line
+  of each message-list row now reads "sender → address", matching the
+  Apple clients: the dimmed destination is the address the message was
+  delivered to — preferring a recipient on one of the deployment's mail
+  domains (subdomain-aware), falling back to the first To/Cc entry, and
+  dropping the arrow when there are no recipients.
+- **Release dashboard holds Promote while merged fixes await tester
+  sign-off.** When an open tester/fixer-cycle issue has a claimed fix
+  (a `fixer/N-…` branch, a closing reference, or an "Addresses #N"-style
+  mention) merged on stage but not yet released, the Promote buttons are
+  disabled and a banner lists the pending issues with their PRs — closing
+  the issue, which the retest pass does, releases the hold. Bare `#N`
+  context mentions deliberately don't count, and released-vs-pending is
+  decided per merge commit against main, so an already-shipped fix never
+  re-blocks.
+
+### Fixed
+- Apple: **Picking a folder during a search now goes there.** On iPad and macOS, choosing a mailbox in the sidebar while search results were showing marked the row selected and left the message column on the results, still titled "Search" — and re-choosing the mailbox that was already selected did not even dismiss the folder panel. A folder pick now ends the search the way the search field's own clear button does, and lands the column on that mailbox.
+- Apple: **The watch's confirmation dialogs offer a labelled way out too.** "Revoke <address>?" and "Suspend <address>?" on the watch each came up showing one labelled control — the irreversible one — because watchOS drops a cancel-role button exactly as iPhone and visionOS do. Both now take the back-out role from the same shared rule the other nine dialogs use, so a **Cancel** is drawn beneath the destructive button.
+
+### Security
+- **Every admin mutation now carries the per-caller ceiling and the audit line.** `confirm_user`, `assign_address`, `unassign_address` and `repair_dns_record` ran the admin-group guard and neither of the other two controls their five siblings have had since 0.10.x, so confirming an account, rewriting a `cabal-addresses` row and UPSERTing a Route 53 record were each unbounded per caller and left no greppable `AUDIT` record of who did what. All four now emit an audit line on success and on failure and are bounded at the same 30-actions-per-minute ceiling. Read-only admin endpoints are unchanged, and are now named individually in the test that pins the rule rather than left to be inferred.
+- **Per-method API Gateway overrides no longer opt out of the logging policy.** API Gateway resolves method settings by longest match rather than by merge, so the per-method entries the gateway writes for caching replaced the `*/*` defaults wholesale instead of inheriting them. The `*/*` entry read correctly as `ERROR` with request/response tracing off, while the overrides that actually governed each call did not: 29 of 51 methods in prod and 35 of 51 in stage were running at `INFO` with `dataTraceEnabled`, writing address and envelope metadata into an execution log group kept for a year. The observability policy is now stated once and restated by every override, so no method can silently fall back to the API's own defaults.
+
 ## [1.3.4] - 2026-08-22
 
 ### Added
