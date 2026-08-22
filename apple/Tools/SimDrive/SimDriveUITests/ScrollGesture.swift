@@ -194,3 +194,63 @@ enum ScrollFeedback {
         return min(max(wanted, minimumSweepTravel), cap)
     }
 }
+
+/// Whether the element a `scroll … until:<query>` is aiming at has arrived
+/// on screen (#1208).
+///
+/// `exists` is not the question. An unrealized SwiftUI row does not exist,
+/// but a row that has scrolled *out* often still does, reporting a frame in
+/// content space that lies outside its container's clip bounds — so an
+/// existence check both under- and over-reports. What a recipe means by "on
+/// screen" is "the next command can address it", and the next command is
+/// usually a tap, so the rule is geometric: the element has to be inside the
+/// scrolling container, not merely known to it.
+///
+/// Full containment rather than any overlap, because a row half-drawn at the
+/// fold is exactly the one whose tap lands on whatever floats over the edge —
+/// measured on visionOS, where the bulk bar covers the bottom of the list
+/// column and a checkbox the tree places there is behind it. An element
+/// taller than its own container can never be fully contained, so for that
+/// case the bar is the most it could ever show.
+enum ScrollDestination {
+
+    /// Slack for the sub-point arithmetic AX frames come back with.
+    static let tolerance: CGFloat = 0.5
+
+    static func isOnScreen(element: CGRect?, container: CGRect) -> Bool {
+        guard let element, !element.isEmpty, !container.isEmpty else { return false }
+        let overlap = element.intersection(container)
+        guard !overlap.isNull, !overlap.isEmpty else { return false }
+        let needed = min(element.height, container.height)
+        return overlap.height >= needed - tolerance
+    }
+}
+
+/// Splitting `scroll`'s `until:` clause off the rest of the command (#1208).
+///
+/// A pure function because the rule is fiddlier than it looks and the REPL is
+/// an expensive place to discover that. `until:` takes everything after it
+/// verbatim, so its query may contain spaces the way the anchor's already
+/// may; the option parser everywhere else splits on spaces and could not tell
+/// `text:All folders` from a stray token. The cost is that `until:` has to be
+/// the last thing on the line, which the usage text says.
+enum ScrollCommand {
+
+    /// The command with the clause removed, and the clause's query.
+    ///
+    /// `nil` means there was no `until:` at all — distinct from an empty
+    /// query, which is a caller error worth naming rather than a default.
+    static func splitUntilClause(_ remainder: String) -> (head: String, until: String?) {
+        guard let range = remainder.range(of: "until:") else { return (remainder, nil) }
+        // Only as a whole token: a query of `text:until:x` is far-fetched, but
+        // matching mid-word would silently mangle it.
+        let precedingIsBoundary = range.lowerBound == remainder.startIndex
+            || remainder[remainder.index(before: range.lowerBound)] == " "
+        guard precedingIsBoundary else { return (remainder, nil) }
+        let head = String(remainder[..<range.lowerBound])
+            .trimmingCharacters(in: .whitespaces)
+        let until = String(remainder[range.upperBound...])
+            .trimmingCharacters(in: .whitespaces)
+        return (head, until)
+    }
+}
