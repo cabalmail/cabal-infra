@@ -49,6 +49,44 @@ class EnvelopeFormattingTest {
     }
 
     @Test
+    fun `delivered-to prefers an owned-domain recipient, subdomain-aware`() {
+        val domains = listOf("cabalmail.com")
+        // The owned address wins even when listed after an outside one.
+        assertEquals(
+            "xkcd@store.cabalmail.com",
+            Envelope(
+                id = 1,
+                to = listOf("Other <other@example.com>", "\"Me\" <xkcd@store.cabalmail.com>"),
+            ).deliveredToAddress(domains),
+        )
+        // Cc is searched when To has no owned address.
+        assertEquals(
+            "me@shop.cabalmail.com",
+            Envelope(
+                id = 1,
+                to = listOf("other@example.com"),
+                cc = listOf("me@shop.cabalmail.com"),
+            ).deliveredToAddress(domains),
+        )
+        // Subdomain matching is anchored: a lookalike domain is not owned.
+        assertEquals(
+            "me@a.cabalmail.com",
+            Envelope(
+                id = 1,
+                to = listOf("x@evilcabalmail.com", "me@a.cabalmail.com"),
+            ).deliveredToAddress(domains),
+        )
+        // No owned match falls back to the first recipient.
+        assertEquals(
+            "other@example.com",
+            Envelope(id = 1, to = listOf("Other <other@example.com>")).deliveredToAddress(domains),
+        )
+        // No recipients (e.g. a draft) yields null, dropping the arrow.
+        assertNull(Envelope(id = 1).deliveredToAddress(domains))
+        assertNull(Envelope(id = 1, to = listOf("undisclosed-recipients")).deliveredToAddress(domains))
+    }
+
+    @Test
     fun `auth failure warns only on explicit failure verdicts`() {
         assertTrue(
             Envelope(id = 1, authResults = AuthResults(spf = "pass", dmarc = "fail")).hasAuthFailure,

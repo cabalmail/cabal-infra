@@ -169,37 +169,98 @@ struct MailRootView: View {
         )
     }
 
+    /// The sidebar's selection, with the search dismissal on the write
+    /// (#1217).
+    ///
+    /// It rides the *binding* rather than `onChange(of: selectedFolder)`
+    /// because `onChange` only sees a value that changed. Re-picking the
+    /// folder that was already selected when the search started — the
+    /// report's second, feedback-free variant, where not even the panel
+    /// dismisses — writes the same `Folder` back, which a binding setter sees
+    /// and an `onChange` does not.
+    private var sidebarSelection: Binding<Folder?> {
+        Binding(
+            get: { selectedFolder },
+            set: { picked in
+                if ContentColumnPolicy.pickEndsSearch(
+                    isSearching: isSearching,
+                    picked: picked?.path
+                ) {
+                    endGlobalSearch()
+                }
+                // Same reason the dismissal is here: re-picking the selected
+                // folder leaves the panel up otherwise, which is the half of
+                // #1217 where the tap produced no feedback at all.
+                if picked != nil { dismissFolderPanel() }
+                selectedFolder = picked
+            }
+        )
+    }
+
+    /// Slide the iPad-regular folder panel away after a pick, so the message
+    /// list is fully interactive again. One routine, two callers: the sidebar
+    /// binding (a user pick) and the folder-change handler (a programmatic
+    /// one). No-op on compact — the panel is never presented there — and on
+    /// launches, where INBOX auto-selects with the panel already closed.
+    private func dismissFolderPanel() {
+        #if os(iOS)
+        withAnimation(folderPanelAnimation) { folderPanelPresented = false }
+        #endif
+    }
+
+    /// End the global search exactly the way the search field's own × does
+    /// (`GlobalSearchField`): zero the query and drop focus, and let the
+    /// mounted search list's `onChange(of: searchQuery)` call `clearSearch()`
+    /// from there. One routine rather than a second copy of the rule — the ×
+    /// path already lands the user back on a folder, which is what the folder
+    /// pick wanted all along.
+    private func endGlobalSearch() {
+        searchModel?.searchQuery = ""
+        searchFieldFocused = false
+    }
+
     /// Content column: global search results while the search field is
     /// engaged, otherwise the selected folder's message list (or an empty-state
     /// prompt). Extracted so `body` can hang the Settings gear on its toolbar.
     @ViewBuilder
     private var contentColumn: some View {
-        if isSearching, let searchModel {
-            // Global search owns the content column while the search field
-            // is engaged. Stable `.id` so it isn't torn down per keystroke;
-            // the detail column still reads the selected message, against
-            // the result's true mailbox via `crossFolderDetail`.
-            MessageListView(
-                scope: .search,
-                injectedSearchModel: searchModel,
-                selection: $selectedEnvelope,
-                onSearchResultSelected: { sourceFolderPath in
-                    crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                },
-                onSelectionCountChanged: { listSelectionCount = $0 }
-            )
-            .id("search")
-        } else if let selectedFolder {
-            MessageListView(
-                scope: .folder(selectedFolder),
-                selection: $selectedEnvelope,
-                onSearchResultSelected: { sourceFolderPath in
-                    crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                },
-                onSelectionCountChanged: { listSelectionCount = $0 }
-            )
-            .id(selectedFolder.path)
-        } else {
+        // The precedence itself lives in `ContentColumnPolicy` so the rule a
+        // folder pick has to satisfy (#1217) is stated in the same place as
+        // the rule it has to satisfy it against.
+        switch ContentColumnPolicy.mode(
+            isSearching: isSearching,
+            selectedFolderPath: selectedFolder?.path
+        ) {
+        case .search:
+            if let searchModel {
+                // Global search owns the content column while the search field
+                // is engaged. Stable `.id` so it isn't torn down per keystroke;
+                // the detail column still reads the selected message, against
+                // the result's true mailbox via `crossFolderDetail`.
+                MessageListView(
+                    scope: .search,
+                    injectedSearchModel: searchModel,
+                    selection: $selectedEnvelope,
+                    onSearchResultSelected: { sourceFolderPath in
+                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
+                    },
+                    onSelectionCountChanged: { listSelectionCount = $0 }
+                )
+                .id("search")
+            }
+        case .folder:
+            if let selectedFolder {
+                MessageListView(
+                    scope: .folder(selectedFolder),
+                    selection: $selectedEnvelope,
+                    onSearchResultSelected: { sourceFolderPath in
+                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
+                    },
+                    onSelectionCountChanged: { listSelectionCount = $0 }
+                )
+                .id(selectedFolder.path)
+            }
+        case .empty:
             ContentUnavailableView(
                 "Select a folder",
                 systemImage: "sidebar.left",
@@ -284,15 +345,11 @@ struct MailRootView: View {
             // Picking a folder shows its list on compact (it's pushed natively
             // from the sidebar List, but keep the binding in step).
             compactColumn = folder == nil ? .sidebar : .content
-            #if os(iOS)
-            // On iPad-regular, slide the folder panel away after a pick so the
-            // message list is fully interactive again. No-op on compact (the
-            // panel is never presented there) and on launches (INBOX
-            // auto-select happens with the panel already closed).
-            if folder != nil {
-                withAnimation(folderPanelAnimation) { folderPanelPresented = false }
-            }
-            #endif
+            // Programmatic folder writes (Spotlight routing, a deep link, the
+            // cursor restore) don't go through `sidebarSelection`, so they
+            // still slide the panel away from here. A sidebar pick has
+            // already done it and this is a no-op for it.
+            if folder != nil { dismissFolderPanel() }
             // Record the folder move for the cross-client cursor (highest-
             // priority field). Fires on user navigation and on restore alike;
             // the coordinator debounces and de-dupes writes.
@@ -600,7 +657,7 @@ extension MailRootView {
             // view's own header (`SidebarListHeaderRow`). Compact lets the list
             // keep its own top-of-sidebar `.searchable` and toolbar buttons.
             FolderListView(
-                selection: $selectedFolder,
+                selection: sidebarSelection,
                 externalFilter: isWideSidebar ? $folderListFilter : nil,
                 onFoldersLoaded: { folders in
                     // First load: swap the fetched INBOX into the launch

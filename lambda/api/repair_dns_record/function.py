@@ -2,7 +2,11 @@
 import json
 import os
 import boto3  # pylint: disable=import-error
-from admin_limits import admin_response_or_none  # pylint: disable=import-error
+from admin_limits import ( # pylint: disable=import-error
+    admin_response_or_none,
+    audit_log,
+    rate_limit_response_or_none,
+)
 from helper import ( # pylint: disable=import-error
     assert_zone_owns_apex,
     find_managed_apex,
@@ -72,6 +76,10 @@ def handler(event, _context):
     denial = admin_response_or_none(event)
     if denial:
         return denial
+    caller = event['requestContext']['authorizer']['claims']['cognito:username']
+    limited = rate_limit_response_or_none(caller, 'repair_dns_record')
+    if limited:
+        return limited
     parsed, err = validate(event)
     if err:
         return err
@@ -82,7 +90,9 @@ def handler(event, _context):
         upsert_record(zone_id, name, value, rtype)
     except Exception as ex:  # pylint: disable=broad-exception-caught
         print(f'Failed to upsert {rtype} {name}: {ex}')
+        audit_log(caller, 'repair_dns_record', f'{domain}:{record_type}', 'failure')
         return _err(500, str(ex))
+    audit_log(caller, 'repair_dns_record', f'{domain}:{record_type}', 'success')
     return {
         'statusCode': 200,
         'body': json.dumps({

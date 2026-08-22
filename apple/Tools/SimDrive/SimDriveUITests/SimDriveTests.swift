@@ -40,9 +40,23 @@ import XCTest
 ///                              host-side with `simctl pbcopy`; the ONLY
 ///                              way into a SecureField, and keeps secrets
 ///                              out of command files and logs)
-///   key <char> [mods...]       one hardware keystroke with modifiers
+///   key <char|name> [mods...]  one hardware keystroke with modifiers
 ///                              (cmd, shift, alt, ctrl), e.g.
-///                              `key v cmd shift` for Cmd-Shift-V
+///                              `key v cmd shift` for Cmd-Shift-V. A key
+///                              with no character — `key return`, `tab`,
+///                              `escape`, `space`, `delete`, `up`/`down`/
+///                              `left`/`right`, `home`/`end`, `pageup`/
+///                              `pagedown` — goes by NAME: a bare control
+///                              character cannot survive the exchange
+///                              file's whitespace trim (#1222). `\n` and
+///                              `\e` are accepted as aliases for `return`
+///                              and `escape`, since that is what a shell
+///                              delivers. An unknown name is an ordinary
+///                              error, not a dead REPL. A named key takes
+///                              no modifiers: `typeKey` is inert for keys
+///                              with no character in the simulator, so
+///                              those go through `typeText`, which carries
+///                              no modifier flags
 ///   orient portrait|left|right|upsidedown
 ///   drag from:<x>,<y> to:<x>,<y> [press:<s>] [hold:<s>]
 ///                              press, drag, then HOLD before release —
@@ -81,7 +95,9 @@ import XCTest
 ///                              command; and the sweep count depends on
 ///                              whether <query> survives, because the
 ///                              measurement ends when its witness leaves the
-///                              tree. `until:` ends on the destination
+///                              tree — the answer then says the distance is
+///                              not measurable rather than printing a number
+///                              (#1216). `until:` ends on the destination
 ///                              instead, so it does not care.
 ///                              Where a press-drag moves nothing at all —
 ///                              visionOS — it falls back to element swipes
@@ -260,8 +276,17 @@ final class SimDriveTests: XCTestCase {
             targetApp().typeKey("v", modifierFlags: .command)
             return "pasted"
         case "key":
-            guard let keyChar = args.first else {
-                throw DriveError("key expects: key <char> [cmd|shift|alt|ctrl ...]")
+            guard let token = args.first else {
+                throw DriveError("key expects: key <char|name> [cmd|shift|alt|ctrl ...]")
+            }
+            // Resolve BEFORE calling XCTest: `typeKey` takes one character and
+            // raises an NSInvalidArgumentException — a test failure, not an
+            // error — on anything longer, which kills the REPL (#1222).
+            guard let stroke = KeyStrokeTable.stroke(for: token) else {
+                throw DriveError(
+                    "key: '\(token)' is neither a single character nor a known key name "
+                        + "(\(KeyStrokeTable.helpNames))"
+                )
             }
             var flags: XCUIElement.KeyModifierFlags = []
             for mod in args.dropFirst() {
@@ -273,8 +298,27 @@ final class SimDriveTests: XCTestCase {
                 default: throw DriveError("unknown modifier '\(mod)'")
                 }
             }
-            targetApp().typeKey(keyChar, modifierFlags: flags)
-            return "keyed \(([keyChar] + args.dropFirst()).joined(separator: "+"))"
+            switch stroke {
+            case .character(let char):
+                targetApp().typeKey(char, modifierFlags: flags)
+            case .named(let key):
+                // `typeKey` is INERT for a key with no character on the
+                // simulator, measured on iPadOS 26.5 (#1222): `return`,
+                // `enter` and `delete` all report success and do nothing,
+                // while `key a` through the same call lands. `typeText` with
+                // the key's own character works — but it carries no modifier
+                // flags, so a modified named key has no working mechanism and
+                // is refused rather than silently doing nothing.
+                guard flags.isEmpty else {
+                    throw DriveError(
+                        "key: '\(token)' takes no modifiers — typeKey is inert for keys with "
+                            + "no character in the simulator (#1222), so the modified form "
+                            + "would silently do nothing"
+                    )
+                }
+                targetApp().typeText(key.rawValue)
+            }
+            return "keyed \(([token] + args.dropFirst()).joined(separator: "+"))"
         case "orient":
             try orient(args.first ?? "")
             return "oriented \(args.first ?? "")"
@@ -631,33 +675,35 @@ final class SimDriveTests: XCTestCase {
             return "scrolled \(query) \(goingDown ? "down" : "up") (0pt — the drag moved nothing "
                 + "and there is no on-screen container to swipe instead)"
         }
-        var travelled: CGFloat = 0
-        var swipes = 0
+        var result = SwipeFallbackResult(measured: 0, swipes: 0, witness: .tracked)
         var lastStep = ScrollProgress.stillThreshold
         while ScrollProgress.shouldSwipeAgain(
-            travelled: travelled,
+            travelled: result.measured,
             requested: requested,
-            swipes: swipes,
+            swipes: result.swipes,
             lastStep: lastStep
         ) {
             let before = position(of: target)
             if goingDown { anchor.swipeUp() } else { anchor.swipeDown() }
-            swipes += 1
+            result.swipes += 1
             let after = position(of: target)
-            guard let before else { break }
+            guard let before else {
+                // Nothing to measure against: the witness was already gone
+                // when this sweep started.
+                result.witness = .neverSeen
+                break
+            }
             guard let after else {
                 // The witness scrolled out of the tree, so the distance is no
-                // longer measurable — count the request as met and stop.
-                travelled = max(travelled, requested)
+                // longer measurable. Stopping here is right; saying the
+                // request was met is not (#1216).
+                result.witness = .leftView
                 break
             }
             lastStep = abs(after - before)
-            travelled += lastStep
+            result.measured += lastStep
         }
-        let plural = swipes == 1 ? "" : "s"
-        return "scrolled \(query) \(goingDown ? "down" : "up") "
-            + "(\(Int(travelled))pt in \(swipes) swipe\(plural), drag fallback — "
-            + "a press-drag moved nothing here)"
+        return result.summary(query: query, goingDown: goingDown)
     }
 
     /// The anchor's vertical position, or nil once it has left the tree.
