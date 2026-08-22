@@ -212,10 +212,14 @@ final class ScrollProgressTests: XCTestCase {
 /// somewhere else, failing on the *next* command rather than on the scroll.
 ///
 /// The verb now measures each sweep against the element the caller named and
-/// sizes the next one for what is left at that rate — closing the loop the
-/// swipe fallback already closed, and whose doc comment already claimed the
-/// contract for the whole verb ("reports what it measured rather than what it
-/// planned").
+/// sizes the next one for what is left at that rate — honouring the contract
+/// its own doc comment already claimed for the whole verb ("reports what it
+/// measured rather than what it planned").
+///
+/// This class originally said the swipe fallback had "already closed" that
+/// loop. It had not: it measured every sweep except the last one, and the
+/// last one is where the number came from (#1216). `SwipeFallbackTests`
+/// below covers the other half.
 final class ScrollFeedbackTests: XCTestCase {
 
     
@@ -417,5 +421,87 @@ final class ScrollCommandTests: XCTestCase {
         let split = ScrollCommand.splitUntilClause("until:text:Appearance")
         XCTAssertEqual(split.head, "")
         XCTAssertEqual(split.until, "text:Appearance")
+    }
+}
+
+/// Regression cover for #1216: the swipe fallback printed the travel it was
+/// *asked for* as though it were the travel it *measured*, whenever the
+/// witness left the accessibility tree.
+///
+/// The numbers are the ones measured on Apple Vision Pro `E46F153F…`,
+/// visionOS 26.5, window `1280x720`, from the Settings list with
+/// `text:Reading` as the anchor: `amount:0.05` (a 36-point request) and
+/// `amount:0.2` (144) both printed their request and both actually moved the
+/// content 527.5 points — the swipe step is a fixed quantum, so the printed
+/// figure and the displacement were unrelated. The control that scopes it to
+/// the vanished-witness branch is an anchor that survives: `id:message.row.191`
+/// in the INBOX list printed 166pt and really did move 166.
+final class SwipeFallbackTests: XCTestCase {
+
+    /// The visionOS arm as it should now read: two sweeps happened, the
+    /// witness was lost, so the answer names the anchor instead of a number.
+    func testALostWitnessIsNotReportedAsATravel() {
+        let result = SwipeFallbackResult(measured: 0, swipes: 1, witness: .leftView)
+        let summary = result.summary(query: "text:Reading", goingDown: true)
+        XCTAssertFalse(summary.contains("pt in"), "a lost witness has no measured travel to report")
+        XCTAssertTrue(summary.contains("not measurable"))
+        XCTAssertTrue(summary.contains("text:Reading"), "the answer names the anchor to change")
+    }
+
+    /// Neither request may appear in the answer. This is the assertion the
+    /// pre-#1216 code fails: it printed 36 for one and 144 for the other,
+    /// from an identical starting state that delivered 527.5 both times.
+    func testNeitherVisionOSRequestSurvivesIntoTheAnswer() {
+        let result = SwipeFallbackResult(measured: 0, swipes: 1, witness: .leftView)
+        let summary = result.summary(query: "text:Reading", goingDown: true)
+        for request in [36, 144, 527] {
+            XCTAssertFalse(
+                summary.contains("\(request)pt"),
+                "the request must not be printed as a measurement"
+            )
+        }
+    }
+
+    /// The sweeps *before* the witness vanished were measured, and saying so
+    /// is worth more than saying nothing — but it is a floor, not the total.
+    func testMeasuredSweepsBeforeTheLossAreReportedAsAFloor() {
+        let result = SwipeFallbackResult(measured: 166, swipes: 2, witness: .leftView)
+        let summary = result.summary(query: "text:Reading", goingDown: true)
+        XCTAssertTrue(summary.contains("at least 166pt"))
+        XCTAssertTrue(summary.contains("not measurable"))
+    }
+
+    /// The surviving-anchor control, which must keep reading exactly as it
+    /// did: this is the path the verb answers honestly on today.
+    func testASurvivingWitnessStillReportsItsMeasurement() {
+        let result = SwipeFallbackResult(measured: 166, swipes: 1, witness: .tracked)
+        XCTAssertEqual(
+            result.summary(query: "id:message.row.191", goingDown: true),
+            "scrolled id:message.row.191 down (166pt in 1 swipe, drag fallback — "
+                + "a press-drag moved nothing here)"
+        )
+    }
+
+    /// A witness that was never in the tree measured nothing at all, which is
+    /// a different sentence from having lost one partway.
+    func testAWitnessThatWasNeverThereSaysSo() {
+        let result = SwipeFallbackResult(measured: 0, swipes: 1, witness: .neverSeen)
+        let summary = result.summary(query: "text:Reading", goingDown: true)
+        XCTAssertTrue(summary.contains("not on screen to measure against"))
+        XCTAssertFalse(summary.contains("0pt"), "no measurement is not a measurement of zero")
+    }
+
+    /// Direction and sweep count are still reported, on every branch: the
+    /// caller needs to know the gesture happened even when its distance is
+    /// unknown.
+    func testEveryBranchStillReportsDirectionAndSweepCount() {
+        let witnesses: [SwipeWitness] = [.tracked, .leftView, .neverSeen]
+        for witness in witnesses {
+            let result = SwipeFallbackResult(measured: 12, swipes: 3, witness: witness)
+            let summary = result.summary(query: "text:Reading", goingDown: false)
+            XCTAssertTrue(summary.contains("scrolled text:Reading up"), "\(witness)")
+            XCTAssertTrue(summary.contains("3 swipes"), "\(witness)")
+            XCTAssertTrue(summary.contains("drag fallback"), "\(witness)")
+        }
     }
 }

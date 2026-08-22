@@ -81,7 +81,9 @@ import XCTest
 ///                              command; and the sweep count depends on
 ///                              whether <query> survives, because the
 ///                              measurement ends when its witness leaves the
-///                              tree. `until:` ends on the destination
+///                              tree — the answer then says the distance is
+///                              not measurable rather than printing a number
+///                              (#1216). `until:` ends on the destination
 ///                              instead, so it does not care.
 ///                              Where a press-drag moves nothing at all —
 ///                              visionOS — it falls back to element swipes
@@ -631,33 +633,35 @@ final class SimDriveTests: XCTestCase {
             return "scrolled \(query) \(goingDown ? "down" : "up") (0pt — the drag moved nothing "
                 + "and there is no on-screen container to swipe instead)"
         }
-        var travelled: CGFloat = 0
-        var swipes = 0
+        var result = SwipeFallbackResult(measured: 0, swipes: 0, witness: .tracked)
         var lastStep = ScrollProgress.stillThreshold
         while ScrollProgress.shouldSwipeAgain(
-            travelled: travelled,
+            travelled: result.measured,
             requested: requested,
-            swipes: swipes,
+            swipes: result.swipes,
             lastStep: lastStep
         ) {
             let before = position(of: target)
             if goingDown { anchor.swipeUp() } else { anchor.swipeDown() }
-            swipes += 1
+            result.swipes += 1
             let after = position(of: target)
-            guard let before else { break }
+            guard let before else {
+                // Nothing to measure against: the witness was already gone
+                // when this sweep started.
+                result.witness = .neverSeen
+                break
+            }
             guard let after else {
                 // The witness scrolled out of the tree, so the distance is no
-                // longer measurable — count the request as met and stop.
-                travelled = max(travelled, requested)
+                // longer measurable. Stopping here is right; saying the
+                // request was met is not (#1216).
+                result.witness = .leftView
                 break
             }
             lastStep = abs(after - before)
-            travelled += lastStep
+            result.measured += lastStep
         }
-        let plural = swipes == 1 ? "" : "s"
-        return "scrolled \(query) \(goingDown ? "down" : "up") "
-            + "(\(Int(travelled))pt in \(swipes) swipe\(plural), drag fallback — "
-            + "a press-drag moved nothing here)"
+        return result.summary(query: query, goingDown: goingDown)
     }
 
     /// The anchor's vertical position, or nil once it has left the tree.
