@@ -265,11 +265,7 @@ final class SimDriveTests: XCTestCase {
             }
             return "tapped \(query)\(hostNote(for: query))"
         case "type":
-            // `typeText` with nothing focused raises an XCTest failure, which
-            // takes the whole loop down with it (#902) — refuse first.
-            guard focusedElement() != nil else {
-                throw DriveError("no keyboard focus — tap a text field before typing")
-            }
+            try requireKeyboardFocus()
             targetApp().typeText(remainder)
             return "typed \(remainder.count) characters"
         case "cmdv":
@@ -297,6 +293,12 @@ final class SimDriveTests: XCTestCase {
                 case "ctrl": flags.insert(.control)
                 default: throw DriveError("unknown modifier '\(mod)'")
                 }
+            }
+            // `typeText` is fatal to the loop with nothing focused and
+            // `typeKey` is not, so the stroke decides whether the guard runs
+            // (#1230).
+            if stroke.requiresKeyboardFocus {
+                try requireKeyboardFocus()
             }
             switch stroke {
             case .character(let char):
@@ -779,6 +781,20 @@ final class SimDriveTests: XCTestCase {
             throw DriveError(
                 "target app \(targetBundleId) is not running — 'launch' it first"
             )
+        }
+    }
+
+    /// The rule every `typeText` call has to follow, in one place.
+    ///
+    /// `typeText` with nothing focused raises an XCTest *failure* rather than
+    /// returning an error, so it unwinds `testDriveLoop` and every command
+    /// queued afterwards answers `runner is gone`. `type` has refused first
+    /// since #902; `key`'s named branch was a second `typeText` call site
+    /// added in #1224 without the guard, and cost the same restart (#1230).
+    /// Both verbs call this rather than carrying a copy of the rule.
+    private func requireKeyboardFocus() throws {
+        guard focusedElement() != nil else {
+            throw DriveError("no keyboard focus — tap a text field before typing")
         }
     }
 

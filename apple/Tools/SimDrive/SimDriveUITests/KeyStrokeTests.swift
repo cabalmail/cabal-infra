@@ -68,6 +68,54 @@ final class KeyStrokeTests: XCTestCase {
         }
     }
 
+    // MARK: - Only the mechanism that needs focus asks for it (#1230)
+
+    /// The defect. A named key can only be delivered by `typeText`, which is
+    /// fatal to the REPL with nothing focused, so every stroke that resolves
+    /// to a name has to declare it needs focus first.
+    func testEveryNamedStrokeRequiresKeyboardFocus() {
+        for (name, _) in KeyStrokeTable.names {
+            XCTAssertEqual(
+                KeyStrokeTable.stroke(for: name)?.requiresKeyboardFocus, true,
+                "'\(name)' goes out through typeText and must be guarded"
+            )
+        }
+        for (alias, _) in KeyStrokeTable.escapeAliases {
+            XCTAssertEqual(
+                KeyStrokeTable.stroke(for: alias)?.requiresKeyboardFocus, true,
+                "'\(alias)' goes out through typeText and must be guarded"
+            )
+        }
+    }
+
+    /// The control, and the half a blunter fix would have broken: `key q` with
+    /// nothing focused was never fatal, because `typeKey` tolerates an
+    /// unfocused app. Guarding it too would refuse a command that works.
+    func testACharacterStrokeDoesNotRequireKeyboardFocus() {
+        for token in ["q", "v", "1", "V"] {
+            XCTAssertEqual(
+                KeyStrokeTable.stroke(for: token)?.requiresKeyboardFocus, false,
+                "'\(token)' goes out through typeKey and needs no focus"
+            )
+        }
+    }
+
+    /// The split itself, stated once so neither half can drift into the other:
+    /// requiring focus is exactly what tells the two cases apart.
+    func testRequiringFocusIsExactlyTheNamedCase() {
+        for token in ["q", "v", "1"] + KeyStrokeTable.names.map(\.key) {
+            guard let stroke = KeyStrokeTable.stroke(for: token) else {
+                return XCTFail("'\(token)' should resolve")
+            }
+            switch stroke {
+            case .character:
+                XCTAssertFalse(stroke.requiresKeyboardFocus, "'\(token)' is a character")
+            case .named:
+                XCTAssertTrue(stroke.requiresKeyboardFocus, "'\(token)' is a name")
+            }
+        }
+    }
+
     // MARK: - The table cannot go vacuous
 
     /// The one-character rule runs first, so a single-character name would be
