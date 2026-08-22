@@ -30,3 +30,13 @@ ecdsa==0.19.1 \
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
+# rsa (+ its pyasn1 dependency) provides the one RS256 signature per FCM
+# token refresh in fcm.py — pure-python universal wheels, the same trade
+# ecdsa makes above. FCM's HTTP v1 endpoint is plain HTTPS, so nothing else
+# is needed on that path (no h2). rsa shares ecdsa's non-constant-time
+# character; the same once-per-45-minutes internal cadence and revocable-key
+# calculus applies.
+rsa==4.9.1 \
+    --hash=sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762
+pyasn1==0.6.4 \
+    --hash=sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b

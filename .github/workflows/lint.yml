@@ -243,7 +243,7 @@ jobs:
     - name: install-pylint
       run: pip install pylint
     - name: pylint-api
-      run: cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py
+      run: cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py push_dispatch/apns.py push_dispatch/fcm.py
     - name: pylint-counter
       run: pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
     - name: unittest-shared
