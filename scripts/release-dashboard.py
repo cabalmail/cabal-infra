@@ -16,7 +16,12 @@ What it shows, top to bottom:
   * the release in flight, derived statelessly from what GitHub reports:
       - no release PR open: the pending changelog.d/ fragments on
         origin/stage, grouped by category (what the next release would say),
-        and Promote buttons for a patch / minor / major bump
+        and Promote buttons for a patch / minor / major bump. Promote is
+        held - buttons disabled, pending issues listed - while any open
+        tester/fixer-cycle issue has a claimed fix merged on stage but not
+        yet released: code the tester hasn't signed off on shouldn't ride to
+        prod. Closing the issue (the retest pass does this) releases the
+        hold.
       - promote running: the live promote.sh log
       - release PR open: its checks, and a Merge button that arms once the
         checks are green (review the diff on github.com - this dashboard
@@ -125,6 +130,60 @@ query($owner: String!, $name: String!) {
 }
 """
 
+# The tester/fixer lifecycle labels (the same set scripts/triage-dashboard.py
+# puts on its board). An open issue bearing any of these is still in the
+# cycle; if a merged stage PR claims to fix it and that merge hasn't reached
+# main, the release gate holds Promote until the issue is closed.
+LIFECYCLE_LABELS = {"needs-verification", "tester-found", "verified",
+                    "verify-blocked", "accepted", "fix-in-review",
+                    "needs-retest"}
+
+# Open issues, paged; filtered to LIFECYCLE_LABELS client-side (the GraphQL
+# labels argument can't express "any of these").
+ISSUES_QUERY = """
+query($owner: String!, $name: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    issues(states: OPEN, first: 100, after: $cursor,
+           orderBy: {field: CREATED_AT, direction: DESC}) {
+      pageInfo { hasNextPage endCursor }
+      nodes { number title url labels(first: 20) { nodes { name } } }
+    }
+  }
+}
+"""
+
+# Merged stage PRs, newest first - the population that can have put an
+# issue's fix onto stage. Paged until the numbers fall below the oldest
+# issue on the board (issues and PRs share one number sequence, and a PR
+# fixing an issue is always created, so numbered, after it).
+STAGE_PR_QUERY = """
+query($owner: String!, $name: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(baseRefName: "stage", states: [MERGED], first: 100,
+                 after: $cursor,
+                 orderBy: {field: CREATED_AT, direction: DESC}) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number title url mergedAt headRefName body
+        mergeCommit { oid }
+        closingIssuesReferences(first: 20) { nodes { number } }
+      }
+    }
+  }
+}
+"""
+# Safety cap on the PR scan (pages of 100), same as the triage dashboard's;
+# only reached if a lifecycle-labelled issue is very old.
+PR_SCAN_MAX_PAGES = 25
+
+# A fix-intent phrase: address/fix/close/resolve within a few words of one or
+# more `#N`s ("Addresses #1217", "fixes issue #12 and #34"). See
+# claimed_issues() for why this is narrower than a bare-mention scan.
+FIX_CLAIM_RE = re.compile(
+    r"\b(?:address(?:es|ed|ing)?|fix(?:es|ed|ing)?|clos(?:es?|ed|ing)|"
+    r"resolv(?:es?|ed|ing))\b[^#\n]{0,30}((?:#\d+[,;\s]*(?:and\s+)?)+)",
+    re.IGNORECASE)
+
 REPO_SLUG = None
 REPO_PATH = None
 WORKDIR = None
@@ -161,8 +220,8 @@ def origin_url(repo_path):
         return None
 
 
-def graphql(variables):
-    """Run QUERY against the GitHub GraphQL API and return the `data` dict.
+def graphql(query, variables):
+    """Run a GraphQL query against the GitHub API and return the `data` dict.
 
     Prefers a token in GITHUB_TOKEN/GH_TOKEN (direct HTTPS call); otherwise
     shells out to `gh api graphql` so the user's normal gh login is used.
@@ -171,7 +230,7 @@ def graphql(variables):
     if token:
         req = urllib.request.Request(
             "https://api.github.com/graphql",
-            data=json.dumps({"query": QUERY, "variables": variables}).encode(),
+            data=json.dumps({"query": query, "variables": variables}).encode(),
             headers={"Authorization": f"bearer {token}",
                      "Content-Type": "application/json"},
         )
@@ -183,7 +242,7 @@ def graphql(variables):
                 "Neither GITHUB_TOKEN/GH_TOKEN is set nor is the `gh` CLI on PATH. "
                 "Install gh and run `gh auth login`, or export a token."
             )
-        cmd = ["gh", "api", "graphql", "-f", f"query={QUERY}"]
+        cmd = ["gh", "api", "graphql", "-f", f"query={query}"]
         for key, value in variables.items():
             if value is not None:
                 cmd += ["-f", f"{key}={value}"]
@@ -398,6 +457,101 @@ def shape_last_release(node, releases):
             "release": release}
 
 
+def claimed_issues(node):
+    """Issue numbers a merged PR claims to FIX.
+
+    Deliberately narrower than the triage dashboard's reference union: a bare
+    `#N` mention is very often context ("same class as #1191", "filed as
+    #1222 rather than folded in"), and a match here disables the Promote
+    buttons, so only a fix claim counts:
+
+      * a `fixer/N-...` head branch (the fixer's convention),
+      * GitHub closing references (a human's `Fixes #N` keyword),
+      * a fix-intent phrase in the body (the fixer's "Addresses #N").
+    """
+    refs = {n["number"] for n in (node.get("closingIssuesReferences") or {}).get("nodes", [])}
+    for run in FIX_CLAIM_RE.findall(node.get("body") or ""):
+        refs.update(int(n) for n in re.findall(r"#(\d+)", run))
+    match = re.match(r"fixer/(\d+)-", node.get("headRefName") or "")
+    if match:
+        refs.add(int(match.group(1)))
+    return refs
+
+
+def fetch_lifecycle_issues(owner, name):
+    """Open issues currently in the tester/fixer cycle, with their cycle labels."""
+    out, cursor = [], None
+    while True:
+        data = graphql(ISSUES_QUERY, {"owner": owner, "name": name, "cursor": cursor})
+        issues = data["repository"]["issues"]
+        for node in issues["nodes"]:
+            cycle = [lab["name"] for lab in node["labels"]["nodes"]
+                     if lab["name"] in LIFECYCLE_LABELS]
+            if cycle:
+                out.append({"number": node["number"], "title": node["title"],
+                            "url": node["url"], "labels": cycle})
+        if not issues["pageInfo"]["hasNextPage"]:
+            return out
+        cursor = issues["pageInfo"]["endCursor"]
+
+
+def scan_stage_prs(owner, name, wanted):
+    """Map issue number -> merged stage PRs claiming to fix it.
+
+    Pages newest-first, stopping once the PR numbers drop below the smallest
+    wanted issue number (nothing older can be its fix). Returns the map and
+    whether the page cap cut the scan short.
+    """
+    found = {}
+    if not wanted:
+        return found, False
+    floor, cursor, pages = min(wanted), None, 0
+    while True:
+        data = graphql(STAGE_PR_QUERY, {"owner": owner, "name": name, "cursor": cursor})
+        prs = data["repository"]["pullRequests"]
+        pages += 1
+        for node in prs["nodes"]:
+            for issue in claimed_issues(node) & wanted:
+                found.setdefault(issue, []).append(
+                    {"number": node["number"], "title": node["title"],
+                     "url": node["url"], "merged": node.get("mergedAt") or "",
+                     "oid": ((node.get("mergeCommit") or {}).get("oid")) or ""})
+        numbers = [n["number"] for n in prs["nodes"]]
+        if not prs["pageInfo"]["hasNextPage"] or (numbers and min(numbers) < floor):
+            return found, False
+        if pages >= PR_SCAN_MAX_PAGES:
+            return found, True
+        cursor = prs["pageInfo"]["endCursor"]
+
+
+def pending_fixes(owner, name):
+    """The release gate: open lifecycle issues whose claimed fix is merged on
+    stage but not yet in main.
+
+    Released-vs-pending is decided per merge commit with the compare API.
+    main only ever advances by merging stage, so a stage merge commit that is
+    not an ancestor of main (compare status "ahead"/"diverged") hasn't
+    shipped, while "behind"/"identical" means a past release carried it.
+    """
+    issues = fetch_lifecycle_issues(owner, name)
+    prs_by_issue, truncated = scan_stage_prs(
+        owner, name, {i["number"] for i in issues})
+    shipped = {}
+    for prs in prs_by_issue.values():
+        for pr in prs:
+            oid = pr["oid"]
+            if oid and oid not in shipped:
+                cmp = rest("GET", f"/repos/{REPO_SLUG}/compare/main...{oid}") or {}
+                shipped[oid] = cmp.get("status") in ("behind", "identical")
+    blocked = []
+    for issue in issues:
+        pending = [pr for pr in prs_by_issue.get(issue["number"], [])
+                   if pr["oid"] and not shipped.get(pr["oid"])]
+        if pending:
+            blocked.append(dict(issue, prs=pending))
+    return {"issues": blocked, "truncated": truncated}
+
+
 def promote_snapshot():
     with PROMOTE_LOCK:
         return {key: (list(val) if isinstance(val, list) else val)
@@ -406,7 +560,7 @@ def promote_snapshot():
 
 def build_model():
     owner, name = REPO_SLUG.split("/", 1)
-    data = graphql({"owner": owner, "name": name})
+    data = graphql(QUERY, {"owner": owner, "name": name})
     repo = data["repository"]
 
     releases = [{"tag": n.get("tagName") or "",
@@ -430,6 +584,7 @@ def build_model():
         "repo": REPO_SLUG,
         "generated": utcnow(),
         "fragments": parse_fragments(repo["fragments"]),
+        "pending": pending_fixes(owner, name),
         "next": next_versions([n["name"] for n in repo["tags"]["nodes"]]),
         "promote": promote_snapshot(),
         "pr": shape_open_pr(open_nodes[0] if open_nodes else None),
@@ -677,6 +832,10 @@ PAGE = r"""<!DOCTYPE html>
   .rmenu-item[aria-selected="true"]{font-weight:600}
   .banner{border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:13px}
   .banner.err{background:color-mix(in srgb,var(--critical) 12%,transparent); border:1px solid color-mix(in srgb,var(--critical) 40%,transparent); color:var(--critical)}
+  .banner.warn{background:color-mix(in srgb,var(--warning) 13%,transparent); border:1px solid color-mix(in srgb,var(--warning) 50%,transparent); color:var(--ink)}
+  .banner ul{margin:8px 0 0; padding-left:20px}
+  .banner li{margin:0 0 4px}
+  .banner li:last-child{margin-bottom:0}
   .stats{display:flex; gap:10px; flex-wrap:wrap; margin:18px 0 18px}
   .stat{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; min-width:150px}
   .stat .n{font-size:22px; font-weight:650; letter-spacing:-0.02em}
@@ -773,7 +932,10 @@ PAGE = r"""<!DOCTYPE html>
     gate, across all pages of the Actions tab, so a run can never hide below the fold;
     Approve uses the same API as the Actions tab (GitHub still enforces who may approve).
     <b>Release in flight</b> walks the cycle: pending <code>changelog.d/</code> fragments
-    (read from <code>origin/stage</code>) → <b>Promote</b>, which runs
+    (read from <code>origin/stage</code>) → <b>Promote</b>, held while any open
+    tester/fixer-cycle issue has a claimed fix (a <code>fixer/N-…</code> branch, a closing
+    reference, or an "Addresses&nbsp;#N"-style mention) merged on stage but not yet in main —
+    closing the issue, which the tester's retest pass does, releases the hold — which runs
     <code>scripts/promote.sh</code> with all its guards in a private clone pinned to
     stage (never your working checkout) → the stage→main PR with its checks →
     <b>Merge</b>, armed once checks are green (review the diff on GitHub first — this
@@ -938,6 +1100,8 @@ function phaseSummary(m){
   const lp=lastPhase(m.last);
   if(lp && lp.key!=='done') return `${m.last.version||('PR #'+m.last.pr.number)} ${lp.word}`;
   const n=(m.fragments||[]).length;
+  const pend=((m.pending||{}).issues||[]).length;
+  if(pend) return `promote held — ${pend} open issue${pend!==1?'s':''} with unreleased fixes on stage`;
   return `${n} pending fragment${n!==1?'s':''} · nothing in flight`;
 }
 
@@ -1020,9 +1184,15 @@ function renderFlight(){
     const fragHtml=byCat.length?byCat.map(([c,fs])=>`<div class="fragcat"><h3>${esc(c)} <span class="pill neutral">${fs.length}</span></h3>`+
         fs.map(f=>`<div class="frag"><span class="slug">${esc(f.file)}</span>${mdFragment(f.body)}</div>`).join('')+`</div>`).join('')
       :`<div class="empty">No pending fragments on origin/stage — nothing to release.</div>`;
-    const canPromote=frags.length>0;
-    const btn=(spec)=>`<button class="abtn go big" type="button" ${canPromote?`onclick="askPromote('${spec}')"`:'disabled title="No pending fragments — nothing to release"'}>${spec[0].toUpperCase()+spec.slice(1)}${nxt?` → ${esc(nxt[spec])}`:''}</button>`;
-    inner=`<h2>Release in flight <span class="pill neutral">none — next release preview</span></h2>`+fragHtml+
+    const pend=(m.pending||{}).issues||[];
+    const canPromote=frags.length>0 && !pend.length;
+    const holdWhy=pend.length?`Held — ${pend.length} open issue${pend.length!==1?'s have':' has'} unreleased fixes on stage (see above)`:'No pending fragments — nothing to release';
+    const btn=(spec)=>`<button class="abtn go big" type="button" ${canPromote?`onclick="askPromote('${spec}')"`:`disabled title="${esc(holdWhy)}"`}>${spec[0].toUpperCase()+spec.slice(1)}${nxt?` → ${esc(nxt[spec])}`:''}</button>`;
+    const gateHtml=(pend.length?`<div class="banner warn"><b>Promote is held.</b> Stage carries merged fixes for ${pend.length} open issue${pend.length!==1?'s':''} the tester hasn't signed off on; releasing now would ship ${pend.length!==1?'them':'it'} to prod unretested. The hold clears when the issue${pend.length!==1?'s close':' closes'} (the retest pass does this).<ul>`+
+        pend.map(i=>`<li><a href="${esc(i.url)}" target="_blank" rel="noopener">#${i.number}</a> ${esc(i.title)} ${(i.labels||[]).map(l=>`<span class="pill warn">${esc(l)}</span>`).join(' ')} — fix merged in ${(i.prs||[]).map(p=>`<a href="${esc(p.url)}" target="_blank" rel="noopener">PR #${p.number}</a>`).join(', ')}</li>`).join('')+
+        `</ul></div>`:'')+
+      ((m.pending||{}).truncated?`<div class="banner warn">The fix-PR scan hit its page cap, so the hold list may be incomplete — check the triage dashboard before promoting.</div>`:'');
+    inner=`<h2>Release in flight <span class="pill ${pend.length?'warn':'neutral'}">${pend.length?'promote held — issues awaiting close':'none — next release preview'}</span></h2>`+gateHtml+fragHtml+
       `<div class="promoterow">${btn('patch')}${btn('minor')}${btn('major')}<span class="hint">${nxt?`latest tag ${esc(nxt.latest)} · `:''}runs promote.sh in the dashboard's private stage clone: collate → commit → push stage → open the stage→main PR</span></div>`+
       (p.ok===false?`<div class="banner err" style="margin-top:12px"><b>The last promote failed.</b> See the log below.</div>`:'')+
       promoteLogHtml(p, false);
