@@ -156,14 +156,11 @@ resource "aws_api_gateway_method_settings" "general_settings" {
   stage_name  = aws_api_gateway_stage.api_stage.stage_name
   method_path = "*/*"
   settings {
-    metrics_enabled = true
-    # data_trace logs full request/response bodies to CloudWatch. For a mail
-    # API that means addresses, message content, and tokens - keep it off.
-    data_trace_enabled = false
-    # ERROR, not INFO: at INFO every call writes a multi-KB execution-log line
-    # for a mail API. The access-log stream (set on the stage) already captures
-    # caller, method, path, status, and latency - the useful per-request signal.
-    logging_level          = "ERROR"
+    # The three observability fields are shared with `cache_settings` below -
+    # see the comment on `local.method_observability`.
+    metrics_enabled        = local.method_observability.metrics_enabled
+    data_trace_enabled     = local.method_observability.data_trace_enabled
+    logging_level          = local.method_observability.logging_level
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
   }
@@ -178,5 +175,11 @@ resource "aws_api_gateway_method_settings" "cache_settings" {
   settings {
     caching_enabled      = each.value.cache
     cache_ttl_in_seconds = each.value.cache_ttl
+    # Restated, not inherited: a per-method entry replaces the `*/*` defaults
+    # wholesale, so leaving these out hands the method API Gateway's own
+    # defaults instead (#1223).
+    metrics_enabled    = local.method_observability.metrics_enabled
+    data_trace_enabled = local.method_observability.data_trace_enabled
+    logging_level      = local.method_observability.logging_level
   }
 }
