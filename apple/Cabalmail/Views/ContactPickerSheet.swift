@@ -90,20 +90,7 @@ struct ContactPickerSheet: View {
                 .foregroundStyle(selectedIDs.contains(suggestion.id) ?
                                  Color.accentColor : Color.secondary)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                if let name = suggestion.name, !name.isEmpty {
-                    Text(name)
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-                    Text(suggestion.email)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(suggestion.email)
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-                }
-            }
+            RecipientSuggestionLabel(suggestion: suggestion)
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
