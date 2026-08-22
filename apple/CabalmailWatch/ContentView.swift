@@ -104,7 +104,7 @@ struct ContentView: View {
             Button("Revoke", role: .destructive) {
                 Task { await model.revoke(address) }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
         } message: { _ in
             Text("Mail sent to it will stop being delivered.")
         }
@@ -117,7 +117,7 @@ struct ContentView: View {
             Button("Suspend") {
                 Task { await model.setSuspended(address, to: true) }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
         } message: { _ in
             Text("Inbound mail stops until it is reinstated.")
         }

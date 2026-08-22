@@ -342,6 +342,15 @@ targets:
     platform: watchOS
     sources:
       - path: CabalmailWatch
+      # The two view-level rules the watch dialogs have to obey, compiled
+      # from the iOS target's source tree exactly as CabalmailMac compiles
+      # its share of it. Named file by file rather than by directory: the
+      # rest of Cabalmail/Views is mail UI the watch has no counterpart
+      # for. Leaving the watch outside the policy is what let its two
+      # confirmation dialogs keep the cancel role after the other nine
+      # dropped it (#1207).
+      - path: Cabalmail/Views/HostPlatform.swift
+      - path: Cabalmail/Views/ConfirmationDialogPolicy.swift
     dependencies:
       - package: CabalmailKit
     info:
