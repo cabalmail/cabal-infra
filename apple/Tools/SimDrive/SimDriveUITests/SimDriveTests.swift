@@ -18,7 +18,8 @@ import XCTest
 ///
 /// Command grammar (one command per file; `<query>` is `id:<identifier>`,
 /// `text:<label>`, or `xy:<x>,<y>`, and `sysid:`/`systext:` for the
-/// system-UI variants — see `systemAppCandidates`). A query runs to the
+/// system-UI variants — see `systemAppCandidates`; `xy:` is refused on
+/// visionOS, which cannot deliver a synthesized coordinate — #1238). A query runs to the
 /// end of the line apart from the trailing `name:value` options its verb
 /// accepts, so labels with spaces — `tap text:Save Draft` — need no
 /// quoting:
@@ -62,7 +63,10 @@ import XCTest
 ///                              press, drag, then HOLD before release —
 ///                              gestures occupy this process's main
 ///                              thread, so observe the held state from
-///                              the host (simctl screenshot) during hold
+///                              the host (simctl screenshot) during hold.
+///                              Coordinates, so refused on visionOS along
+///                              with `tap xy:` (#1238) — use `scroll` or
+///                              `swiperow`, which anchor in an element
 ///   swiperow <query> edge:leading|trailing [hold:<s>]
 ///                              horizontal swipe within an element to
 ///                              reveal its swipe actions
@@ -145,6 +149,11 @@ final class SimDriveTests: XCTestCase {
     /// first on the next one.
     private var resolvedSystemBundleId: String?
 
+    /// The simulator platform the host is driving, learned from it at start-up
+    /// (see `testDriveLoop`). Defaults to the capable case so a runner started
+    /// without that information behaves as it always has.
+    private var driveHost: DriveHost = .coordinateCapable
+
     func testDriveLoop() throws {
         continueAfterFailure = true
         let env = ProcessInfo.processInfo.environment
@@ -158,6 +167,17 @@ final class SimDriveTests: XCTestCase {
             dirPath = dirPath ?? config["dir"]
             bundleId = bundleId ?? config["app"]
         }
+        // Read separately from the block above, which only runs when the
+        // environment is empty: on iOS the environment IS populated, and the
+        // platform still has to arrive. The bundle is built for iOS whatever
+        // it drives, so this cannot be answered with `#if os(visionOS)`.
+        var hostPlatform = env["SIMDRIVE_PLATFORM"]
+        if hostPlatform == nil,
+           let data = FileManager.default.contents(atPath: "/tmp/simdrive/config.json"),
+           let config = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+            hostPlatform = config["platform"]
+        }
+        driveHost = DriveHost.resolve(hostPlatform: hostPlatform)
         if let bundleId, !bundleId.isEmpty {
             targetBundleId = bundleId
         }
@@ -977,7 +997,16 @@ final class SimDriveTests: XCTestCase {
         }
     }
 
+    /// The one place an `xy:` query becomes a coordinate, so the hosts that
+    /// cannot deliver one are refused here rather than per verb — `tap xy:`
+    /// and `drag` are both call sites, and #1230 was a guard copied to one
+    /// site and not the other.
     private func coordinate(from query: String) throws -> XCUICoordinate {
+        // Before XCTest is called: the synthesis failure this avoids is a test
+        // failure, not an error, so there is nothing to catch afterwards.
+        if let refusal = CoordinateAnchor.refusal(on: driveHost) {
+            throw DriveError(refusal)
+        }
         let parts = query.dropFirst(3).split(separator: ",")
         guard parts.count == 2,
               let xOffset = Double(parts[0]), let yOffset = Double(parts[1]) else {
