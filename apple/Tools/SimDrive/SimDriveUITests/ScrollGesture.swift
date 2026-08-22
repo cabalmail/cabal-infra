@@ -106,7 +106,9 @@ struct ScrollGesture: Equatable {
 /// A swipe's travel is not adjustable — `.slow`, `.default` and `.fast` all
 /// moved the visionOS message list by exactly 435 points in a 393-point
 /// container — so `amount:` can only be honoured by swiping more than once,
-/// and the verb reports what it measured rather than what it planned.
+/// and the verb reports what it measured rather than what it planned. On
+/// both paths that includes declining to report at all once the witness has
+/// left the tree, which is where the measurement ends (#1216).
 enum ScrollProgress {
 
     /// Displacements below this are the tree settling, not a scroll.
@@ -252,5 +254,81 @@ enum ScrollCommand {
         let until = String(remainder[range.upperBound...])
             .trimmingCharacters(in: .whitespaces)
         return (head, until)
+    }
+}
+
+/// What the swipe fallback can honestly say about how far the content moved
+/// (#1216).
+///
+/// A swipe's step is fixed and `amount:` cannot buy any of it, so the only
+/// measurement this path has is the witness's displacement between sweeps.
+/// When the witness leaves the accessibility tree that measurement ends —
+/// and the code printed the *request* in its place, unqualified, which is
+/// silently wrong in the reassuring direction. It lands in the usual case
+/// rather than an exceptional one: the natural thing to anchor on is the
+/// thing you want scrolled away, and on visionOS this is the only path that
+/// scrolls anything at all.
+///
+/// The press-drag path in the same verb already refuses to answer here
+/// (#1193, PR #1204). This is that refusal, stated as data so it can be
+/// tested away from a simulator.
+enum SwipeWitness: Equatable {
+
+    /// The witness answered before and after every sweep, so the total is a
+    /// measurement.
+    case tracked
+
+    /// The witness left the tree partway. Sweeps before that one were
+    /// measured; the sweep that lost it, and everything after, were not.
+    case leftView
+
+    /// The witness was not in the tree when the first sweep started, so
+    /// nothing was measured at all.
+    case neverSeen
+}
+
+/// The swipe fallback's tally, kept apart from the budget that stops it.
+///
+/// `travelled` was doing both jobs before #1216 — feeding
+/// `ScrollProgress.shouldSwipeAgain` and feeding the answer — and the
+/// vanished-witness branch wrote the request into it. That write never had a
+/// stopping role (the branch breaks unconditionally); its only effect was on
+/// what got printed.
+struct SwipeFallbackResult: Equatable {
+
+    /// Displacement actually observed, over the sweeps that could be
+    /// measured. Never the request.
+    var measured: CGFloat
+
+    /// Sweeps performed, measurable or not.
+    var swipes: Int
+
+    /// Whether `measured` is the whole story.
+    var witness: SwipeWitness
+
+    /// The line the REPL prints.
+    ///
+    /// `query` is echoed rather than described because it is what the caller
+    /// has to change to get a measurement: anchoring on something that stays
+    /// is the fix, and naming the anchor is how the answer says so.
+    func summary(query: String, goingDown: Bool) -> String {
+        let direction = goingDown ? "down" : "up"
+        let plural = swipes == 1 ? "" : "s"
+        let path = "drag fallback — a press-drag moved nothing here"
+        switch witness {
+        case .tracked:
+            return "scrolled \(query) \(direction) (\(Int(measured))pt in \(swipes) swipe\(plural), \(path))"
+        case .leftView:
+            let before = measured >= ScrollProgress.stillThreshold
+                ? " — at least \(Int(measured))pt before it did"
+                : ""
+            return "scrolled \(query) \(direction) (\(swipes) swipe\(plural), \(path); "
+                + "\(query) left the view, so the distance it moved is not measurable\(before) — "
+                + "anchor on something that stays to get one)"
+        case .neverSeen:
+            return "scrolled \(query) \(direction) (\(swipes) swipe\(plural), \(path); "
+                + "\(query) was not on screen to measure against, so the distance is not "
+                + "measurable — anchor on something that stays to get one)"
+        }
     }
 }
