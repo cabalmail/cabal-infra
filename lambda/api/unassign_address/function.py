@@ -5,7 +5,9 @@ import boto3  # pylint: disable=import-error
 from address_events import notify_containers  # pylint: disable=import-error
 from admin_limits import ( # pylint: disable=import-error
     admin_response_or_none,
+    audit_log,
     parse_json_object_body,
+    rate_limit_response_or_none,
 )
 
 ddb = boto3.resource('dynamodb')
@@ -17,6 +19,10 @@ def handler(event, _context):
     denial = admin_response_or_none(event)
     if denial:
         return denial
+    caller = event['requestContext']['authorizer']['claims']['cognito:username']
+    limited = rate_limit_response_or_none(caller, 'unassign_address')
+    if limited:
+        return limited
     body, invalid = parse_json_object_body(event)
     if invalid:
         return invalid
@@ -52,10 +58,12 @@ def handler(event, _context):
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f"Error unassigning user {target_user} from address {address}: {err}")
+        audit_log(caller, 'unassign_address', f'{address}:{target_user}', 'failure')
         return {
             'statusCode': 500,
             'body': json.dumps({'Error': str(err)})
         }
+    audit_log(caller, 'unassign_address', f'{address}:{target_user}', 'success')
     return {
         'statusCode': 200,
         'body': json.dumps({
