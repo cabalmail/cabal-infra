@@ -300,3 +300,122 @@ final class ScrollFeedbackTests: XCTestCase {
         XCTAssertEqual(next, cap, "still 367 points owed at a gain of 0.48")
     }
 }
+
+/// Regression cover for #1208's stop condition: `scroll … until:<query>`
+/// sweeps until the named element is on screen, so "on screen" is the whole
+/// contract and it is arithmetic.
+///
+/// The frames below are the ones the iPhone 17 simulator (iOS 26.5, 402x874)
+/// reported for the Settings form and its rows during the arms in #1208.
+final class ScrollDestinationTests: XCTestCase {
+
+    /// The Settings form's collection view, as measured: it fills the window,
+    /// so a row's frame going negative or past 874 is how "off screen" looks
+    /// here rather than anything to do with the nav bar.
+    private let container = CGRect(x: 0, y: 0, width: 402, height: 874)
+
+    /// "Appearance", the destination in every #1208 arm, once it arrived.
+    func testARowFullyInsideTheContainerHasArrived() {
+        let row = CGRect(x: 16, y: 719, width: 370, height: 40.3)
+        XCTAssertTrue(ScrollDestination.isOnScreen(element: row, container: container))
+    }
+
+    /// The case `exists` gets wrong in the over-reporting direction: a
+    /// scrolled-out cell still in the tree, reporting a content-space frame
+    /// outside its container's clip bounds.
+    func testARowBelowTheContainerHasNot() {
+        let row = CGRect(x: 16, y: 900, width: 370, height: 44)
+        XCTAssertFalse(ScrollDestination.isOnScreen(element: row, container: container))
+    }
+
+    func testARowAboveTheContainerHasNot() {
+        let row = CGRect(x: 16, y: -30, width: 370, height: 44)
+        XCTAssertFalse(ScrollDestination.isOnScreen(element: row, container: container))
+    }
+
+    /// Half-drawn at the fold is not arrived. A tap on the visible half lands
+    /// wherever the chrome that covers the other half wants it to — measured
+    /// on visionOS, where the bulk bar floats over the bottom of the list.
+    func testARowStraddlingTheFoldHasNot() {
+        let row = CGRect(x: 16, y: 852, width: 370, height: 44)
+        XCTAssertFalse(ScrollDestination.isOnScreen(element: row, container: container))
+    }
+
+    func testARowFlushWithTheBottomEdgeHasArrived() {
+        let row = CGRect(x: 16, y: 830, width: 370, height: 44)
+        XCTAssertTrue(ScrollDestination.isOnScreen(element: row, container: container))
+    }
+
+    /// Sub-point AX arithmetic must not read as a miss.
+    func testAQuarterPointOverhangIsTolerated() {
+        let row = CGRect(x: 16, y: 830.25, width: 370, height: 44)
+        XCTAssertTrue(ScrollDestination.isOnScreen(element: row, container: container))
+    }
+
+    /// An element taller than the container can never be fully contained, so
+    /// filling the container is the most it could ever manage.
+    func testAnElementTallerThanTheContainerCountsWhenItFillsIt() {
+        let tall = CGRect(x: 0, y: -200, width: 402, height: 1400)
+        XCTAssertTrue(ScrollDestination.isOnScreen(element: tall, container: container))
+    }
+
+    /// Gone from the tree, empty, or measured against nothing: all misses,
+    /// never crashes.
+    func testDegenerateFramesAreNotOnScreen() {
+        XCTAssertFalse(ScrollDestination.isOnScreen(element: nil, container: container))
+        XCTAssertFalse(ScrollDestination.isOnScreen(element: .zero, container: container))
+        XCTAssertFalse(ScrollDestination.isOnScreen(
+            element: CGRect(x: 16, y: 719, width: 370, height: 40.3),
+            container: .zero
+        ))
+    }
+}
+
+/// Regression cover for #1208's grammar: `until:` takes the rest of the line.
+///
+/// The reason is that a SwiftUI label routinely has spaces in it — the app's
+/// own "All folders" section header is one — and every other option on this
+/// verb is a bare number that never does. Splitting on spaces the way the
+/// option parser does would have made `until:text:All folders` mean something
+/// other than what it says.
+final class ScrollCommandTests: XCTestCase {
+
+    func testNoClauseLeavesTheCommandAlone() {
+        let split = ScrollCommand.splitUntilClause("text:Account dir:down amount:0.2")
+        XCTAssertEqual(split.head, "text:Account dir:down amount:0.2")
+        XCTAssertNil(split.until)
+    }
+
+    func testTheClauseIsRemovedFromTheHead() {
+        let split = ScrollCommand.splitUntilClause("text:Account dir:down until:text:Appearance")
+        XCTAssertEqual(split.head, "text:Account dir:down")
+        XCTAssertEqual(split.until, "text:Appearance")
+    }
+
+    /// The whole point of taking the rest of the line.
+    func testTheClauseKeepsItsSpaces() {
+        let split = ScrollCommand.splitUntilClause("id:folder.list dir:down until:text:All folders")
+        XCTAssertEqual(split.head, "id:folder.list dir:down")
+        XCTAssertEqual(split.until, "text:All folders")
+    }
+
+    /// Empty is a caller error the verb names, not a default it invents.
+    func testAnEmptyClauseIsDistinctFromNoClause() {
+        XCTAssertEqual(ScrollCommand.splitUntilClause("text:Account dir:down until:").until, "")
+        XCTAssertEqual(ScrollCommand.splitUntilClause("text:Account dir:down until: ").until, "")
+    }
+
+    /// Only as a whole token: an anchor query that happens to contain the
+    /// letters must not be cut in half.
+    func testAMidWordMatchIsNotAClause() {
+        let split = ScrollCommand.splitUntilClause("text:funtil:x dir:down")
+        XCTAssertEqual(split.head, "text:funtil:x dir:down")
+        XCTAssertNil(split.until)
+    }
+
+    func testAClauseAtTheStartIsStillAClause() {
+        let split = ScrollCommand.splitUntilClause("until:text:Appearance")
+        XCTAssertEqual(split.head, "")
+        XCTAssertEqual(split.until, "text:Appearance")
+    }
+}

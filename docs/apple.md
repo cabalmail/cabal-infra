@@ -210,8 +210,21 @@ sessions out of known potholes:
   invalid scene ID (nil)` and takes the runner with it. Off-screen
   SwiftUI rows are `exists=false`, not merely unhittable, so no
   identifier reaches them until something scrolls them into existence.
-  Travel is a fraction of the window (`amount:`, default 0.5), not of
-  the element, so a section header is a perfectly good anchor.
+  The element you name is only the gesture's anchor, so a section header
+  is a perfectly good one.
+
+  Say where you are going, not how far: `scroll <query> dir:down
+  until:<query>` sweeps until the second element is on screen, up to a
+  budget of eight sweeps. That is what a recorded recipe wants, and
+  `amount:` cannot express it. A synthesized press-and-drag always
+  flicks, so one sweep moves roughly 270 points of content on an
+  874-point window whatever the arithmetic asked for and every `amount:`
+  below about 0.3 is the same command; and the `amount:` path stops
+  measuring when the element you named scrolls out of the tree, which is
+  the usual case, so the same request travels a different distance
+  depending on an anchor chosen for unrelated reasons. `until:` has to
+  come last — the rest of the line is its query, which is how a label
+  with spaces gets through.
 - **Gestures hold the runner's main thread.** A swipe reveal cannot be
   observed from inside the runner mid-gesture. Use `drag ... hold:<s>`
   or `swiperow ... hold:<s>` and screenshot from *outside* during the

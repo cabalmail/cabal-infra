@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.MailEvent
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.SearchFilters
@@ -153,6 +154,13 @@ class SearchViewModel(
         if (!disposing.add(folder to envelope.id)) {
             return
         }
+        // Optimistic: the result row leaves before the server confirms; on
+        // the rare failure the error surfaces and the next search (or the
+        // source folder's next refresh) shows true state.
+        mutableState.update { state ->
+            state.copy(results = state.results.filterNot { it.id == envelope.id && it.folder == folder })
+        }
+        container.mailEvents.beginWrite()
         viewModelScope.launch {
             try {
                 val api = container.requireApi()
@@ -168,12 +176,11 @@ class SearchViewModel(
                     )
                 }
                 container.envelopeCache.invalidateFolder(folder)
-                mutableState.update { state ->
-                    state.copy(results = state.results.filterNot { it.id == envelope.id && it.folder == folder })
-                }
             } catch (exception: Exception) {
                 mutableState.update { it.copy(error = userMessage(exception, "Could not move message")) }
+                container.mailEvents.emit(MailEvent.Reconcile(folder))
             } finally {
+                container.mailEvents.endWrite()
                 disposing.remove(folder to envelope.id)
             }
         }
@@ -185,27 +192,33 @@ class SearchViewModel(
         value: Boolean,
     ) {
         val folder = envelope.folder ?: return
+        val flags =
+            if (value) {
+                (envelope.flags + flag).distinct()
+            } else {
+                envelope.flags.filterNot { it.equals(flag, ignoreCase = true) }
+            }
+        val patched = envelope.copy(flags = flags)
+        // Optimistic: the row changes before the server confirms; the
+        // envelope cache is only written once it has.
+        mutableState.update { state ->
+            state.copy(
+                results =
+                    state.results.map {
+                        if (it.id == envelope.id && it.folder == folder) patched else it
+                    },
+            )
+        }
+        container.mailEvents.beginFlagWrite(folder, listOf(envelope.id))
         viewModelScope.launch {
             try {
                 container.requireApi().setFlag(folder, listOf(envelope.id), flag, value)
-                val flags =
-                    if (value) {
-                        (envelope.flags + flag).distinct()
-                    } else {
-                        envelope.flags.filterNot { it.equals(flag, ignoreCase = true) }
-                    }
-                val patched = envelope.copy(flags = flags)
                 container.envelopeCache.write(folder, listOf(patched))
-                mutableState.update { state ->
-                    state.copy(
-                        results =
-                            state.results.map {
-                                if (it.id == envelope.id && it.folder == folder) patched else it
-                            },
-                    )
-                }
             } catch (exception: Exception) {
                 mutableState.update { it.copy(error = userMessage(exception, "Could not update flags")) }
+                container.mailEvents.emit(MailEvent.Reconcile(folder))
+            } finally {
+                container.mailEvents.endFlagWrite(folder, listOf(envelope.id))
             }
         }
     }

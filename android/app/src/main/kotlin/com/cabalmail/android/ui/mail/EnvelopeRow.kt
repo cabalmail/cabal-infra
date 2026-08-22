@@ -38,6 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,6 +87,27 @@ fun EnvelopeRow(
             Checkbox(checked = checked, onCheckedChange = { onClick() })
             Spacer(Modifier.width(4.dp))
         }
+        // Unread indicator: bold text alone is easy to miss, so unread rows
+        // also lead with a primary-color dot (the Material badge idiom,
+        // mirroring the Apple clients). The slot is reserved either way so
+        // toggling read state never shifts the row's layout.
+        val unreadLabel = stringResource(R.string.unread)
+        Box(
+            modifier =
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (envelope.isSeen) Color.Transparent else MaterialTheme.colorScheme.primary,
+                    ).then(
+                        if (envelope.isSeen) {
+                            Modifier
+                        } else {
+                            Modifier.semantics { contentDescription = unreadLabel }
+                        },
+                    ),
+        )
+        Spacer(Modifier.width(8.dp))
         SenderAvatar(
             mailbox = envelope.from.firstOrNull(),
             bimiLookup = bimiLookup,

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.4] - 2026-08-22
+
+### Added
+- Android: **Unread dot in message lists.** Unread rows now lead with a
+  primary-color dot ahead of the sender avatar, complementing the bold
+  text (which was too subtle on its own) and matching the Apple clients'
+  unread indicator. The dot's slot is always reserved, so marking a row
+  read never shifts its layout.
+
+### Changed
+- Android: **Instant message-list actions.** Swipe-to-dispose, move,
+  purge, and read/flag changes now update the message list, filter pills,
+  and counts immediately instead of waiting for the server, from the list,
+  the reader, and search results alike. On the rare server-side failure
+  the list surfaces the error and reconciles by refetching, and background
+  polling holds off while a change is still being confirmed so it cannot
+  resurrect a row the user watched leave.
+
+### Fixed
+- Android: **Flag changes from other clients land on refresh.** The message
+  list served already-cached rows without re-fetching them, so a flag set or
+  cleared elsewhere never reached the screen — a star cleared in another
+  client survived pull-to-refresh (and app restarts) indefinitely. A cached
+  band now paints only as a warm start while the row is re-fetched, and the
+  server copy wins unless that row's own flag write is still in flight.
+
 ## [1.3.3] - 2026-08-21
 
 ### Added

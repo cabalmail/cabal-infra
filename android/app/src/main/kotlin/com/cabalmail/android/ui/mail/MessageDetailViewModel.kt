@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.MailEvent
 import com.cabalmail.android.userMessage
+import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.compose.DraftResume
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.compose.SignatureFormatter
@@ -249,32 +250,36 @@ class MessageDetailViewModel(
         mutableState.update { it.copy(openFile = null, error = "No app can open this attachment") }
     }
 
-    /** Sets or clears one flag and patches the local envelope copy. */
+    /**
+     * Sets or clears one flag, patching the local envelope copy and the
+     * list (via the event bus) before the server confirms. The server call
+     * runs in the app scope so leaving the reader doesn't cancel it, and
+     * the envelope cache is only written once the server has agreed.
+     */
     fun setFlag(
         flag: String,
         value: Boolean,
     ) {
-        viewModelScope.launch {
+        val envelope = mutableState.value.envelope ?: return
+        val flags =
+            if (value) {
+                (envelope.flags + flag).distinct()
+            } else {
+                envelope.flags.filterNot { it.equals(flag, ignoreCase = true) }
+            }
+        val patched = envelope.copy(flags = flags)
+        mutableState.update { it.copy(envelope = patched) }
+        container.mailEvents.emit(MailEvent.FlagChanged(folder, setOf(uid), flag, value))
+        container.mailEvents.beginFlagWrite(folder, listOf(uid))
+        container.appScope.launch {
             try {
                 container.requireApi().setFlag(folder, listOf(uid), flag, value)
-                mutableState.update { state ->
-                    val envelope = state.envelope ?: return@update state
-                    val flags =
-                        if (value) {
-                            (envelope.flags + flag).distinct()
-                        } else {
-                            envelope.flags.filterNot { it.equals(flag, ignoreCase = true) }
-                        }
-                    val patched = envelope.copy(flags = flags)
-                    state.copy(envelope = patched).also {
-                        viewModelScope.launch {
-                            container.envelopeCache.write(folder, listOf(patched))
-                        }
-                    }
-                }
-                container.mailEvents.emit(MailEvent.FlagChanged(folder, setOf(uid), flag, value))
+                container.envelopeCache.write(folder, listOf(patched))
             } catch (exception: Exception) {
                 mutableState.update { it.copy(error = userMessage(exception, "Could not update flag")) }
+                container.mailEvents.emit(MailEvent.Reconcile(folder))
+            } finally {
+                container.mailEvents.endFlagWrite(folder, listOf(uid))
             }
         }
     }
@@ -286,75 +291,71 @@ class MessageDetailViewModel(
      * disposals also mark the message read (archived == read, as on Apple
      * and React), folded into the move call so the flag is set before the
      * UID leaves the source folder; a restore keeps the read state as-is.
-     * Ignored while a move or purge is already in flight: a second
-     * concurrent MOVE of the same message duplicates it server-side.
+     * Ignored while the initial load is still in flight or the message has
+     * already departed: a second concurrent MOVE of the same message
+     * duplicates it server-side.
      */
     fun dispose(explicitAction: DisposeAction? = null) {
-        if (!claimBusy()) {
+        if (!canDepart()) {
             return
         }
-        viewModelScope.launch {
-            try {
-                val api = container.requireApi()
-                val intent =
-                    explicitAction?.let { DisposeIntent.explicit(it, folder) }
-                        ?: DisposeIntent.standard(
-                            container.preferences.preferences.value.disposeAction,
-                            folder,
-                        )
-                when (intent) {
-                    DisposeIntent.Purge -> api.purgeMessages(folder, listOf(uid))
-                    DisposeIntent.Restore ->
-                        api.moveMessages(folder, DisposeIntent.INBOX_FOLDER, listOf(uid))
-                    is DisposeIntent.Move ->
-                        api.moveMessages(
-                            folder,
-                            intent.destination,
-                            listOf(uid),
-                            markSeen = mutableState.value.envelope?.isSeen != true,
-                        )
-                }
-                container.envelopeCache.invalidateFolder(folder)
-                container.bodyCache.remove(folder, uid)
-                container.mailEvents.emit(MailEvent.Removed(folder, setOf(uid)))
-                mutableState.update { it.copy(busy = false, departed = true) }
-            } catch (exception: Exception) {
-                mutableState.update {
-                    it.copy(busy = false, error = userMessage(exception, "Could not move message"))
-                }
+        val intent =
+            explicitAction?.let { DisposeIntent.explicit(it, folder) }
+                ?: DisposeIntent.standard(
+                    container.preferences.preferences.value.disposeAction,
+                    folder,
+                )
+        val markSeen = mutableState.value.envelope?.isSeen != true
+        departAfter { api ->
+            when (intent) {
+                DisposeIntent.Purge -> api.purgeMessages(folder, listOf(uid))
+                DisposeIntent.Restore ->
+                    api.moveMessages(folder, DisposeIntent.INBOX_FOLDER, listOf(uid))
+                is DisposeIntent.Move ->
+                    api.moveMessages(folder, intent.destination, listOf(uid), markSeen = markSeen)
             }
         }
     }
 
-    /**
-     * Marks the screen busy for a move/purge, or returns false when one is
-     * already in flight (or the message has already departed).
-     */
-    private fun claimBusy(): Boolean {
-        val current = mutableState.value
-        if (current.busy || current.departed) {
-            return false
-        }
-        mutableState.update { it.copy(busy = true, error = null) }
-        return true
-    }
-
     /** Moves the open message to [destination] and departs. */
     fun move(destination: String) {
-        if (!claimBusy()) {
+        if (!canDepart()) {
             return
         }
-        viewModelScope.launch {
+        departAfter { api -> api.moveMessages(folder, destination, listOf(uid)) }
+    }
+
+    /**
+     * Whether a move/purge may start: not while the initial load is busy,
+     * and never twice — [departAfter] sets `departed` synchronously, so a
+     * repeat tap can't queue a second MOVE.
+     */
+    private fun canDepart(): Boolean {
+        val current = mutableState.value
+        return !current.busy && !current.departed
+    }
+
+    /**
+     * Optimistic departure: the reader pops and the list drops the row
+     * before the server confirms — success is the overwhelmingly common
+     * case. [action] runs in the app scope so it survives this view model
+     * being cleared on the way out; the caches are only touched once the
+     * server has agreed, and a failure asks the folder's viewers to
+     * refetch true state.
+     */
+    private fun departAfter(action: suspend (ApiClient) -> Unit) {
+        mutableState.update { it.copy(departed = true, error = null) }
+        container.mailEvents.emit(MailEvent.Removed(folder, setOf(uid)))
+        container.mailEvents.beginWrite()
+        container.appScope.launch {
             try {
-                container.requireApi().moveMessages(folder, destination, listOf(uid))
+                action(container.requireApi())
                 container.envelopeCache.invalidateFolder(folder)
                 container.bodyCache.remove(folder, uid)
-                container.mailEvents.emit(MailEvent.Removed(folder, setOf(uid)))
-                mutableState.update { it.copy(busy = false, departed = true) }
-            } catch (exception: Exception) {
-                mutableState.update {
-                    it.copy(busy = false, error = userMessage(exception, "Could not move message"))
-                }
+            } catch (_: Exception) {
+                container.mailEvents.emit(MailEvent.Reconcile(folder))
+            } finally {
+                container.mailEvents.endWrite()
             }
         }
     }
