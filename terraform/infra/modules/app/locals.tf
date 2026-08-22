@@ -428,3 +428,23 @@ locals {
     if length(data.aws_s3_objects.check[l].keys) > 0
   }
 }
+
+locals {
+  # API Gateway resolves method settings by longest match, not by merge: a
+  # per-method entry REPLACES the `*/*` defaults for that method rather than
+  # inheriting the fields it leaves out (#1223). Anything that writes a
+  # per-method override therefore has to restate the whole observability
+  # policy, so it lives here once and both `aws_api_gateway_method_settings`
+  # resources read it. test_api_gateway_method_overrides.py fails if one of
+  # them stops.
+  method_observability = {
+    metrics_enabled = true
+    # data_trace logs full request/response bodies to CloudWatch. For a mail
+    # API that means addresses, message content, and tokens - keep it off.
+    data_trace_enabled = false
+    # ERROR, not INFO: at INFO every call writes a multi-KB execution-log line
+    # for a mail API. The access-log stream (set on the stage) already captures
+    # caller, method, path, status, and latency - the useful per-request signal.
+    logging_level = "ERROR"
+  }
+}

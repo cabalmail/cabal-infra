@@ -85,7 +85,6 @@
                     "resource": "module.admin.aws_api_gateway_stage.api_stage",
                     "check_ids": [
                         "CKV2_AWS_29",
-                        "CKV2_AWS_4",
                         "CKV2_AWS_51",
                         "CKV_AWS_120",
                         "CKV_AWS_73"
