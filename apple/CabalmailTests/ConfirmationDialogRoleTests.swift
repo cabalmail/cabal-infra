@@ -17,6 +17,11 @@ import SwiftUI
 // end on iOS 27 and iOS 26 (same binary, same single-button popover, so this
 // is not a 27 delta) and read the other seven off the source.
 //
+// #1207 added the watch's two, which this suite had been structurally unable
+// to see: `appSources()` walked two targets and the allowlist doc explained
+// the third away. watchOS presents these as a sheet and drops the cancel-role
+// button all the same, so the exemption was wrong on its own terms.
+//
 // Two halves are tested here, because the defect had two halves. The rule
 // itself is now a policy, which is directly testable. But the rule already
 // existed in `ComposeCancelChoice`'s doc comment and eight call sites simply
@@ -27,9 +32,12 @@ final class ConfirmationDialogRoleTests: XCTestCase {
     // MARK: - The rule
 
     func testTouchPlatformsGetNoCancelRole() {
-        // Popover presentation would swallow the button outright.
+        // SwiftUI swallows the button outright on all three, whether the
+        // dialog comes up as a popover (iPhone) or a sheet (visionOS,
+        // watchOS) — the presentation style never was the variable.
         XCTAssertNil(ConfirmationDialogPolicy.backOutRole(on: .iOS))
         XCTAssertNil(ConfirmationDialogPolicy.backOutRole(on: .visionOS))
+        XCTAssertNil(ConfirmationDialogPolicy.backOutRole(on: .watchOS))
     }
 
     func testMacKeepsTheCancelRoleForEscape() {
@@ -72,6 +80,16 @@ final class ConfirmationDialogRoleTests: XCTestCase {
             sources.count, 40,
             "floor: an empty or mis-rooted scan would pass everything vacuously"
         )
+        // Per-target floor. The overall count is dominated by the iOS target,
+        // so dropping a small one back out of the scan would not move it —
+        // and a target outside the scan is how #1207 happened.
+        for probe in [
+            "Cabalmail/ContentView.swift",
+            "CabalmailMac/CabalmailMacApp.swift",
+            "CabalmailWatch/ContentView.swift",
+        ] {
+            XCTAssertNotNil(sources[probe], "\(probe) is missing from the corpus")
+        }
 
         var offenders: [String: Int] = [:]
         for (name, body) in sources {
@@ -103,17 +121,24 @@ final class ConfirmationDialogRoleTests: XCTestCase {
 
     /// The two places a literal `.cancel` role is correct and stays.
     ///
-    /// - `RichTextToolbar` presents an `.alert`, never a popover, and a
-    ///   cancel-role button renders normally there.
+    /// - `RichTextToolbar` presents an `.alert`, never a `confirmationDialog`,
+    ///   and a cancel-role button renders normally there.
     /// - `SignInView`'s pair are ordinary form rows (and a macOS button row),
     ///   not dialog actions.
     ///
-    /// `CabalmailWatch` is deliberately outside the scan: watchOS has no
-    /// popover presentation for `confirmationDialog`, and its two dialogs are
-    /// in a target this policy isn't compiled into.
+    /// Keyed by path under `apple/`, not by filename: `ContentView.swift`
+    /// exists in both the iOS and the watch target, and a filename key would
+    /// let one silently stand in for the other.
+    ///
+    /// `CabalmailWatch` used to sit outside the scan on the stated grounds
+    /// that watchOS has no popover presentation for `confirmationDialog`.
+    /// True and irrelevant: watchOS renders these as a sheet and drops the
+    /// cancel-role button there anyway, so both of its dialogs offered only
+    /// their destructive control (#1207). The scan covers that target now,
+    /// and the policy is compiled into it.
     private static let allowed = [
-        "RichTextToolbar.swift": 1,
-        "SignInView.swift": 2,
+        "Cabalmail/Views/RichTextToolbar.swift": 1,
+        "Cabalmail/Views/SignInView.swift": 2,
     ]
 
     /// `force_try` is on in tests, so this throws rather than asserting the
@@ -122,22 +147,28 @@ final class ConfirmationDialogRoleTests: XCTestCase {
         try body.ranges(of: Regex(#"role:\s*\.cancel"#)).count
     }
 
-    /// Every Swift source in the iOS/visionOS and macOS app targets, keyed by
-    /// filename. Rooted off this file's own compile-time path so the scan
-    /// follows the checkout wherever it lives.
+    /// Every Swift source in the iOS/visionOS, macOS and watchOS app
+    /// targets, keyed by its path under `apple/`. Rooted off this file's own
+    /// compile-time path so the scan follows the checkout wherever it lives.
+    ///
+    /// A target left out here is a target the invariant cannot see, which is
+    /// the shape #1207 took: the watch's two dialogs stayed wrong through the
+    /// whole of #1201's sweep and this suite stayed green.
     private static func appSources() throws -> [String: String] {
         let apple = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
         var found: [String: String] = [:]
-        for target in ["Cabalmail", "CabalmailMac"] {
+        for target in ["Cabalmail", "CabalmailMac", "CabalmailWatch"] {
             let root = apple.appendingPathComponent(target)
             guard let walker = FileManager.default.enumerator(
                 at: root,
                 includingPropertiesForKeys: nil
             ) else { continue }
             for case let url as URL in walker where url.pathExtension == "swift" {
-                found[url.lastPathComponent] = try String(contentsOf: url, encoding: .utf8)
+                let key = url.standardizedFileURL.path
+                    .replacingOccurrences(of: apple.standardizedFileURL.path + "/", with: "")
+                found[key] = try String(contentsOf: url, encoding: .utf8)
             }
         }
         return found

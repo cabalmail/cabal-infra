@@ -1,24 +1,5 @@
 import SwiftUI
 
-/// The platform a view is being drawn on, as far as the rules below care.
-/// Only the distinctions that change a rule are modelled.
-enum HostPlatform {
-    case macOS
-    case iOS
-    case visionOS
-
-    /// The platform this build is compiled for.
-    static var current: HostPlatform {
-        #if os(macOS)
-        return .macOS
-        #elseif os(visionOS)
-        return .visionOS
-        #else
-        return .iOS
-        #endif
-    }
-}
-
 /// Whether the From pop-up's label has to draw its own disclosure chevron.
 ///
 /// A pure rule rather than an inline `#if` so it can be tested directly —
