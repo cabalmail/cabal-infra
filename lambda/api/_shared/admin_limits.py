@@ -138,9 +138,14 @@ def admin_user_action_response(event, action, status, operate):
     apart from those three tokens. delete_user keeps its own copy: it refuses a
     self-delete part way through and purges the user's domain-access rows inside
     the same try, so folding it in would mean a second callback with exactly one
-    caller. confirm_user and set_user_domain_access differ further still -- the
-    first runs neither the rate limit nor the audit log, the second reads a
+    caller. set_user_domain_access differs further still: it reads a
     three-field body and reports allowed/denied rather than a status word.
+
+    confirm_user is not an exception on the merits: since #1200 it runs these
+    same three controls in this same order and returns the same
+    {status, username} shape, so it differs from disable_user only in which
+    Cognito call it makes. It keeps its own copy because #1227 gave it the
+    controls without restructuring it -- folding it in is open as #1231.
 
     A body carrying no `username` stays a 500 with a failure audit line rather
     than a 400: the KeyError is raised inside the try, exactly where it was
