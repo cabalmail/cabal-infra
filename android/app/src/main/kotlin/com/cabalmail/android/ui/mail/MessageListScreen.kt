@@ -75,6 +75,8 @@ fun MessageListScreen(
     state: MessageListUiState,
     viewModel: MessageListViewModel,
     bimiLookup: suspend (String) -> String?,
+    /** Deployment mail domains, for the row's delivered-to address. */
+    mailDomains: List<String>,
     onOpenMessage: (Envelope) -> Unit,
     onOpenSearch: () -> Unit,
     onBack: () -> Unit,
@@ -251,6 +253,7 @@ fun MessageListScreen(
                                     state = state,
                                     viewModel = viewModel,
                                     bimiLookup = bimiLookup,
+                                    mailDomains = mailDomains,
                                     highlighted = index == cursor || envelope.id == highlightedUid,
                                     menuOpen = menuUid == envelope.id,
                                     onMenuChange = { open -> menuUid = if (open) envelope.id else null },
@@ -271,6 +274,7 @@ fun MessageListScreen(
                                 state = state,
                                 viewModel = viewModel,
                                 bimiLookup = bimiLookup,
+                                mailDomains = mailDomains,
                                 highlighted = index == cursor || envelope.id == highlightedUid,
                                 menuOpen = menuUid == envelope.id,
                                 onMenuChange = { open -> menuUid = if (open) envelope.id else null },
@@ -521,6 +525,7 @@ private fun InteractiveRow(
     state: MessageListUiState,
     viewModel: MessageListViewModel,
     bimiLookup: suspend (String) -> String?,
+    mailDomains: List<String>,
     highlighted: Boolean,
     menuOpen: Boolean,
     onMenuChange: (Boolean) -> Unit,
@@ -545,6 +550,7 @@ private fun InteractiveRow(
                 onClick = { viewModel.toggleSelected(envelope.id) },
                 checked = envelope.id in state.selected,
                 bimiLookup = bimiLookup,
+                mailDomains = mailDomains,
             )
         } else {
             SwipeRow(
@@ -559,6 +565,7 @@ private fun InteractiveRow(
                     onClick = onOpen,
                     onLongClick = { onMenuChange(true) },
                     bimiLookup = bimiLookup,
+                    mailDomains = mailDomains,
                 )
             }
         }

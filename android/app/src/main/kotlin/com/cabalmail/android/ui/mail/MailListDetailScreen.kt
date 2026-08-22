@@ -46,6 +46,8 @@ fun MailListDetailScreen(
 ) {
     val navigator = rememberListDetailPaneScaffoldNavigator<Long>()
     val scope = rememberCoroutineScope()
+    val config by container.configService.config.collectAsState()
+    val mailDomains = config?.mailDomains.orEmpty()
     val openUid = navigator.currentDestination?.contentKey
     LaunchedEffect(initialUid) {
         if (initialUid != null && navigator.currentDestination?.contentKey == null) {
@@ -62,6 +64,7 @@ fun MailListDetailScreen(
                     state = listState,
                     viewModel = listViewModel,
                     bimiLookup = container.bimiLookup,
+                    mailDomains = mailDomains,
                     onOpenMessage = { envelope ->
                         scope.launch { navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, envelope.id) }
                     },

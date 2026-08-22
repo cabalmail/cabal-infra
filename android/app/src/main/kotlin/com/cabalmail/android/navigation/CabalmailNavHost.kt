@@ -372,11 +372,13 @@ private fun MailNavGraph(
                 viewModel(factory = MessageListViewModel.factory(container, folder))
             val state by viewModel.state.collectAsState()
             if (compactWidth) {
+                val config by container.configService.config.collectAsState()
                 MessageListScreen(
                     folder = folder,
                     state = state,
                     viewModel = viewModel,
                     bimiLookup = container.bimiLookup,
+                    mailDomains = config?.mailDomains.orEmpty(),
                     onOpenMessage = { envelope ->
                         navController.navigate("message/${Uri.encode(folder)}/${envelope.id}")
                     },
@@ -415,10 +417,12 @@ private fun MailNavGraph(
             val viewModel: SearchViewModel =
                 viewModel(factory = SearchViewModel.factory(container, folder))
             val state by viewModel.state.collectAsState()
+            val config by container.configService.config.collectAsState()
             SearchScreen(
                 state = state,
                 viewModel = viewModel,
                 bimiLookup = container.bimiLookup,
+                mailDomains = config?.mailDomains.orEmpty(),
                 onOpenMessage = { envelope ->
                     // Search rows carry their source folder; route there.
                     envelope.folder?.let { source ->
