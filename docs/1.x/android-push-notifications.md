@@ -186,6 +186,8 @@ Each phase is independently shippable and inert until the next one lands. Androi
 - `Mark as Read` and `Archive` actions via `NotificationCompat.Action` + a `BroadcastReceiver` calling `/set_flag` / `/move_messages` with WorkManager-backed retry, mirroring the Apple category actions.
 - Archive folder discovery copies the shipped Apple behavior: find the folder named "Archive" (case-insensitive) via `/list_folders`, cache it, degrade the action to absent when there is none.
 
+  > **Erratum (2026-08-23):** Shipped without discovery. The Android app's in-app archive (`DisposeIntent`) already hardcodes the `Archive` mailbox — which Dovecot auto-creates for every user (`special_use \Archive`, shipped with the Apple push phases) — so the notification action reuses that constant for consistency, and the degrade-to-absent case cannot arise. The action is omitted only when the mail already sits in the archive folder.
+
 ### Phase 6: As-implemented documentation
 
 - Fold Android into [docs/push-notifications.md](../push-notifications.md): FCM provisioning and rotation alongside the APNs sections, the per-sender dispatch behavior, and the client fallback matrix. This plan stays in `docs/1.x/` as the historical record, with errata if implementation diverges.
