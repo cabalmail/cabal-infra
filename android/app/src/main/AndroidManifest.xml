@@ -50,6 +50,22 @@
             </intent-filter>
         </activity>
 
+        <!-- FCM wake signals (docs/1.x/android-push-notifications.md):
+             content-free data messages enriched on-device. -->
+        <service
+            android:name=".notifications.PushMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- No FCM token before the user opts in: registration is explicit
+             (PushRegistrar, gated on the notifications setting), never
+             automatic at first launch. -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
+
         <!-- Serves downloaded attachments to ACTION_VIEW handlers without
              exposing raw file paths (plan §4.3, message detail). -->
         <provider

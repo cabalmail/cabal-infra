@@ -37,6 +37,24 @@ enum KeyStroke: Equatable {
 
     /// A named key, e.g. `key return`.
     case named(XCUIKeyboardKey)
+
+    /// Whether XCTest has to be handed a focused app before this stroke can be
+    /// delivered.
+    ///
+    /// The split is the delivery mechanism, not the key. A `.character` goes
+    /// out through `typeKey`, which tolerates an app with nothing focused; a
+    /// `.named` has no working `typeKey` form (see above) and goes out through
+    /// `typeText`, which raises an XCTest *failure* — fatal to the REPL, not an
+    /// error result — when no descendant has keyboard focus. So `key q` with
+    /// nothing focused is a harmless no-op while `key return` cost a restart
+    /// until the verb started taking the same guard `type` has taken since
+    /// #902 (#1230).
+    var requiresKeyboardFocus: Bool {
+        switch self {
+        case .character: false
+        case .named: true
+        }
+    }
 }
 
 /// Maps a `key` token onto the keystroke XCTest should be asked for.

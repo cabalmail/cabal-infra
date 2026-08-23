@@ -85,8 +85,43 @@ resource "aws_api_gateway_deployment" "deployment" {
   }
 }
 
+# API Gateway's execution log. The name is AWS's, not ours - the service
+# writes to API-Gateway-Execution-Logs_<rest-api-id>/<stage> and nowhere else -
+# so this group cannot be renamed, moved or split after the fact. Declaring it
+# here is what puts a retention on it; left to the service it would be created
+# on first write and never expire.
+#
+# Thirty days, not the 365 every other group in this stack carries: this is the
+# group #1233 is about. While #1223's method settings resolved to INFO with data
+# tracing on, the service wrote truncated request/response bodies, truncated
+# Authorization headers and complete JWT claims here, and retention on this
+# group is the only lever that ages that history out. The window it ages out is
+# fixed - the oldest retrievable event in either account is 2026-06-29, left
+# behind when 4d1e8f3e raised this group from 14 days to 365 - so 30 days
+# retires all of it within a month and nothing new joins it now that #1223 has
+# applied. Collateral, accepted deliberately: the access-log entries written
+# before the split above still live in this group and go with the bodies.
 resource "aws_cloudwatch_log_group" "api_logs" {
+  #checkov:skip=CKV_AWS_338:Thirty days is the decision recorded in #1233, not an oversight. This group is the one place request/response bodies and truncated Authorization headers landed while #1223's method settings were misresolved; a year of retention is a year of that history. ERROR-level execution logs are a debugging aid with a short half-life, so the forensic value the one-year floor protects is not the value this particular group carries. Every other log group in the stack keeps 365.
   name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.gateway.id}/${var.stage_name}"
+  retention_in_days = 30
+}
+
+# The access log is a group of its own, and that separation is the point.
+#
+# Until #1233 the stage's access log was written into `api_logs` above, so the
+# two signals could not be retained apart. They want different answers: the
+# access log is the per-request record worth keeping, while the execution log
+# is where #1223's misresolved method settings put request and response bodies
+# and truncated Authorization headers for ~8 weeks. The only lever for ageing
+# that history out is retention on its group, and while the groups were shared
+# that lever took the access log with it.
+#
+# Nothing moves. Entries written before this applies stay in the group that
+# received them, so the pre-split access-log history lives on in `api_logs` and
+# ages out on its 30 days. Everything written here keeps the year.
+resource "aws_cloudwatch_log_group" "api_access_logs" {
+  name              = "/cabal/apigateway/access/${aws_api_gateway_rest_api.gateway.id}/${var.stage_name}"
   retention_in_days = 365
 }
 
@@ -98,7 +133,7 @@ resource "aws_api_gateway_stage" "api_stage" {
   cache_cluster_enabled = false
   cache_cluster_size    = "0.5"
   access_log_settings {
-    destination_arn = aws_cloudwatch_log_group.api_logs.arn
+    destination_arn = aws_cloudwatch_log_group.api_access_logs.arn
     format          = "{ \"requestId\":\"$context.requestId\", \"extendedRequestId\":\"$context.extendedRequestId\",\"ip\": \"$context.identity.sourceIp\", \"caller\":\"$context.identity.caller\", \"user\":\"$context.identity.user\", \"requestTime\":\"$context.requestTime\", \"httpMethod\":\"$context.httpMethod\", \"resourcePath\":\"$context.resourcePath\", \"status\":\"$context.status\", \"protocol\":\"$context.protocol\", \"responseLength\":\"$context.responseLength\" }"
   }
 }

@@ -43,6 +43,20 @@ _READ_ONLY = {
     'check_dns_record': 'resolves a record and compares it to what Cabal expects',
 }
 
+_ADMIN_LIMITS = os.path.join(_API_DIR, '_shared', 'admin_limits.py')
+
+# Prose asserting that a handler skips one of the two controls the admin-
+# mutation contract requires. #1229: the envelope's own docstring still said
+# confirm_user "runs neither the rate limit nor the audit log" after #1227 gave
+# it both, and that sentence had already been read once as a rationale for the
+# gap. A claim about the code, sitting in the code, is checkable.
+_SKIPS_A_CONTROL = re.compile(
+    r'runs neither|does not run|skips the (rate limit|audit)|'
+    r'neither the rate limit|no rate limit|no audit line|'
+    r'without the rate limit|without an audit',
+    re.IGNORECASE
+)
+
 _ADMIN_GUARD = re.compile(r'\badmin_response_or_none\s*\(')
 _RATE_LIMIT = re.compile(r'\brate_limit_response_or_none\s*\(')
 _AUDIT = re.compile(r'\baudit_log\s*\(')
@@ -79,6 +93,37 @@ def _missing(src):
     if not _AUDIT.search(src):
         gaps.append('audit_log')
     return gaps
+
+
+def _prose_sentences(path):
+    '''Returns `path`'s text as whitespace-normalised sentences.
+
+    The docstrings wrap across lines, so a claim about a handler is only one
+    "sentence" after the newlines collapse.
+    '''
+    with open(path, encoding='utf-8') as handle:
+        text = handle.read()
+    text = re.sub(r'\s+', ' ', text)
+    return [part.strip() for part in re.split(r'(?<=\.)\s+', text) if part.strip()]
+
+
+def _stale_control_claims(sentences, admin):
+    '''Returns {handler: sentence} for each sentence claiming a handler skips
+    a control that `admin` proves it runs.
+
+    Attribution is per sentence, not per clause: the #1229 sentence said "the
+    first runs neither", so every handler it named is reported, including the
+    one the claim was accurate about. That over-reports within a sentence,
+    which is the right way round for a check whose remedy is a reword.
+    '''
+    found = {}
+    for sentence in sentences:
+        if not _SKIPS_A_CONTROL.search(sentence):
+            continue
+        for name, src in admin.items():
+            if re.search(r'\b%s\b' % re.escape(name), sentence) and not _missing(src):
+                found[name] = sentence
+    return found
 
 
 class AdminMutationGuardTests(unittest.TestCase):
@@ -158,6 +203,53 @@ class AdminMutationGuardTests(unittest.TestCase):
         it must not be reported as a gap.'''
         src = "    return admin_user_action_response(event, 'disable_user', 'disabled', op)\n"
         self.assertEqual(_missing(src), [])
+
+
+class AdminLimitsProseTests(unittest.TestCase):
+    """#1229: admin_limits.py's prose makes claims about handlers, and a claim
+    that goes stale reads as a rationale for the gap it describes."""
+
+    # The clause exactly as it shipped between #1227 and #1229, which is what
+    # this detector exists to catch.
+    STALE_1229 = (
+        'caller. confirm_user and set_user_domain_access differ further still '
+        '-- the first runs neither the rate limit nor the audit log, the '
+        'second reads a three-field body and reports allowed/denied rather '
+        'than a status word.'
+    )
+
+    def test_prose_parsed(self):
+        """Floor: an empty or unsplit parse would pass the invariant vacuously."""
+        sentences = _prose_sentences(_ADMIN_LIMITS)
+        self.assertGreater(len(sentences), 20, len(sentences))
+        named = [s for s in sentences if 'delete_user' in s or 'set_user_domain_access' in s]
+        self.assertTrue(named, 'prose names none of the handlers it documents')
+
+    def test_no_stale_control_claims(self):
+        """The invariant."""
+        stale = _stale_control_claims(_prose_sentences(_ADMIN_LIMITS), _admin_endpoints())
+        self.assertEqual(
+            stale, {},
+            'admin_limits.py says these handlers skip a control they run: %r' % stale
+        )
+
+    def test_detector_catches_the_claim_from_1229(self):
+        """Self-test on the real pre-fix sentence: restoring it must fail."""
+        stale = _stale_control_claims([self.STALE_1229], _admin_endpoints())
+        self.assertIn('confirm_user', stale)
+
+    def test_detector_allows_a_claim_that_is_true(self):
+        """Saying a handler skips a control is fine when it does -- otherwise
+        the fix for a real gap would be to stop describing it."""
+        admin = {'gappy': 'denial = admin_response_or_none(event)\n'}
+        sentence = 'gappy runs neither the rate limit nor the audit log.'
+        self.assertEqual(_stale_control_claims([sentence], admin), {})
+
+    def test_detector_ignores_prose_with_no_control_claim(self):
+        """Naming a handler is not making a claim about its controls."""
+        admin = _admin_endpoints()
+        sentence = 'confirm_user differs from disable_user only in which Cognito call it makes.'
+        self.assertEqual(_stale_control_claims([sentence], admin), {})
 
 
 if __name__ == '__main__':

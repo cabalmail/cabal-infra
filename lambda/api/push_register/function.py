@@ -1,9 +1,11 @@
-'''Registers (upserts) an APNs device token for the calling user.
+'''Registers (upserts) a push device token for the calling user.
 
-The Apple clients call this on every launch after sign-in and again whenever
-APNs rotates the token, so the write must be an idempotent upsert. One row per
-(user, device token); push_dispatch fans a wake signal out to every row it
-finds for the recipient. See docs/0.11.x/push-notifications.md.
+The clients call this on every launch after sign-in and again whenever the
+push service rotates the token, so the write must be an idempotent upsert.
+One row per (user, device token); push_dispatch fans a wake signal out to
+every row it finds for the recipient, routing Apple rows to APNs and android
+rows to FCM. See docs/0.11.x/push-notifications.md and
+docs/1.x/android-push-notifications.md.
 '''
 import datetime
 import json
@@ -17,13 +19,22 @@ table = ddb.Table(TABLE_NAME)
 
 # APNs device tokens are opaque hex; currently 32 bytes (64 hex chars) but
 # Apple documents the length as subject to change, so bound rather than pin.
-DEVICE_TOKEN_RE = re.compile(r'^[0-9a-f]{16,400}$')
+# Registration normalizes them to lowercase.
+APNS_DEVICE_TOKEN_RE = re.compile(r'^[0-9a-f]{16,400}$')
 
-# bundle_id doubles as the APNs topic in push_dispatch, so only known app ids
-# are accepted; platform is informational and derived rather than trusted.
+# FCM registration tokens are opaque strings (~140-200 chars today: an
+# instance id, a colon, and a base64url-ish payload) with no documented
+# grammar, so bound charset and length rather than pin. Case-significant —
+# never lowercase one.
+FCM_DEVICE_TOKEN_RE = re.compile(r'^[A-Za-z0-9_:\-]{16,400}$')
+
+# bundle_id selects the sender in push_dispatch (and doubles as the APNs
+# topic for Apple rows), so only known app ids are accepted; platform is
+# informational and derived rather than trusted.
 ALLOWED_BUNDLE_IDS = {
     'com.cabalmail.Cabalmail': 'ios',
     'com.cabalmail.CabalmailMac': 'macos',
+    'com.cabalmail.android': 'android',
 }
 
 MAX_ENABLED_FOLDERS = 100
@@ -56,6 +67,22 @@ def _validate_enabled_folders(value):
     return cleaned
 
 
+def _validate_device_token(bundle_id, raw):
+    '''Returns (normalized_token, None) on success or (None, error_response)
+    per the platform's token grammar: Android tokens are case-significant
+    and pass through as-is; Apple tokens are hex and normalize to
+    lowercase.'''
+    token = str(raw or '')
+    if ALLOWED_BUNDLE_IDS[bundle_id] == 'android':
+        if FCM_DEVICE_TOKEN_RE.match(token):
+            return token, None
+    else:
+        token = token.lower()
+        if APNS_DEVICE_TOKEN_RE.match(token):
+            return token, None
+    return None, {'statusCode': 400, 'body': json.dumps({'Error': 'Invalid device_token.'})}
+
+
 def _info_field(body, key):
     '''Returns a short informational string field, clipped, never trusted.'''
     value = body.get(key, '')
@@ -72,13 +99,14 @@ def handler(event, _context):
     except (TypeError, ValueError):
         return {'statusCode': 400, 'body': json.dumps({'Error': 'Invalid JSON body.'})}
 
-    device_token = str(body.get('device_token', '')).lower()
-    if not DEVICE_TOKEN_RE.match(device_token):
-        return {'statusCode': 400, 'body': json.dumps({'Error': 'Invalid device_token.'})}
-
+    # Bundle id first: it decides which token grammar applies.
     bundle_id = body.get('bundle_id')
     if bundle_id not in ALLOWED_BUNDLE_IDS:
         return {'statusCode': 400, 'body': json.dumps({'Error': 'Unknown bundle_id.'})}
+
+    device_token, error = _validate_device_token(bundle_id, body.get('device_token'))
+    if error:
+        return error
 
     # Tri-state, matching set_preferences' merge semantics: key absent =
     # leave the row's existing selection alone (the app re-registers on

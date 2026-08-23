@@ -1,14 +1,15 @@
-# APNs push-notification dispatch pipeline (docs/0.11.0/push-notifications.md):
-# the consumer Lambda for the wake-signal queue, its IAM, the event source
-# mapping, and the SSM parameters holding the APNs credentials.
+# Push-notification dispatch pipeline (docs/0.11.0/push-notifications.md,
+# extended for Android by docs/1.x/android-push-notifications.md): the
+# consumer Lambda for the wake-signal queue, its IAM, the event source
+# mapping, and the SSM parameters holding the APNs and FCM credentials.
 #
 # The producer side (cabal-push-queue + DLQ, the imap task-role grant, and the
 # PUSH_QUEUE_URL env var) lives in modules/ecs/push.tf next to the imap task
 # definition. This consumer looks up the user's device tokens in
-# cabal-push-tokens and sends one content-free APNs alert per token; the
-# Notification Service Extension on the device then calls /push_envelope to
-# enrich the alert locally, so Apple's infrastructure never sees message
-# content.
+# cabal-push-tokens and sends one content-free wake signal per token — Apple
+# rows via APNs, android rows via FCM; the device then calls /push_envelope
+# to enrich the notification locally, so neither Apple's nor Google's
+# infrastructure ever sees message content.
 
 # -- APNs credentials --------------------------------------------
 # Operator-populated after creating an APNs auth key in the Apple Developer
@@ -16,21 +17,22 @@
 #   aws ssm put-parameter --name /cabal/apns/private_key \
 #     --type SecureString --value file://AuthKey_XXXXXXXXXX.p8 --overwrite
 # The dispatch Lambda treats the placeholder value as "not configured" and
-# drops wake signals instead of retrying them into the DLQ, so environments
-# without an APNs key (or with no Apple app installed) stay quiet.
+# drops that platform's wake signals instead of retrying them into the DLQ,
+# so environments without an APNs key (or with no Apple app installed) stay
+# quiet. The same posture applies per-sender to the FCM credential below.
 
 locals {
   # The "placeholder-" prefix is load-bearing: push_dispatch's function.py
   # (PLACEHOLDER_PREFIX) matches on it to decide the environment is not yet
   # provisioned. Keep the two in sync.
-  apns_placeholder = "placeholder-set-via-aws-ssm-put-parameter"
+  push_placeholder = "placeholder-set-via-aws-ssm-put-parameter"
 }
 
 resource "aws_ssm_parameter" "apns_team_id" {
   name        = "/cabal/apns/team_id"
   description = "Apple Developer Team ID for APNs token auth. Populate via aws ssm put-parameter --overwrite."
   type        = "SecureString"
-  value       = local.apns_placeholder
+  value       = local.push_placeholder
 
   lifecycle {
     ignore_changes = [value]
@@ -41,7 +43,7 @@ resource "aws_ssm_parameter" "apns_key_id" {
   name        = "/cabal/apns/key_id"
   description = "Key ID of the APNs auth key (.p8). Populate via aws ssm put-parameter --overwrite."
   type        = "SecureString"
-  value       = local.apns_placeholder
+  value       = local.push_placeholder
 
   lifecycle {
     ignore_changes = [value]
@@ -52,7 +54,7 @@ resource "aws_ssm_parameter" "apns_private_key" {
   name        = "/cabal/apns/private_key"
   description = "APNs auth key (.p8 PEM content). High-value: rotate via the Apple Developer portal per docs/push-notifications.md. Populate via aws ssm put-parameter --overwrite."
   type        = "SecureString"
-  value       = local.apns_placeholder
+  value       = local.push_placeholder
 
   lifecycle {
     ignore_changes = [value]
@@ -66,6 +68,24 @@ resource "aws_ssm_parameter" "apns_endpoint" {
   description = "APNs provider API base URL. Default is production; point non-prod at https://api.sandbox.push.apple.com when testing development-signed builds."
   type        = "SecureString"
   value       = "https://api.push.apple.com"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+# -- FCM credentials ---------------------------------------------
+# Operator-populated after creating a Firebase project and a least-privilege
+# service account (roles/firebasecloudmessaging.admin only — not the default
+# firebase-adminsdk account) per docs/1.x/android-push-notifications.md:
+#   aws ssm put-parameter --name /cabal/fcm/service_account \
+#     --type SecureString --value file://cabal-fcm-<env>.json --overwrite
+
+resource "aws_ssm_parameter" "fcm_service_account" {
+  name        = "/cabal/fcm/service_account"
+  description = "Google service-account JSON key for FCM HTTP v1 sends. High-value: rotate per docs/1.x/android-push-notifications.md. Populate via aws ssm put-parameter --overwrite."
+  type        = "SecureString"
+  value       = local.push_placeholder
 
   lifecycle {
     ignore_changes = [value]
@@ -108,6 +128,8 @@ resource "aws_iam_role_policy" "push_dispatch" {
         Resource = [
           "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/apns",
           "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/apns/*",
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/fcm",
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/fcm/*",
         ]
       },
       {
@@ -157,7 +179,7 @@ resource "aws_lambda_function" "push_dispatch" {
   # Same posture as the append_sent consumer this function mirrors:
   #checkov:skip=CKV_AWS_115: shared-pool concurrency is the point; a per-function reserve would starve the API lambdas
   #checkov:skip=CKV_AWS_116: SQS is the trigger, so failed events redeliver and land in cabal-push-dlq; a Lambda-side DLQ is redundant here
-  #checkov:skip=CKV_AWS_117: needs APNs (public internet) and only AWS APIs otherwise; a VPC placement would add a NAT dependency for zero data-plane gain
+  #checkov:skip=CKV_AWS_117: needs APNs and FCM (public internet) and only AWS APIs otherwise; a VPC placement would add a NAT dependency for zero data-plane gain
   #checkov:skip=CKV_AWS_272: code-signing is not part of this repo's Lambda supply chain (zips are hash-pinned at build; see build-api-one.sh)
   #checkov:skip=CKV_AWS_50: X-Ray tracing is not used anywhere in this stack (see the tfsec ignore above)
   s3_bucket        = var.bucket

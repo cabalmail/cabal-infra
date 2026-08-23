@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import AuthShell from './AuthShell';
 import PasswordField from './PasswordField';
+import UsernameField from './UsernameField';
 
 /**
  * Sign-in screen per redesign §1: narrow card, eyebrow + title + subtitle,
@@ -32,25 +33,7 @@ function Login({
         Log in with the username you chose when you signed up.
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="userName">Username</label>
-          </div>
-          <input
-            id="userName"
-            name="userName"
-            type="text"
-            className="mono"
-            autoComplete="username"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck="false"
-            placeholder="your-username"
-            onChange={onUsernameChange}
-            value={username || ''}
-            required
-          />
-        </div>
+        <UsernameField value={username} onChange={onUsernameChange} />
         <PasswordField
           label="Password"
           autoComplete="current-password"
