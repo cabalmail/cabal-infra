@@ -1,6 +1,7 @@
 package com.cabalmail.android.notifications
 
 import android.content.Context
+import android.util.Log
 import com.cabalmail.android.BuildConfig
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -26,12 +27,20 @@ object Push {
             BuildConfig.FCM_API_KEY.isNotEmpty() &&
             BuildConfig.FCM_SENDER_ID.isNotEmpty()
 
+    private const val TAG = "cabal-push"
+
     /** True when this device can actually receive FCM messages. */
-    fun available(context: Context): Boolean =
-        configured &&
-            GoogleApiAvailability
-                .getInstance()
-                .isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
+    fun available(context: Context): Boolean {
+        if (!configured) {
+            return false
+        }
+        val code = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
+        if (code != ConnectionResult.SUCCESS) {
+            Log.w(TAG, "Play services unavailable for push (code $code)")
+            return false
+        }
+        return true
+    }
 
     /**
      * Initializes the default FirebaseApp from BuildConfig, once. Safe (and
@@ -64,6 +73,9 @@ object Push {
     suspend fun currentToken(): String? =
         suspendCancellableCoroutine { continuation ->
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    Log.w(TAG, "FCM token fetch failed", task.exception)
+                }
                 continuation.resume(if (task.isSuccessful) task.result else null)
             }
         }

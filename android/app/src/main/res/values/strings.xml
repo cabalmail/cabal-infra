@@ -161,6 +161,19 @@
     <string name="settings_new_mail_notifications">New mail notifications</string>
     <string name="settings_new_mail_notifications_hint">Alerts arrive by push where Google Play services is available; otherwise INBOX is checked about every 15 minutes.</string>
     <string name="settings_notifications_denied">Notification permission was denied. Allow it in system settings to turn this on.</string>
+    <string name="notification_action_mark_read">Mark as read</string>
+    <string name="notification_action_archive">Archive</string>
+    <string name="settings_push_folders">Notification folders</string>
+    <string name="push_folders_inbox_only">Inbox only</string>
+    <string name="push_folders_all">All folders</string>
+    <string name="push_folders_custom">Selected folders</string>
+    <string name="push_folders_loading">Loading folders…</string>
+    <string name="push_folders_hint">Applies to instant push alerts on this device. The fallback background check covers Inbox only.</string>
+    <plurals name="push_folders_count">
+        <item quantity="one">%d folder</item>
+        <item quantity="other">%d folders</item>
+    </plurals>
+    <string name="save">Save</string>
 
     <!-- Addresses -->
     <string name="addresses_title">Addresses</string>

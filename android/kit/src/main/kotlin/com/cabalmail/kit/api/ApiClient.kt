@@ -678,15 +678,21 @@ class ApiClient(
     /**
      * Registers (upserts) this device's FCM registration token for the
      * signed-in user. Idempotent — call it on every launch and again on
-     * token rotation; omitting `enabled_folders` preserves any folder
-     * selection already on the row. [deviceToken] is case-significant:
-     * never normalize it.
+     * token rotation. [deviceToken] is case-significant: never normalize
+     * it.
+     *
+     * [enabledFolders] is the per-device folder opt-in, wire semantics
+     * verbatim: null omits the key (the server preserves the row's
+     * existing selection), an empty list resets to the INBOX-only
+     * default, `["*"]` means every folder, anything else is exact
+     * membership.
      */
     suspend fun pushRegister(
         deviceToken: String,
         bundleId: String,
         appVersion: String,
         locale: String,
+        enabledFolders: List<String>? = null,
     ) {
         call(
             HttpMethod.Post,
@@ -698,6 +704,9 @@ class ApiClient(
                     put("platform", "android")
                     put("app_version", appVersion)
                     put("locale", locale)
+                    enabledFolders?.let { folders ->
+                        put("enabled_folders", buildJsonArray { folders.forEach { add(it) } })
+                    }
                 },
         )
     }

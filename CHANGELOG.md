@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-08-23
+
+### Added
+- Android: **Mark as read and Archive from the notification.** New-mail
+  notifications now carry both actions: a tap dismisses the alert
+  immediately and applies the change on the server in the background,
+  retrying on transient failure — no need to open the app. Archive uses
+  the same Archive mailbox as the in-app action and is omitted when the
+  mail is already there.
+- Android: **Per-folder push opt-in.** A "Notification folders" picker in
+  Settings scopes instant push alerts on this device to the inbox only (the
+  default), every folder, or an explicit selection — matching the Apple
+  clients' per-device behavior. The fallback background check still covers
+  the inbox only.
+
+### Changed
+- Android: **Disposed rows animate out of the list.** The optimistic
+  removal after a swipe-dispose, move, or purge was instantaneous, abrupt
+  enough for the eye to miss. The departing row now fades out over a
+  quarter second while the rows below glide up to close the gap, in both
+  the message list and search results. Rows still appear instantly; only
+  removal animates.
+
 ## [1.4.0] - 2026-08-23
 
 ### Added

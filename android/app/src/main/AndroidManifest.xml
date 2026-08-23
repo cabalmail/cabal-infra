@@ -66,6 +66,11 @@
             android:name="firebase_messaging_auto_init_enabled"
             android:value="false" />
 
+        <!-- Mark as read / Archive taps on new-mail notifications. -->
+        <receiver
+            android:name=".notifications.NotificationActionReceiver"
+            android:exported="false" />
+
         <!-- Serves downloaded attachments to ACTION_VIEW handlers without
              exposing raw file paths (plan §4.3, message detail). -->
         <provider

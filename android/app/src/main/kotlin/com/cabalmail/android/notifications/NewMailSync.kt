@@ -22,6 +22,7 @@ import androidx.work.WorkerParameters
 import com.cabalmail.android.CabalmailApp
 import com.cabalmail.android.MainActivity
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.mail.MessageListViewModel
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.PushEnvelope
 import com.cabalmail.kit.models.mailboxDisplayName
@@ -164,7 +165,7 @@ object NewMailSync {
                     open,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
-            val notification =
+            val builder =
                 NotificationCompat
                     .Builder(context, CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_notification)
@@ -174,8 +175,23 @@ object NewMailSync {
                     .setAutoCancel(true)
                     .setGroup(GROUP)
                     .setCategory(NotificationCompat.CATEGORY_EMAIL)
-                    .build()
-            manager.notify(alert.id, notification)
+            NotificationAction
+                .eligible(folder, alert.uid, MessageListViewModel.ARCHIVE_FOLDER)
+                .forEach { verb ->
+                    // Action icons are ignored since Android N; 0 avoids a
+                    // dead asset.
+                    builder.addAction(
+                        0,
+                        context.getString(
+                            when (verb) {
+                                NotificationAction.Verb.MARK_READ -> R.string.notification_action_mark_read
+                                NotificationAction.Verb.ARCHIVE -> R.string.notification_action_archive
+                            },
+                        ),
+                        NotificationActionReceiver.pendingIntent(context, verb, folder, alert.uid, alert.id),
+                    )
+                }
+            manager.notify(alert.id, builder.build())
         }
         if (alerts.size > 1) {
             val summary =

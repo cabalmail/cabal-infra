@@ -22,16 +22,26 @@ object PushRegistrar {
     /** Registers this device if push is available and the user opted in. */
     suspend fun register(container: AppContainer) =
         withContext(Dispatchers.Default) {
+            // Each early return logs its reason: a silent skip here cost a
+            // long diagnosis session once (the gates are all invisible from
+            // the server side).
             if (!Push.available(container.applicationContext)) {
+                Log.d(TAG, "register skipped: push unavailable (no config or no Play services)")
                 return@withContext
             }
             if (!container.preferences.current().notificationsEnabled) {
+                Log.d(TAG, "register skipped: notifications not enabled")
                 return@withContext
             }
             if (container.tokenStore.readTokens() == null) {
+                Log.d(TAG, "register skipped: not signed in")
                 return@withContext
             }
-            val token = Push.currentToken() ?: return@withContext
+            val token = Push.currentToken()
+            if (token == null) {
+                Log.w(TAG, "register skipped: no FCM token; will retry next launch")
+                return@withContext
+            }
             registerToken(container, token)
         }
 
@@ -46,7 +56,15 @@ object PushRegistrar {
                 bundleId = BuildConfig.APPLICATION_ID,
                 appVersion = BuildConfig.VERSION_NAME,
                 locale = Locale.getDefault().toLanguageTag(),
+                // Always explicit, so the token row mirrors this device's
+                // selection (empty = the INBOX-only default).
+                enabledFolders =
+                    container.preferences
+                        .current()
+                        .pushFolders
+                        .sorted(),
             )
+            Log.d(TAG, "push registration upserted")
         }.onFailure { Log.w(TAG, "push registration failed; will retry next launch", it) }
     }
 
