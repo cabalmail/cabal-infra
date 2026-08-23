@@ -116,27 +116,29 @@ fun SearchScreen(
                 }
             }
             items(state.results, key = { "${it.folder}/${it.id}" }) { envelope ->
-                SwipeRow(
-                    isSeen = envelope.isSeen,
-                    onToggleSeen = { viewModel.toggleSeen(envelope) },
-                    onDispose = {
-                        if (envelope.folder == "Trash") {
-                            pendingPurge = envelope
-                        } else {
-                            viewModel.dispose(envelope)
-                        }
-                    },
-                ) {
-                    EnvelopeRow(
-                        envelope = envelope,
-                        onClick = { onOpenMessage(envelope) },
-                        onLongClick = { viewModel.toggleFlag(envelope) },
-                        folderLabel = envelope.folder,
-                        bimiLookup = bimiLookup,
-                        mailDomains = mailDomains,
-                    )
+                Column(modifier = Modifier.animateRowRemoval(this)) {
+                    SwipeRow(
+                        isSeen = envelope.isSeen,
+                        onToggleSeen = { viewModel.toggleSeen(envelope) },
+                        onDispose = {
+                            if (envelope.folder == "Trash") {
+                                pendingPurge = envelope
+                            } else {
+                                viewModel.dispose(envelope)
+                            }
+                        },
+                    ) {
+                        EnvelopeRow(
+                            envelope = envelope,
+                            onClick = { onOpenMessage(envelope) },
+                            onLongClick = { viewModel.toggleFlag(envelope) },
+                            folderLabel = envelope.folder,
+                            bimiLookup = bimiLookup,
+                            mailDomains = mailDomains,
+                        )
+                    }
+                    HorizontalDivider()
                 }
-                HorizontalDivider()
             }
             if (state.searching || state.cursor != null) {
                 item {
