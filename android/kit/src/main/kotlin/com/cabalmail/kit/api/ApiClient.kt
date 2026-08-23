@@ -17,6 +17,7 @@ import com.cabalmail.kit.models.MyDomains
 import com.cabalmail.kit.models.NavState
 import com.cabalmail.kit.models.Preferences
 import com.cabalmail.kit.models.PreferencesUpdate
+import com.cabalmail.kit.models.PushEnvelope
 import com.cabalmail.kit.models.SaveDraftResult
 import com.cabalmail.kit.models.SearchFilters
 import com.cabalmail.kit.models.SearchResult
@@ -671,4 +672,71 @@ class ApiClient(
             )
         return decode(call(HttpMethod.Put, "set_nav_state", body = body))
     }
+
+    // ----------------------------------------------------------------- push
+
+    /**
+     * Registers (upserts) this device's FCM registration token for the
+     * signed-in user. Idempotent — call it on every launch and again on
+     * token rotation; omitting `enabled_folders` preserves any folder
+     * selection already on the row. [deviceToken] is case-significant:
+     * never normalize it.
+     */
+    suspend fun pushRegister(
+        deviceToken: String,
+        bundleId: String,
+        appVersion: String,
+        locale: String,
+    ) {
+        call(
+            HttpMethod.Post,
+            "push_register",
+            body =
+                buildJsonObject {
+                    put("device_token", deviceToken)
+                    put("bundle_id", bundleId)
+                    put("platform", "android")
+                    put("app_version", appVersion)
+                    put("locale", locale)
+                },
+        )
+    }
+
+    /**
+     * Removes this device's token row (sign-out, or notifications turned
+     * off). The dispatcher also prunes rows the push service rejects, so
+     * this is the polite path, not the only one.
+     */
+    suspend fun pushDeregister(deviceToken: String) {
+        call(
+            HttpMethod.Post,
+            "push_deregister",
+            body = buildJsonObject { put("device_token", deviceToken) },
+        )
+    }
+
+    /**
+     * Enriches a content-free wake signal with sender/subject/snippet.
+     * [msgId] is authoritative when present; [uid] is a best-effort hint
+     * (procmail enqueues before Dovecot assigns the UID). 404 = the
+     * message is gone; 503 = a planned IMAP roll — callers degrade to the
+     * generic alert either way.
+     */
+    suspend fun pushEnvelope(
+        folder: String,
+        uid: Long?,
+        msgId: String?,
+    ): PushEnvelope =
+        decode(
+            call(
+                HttpMethod.Post,
+                "push_envelope",
+                body =
+                    buildJsonObject {
+                        put("folder", folder)
+                        uid?.takeIf { it > 0 }?.let { put("uid", it) }
+                        msgId?.takeIf { it.isNotBlank() }?.let { put("msg_id", it) }
+                    },
+            ),
+        )
 }

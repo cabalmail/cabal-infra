@@ -55,6 +55,7 @@ import com.cabalmail.android.AppContainer
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
 import com.cabalmail.android.notifications.NewMailSync
+import com.cabalmail.android.notifications.PushRegistrar
 import com.cabalmail.android.ui.addresses.AddressesScreen
 import com.cabalmail.android.ui.addresses.AddressesViewModel
 import com.cabalmail.android.ui.compose.ComposeLaunch
@@ -132,6 +133,11 @@ fun CabalmailNavHost(
         // Keep the background sync scheduled to match the preference (a
         // fresh install or a cleared WorkManager DB would otherwise drift).
         NewMailSync.schedule(context, container.preferences.current().notificationsEnabled)
+        // Re-assert the push registration every launch, like the Apple
+        // client: /push_register is an idempotent upsert, and this is what
+        // heals reinstalls and missed token rotations. Quiet no-op when
+        // push is unavailable or the user has not opted in.
+        PushRegistrar.register(container)
     }
 
     // Ctrl+N from anywhere but an open compose (plan §7.2).
@@ -512,6 +518,9 @@ private fun MailNavGraph(
                 state = state,
                 preferences = preferences,
                 onUpdate = viewModel::update,
+                onPushChange = { enabled ->
+                    if (enabled) viewModel.registerPush() else viewModel.deregisterPush()
+                },
                 onSignOut = onSignOut,
                 onBack = null,
             )

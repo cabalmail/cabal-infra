@@ -69,6 +69,8 @@ fun SettingsScreen(
     state: SettingsUiState,
     preferences: AppPreferences,
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+    /** Push (de)registration when the notifications toggle changes. */
+    onPushChange: (Boolean) -> Unit,
     onSignOut: () -> Unit,
     /** Null when hosted as a top-level destination (no back arrow). */
     onBack: (() -> Unit)?,
@@ -191,6 +193,7 @@ fun SettingsScreen(
             NotificationsRow(
                 enabled = preferences.notificationsEnabled,
                 onChange = { value -> onUpdate { it.copy(notificationsEnabled = value) } },
+                onPushChange = onPushChange,
             )
 
             SectionHeader(stringResource(R.string.settings_appearance))
@@ -243,13 +246,16 @@ fun SettingsScreen(
 // --------------------------------------------------------------- rows
 
 /**
- * The new-mail toggle (plan §7.3): turning it on asks for the notification
- * permission on API 33+ and schedules the periodic sync; off cancels it.
+ * The new-mail toggle (plan §7.3, push since the FCM phase): turning it on
+ * asks for the notification permission on API 33+, schedules the periodic
+ * sync, and registers for push where available; off cancels and
+ * deregisters.
  */
 @Composable
 private fun NotificationsRow(
     enabled: Boolean,
     onChange: (Boolean) -> Unit,
+    onPushChange: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     var denied by remember { mutableStateOf(false) }
@@ -257,6 +263,7 @@ private fun NotificationsRow(
         NewMailSync.clearBaseline(context)
         NewMailSync.schedule(context, enabled = true)
         onChange(true)
+        onPushChange(true)
     }
     val permission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -275,6 +282,7 @@ private fun NotificationsRow(
             if (!value) {
                 NewMailSync.schedule(context, enabled = false)
                 onChange(false)
+                onPushChange(false)
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !NewMailSync.canPost(context)) {
                 permission.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {

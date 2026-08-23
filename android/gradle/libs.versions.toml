@@ -30,6 +30,10 @@ tripletPlay = "4.1.1"
 jetbrainsMarkdown = "0.7.8"
 # Background new-mail sync (Phase 7).
 work = "2.10.1"
+# Push (docs/1.x/android-push-notifications.md). No google-services plugin —
+# FirebaseOptions come from gradle properties (app/build.gradle.kts).
+firebaseMessaging = "25.1.2"
+playServicesBase = "18.10.1"
 
 [libraries]
 # AndroidX + Compose (app module)
@@ -86,6 +90,10 @@ jetbrains-markdown = { group = "org.jetbrains", name = "markdown", version.ref =
 
 # Background work (app module)
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+
+# Push (app module): FCM receive + Play services availability probe.
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
+play-services-base = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
 
 # Testing
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }

@@ -291,3 +291,16 @@ data class NavState(
     @SerialName("list_scroll") val listScroll: Long? = null,
     @SerialName("msg_scroll") val msgScroll: Long? = null,
 )
+
+/**
+ * `/push_envelope` enrichment for a content-free wake signal: the sender
+ * (raw RFC 5322 From header), subject, plain-text snippet, and the resolved
+ * UID (authoritative when the signal carried only a Message-ID).
+ */
+@Serializable
+data class PushEnvelope(
+    val from: String = "",
+    val subject: String = "",
+    val snippet: String = "",
+    val uid: Long = 0,
+)

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.notifications.PushRegistrar
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.MfaMethod
@@ -126,6 +127,9 @@ class SignInViewModel(
 
     fun signOut() {
         runAuthAction {
+            // Push deregistration needs the live session, so it goes before
+            // the token wipe; it is best-effort and never blocks sign-out.
+            PushRegistrar.deregister(container)
             container.requireAuth().signOut()
             AuthPhase.SignedOut
         }

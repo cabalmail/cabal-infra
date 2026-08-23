@@ -159,7 +159,7 @@
     </plurals>
     <string name="settings_notifications">Notifications</string>
     <string name="settings_new_mail_notifications">New mail notifications</string>
-    <string name="settings_new_mail_notifications_hint">Checks INBOX about every 15 minutes in the background.</string>
+    <string name="settings_new_mail_notifications_hint">Alerts arrive by push where Google Play services is available; otherwise INBOX is checked about every 15 minutes.</string>
     <string name="settings_notifications_denied">Notification permission was denied. Allow it in system settings to turn this on.</string>
 
     <!-- Addresses -->
