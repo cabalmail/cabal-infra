@@ -1,4 +1,5 @@
 import AuthShell from '../Login/AuthShell';
+import UsernameField from '../Login/UsernameField';
 
 /**
  * Forgot-password screen per §3: single username field submits a Cognito
@@ -70,25 +71,7 @@ function ForgotPassword({
         added one.
       </p>
       <form className="auth__form" onSubmit={onSubmit} noValidate>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="userName">Username</label>
-          </div>
-          <input
-            id="userName"
-            name="userName"
-            type="text"
-            className="mono"
-            autoComplete="username"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck="false"
-            placeholder="your-username"
-            onChange={onUsernameChange}
-            value={username || ''}
-            required
-          />
-        </div>
+        <UsernameField value={username} onChange={onUsernameChange} />
         <button type="submit" className="auth__btn-primary">
           Send reset code
         </button>

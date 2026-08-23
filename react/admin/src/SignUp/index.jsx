@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import AuthShell from '../Login/AuthShell';
 import PasswordField from '../Login/PasswordField';
+import UsernameField from '../Login/UsernameField';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -91,28 +92,15 @@ function SignUp({
           : "Pick a username and password. Your email is used only for verification and recovery."}
       </p>
       <form className="auth__form" onSubmit={handleSubmit} noValidate>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="userName">Username</label>
-          </div>
-          <input
-            id="userName"
-            name="userName"
-            type="text"
-            className="mono"
-            autoComplete="username"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck="false"
-            placeholder="choose-a-username"
-            onChange={onUsernameChange}
-            value={username || ''}
-            required
-          />
+        <UsernameField
+          value={username}
+          onChange={onUsernameChange}
+          placeholder="choose-a-username"
+        >
           <p className="auth__field-help">
             3&ndash;32 characters. Lowercase letters, numbers, hyphens.
           </p>
-        </div>
+        </UsernameField>
         <div className="auth__field">
           <div className="auth__field-header">
             <label className="auth__field-label" htmlFor="email">Email address</label>
