@@ -86,6 +86,8 @@ fun MessageListScreen(
     handleShortcuts: Boolean = true,
     /** The message open in an adjacent detail pane, if any. */
     highlightedUid: Long? = null,
+    /** False beside a visible folder pane, where there is no hub to go back to. */
+    showBack: Boolean = true,
 ) {
     val listState = rememberLazyListState()
     ForegroundPolling(viewModel::poll)
@@ -213,6 +215,7 @@ fun MessageListScreen(
                     viewModel = viewModel,
                     onOpenSearch = onOpenSearch,
                     onBack = onBack,
+                    showBack = showBack,
                 )
             }
         },
@@ -337,16 +340,19 @@ private fun DefaultTopBar(
     viewModel: MessageListViewModel,
     onOpenSearch: () -> Unit,
     onBack: () -> Unit,
+    showBack: Boolean,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     TopAppBar(
         title = { Text(folder) },
         navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.back),
-                )
+            if (showBack) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back),
+                    )
+                }
             }
         },
         actions = {
