@@ -431,4 +431,37 @@ class ApiClientTest {
 
             assertFalse(server.body(0).contains("\"uid\""))
         }
+
+    @Test
+    fun `push register sends the folder opt-in verbatim and omits it when null`() =
+        runTest {
+            val server =
+                Server(
+                    HttpStatusCode.OK to """{"status": "registered"}""",
+                    HttpStatusCode.OK to """{"status": "registered"}""",
+                    HttpStatusCode.OK to """{"status": "registered"}""",
+                )
+
+            server.api.pushRegister("droid:tok_123456789", "com.cabalmail.android", "1.5.0", "en-US")
+            server.api.pushRegister(
+                "droid:tok_123456789",
+                "com.cabalmail.android",
+                "1.5.0",
+                "en-US",
+                enabledFolders = emptyList(),
+            )
+            server.api.pushRegister(
+                "droid:tok_123456789",
+                "com.cabalmail.android",
+                "1.5.0",
+                "en-US",
+                enabledFolders = listOf("INBOX", "Receipts"),
+            )
+
+            // Null omits the key: the server preserves the row's selection.
+            assertFalse(server.body(0).contains("enabled_folders"))
+            // Empty list is the explicit reset to the INBOX-only default.
+            assertTrue(server.body(1).contains("\"enabled_folders\":[]"))
+            assertTrue(server.body(2).contains("\"enabled_folders\":[\"INBOX\",\"Receipts\"]"))
+        }
 }

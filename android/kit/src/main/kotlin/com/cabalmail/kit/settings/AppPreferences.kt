@@ -130,6 +130,15 @@ data class AppPreferences(
     val dynamicColor: Boolean = true,
     /** Background new-mail notifications (plan §7.3); off until the user opts in. */
     val notificationsEnabled: Boolean = false,
+    /**
+     * Push folder opt-in, per device like the Apple clients (it lives on
+     * this device's token row via `/push_register`, never in the synced
+     * preferences). Wire semantics verbatim: empty = INBOX only (the
+     * server default), `{"*"}` = every folder, anything else = exact
+     * membership — a set without INBOX gets no INBOX pushes. The
+     * 15-minute fallback poll is unaffected (INBOX only).
+     */
+    val pushFolders: Set<String> = emptySet(),
     val defaultSort: DefaultSort = DefaultSort.RECEIVED,
     val defaultSortDescending: Boolean = true,
 )
