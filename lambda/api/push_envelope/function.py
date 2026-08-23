@@ -17,6 +17,7 @@ from email.policy import default
 from html.parser import HTMLParser
 
 from helper import CACHE_BUCKET  # pylint: disable=import-error
+from helper import delete_object  # pylint: disable=import-error
 from helper import get_imap_client  # pylint: disable=import-error
 from helper import get_message  # pylint: disable=import-error
 from helper import get_object  # pylint: disable=import-error
@@ -25,8 +26,8 @@ from helper import maintenance_guard  # pylint: disable=import-error
 from helper import MessageGoneError  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import upload_object  # pylint: disable=import-error
-from helper import validate_content_id  # pylint: disable=import-error
 from helper import validate_folder_name  # pylint: disable=import-error
+from helper import validate_message_id  # pylint: disable=import-error
 from helper import validate_uid  # pylint: disable=import-error
 
 # The notification preview area is small and iOS truncates aggressively; these
@@ -110,14 +111,25 @@ def _load_by_message_id(user, folder, uid_hint, msg_id):
         if uid is None:
             return None, None
         key = f'{user}/{folder}/{uid}/raw'
+        raw = b''
         if key_exists(CACHE_BUCKET, key):
             raw = get_object(CACHE_BUCKET, key)
-        else:
+            if not raw:
+                # A zero-byte entry is cache poison, not content (see
+                # get_message's docstring); delete it and refetch.
+                delete_object(CACHE_BUCKET, key)
+        if not raw:
             fetched = client.fetch([uid], ['RFC822'])
             if uid not in fetched:
                 # Expunged, or a stale hint with no Message-ID match.
                 return uid, None
             raw = fetched[uid][b'RFC822']
+            if not raw:
+                # A truncated delivery's empty message file: enriching it
+                # would blank the alert (empty From/Subject/snippet beat the
+                # client's "New mail" fallback) and caching it would poison
+                # every later read. Treat it as gone.
+                return uid, None
             upload_object(CACHE_BUCKET, key, 'text/plain', raw)
     finally:
         client.logout()
@@ -136,11 +148,10 @@ def handler(event, _context):
         uid = validate_uid(body.get('uid')) if body.get('uid') else None
     except ValueError as err:
         return {'statusCode': 400, 'body': json.dumps({'Error': str(err)})}
-    # msg_id is advisory identity, not a gate: validate_content_id caps at a
-    # length real Message-IDs exceed (RFC 5322 allows ~990 chars), and a
-    # rejected msg_id must degrade to the uid hint, not 400 the enrichment.
+    # msg_id is advisory identity, not a gate: a rejected msg_id must degrade
+    # to the uid hint, not 400 the enrichment.
     try:
-        msg_id = validate_content_id(body['msg_id']) if body.get('msg_id') else None
+        msg_id = validate_message_id(body['msg_id']) if body.get('msg_id') else None
     except ValueError:
         msg_id = None
     if uid is None and msg_id is None:
