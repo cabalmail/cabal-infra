@@ -34,6 +34,8 @@ class SettingsViewModel(
     private val mutableState = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = mutableState.asStateFlow()
 
+    private val mutableFolderChoices = MutableStateFlow<List<String>?>(null)
+
     val preferences: StateFlow<AppPreferences> = container.preferences.preferences
 
     init {
@@ -59,6 +61,31 @@ class SettingsViewModel(
     /** Push registration when the notifications toggle turns on. */
     fun registerPush() {
         viewModelScope.launch { PushRegistrar.register(container) }
+    }
+
+    /** Folder names offered by the push-folders picker; null until loaded. */
+    val folderChoices: StateFlow<List<String>?> = mutableFolderChoices.asStateFlow()
+
+    /** Lazily fetches the folder list the first time the picker opens. */
+    fun loadFolderChoices() {
+        if (mutableFolderChoices.value != null) {
+            return
+        }
+        viewModelScope.launch {
+            mutableFolderChoices.value =
+                runCatching { container.requireApi().listFolders().folders }.getOrNull()
+        }
+    }
+
+    /**
+     * Stores the folder scope and re-registers in the same coroutine, so
+     * the token row is upserted only after the preference write landed.
+     */
+    fun updatePushFolders(folders: Set<String>) {
+        viewModelScope.launch {
+            container.preferences.update { it.copy(pushFolders = folders) }
+            PushRegistrar.register(container)
+        }
     }
 
     /** Push deregistration when the notifications toggle turns off. */

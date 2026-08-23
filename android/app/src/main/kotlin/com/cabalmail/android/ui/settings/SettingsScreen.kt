@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -71,6 +73,10 @@ fun SettingsScreen(
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
     /** Push (de)registration when the notifications toggle changes. */
     onPushChange: (Boolean) -> Unit,
+    /** Folder names for the push-folders picker; null until loaded. */
+    folderChoices: List<String>?,
+    onLoadFolderChoices: () -> Unit,
+    onPushFoldersChange: (Set<String>) -> Unit,
     onSignOut: () -> Unit,
     /** Null when hosted as a top-level destination (no back arrow). */
     onBack: (() -> Unit)?,
@@ -195,6 +201,13 @@ fun SettingsScreen(
                 onChange = { value -> onUpdate { it.copy(notificationsEnabled = value) } },
                 onPushChange = onPushChange,
             )
+            PushFoldersRow(
+                pushFolders = preferences.pushFolders,
+                enabled = preferences.notificationsEnabled,
+                folderChoices = folderChoices,
+                onLoadFolderChoices = onLoadFolderChoices,
+                onChange = onPushFoldersChange,
+            )
 
             SectionHeader(stringResource(R.string.settings_appearance))
             EnumRow(
@@ -290,6 +303,144 @@ private fun NotificationsRow(
             }
         },
     )
+}
+
+/**
+ * The push folder opt-in (per device, like the Apple clients): Inbox only,
+ * all folders, or an explicit selection. Disabled while notifications are
+ * off. The fallback 15-minute check stays Inbox-only regardless — the
+ * dialog says so.
+ */
+@Composable
+private fun PushFoldersRow(
+    pushFolders: Set<String>,
+    enabled: Boolean,
+    folderChoices: List<String>?,
+    onLoadFolderChoices: () -> Unit,
+    onChange: (Set<String>) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val scope = PushFolderScope.of(pushFolders)
+    val summary =
+        when (scope) {
+            PushFolderScope.InboxOnly -> stringResource(R.string.push_folders_inbox_only)
+            PushFolderScope.All -> stringResource(R.string.push_folders_all)
+            is PushFolderScope.Custom ->
+                pluralStringResource(R.plurals.push_folders_count, scope.folders.size, scope.folders.size)
+        }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.settings_push_folders)) },
+        supportingContent = { Text(summary) },
+        modifier =
+            Modifier.clickable(enabled = enabled) {
+                onLoadFolderChoices()
+                open = true
+            },
+        colors =
+            androidx.compose.material3.ListItemDefaults.colors(
+                headlineColor =
+                    if (enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    },
+            ),
+    )
+    if (open) {
+        var custom by remember { mutableStateOf(scope is PushFolderScope.Custom) }
+        var all by remember { mutableStateOf(scope is PushFolderScope.All) }
+        var checked by
+            remember {
+                mutableStateOf((scope as? PushFolderScope.Custom)?.folders ?: setOf("INBOX"))
+            }
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(stringResource(R.string.settings_push_folders)) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        stringResource(R.string.push_folders_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    listOf(
+                        Triple(stringResource(R.string.push_folders_inbox_only), !all && !custom) {
+                            all = false
+                            custom = false
+                        },
+                        Triple(stringResource(R.string.push_folders_all), all) {
+                            all = true
+                            custom = false
+                        },
+                        Triple(stringResource(R.string.push_folders_custom), custom) {
+                            all = false
+                            custom = true
+                        },
+                    ).forEach { (label, selected, choose) ->
+                        androidx.compose.foundation.layout.Row(
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .selectable(selected = selected, onClick = choose)
+                                    .padding(vertical = 6.dp),
+                        ) {
+                            RadioButton(selected = selected, onClick = null)
+                            Text(label, modifier = Modifier.padding(start = 12.dp))
+                        }
+                    }
+                    if (custom) {
+                        val choices =
+                            (listOf("INBOX") + (folderChoices ?: checked.sorted())).distinct()
+                        choices.forEach { folder ->
+                            androidx.compose.foundation.layout.Row(
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            checked =
+                                                if (folder in checked) checked - folder else checked + folder
+                                        }.padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
+                            ) {
+                                Checkbox(
+                                    checked = folder in checked,
+                                    onCheckedChange = null,
+                                )
+                                Text(folder, modifier = Modifier.padding(start = 12.dp))
+                            }
+                        }
+                        if (folderChoices == null) {
+                            Text(
+                                stringResource(R.string.push_folders_loading),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(start = 12.dp, top = 4.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        open = false
+                        onChange(
+                            pushFoldersFor(
+                                when {
+                                    all -> PushFolderScope.All
+                                    custom -> PushFolderScope.Custom(checked)
+                                    else -> PushFolderScope.InboxOnly
+                                },
+                            ),
+                        )
+                    },
+                ) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
 }
 
 @Composable

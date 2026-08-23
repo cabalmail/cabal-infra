@@ -514,6 +514,7 @@ private fun MailNavGraph(
                 viewModel(factory = SettingsViewModel.factory(container))
             val state by viewModel.state.collectAsState()
             val preferences by viewModel.preferences.collectAsState()
+            val folderChoices by viewModel.folderChoices.collectAsState()
             SettingsScreen(
                 state = state,
                 preferences = preferences,
@@ -521,6 +522,9 @@ private fun MailNavGraph(
                 onPushChange = { enabled ->
                     if (enabled) viewModel.registerPush() else viewModel.deregisterPush()
                 },
+                folderChoices = folderChoices,
+                onLoadFolderChoices = viewModel::loadFolderChoices,
+                onPushFoldersChange = viewModel::updatePushFolders,
                 onSignOut = onSignOut,
                 onBack = null,
             )

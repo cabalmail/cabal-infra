@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.cabalmail.kit.api.ApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
@@ -49,6 +50,7 @@ class PreferencesRepository(
         val SIGNATURE = stringPreferencesKey("signature")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val PUSH_FOLDERS = stringSetPreferencesKey("push_folders")
         val DEFAULT_SORT = stringPreferencesKey("default_sort")
         val DEFAULT_SORT_DESCENDING = booleanPreferencesKey("default_sort_descending")
     }
@@ -112,6 +114,7 @@ class PreferencesRepository(
             signature = store[Keys.SIGNATURE] ?: defaults.signature,
             dynamicColor = store[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
             notificationsEnabled = store[Keys.NOTIFICATIONS_ENABLED] ?: defaults.notificationsEnabled,
+            pushFolders = store[Keys.PUSH_FOLDERS] ?: defaults.pushFolders,
             defaultSort = wireEnum<DefaultSort>(store[Keys.DEFAULT_SORT]) ?: defaults.defaultSort,
             defaultSortDescending = store[Keys.DEFAULT_SORT_DESCENDING] ?: defaults.defaultSortDescending,
         )
@@ -135,6 +138,7 @@ class PreferencesRepository(
         store[Keys.SIGNATURE] = value.signature
         store[Keys.DYNAMIC_COLOR] = value.dynamicColor
         store[Keys.NOTIFICATIONS_ENABLED] = value.notificationsEnabled
+        store[Keys.PUSH_FOLDERS] = value.pushFolders
         store[Keys.DEFAULT_SORT] = value.defaultSort.wire
         store[Keys.DEFAULT_SORT_DESCENDING] = value.defaultSortDescending
     }
