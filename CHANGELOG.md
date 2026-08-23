@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-08-23
+
+### Added
+- Android: **Instant new-mail push notifications.** Where Google Play
+  services is available, new mail now raises a notification within seconds
+  via FCM instead of waiting for the 15-minute background check (which
+  remains as the fallback). The push itself is content-free — sender and
+  subject are fetched from the mail server by the app, so Google's
+  infrastructure never sees message content. Registration is tied to the
+  existing notifications opt-in in Settings and is removed on sign-out.
+  Builds without Firebase config (all CI builds) are unaffected. Phase 3 of
+  docs/1.x/android-push-notifications.md.
+- **FCM sender in the push-notification pipeline.** `push_dispatch` now
+  routes each registered device token to its platform's sender — Apple rows
+  to APNs, `android` rows to Firebase Cloud Messaging (HTTP v1, data-only,
+  content-free wake signals) — and `/push_register` / `/push_deregister`
+  accept the Android app's bundle id and FCM token format. The credential
+  lives at `/cabal/fcm/service_account` (Terraform-seeded placeholder,
+  operator-provisioned); until it is seeded, Android sends drop cleanly
+  with Apple delivery untouched, mirroring the APNs posture. Adds a
+  `Platform` dimension to the `Cabal/Push` CloudWatch metrics. Phase 1 of
+  docs/1.x/android-push-notifications.md.
+
+### Security
+- **The API Gateway access log has a log group of its own, and the execution log now ages out.** The stage's access log was written into the execution log group — the one whose per-method overrides had been running at `INFO` with request/response tracing on, so it holds truncated request bodies and `Authorization` headers alongside the per-request access records. One group meant one retention for both, and the only lever for ageing the body history out would have taken the access log with it. The two are now separate groups: the access log keeps the stack's standard year, while the execution log drops to 30 days so the body history it accumulated retires within a month. Entries already written stay in the group that received them, so the pre-split access-log records age out with the execution log.
+
 ## [1.3.5] - 2026-08-22
 
 ### Changed
