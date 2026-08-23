@@ -17,6 +17,21 @@ plugins {
 val controlDomain: String =
     providers.gradleProperty("cabalmail.controlDomain").getOrElse("")
 
+// Firebase client config for push (docs/1.x/android-push-notifications.md).
+// Not secrets — these values ship inside every APK — but they are
+// per-environment, so like the control domain nothing is baked in by
+// default: set the cabalmail.fcm* properties in ~/.gradle/gradle.properties
+// (values from the Firebase console's project settings). Any of the four
+// blank — the default, and every CI build — leaves push wired off; the
+// WorkManager poll carries notifications instead. There is deliberately no
+// google-services plugin: FirebaseOptions are built manually from these
+// fields (see notifications/Push.kt).
+fun fcmProperty(name: String): String = providers.gradleProperty(name).getOrElse("")
+val fcmProjectId = fcmProperty("cabalmail.fcmProjectId")
+val fcmApplicationId = fcmProperty("cabalmail.fcmApplicationId")
+val fcmApiKey = fcmProperty("cabalmail.fcmApiKey")
+val fcmSenderId = fcmProperty("cabalmail.fcmSenderId")
+
 // CI signing (android.yml upload job): the workflow decodes the upload
 // keystore to a temp file and passes everything via environment. When
 // KEYSTORE_PATH is absent — every local and PR build — release stays unsigned
@@ -41,6 +56,10 @@ android {
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
         versionName = System.getenv("VERSION_NAME") ?: "0.1.0"
         buildConfigField("String", "CONTROL_DOMAIN", "\"$controlDomain\"")
+        buildConfigField("String", "FCM_PROJECT_ID", "\"$fcmProjectId\"")
+        buildConfigField("String", "FCM_APPLICATION_ID", "\"$fcmApplicationId\"")
+        buildConfigField("String", "FCM_API_KEY", "\"$fcmApiKey\"")
+        buildConfigField("String", "FCM_SENDER_ID", "\"$fcmSenderId\"")
     }
 
     signingConfigs {
@@ -130,6 +149,8 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.firebase.messaging)
+    implementation(libs.play.services.base)
     implementation(libs.ktor.client.okhttp)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
