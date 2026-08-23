@@ -77,7 +77,11 @@ cmd_start() {
   # also left at a fixed rendezvous path the runner checks when its
   # environment is empty.
   mkdir -p /tmp/simdrive
-  printf '{"dir": "%s", "app": "%s"}\n' "$DIR" "$APP" > /tmp/simdrive/config.json
+  # `platform` rides along for the same reason the file exists: the runner
+  # bundle is built for iOS whatever it drives, so it cannot tell visionOS
+  # from iPadOS by compilation, and `tap xy:` is fatal on one of them (#1238).
+  printf '{"dir": "%s", "app": "%s", "platform": "%s"}\n' "$DIR" "$APP" "$platform" \
+    > /tmp/simdrive/config.json
 
   log "starting runner on $udid ($platform; log: $DIR/xcodebuild.log)"
   # Only the REPL class: the bundle also carries ScrollGestureTests, which is
@@ -89,6 +93,7 @@ cmd_start() {
     -destination "platform=$platform,id=$udid" \
     TEST_RUNNER_SIMDRIVE_DIR="$DIR" \
     TEST_RUNNER_SIMDRIVE_APP="$APP" \
+    TEST_RUNNER_SIMDRIVE_PLATFORM="$platform" \
     > "$DIR/xcodebuild.log" 2>&1 &
   echo $! > "$DIR/xcodebuild.pid"
 

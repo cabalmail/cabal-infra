@@ -134,13 +134,14 @@ def admin_user_action_response(event, action, status, operate):
     all a handler varies is `action` (the rate-limit and audit name), `status`
     (the word echoed back on success) and the one API call itself.
 
-    Shared by disable_user and enable_user, whose handlers were byte-identical
-    apart from those three tokens. delete_user keeps its own copy: it refuses a
-    self-delete part way through and purges the user's domain-access rows inside
-    the same try, so folding it in would mean a second callback with exactly one
-    caller. confirm_user and set_user_domain_access differ further still -- the
-    first runs neither the rate limit nor the audit log, the second reads a
-    three-field body and reports allowed/denied rather than a status word.
+    Shared by confirm_user, disable_user and enable_user, whose handlers were
+    byte-identical apart from those three tokens. delete_user keeps its own
+    copy: it refuses a self-delete part way through and purges the user's
+    domain-access rows inside the same try, so folding it in would mean a
+    second callback that can short-circuit the envelope rather than merely do
+    extra work. set_user_domain_access differs further still: it reads a
+    three-field body, parses it itself, and reports allowed/denied rather than
+    a status word.
 
     A body carrying no `username` stays a 500 with a failure audit line rather
     than a 400: the KeyError is raised inside the try, exactly where it was

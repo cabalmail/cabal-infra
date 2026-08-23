@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.notifications.PushRegistrar
 import com.cabalmail.kit.models.Address
 import com.cabalmail.kit.settings.AppPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +54,16 @@ class SettingsViewModel(
 
     fun update(transform: (AppPreferences) -> AppPreferences) {
         viewModelScope.launch { container.preferences.update(transform) }
+    }
+
+    /** Push registration when the notifications toggle turns on. */
+    fun registerPush() {
+        viewModelScope.launch { PushRegistrar.register(container) }
+    }
+
+    /** Push deregistration when the notifications toggle turns off. */
+    fun deregisterPush() {
+        viewModelScope.launch { PushRegistrar.deregister(container) }
     }
 
     companion object {

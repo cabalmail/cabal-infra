@@ -115,6 +115,22 @@ Every handler catches `ValueError` from these validators and returns a 400 with 
 ### Phase 5 — Per-endpoint abuse limits
 
 - Admin mutations (`/delete_user`, `/disable_user`, `/enable_user`, `/set_user_domain_access`, `/new_address_admin`) gain a per-caller token bucket implemented against a small DynamoDB counter table (`cabal-rate-limits`, TTL 1 hour) or — simpler — a Cognito client-app usage-plan in API Gateway with an `x-api-key`-by-cognito-username binding. Recommendation: start with DynamoDB; revisit if the table contention becomes measurable. Ceiling: 30 mutations per minute per caller.
+
+  > **Erratum (2026-08-22):** This list, and the matching one in finding 5
+  > above, turned out to be the whole definition of scope, and it was
+  > short. `confirm_user`, `assign_address`, `unassign_address` and
+  > `repair_dns_record` are admin mutations too and were never added to it,
+  > so they shipped with the admin-group guard and neither the ceiling nor
+  > the audit line — confirming an account, rewriting a `cabal-addresses`
+  > row and UPSERTing a Route 53 record, each unbounded per caller and
+  > leaving no `AUDIT` record (#1200, fixed in PR #1227). Nothing connected
+  > this enumeration to the handlers, which is why the gap survived a
+  > phase that considered itself complete. The authority is now
+  > `lambda/api/_shared/tests/test_admin_mutation_guards.py`: it scans every
+  > `lambda/api/*/function.py` for the admin guard and fails any handler
+  > that runs it without the other two, with read-only admin endpoints
+  > named individually rather than inferred. Read a list in this document
+  > as the endpoints known in 0.10.x, never as the set the contract covers.
 - Audit log: every admin mutation emits a structured JSON log line with `caller`, `action`, `target`, `outcome`. CloudWatch Logs Insights query in the runbook. Optional: pipe to a separate `audit` log group via `subscription_filter` for longer retention. Out of scope for the first ship.
 - Replace the `cabal-addresses.scan(FilterExpression=...)` in `/list` with a `cabal-addresses.query` against a new GSI `(user, address)` so the cost is O(addresses-owned), not O(table).
 

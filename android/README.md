@@ -59,3 +59,23 @@ cabalmail.controlDomain=admin.your-control-domain.example
 
 or `./gradlew assembleDebug -Pcabalmail.controlDomain=...`. It only applies
 to an install that has never signed in; a domain typed on the form wins.
+
+Push notifications are the one exception to "nothing baked in": the Firebase
+client config is compile-time, per environment, and supplied the same way
+(values from the Firebase console, Project settings → your Android app —
+none of them are secrets, but they identify a deployment, so the checked-in
+defaults are empty):
+
+```sh
+# ~/.gradle/gradle.properties
+cabalmail.fcmProjectId=your-firebase-project-id
+cabalmail.fcmApplicationId=1:000000000000:android:0000000000000000
+cabalmail.fcmApiKey=AIza...
+cabalmail.fcmSenderId=000000000000
+```
+
+There is no `google-services.json` and no google-services plugin —
+`FirebaseOptions` are built from these properties at runtime. With any of
+the four unset (every CI build), push is wired off entirely and new-mail
+notifications fall back to the 15-minute background check; the same
+fallback covers devices without Google Play services.
