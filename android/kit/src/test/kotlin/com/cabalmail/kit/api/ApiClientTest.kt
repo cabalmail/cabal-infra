@@ -356,4 +356,79 @@ class ApiClientTest {
 
             assertEquals("a@b.example-mail.com", address)
         }
+
+    @Test
+    fun `push register carries the case-significant token and android identity`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"status": "registered"}""")
+
+            server.api.pushRegister(
+                deviceToken = "dRoId-1:APA91bMixedCASE_token",
+                bundleId = "com.cabalmail.android",
+                appVersion = "1.4.0",
+                locale = "en-US",
+            )
+
+            val body = server.body(0)
+            assertTrue(body.contains("\"device_token\":\"dRoId-1:APA91bMixedCASE_token\""))
+            assertTrue(body.contains("\"bundle_id\":\"com.cabalmail.android\""))
+            assertTrue(body.contains("\"platform\":\"android\""))
+            assertTrue(body.contains("\"app_version\":\"1.4.0\""))
+            assertTrue(body.contains("\"locale\":\"en-US\""))
+            // Omitted on purpose: absence preserves the row's folder opt-in.
+            assertFalse(body.contains("enabled_folders"))
+            assertEquals(
+                "/v1/push_register",
+                server.requests
+                    .single()
+                    .url.encodedPath,
+            )
+        }
+
+    @Test
+    fun `push deregister sends only the token`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"status": "deregistered"}""")
+
+            server.api.pushDeregister("dRoId-1:APA91bMixedCASE_token")
+
+            assertEquals(
+                """{"device_token":"dRoId-1:APA91bMixedCASE_token"}""",
+                server.body(0),
+            )
+        }
+
+    @Test
+    fun `push envelope omits absent hints and decodes the enrichment`() =
+        runTest {
+            val server =
+                Server(
+                    HttpStatusCode.OK to
+                        """{"from": "\"Ann\" <ann@ex.com>", "subject": "Hi", "snippet": "preview", "uid": 4271}""",
+                )
+
+            val envelope = server.api.pushEnvelope("INBOX", uid = null, msgId = "<a@x>")
+
+            val body = server.body(0)
+            assertTrue(body.contains("\"folder\":\"INBOX\""))
+            assertTrue(body.contains("\"msg_id\":\"<a@x>\""))
+            assertFalse(body.contains("\"uid\""))
+            assertEquals("\"Ann\" <ann@ex.com>", envelope.from)
+            assertEquals("Hi", envelope.subject)
+            assertEquals(4271, envelope.uid)
+        }
+
+    @Test
+    fun `push envelope drops a zero uid hint`() =
+        runTest {
+            val server =
+                Server(
+                    HttpStatusCode.OK to
+                        """{"from": "a@b.c", "subject": "s", "snippet": "", "uid": 7}""",
+                )
+
+            server.api.pushEnvelope("INBOX", uid = 0, msgId = "<a@x>")
+
+            assertFalse(server.body(0).contains("\"uid\""))
+        }
 }

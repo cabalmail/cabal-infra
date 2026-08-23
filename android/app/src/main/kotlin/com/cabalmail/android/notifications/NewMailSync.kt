@@ -23,6 +23,7 @@ import com.cabalmail.android.CabalmailApp
 import com.cabalmail.android.MainActivity
 import com.cabalmail.android.R
 import com.cabalmail.kit.models.Envelope
+import com.cabalmail.kit.models.PushEnvelope
 import com.cabalmail.kit.models.mailboxDisplayName
 import java.util.concurrent.TimeUnit
 
@@ -95,6 +96,107 @@ object NewMailSync {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { remove(KEY_LAST_UID_NEXT) }
     }
 
+    /** One displayable new-mail alert. [uid] <= 0 = unresolved: no deep link. */
+    data class Alert(
+        val id: Int,
+        val uid: Long,
+        val sender: String,
+        val subject: String,
+    )
+
+    /**
+     * Posts an enriched (or, with a null [envelope], generic) notification
+     * for one FCM wake signal. Shares ids with the poller's UID-keyed
+     * notifications, so a message that both paths see replaces rather than
+     * duplicates, and a redelivered signal replaces its own notification.
+     */
+    fun postPush(
+        context: Context,
+        signal: PushSignal,
+        envelope: PushEnvelope?,
+    ) {
+        val resolvedUid = envelope?.uid?.takeIf { it > 0 } ?: signal.uid ?: 0
+        post(
+            context,
+            signal.folder,
+            listOf(
+                Alert(
+                    id = pushNotificationId(signal, envelope?.uid),
+                    uid = resolvedUid,
+                    sender = envelope?.from?.let { mailboxDisplayName(it) }.orEmpty(),
+                    subject = envelope?.subject.orEmpty(),
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Posts one notification per alert (and a group summary for a batch),
+     * deep-linking into [folder]. Callers must have checked [canPost].
+     */
+    fun post(
+        context: Context,
+        folder: String,
+        alerts: List<Alert>,
+    ) {
+        ensureChannel(context)
+        val manager = NotificationManagerCompat.from(context)
+        // Lint's permission check: callers only get here after canPost()
+        // (which checks POST_NOTIFICATIONS on API 33+), but the framework
+        // check is what the analyzer recognizes.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        alerts.forEach { alert ->
+            val open =
+                Intent(context, MainActivity::class.java)
+                    .setAction(Intent.ACTION_VIEW)
+                    .putExtra(EXTRA_FOLDER, folder)
+                    .putExtra(EXTRA_UID, alert.uid)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val pending =
+                PendingIntent.getActivity(
+                    context,
+                    alert.id,
+                    open,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            val notification =
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle(alert.sender.ifBlank { context.getString(R.string.notification_new_mail) })
+                    .setContentText(alert.subject.ifBlank { context.getString(R.string.no_subject) })
+                    .setContentIntent(pending)
+                    .setAutoCancel(true)
+                    .setGroup(GROUP)
+                    .setCategory(NotificationCompat.CATEGORY_EMAIL)
+                    .build()
+            manager.notify(alert.id, notification)
+        }
+        if (alerts.size > 1) {
+            val summary =
+                NotificationCompat
+                    .Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle(context.getString(R.string.notification_new_mail))
+                    .setContentText(
+                        context.resources.getQuantityString(
+                            R.plurals.notification_new_count,
+                            alerts.size,
+                            alerts.size,
+                        ),
+                    ).setGroup(GROUP)
+                    .setGroupSummary(true)
+                    .setAutoCancel(true)
+                    .build()
+            manager.notify(SUMMARY_ID, summary)
+        }
+    }
+
     class NewMailWorker(
         context: Context,
         params: WorkerParameters,
@@ -141,63 +243,18 @@ object NewMailSync {
             context: Context,
             envelopes: List<Envelope>,
         ) {
-            ensureChannel(context)
-            val manager = NotificationManagerCompat.from(context)
-            // Lint's permission check: the worker only gets here after
-            // canPost() (which checks POST_NOTIFICATIONS on API 33+), but
-            // the framework check is what the analyzer recognizes.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                return
-            }
-            envelopes.forEach { envelope ->
-                val sender = envelope.from.firstOrNull()?.let { mailboxDisplayName(it) } ?: ""
-                val open =
-                    Intent(context, MainActivity::class.java)
-                        .setAction(Intent.ACTION_VIEW)
-                        .putExtra(EXTRA_FOLDER, INBOX)
-                        .putExtra(EXTRA_UID, envelope.id)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                val pending =
-                    PendingIntent.getActivity(
-                        context,
-                        envelope.id.toInt(),
-                        open,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            NewMailSync.post(
+                context,
+                INBOX,
+                envelopes.map { envelope ->
+                    Alert(
+                        id = envelope.id.toInt(),
+                        uid = envelope.id,
+                        sender = envelope.from.firstOrNull()?.let { mailboxDisplayName(it) } ?: "",
+                        subject = envelope.subject,
                     )
-                val notification =
-                    NotificationCompat
-                        .Builder(context, CHANNEL_ID)
-                        .setSmallIcon(R.drawable.ic_notification)
-                        .setContentTitle(sender.ifBlank { context.getString(R.string.notification_new_mail) })
-                        .setContentText(envelope.subject.ifBlank { context.getString(R.string.no_subject) })
-                        .setContentIntent(pending)
-                        .setAutoCancel(true)
-                        .setGroup(GROUP)
-                        .setCategory(NotificationCompat.CATEGORY_EMAIL)
-                        .build()
-                manager.notify(envelope.id.toInt(), notification)
-            }
-            if (envelopes.size > 1) {
-                val summary =
-                    NotificationCompat
-                        .Builder(context, CHANNEL_ID)
-                        .setSmallIcon(R.drawable.ic_notification)
-                        .setContentTitle(context.getString(R.string.notification_new_mail))
-                        .setContentText(
-                            context.resources.getQuantityString(
-                                R.plurals.notification_new_count,
-                                envelopes.size,
-                                envelopes.size,
-                            ),
-                        ).setGroup(GROUP)
-                        .setGroupSummary(true)
-                        .setAutoCancel(true)
-                        .build()
-                manager.notify(SUMMARY_ID, summary)
-            }
+                },
+            )
         }
     }
 }
