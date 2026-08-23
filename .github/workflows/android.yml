@@ -201,6 +201,25 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Firebase client config for push (docs/1.x/android-push-notifications.md):
+      # per-environment GitHub environment *variables*, not secrets — the four
+      # values ship inside every APK anyway, they just must not be hardcoded in
+      # a public repo. Absent (any of them), the upload still proceeds but the
+      # published build has push wired off and falls back to the 15-minute
+      # poll; the warning keeps that gap visible instead of silent.
+      - name: Check push configuration
+        if: steps.creds.outputs.present == 'true'
+        env:
+          FCM_PROJECT_ID: ${{ vars.FCM_PROJECT_ID }}
+          FCM_APPLICATION_ID: ${{ vars.FCM_APPLICATION_ID }}
+          FCM_API_KEY: ${{ vars.FCM_API_KEY }}
+          FCM_SENDER_ID: ${{ vars.FCM_SENDER_ID }}
+        run: |
+          if [ -z "$FCM_PROJECT_ID" ] || [ -z "$FCM_APPLICATION_ID" ] || \
+             [ -z "$FCM_API_KEY" ] || [ -z "$FCM_SENDER_ID" ]; then
+            echo "::warning::FCM_* environment variables are not (fully) configured; this upload ships with push notifications wired off (poll fallback only). See android/README.md."
+          fi
+
       - name: Build and publish signed bundle
         if: steps.creds.outputs.present == 'true'
         working-directory: android
@@ -210,4 +229,16 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_PUBLISHER_CREDENTIALS: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-        run: ./gradlew publishBundle
+          FCM_PROJECT_ID: ${{ vars.FCM_PROJECT_ID }}
+          FCM_APPLICATION_ID: ${{ vars.FCM_APPLICATION_ID }}
+          FCM_API_KEY: ${{ vars.FCM_API_KEY }}
+          FCM_SENDER_ID: ${{ vars.FCM_SENDER_ID }}
+        # The -P values are read by app/build.gradle.kts; empty (unset var)
+        # is identical to the local-build default, so this is safe on a tree
+        # that predates the properties too.
+        run: |
+          ./gradlew publishBundle \
+            "-Pcabalmail.fcmProjectId=$FCM_PROJECT_ID" \
+            "-Pcabalmail.fcmApplicationId=$FCM_APPLICATION_ID" \
+            "-Pcabalmail.fcmApiKey=$FCM_API_KEY" \
+            "-Pcabalmail.fcmSenderId=$FCM_SENDER_ID"
