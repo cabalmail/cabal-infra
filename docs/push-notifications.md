@@ -1,9 +1,11 @@
 # Push notifications
 
-The Apple clients receive new-mail notifications via the Apple Push
-Notification service (APNs). The design keeps message content out of Apple's
-infrastructure: the server sends a content-free wake signal, and the device
-enriches it locally before display.
+The native clients receive new-mail notifications via their platforms'
+push services — the Apple Push Notification service (APNs) for the Apple
+clients, Firebase Cloud Messaging (FCM) for the Android client. The design
+keeps message content out of Apple's and Google's infrastructure alike:
+the server sends a content-free wake signal, and the device enriches it
+locally before display.
 
 ## How it works
 
@@ -14,8 +16,11 @@ flowchart LR
     sqs --> dispatch["push_dispatch Lambda"]
     dispatch --> tokens["cabal-push-tokens"]
     dispatch -->|"content-free alert"| apns["APNs"]
+    dispatch -->|"data-only message"| fcm["FCM"]
     apns --> device["device NSE"]
+    fcm --> android["FirebaseMessagingService"]
     device -->|"/push_envelope"| api["API Gateway"]
+    android -->|"/push_envelope"| api
 ```
 
 1. Procmail fires a carbon-copy (`:0c`) recipe after each local delivery on
@@ -28,23 +33,48 @@ flowchart LR
    delivery. Messages the spam rule files away are never enqueued.
 2. The `push_dispatch` Lambda consumes the queue, looks up the recipient's
    registered device tokens in the `cabal-push-tokens` DynamoDB table,
-   filters by each token's folder opt-in, and sends one APNs request per
-   device. The payload is `"New mail"` plus a message reference — no sender,
-   subject, or body.
-3. On the device, the app's Notification Service Extension calls
-   `/push_envelope` with the user's own Cognito JWT to fetch
-   sender/subject/snippet and rewrites the notification before it is shown.
-   If that fails (offline, token expired, timeout), the generic `"New mail"`
-   alert ships instead.
+   filters by each token's folder opt-in, and routes each row to its
+   platform's sender: Apple rows (`ios`/`macos`) to APNs, `android` rows
+   to FCM's HTTP v1 API. The APNs payload is `"New mail"` plus a message
+   reference; the FCM message is data-only (no display text at all) with
+   the same reference, sent at high priority with a one-hour TTL matching
+   the queue's retention. Neither carries sender, subject, or body. Each
+   sender's credential is checked independently: an environment with only
+   one platform's credential provisioned delivers to that platform and
+   drops the other's rows cleanly.
+3. On the device, the app fetches sender/subject/snippet from
+   `/push_envelope` with the user's own Cognito JWT and shows the enriched
+   notification. On Apple platforms that is the Notification Service
+   Extension rewriting the alert; on Android it is the app's
+   `FirebaseMessagingService` posting a local notification (data-only FCM
+   messages render nothing themselves). If enrichment fails (offline,
+   token expired, timeout), the generic `"New mail"` alert ships instead.
+   An Android app in the foreground suppresses the banner and refreshes
+   the visible list, matching the Apple clients.
 4. Devices register tokens through `/push_register` (on every app launch and
-   token rotation) and remove them through `/push_deregister` (sign-out).
-   `push_dispatch` also prunes tokens APNs reports as gone (`410
-   Unregistered`, `BadDeviceToken`), so an uninstalled app stops receiving
-   pushes without operator involvement.
+   token rotation) and remove them through `/push_deregister` (sign-out;
+   the Android client also deregisters when notifications are toggled
+   off). `push_dispatch` also prunes tokens the push service reports as
+   gone (APNs `410 Unregistered`/`BadDeviceToken`; FCM `UNREGISTERED`,
+   `INVALID_ARGUMENT`, `SENDER_ID_MISMATCH`), so an uninstalled app stops
+   receiving pushes without operator involvement.
 
 What APNs sees per push: the device token it already knows, the app's bundle
 id, an AWS egress IP, and a payload containing only the alert text `"New
 mail"`, a folder name, a UID integer, and a Message-ID string.
+
+What Google sees per push is the same profile minus even the alert text:
+the registration token it issued, the package name, an AWS egress IP, and
+a data map of folder name, UID string, and Message-ID string. Message
+content never transits Google — it exists only in the device's own
+`/push_envelope` call.
+
+Redelivery dedup differs by platform: APNs collapses on an
+`apns-collapse-id` derived from the message identity; FCM's collapse keys
+are unsuitable (at most four per offline device), so the Android app keys
+notification ids on the message identity instead — a redelivered signal
+replaces its own notification, and the same keying dedups push against
+the app's fallback poller.
 
 ## Provisioning the APNs key
 
@@ -113,7 +143,64 @@ notifications to every Cabalmail device. It is stored only in SSM
 Revoking first inverts the order of operations and takes push down until the
 new key lands everywhere.
 
-## Client-side manual steps
+## Provisioning the FCM credential
+
+Android push is inert until a Firebase service-account key is provisioned;
+without one, `push_dispatch` logs that FCM is unconfigured and drops
+Android wake signals (Apple delivery is unaffected, and nothing piles up
+in the DLQ). Per environment:
+
+1. Create a **Firebase project** for the environment
+   ([console.firebase.google.com](https://console.firebase.google.com)) —
+   decline Google Analytics; it is not needed and adds a data-sharing
+   surface. One project per environment: distinct sender IDs mean one
+   environment's client builds cannot be pushed with another's
+   credentials, mirroring the per-environment APNs posture.
+2. Register the Android app in the project with the package name
+   `com.cabalmail.android`. Note the four client-side values from Project
+   settings (project ID, application ID, API key, sender ID / project
+   number) — they configure client builds (below), not the server.
+   `google-services.json` is never used; skip the download.
+3. Create a **dedicated service account** in the underlying GCP project
+   with only the Firebase Cloud Messaging API Admin role
+   (`roles/firebasecloudmessaging.admin`) — not the default
+   `firebase-adminsdk` account, which carries project-Editor. Generate a
+   JSON key for it. This key is the FCM analog of the APNs `.p8`: whoever
+   holds it can push arbitrary data messages to every registered Android
+   device.
+4. Seed SSM from CloudShell in the target account. Upload the JSON file
+   via CloudShell's upload menu and reference it with `file://` — never
+   paste the content inline, which risks silent truncation the dispatcher
+   can only report as "service account unusable":
+
+   ```bash
+   aws ssm put-parameter --name /cabal/fcm/service_account \
+     --type SecureString --value file://the-key.json --overwrite
+   ```
+
+   Delete the local JSON copy afterwards. No redeploy is needed — the
+   Lambda re-checks an unconfigured verdict within five minutes.
+
+## Rotating the FCM credential
+
+The service-account JSON is stored only in SSM (SecureString), readable
+only by the `push_dispatch` Lambda role. Google allows up to ten active
+keys per service account, so rotation follows the APNs shape:
+
+1. Generate a second key on the service account (do not delete the old one
+   yet).
+2. Update `/cabal/fcm/service_account` in each environment (`file://`, as
+   above).
+3. Wait for in-flight Lambda containers to recycle (or force it with a
+   no-op `aws lambda update-function-configuration`), and confirm pushes
+   still deliver.
+4. Delete the old key in the Google console.
+
+A key that ever transits the wrong environment's parameter (even briefly —
+old versions remain readable in the parameter's history) should be treated
+as burned: rotate it rather than reasoning about exposure.
+
+## Apple client-side manual steps
 
 The iOS app needs one-time Apple developer setup before push registration
 works on real devices. The generic signing mechanics (certificates, profile
@@ -185,6 +272,47 @@ closed. The extension ships regardless (a monthly automated check
 watches for the macOS fix that would let it take over the quit-app case
 without an app change).
 
+## Android client configuration
+
+There is no portal work on the Android side — no google-services plugin
+and no `google-services.json`. The app builds `FirebaseOptions` manually
+from four values baked in at compile time (`android/README.md` documents
+the gradle properties):
+
+- Local/device builds: `cabalmail.fcmProjectId`, `.fcmApplicationId`,
+  `.fcmApiKey`, `.fcmSenderId` in `~/.gradle/gradle.properties`, from the
+  Firebase console's app settings.
+- Play Console uploads: the same values arrive as the `FCM_PROJECT_ID`,
+  `FCM_APPLICATION_ID`, `FCM_API_KEY`, and `FCM_SENDER_ID` **variables**
+  (not secrets — they ship inside every APK) on the `stage`/`prod` GitHub
+  environments; the upload job passes them as `-P` flags. When any are
+  unset the upload proceeds warn-green with push wired off.
+
+The client degrades cleanly at every layer: a build without the values, a
+device without Google Play services, or the notifications setting left
+off all fall back to the 15-minute WorkManager poll (INBOX only). With
+push active, registration is asserted on every launch, on token rotation,
+and when the notifications toggle turns on; no FCM token exists before
+the user opts in (`firebase_messaging_auto_init_enabled=false`).
+
+User-facing behavior on Android:
+
+- **Folder scope** (Settings → Notification folders): inbox only (the
+  default), all folders, or an explicit selection — stored per device on
+  its token row (`enabled_folders`), like the Apple clients, never in the
+  synced preferences. The fallback poll stays inbox-only regardless.
+- **Notification actions**: Mark as read and Archive. A tap dismisses the
+  notification immediately and applies the change server-side in a
+  retried background job. Archive moves to the auto-created `Archive`
+  mailbox (the same destination as the in-app archive) and is omitted
+  when the mail is already there.
+
+Debugging: the registration and action paths log under the `cabal-push`
+logcat tag, including the reason for every skipped registration; the
+Firebase SDK's own logging can be raised per boot with
+`adb shell setprop log.tag.FirebaseMessaging VERBOSE` (and kin) plus an
+app restart.
+
 ## Operational notes
 
 - **Queue and DLQ.** `cabal-push-queue` retains signals for one hour (a
@@ -195,7 +323,15 @@ without an app change).
 - **Logs and metrics.** Dispatch logs at `/cabal/lambda/push_dispatch`
   (CloudWatch), including token prunes and per-send failures. Each
   invocation emits `Sent` / `Failed` / `LatencyMs` metrics in the
-  `Cabal/Push` namespace via CloudWatch EMF.
+  `Cabal/Push` namespace via CloudWatch EMF, plus `Sent` / `Failed` lines
+  dimensioned by `Platform` (`ios` / `macos` / `android`) so a
+  single-sender failure mode is visible on its own.
+- **Sender failure isolation.** An expired or revoked FCM credential
+  surfaces as `Failed` with `Platform=android` and retryable errors aging
+  into the DLQ while Apple sends continue untouched (and vice versa); the
+  fix is an SSM re-seed, no deploy. A mixed-fleet user (an iPhone and an
+  Android device on one account) gets one notification per device from a
+  single queue signal — there is no cross-platform coordination to break.
 - **Quiesce.** A quiesced environment delivers no mail, so nothing is
   enqueued. Residual signals from before the quiesce age out of the queue
   (and the container spool) within the hour. The Lambda itself costs nothing
@@ -209,7 +345,7 @@ without an app change).
   seconds of wake signals, not mail.
 - **Token hygiene.** `last_seen_at` on each `cabal-push-tokens` row is
   updated on registration and refreshed by successful pushes;
-  `last_failure` records the most recent APNs rejection reason. Rows for
+  `last_failure` records the most recent push-service rejection reason. Rows for
   uninstalled devices are pruned automatically on the next push attempt,
   and the weekly `push_token_gc` Lambda reaps rows idle for 90+ days as
   the backstop for devices no rejection ever surfaces (logs at
