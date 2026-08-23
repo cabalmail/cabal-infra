@@ -1,5 +1,6 @@
 package com.cabalmail.android.ui.mail
 
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
@@ -261,6 +263,26 @@ internal fun shortDate(instant: Instant): String =
         .ofPattern("MMM d")
         .withZone(ZoneId.systemDefault())
         .format(instant)
+
+private const val ROW_REMOVAL_MILLIS = 250
+
+/**
+ * Item animation for the mail lists' removal path. An optimistic dispose or
+ * move drops the row from state instantly, and with no motion at all the eye
+ * can miss that anything happened — so the departing row fades out while the
+ * rows below glide up into the gap. Appearance stays instant
+ * (fadeInSpec = null): band loads and search pages should pop in, not
+ * shimmer, and the placeholder-to-loaded key swap must not crossfade on
+ * every scroll.
+ */
+internal fun Modifier.animateRowRemoval(scope: LazyItemScope): Modifier =
+    with(scope) {
+        animateItem(
+            fadeInSpec = null,
+            placementSpec = tween(ROW_REMOVAL_MILLIS),
+            fadeOutSpec = tween(ROW_REMOVAL_MILLIS),
+        )
+    }
 
 /**
  * Swipe surface per the plan: start-to-end toggles read, end-to-start
