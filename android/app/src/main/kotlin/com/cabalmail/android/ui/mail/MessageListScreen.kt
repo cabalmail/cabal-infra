@@ -246,8 +246,37 @@ fun MessageListScreen(
                         items(state.total ?: 0, key = { state.envelopes[it]?.id ?: -(it + 1L) }) { index ->
                             val envelope = state.envelopes[index]
                             if (envelope == null) {
+                                // No animateRowRemoval here: placeholder keys
+                                // are positional, so they never move — and
+                                // fading one out on the placeholder-to-loaded
+                                // key swap would ghost "• • •" over the row.
                                 PlaceholderRow()
+                                HorizontalDivider()
                             } else {
+                                Column(modifier = Modifier.animateRowRemoval(this)) {
+                                    InteractiveRow(
+                                        envelope = envelope,
+                                        state = state,
+                                        viewModel = viewModel,
+                                        bimiLookup = bimiLookup,
+                                        mailDomains = mailDomains,
+                                        highlighted = index == cursor || envelope.id == highlightedUid,
+                                        menuOpen = menuUid == envelope.id,
+                                        onMenuChange = { open -> menuUid = if (open) envelope.id else null },
+                                        onOpen = { onOpenMessage(envelope) },
+                                        onDispose = { disposeOrConfirm(setOf(envelope.id)) },
+                                        onMove = {
+                                            viewModel.loadFolderChoices()
+                                            moveRequest = setOf(envelope.id)
+                                        },
+                                    )
+                                    HorizontalDivider()
+                                }
+                            }
+                        }
+                    } else {
+                        itemsIndexed(state.filteredRows, key = { _, it -> it.id }) { index, envelope ->
+                            Column(modifier = Modifier.animateRowRemoval(this)) {
                                 InteractiveRow(
                                     envelope = envelope,
                                     state = state,
@@ -264,28 +293,8 @@ fun MessageListScreen(
                                         moveRequest = setOf(envelope.id)
                                     },
                                 )
+                                HorizontalDivider()
                             }
-                            HorizontalDivider()
-                        }
-                    } else {
-                        itemsIndexed(state.filteredRows, key = { _, it -> it.id }) { index, envelope ->
-                            InteractiveRow(
-                                envelope = envelope,
-                                state = state,
-                                viewModel = viewModel,
-                                bimiLookup = bimiLookup,
-                                mailDomains = mailDomains,
-                                highlighted = index == cursor || envelope.id == highlightedUid,
-                                menuOpen = menuUid == envelope.id,
-                                onMenuChange = { open -> menuUid = if (open) envelope.id else null },
-                                onOpen = { onOpenMessage(envelope) },
-                                onDispose = { disposeOrConfirm(setOf(envelope.id)) },
-                                onMove = {
-                                    viewModel.loadFolderChoices()
-                                    moveRequest = setOf(envelope.id)
-                                },
-                            )
-                            HorizontalDivider()
                         }
                     }
                 }
