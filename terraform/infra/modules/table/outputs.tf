@@ -7,3 +7,8 @@ output "user_preferences_table_arn" {
   value       = aws_dynamodb_table.user_preferences.arn
   description = "ARN of the user preferences DynamoDB table."
 }
+
+output "user_rules_table_arn" {
+  value       = aws_dynamodb_table.user_rules.arn
+  description = "ARN of the user mail-rules DynamoDB table."
+}

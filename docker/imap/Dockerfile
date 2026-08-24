@@ -159,6 +159,22 @@ COPY shared/clear-maintenance.sh           /usr/local/bin/clear-maintenance.sh
 COPY shared/push-enqueue.sh                /usr/local/bin/push-enqueue.sh
 COPY shared/push-spool-drain.sh            /usr/local/bin/push-spool-drain.sh
 
+# User-mail-rules compiler (imap only, docs/1.x/user-mail-rules-plan.md):
+# compiles the cabal-user-rules table into /etc/procmail-user/<user>.rc on
+# every reconfigure. The fixture + golden pair ships in the image so the
+# self-test can also gate container start-up (prepare-sendmail.sh); the
+# build-time run below fails the image build on any compiler regression.
+COPY shared/compile-user-rules.py          /usr/local/bin/compile-user-rules.py
+COPY shared/compile-user-rules-selftest.py /usr/local/bin/compile-user-rules-selftest.py
+COPY shared/test/compile-user-rules/fixture-rules.json \
+     /usr/local/share/cabal/compile-user-rules/fixture-rules.json
+COPY shared/test/compile-user-rules/golden.rc \
+     /usr/local/share/cabal/compile-user-rules/golden.rc
+RUN chmod +x /usr/local/bin/compile-user-rules.py \
+             /usr/local/bin/compile-user-rules-selftest.py \
+    && mkdir -p /etc/procmail-user \
+    && /usr/local/bin/compile-user-rules-selftest.py
+
 # Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)
 COPY shared/rsyslog-mail.conf              /etc/rsyslog.conf
 

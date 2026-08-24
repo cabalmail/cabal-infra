@@ -43,6 +43,16 @@ regenerate() {
     # Reassemble aliases (static + dynamic) and rebuild the alias db
     /usr/local/bin/assemble-aliases.sh
 
+    # Recompile per-user procmail rules (docs/1.x/user-mail-rules-plan.md).
+    # The rules SNS topic fans into this tier's queue, so a rule save lands
+    # here within seconds; the periodic fallback covers lost messages. A
+    # compiler failure keeps the previous compiled files in place (better
+    # stale than broken) and must not kill the reconfigure loop.
+    /usr/local/bin/compile-user-rules.py \
+      || echo "[reconfigure] compile-user-rules failed; keeping prior compiled rules"
+
+    rotate_procmail_logs
+
   elif [ "$TIER" = "smtp-in" ]; then
     makemap hash /etc/mail/access.db       < /etc/mail/access
     makemap hash /etc/mail/mailertable.db  < /etc/mail/mailertable
@@ -75,6 +85,25 @@ regenerate() {
   echo "[reconfigure] Done."
 
   ping_healthcheck
+}
+
+# ── Per-user procmail log rotation ─────────────────────────────
+# Procmail appends to ~/.procmail/log on every delivery with no size
+# bound, on EFS (docs/1.x/user-mail-rules-plan.md, "Procmail log growth
+# and rotation"). Bound it copytruncate-style on the reconfigure tick:
+# procmail holds the file open, so the active inode must survive -
+# truncate in place, never rename. 5 MB cap, one prior copy kept.
+rotate_procmail_logs() {
+  local log size
+  for log in /home/*/.procmail/log; do
+    [ -f "$log" ] || continue
+    size=$(stat -c %s "$log" 2>/dev/null || echo 0)
+    if [ "$size" -ge 5242880 ]; then
+      cp -p "$log" "${log}.1" 2>/dev/null || continue
+      : > "$log"
+      echo "[reconfigure] Rotated $log (${size} bytes)"
+    fi
+  done
 }
 
 # ── Healthchecks heartbeat ─────────────────────────────────────
