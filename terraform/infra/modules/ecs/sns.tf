@@ -14,3 +14,21 @@ resource "aws_sns_topic" "address_changed" {
   # its role (modules/app/modules/call/lambda.tf), so publish keeps working.
   kms_master_key_id = "alias/aws/sns"
 }
+
+/**
+* SNS topic for user-mail-rules fan-out (docs/1.x/user-mail-rules-plan.md).
+*
+* The set_rules Lambda publishes here on every successful rule-set write;
+* only the imap tier's queue subscribes (sqs.tf). A separate topic rather
+* than piggybacking on cabal-address-changed because rule writes happen at
+* debounced-typing cadence and the address topic implies a full DynamoDB
+* scan + sendmail-map regeneration on every message - each pipeline should
+* regenerate only what it owns.
+*/
+
+resource "aws_sns_topic" "user_rules_changed" {
+  name = "cabal-user-rules-changed"
+  # Same SSE posture as address_changed above; set_rules gets the ViaService-
+  # scoped KMS grant from the same shared Lambda policy.
+  kms_master_key_id = "alias/aws/sns"
+}

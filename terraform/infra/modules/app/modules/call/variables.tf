@@ -52,6 +52,11 @@ variable "address_changed_topic_arn" {
   description = "ARN of the SNS topic for address change notifications to ECS containers."
 }
 
+variable "user_rules_topic_arn" {
+  type        = string
+  description = "ARN of the SNS topic for user-mail-rules change notifications to the imap tier."
+}
+
 variable "user_pool_id" {
   type        = string
   description = "ID of the Cognito user pool."

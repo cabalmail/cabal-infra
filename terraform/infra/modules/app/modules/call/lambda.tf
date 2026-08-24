@@ -141,13 +141,18 @@ ${local.cache_object_actions}
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-preferences",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-domain-access",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-rate-limits",
-                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-push-tokens"
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-push-tokens",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules-audit"
             ]
         },
         {
             "Effect": "Allow",
             "Action": "sns:Publish",
-            "Resource": "${var.address_changed_topic_arn}"
+            "Resource": [
+                "${var.address_changed_topic_arn}",
+                "${var.user_rules_topic_arn}"
+            ]
         },
         {
             "Effect": "Allow",
@@ -245,6 +250,9 @@ resource "aws_lambda_function" "api_call" {
       DMARC_TABLE_NAME            = "cabal-dmarc-reports"
       CAA_TABLE_NAME              = "cabal-caa-reports"
       USER_PREFERENCES_TABLE_NAME = "cabal-user-preferences"
+      USER_RULES_TABLE_NAME       = "cabal-user-rules"
+      USER_RULES_AUDIT_TABLE_NAME = "cabal-user-rules-audit"
+      USER_RULES_TOPIC_ARN        = var.user_rules_topic_arn
       PUSH_TOKENS_TABLE_NAME      = "cabal-push-tokens"
       IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
       IMAP_INTERNAL_HOST          = var.imap_internal_host

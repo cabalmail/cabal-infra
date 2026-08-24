@@ -29,7 +29,15 @@ resource "aws_sqs_queue_policy" "tier" {
       Action    = "sqs:SendMessage"
       Resource  = aws_sqs_queue.tier[each.key].arn
       Condition = {
-        ArnEquals = { "aws:SourceArn" = aws_sns_topic.address_changed.arn }
+        # The imap queue also receives user-mail-rules notifications
+        # (aws_sns_topic_subscription.imap_user_rules below); ArnEquals
+        # with a list ORs the allowed source topics.
+        ArnEquals = {
+          "aws:SourceArn" = each.key == "imap" ? [
+            aws_sns_topic.address_changed.arn,
+            aws_sns_topic.user_rules_changed.arn,
+          ] : [aws_sns_topic.address_changed.arn]
+        }
       }
     }]
   })
@@ -40,4 +48,14 @@ resource "aws_sns_topic_subscription" "tier" {
   topic_arn = aws_sns_topic.address_changed.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.tier[each.key].arn
+}
+
+# The imap tier additionally regenerates per-user procmail rule files
+# (docs/1.x/user-mail-rules-plan.md), so its queue fans in the user-rules
+# topic on top of the address topic. reconfigure.sh treats any queue
+# message as a regenerate trigger.
+resource "aws_sns_topic_subscription" "imap_user_rules" {
+  topic_arn = aws_sns_topic.user_rules_changed.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.tier["imap"].arn
 }
