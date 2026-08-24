@@ -4,7 +4,7 @@
 # module actually references.
 
 [versions]
-agp = "9.3.1"
+agp = "9.3.2"
 kotlin = "2.4.10"
 # KSP2 (2.3.x+) versions independently of Kotlin; check the KSP release notes for
 # the supported Kotlin range when bumping either.
@@ -20,14 +20,14 @@ ktor = "3.5.2"
 datastore = "1.1.6"
 room = "2.8.4"
 coil = "3.5.0"
-amplify = "2.39.0"
+amplify = "2.40.0"
 junit = "6.1.3"
 junitPlatform = "6.1.3"
 turbine = "1.2.1"
 # 4.x requires Gradle 9 (this project is on Gradle 9 / AGP 9).
 tripletPlay = "4.1.1"
 # Markdown → HTML for the compose body (Phase 5). Pure Kotlin/JVM, no UI.
-jetbrainsMarkdown = "0.7.8"
+jetbrainsMarkdown = "0.7.9"
 # Background new-mail sync (Phase 7).
 work = "2.10.1"
 # Push (docs/1.x/android-push-notifications.md). No google-services plugin —
