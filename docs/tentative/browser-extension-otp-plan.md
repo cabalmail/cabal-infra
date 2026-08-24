@@ -25,14 +25,20 @@ has. It also overlaps the base plan's procmail clear-on-receive hook:
 the same mail arrival that confirms the pending address carries the
 code we want to surface.
 
-**Prior art and honest value assessment:** Apple platforms already
-autofill codes from Messages, and Safari on recent macOS can offer
-codes from Mail.app. Where nothing like this exists is Chrome on every
-OS, and any browser where the user's Cabalmail mail is not configured
-in the platform mail client. That is the value pocket: Chrome users,
-and codes sent to minted addresses. It is a genuine differentiator —
-per-site addresses give Cabalmail an origin-binding signal no generic
-mail-based OTP filler has (see below) — but it is also the most
+**Prior art and honest value assessment:** Apple platforms autofill
+codes from Messages, and Safari on macOS can offer codes surfaced
+from Mail.app. That used to work for Cabalmail: with the mailbox
+configured in Apple Mail over public IMAP, macOS surfaced Cabalmail
+codes. The private mail-plane work removed public IMAP, so no
+platform mail client can index a Cabalmail inbox anymore, and the
+capability is gone on every platform — not just the Chrome/non-Apple
+gap that always existed. The honest framing is therefore not
+"adoption driver" — address minting is the adoption driver — but
+"restored capability": someone who chooses Cabalmail for the minting
+should not have to sacrifice a convenience other mail platforms
+offer. Per-site addresses even upgrade the capability rather than
+merely restoring it: they give an origin-binding signal no generic
+mail-based OTP filler has (see below). It remains the most
 security-sensitive thing the extension could do, and the design cost
 is dominated by getting that right, not by the plumbing.
 
@@ -59,8 +65,9 @@ is dominated by getting that right, not by the plumbing.
   while an OTP field is on screen; there is no always-on poll and no
   standing notification channel in v1.
 - Auto-submit after fill, ever.
-- Competing with platform autofill where it exists (Safari/macOS with
-  Mail.app configured). Detection-and-yield is an open question.
+- Restoring public IMAP so platform mail clients can do this instead.
+  The private mail plane is settled; this feature exists inside that
+  boundary.
 
 ## Design sketch
 
@@ -185,14 +192,10 @@ Codes are single-use noise; the mailbox does not need to keep them.
    should survive Safari's aggressive service-worker lifecycle since
    every poll is triggered by a live page; verify before committing
    to iOS parity.
-4. **Yielding to platform autofill.** On macOS Safari with Mail.app
-   configured, the system may offer the same code natively. Can the
-   extension detect this and stand down, or do we accept the double
-   offer?
-5. **Extraction quality bar.** Server-side extraction needs its own
+4. **Extraction quality bar.** Server-side extraction needs its own
    fixture corpus (real OTP mails from a spread of senders) and the
    same regress-against-corpus discipline as the form detector.
-6. **Notification surface for native clients.** If the endpoint ships,
+5. **Notification surface for native clients.** If the endpoint ships,
    an Android/Apple "copy code" notification is nearly free — same
    endpoint, push-triggered. Separate plan, but the endpoint contract
    should not preclude it.
