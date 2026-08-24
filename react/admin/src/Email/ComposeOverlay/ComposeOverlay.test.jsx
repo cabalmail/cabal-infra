@@ -174,6 +174,93 @@ describe('ComposeOverlay', () => {
     }
   });
 
+  it('reply from Sent reuses the sending alias and targets the original To', async () => {
+    const envelope = {
+      from: ['"Me" <user@test.com>'],
+      to: ['"Ann" <ann@vendor.example>', 'bob@vendor.example'],
+      cc: ['carol@vendor.example'],
+      subject: 'Plans',
+    };
+    const { unmount } = renderCompose({
+      type: 'reply',
+      envelope,
+      recipient: '',
+      subject: 'Re: Plans',
+      reply_source: { folder: 'Sent', id: 7 },
+    });
+    try {
+      await waitFor(() => {
+        expect(screen.getByText('"Ann" <ann@vendor.example>')).toBeInTheDocument();
+      });
+      expect(screen.getByText('bob@vendor.example')).toBeInTheDocument();
+      // Plain reply drops the Cc, and the author is never a recipient.
+      expect(screen.queryByText('carol@vendor.example')).not.toBeInTheDocument();
+      expect(screen.queryByText('"Me" <user@test.com>')).not.toBeInTheDocument();
+      // The From alias survives the owned-list reconciliation.
+      await waitFor(() => {
+        expect(screen.getByLabelText('From')).toHaveTextContent('user@test.com');
+      });
+    } finally {
+      unmount();
+    }
+  });
+
+  it('replyAll from Sent carries the original Cc and Bcc without the blind-copy warning', async () => {
+    const envelope = {
+      from: ['"Me" <user@test.com>'],
+      to: ['ann@vendor.example'],
+      cc: ['carol@vendor.example'],
+      bcc: ['eve@home.example'],
+      subject: 'Plans',
+    };
+    const { unmount } = renderCompose({
+      type: 'replyAll',
+      envelope,
+      recipient: '',
+      subject: 'Re: Plans',
+      reply_source: { folder: 'Sent', id: 7 },
+    });
+    try {
+      await waitFor(() => {
+        expect(screen.getByText('eve@home.example')).toBeInTheDocument();
+      });
+      expect(screen.getByText('ann@vendor.example')).toBeInTheDocument();
+      expect(screen.getByText('carol@vendor.example')).toBeInTheDocument();
+      expect(setMessage).not.toHaveBeenCalledWith(
+        'Warning: You are replying to a blind copy.', true
+      );
+    } finally {
+      unmount();
+    }
+  });
+
+  it('clears a Sent-derived From the user no longer owns', async () => {
+    const envelope = {
+      from: ['gone@test.com'],
+      to: ['ann@vendor.example'],
+      cc: [],
+      subject: 'Plans',
+    };
+    const { unmount } = renderCompose({
+      type: 'reply',
+      envelope,
+      recipient: '',
+      subject: 'Re: Plans',
+      reply_source: { folder: 'Sent', id: 7 },
+    });
+    try {
+      await waitFor(() => {
+        expect(mockGetAddresses).toHaveBeenCalled();
+      });
+      // The revoked alias must not survive into the From picker.
+      await waitFor(() => {
+        expect(screen.getByLabelText('From')).not.toHaveTextContent('gone@test.com');
+      });
+    } finally {
+      unmount();
+    }
+  });
+
   it('strips self from replyAll recipients when entries carry display names', async () => {
     const envelope = {
       from: ['"Sender" <sender@example.com>'],

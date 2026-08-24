@@ -23,6 +23,10 @@ public enum FolderTree {
     /// it back here: IMAP keeps no record of where it was archived from.
     public static let inboxPath = "INBOX"
 
+    /// Where `/send` files the user's own outbound copies. Reply affordances
+    /// invert their addressing when acting inside it - see `ReplyBuilder`.
+    public static let sentPath = "Sent"
+
     /// DFS through the `/`-delimited tree formed by `path`s, emitting peers
     /// alphabetically and children directly under their parent. Intermediate
     /// path segments that aren't themselves in `input` are skipped - we

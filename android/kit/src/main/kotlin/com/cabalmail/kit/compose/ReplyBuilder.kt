@@ -23,6 +23,13 @@ import java.util.UUID
  * owned address the original was sent to (To → Cc), and fall back to no
  * selection — the compose screen then leads with "Create new address…".
  *
+ * ### Reply from Sent
+ * Replying to the user's own message (read out of the Sent folder, From
+ * owned by the user) inverts the addressing instead: From reuses the alias
+ * the original was sent from, Reply goes to the original To, and Reply All
+ * carries the original To / Cc / Bcc. The author never appears in the
+ * recipient lists.
+ *
  * ### Threading
  * An open message overlays the ids parsed from the fetched body
  * ([MessageContent]) onto the envelope, so replies thread correctly even
@@ -31,6 +38,8 @@ import java.util.UUID
  */
 object ReplyBuilder {
     enum class Mode { REPLY, REPLY_ALL, FORWARD }
+
+    private const val SENT_FOLDER = "Sent"
 
     fun build(
         envelope: Envelope,
@@ -43,17 +52,36 @@ object ReplyBuilder {
         id: String = UUID.randomUUID().toString(),
     ): Draft {
         val owned = ownedAddresses.map { it.lowercase() }.toSet()
-        val fromAddress = pickDefaultFrom(envelope, owned)
+
+        // A message read out of Sent whose From is one of the user's own
+        // addresses is their own outbound copy, and replying to it inverts
+        // the addressing (see the class doc). The ownership check keeps the
+        // inversion off messages merely filed into Sent by hand.
+        val ownFrom = bareAddresses(envelope.from).firstOrNull()?.lowercase()
+        val isOwnMessage = sourceFolder == SENT_FOLDER && ownFrom in owned
+
+        val fromAddress = if (isOwnMessage) ownFrom else pickDefaultFrom(envelope, owned)
         val subject = prefixedSubject(envelope.subject, mode)
 
-        val (to, cc) =
-            when (mode) {
-                Mode.REPLY -> bareAddresses(envelope.from) to emptyList()
-                Mode.REPLY_ALL -> {
-                    val recipients = deduped(bareAddresses(envelope.from + envelope.to + envelope.cc), owned)
-                    recipients.take(1) to recipients.drop(1)
+        val (to, cc, bcc) =
+            when {
+                isOwnMessage && mode == Mode.REPLY -> {
+                    val seen = owned.toMutableSet()
+                    Triple(deduped(envelope.to, seen), emptyList<String>(), emptyList<String>())
                 }
-                Mode.FORWARD -> emptyList<String>() to emptyList()
+                isOwnMessage && mode == Mode.REPLY_ALL -> {
+                    // One shared seen-set so an address never lands in more
+                    // than one of To / Cc / Bcc.
+                    val seen = owned.toMutableSet()
+                    Triple(deduped(envelope.to, seen), deduped(envelope.cc, seen), deduped(envelope.bcc, seen))
+                }
+                mode == Mode.REPLY ->
+                    Triple(bareAddresses(envelope.from), emptyList<String>(), emptyList<String>())
+                mode == Mode.REPLY_ALL -> {
+                    val recipients = deduped(envelope.from + envelope.to + envelope.cc, owned.toMutableSet())
+                    Triple(recipients.take(1), recipients.drop(1), emptyList<String>())
+                }
+                else -> Triple(emptyList<String>(), emptyList<String>(), emptyList<String>())
             }
 
         val originalBody = quotableBody(content)
@@ -71,6 +99,7 @@ object ReplyBuilder {
             fromAddress = fromAddress,
             to = to,
             cc = cc,
+            bcc = bcc,
             subject = subject,
             body = body,
             inReplyTo = threading.first,
@@ -107,16 +136,16 @@ object ReplyBuilder {
 
     private fun bareAddresses(mailboxes: List<String>): List<String> = mailboxes.mapNotNull { mailboxAddress(it) }
 
+    /**
+     * Bare addresses, first occurrence wins, minus anything already in
+     * [seen]. Seed [seen] with the owned set to keep the user out of the
+     * recipients; pass the same set across calls to keep an address from
+     * landing in more than one of To / Cc / Bcc.
+     */
     private fun deduped(
-        addresses: List<String>,
-        owned: Set<String>,
-    ): List<String> {
-        val seen = mutableSetOf<String>()
-        return addresses.filter { address ->
-            val key = address.lowercase()
-            key !in owned && seen.add(key)
-        }
-    }
+        mailboxes: List<String>,
+        seen: MutableSet<String>,
+    ): List<String> = bareAddresses(mailboxes).filter { seen.add(it.lowercase()) }
 
     // ------------------------------------------------------------- quoting
 

@@ -36,6 +36,9 @@ data class Envelope(
     val from: List<String> = emptyList(),
     val to: List<String> = emptyList(),
     val cc: List<String> = emptyList(),
+    /** Non-empty only when the stored copy carries a Bcc header - in
+     * practice the user's own Sent mail. Absent from older payloads. */
+    val bcc: List<String> = emptyList(),
     val flags: List<String> = emptyList(),
     val struct: JsonElement? = null,
     val priority: List<String> = emptyList(),
