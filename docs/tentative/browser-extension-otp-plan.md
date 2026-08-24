@@ -151,11 +151,18 @@ so the binding design is the feature. Ranked signals:
    signal every mail-based filler has. Decent, not sufficient alone.
 3. **No binding signal.** Normal, not suspicious. Email-code sign-in
    is routine — for passwordless sites it is the entire auth flow —
-   and most existing addresses carry no site association, so absence
-   of evidence cannot justify demotion or extra confirmation steps
-   without punishing the legitimate common case into warning
-   fatigue. The offer appears with sender and recipient shown
-   plainly, and nothing more.
+   and most existing addresses carry no site association, so this is
+   the common tier. The offer appears with sender and recipient
+   shown plainly, and nothing more. The reason is not that friction
+   here would annoy anyone — an offer is opt-in, and even a hedged
+   offer beats the switch-app/memorize/type cycle — but that a
+   confirmation step firing on the common path becomes an automatic
+   click within days and then protects no one, while training the
+   user that caution-styled chips are the feature's normal look,
+   which dilutes the one warning that must stay salient (the
+   mismatch case below). Rejected alternative: offering nothing at
+   all without binding evidence — silence instead of a hedged offer
+   — which would gut exactly the routine passwordless case.
 
 Binding is therefore not a gate on offering; it is what makes the
 dangerous case detectable. A code whose recipient address is bound
