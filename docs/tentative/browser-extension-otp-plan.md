@@ -204,10 +204,14 @@ segmented inputs get per-character dispatch. The toolbar popup offers the same
 candidates with a copy button, as the fallback for OTP fields the
 detector missed.
 
-Optional post-use cleanup, settings-gated and default off: after a
-successful fill, offer to mark the code message read or move it to
-trash via the existing `/set_flag` / `/move_messages` endpoints.
-Codes are single-use noise; the mailbox does not need to keep them.
+Optional post-use cleanup, default off: after a successful fill,
+invoke the user's preferred disposal method for the code message —
+leave it untouched, mark it read, or move it to trash — via the
+existing `/set_flag` / `/move_messages` endpoints. The preference
+belongs in the synced app-preferences map (`set_preferences`) rather
+than extension-local storage, so the future native-client code
+surface (open question 5) honors the same choice. Codes are
+single-use noise; the mailbox does not need to keep them.
 
 ## Backend additions
 
