@@ -79,6 +79,9 @@ jobs:
             - '.github/workflows/lint.yml'
           python:
             - 'lambda/**'
+            # The user-mail-rules procmail compiler and its corpus tests
+            # live with the container sources but gate here.
+            - 'docker/shared/**'
             - '.github/workflows/lint.yml'
           swift:
             - 'apple/**'
@@ -252,6 +255,12 @@ jobs:
       # Same invocation as the docstring in each test file; suites are
       # import-order independent since #863.
       run: python3 -m unittest discover -s lambda/api/_shared/tests -p "test_*.py"
+    - name: unittest-rules-compiler
+      # Golden-file + injection-corpus tests for the procmail rule compiler
+      # (docs/1.x/user-mail-rules-plan.md, Phase 2). Pure stdlib; the same
+      # golden assertion also runs in the imap image build and at container
+      # start-up via compile-user-rules-selftest.py.
+      run: python3 -m unittest discover -s docker/shared/test/compile-user-rules -p "test_*.py"
 
   # ---------------------------------------------------------------------------
   # Swift. swiftlint --strict, the same gate apple.yml runs on its macOS leg.

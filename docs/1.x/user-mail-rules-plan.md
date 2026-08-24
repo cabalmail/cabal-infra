@@ -117,25 +117,31 @@ The ordering constraint set there is the load-bearing invariant:
    in [`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc).
    It catches everything that no user rule consumed.
 
-One step in today's pipeline is not covered by that ordering: the
-0.11.x push-notification enqueue recipe in
+One step in today's pipeline sits between those stages: the 0.11.x
+push-notification enqueue recipe in
 [`procmailrc`](../../docker/imap/configs/procmailrc) -- a `:0c`
-best-effort recipe, placed after the spam rule, that enqueues a wake
-signal hardcoded to folder `INBOX`. Phase 2 must place user rules
-relative to it: left where it is, the push fires before user rules,
-so a message a rule deletes or files elsewhere would still produce an
-INBOX-labeled push. The likely shape is to run user rules first and
-suppress or re-label the push for diverted messages; the decision is
-settled in [Phase 2.2](#22-dockershared-changes) with the recipe in
-hand.
+best-effort recipe that enqueues a wake signal labeled `INBOX`. The
+settled placement (considered and preferred over splitting delete
+rules out ahead of the queue, which would overcomplicate ordering for
+questionable benefit): user rules run BEFORE the push recipe.
+Procmail stops at the first delivering recipe, so a rule that deletes
+or files a message never reaches the file-level push at all -- deleted
+mail never buzzes -- and for terminal move/archive deliveries the
+compiler emits its own guarded push-enqueue recipe, carrying the real
+destination folder as the label, immediately ahead of the delivery.
+Messages no rule consumes fall through to the unchanged INBOX push.
 
-The single edit that wires this all up sits in
-[`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc),
-and the single edit that propagates the include lines to each user's
-`~/.procmailrc` sits in
-[`docker/shared/sync-users.sh`](../../docker/shared/sync-users.sh). Both
-edits are additive and idempotent; both grow by exactly one INCLUDERC
-line in this version. See [Phase 2](#phase-2--procmail-compiler-and-imap-tier-integration).
+The wiring lives in
+[`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc):
+the shared template (installed at `/etc/procmailrc` AND copied per
+user) carries a guarded include of `/etc/procmail-user/$LOGNAME.rc`
+between the spam rule and the push recipe; a `CABALRULESDONE` guard
+(the same pattern as `PUSH_ENQUEUED`) makes the include run exactly
+once whichever rcfile copy runs first.
+[`sync-users.sh`](../../docker/shared/sync-users.sh) installs the
+current template into each user's `~/.procmailrc` on every sync, so
+ordering changes reach existing users, not just new ones. See
+[Phase 2](#phase-2--procmail-compiler-and-imap-tier-integration).
 
 **This plan ships first.** The browser extension plan has not shipped,
 so no pending-confirm path is live and no INCLUDERC for
@@ -436,12 +442,21 @@ Container-local `/etc/procmail-user/`, one file per user:
 
 Each file is regenerated atomically on every reconfigure (write to
 `.tmp`, `fsync`, `rename`). Procmail reads it at message-delivery time
-via the user's `~/.procmailrc`:
+via the guarded include in the shared `procmailrc` template (present
+in both `/etc/procmailrc` and the per-user copy; the guard makes it
+run once):
 
 ```
-INCLUDERC=/etc/procmail-pending.rc          # browser extension plan, system-owned
-INCLUDERC=/etc/procmail-user/$LOGNAME.rc    # this plan
+:0
+* ! CABALRULESDONE ?? yes
+{
+  CABALRULESDONE=yes
+  INCLUDERC=/etc/procmail-user/$LOGNAME.rc
+}
 ```
+
+(The browser extension plan's future `/etc/procmail-pending.rc`
+include slots in ahead of this block when that plan ships.)
 
 (`$LOGNAME` is set by procmail to the receiving user. The compiler
 uses the same Cognito username everywhere -- the `cabal-user-rules.user`
@@ -480,9 +495,11 @@ defended in depth.
 
 Inputs:
 - A DynamoDB scan of `cabal-user-rules`.
-- A snapshot of each user's folder list (fetched once per
-  reconfigure -- one IMAP `LIST` per user, cached for the duration of
-  the run).
+- Each user's folder list, checked directly on the filesystem
+  (`~user/Maildir/.<folder>/` exists) rather than via IMAP `LIST`:
+  the compiler runs inside the imap container where the Maildir
+  directory IS what the emitted recipe delivers into, so the
+  filesystem is the authoritative (and cheapest) source.
 - The compiled output of `compile-user-rules.py --self-test` (see
   below) is asserted at container start-up.
 
@@ -890,6 +907,16 @@ matching the React shape. Implement in
 
 Goal: the rules a user writes via Phase 1 actually shape mail delivery.
 
+Lands in three slices, each shippable: **2 (core)** -- the compiler with
+conditions, all five destination actions, spill-through, and forward,
+plus all the container wiring below; **2b** -- the flag / markRead
+Maildir info-flag delivery path; **2c** -- the Reply machinery (vacation
+cache, bounce suppression, rate cap). Until its slice lands, a rule
+requesting flag/markRead compiles without the decoration (logged
+`aux_not_implemented`), while a Reply rule is skipped whole -- compiling
+its halt without sending the reply would consume the message's
+precedence without doing the thing the rule exists for.
+
 ### 2.1 The compiler script
 
 Add `docker/shared/compile-user-rules.py` -- a Python 3 script invoked
@@ -913,28 +940,23 @@ self-test described above.
   `regenerate()`. Subscribe to the new SNS topic on top of the
   existing one (single SQS subscriber, fan-in).
 - [`docker/shared/sync-users.sh`](../../docker/shared/sync-users.sh):
-  today it copies `/etc/procmailrc` verbatim and appends nothing, so
-  this is the first appended INCLUDERC line (the pending include
-  arrives with the browser extension plan, whenever that ships). Add:
-  ```sh
-  grep -q '/etc/procmail-user/' "/home/${username}/.procmailrc" \
-    || echo 'INCLUDERC=/etc/procmail-user/$LOGNAME.rc' \
-      >> "/home/${username}/.procmailrc"
-  ```
-  Idempotent. Runs on every container start; correct on first run
-  AND on subsequent runs.
+  the include lives in the shared `procmailrc` template rather than
+  being appended per user (see
+  [Relation to prior work](#relation-to-prior-work)); sync-users just
+  switches from copy-once (`cp -n`) to installing the CURRENT template
+  into `~/.procmailrc` on every sync, so recipe-ordering changes reach
+  existing users. Safe because the file is system-owned (users have no
+  shell) and the in-file guards make double-processing harmless.
 - [`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc):
   add `SHELL=/usr/bin/false` near the top, ahead of any INCLUDERC,
-  per [Sandbox the recipient user](#sandbox-the-recipient-user).
+  per [Sandbox the recipient user](#sandbox-the-recipient-user), and
+  the `CABALRULESDONE`-guarded user-rules include between the spam
+  rule and the push recipe (the settled push placement -- see
+  [Relation to prior work](#relation-to-prior-work): deleted/filed
+  mail never reaches the INBOX push; the compiler emits its own
+  folder-labeled push ahead of terminal deliveries).
   Leave `VERBOSE` unset (default off) per
   [Procmail log growth and rotation](#procmail-log-growth-and-rotation).
-  This is also where the push-enqueue placement decision from
-  [Relation to prior work](#relation-to-prior-work) lands: position
-  the user-rules include ahead of the 0.11.x push-enqueue recipe and
-  suppress or re-label the push for messages a rule deletes or files
-  out of INBOX (finalize the mechanism with the recipe in hand; the
-  `PUSH_ENQUEUED` guard variable is the existing hook for exactly
-  this kind of suppression).
 - New file `docker/imap/configs/procmail-user.rc.empty` -- an empty
   fixture procmail include used as the initial state for a user with
   no rules. Saves the compiler from having to special-case the
@@ -1570,10 +1592,10 @@ No migration from prior versions is required -- there are no rules
 before this version. Existing users land in the empty state on first
 visit. The DynamoDB table is empty until users start writing rules.
 
-The procmailrc and sync-users.sh INCLUDERC lines are additive and
-idempotent: existing users get the user-rules INCLUDERC line appended
-to `~/.procmailrc` on the next container start (and, when the browser
-extension plan ships, its pending include the same way).
+The include ships inside the shared `procmailrc` template, which
+sync-users.sh installs into every user's `~/.procmailrc` on the next
+container start (and, when the browser extension plan ships, its
+pending include arrives the same way).
 First-time-after-deploy delivery for a user that hasn't been re-
 synced reads the not-yet-present `/etc/procmail-user/<user>.rc` and
 falls through (procmail tolerates a missing include with `INCLUDERC`

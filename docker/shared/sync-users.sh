@@ -44,7 +44,14 @@ aws cognito-idp list-users \
     "/home/${username}/Maildir"
   install -d -o "$username" -g "$username" -m 755 \
     "/home/${username}/.procmail"
-  cp -n /etc/procmailrc "/home/${username}/.procmailrc" 2>/dev/null || true
+  # ~/.procmailrc is system-owned (users have no shell access), so install
+  # the CURRENT template on every sync rather than copy-once: recipe
+  # ordering changes (e.g. the user-rules include landing before the push
+  # recipe, docs/1.x/user-mail-rules-plan.md) must reach existing users,
+  # not just new ones. The in-file guards (CABALRULESDONE, PUSH_ENQUEUED)
+  # make double-processing of /etc/procmailrc + this copy harmless.
+  install -o "$username" -g "$username" -m 644 \
+    /etc/procmailrc "/home/${username}/.procmailrc"
 done
 
 echo "[sync-users] Done."

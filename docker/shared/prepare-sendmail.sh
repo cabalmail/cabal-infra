@@ -55,6 +55,17 @@ make -C /etc/mail
 if [ "$TIER" = "imap" ]; then
   echo "[prepare-sendmail] Assembling aliases..."
   /usr/local/bin/assemble-aliases.sh
+
+  # User-mail-rules compiler (docs/1.x/user-mail-rules-plan.md): golden
+  # self-test first - a regressed compiler must never touch a user's mail,
+  # and failing here (set -e) keeps /run/sendmail-ready unwritten so
+  # sendmail never starts and ECS replaces the task. Then the initial
+  # compile, so every user's include exists before the first delivery
+  # (subsequent recompiles ride reconfigure.sh).
+  echo "[prepare-sendmail] Running compile-user-rules self-test..."
+  /usr/local/bin/compile-user-rules-selftest.py
+  echo "[prepare-sendmail] Compiling user mail rules..."
+  /usr/local/bin/compile-user-rules.py
 fi
 
 touch /run/sendmail-ready
