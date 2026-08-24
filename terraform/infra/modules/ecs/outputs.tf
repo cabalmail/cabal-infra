@@ -13,6 +13,11 @@ output "capacity_provider_name" {
   description = "Name of the EC2 capacity provider. Consumed by non-mail services that share the cluster."
 }
 
+output "user_rules_topic_arn" {
+  value       = aws_sns_topic.user_rules_changed.arn
+  description = "ARN of the SNS topic for user-mail-rules change notifications."
+}
+
 output "sns_topic_arn" {
   value       = aws_sns_topic.address_changed.arn
   description = "ARN of the address-changed SNS topic. Lambdas publish here to trigger reconfiguration."

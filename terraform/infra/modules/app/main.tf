@@ -51,6 +51,7 @@ module "cabal_method" {
   domains                   = var.domains
   bucket                    = var.bucket
   address_changed_topic_arn = var.address_changed_topic_arn
+  user_rules_topic_arn      = var.user_rules_topic_arn
   user_pool_id              = var.user_pool_id
   # Alarm on tail latency/errors for the endpoints whose latency tracks folder
   # cardinality (large-mailbox hardening plan, Layer 4.3).

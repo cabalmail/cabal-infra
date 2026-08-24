@@ -233,6 +233,7 @@ module "admin" {
   dev_mode             = var.prod ? false : true
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
+  user_rules_topic_arn      = module.ecs.user_rules_topic_arn
   push_queue_arn            = module.ecs.push_queue_arn
 
   dmarc_healthcheck_ping_param = local.hc_ping_dmarc
