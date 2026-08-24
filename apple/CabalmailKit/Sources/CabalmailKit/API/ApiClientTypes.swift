@@ -53,6 +53,10 @@ public struct ApiEnvelope: Sendable, Codable, Hashable {
     public let from: [String]
     public let to: [String]
     public let cc: [String]
+    /// Optional so payloads from Lambdas predating the field still decode.
+    /// Non-empty only for messages whose stored copy carries a Bcc header -
+    /// in practice the user's own Sent mail.
+    public let bcc: [String]?
     public let flags: [String]
     /// BODYSTRUCTURE expressed as a recursive list of strings / numbers.
     /// Decoded as JSON `Any`-equivalent and walked at the call site to
@@ -74,7 +78,7 @@ public struct ApiEnvelope: Sendable, Codable, Hashable {
     public let authResults: AuthResults?
 
     private enum CodingKeys: String, CodingKey {
-        case id, date, subject, from, to, cc, flags, priority, references
+        case id, date, subject, from, to, cc, bcc, flags, priority, references
         case structure = "struct"
         case messageId = "message_id"
         case inReplyTo = "in_reply_to"
@@ -88,6 +92,7 @@ public struct ApiEnvelope: Sendable, Codable, Hashable {
         from: [String],
         to: [String],
         cc: [String],
+        bcc: [String]? = nil,
         flags: [String],
         structure: BodyStructureNode?,
         priority: [String]?,
@@ -102,6 +107,7 @@ public struct ApiEnvelope: Sendable, Codable, Hashable {
         self.from = from
         self.to = to
         self.cc = cc
+        self.bcc = bcc
         self.flags = flags
         self.structure = structure
         self.priority = priority
@@ -305,6 +311,8 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
     public let from: [String]
     public let to: [String]
     public let cc: [String]
+    /// Same shape and optionality as `ApiEnvelope.bcc`.
+    public let bcc: [String]?
     public let flags: [String]
     public let structure: BodyStructureNode?
     public let priority: [String]?
@@ -318,7 +326,7 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
     public let authResults: AuthResults?
 
     private enum CodingKeys: String, CodingKey {
-        case id, date, subject, from, to, cc, flags, priority, folder, references
+        case id, date, subject, from, to, cc, bcc, flags, priority, folder, references
         case structure = "struct"
         case messageId = "message_id"
         case inReplyTo = "in_reply_to"
@@ -332,6 +340,7 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
         from: [String],
         to: [String],
         cc: [String],
+        bcc: [String]? = nil,
         flags: [String],
         structure: BodyStructureNode?,
         priority: [String]?,
@@ -347,6 +356,7 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
         self.from = from
         self.to = to
         self.cc = cc
+        self.bcc = bcc
         self.flags = flags
         self.structure = structure
         self.priority = priority

@@ -1396,6 +1396,10 @@ def envelope_dict(msgid, data):
         "from": decode_address(envelope.from_),
         "to": decode_address(envelope.to),
         "cc": decode_address(envelope.cc),
+        # Populated only for messages whose stored copy carries a Bcc header -
+        # in practice the user's own Sent mail - and empty everywhere else.
+        # Reply-from-Sent needs it to reconstruct the original recipient set.
+        "bcc": decode_address(envelope.bcc),
         "flags": decode_flags(data[b'FLAGS']),
         "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
         "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()],
