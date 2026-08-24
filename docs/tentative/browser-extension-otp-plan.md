@@ -52,9 +52,12 @@ is dominated by getting that right, not by the plumbing.
 - The extension never gains standing access to message content. Code
   extraction happens server-side; the extension only ever sees
   candidate codes with metadata.
-- Use the minted-address relationship as the origin-binding signal:
-  a code arriving at the address minted for this site is trustworthy
-  in a way "a code arrived somewhere in your inbox" is not.
+- Use the minted-address relationship as origin-binding evidence
+  where it exists, and treat its absence as normal rather than
+  suspicious. Email-code sign-in is a routine mechanism — some sites
+  eschew passwords entirely — and most addresses carry no site
+  association today. Binding exists to make contradiction detectable
+  (see Origin binding), not to gate the offer.
 
 ## Non-goals
 
@@ -143,17 +146,45 @@ so the binding design is the feature. Ranked signals:
    suggest flow defaults the address `comment` to the page hostname,
    so even before any mapping store exists, a code arriving at an address
    whose comment matches the current origin is a strong match. The
-   deferred site-to-address mapping store makes this rigorous.
+   address-metadata model (below) makes this rigorous.
 2. **Sender domain matches the page origin** (eTLD+1). The generic
    signal every mail-based filler has. Decent, not sufficient alone.
-3. **No binding signal.** The offer still appears (the manual escape
-   hatch has to exist) but visually demoted, showing sender and
-   recipient prominently, behind an extra confirmation step.
+3. **No binding signal.** Normal, not suspicious. Email-code sign-in
+   is routine — for passwordless sites it is the entire auth flow —
+   and most existing addresses carry no site association, so absence
+   of evidence cannot justify demotion or extra confirmation steps
+   without punishing the legitimate common case into warning
+   fatigue. The offer appears with sender and recipient shown
+   plainly, and nothing more.
 
-The dangerous case gets loud treatment: a code whose recipient
-address is bound to site A offered while the user is on site B is
-exactly the phishing shape, and the UI says so instead of just
-dimming the chip.
+Binding is therefore not a gate on offering; it is what makes the
+dangerous case detectable. A code whose recipient address is bound
+to site A, offered while the user is on site B, is exactly the
+real-time phishing shape, and that gets loud treatment — a warning,
+not a dimmed chip. A warning can only fire on positive evidence,
+and today that evidence is sparse: extension-minted addresses carry
+comment-equals-hostname; everything else carries nothing.
+
+### Address metadata: the fuller answer (out of scope, recorded here)
+
+The confident version of OTP-to-site ascription is richer metadata
+on `cabal-addresses` rows, along the lines of:
+
+- correspondence mode: two-way vs receive-only
+- which sender domains (or MX) are authorized or expected to send
+  to this address
+- personal vs corporate
+- associated websites
+
+This is a superset of the base plan's deferred site-to-address
+mapping store, and its value reaches well beyond OTP fill:
+expected-sender metadata is leak detection (mail arriving at a
+vendor-scoped address from anyone but that vendor means the address
+was leaked or sold), correspondence mode can drive send-side UI, and
+associated websites powers the deferred sign-in autofill. Way out of
+scope for this feature; recorded here because it is the model that
+would let OTP ascription be confident rather than heuristic. If
+pursued, it becomes its own tentative doc.
 
 ### UX
 
@@ -185,9 +216,11 @@ Codes are single-use noise; the mailbox does not need to keep them.
    part — worth measuring whether a coarser interval (or reusing
    `list_envelopes` timestamps to skip body work) keeps latency
    acceptable.
-2. **Does the mapping store need to ship first?** The base plan's
-   comment-equals-hostname convention may be enough binding for v1, with
-   the store upgrading signal quality later. Leaning yes-it's-enough.
+2. **How much address metadata must exist before v1?** With unbound
+   codes treated as normal, none: comment-equals-hostname already
+   gives mismatch detection for extension-minted addresses, and the
+   metadata model upgrades confidence later. Leaning ship with
+   nothing new.
 3. **Safari iOS.** On-demand polling driven by the content script
    should survive Safari's aggressive service-worker lifecycle since
    every poll is triggered by a live page; verify before committing
