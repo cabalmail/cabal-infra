@@ -24,6 +24,7 @@
     <string name="dispose_options">Dispose options</string>
     <string name="dispose_then">%1$s, then %2$s</string>
     <string name="load_remote_content">Load remote content</string>
+    <string name="retry">Retry</string>
     <string name="cancel">Cancel</string>
     <string name="more_actions">More actions</string>
     <string name="active_option">Active</string>
