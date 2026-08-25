@@ -18,6 +18,8 @@ import com.cabalmail.kit.models.NavState
 import com.cabalmail.kit.models.Preferences
 import com.cabalmail.kit.models.PreferencesUpdate
 import com.cabalmail.kit.models.PushEnvelope
+import com.cabalmail.kit.models.Rule
+import com.cabalmail.kit.models.RuleSet
 import com.cabalmail.kit.models.SaveDraftResult
 import com.cabalmail.kit.models.SearchFilters
 import com.cabalmail.kit.models.SearchResult
@@ -647,6 +649,48 @@ class ApiClient(
                 message = "Attachment upload failed (${response.status.value})",
             )
         }
+    }
+
+    // ------------------------------------------------------------ mail rules
+
+    /**
+     * The caller's whole ordered rule set. A user with no rules reads as
+     * `{rules: [], version: 0}` — never an error. The Lambda reads
+     * consistently, so a reload right after a
+     * [CabalmailException.RuleSetConflict] sees the winning write.
+     */
+    suspend fun getRules(): RuleSet = decode(call(HttpMethod.Get, "get_rules"))
+
+    /**
+     * Replaces the caller's whole rule set (list order is precedence).
+     * [expectedVersion] carries optimistic concurrency: a stale writer gets
+     * HTTP 409, surfaced as [CabalmailException.RuleSetConflict] so the UI
+     * offers a reload instead of interleaving two devices' orderings.
+     * Returns the canonicalized set (server-assigned ids, invalid forwards
+     * stripped) and the new version. The 200 body's extra `stripped` /
+     * `warnings` keys are ignored: `RulesValidator` flags bad forwards
+     * before the PUT, and the folder warning fires for every folder target
+     * on every save, so it isn't actionable.
+     */
+    suspend fun setRules(
+        rules: List<Rule>,
+        expectedVersion: Int,
+    ): RuleSet {
+        val body =
+            buildJsonObject {
+                put("rules", bodyJson.encodeToJsonElement(rules))
+                put("expectedVersion", expectedVersion)
+            }
+        val text =
+            try {
+                call(HttpMethod.Put, "set_rules", body = body)
+            } catch (exception: CabalmailException.ApiError) {
+                if (exception.httpStatus == 409) {
+                    throw CabalmailException.RuleSetConflict()
+                }
+                throw exception
+            }
+        return decode(text)
     }
 
     // ------------------------------------------- preferences and nav state
