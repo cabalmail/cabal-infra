@@ -188,6 +188,10 @@ application shell (work item 4), and the `xtask` entry points (work item 5) are
 in place. `cargo run -p cabalmail-gtk` opens a window; there is nothing to sign
 in to yet, which is Phase 3.
 
+Arch packaging is finished but **not published**: the AUR is closed to new
+account registrations, so there is no route to publish the package. It is built
+and linted on every push regardless, which is what keeps it working.
+
 Phase 2 is under way. The `linux.yml` workflow (work item 1) is in place, so
 every push to a named branch is gated on the same steps a developer runs, and
 Arch packaging (work item 4) builds and lints an installable package on every
