@@ -322,11 +322,18 @@ def scan_rules_table():
 
     Returns {user: raw rules JSON string}. The CLI auto-paginates.
     '''
-    out = subprocess.run(
+    result = subprocess.run(
         ['aws', 'dynamodb', 'scan', '--table-name', TABLE_NAME,
          '--consistent-read', '--region', os.environ['AWS_REGION'],
          '--output', 'json'],
-        check=True, capture_output=True, text=True).stdout
+        check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        # Surface the CLI's stderr (AccessDenied, throttling, ...) - a bare
+        # CalledProcessError hides the reason the scan failed.
+        raise RuntimeError(
+            f'dynamodb scan failed (exit {result.returncode}): '
+            f'{result.stderr.strip()[-500:]}')
+    out = result.stdout
     rows = {}
     for item in json.loads(out).get('Items', []):
         user = item.get('user', {}).get('S', '')

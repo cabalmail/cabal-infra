@@ -59,13 +59,19 @@ if [ "$TIER" = "imap" ]; then
   # User-mail-rules compiler (docs/1.x/user-mail-rules-plan.md): golden
   # self-test first - a regressed compiler must never touch a user's mail,
   # and failing here (set -e) keeps /run/sendmail-ready unwritten so
-  # sendmail never starts and ECS replaces the task. Then the initial
-  # compile, so every user's include exists before the first delivery
-  # (subsequent recompiles ride reconfigure.sh).
+  # sendmail never starts and ECS replaces the task. The initial compile
+  # itself is BEST-EFFORT, unlike the self-test: a failed table scan
+  # (transient DynamoDB error, or IAM landing a minute behind the image
+  # on a first deploy) must degrade to rules-inactive-until-the-next-
+  # reconfigure, not hold every local delivery hostage behind an
+  # unwritten sendmail-ready. Procmail tolerates the missing include
+  # (logs and falls through to INBOX), and both the SNS trigger and the
+  # 15-minute fallback retry the compile.
   echo "[prepare-sendmail] Running compile-user-rules self-test..."
   /usr/local/bin/compile-user-rules-selftest.py
   echo "[prepare-sendmail] Compiling user mail rules..."
-  /usr/local/bin/compile-user-rules.py
+  /usr/local/bin/compile-user-rules.py \
+    || echo "[prepare-sendmail] compile-user-rules failed; rules inactive until next reconfigure"
 fi
 
 touch /run/sendmail-ready
