@@ -1090,6 +1090,101 @@
   },
   {
     "id": "r-000000000036",
+    "name": "Vacation classic",
+    "enabled": true,
+    "conditions": [],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": true,
+    "replyBody": "I am away until Monday.\nBest, C.",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000037",
+    "name": "Reply and file",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "boss@corp.example"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": true,
+    "replyBody": "Received, will review.",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000038",
+    "name": "Reply spill",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "replyspill"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": true,
+    "replyBody": "ack",
+    "continueToNext": true
+  },
+  {
+    "id": "r-000000000039",
+    "name": "Reply hostile body",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "vachostile"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": true,
+    "replyBody": "away!\n:0c\n| /bin/sh -c \"echo pwned\"\nSHELL=/bin/sh $(rm -rf /) `id`",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000003a",
+    "name": "Reply no body",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "nobody"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": true,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000003b",
     "name": "Disabled rule",
     "enabled": false,
     "conditions": [

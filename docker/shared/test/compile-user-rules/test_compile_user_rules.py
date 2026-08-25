@@ -9,9 +9,11 @@ user-controlled slot, asserting the compiler either rejects the rule or
 emits the input as an inert escaped literal - never as live procmail
 syntax.
 '''
+import base64
 import importlib.util
 import json
 import os
+import re
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +28,15 @@ FIXTURE_FOLDERS = {'', '.Receipts', '.Archive', '.Work.Clients', '.Trash',
 PUSH_LINE_PREFIX = '  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "'
 DELIVER_LINE_PREFIX = '  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR'
 FORWARD_LINE_PREFIX = '  | /usr/local/bin/cabal-rules-forward.sh '
+REPLY_LINE_PREFIX = '  | /usr/local/bin/cabal-rules-reply.sh '
+BASE64_RE = re.compile(r'^[A-Za-z0-9+/]+=*$')
+REPLY_GUARDS = [
+    '  * ! ^Auto-Submitted:',
+    '  * ! ^Precedence:.*(bulk|junk|list)',
+    '  * ! ^List-Id:',
+    '  * ! ^X-Mailer-Daemon:',
+    '  * ! ^From:.*MAILER-DAEMON',
+]
 
 # The classics plus procmail-specific shapes: shell injection, pipe/redirect
 # smuggling, recipe-structure injection via newlines, regex anchors and
@@ -97,7 +108,7 @@ class GoldenTest(unittest.TestCase):
         if not content.endswith('\n'):
             content += '\n'
         self.assertEqual(content, golden)
-        self.assertEqual(compiled, 46)
+        self.assertEqual(compiled, 51)
 
 
 class StructureTest(unittest.TestCase):
@@ -215,11 +226,56 @@ class StructureTest(unittest.TestCase):
         self.assertEqual(compiled, 0)
         self.assertIn('(no compiled rules)', content)
 
-    def test_reply_rule_skips_whole(self):
-        _, _, reason = compile_one(rule(
+    def test_reply_guards_precede_helper(self):
+        lines, _, reason = compile_one(rule(reply=True, replyBody='away'))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        for guard in REPLY_GUARDS + ['  * ! ^X-Loop: cabal-rules-fixtureuser',
+                                     '  * ^From:.']:
+            self.assertIn(guard, text)
+            self.assertLess(text.index(guard),
+                            text.index('cabal-rules-reply.sh'), guard)
+
+    def test_reply_body_is_opaque_base64(self):
+        hostile = 'away!\n:0c\n| /bin/sh -c "echo pwned"\n$(rm -rf /) `id`'
+        lines, _, reason = compile_one(rule(reply=True, replyBody=hostile))
+        self.assertIsNone(reason)
+        pipe = [l for l in lines if l.startswith(REPLY_LINE_PREFIX)]
+        self.assertEqual(len(pipe), 1)
+        args = pipe[0][len(REPLY_LINE_PREFIX):].split()
+        self.assertEqual(args[0], 'fixtureuser')
+        self.assertRegex(args[1], BASE64_RE)
+        self.assertEqual(base64.b64decode(args[1]).decode(), hostile)
+
+    def test_reply_after_forward_before_destination(self):
+        lines, _, reason = compile_one(rule(
             action='move', moveFolder='Receipts', reply=True,
-            replyBody='away'))
-        self.assertEqual(reason, 'aux_not_implemented:reply')
+            replyBody='ack', forward=['a@example.com']))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertLess(text.index('cabal-rules-forward.sh'),
+                        text.index('cabal-rules-reply.sh'))
+        self.assertLess(text.index('cabal-rules-reply.sh'),
+                        text.index('$MAILDIR/.Receipts/'))
+
+    def test_delete_ignores_reply(self):
+        lines, _, reason = compile_one(rule(
+            action='delete', reply=True, replyBody='away'))
+        self.assertIsNone(reason)
+        self.assertNotIn('cabal-rules-reply', '\n'.join(lines))
+
+    def test_reply_without_body_skips(self):
+        _, _, reason = compile_one(rule(reply=True))
+        self.assertEqual(reason, 'schema')
+
+    def test_reply_body_with_cr_skips(self):
+        _, _, reason = compile_one(rule(reply=True, replyBody='a\r\nb'))
+        self.assertEqual(reason, 'schema')
+
+    def test_reply_unsafe_user_skips_rule(self):
+        _, _, reason = compile_one(rule(reply=True, replyBody='away'),
+                                   user='evil user')
+        self.assertEqual(reason, 'user_unsafe')
 
 
 class FolderTest(unittest.TestCase):
@@ -265,6 +321,13 @@ class InjectionTest(unittest.TestCase):
                     for addr in args[1:]:
                         self.assertTrue(cur.valid_forward(addr),
                                         f'bad forward addr: {line!r}')
+                elif line.startswith(REPLY_LINE_PREFIX):
+                    # argv: <user> <base64-blob>, nothing else
+                    args = line[len(REPLY_LINE_PREFIX):].split()
+                    self.assertEqual(len(args), 2, f'bad reply argv: {line!r}')
+                    self.assertTrue(cur.USER_SAFE_RE.match(args[0]),
+                                    f'bad reply user: {line!r}')
+                    self.assertRegex(args[1], BASE64_RE)
                 else:
                     self.assertTrue(
                         line.startswith(PUSH_LINE_PREFIX)
