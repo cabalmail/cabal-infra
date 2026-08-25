@@ -71,8 +71,14 @@ locals {
 #     image now sets ssl = required and trusts only loopback; the env
 #     would be read no more but the mapping and the wider trust list
 #     would keep shipping to running tasks without this bump.
+# v9 (user-mail-rules Phase 2b): var.sinkhole joins the input so flipping
+#     the flag replaces the task def and picks up (or drops) the
+#     conditional SINKHOLE_ENABLED env var, same as smtp-out's marker.
 resource "terraform_data" "imap_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v8+hc" : "imap-taskdef-v8"
+  input = join("", [
+    var.healthcheck_ping_param != "" ? "imap-taskdef-v9+hc" : "imap-taskdef-v9",
+    var.sinkhole ? "+sinkhole" : "",
+  ])
 }
 
 resource "aws_ecs_task_definition" "imap" {
@@ -123,7 +129,11 @@ resource "aws_ecs_task_definition" "imap" {
       startPeriod = 120
     }
 
-    environment = [
+    # SINKHOLE_ENABLED is appended conditionally, mirroring smtp-out: as
+    # of user-mail-rules Phase 2b, rule forwards are submitted from this
+    # tier (cabal-forward-drain.sh), so forward-to-sinkhole test traffic
+    # needs the sinkhole.test mailertable entry here too.
+    environment = concat([
       { name = "TIER", value = "imap" },
       { name = "CERT_DOMAIN", value = var.control_domain },
       { name = "AWS_REGION", value = var.region },
@@ -132,7 +142,9 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "NETWORK_CIDR", value = var.cidr_block },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["imap"].url },
       { name = "PUSH_QUEUE_URL", value = aws_sqs_queue.push.url },
-    ]
+      ], var.sinkhole ? [
+      { name = "SINKHOLE_ENABLED", value = "true" },
+    ] : [])
 
     secrets = concat([
       { name = "MASTER_PASSWORD", valueFrom = "/cabal/master_password" },

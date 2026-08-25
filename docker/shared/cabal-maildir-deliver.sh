@@ -29,10 +29,11 @@ if [ ! -d "$maildir/tmp" ] || [ ! -d "$maildir/cur" ]; then
   exit 64
 fi
 
-# Unique per the maildir naming rules: seconds.<pid+random>.<host>. The
-# rename is atomic on the same filesystem, so readers never see a partial
-# message.
-name="$(date +%s).P$$R${RANDOM}.$(hostname)"
+# Unique per the maildir naming rules: seconds.<pid+random>.<host>.
+# `uname -n`, not `hostname`: the AL2023 runtime image does not ship the
+# hostname binary. The rename is atomic on the same filesystem, so
+# readers never see a partial message.
+name="$(date +%s).P$$R${RANDOM}.$(uname -n)"
 tmp="$maildir/tmp/$name"
 trap 'rm -f "$tmp"' EXIT
 cat > "$tmp"

@@ -569,14 +569,24 @@ Per-rule compilation:
      and cannot set info flags. The recipe carries procmail's `w`
      flag, so a helper failure leaves the message for later recipes /
      DEFAULT rather than losing it.
-   - `forward`: a `cabal-rules-forward.sh` helper invocation (the
-     `formail | sendmail` pipeline lives in the helper because
-     `SHELL=/usr/bin/false` forbids inline pipelines) behind an
+   - `forward`: a `cabal-rules-forward.sh` helper invocation behind an
      `X-Loop: cabal-rules-<user>` guard condition; the helper stamps
      the marker on the outbound copy, bounding any forward cycle
-     through the mailbox to a single hop. Each `<addr>` is validated
-     against the email regex AND constrained to a length cap (320
-     chars per RFC 5321 limit).
+     through the mailbox to a single hop. Spool-then-drain, mirroring
+     the push wake-signal split: under DROPPRIVS the recipe runs as
+     the recipient, where sendmail client submission is unavailable in
+     the hardened task, so the helper only writes the stamped message
+     plus `{user, sender, addrs}` metadata into
+     `/var/spool/cabal-forward`, and the root `cabal-forward-drain.sh`
+     supervisord daemon re-validates every field (the spool is the
+     trust boundary; files must be owned by the user they name) and
+     submits via sendmail, preserving the original envelope sender.
+     Each `<addr>` is validated against the email regex AND
+     constrained to a length cap (320 chars per RFC 5321 limit) at
+     compile time and again in the drain. Because forwards originate
+     on the imap tier, the sinkhole.test mailertable entry (and its
+     `SINKHOLE_ENABLED` task env) extends to imap alongside smtp-out
+     for the test-harness path.
    - `reply`: a guarded `formail -rt` recipe (see
      [Reply action](#reply-action)) plus the vacation cache and
      bounce-suppression headers.
