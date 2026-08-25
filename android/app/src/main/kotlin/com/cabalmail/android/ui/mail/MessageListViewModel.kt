@@ -9,9 +9,12 @@ import com.cabalmail.android.AppContainer
 import com.cabalmail.android.MailEvent
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.Envelope
+import com.cabalmail.kit.models.SearchFilters
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.DefaultSort
 import com.cabalmail.kit.settings.DisposeAction
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,7 +31,13 @@ enum class MessageSortField(
     SUBJECT("SUBJECT"),
 }
 
-/** Display narrowing over the loaded window; never a server query. */
+/**
+ * The list's filter pill. Unread and Flagged run a folder-scoped
+ * `/search_envelopes` query — the same server-side path the Apple clients
+ * use — because a narrowing of the loaded window cannot deliver "every
+ * match in the folder" on a large mailbox, where the matching rows may sit
+ * thousands of positions deep.
+ */
 enum class MessageFilter { ALL, UNREAD, FLAGGED }
 
 data class FolderCounts(
@@ -58,6 +67,11 @@ data class MessageListUiState(
     val sortField: MessageSortField = MessageSortField.DATE_RECEIVED,
     val sortDescending: Boolean = true,
     val filter: MessageFilter = MessageFilter.ALL,
+    /** Server matches for the active filter pill, newest-first. */
+    val filterMatches: List<Envelope> = emptyList(),
+    /** Opaque next-page cursor for the pill's search; null = no further pages. */
+    val filterCursor: String? = null,
+    val filterLoading: Boolean = false,
     val counts: FolderCounts? = null,
     /** Selection mode: rows become checkboxes, the top bar turns contextual. */
     val selecting: Boolean = false,
@@ -66,22 +80,24 @@ data class MessageListUiState(
     val folderChoices: List<String>? = null,
 ) {
     /**
-     * The loaded rows that survive the active filter pill, in window order.
-     * Meaningful only when [filter] is not ALL — the unfiltered list renders
-     * by index with placeholders instead.
+     * The rows the list is showing, in display order. Under ALL that is the
+     * loaded window (the unfiltered list itself renders by index with
+     * placeholders, but reader auto-advance walks these rows). Under a pill
+     * it is the server matches, re-narrowed client-side so a row that stops
+     * matching (marked read under Unread, unstarred under Flagged) leaves
+     * the list immediately instead of waiting for the next search round
+     * trip.
      */
     val filteredRows: List<Envelope>
         get() =
-            envelopes.entries
-                .sortedBy { it.key }
-                .map { it.value }
-                .filter { envelope ->
-                    when (filter) {
-                        MessageFilter.ALL -> true
-                        MessageFilter.UNREAD -> !envelope.isSeen
-                        MessageFilter.FLAGGED -> envelope.isFlagged
-                    }
-                }
+            when (filter) {
+                MessageFilter.ALL ->
+                    envelopes.entries
+                        .sortedBy { it.key }
+                        .map { it.value }
+                MessageFilter.UNREAD -> filterMatches.filter { !it.isSeen }
+                MessageFilter.FLAGGED -> filterMatches.filter { it.isFlagged }
+            }
 }
 
 /**
@@ -133,6 +149,20 @@ internal fun mergeBand(
 }
 
 /**
+ * Appends a search page to the pill's match list, dropping any UID already
+ * present: the search cursor is date-based, so a page boundary shifting
+ * under mailbox churn can re-deliver a row from the previous page, and a
+ * duplicate would also be a duplicate key for the UID-keyed list.
+ */
+internal fun appendFilterPage(
+    matches: List<Envelope>,
+    page: List<Envelope>,
+): List<Envelope> {
+    val known = matches.mapTo(mutableSetOf()) { it.id }
+    return matches + page.filterNot { it.id in known }
+}
+
+/**
  * The server copy of a refetched band wins over the loaded window — except
  * rows whose own flag write is still in flight, where the optimistic local
  * copy stands until the write settles (the Apple client's pending-write
@@ -168,6 +198,9 @@ class MessageListViewModel(
     val state: StateFlow<MessageListUiState> = mutableState.asStateFlow()
 
     private val requestedBands = mutableSetOf<Int>()
+
+    /** The in-flight filter-pill search, cancelled when the pill changes. */
+    private var filterJob: Job? = null
 
     /**
      * UIDs with a move or purge already in flight. A second request for the
@@ -243,6 +276,9 @@ class MessageListViewModel(
                     )
                 }
                 ensureBand(0)
+                if (mutableState.value.filter != MessageFilter.ALL) {
+                    fetchFilterPage(reset = true)
+                }
             } catch (exception: Exception) {
                 mutableState.update {
                     it.copy(refreshing = false, error = userMessage(exception, "Could not load $folder"))
@@ -306,7 +342,16 @@ class MessageListViewModel(
     }
 
     fun setFilter(filter: MessageFilter) {
-        mutableState.update { it.copy(filter = filter) }
+        if (mutableState.value.filter == filter) {
+            return
+        }
+        filterJob?.cancel()
+        mutableState.update {
+            it.copy(filter = filter, filterMatches = emptyList(), filterCursor = null, filterLoading = false)
+        }
+        if (filter != MessageFilter.ALL) {
+            fetchFilterPage(reset = true)
+        }
     }
 
     // ------------------------------------------------------------ windowing
@@ -321,14 +366,63 @@ class MessageListViewModel(
     }
 
     /**
-     * Under an active filter pill the row indices no longer map to window
-     * indices, so nearing the end of the filtered rows just requests the
-     * next unloaded band.
+     * Fetches the pill's next search page; no-op while one is in flight or
+     * once the match set is exhausted. The list's visible-range effect calls
+     * this near the end of the filtered rows — and when they are empty, so a
+     * page the user has fully dealt with (every row marked read under
+     * Unread) can still pull the next one.
      */
-    fun requestMoreForFilter() {
-        val total = mutableState.value.total ?: return
-        val bandCount = (total + BAND_SIZE - 1) / BAND_SIZE
-        (0 until bandCount).firstOrNull { it !in requestedBands }?.let(::ensureBand)
+    fun loadMoreForFilter() {
+        val current = mutableState.value
+        if (current.filter == MessageFilter.ALL || current.filterLoading || current.filterCursor == null) {
+            return
+        }
+        fetchFilterPage(reset = false)
+    }
+
+    /**
+     * One `/search_envelopes` page for the active pill, folder-scoped.
+     * [reset] starts over from the first page (keeping any rows on screen
+     * until the fresh page lands); otherwise the result extends
+     * [MessageListUiState.filterMatches] from the stored cursor.
+     */
+    private fun fetchFilterPage(reset: Boolean) {
+        filterJob?.cancel()
+        filterJob =
+            viewModelScope.launch {
+                mutableState.update { it.copy(filterLoading = true, error = null) }
+                try {
+                    val current = mutableState.value
+                    val result =
+                        container.requireApi().searchEnvelopes(
+                            filters =
+                                SearchFilters(
+                                    unread = current.filter == MessageFilter.UNREAD,
+                                    flagged = current.filter == MessageFilter.FLAGGED,
+                                ),
+                            folder = folder,
+                            limit = BAND_SIZE,
+                            cursor = if (reset) null else current.filterCursor,
+                        )
+                    mutableState.update { state ->
+                        state.copy(
+                            filterMatches =
+                                appendFilterPage(
+                                    if (reset) emptyList() else state.filterMatches,
+                                    result.envelopes,
+                                ),
+                            filterCursor = result.nextCursor,
+                            filterLoading = false,
+                        )
+                    }
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    mutableState.update {
+                        it.copy(filterLoading = false, error = userMessage(exception, "Could not load messages"))
+                    }
+                }
+            }
     }
 
     private fun ensureBand(band: Int) {
@@ -526,27 +620,32 @@ class MessageListViewModel(
     ) {
         mutableState.update { state ->
             // Count actual transitions so the pill counts track the server
-            // without a re-STATUS; a no-op set leaves them untouched.
+            // without a re-STATUS; a no-op set leaves them untouched. The
+            // window and the pill's match list can hold the same message, so
+            // the count dedupes by UID.
             val changed =
-                state.envelopes.values.count { envelope ->
-                    envelope.id in uids && envelope.flags.any { it.equals(flag, ignoreCase = true) } != value
-                }
+                (state.envelopes.values + state.filterMatches)
+                    .distinctBy { it.id }
+                    .count { envelope ->
+                        envelope.id in uids && envelope.flags.any { it.equals(flag, ignoreCase = true) } != value
+                    }
             val gained = if (value) changed else -changed
-            state.copy(
-                envelopes =
-                    state.envelopes.mapValues { (_, envelope) ->
-                        if (envelope.id !in uids) {
-                            envelope
+
+            fun patched(envelope: Envelope): Envelope =
+                if (envelope.id !in uids) {
+                    envelope
+                } else {
+                    val flags =
+                        if (value) {
+                            (envelope.flags + flag).distinct()
                         } else {
-                            val flags =
-                                if (value) {
-                                    (envelope.flags + flag).distinct()
-                                } else {
-                                    envelope.flags.filterNot { it.equals(flag, ignoreCase = true) }
-                                }
-                            envelope.copy(flags = flags)
+                            envelope.flags.filterNot { it.equals(flag, ignoreCase = true) }
                         }
-                    },
+                    envelope.copy(flags = flags)
+                }
+            state.copy(
+                envelopes = state.envelopes.mapValues { (_, envelope) -> patched(envelope) },
+                filterMatches = state.filterMatches.map(::patched),
                 counts = state.counts?.adjustedFor(flag, gained),
             )
         }
@@ -558,8 +657,10 @@ class MessageListViewModel(
      * that fails never poisons the cache.
      */
     private fun writeWindowToCache(uids: Set<Long>) {
+        val current = mutableState.value
         val patched =
-            mutableState.value.envelopes.values
+            (current.envelopes.values + current.filterMatches)
+                .distinctBy { it.id }
                 .filter { it.id in uids }
         viewModelScope.launch {
             container.envelopeCache.write(folder, patched)
@@ -571,9 +672,13 @@ class MessageListViewModel(
         // markers so any gap re-requests on the next scroll past it.
         requestedBands.clear()
         mutableState.update { state ->
-            val removed = state.envelopes.values.filter { it.id in uids }
+            val removed =
+                (state.envelopes.values + state.filterMatches)
+                    .distinctBy { it.id }
+                    .filter { it.id in uids }
             state.copy(
                 envelopes = compactWindow(state.envelopes, uids),
+                filterMatches = state.filterMatches.filterNot { it.id in uids },
                 total = state.total?.let { (it - uids.size).coerceAtLeast(0) },
                 counts =
                     state.counts?.let { counts ->

@@ -114,25 +114,32 @@ class MessageListWindowTest {
     }
 
     @Test
-    fun `filter pills narrow the loaded window`() {
+    fun `filtered rows read the window under ALL and the search matches under a pill`() {
+        // The pills are server-backed (`/search_envelopes`), so they never
+        // narrow the loaded window — that is `filterMatches`' job; ALL still
+        // walks the window in display order for reader auto-advance.
         val state =
             MessageListUiState(
                 envelopes =
                     mapOf(
                         0 to Envelope(id = 1, flags = listOf("\\Seen")),
                         1 to Envelope(id = 2),
-                        2 to Envelope(id = 3, flags = listOf("\\Seen", "\\Flagged")),
                     ),
-                filter = MessageFilter.UNREAD,
+                filterMatches =
+                    listOf(
+                        Envelope(id = 9),
+                        Envelope(id = 8, flags = listOf("\\Seen", "\\Flagged")),
+                    ),
+                filter = MessageFilter.ALL,
             )
-        assertEquals(listOf(2L), state.filteredRows.map { it.id })
+        assertEquals(listOf(1L, 2L), state.filteredRows.map { it.id })
         assertEquals(
-            listOf(3L),
-            state.copy(filter = MessageFilter.FLAGGED).filteredRows.map { it.id },
+            listOf(9L),
+            state.copy(filter = MessageFilter.UNREAD).filteredRows.map { it.id },
         )
         assertEquals(
-            listOf(1L, 2L, 3L),
-            state.copy(filter = MessageFilter.ALL).filteredRows.map { it.id },
+            listOf(8L),
+            state.copy(filter = MessageFilter.FLAGGED).filteredRows.map { it.id },
         )
     }
 }
