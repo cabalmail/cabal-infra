@@ -344,6 +344,8 @@ MAX_IDS_PER_IMAP_CMD = 500
 MAX_FOLDER_NAME_BYTES = 255
 MAX_KEYWORD_LEN = 64
 MAX_CONTENT_ID_LEN = 128
+# RFC 5322's line limit; a Message-ID header can legally run right up to it.
+MAX_MESSAGE_ID_LEN = 998
 MAX_SEARCH_TEXT_LEN = 1024
 MAX_UID = 0xFFFFFFFF
 MAX_PAGE_SIZE = 250
@@ -352,6 +354,7 @@ _FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 _KEYWORD_RE = re.compile(r'^[A-Za-z0-9_\-]+$')
 _CONTROL_CHARS_RE = re.compile(r'[\x00-\x1f\x7f]')
 _CONTENT_ID_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f\s/\\]')
+_MESSAGE_ID_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f\s]')
 _ATTACHMENT_NAME_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f/\\]')
 
 # Lowercased wire form -> canonical form. Only these five system flags are
@@ -631,6 +634,28 @@ def validate_content_id(value):
         raise ValueError('content-id must be a bracketed token')
     if _CONTENT_ID_FORBIDDEN_RE.search(value):
         raise ValueError('content-id contains illegal characters')
+    return value
+
+
+def validate_message_id(value):
+    '''Validates an RFC 5322 Message-ID as the push wake signals carry it: a
+    bracketed `<id-left@id-right>` token. Unlike validate_content_id this
+    permits path separators: GitHub notification Message-IDs contain `/`
+    (`<owner/repo/pull/123/...@github.com>`), and the value is only ever an
+    IMAP SEARCH argument, never embedded in an S3 key -- rejecting the slash
+    silently downgraded every GitHub message to hint-only UID resolution,
+    which mis-targets enrichment whenever a delivery burst reuses one stale
+    next-uid hint. Control bytes and whitespace stay rejected, and the cap is
+    the RFC 5322 line limit rather than the Content-ID cap real Message-IDs
+    exceed. Returns the value unchanged.'''
+    if not isinstance(value, str) or not value:
+        raise ValueError('message-id is required')
+    if len(value) > MAX_MESSAGE_ID_LEN:
+        raise ValueError('message-id is too long')
+    if not (value.startswith('<') and value.endswith('>') and len(value) >= 3):
+        raise ValueError('message-id must be a bracketed token')
+    if _MESSAGE_ID_FORBIDDEN_RE.search(value):
+        raise ValueError('message-id contains illegal characters')
     return value
 
 
@@ -1143,13 +1168,24 @@ def get_message(_host, user, folder, msg_id):
     '''Gets a message from cache on s3 or from imap server.
 
     `_host` is ignored (see get_imap_client); the cache bucket and IMAP target
-    are derived from the environment, never from the request.'''
+    are derived from the environment, never from the request.
+
+    Empty raw bytes are never message content: a local delivery interrupted
+    mid-write (the reconfigure loop's sendmail restart) can leave a zero-byte
+    message file, which Dovecot serves as an empty RFC822 literal and
+    email.message_from_bytes parses into a message with no headers at all --
+    push enrichment then renders a blank alert, and once cached the message
+    body opens blank forever. An empty fetch is therefore the message being
+    gone, and an empty cache entry (written before this guard existed) is
+    deleted and refetched instead of served.'''
     bucket = CACHE_BUCKET
     email_body_raw = b''
     key = f"{user}/{folder}/{msg_id}/raw"
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
-    else:
+        if not email_body_raw:
+            delete_object(bucket, key)
+    if not email_body_raw:
         client = get_imap_client(IMAP_HOST, user, folder, True)
         message = client.fetch([msg_id],['RFC822'])
         client.logout()
@@ -1158,6 +1194,8 @@ def get_message(_host, user, folder, msg_id):
         if msg_id not in message:
             raise MessageGoneError(folder, msg_id)
         email_body_raw = message[msg_id][b'RFC822']
+        if not email_body_raw:
+            raise MessageGoneError(folder, msg_id)
         upload_object(bucket, key, "text/plain", email_body_raw)
     message = email.message_from_bytes(email_body_raw, policy=default_policy)
     return message
@@ -1358,6 +1396,10 @@ def envelope_dict(msgid, data):
         "from": decode_address(envelope.from_),
         "to": decode_address(envelope.to),
         "cc": decode_address(envelope.cc),
+        # Populated only for messages whose stored copy carries a Bcc header -
+        # in practice the user's own Sent mail - and empty everywhere else.
+        # Reply-from-Sent needs it to reconstruct the original recipient set.
+        "bcc": decode_address(envelope.bcc),
         "flags": decode_flags(data[b'FLAGS']),
         "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
         "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()],

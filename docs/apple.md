@@ -1108,7 +1108,7 @@ lossless. See `docs/draft-sync-and-threading.md`.
 
 Neither mail tier auto-APPENDs to `Sent`. The `/send` Lambda owns the
 whole outbound shuffle — Outbox APPEND, SMTP submission, and the Sent
-copy (staged Bcc-free and written by a decoupled queue consumer, see
+copy (staged to S3 and written by a decoupled queue consumer, see
 `lambda/api/append_sent`) — so `CabalmailClient.send(_:)` posts the
 compose payload and does no client-side APPEND. Sending from a synced
 draft passes the draft's `discard_draft_*` coordinates so the server

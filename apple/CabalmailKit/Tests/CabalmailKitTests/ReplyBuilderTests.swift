@@ -15,6 +15,7 @@ private func makeEnvelope(
     replyTo: [(String, String)] = [],
     to: [(String, String)] = [],
     cc: [(String, String)] = [],
+    bcc: [(String, String)] = [],
     subject: String? = nil,
     date: Date? = nil,
     messageId: String? = nil,
@@ -30,6 +31,7 @@ private func makeEnvelope(
         replyTo: replyTo.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
         to: to.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
         cc: cc.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
+        bcc: bcc.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
         inReplyTo: inReplyTo,
         references: references,
         flags: [],
@@ -366,5 +368,117 @@ private extension EmailAddress {
         let host = String(trimmed[trimmed.index(after: atIndex)...])
         guard !mailbox.isEmpty, !host.isEmpty else { return nil }
         self.init(name: nil, mailbox: mailbox, host: host)
+    }
+}
+
+// Reply-from-Sent inversion: replying to the user's own outbound copy
+// addresses the original recipients, never the author. Separate class for
+// the same type_body_length reason as the threading suite.
+final class ReplyBuilderSentFolderTests: XCTestCase {
+    private let owned = [
+        Address(address: "alice@mail.example.com", subdomain: "mail", tld: "example.com"),
+        Address(address: "alt@shop.example.com", subdomain: "shop", tld: "example.com")
+    ]
+
+    private func ownEnvelope(
+        cc: [(String, String)] = [],
+        bcc: [(String, String)] = []
+    ) -> Envelope {
+        makeEnvelope(
+            from: [("alice", "mail.example.com")],
+            to: [("bob", "example.com"), ("carol", "x.example.com")],
+            cc: cc,
+            bcc: bcc,
+            subject: "Plans"
+        )
+    }
+
+    func testReplyFromSentUsesOwnFromAndTargetsOriginalTo() {
+        let draft = ReplyBuilder.build(
+            from: ownEnvelope(cc: [("dave", "example.com")]),
+            body: nil,
+            mode: .reply,
+            userAddresses: owned,
+            sourceFolder: FolderTree.sentPath,
+            now: clock
+        )
+        XCTAssertEqual(draft.fromAddress, "alice@mail.example.com")
+        XCTAssertEqual(draft.to, ["bob@example.com", "carol@x.example.com"])
+        XCTAssertEqual(draft.cc, [])
+        XCTAssertEqual(draft.bcc, [])
+        XCTAssertEqual(draft.replySourceFolder, FolderTree.sentPath)
+    }
+
+    func testReplyAllFromSentCarriesCcAndBcc() {
+        let draft = ReplyBuilder.build(
+            from: ownEnvelope(cc: [("dave", "example.com")], bcc: [("eve", "example.com")]),
+            body: nil,
+            mode: .replyAll,
+            userAddresses: owned,
+            sourceFolder: FolderTree.sentPath,
+            now: clock
+        )
+        XCTAssertEqual(draft.fromAddress, "alice@mail.example.com")
+        XCTAssertEqual(draft.to, ["bob@example.com", "carol@x.example.com"])
+        XCTAssertEqual(draft.cc, ["dave@example.com"])
+        XCTAssertEqual(draft.bcc, ["eve@example.com"])
+    }
+
+    func testReplyAllFromSentDropsOwnAliasesAndCrossFieldDuplicates() {
+        // The user's other alias was an original recipient; a Cc repeats a
+        // To recipient. Neither may survive into the seeded lists.
+        let envelope = makeEnvelope(
+            from: [("alice", "mail.example.com")],
+            to: [("bob", "example.com"), ("alt", "shop.example.com")],
+            cc: [("bob", "example.com"), ("dave", "example.com")]
+        )
+        let draft = ReplyBuilder.build(
+            from: envelope,
+            body: nil,
+            mode: .replyAll,
+            userAddresses: owned,
+            sourceFolder: FolderTree.sentPath,
+            now: clock
+        )
+        XCTAssertEqual(draft.to, ["bob@example.com"])
+        XCTAssertEqual(draft.cc, ["dave@example.com"])
+        XCTAssertEqual(draft.bcc, [])
+    }
+
+    func testSentMessageNotAuthoredByUserRepliesNormally() {
+        // A message merely filed into Sent by hand keeps author-directed
+        // reply semantics.
+        let envelope = makeEnvelope(
+            from: [("mallory", "example.org")],
+            to: [("alice", "mail.example.com")]
+        )
+        let draft = ReplyBuilder.build(
+            from: envelope,
+            body: nil,
+            mode: .reply,
+            userAddresses: owned,
+            sourceFolder: FolderTree.sentPath,
+            now: clock
+        )
+        XCTAssertEqual(draft.fromAddress, "alice@mail.example.com")
+        XCTAssertEqual(draft.to, ["mallory@example.org"])
+    }
+
+    func testOwnMessageOutsideSentRepliesNormally() {
+        // Same envelope read out of another folder (e.g. a copy in Archive)
+        // keeps today's semantics, including an empty Bcc seed.
+        let draft = ReplyBuilder.build(
+            from: ownEnvelope(bcc: [("eve", "example.com")]),
+            body: nil,
+            mode: .replyAll,
+            userAddresses: owned,
+            sourceFolder: FolderTree.archivePath,
+            now: clock
+        )
+        // The owned author is dropped by the ordinary reply-all dedupe, so
+        // the first original recipient becomes To.
+        XCTAssertEqual(draft.to, ["bob@example.com"])
+        XCTAssertEqual(draft.cc, ["carol@x.example.com"])
+        XCTAssertEqual(draft.bcc, [])
     }
 }

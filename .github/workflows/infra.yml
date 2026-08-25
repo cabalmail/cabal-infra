@@ -172,7 +172,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4.37.8
       with:
         sarif_file: results.sarif
         category: checkov-dns
@@ -203,6 +203,11 @@ jobs:
       with:
         tflint_version: v0.63.1
     - name: init-tflint
+      # Authenticated so the ruleset download rides the token's rate
+      # limit; anonymous runner IPs share a 60/hr quota that other
+      # tenants exhaust (observed: 403 on the aws-ruleset fetch).
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       run: tflint --init
     - name: run-linter
       # GATING (Phase 3): tflint exits 2 on any finding, failing the job. dns
@@ -214,7 +219,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4.37.8
       with:
         sarif_file: terraform/dns/tflint.sarif
         category: tflint-dns
@@ -246,7 +251,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4.37.8
       with:
         sarif_file: trivy-dns.sarif
         category: trivy-dns
@@ -468,7 +473,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4.37.8
       with:
         sarif_file: results.sarif
         category: checkov-infra
@@ -502,6 +507,11 @@ jobs:
       with:
         tflint_version: v0.63.1
     - name: init-tflint
+      # Authenticated so the ruleset download rides the token's rate
+      # limit; anonymous runner IPs share a 60/hr quota that other
+      # tenants exhaust (observed: 403 on the aws-ruleset fetch).
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       run: tflint --init
     - name: run-linter
       # GATING (Phase 3): tflint exits 2 on any finding, failing the job (which
@@ -514,7 +524,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4.37.8
       with:
         sarif_file: terraform/infra/tflint.sarif
         category: tflint-infra
@@ -546,7 +556,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4.37.8
       with:
         sarif_file: trivy-infra.sarif
         category: trivy-infra

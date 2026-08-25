@@ -5,6 +5,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-08-25
+
+### Added
+- Android: **Three-pane mail layout on wide screens.** When the window
+  fits it — a phone in landscape, a tablet, a wide foldable — the mail
+  view adds the folder list as a leading pane beside the message list and
+  reading pane, with the open folder highlighted. Picking a folder swaps
+  the message list in place, the two message panes split the remaining
+  width evenly (medium-width windows previously showed only one at a
+  time), and the message list drops its now-redundant back arrow while
+  the folder pane is visible.
+- **User-defined mail rules (server side).** The IMAP tier now
+  evaluates per-user mail rules on every incoming delivery, ahead of
+  default delivery: conditions match From / To / Cc / Subject / Body
+  (case-insensitive contains, ANDed), rules run in the user's chosen
+  order, the first match fires, and each rule can opt into
+  continue-to-next. Actions: move, copy, archive, and delete, plus
+  the independent extras flag, mark as read, forward (loop-guarded,
+  so a forward that routes back to the same mailbox is forwarded
+  exactly once), and auto-reply (reply comes from the address the
+  message was delivered to, marked per RFC 3834, with a 7-day
+  per-sender suppression window and a 100-per-day cap). Rule sets are
+  stored server-side with optimistic concurrency and a 90-day audit
+  history, and are compiled to procmail with every user-supplied
+  value escaped or the rule skipped - user input never lands as raw
+  procmail syntax, and a rule that fails to compile never affects
+  delivery of the message. BCC is deliberately not offered as a
+  condition field: it is not present in delivered mail and would
+  silently never match. Managed via the new `get_rules` /
+  `set_rules` endpoints; the rule editors in the client apps ship
+  separately.
+
+### Fixed
+- **Blank push notifications from a truncated delivery.** A local delivery
+  interrupted mid-write (the mail tier's periodic sendmail restart) can leave
+  a zero-byte message file in the mailbox. `/push_envelope` treated the empty
+  fetch as valid content, so every Apple device enriched its alert into empty
+  title and body instead of the designed "New mail" fallback, and the empty
+  bytes were written to the message cache, where they also made the message
+  open blank forever after. Empty raw content is now treated as the message
+  being gone: the endpoints answer 404, nothing is cached, and an
+  already-poisoned cache entry is deleted and refetched on the next read.
+  Relatedly, Message-IDs containing `/` (every GitHub notification) were
+  failing the enrichment endpoint's validation and silently degrading to the
+  wake signal's stale UID hint, which mis-targets enrichment during delivery
+  bursts; a dedicated Message-ID validator now lets them resolve by search.
+- Android: **Reply from Sent addresses the recipients.** Replying to your
+  own message in the Sent folder used to target yourself and leave From
+  unset. Reply and Reply All now invert the addressing: From is the alias
+  the original was sent from, Reply goes to the original To, and Reply All
+  carries the original To, Cc, and Bcc (for mail sent after the Sent copy
+  began retaining Bcc). Your own addresses never land in the recipient
+  lists.
+- Apple: **Reply from Sent addresses the recipients.** Replying to your own
+  message in the Sent folder used to target yourself and lose the alias you
+  sent from. Reply and Reply All now invert the addressing: From is the
+  alias the original was sent from, Reply goes to the original To, and
+  Reply All carries the original To, Cc, and Bcc (for mail sent after the
+  Sent copy began retaining Bcc). Your own addresses never land in the
+  recipient lists.
+- **Reply from Sent addresses the recipients (web).** Same inversion as the
+  native clients: replying to your own message in the Sent folder seeds From
+  with the alias the original was sent from and targets the original To
+  (plus Cc and Bcc on Reply All) instead of replying to yourself, without
+  the spurious blind-copy warning. Serving this, `/list_envelopes` and
+  `/search_envelopes` now expose a `bcc` field, populated for messages whose
+  stored copy carries a Bcc header. A reply-seeded From the user no longer
+  owns is cleared once the address list loads instead of wedging Send.
+- **Sent copies keep the Bcc header.** `/send` used to strip `Bcc` from the
+  copy it stages for the Sent folder, permanently destroying the sender's
+  only record of who they blind-copied. The stripping protected nothing:
+  only the mailbox owner can read Sent, and blind recipients were never at
+  risk on the wire (smtplib strips `Bcc` from the transmitted message, and
+  delivery uses an explicit recipient list). Sent copies now retain `Bcc`,
+  matching drafts and mainstream mail clients. Messages sent before this
+  change are unaffected - their Bcc information was never stored and cannot
+  be recovered.
+
 ## [1.5.0] - 2026-08-23
 
 ### Added

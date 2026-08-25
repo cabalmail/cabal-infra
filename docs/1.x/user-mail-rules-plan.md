@@ -26,12 +26,19 @@ Each rule has:
   processing (default) or proceed to the next rule.
 
 The design handoff at
-[docs/1.3.x/design_handoff_mail_rules/](design_handoff_mail_rules/) defines
-the React-side look and feel pixel-perfectly. The Apple clients (iOS,
-iPadOS, macOS, visionOS) re-implement the same feature using native
-SwiftUI widgets -- a Settings-window tab on macOS, a navigation row in the
-shared Settings view on iOS / iPadOS, a sheet or window where appropriate
-on visionOS.
+[docs/1.x/design_handoff_mail_rules/](design_handoff_mail_rules/) was
+drawn against the React admin app, but the React app is now
+second-class and does not necessarily receive new features -- so treat
+the handoff as wire-frames: a normative statement of structure,
+behavior, and interaction, not a pixel-perfect implementation target.
+The native clients are the primary surfaces. The Apple clients (iOS,
+iPadOS, macOS, visionOS) implement the feature using native SwiftUI
+widgets -- a navigation row in the shared Settings view on iOS /
+iPadOS, a macOS placement chosen in [Phase 4.3](#43-macos), a sheet or
+window where appropriate on visionOS. The Android client implements
+the same feature in Compose, with Android idioms rather than a
+transplant of the Apple UI (see
+[Phase 4b](#phase-4b--android-client)).
 
 The handoff omits one action that the spec calls for and that this plan
 covers: **Reply** with a user-specified body (auto-reply / vacation
@@ -40,8 +47,10 @@ model, UI, and procmail compiler that Reply requires.
 
 ## Goals
 
-- Let users author and reorder mail-handling rules from any first-party
-  Cabalmail client (React web app, iOS, iPadOS, macOS, visionOS).
+- Let users author and reorder mail-handling rules from the first-party
+  native clients (iOS, iPadOS, macOS, visionOS, Android). The React web
+  editor is optional (see [Phase 3](#phase-3--react-ui-optional)); the
+  Linux client is separately owned and out of scope for this plan.
 - Have the IMAP tier honor those rules deterministically on every incoming
   message, in the user's declared order, with the user's spill-through
   intent respected.
@@ -49,10 +58,10 @@ model, UI, and procmail compiler that Reply requires.
   shapes rules, but never lands as raw procmail syntax. Every condition
   value, folder name, forward target, and reply body is whitelisted,
   escaped, and bounded before it reaches `/etc/procmail-user/<user>.rc`.
-- Preserve the pending-address procmail hook introduced in
-  [1.2.x](../1.2.x/browser-extension-plan.md): user rules MUST run *after*
-  the system pending-confirm rules and MUST NOT overwrite, suppress, or
-  collide with them.
+- Preserve room for the pending-address procmail hook planned in the
+  [browser extension plan](browser-extension-plan.md): when it ships,
+  user rules MUST run *after* the system pending-confirm rules and MUST
+  NOT overwrite, suppress, or collide with them.
 - Survive a malformed rule set without breaking mail delivery for the user.
   A rule that fails to compile is skipped with a logged warning; the rest
   of the user's rules continue to apply; the message still delivers to the
@@ -84,17 +93,18 @@ model, UI, and procmail compiler that Reply requires.
 
 ## Relation to prior work
 
-[1.2.x's browser extension plan](../1.2.x/browser-extension-plan.md)
-introduces a separate system-level procmail surface for pending-address
-confirmation -- per the
-[Coexistence section of that plan](../1.2.x/browser-extension-plan.md#:~:text=Coexistence%20with%20the%20planned%20end-user%20procmail%20framework),
+The [browser extension plan](browser-extension-plan.md) (still in
+planning) introduces a separate system-level procmail surface for
+pending-address confirmation -- per the
+[Coexistence section of that plan](browser-extension-plan.md#:~:text=Coexistence%20with%20the%20planned%20end-user%20procmail%20framework),
 the two pieces are explicitly designed to live in adjacent procmail
 niches without colliding. This plan is the realization of that "end-user
 procmail framework."
 
-The ordering constraint set by 1.2.x is the load-bearing invariant:
+The ordering constraint set there is the load-bearing invariant:
 
-1. **System pending-confirm rules run first.** They live in
+1. **System pending-confirm rules run first** (once the browser
+   extension plan ships them). They live in
    `/etc/procmail-pending.rc`, are `:0 wc` (wait, copy -- side-effect-only;
    never divert delivery), and clear the `pending` flag on a freshly
    minted address the moment real mail arrives at it.
@@ -107,22 +117,40 @@ The ordering constraint set by 1.2.x is the load-bearing invariant:
    in [`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc).
    It catches everything that no user rule consumed.
 
-The single edit that wires this all up sits in
-[`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc),
-and the single edit that propagates the include lines to each user's
-`~/.procmailrc` sits in
-[`docker/shared/sync-users.sh`](../../docker/shared/sync-users.sh). Both
-edits are additive and idempotent; both grow by exactly one INCLUDERC
-line in this version. See [Phase 2](#phase-2--procmail-compiler-and-imap-tier-integration).
+One step in today's pipeline sits between those stages: the 0.11.x
+push-notification enqueue recipe in
+[`procmailrc`](../../docker/imap/configs/procmailrc) -- a `:0c`
+best-effort recipe that enqueues a wake signal labeled `INBOX`. The
+settled placement (considered and preferred over splitting delete
+rules out ahead of the queue, which would overcomplicate ordering for
+questionable benefit): user rules run BEFORE the push recipe.
+Procmail stops at the first delivering recipe, so a rule that deletes
+or files a message never reaches the file-level push at all -- deleted
+mail never buzzes -- and for terminal move/archive deliveries the
+compiler emits its own guarded push-enqueue recipe, carrying the real
+destination folder as the label, immediately ahead of the delivery.
+Messages no rule consumes fall through to the unchanged INBOX push.
 
-**1.2.x ships first.** This plan assumes 1.2.x's pending-confirm path
-is live and the INCLUDERC for `/etc/procmail-pending.rc` is already
-present in every user's `~/.procmailrc`. If 1.2.x ships in a degraded
-form (e.g. extension shipped, procmail clear-on-receive deferred), Phase
-2 below adds its own INCLUDERC line and the system one is added by
-whichever of the two ships first; the two lines are idempotent and
-order-independent at the include level (the file-content ordering is
-what matters and is handled by `procmailrc`, not by the includes).
+The wiring lives in
+[`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc):
+the shared template (installed at `/etc/procmailrc` AND copied per
+user) carries a guarded include of `/etc/procmail-user/$LOGNAME.rc`
+between the spam rule and the push recipe; a `CABALRULESDONE` guard
+(the same pattern as `PUSH_ENQUEUED`) makes the include run exactly
+once whichever rcfile copy runs first.
+[`sync-users.sh`](../../docker/shared/sync-users.sh) installs the
+current template into each user's `~/.procmailrc` on every sync, so
+ordering changes reach existing users, not just new ones. See
+[Phase 2](#phase-2--procmail-compiler-and-imap-tier-integration).
+
+**This plan ships first.** The browser extension plan has not shipped,
+so no pending-confirm path is live and no INCLUDERC for
+`/etc/procmail-pending.rc` exists yet. Phase 2 below adds its own
+INCLUDERC line without waiting, and the system pending include is
+added by whichever of the two plans ships next; the two lines are
+idempotent and order-independent at the include level (the
+file-content ordering is what matters and is handled by `procmailrc`,
+not by the includes).
 
 ## Data model
 
@@ -291,12 +319,15 @@ data model omits it. Adding it here:
   `Re: <original subject>` if not already prefixed. An
   `Auto-Submitted: auto-replied` header is added to mark the message
   as a vacation reply per RFC 3834.
-- **Loop prevention.** Procmail's standard `vacation.cache` mechanism
-  (or `formail -D` against a per-user dbm cache) suppresses repeated
-  replies to the same sender within a configurable window
-  (default 7 days). This is the cheap, well-understood guard; the
-  vacation cache lives in the user's home directory at
-  `~/.cabal-rules-reply-cache.db`.
+- **Loop prevention.** A per-sender vacation cache suppresses repeated
+  replies to the same sender within a 7-day window. As built it is a
+  plain timestamped-line file at `~/.cabal-rules-reply-cache` (with a
+  sibling `~/.cabal-rules-reply-count` for the daily rate cap), pruned
+  in place by the reply helper -- `formail -D`'s circular cache is
+  size-bounded, not time-bounded, so it cannot express the 7-day
+  window directly. Belt and braces: every reply also carries the
+  user's `X-Loop` marker and `Auto-Submitted: auto-replied`, both of
+  which the recipe guards check.
 - **Bounce suppression.** Auto-replies to mailer-daemons and
   list servers cause reply storms. The compiler emits a header-based
   guard ahead of every reply rule: skip if
@@ -414,12 +445,21 @@ Container-local `/etc/procmail-user/`, one file per user:
 
 Each file is regenerated atomically on every reconfigure (write to
 `.tmp`, `fsync`, `rename`). Procmail reads it at message-delivery time
-via the user's `~/.procmailrc`:
+via the guarded include in the shared `procmailrc` template (present
+in both `/etc/procmailrc` and the per-user copy; the guard makes it
+run once):
 
 ```
-INCLUDERC=/etc/procmail-pending.rc          # 1.2.x, system-owned
-INCLUDERC=/etc/procmail-user/$LOGNAME.rc    # 1.3.x, this plan
+:0
+* ! CABALRULESDONE ?? yes
+{
+  CABALRULESDONE=yes
+  INCLUDERC=/etc/procmail-user/$LOGNAME.rc
+}
 ```
+
+(The browser extension plan's future `/etc/procmail-pending.rc`
+include slots in ahead of this block when that plan ships.)
 
 (`$LOGNAME` is set by procmail to the receiving user. The compiler
 uses the same Cognito username everywhere -- the `cabal-user-rules.user`
@@ -458,9 +498,11 @@ defended in depth.
 
 Inputs:
 - A DynamoDB scan of `cabal-user-rules`.
-- A snapshot of each user's folder list (fetched once per
-  reconfigure -- one IMAP `LIST` per user, cached for the duration of
-  the run).
+- Each user's folder list, checked directly on the filesystem
+  (`~user/Maildir/.<folder>/` exists) rather than via IMAP `LIST`:
+  the compiler runs inside the imap container where the Maildir
+  directory IS what the emitted recipe delivers into, so the
+  filesystem is the authoritative (and cheapest) source.
 - The compiled output of `compile-user-rules.py --self-test` (see
   below) is asserted at container start-up.
 
@@ -522,17 +564,47 @@ Per-rule compilation:
      (See [No folder auto-creation](#no-folder-auto-creation).)
    - `none`: no destination recipe; auxiliary actions still run.
 7. **Auxiliary action emission.**
-   - `flag`: `formail`-based header rewrite that adds an IMAP
-     `\Flagged` keyword. Procmail can write Maildir messages with
-     the `F` info-flag suffix directly, the cleaner path; see
-     [Maildir info flags](https://cr.yp.to/proto/maildir.html).
-   - `markRead`: same approach, `S` info-flag.
-   - `forward`: per-address `! <addr>` line, with `<addr>` validated
-     against the email regex AND constrained to a length cap (320
-     chars per RFC 5321 limit).
-   - `reply`: a guarded `formail -rt` recipe (see
-     [Reply action](#reply-action)) plus the vacation cache and
-     bounce-suppression headers.
+   - `flag` / `markRead`: the rule's own deliveries pipe through the
+     `cabal-maildir-deliver.sh` helper, which writes `cur/` with the
+     sorted `:2,<flags>` info suffix (`F` = Flagged, `S` = Seen) per
+     [the maildir spec](https://cr.yp.to/proto/maildir.html) -
+     procmail's native maildir delivery writes bare files into `new/`
+     and cannot set info flags. The recipe carries procmail's `w`
+     flag, so a helper failure leaves the message for later recipes /
+     DEFAULT rather than losing it.
+   - `forward`: a `cabal-rules-forward.sh` helper invocation behind an
+     `X-Loop: cabal-rules-<user>` guard condition; the helper stamps
+     the marker on the outbound copy, bounding any forward cycle
+     through the mailbox to a single hop. Spool-then-drain, mirroring
+     the push wake-signal split: under DROPPRIVS the recipe runs as
+     the recipient, where sendmail client submission is unavailable in
+     the hardened task, so the helper only writes the stamped message
+     plus `{user, sender, addrs}` metadata into
+     `/var/spool/cabal-forward`, and the root `cabal-forward-drain.sh`
+     supervisord daemon re-validates every field (the spool is the
+     trust boundary; files must be owned by the user they name) and
+     submits via sendmail, preserving the original envelope sender.
+     Each `<addr>` is validated against the email regex AND
+     constrained to a length cap (320 chars per RFC 5321 limit) at
+     compile time and again in the drain. Because forwards originate
+     on the imap tier, the sinkhole.test mailertable entry (and its
+     `SINKHOLE_ENABLED` task env) extends to imap alongside smtp-out
+     for the test-harness path.
+   - `reply`: a `cabal-rules-reply.sh` helper invocation behind the
+     bounce-suppression guard conditions (see
+     [Reply action](#reply-action)); the helper owns `formail -rt`
+     composition, the vacation cache, and the rate cap, and the user's
+     body rides as an opaque base64 argv token so it never appears as
+     procmail syntax. Submission reuses the forward spool +
+     `cabal-forward-drain.sh` (meta `sender` = the resolved recipient
+     address, `addrs` = the original sender). The reply-From is
+     resolved at delivery time by intersecting the user's
+     virtusertable addresses with the original's To/Cc (first
+     provisioned address as the Bcc-delivery fallback) -- the compiler
+     cannot know it, since it varies per message. Multi-user addresses
+     map to a combined alias name in the virtusertable, so the
+     resolution expands aliases through `/etc/aliases.dynamic` and a
+     shared address counts as each member user's.
 8. **Spill-through wrapping.** Procmail's default is to stop after
    the first matching delivering recipe. To express "continue to
    next rule":
@@ -589,8 +661,9 @@ Yes -- we need to handle this, and it is not handled today.
 [`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc)
 sets `LOGFILE=$HOME/.procmail/log` -- a per-user log file that lives on
 the EFS mailstore. Procmail appends to it on every delivery and has no
-built-in rotation or size bound. Today, with a single spam rule, the
-file grows slowly and nobody has noticed. Once users have rules that
+built-in rotation or size bound. Today, with only the built-in spam
+rule and the 0.11.x push-enqueue recipe, the file grows slowly and
+nobody has noticed. Once users have rules that
 fire (and especially once the compiler writes a per-rule `[r-xxxxxx]`
 prefix on each decision for "why did my rule fire" debugging), the log
 grows faster, per user, forever, on the most expensive storage in the
@@ -689,6 +762,13 @@ mailbox, not the container or other users' mailboxes.
 
 We additionally:
 
+- Set `DROPPRIVS=yes` at the top of the system `procmailrc`, ahead of
+  every recipe. Procmail processes the `/etc/procmailrc` copy BEFORE
+  setuiding to the recipient, so without the drop the compiled user
+  rules would execute privileged and write root-owned Maildir files
+  the recipient's own IMAP session cannot read (observed during Phase
+  2 verification). The push-spool drain already accepts
+  recipient-owned signal files, so the wake-signal path is unaffected.
 - Pin the procmail executable to the system-supplied binary
   (`/usr/bin/procmail`) and refuse to run if the binary is replaced.
 - Set `SHELL=/usr/bin/false` in the system `procmailrc` so any `|`
@@ -707,7 +787,7 @@ We additionally:
 - Per-rule forward cap: 10 addresses.
 - Per-rule reply body cap: 4000 chars.
 - Per-user reply rate cap: 100 replies / 24h, enforced at delivery
-  time by a counter file in `~/.cabal-rules-reply-cache.db`.
+  time by the counter file `~/.cabal-rules-reply-count`.
 - Per-sender vacation suppression: 7-day suppression on repeated replies
   to the same envelope sender.
 - Per-message forward count, summed across all rules that fire on a
@@ -829,6 +909,7 @@ The `set_rules` Lambda needs `dynamodb:PutItem` /
 
 Add `getRules()` / `setRules(rules, expectedVersion)` to
 [`react/admin/src/ApiClient.js`](../../react/admin/src/ApiClient.js).
+Optional -- ships with Phase 3 only if the React editor is built.
 
 ### 1.8 Apple API client
 
@@ -866,6 +947,13 @@ matching the React shape. Implement in
 
 Goal: the rules a user writes via Phase 1 actually shape mail delivery.
 
+Landed in three slices, each shipped and stage-verified separately:
+**2 (core)** -- the compiler with conditions, all five destination
+actions, spill-through, and forward, plus all the container wiring
+below; **2b** -- the flag / markRead Maildir info-flag delivery path
+and the forward X-Loop guard (issue #1266); **2c** -- the Reply
+machinery (vacation cache, bounce suppression, rate cap).
+
 ### 2.1 The compiler script
 
 Add `docker/shared/compile-user-rules.py` -- a Python 3 script invoked
@@ -889,17 +977,21 @@ self-test described above.
   `regenerate()`. Subscribe to the new SNS topic on top of the
   existing one (single SQS subscriber, fan-in).
 - [`docker/shared/sync-users.sh`](../../docker/shared/sync-users.sh):
-  after the existing pending-include line, add:
-  ```sh
-  grep -q '/etc/procmail-user/' "/home/${username}/.procmailrc" \
-    || echo 'INCLUDERC=/etc/procmail-user/$LOGNAME.rc' \
-      >> "/home/${username}/.procmailrc"
-  ```
-  Idempotent. Runs on every container start; correct on first run
-  AND on subsequent runs.
+  the include lives in the shared `procmailrc` template rather than
+  being appended per user (see
+  [Relation to prior work](#relation-to-prior-work)); sync-users just
+  switches from copy-once (`cp -n`) to installing the CURRENT template
+  into `~/.procmailrc` on every sync, so recipe-ordering changes reach
+  existing users. Safe because the file is system-owned (users have no
+  shell) and the in-file guards make double-processing harmless.
 - [`docker/imap/configs/procmailrc`](../../docker/imap/configs/procmailrc):
   add `SHELL=/usr/bin/false` near the top, ahead of any INCLUDERC,
-  per [Sandbox the recipient user](#sandbox-the-recipient-user).
+  per [Sandbox the recipient user](#sandbox-the-recipient-user), and
+  the `CABALRULESDONE`-guarded user-rules include between the spam
+  rule and the push recipe (the settled push placement -- see
+  [Relation to prior work](#relation-to-prior-work): deleted/filed
+  mail never reaches the INBOX push; the compiler emits its own
+  folder-labeled push ahead of terminal deliveries).
   Leave `VERBOSE` unset (default off) per
   [Procmail log growth and rotation](#procmail-log-growth-and-rotation).
 - New file `docker/imap/configs/procmail-user.rc.empty` -- an empty
@@ -922,9 +1014,9 @@ self-test described above.
 `docker/imap/Dockerfile`:
 - Bake `compile-user-rules.py` and its self-test into
   `/usr/local/bin/`.
-- Bake `confirm-cabal-address` from 1.2.x in the same way (already
-  done by 1.2.x; this is just a note that the two scripts live
-  side-by-side).
+- (`confirm-cabal-address` from the browser extension plan will be
+  baked in the same way when that plan ships; the two scripts are
+  designed to live side-by-side.)
 - Add a `RUN /usr/local/bin/compile-user-rules-selftest.py` to the
   build so the build fails if the compiler regresses against the
   golden fixture. This is in addition to the runtime self-test.
@@ -1007,17 +1099,19 @@ prod-to-stage loop is the inbound source.)
    Verify the produced recipe in `/etc/procmail-user/<user>.rc`
    contains the value as an escaped literal, never as a pipe, and
    that a test delivery does not execute the shell.
-9. Manual: confirm the 1.2.x pending-confirm path still works
-   end-to-end with this version live. Create a pending address,
-   confirm it via the procmail hook (1.2.x), then create a user
-   rule, confirm that subsequent mail to other addresses still
-   hits the rule.
-10. Manual: confirm spill-through ordering across pending and user
-    includes. Create a pending address. Create a user rule that
-    matches mail to that pending address with
-    `action: 'move', moveFolder: 'Receipts'`. Send mail to the
-    address. Confirm: the pending flag clears (1.2.x ran first),
-    AND the message arrives in `Receipts` (user rule ran second).
+9. Manual (deferred until the browser extension plan's
+   pending-confirm hook ships; runs as part of that plan's
+   verification): confirm the pending-confirm path works end-to-end
+   with this version live. Create a pending address, confirm it via
+   the procmail hook, then create a user rule, confirm that
+   subsequent mail to other addresses still hits the rule.
+10. Manual (same precondition as step 9): confirm spill-through
+    ordering across pending and user includes. Create a pending
+    address. Create a user rule that matches mail to that pending
+    address with `action: 'move', moveFolder: 'Receipts'`. Send mail
+    to the address. Confirm: the pending flag clears (pending-confirm
+    ran first), AND the message arrives in `Receipts` (user rule ran
+    second).
 11. Manual: kill the rules-reconfigure SNS subscriber on one IMAP
     container. PUT a rule. Confirm the periodic fallback in
     `reconfigure.sh` picks up the change within the fallback
@@ -1038,10 +1132,17 @@ prod-to-stage loop is the inbound source.)
     copies beyond the retention count are gone. Confirm `VERBOSE` is
     off in the running config (no per-recipe trace spam in the log).
 
-## Phase 3 -- React UI
+## Phase 3 -- React UI (optional)
 
-Goal: implement the design handoff. This is the bulk of the user-
-facing surface and the phase the user will judge first.
+Goal: implement the design handoff in the React admin app. The React
+app is second-class and does not necessarily receive new features, so
+this phase is optional and may be deferred indefinitely. It is
+retained because its subsections double as the normative interaction
+spec for the native clients: the folder picker and no-auto-create
+rules (3.4), the auto-save debounce and save-state machine (3.5), 409
+concurrency handling (3.6), and the empty-state templates (3.7) apply
+to Phases 4 and 4b regardless of whether the React editor is ever
+built.
 
 ### 3.1 Route and entry point
 
@@ -1338,29 +1439,23 @@ Empty state: a single screen with three template buttons and a
 
 ### 4.3 macOS
 
-Add a `Rules` tab to
-[`apple/CabalmailMac/SettingsTabsView.swift`](../../apple/CabalmailMac/SettingsTabsView.swift)
-between General and Addresses:
-```swift
-TabView {
-    SettingsView().tabItem { Label("General", systemImage: "gearshape") }
-    RequiresSignIn { RulesView() }
-        .tabItem { Label("Rules", systemImage: "tray.full") }
-    RequiresSignIn { AddressesView() }
-        .tabItem { Label("Addresses", systemImage: "at") }
-    RequiresSignIn { FoldersAdminView() }
-        .tabItem { Label("Folders", systemImage: "folder") }
-}
-```
+The macOS Settings window is a single `SettingsView` --
+[`SettingsTabsView.swift`](../../apple/CabalmailMac/SettingsTabsView.swift)
+lost its tab bar in June 2026 (commit 7b44c2c6) when Addresses and
+Folders moved to the main-window sidebar. The Rules surface therefore
+needs a placement decision, made at implementation time:
+
+- a main-window sidebar surface alongside Addresses and Folders (most
+  consistent with where the June 2026 rework put the other management
+  views), or
+- a reintroduced Settings tab bar with a Rules tab.
+
+Note that the Settings scene has no `NavigationStack`, so a
+`NavigationLink` from Settings is inert on macOS; anything reached
+from Settings must present as a sheet or window, not a push.
 
 The `RulesView` itself reuses the iOS implementation; SwiftUI
 adapts the layout to the macOS chrome.
-
-> **Erratum (2026-08-07):** The macOS Settings tab bar quoted above was removed in
-> June 2026 (commit 7b44c2c6): Addresses/Folders moved to the main-window
-> sidebar and `SettingsTabsView` now renders `SettingsView` directly. A
-> macOS Rules surface needs a new design (e.g. reintroduce a tab bar, or a
-> sidebar/section placement), not an insertion into the quoted `TabView`.
 
 Match the macOS Settings-window conventions: the master/detail
 layout, the standard padding, the standard pill segmented
@@ -1383,8 +1478,8 @@ affordances.
    and the tap navigates to a working editor.
 3. Same on iPad simulator (regular width); the master/detail
    layout renders.
-4. Same on macOS; the Settings window shows a Rules tab between
-   General and Addresses; the editor works.
+4. Same on macOS, via the placement chosen in 4.3; the editor
+   works.
 5. Same on visionOS simulator.
 6. Round-trip parity: create rules on macOS, observe them on
    iPhone after a refresh; modify on iPhone, refresh on macOS,
@@ -1394,13 +1489,60 @@ affordances.
 8. Manual: drag-reorder on iPhone via EditMode reorder grip;
    confirm a PUT lands within the debounce window.
 
+## Phase 4b -- Android client
+
+Goal: the same feature on Android -- same data model, same API --
+built with Android idioms rather than a transplant of the Apple UI.
+(This phase postdates the original draft of this plan: the native
+Android client shipped as roadmap 1.3, after the draft was written.)
+
+### 4b.1 Kit additions
+
+In the UI-free `android/kit` module (which must stay free of
+Compose/UI dependencies):
+
+- `Rule`, `Condition`, `RuleSet` models and the `Field` / `Action`
+  enums, mirroring the wire shape in [Data model](#data-model) (five
+  fields; no `bcc`).
+- `listRules()` / `setRules(rules, expectedVersion)` on the API
+  client, matching the Apple kit's shape.
+- A `RulesValidator` equivalent, JUnit-tested against the same corpus
+  as the Swift `RulesValidator` and the web `validate.js`.
+
+### 4b.2 Compose UI
+
+A rules editor reached from the app's settings surface: a master list
+(reorder, enable/disable, add / duplicate / delete) and a rule editor
+(conditions, destination, auxiliary actions including Reply,
+spill-through), following the interaction spec in Phase 3 but
+expressed with Material/Compose idioms -- idiomatic divergence from
+the Apple UI is expected, not a defect. Same debounced auto-save,
+optimistic concurrency, and 409 reload flow as the other clients.
+Folder pickers offer existing folders only, per
+[No folder auto-creation](#no-folder-auto-creation).
+
+### Phase 4b verification
+
+1. `cd android && ./gradlew :kit:test` covers model encode/decode and
+   the validator corpus; `./gradlew :app:testDebugUnitTest` covers
+   the editor's state model; `./gradlew ktlintCheck lint` passes.
+2. Manual on device or emulator: author, reorder, and toggle rules;
+   confirm round-trip parity with the other clients and the 409
+   reload flow between two devices.
+3. The change ships with an `Android:`-prefixed changelog fragment
+   (see [5.4](#54-changelog)).
+
 ## Phase 5 -- Polish, observability, docs
 
 ### 5.1 Operator dashboard
 
-Add a Grafana panel to the existing monitoring stack
-([`terraform/infra/modules/app/grafana.tf`](../../terraform/infra/modules/app/grafana.tf)
-or the relevant module):
+Grafana is an optional container tier
+([`docker/grafana/`](../../docker/grafana/), built only when
+`TF_VAR_MONITORING` is `true`), and monitoring is currently disabled
+in every environment for cost -- so these panels are provisioning
+files that stay dormant until an operator enables the stack. Add them
+to the dashboard provisioning in `docker/grafana/` so an enabled
+stack picks them up:
 - Per-user rule count distribution.
 - Per-day rule writes.
 - Compiler skip rate (count of `compile_skip_rule` per day,
@@ -1410,7 +1552,8 @@ or the relevant module):
 
 ### 5.2 Alarms
 
-CloudWatch alarms (added to the existing monitoring set):
+CloudWatch alarms -- the always-on observability path while the
+Grafana stack is off (added to the existing alarm set):
 - `RuleCompilerSelfTestFailures > 0` over 5 minutes.
 - `RuleCompilerSkipsTotal` rate of change > 10x baseline (a
   schema change or compiler bug just shipped).
@@ -1445,18 +1588,27 @@ Link from `docs/user_manual.md` and `docs/operations.md`.
 
 ### 5.4 CHANGELOG
 
-Add an `Unreleased` entry under 1.3.x:
-- "User-defined mail rules: rule editor in the web admin app and
-  in iOS / iPadOS / macOS / visionOS Settings. Rules are evaluated
-  by the IMAP tier ahead of default delivery and after the 1.2.x
-  pending-address confirmation pass. Conditions match From / To / Cc
-  / Subject / Body (BCC is not present in delivered mail, so it is
-  not offered). Actions: move, copy, archive, delete, plus
-  independent flag / mark-read / forward / auto-reply."
+Record the change as fragments in `changelog.d/` (no `Unreleased`
+section, no pre-assigned version -- the release collator folds
+fragments into a dated section at promotion time):
+
+- A server/infra fragment, e.g.
+  `changelog.d/user-mail-rules.added.md`: "**User-defined mail
+  rules.** Rules are evaluated by the IMAP tier ahead of default
+  delivery. Conditions match From / To / Cc / Subject / Body (BCC is
+  not present in delivered mail, so it is not offered). Actions:
+  move, copy, archive, delete, plus independent flag / mark-read /
+  forward / auto-reply."
+- An `Apple:`-prefixed fragment for the Phase 4 editor (required by
+  the `apple-changelog.yml` gate; the prefix scopes it into the
+  TestFlight notes).
+- An `Android:`-prefixed fragment for the Phase 4b editor (required
+  by `android-changelog.yml`; only the bold headline reaches the
+  Play release notes, inside the 500-character-per-release budget).
 
 ### 5.5 Browser extension follow-up (optional)
 
-The 1.2.x browser extension touches `cabal-addresses` via the
+The planned browser extension touches `cabal-addresses` via the
 existing `/new` and `/revoke` endpoints; it does not need to know
 about rules. No work required in this version. A future browser-
 extension version might add "create a rule that auto-files mail
@@ -1477,16 +1629,17 @@ No migration from prior versions is required -- there are no rules
 before this version. Existing users land in the empty state on first
 visit. The DynamoDB table is empty until users start writing rules.
 
-The procmailrc and sync-users.sh INCLUDERC lines are additive and
-idempotent: existing users with already-patched `~/.procmailrc` from
-1.2.x get the second INCLUDERC line on the next container start.
+The include ships inside the shared `procmailrc` template, which
+sync-users.sh installs into every user's `~/.procmailrc` on the next
+container start (and, when the browser extension plan ships, its
+pending include arrives the same way).
 First-time-after-deploy delivery for a user that hasn't been re-
 synced reads the not-yet-present `/etc/procmail-user/<user>.rc` and
 falls through (procmail tolerates a missing include with `INCLUDERC`
 but to be safe the compiler writes an empty file for every user at
 the first run after deploy, regardless of whether they have rules).
 
-## Out of scope for 1.3.x
+## Out of scope for v1
 
 - Power-user / advanced rule features (OR, regex, header
   extraction). Possible future extension; not in v1.
@@ -1511,14 +1664,13 @@ the first run after deploy, regardless of whether they have rules).
 
 ## Prerequisites
 
-- 1.2.x's procmail-pending include and its
-  [Phase 3.1 backend additions](../1.2.x/browser-extension-plan.md#3-backend-additions-lambda--terraform)
-  should be live before this work ships, so the ordering invariant
-  in [Relation to prior work](#relation-to-prior-work) has both
-  sides to enforce. (If 1.2.x slips, this work can ship first and
-  hold the user-include INCLUDERC pattern open for 1.2.x's later
-  addition. The two are designed to coexist regardless of which
-  arrives first.)
+- The browser extension plan's procmail-pending include and its
+  [backend additions](browser-extension-plan.md#1-backend-additions-lambda--terraform)
+  are NOT prerequisites: that plan is unshipped, so this work ships
+  first and holds the user-include INCLUDERC pattern open for its
+  later addition. The two are designed to coexist regardless of which
+  arrives first (see
+  [Relation to prior work](#relation-to-prior-work)).
 - DynamoDB capacity headroom -- pay-per-request, no provisioned-
   capacity planning needed.
 - A first-pass injection corpus (per [Phase 2](#25-test-corpus))
@@ -1549,7 +1701,7 @@ implementation phase does not relitigate them.
 3. **Rule import / export: out of scope for v1.** Deferred to a
    follow-on; the `GET /rules` JSON already solves the data side, so
    the future work is purely the UI affordance. (See
-   [Out of scope](#out-of-scope-for-13x).)
+   [Out of scope](#out-of-scope-for-v1).)
 
 4. **Folder targets: pick from existing folders; never auto-create.**
    The rule editors offer only the user's existing folders. The
@@ -1563,7 +1715,7 @@ implementation phase does not relitigate them.
 
 5. **Per-rule "this message was filed by rule X" indicator: out of
    scope for v1.** Deferred; would need a per-delivery rule-id store.
-   (See [Out of scope](#out-of-scope-for-13x).)
+   (See [Out of scope](#out-of-scope-for-v1).)
 
 6. **Inbound test path: prod-to-stage via `test-mail-loop.py`.**
    Phase 2 verification originates external inbound mail by running
@@ -1579,4 +1731,4 @@ implementation phase does not relitigate them.
 7. **Disabled rules: skipped, no preview mode.** Disabled rules are
    not emitted by the compiler and not evaluated. An
    evaluate-without-acting preview is deferred to a follow-on. (See
-   [Out of scope](#out-of-scope-for-13x).)
+   [Out of scope](#out-of-scope-for-v1).)

@@ -1,5 +1,4 @@
 '''Sends an email message'''
-import copy
 import json
 import smtplib
 import time
@@ -27,7 +26,7 @@ from helper import CACHE_BUCKET, SMTP_HOST # pylint: disable=import-error
 from helper import MaintenanceError, maintenance_response # pylint: disable=import-error
 import smtp_session # pylint: disable=import-error
 
-# Sending is SMTP-first: outbound delivery never blocks on IMAP. The Bcc-free
+# Sending is SMTP-first: outbound delivery never blocks on IMAP. The
 # Sent copy is staged to S3 and queued, and the append_sent consumer Lambda
 # writes it to the Sent folder when IMAP is available (immediately in steady
 # state, after the roll completes during an IMAP deploy). See
@@ -82,10 +81,11 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
     # SMTP first and queue the Sent copy for the append_sent consumer to write
     # when IMAP is available.
     #
-    # The Sent copy must not retain Bcc - it would expose blind recipients to
-    # anyone who can read Sent. SMTP still delivers to the BCC addresses because
-    # the recipient list is passed to send() explicitly.
-    sent_copy = strip_bcc(msg)
+    # The Sent copy keeps Bcc on purpose: it is the sender's only record of
+    # who they blind-copied, and only the mailbox owner can read Sent.
+    # Blindness is enforced on the wire, not here - smtplib strips Bcc from
+    # the transmitted DATA and send() passes the recipient list explicitly
+    # (see send() below).
     message_id = msg['Message-Id']
 
     # Idempotency: claim the Message-Id before SMTP so a retried /send (e.g. the
@@ -139,9 +139,9 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
     if message_id:
         _confirm_send(message_id)
 
-    # Queue the Bcc-free Sent copy (best effort; a queue failure here loses
-    # only the Sent record, not the delivery).
-    _queue_sent_copy(sent_copy, body['host'], user, message_id)
+    # Queue the Sent copy (best effort; a queue failure here loses only the
+    # Sent record, not the delivery).
+    _queue_sent_copy(msg, body['host'], user, message_id)
 
     # Send-from-draft cleanup (best effort, same spirit as the Sent copy):
     # when the client passes the draft's coordinates, expunge the now-stale
@@ -167,10 +167,9 @@ def _invalid(err):
 
 
 def _save_draft(host, user, msg):
-    '''Saves a draft to the user's Drafts folder. Drafts keep Bcc (the user is
-    still composing). Interactive and IMAP-only, so during a planned IMAP roll
-    there is nothing to queue - return the maintenance signal and let the client
-    retry rather than failing.
+    '''Saves a draft to the user's Drafts folder. Interactive and IMAP-only,
+    so during a planned IMAP roll there is nothing to queue - return the
+    maintenance signal and let the client retry rather than failing.
 
     Create-only on purpose: this branch keeps its original response shape for
     the React explicit-save flow. /save_draft (which shares append_draft) is
@@ -226,7 +225,7 @@ def _append_sent_queue_url():
 
 
 def _queue_sent_copy(msg, _host, user, message_id):
-    '''Stages the Bcc-free Sent copy to S3 and enqueues an append job. Best
+    '''Stages the Sent copy to S3 and enqueues an append job. Best
     effort: a failure means the message was delivered but its Sent copy is not
     recorded, which we log rather than surface as a send failure.
 
@@ -351,18 +350,6 @@ def _release_send(message_id):
         _dedupe_table.delete_item(Key={'pk': f'senddedupe#{message_id}'})
     except ClientError as err:
         print(f'[send-dedupe] WARN release failed: {err}')
-
-def strip_bcc(msg):
-    """Returns a copy of msg with every Bcc header removed.
-
-    Mirrors what smtplib.send_message does to its wire copy, applied here to
-    the copy that lands in Outbox (and then Sent). EmailMessage.__delitem__
-    rebinds the header list, so the original msg keeps its Bcc for the
-    explicit recipient computation in the handler.
-    """
-    copied = copy.copy(msg)
-    del copied['Bcc']
-    return copied
 
 def send(msg, smtp_host, from_addr, to_addrs):
     """Send the message.

@@ -195,6 +195,12 @@ if [ "$TIER" = "imap" ]; then
   echo "[entrypoint] Preparing push wake-signal spool..."
   mkdir -p /var/spool/cabal-push
   chmod 1777 /var/spool/cabal-push
+  # Same split for user-rule forwards (docs/1.x/user-mail-rules-plan.md,
+  # Phase 2b): recipients spool via cabal-rules-forward.sh, the root
+  # cabal-forward-drain.sh daemon submits via sendmail.
+  echo "[entrypoint] Preparing rule-forward spool..."
+  mkdir -p /var/spool/cabal-forward
+  chmod 1777 /var/spool/cabal-forward
 fi
 
 # ── Step 6: Prepare rsyslog working directory ─────────────────

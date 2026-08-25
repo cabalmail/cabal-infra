@@ -126,6 +126,72 @@ resource "aws_dynamodb_table" "push_tokens" {
 * list_my_domains so the React client can filter its domain picker.
 */
 
+/**
+* Per-user mail rules (docs/1.x/user-mail-rules-plan.md). One row per Cognito
+* username holding the whole ordered rule set as a JSON-encoded array (array
+* index = precedence), plus a monotonic version for optimistic concurrency.
+* Written whole-row by the set_rules Lambda; read by get_rules on client load
+* and scanned by the IMAP tier's procmail compiler on reconfigure (Phase 2).
+* Bounded: <= 100 rules of ~1 KB each, well inside the 400 KB item limit.
+*/
+
+#tfsec:ignore:aws-dynamodb-table-customer-key
+resource "aws_dynamodb_table" "user_rules" {
+  name                        = "cabal-user-rules"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "user"
+  deletion_protection_enabled = true
+
+  attribute {
+    name = "user"
+    type = "S"
+  }
+  server_side_encryption {
+    enabled = true
+  }
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+/**
+* Audit trail for mail-rule writes (docs/1.x/user-mail-rules-plan.md). One row
+* per set_rules PUT: (user, ts) -> {version, diff}, where diff is a JSON Patch
+* against the prior rule set. Kept for operator incident response (who set the
+* rule that caused a mail loop, and what it said); TTL-pruned at 90 days via
+* expiresAt.
+*/
+
+#tfsec:ignore:aws-dynamodb-table-customer-key
+resource "aws_dynamodb_table" "user_rules_audit" {
+  name                        = "cabal-user-rules-audit"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "user"
+  range_key                   = "ts"
+  deletion_protection_enabled = true
+
+  attribute {
+    name = "user"
+    type = "S"
+  }
+  attribute {
+    name = "ts"
+    type = "N"
+  }
+
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "user_domain_access" {
   name                        = "cabal-user-domain-access"

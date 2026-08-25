@@ -345,6 +345,22 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    get_rules = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    set_rules = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     get_nav_state = {
       runtime = "python3.13"
 
