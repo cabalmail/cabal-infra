@@ -46,6 +46,7 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
             self.id = id
         }
 
+        // swiftlint:disable:next nesting
         private enum CodingKeys: String, CodingKey { case field, value }
 
         public init(from decoder: Decoder) throws {

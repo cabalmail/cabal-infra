@@ -102,7 +102,8 @@ final class ApiClientRulesTests: XCTestCase {
     func testSetRulesValidationErrorStaysServerError() async throws {
         // A 400 (schema rejection) is not a conflict — it surfaces as the
         // regular server error carrying the Lambda's structured body.
-        let body = #"{"errors": [{"rule": 0, "field": "name", "error": "Must be 1-100 characters, no control characters."}]}"#
+        let body = #"{"errors": [{"rule": 0, "field": "name", "#
+            + #""error": "Must be 1-100 characters, no control characters."}]}"#
         let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 400)])
         do {
             _ = try await makeClient(http).setRules([Rule()], expectedVersion: 0)
