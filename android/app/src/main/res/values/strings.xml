@@ -85,6 +85,10 @@
     <!-- Folders -->
     <string name="empty_trash">Empty Trash</string>
     <string name="empty_trash_confirm">This permanently deletes every message in Trash. It cannot be undone.</string>
+    <string name="folder_section_subscribed">Subscribed</string>
+    <string name="folder_section_all">All folders</string>
+    <string name="folder_section_expand">Expand %1$s</string>
+    <string name="folder_section_collapse">Collapse %1$s</string>
 
     <!-- Resume cursor -->
     <string name="resume_prompt">Pick up where you left off?</string>
