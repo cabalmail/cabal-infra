@@ -319,12 +319,15 @@ data model omits it. Adding it here:
   `Re: <original subject>` if not already prefixed. An
   `Auto-Submitted: auto-replied` header is added to mark the message
   as a vacation reply per RFC 3834.
-- **Loop prevention.** Procmail's standard `vacation.cache` mechanism
-  (or `formail -D` against a per-user dbm cache) suppresses repeated
-  replies to the same sender within a configurable window
-  (default 7 days). This is the cheap, well-understood guard; the
-  vacation cache lives in the user's home directory at
-  `~/.cabal-rules-reply-cache.db`.
+- **Loop prevention.** A per-sender vacation cache suppresses repeated
+  replies to the same sender within a 7-day window. As built it is a
+  plain timestamped-line file at `~/.cabal-rules-reply-cache` (with a
+  sibling `~/.cabal-rules-reply-count` for the daily rate cap), pruned
+  in place by the reply helper -- `formail -D`'s circular cache is
+  size-bounded, not time-bounded, so it cannot express the 7-day
+  window directly. Belt and braces: every reply also carries the
+  user's `X-Loop` marker and `Auto-Submitted: auto-replied`, both of
+  which the recipe guards check.
 - **Bounce suppression.** Auto-replies to mailer-daemons and
   list servers cause reply storms. The compiler emits a header-based
   guard ahead of every reply rule: skip if
@@ -587,9 +590,18 @@ Per-rule compilation:
      on the imap tier, the sinkhole.test mailertable entry (and its
      `SINKHOLE_ENABLED` task env) extends to imap alongside smtp-out
      for the test-harness path.
-   - `reply`: a guarded `formail -rt` recipe (see
-     [Reply action](#reply-action)) plus the vacation cache and
-     bounce-suppression headers.
+   - `reply`: a `cabal-rules-reply.sh` helper invocation behind the
+     bounce-suppression guard conditions (see
+     [Reply action](#reply-action)); the helper owns `formail -rt`
+     composition, the vacation cache, and the rate cap, and the user's
+     body rides as an opaque base64 argv token so it never appears as
+     procmail syntax. Submission reuses the forward spool +
+     `cabal-forward-drain.sh` (meta `sender` = the resolved recipient
+     address, `addrs` = the original sender). The reply-From is
+     resolved at delivery time by intersecting the user's
+     virtusertable addresses with the original's To/Cc (first
+     provisioned address as the Bcc-delivery fallback) -- the compiler
+     cannot know it, since it varies per message.
 8. **Spill-through wrapping.** Procmail's default is to stop after
    the first matching delivering recipe. To express "continue to
    next rule":
@@ -772,7 +784,7 @@ We additionally:
 - Per-rule forward cap: 10 addresses.
 - Per-rule reply body cap: 4000 chars.
 - Per-user reply rate cap: 100 replies / 24h, enforced at delivery
-  time by a counter file in `~/.cabal-rules-reply-cache.db`.
+  time by the counter file `~/.cabal-rules-reply-count`.
 - Per-sender vacation suppression: 7-day suppression on repeated replies
   to the same envelope sender.
 - Per-message forward count, summed across all rules that fire on a
@@ -932,14 +944,12 @@ matching the React shape. Implement in
 
 Goal: the rules a user writes via Phase 1 actually shape mail delivery.
 
-Lands in three slices, each shippable: **2 (core)** -- the compiler with
-conditions, all five destination actions, spill-through, and forward,
-plus all the container wiring below; **2b** -- the flag / markRead
-Maildir info-flag delivery path and the forward X-Loop guard (issue
-#1266); **2c** -- the Reply machinery (vacation cache, bounce
-suppression, rate cap). Until 2c lands, a Reply rule is skipped whole --
-compiling its halt without sending the reply would consume the
-message's precedence without doing the thing the rule exists for.
+Landed in three slices, each shipped and stage-verified separately:
+**2 (core)** -- the compiler with conditions, all five destination
+actions, spill-through, and forward, plus all the container wiring
+below; **2b** -- the flag / markRead Maildir info-flag delivery path
+and the forward X-Loop guard (issue #1266); **2c** -- the Reply
+machinery (vacation cache, bounce suppression, rate cap).
 
 ### 2.1 The compiler script
 

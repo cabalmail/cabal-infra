@@ -20,17 +20,21 @@ rules still apply. Folder existence is checked directly on the filesystem
 (~user/Maildir/.<folder>/) rather than via IMAP LIST: the directory is
 exactly what the emitted recipe will deliver into.
 
-Auxiliary actions (Phase 2b): flag / markRead deliver through the
+Auxiliary actions: flag / markRead (Phase 2b) deliver through the
 cabal-maildir-deliver helper, which writes cur/ with the :2,<flags> info
-suffix procmail's native maildir delivery cannot set; forward runs through
-the cabal-rules-forward helper behind an X-Loop guard condition, so a
-forward that routes back into the same mailbox is forwarded exactly once
-(issue #1266). Reply is not implemented yet (Phase 2c); a Reply rule is
-skipped whole rather than consuming precedence without replying.
+suffix procmail's native maildir delivery cannot set; forward (2b) runs
+through the cabal-rules-forward helper behind an X-Loop guard condition,
+so a forward that routes back into the same mailbox is forwarded exactly
+once (issue #1266); reply (2c) runs through the cabal-rules-reply helper
+behind the bounce-suppression guard conditions, with the user's reply
+body carried as an opaque base64 argv token - user text never appears as
+procmail syntax, and base64's alphabet contains no SHELLMETAS, so the
+recipe execs directly under SHELL=/usr/bin/false.
 
 Output is deterministic (no timestamps, sorted iteration) so the golden-file
 self-test (compile-user-rules-selftest.py) can compare byte-for-byte.
 '''
+import base64
 import json
 import os
 import re
@@ -45,6 +49,8 @@ TABLE_NAME = os.environ.get('USER_RULES_TABLE_NAME', 'cabal-user-rules')
 PUSH_ENQUEUE = '/usr/local/bin/push-enqueue.sh'
 DELIVER_HELPER = '/usr/local/bin/cabal-maildir-deliver.sh'
 FORWARD_HELPER = '/usr/local/bin/cabal-rules-forward.sh'
+REPLY_HELPER = '/usr/local/bin/cabal-rules-reply.sh'
+MAX_REPLY_BODY_LENGTH = 4000
 
 # OS usernames reach forward-helper argv and the X-Loop marker; sync-users
 # creates them from Cognito usernames, but re-check the shape before
@@ -152,6 +158,12 @@ def validate_rule(rule):
     forwards = rule.get('forward')
     if not isinstance(forwards, list) or len(forwards) > MAX_FORWARDS:
         return 'schema'
+    if rule.get('reply'):
+        body = rule.get('replyBody')
+        if (not isinstance(body, str) or not 1 <= len(body) <= MAX_REPLY_BODY_LENGTH
+                or any((ord(ch) < 32 and ch != '\n') or ord(ch) == 127
+                       for ch in body)):
+            return 'schema'
     return None
 
 
@@ -206,6 +218,32 @@ def deliver_block(dir_name, flags, copy):
             f'  | {DELIVER_HELPER} {target} {flags}']
 
 
+def reply_block(user, body):
+    '''The guarded auto-reply recipe (Phase 2c).
+
+    The condition set is the plan's bounce-suppression guard, baked into
+    every compiled reply recipe and not user-controlled: never answer
+    anything auto-generated, bulk/list traffic, mailer daemons, our own
+    marker, or a message with no usable From. The helper owns the
+    vacation cache, rate cap, and composition; the body rides as an
+    opaque base64 token.
+    '''
+    marker = escape_value(f'X-Loop: cabal-rules-{user}')
+    blob = base64.b64encode(body.encode()).decode()
+    return [
+        '  :0cw',
+        '  * ! ^Auto-Submitted:',
+        '  * ! ^Precedence:.*(bulk|junk|list)',
+        '  * ! ^List-Id:',
+        '  * ! ^X-Mailer-Daemon:',
+        '  * ! ^From:.*MAILER-DAEMON',
+        f'  * ! ^{marker}',
+        '  * ^From:.',
+        f'  | {REPLY_HELPER} {user} {blob}',
+        '',
+    ]
+
+
 def forward_block(user, forwards):
     '''The guarded forward recipe (Phase 2b; issue #1266).
 
@@ -246,11 +284,11 @@ def compile_rule(rule, folder_exists, user):
     if reason:
         return None, [], reason
     action = rule['action']
-    # Reply is a primary effect (Phase 2c): compiling the rest of a reply
-    # rule would consume the message's precedence without sending the reply
-    # the rule exists for, so the whole rule skips until reply lands.
-    if rule.get('reply'):
-        return None, [], 'aux_not_implemented:reply'
+    # Reply and forward emit the username into recipes; an unexpected
+    # shape skips the whole rule (skip-not-mangle).
+    if (rule.get('reply') or rule.get('forward')) and not USER_SAFE_RE.match(user):
+        if rule.get('reply'):
+            return None, [], 'user_unsafe'
     aux_skips = []
     # Maildir info flags for this rule's own deliveries (sorted: F < S).
     flags = ('F' if rule.get('flag') else '') + ('S' if rule.get('markRead') else '')
@@ -270,6 +308,10 @@ def compile_rule(rule, folder_exists, user):
     body = []
     if forwards:
         body += forward_block(user, forwards)
+    # Settled decision 2: forward fires before reply (the forward target
+    # sees the original, not the auto-reply); reply before the destination.
+    if rule.get('reply') and action != 'delete':
+        body += reply_block(user, rule['replyBody'])
 
     if action in ('move', 'archive'):
         folder = 'Archive' if action == 'archive' else rule['moveFolder']
@@ -325,7 +367,9 @@ def compile_ruleset(user, rules, folder_exists):
         '# Generated by compile-user-rules.py (docs/1.x/user-mail-rules-plan.md).',
         '# DO NOT EDIT - regenerated on every reconfigure.',
         f'# user: {user}',
-        'LINEBUF=4096',
+        # Reply recipes carry the base64 body inline (<= ~5.4 KB for the
+        # 4000-char cap); keep well clear of the longest legal line.
+        'LINEBUF=16384',
         '',
     ]
     lines = []
