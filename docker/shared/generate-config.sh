@@ -217,6 +217,13 @@ if tier == "imap":
     write("/etc/mail/access",           gen_imap_access())
     write("/etc/mail/virtusertable",    gen_virtusertable())
     write("/etc/aliases.dynamic",       gen_aliases())
+    # Fresh empty base for the conditional sinkhole append below (shell
+    # section). smtp-out overwrites its mailertable every run, so its
+    # append yields exactly one entry; without this base the imap append
+    # accumulates a duplicate key per regenerate, makemap exits 65 on
+    # the duplicate, and set -e kills the reconfigure loop before the
+    # rule compiler runs.
+    write("/etc/mail/mailertable",      "")
 
 elif tier == "smtp-in":
     write("/etc/mail/masq-domains",     gen_domain_list())
