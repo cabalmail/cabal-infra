@@ -297,8 +297,9 @@ LINEBUF=4096
 :0
 * ^To:.*fwd@me\.example
 {
-  :0c
-  ! other@example.com
+  :0cw
+  * ! ^X-Loop: cabal-rules-fixtureuser
+  | /usr/local/bin/cabal-rules-forward.sh fixtureuser other@example.com
 
   :0c
   * ! PUSH_ENQUEUED ?? yes
@@ -313,16 +314,18 @@ LINEBUF=4096
 :0
 * ^To:.*fw2@me\.example
 {
-  :0c
-  ! other@example.com
+  :0cw
+  * ! ^X-Loop: cabal-rules-fixtureuser
+  | /usr/local/bin/cabal-rules-forward.sh fixtureuser other@example.com
 }
 
 # [r-00000000001c] Forward two
 :0
 * ^To:.*fw3@me\.example
 {
-  :0c
-  ! a@example.com b@example.org
+  :0cw
+  * ! ^X-Loop: cabal-rules-fixtureuser
+  | /usr/local/bin/cabal-rules-forward.sh fixtureuser a@example.com b@example.org
 
   :0c
   * ! PUSH_ENQUEUED ?? yes
@@ -337,8 +340,9 @@ LINEBUF=4096
 :0
 * ^Subject:.*both
 {
-  :0c
-  ! keep@example.net
+  :0cw
+  * ! ^X-Loop: cabal-rules-fixtureuser
+  | /usr/local/bin/cabal-rules-forward.sh fixtureuser keep@example.net
 
   :0c
   * ! PUSH_ENQUEUED ?? yes
@@ -445,8 +449,8 @@ LINEBUF=4096
   | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Receipts"
   PUSH_ENQUEUED=yes
 
-  :0:
-  $MAILDIR/.Receipts/
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Receipts" F
 }
 
 # [r-000000000029] Mark read requested
@@ -458,16 +462,17 @@ LINEBUF=4096
   | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Archive"
   PUSH_ENQUEUED=yes
 
-  :0:
-  $MAILDIR/.Archive/
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Archive" S
 }
 
 # [r-00000000002b] Forward drop invalid
 :0
 * ^To:.*fw4@me\.example
 {
-  :0c
-  ! good@example.com
+  :0cw
+  * ! ^X-Loop: cabal-rules-fixtureuser
+  | /usr/local/bin/cabal-rules-forward.sh fixtureuser good@example.com
 
   :0c
   * ! PUSH_ENQUEUED ?? yes
@@ -489,4 +494,54 @@ LINEBUF=4096
 
   :0:
   $MAILDIR/.Receipts/
+}
+
+# [r-000000000032] Flag and read
+:0
+* ^From:.*vip@corp\.example
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Receipts"
+  PUSH_ENQUEUED=yes
+
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Receipts" FS
+}
+
+# [r-000000000033] Flag spill
+:0
+* ^Subject:.*flagspill
+{
+  :0cw
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Receipts" F
+}
+
+# [r-000000000034] Read copy
+:0
+* ^Subject:.*readcopy
+{
+  :0cw
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Receipts" S
+
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "INBOX"
+  PUSH_ENQUEUED=yes
+
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR" S
+}
+
+# [r-000000000035] Flag inbox
+:0
+* ^Subject:.*flaginbox
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "INBOX"
+  PUSH_ENQUEUED=yes
+
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR" F
 }

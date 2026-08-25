@@ -24,6 +24,8 @@ spec.loader.exec_module(cur)
 FIXTURE_FOLDERS = {'', '.Receipts', '.Archive', '.Work.Clients', '.Trash',
                    '.My Stuff', '.Newsletters'}
 PUSH_LINE_PREFIX = '  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "'
+DELIVER_LINE_PREFIX = '  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR'
+FORWARD_LINE_PREFIX = '  | /usr/local/bin/cabal-rules-forward.sh '
 
 # The classics plus procmail-specific shapes: shell injection, pipe/redirect
 # smuggling, recipe-structure injection via newlines, regex anchors and
@@ -78,8 +80,8 @@ def rule(**kw):
     return base
 
 
-def compile_one(r):
-    return cur.compile_rule(r, lambda d: d in FIXTURE_FOLDERS)
+def compile_one(r, user='fixtureuser'):
+    return cur.compile_rule(r, lambda d: d in FIXTURE_FOLDERS, user)
 
 
 class GoldenTest(unittest.TestCase):
@@ -95,7 +97,7 @@ class GoldenTest(unittest.TestCase):
         if not content.endswith('\n'):
             content += '\n'
         self.assertEqual(content, golden)
-        self.assertEqual(compiled, 42)
+        self.assertEqual(compiled, 46)
 
 
 class StructureTest(unittest.TestCase):
@@ -128,9 +130,11 @@ class StructureTest(unittest.TestCase):
 
     def test_delete_ignores_aux(self):
         lines, _, reason = compile_one(rule(
-            action='delete', forward=['a@example.com']))
+            action='delete', forward=['a@example.com'], flag=True))
         self.assertIsNone(reason)
-        self.assertNotIn('!', '\n'.join(lines))
+        text = '\n'.join(lines)
+        self.assertNotIn('cabal-rules-forward', text)
+        self.assertNotIn('cabal-maildir-deliver', text)
 
     def test_none_halt_delivers_default_with_inbox_push(self):
         lines, _, reason = compile_one(rule())
@@ -148,7 +152,54 @@ class StructureTest(unittest.TestCase):
             action='move', moveFolder='Receipts', forward=['a@example.com']))
         self.assertIsNone(reason)
         text = '\n'.join(lines)
-        self.assertLess(text.index('! a@example.com'), text.index('$MAILDIR'))
+        self.assertLess(text.index('cabal-rules-forward.sh fixtureuser a@example.com'),
+                        text.index('$MAILDIR'))
+
+    def test_forward_carries_loop_guard(self):
+        lines, _, reason = compile_one(rule(forward=['a@example.com']))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertIn('* ! ^X-Loop: cabal-rules-fixtureuser', text)
+        self.assertLess(text.index('X-Loop'), text.index('cabal-rules-forward.sh'))
+
+    def test_forward_marker_escaped_for_dotted_user(self):
+        lines, _, reason = compile_one(rule(forward=['a@example.com']),
+                                       user='j.doe-2')
+        self.assertIsNone(reason)
+        self.assertIn('* ! ^X-Loop: cabal-rules-j\\.doe-2', '\n'.join(lines))
+
+    def test_unsafe_username_drops_forward(self):
+        lines, aux, reason = compile_one(
+            rule(action='move', moveFolder='Receipts', forward=['a@example.com']),
+            user='evil user')
+        self.assertIsNone(reason)
+        self.assertIn('forward_user_unsafe', aux)
+        self.assertNotIn('cabal-rules-forward', '\n'.join(lines))
+
+    def test_flags_deliver_via_helper_sorted(self):
+        lines, aux, reason = compile_one(rule(
+            action='move', moveFolder='Receipts', flag=True, markRead=True))
+        self.assertIsNone(reason)
+        self.assertEqual(aux, [])
+        text = '\n'.join(lines)
+        self.assertIn('cabal-maildir-deliver.sh "$MAILDIR/.Receipts" FS', text)
+        self.assertIn('  :0w', text)
+        self.assertNotIn('$MAILDIR/.Receipts/', text)
+
+    def test_flagged_spill_is_cw_copy(self):
+        lines, _, reason = compile_one(rule(
+            action='move', moveFolder='Receipts', markRead=True,
+            continueToNext=True))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertIn('  :0cw\n  | /usr/local/bin/cabal-maildir-deliver.sh '
+                      '"$MAILDIR/.Receipts" S', text)
+        self.assertNotIn('push-enqueue', text)
+
+    def test_flagged_inbox_uses_maildir_root(self):
+        lines, _, reason = compile_one(rule(flag=True))
+        self.assertIsNone(reason)
+        self.assertIn('cabal-maildir-deliver.sh "$MAILDIR" F', '\n'.join(lines))
 
     def test_inbox_move_is_default_delivery(self):
         lines, _, reason = compile_one(rule(action='move', moveFolder='INBOX'))
@@ -170,13 +221,6 @@ class StructureTest(unittest.TestCase):
             replyBody='away'))
         self.assertEqual(reason, 'aux_not_implemented:reply')
 
-    def test_flag_rule_compiles_rest(self):
-        lines, aux, reason = compile_one(rule(
-            action='move', moveFolder='Receipts', flag=True))
-        self.assertIsNone(reason)
-        self.assertIn('aux_not_implemented:flag', aux)
-        self.assertIn('$MAILDIR/.Receipts/', '\n'.join(lines))
-
 
 class FolderTest(unittest.TestCase):
     def test_missing_folder_skips(self):
@@ -184,7 +228,8 @@ class FolderTest(unittest.TestCase):
         self.assertEqual(reason, 'folder_not_found')
 
     def test_archive_without_archive_folder_skips(self):
-        _, _, reason = cur.compile_rule(rule(action='archive'), lambda d: d == '')
+        _, _, reason = cur.compile_rule(rule(action='archive'), lambda d: d == '',
+                                        'fixtureuser')
         self.assertEqual(reason, 'folder_not_found')
 
     def test_wire_and_internal_separators_agree(self):
@@ -212,14 +257,21 @@ class InjectionTest(unittest.TestCase):
         for line in text.splitlines():
             stripped = line.strip()
             if stripped.startswith('|'):
-                self.assertTrue(
-                    line.startswith(PUSH_LINE_PREFIX),
-                    f'unexpected pipe action: {line!r}')
+                if line.startswith(FORWARD_LINE_PREFIX):
+                    # argv after the helper: <user> <addr>... all re-checkable
+                    args = line[len(FORWARD_LINE_PREFIX):].split()
+                    self.assertTrue(args and cur.USER_SAFE_RE.match(args[0]),
+                                    f'bad forward user: {line!r}')
+                    for addr in args[1:]:
+                        self.assertTrue(cur.valid_forward(addr),
+                                        f'bad forward addr: {line!r}')
+                else:
+                    self.assertTrue(
+                        line.startswith(PUSH_LINE_PREFIX)
+                        or line.startswith(DELIVER_LINE_PREFIX),
+                        f'unexpected pipe action: {line!r}')
             if stripped.startswith('!'):
-                addrs = stripped[1:].split()
-                for addr in addrs:
-                    self.assertTrue(cur.valid_forward(addr),
-                                    f'unexpected forward: {line!r}')
+                self.fail(f'bare forward action emitted: {line!r}')
             self.assertNotIn('\x00', line)
 
     def test_hostile_condition_values_become_literals(self):
@@ -270,10 +322,7 @@ class InjectionTest(unittest.TestCase):
                     continue  # control chars etc. may reject at schema level
                 self.assertIsNone(reason)
                 self.assertIn('forward_invalid_dropped', aux, value)
-                # No forward action line (the push guard's `* !` is a
-                # condition, not a forward; forwards start the line with !).
-                self.assertFalse(
-                    any(l.strip().startswith('!') for l in lines), lines)
+                self.assertNotIn('cabal-rules-forward', '\n'.join(lines))
 
     def test_hostile_names_stay_in_comments(self):
         for value in HOSTILE_VALUES:

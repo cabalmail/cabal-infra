@@ -561,12 +561,20 @@ Per-rule compilation:
      (See [No folder auto-creation](#no-folder-auto-creation).)
    - `none`: no destination recipe; auxiliary actions still run.
 7. **Auxiliary action emission.**
-   - `flag`: `formail`-based header rewrite that adds an IMAP
-     `\Flagged` keyword. Procmail can write Maildir messages with
-     the `F` info-flag suffix directly, the cleaner path; see
-     [Maildir info flags](https://cr.yp.to/proto/maildir.html).
-   - `markRead`: same approach, `S` info-flag.
-   - `forward`: per-address `! <addr>` line, with `<addr>` validated
+   - `flag` / `markRead`: the rule's own deliveries pipe through the
+     `cabal-maildir-deliver.sh` helper, which writes `cur/` with the
+     sorted `:2,<flags>` info suffix (`F` = Flagged, `S` = Seen) per
+     [the maildir spec](https://cr.yp.to/proto/maildir.html) -
+     procmail's native maildir delivery writes bare files into `new/`
+     and cannot set info flags. The recipe carries procmail's `w`
+     flag, so a helper failure leaves the message for later recipes /
+     DEFAULT rather than losing it.
+   - `forward`: a `cabal-rules-forward.sh` helper invocation (the
+     `formail | sendmail` pipeline lives in the helper because
+     `SHELL=/usr/bin/false` forbids inline pipelines) behind an
+     `X-Loop: cabal-rules-<user>` guard condition; the helper stamps
+     the marker on the outbound copy, bounding any forward cycle
+     through the mailbox to a single hop. Each `<addr>` is validated
      against the email regex AND constrained to a length cap (320
      chars per RFC 5321 limit).
    - `reply`: a guarded `formail -rt` recipe (see
@@ -917,12 +925,11 @@ Goal: the rules a user writes via Phase 1 actually shape mail delivery.
 Lands in three slices, each shippable: **2 (core)** -- the compiler with
 conditions, all five destination actions, spill-through, and forward,
 plus all the container wiring below; **2b** -- the flag / markRead
-Maildir info-flag delivery path; **2c** -- the Reply machinery (vacation
-cache, bounce suppression, rate cap). Until its slice lands, a rule
-requesting flag/markRead compiles without the decoration (logged
-`aux_not_implemented`), while a Reply rule is skipped whole -- compiling
-its halt without sending the reply would consume the message's
-precedence without doing the thing the rule exists for.
+Maildir info-flag delivery path and the forward X-Loop guard (issue
+#1266); **2c** -- the Reply machinery (vacation cache, bounce
+suppression, rate cap). Until 2c lands, a Reply rule is skipped whole --
+compiling its halt without sending the reply would consume the
+message's precedence without doing the thing the rule exists for.
 
 ### 2.1 The compiler script
 
