@@ -16,6 +16,7 @@ import { useAppMessage } from '../../contexts/AppMessageContext';
 import ConfirmDialog from '../../ConfirmDialog';
 import FromPicker from './FromPicker';
 import { extractEmail } from '../../utils/formatDate';
+import { folderMeta } from '../../utils/folderMeta';
 
 const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
 
@@ -304,14 +305,50 @@ function ComposeOverlay({
 
   // Initialize compose state based on type (reply/replyAll/forward/new)
   useEffect(() => {
+    // Replying to the user's own message (read out of Sent) inverts the
+    // addressing: From reuses the alias the original was sent from and the
+    // recipients are the original To / Cc / Bcc (the Sent copy retains Bcc
+    // server-side, and /list_envelopes surfaces it), never the author. The
+    // owned-address list loads async, so ownership of the seeded From is
+    // reconciled in the fetch effect below.
+    const sentSource = folderMeta((reply_source && reply_source.folder) || '').kind === 'sent';
+    const ownAlias = (extractEmail((envelope.from || [])[0]) || '').toLowerCase();
+    const fromOwnSent = sentSource && ownAlias !== '';
+    // First occurrence wins and the seeded set starts with the user's own
+    // alias, so the author is excluded and an address never lands in more
+    // than one of To / Cc / Bcc.
+    const seen = new Set([ownAlias]);
+    const takeUnseen = (list) => (list || []).filter((s) => {
+      const key = (extractEmail(s) || s || '').toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     switch (type) {
       case "reply":
-        setAddress(propRecipient);
-        setTo(envelope.from);
+        if (fromOwnSent) {
+          setAddress(ownAlias);
+          setTo(takeUnseen(envelope.to));
+        } else {
+          setAddress(propRecipient);
+          setTo(envelope.from || []);
+        }
         setCC([]);
         setSubject(propSubject);
         break;
       case "replyAll": {
+        if (fromOwnSent) {
+          const toList = takeUnseen(envelope.to);
+          const ccList = takeUnseen(envelope.cc);
+          const bccList = takeUnseen(envelope.bcc);
+          setAddress(ownAlias);
+          setTo(toList);
+          setCC(ccList);
+          setBCC(bccList);
+          if (ccList.length > 0 || bccList.length > 0) setShowCcBcc(true);
+          setSubject(propSubject);
+          break;
+        }
         // Self-removal compares by bare email since list entries may carry
         // a display-name wrapper (`"Name" <addr@host>`) while propRecipient
         // is always a bare address.
@@ -400,11 +437,12 @@ function ComposeOverlay({
     loadAddresses().then((items) => {
       const list = items.map((a) => a.address);
       // Respect explicit reply-derived `address` (set above in reply/replyAll/forward)
-      // and a user-picked `composeFromAddress`. Otherwise the From picker stays
-      // empty — the user must explicitly choose (or create) a From address
-      // before Send is allowed.
+      // and a user-picked `composeFromAddress` — but only while the user still
+      // owns it: the alias a Sent message was sent from may have been revoked
+      // since. Otherwise the From picker stays empty — the user must
+      // explicitly choose (or create) a From address before Send is allowed.
       setAddress(prev => {
-        if (prev) return prev;
+        if (prev && list.includes(prev)) return prev;
         if (composeFromAddress && list.includes(composeFromAddress)) {
           return composeFromAddress;
         }

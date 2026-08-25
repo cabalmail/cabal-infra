@@ -64,6 +64,7 @@ import com.cabalmail.android.ui.compose.ComposeViewModel
 import com.cabalmail.android.ui.folders.FoldersAdminScreen
 import com.cabalmail.android.ui.folders.FoldersAdminViewModel
 import com.cabalmail.android.ui.mail.FolderListScreen
+import com.cabalmail.android.ui.mail.FolderPane
 import com.cabalmail.android.ui.mail.FoldersViewModel
 import com.cabalmail.android.ui.mail.MailListDetailScreen
 import com.cabalmail.android.ui.mail.MessageDetailScreen
@@ -393,7 +394,8 @@ private fun MailNavGraph(
                     onCompose = composeNew,
                 )
             } else {
-                // Tablet / foldable (plan §7.2): list | detail side by side.
+                // Tablet / foldable / landscape phone (plan §7.2): list |
+                // detail side by side, the folder pane leading when it fits.
                 MailListDetailScreen(
                     container = container,
                     folder = folder,
@@ -404,6 +406,42 @@ private fun MailNavGraph(
                     onBack = { navController.popBackStack() },
                     onCompose = composeNew,
                     openCompose = openCompose,
+                    folderPane = {
+                        // Scoped to the "folders" hub entry (always beneath
+                        // us — it is the start destination) so the folder
+                        // list and its statuses survive folder switches.
+                        val foldersOwner =
+                            remember(entry) {
+                                runCatching {
+                                    navController.getBackStackEntry("folders")
+                                }.getOrNull() ?: entry
+                            }
+                        val foldersViewModel: FoldersViewModel =
+                            viewModel(
+                                viewModelStoreOwner = foldersOwner,
+                                factory = FoldersViewModel.factory(container),
+                            )
+                        val foldersState by foldersViewModel.state.collectAsState()
+                        val preferences by container.preferences.preferences.collectAsState()
+                        FolderPane(
+                            state = foldersState,
+                            countDisplay = preferences.folderCountDisplay,
+                            selectedFolder = folder,
+                            onOpenFolder = { target ->
+                                if (target != folder) {
+                                    // Swap the list in place: pop the current
+                                    // messages entry rather than stacking one
+                                    // per visited folder.
+                                    navController.navigate("messages/${Uri.encode(target)}") {
+                                        popUpTo("folders")
+                                        launchSingleTop = true
+                                    }
+                                }
+                            },
+                            onEmptyTrash = foldersViewModel::emptyTrash,
+                            onPoll = foldersViewModel::poll,
+                        )
+                    },
                 )
             }
         }

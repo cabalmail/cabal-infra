@@ -20,6 +20,14 @@ import Foundation
 /// owns, From is left unset and the UI falls through to the "Create new
 /// address…" flow. Matches the React app's 0.3.0 semantics (see
 /// `react/admin/src/Email/Messages/`).
+///
+/// ### Reply from Sent
+///
+/// Replying to the user's own message (read out of the Sent folder, From
+/// owned by the user) inverts the addressing instead: From reuses the alias
+/// the original was sent from, Reply goes to the original To, and Reply All
+/// carries the original To / Cc / Bcc. The author never appears in the
+/// recipient lists.
 public enum ReplyBuilder {
     public enum ReplyMode: Sendable, Hashable {
         case reply
@@ -55,24 +63,45 @@ public enum ReplyBuilder {
         now: () -> Date = Date.init
     ) -> Draft {
         let ownedAddressStrings = Set(userAddresses.map { $0.address.lowercased() })
-        let defaultFrom = pickDefaultFrom(from: envelope, owned: ownedAddressStrings)
+
+        // A message read out of Sent whose From is one of the user's own
+        // addresses is their own outbound copy, and replying to it inverts
+        // the addressing: From reuses the alias it was sent from, and the
+        // recipients are the original To / Cc / Bcc (never the author).
+        // The ownership check keeps the inversion off messages merely filed
+        // into Sent by hand.
+        let isOwnMessage = sourceFolder == FolderTree.sentPath
+            && envelope.from.first.map { ownedAddressStrings.contains(addressKey($0)) } == true
+
+        let defaultFrom = isOwnMessage
+            ? envelope.from.first.map(addressKey)
+            : pickDefaultFrom(from: envelope, owned: ownedAddressStrings)
 
         let subject = prefixedSubject(envelope.subject ?? "", mode: mode)
 
-        let (toList, ccList): ([EmailAddress], [EmailAddress]) = {
+        let lists: RecipientLists = {
             switch mode {
+            case .reply where isOwnMessage:
+                var seen = ownedAddressStrings
+                return RecipientLists(to: deduped(envelope.to, tracking: &seen))
+            case .replyAll where isOwnMessage:
+                var seen = ownedAddressStrings
+                return RecipientLists(to: deduped(envelope.to, tracking: &seen),
+                                      cc: deduped(envelope.cc, tracking: &seen),
+                                      bcc: deduped(envelope.bcc, tracking: &seen))
             case .reply:
                 // Reply goes to the author. Reply-To overrides From when
                 // present, per RFC 5322 §3.6.2.
                 let primary = envelope.replyTo.isEmpty ? envelope.from : envelope.replyTo
-                return (primary, [])
+                return RecipientLists(to: primary)
             case .replyAll:
                 let primary = envelope.replyTo.isEmpty ? envelope.from : envelope.replyTo
                 let extras = envelope.to + envelope.cc
                 let recipients = deduped(primary + extras, excluding: ownedAddressStrings)
-                return (Array(recipients.prefix(1)), Array(recipients.dropFirst()))
+                return RecipientLists(to: Array(recipients.prefix(1)),
+                                      cc: Array(recipients.dropFirst()))
             case .forward:
-                return ([], [])
+                return RecipientLists()
             }
         }()
 
@@ -86,9 +115,9 @@ public enum ReplyBuilder {
         return Draft(
             updatedAt: now(),
             fromAddress: defaultFrom,
-            to: toList.map(formatAddressForDraft),
-            cc: ccList.map(formatAddressForDraft),
-            bcc: [],
+            to: lists.to.map(formatAddressForDraft),
+            cc: lists.cc.map(formatAddressForDraft),
+            bcc: lists.bcc.map(formatAddressForDraft),
             subject: subject,
             body: quoted,
             inReplyTo: threading.inReplyTo,
@@ -146,14 +175,20 @@ public enum ReplyBuilder {
         owned: Set<String>
     ) -> String? {
         let ordered = envelope.to + envelope.cc + envelope.bcc
-        for address in ordered {
-            let candidate = "\(address.mailbox)@\(address.host)".lowercased()
-            if owned.contains(candidate) { return candidate }
-        }
-        return nil
+        return ordered.map(addressKey).first { owned.contains($0) }
+    }
+
+    private static func addressKey(_ address: EmailAddress) -> String {
+        "\(address.mailbox)@\(address.host)".lowercased()
     }
 
     // MARK: - Recipient list
+
+    private struct RecipientLists {
+        var to: [EmailAddress] = []
+        var cc: [EmailAddress] = []
+        var bcc: [EmailAddress] = []
+    }
 
     /// Deduplicates an address list and drops anything owned by the signed-in
     /// user, preserving the first-seen order.
@@ -161,11 +196,20 @@ public enum ReplyBuilder {
         _ list: [EmailAddress],
         excluding owned: Set<String>
     ) -> [EmailAddress] {
-        var seen: Set<String> = []
+        var seen = owned
+        return deduped(list, tracking: &seen)
+    }
+
+    /// As `deduped(_:excluding:)`, but with the seen-set shared across calls
+    /// so an address never lands in more than one of To / Cc / Bcc. Seed
+    /// `seen` with the owned set to keep the user out of the recipients.
+    private static func deduped(
+        _ list: [EmailAddress],
+        tracking seen: inout Set<String>
+    ) -> [EmailAddress] {
         var result: [EmailAddress] = []
         for address in list {
-            let key = "\(address.mailbox)@\(address.host)".lowercased()
-            if owned.contains(key) { continue }
+            let key = addressKey(address)
             if seen.contains(key) { continue }
             seen.insert(key)
             result.append(address)

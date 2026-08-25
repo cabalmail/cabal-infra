@@ -1,5 +1,7 @@
-'''Unit tests for get_message's handling of a UID that is no longer in the
-folder, and for the 404 the guard builds from it.
+'''Unit tests for get_message's and push_envelope's handling of a UID that is
+no longer in the folder -- including a zero-byte fetch or cache entry, which
+must be treated as gone, never parsed into an empty message -- and for the 404
+the guard builds from it.
 
 No pytest harness in this repo; run under the stdlib:
 
@@ -11,6 +13,7 @@ IMAP server. The fake client mirrors the behavior under test: like a real
 server, an IMAP UID FETCH for a UID that has been expunged succeeds and returns
 an empty dict rather than failing.'''
 import importlib.util
+import json
 import os
 import sys
 import types
@@ -117,6 +120,7 @@ def _load_handler(name):
 
 
 fetch_message = _load_handler('fetch_message')
+push_envelope = _load_handler('push_envelope')
 
 _SAVED = {}
 
@@ -180,6 +184,153 @@ class GetMessageGoneTest(unittest.TestCase):
         message = helper.get_message(None, 'testuser', 'INBOX', 28)
         self.assertEqual(message.get('Subject'), 'still here')
         self.assertEqual(UPLOADED, ['testuser/INBOX/28/raw'])
+
+
+class EmptyRawIsGoneTest(unittest.TestCase):
+    '''A zero-byte RFC822 fetch or cache entry is a truncated delivery's
+    artifact, not content: parsing it yields a message with no headers, which
+    push enrichment renders as a blank alert and the cache then serves
+    forever. get_message must report it gone and heal a poisoned entry.'''
+
+    def setUp(self):
+        PRESENT_UIDS.clear()
+        OPENED.clear()
+        UPLOADED.clear()
+        self.cache = {}
+        self.deleted = []
+        self._saved = (helper.key_exists, helper.get_object,
+                       helper.delete_object, helper.upload_object)
+        helper.key_exists = lambda _bucket, key: key in self.cache
+        helper.get_object = lambda _bucket, key: self.cache[key]
+        helper.delete_object = lambda _bucket, key: self.deleted.append(key) or True
+        helper.upload_object = lambda _bucket, key, _ctype, _obj: UPLOADED.append(key) or True
+
+    def tearDown(self):
+        (helper.key_exists, helper.get_object,
+         helper.delete_object, helper.upload_object) = self._saved
+
+    def test_empty_fetch_raises_message_gone_and_caches_nothing(self):
+        PRESENT_UIDS[29] = b''
+        with self.assertRaises(helper.MessageGoneError):
+            helper.get_message(None, 'testuser', 'INBOX', 29)
+        self.assertEqual(UPLOADED, [])
+
+    def test_empty_cache_entry_is_deleted_and_refetched(self):
+        self.cache['testuser/INBOX/30/raw'] = b''
+        PRESENT_UIDS[30] = RAW_MESSAGE
+        message = helper.get_message(None, 'testuser', 'INBOX', 30)
+        self.assertEqual(message.get('Subject'), 'still here')
+        self.assertEqual(self.deleted, ['testuser/INBOX/30/raw'])
+        self.assertEqual(UPLOADED, ['testuser/INBOX/30/raw'])
+
+    def test_empty_cache_entry_with_message_also_gone_raises(self):
+        self.cache['testuser/INBOX/31/raw'] = b''
+        with self.assertRaises(helper.MessageGoneError):
+            helper.get_message(None, 'testuser', 'INBOX', 31)
+        self.assertEqual(self.deleted, ['testuser/INBOX/31/raw'])
+        self.assertEqual(UPLOADED, [])
+
+
+def _envelope_event(body):
+    return {
+        'body': json.dumps(body),
+        'requestContext': {'authorizer': {'claims': {'cognito:username': 'testuser'}}},
+    }
+
+
+class _FakeSearchImapClient(_FakeImapClient):
+    '''Adds the Message-ID search push_envelope's msg_id path performs.'''
+
+    def __init__(self):
+        super().__init__()
+        self.searches = []
+
+    def search(self, criteria):
+        self.searches.append(criteria)
+        return sorted(PRESENT_UIDS)
+
+
+class PushEnvelopeEmptyRawTest(unittest.TestCase):
+    '''The enrichment endpoint answered 200 with empty from/subject/snippet
+    for a zero-byte message, which the Apple NSE "successfully" rendered as a
+    completely blank alert (its designed "New mail" fallback only covers
+    non-2xx and undecodable responses). Empty raw must 404 instead, and a
+    poisoned cache entry must be healed.
+
+    push_envelope binds helper's names at import (`from helper import ...`),
+    so the fakes are patched onto the handler module, not onto helper.'''
+
+    def setUp(self):
+        PRESENT_UIDS.clear()
+        UPLOADED.clear()
+        self.cache = {}
+        self.deleted = []
+        self.client = _FakeSearchImapClient()
+        self._saved = {name: getattr(push_envelope, name) for name in
+                       ('key_exists', 'get_object', 'delete_object',
+                        'upload_object', 'get_imap_client')}
+        push_envelope.key_exists = lambda _bucket, key: key in self.cache
+        push_envelope.get_object = lambda _bucket, key: self.cache[key]
+        push_envelope.delete_object = lambda _bucket, key: self.deleted.append(key) or True
+        push_envelope.upload_object = lambda _bucket, key, _ctype, _obj: UPLOADED.append(key) or True
+        push_envelope.get_imap_client = lambda *_args, **_kwargs: self.client
+
+    def tearDown(self):
+        for name, value in self._saved.items():
+            setattr(push_envelope, name, value)
+
+    def test_empty_fetch_is_a_404_not_a_blank_envelope(self):
+        PRESENT_UIDS[37] = b''
+        response = push_envelope.handler(
+            _envelope_event({'folder': 'INBOX', 'msg_id': '<a@b.example>'}), None)
+        self.assertEqual(response['statusCode'], 404)
+        self.assertEqual(UPLOADED, [])
+
+    def test_poisoned_cache_entry_is_healed(self):
+        self.cache['testuser/INBOX/37/raw'] = b''
+        PRESENT_UIDS[37] = RAW_MESSAGE
+        response = push_envelope.handler(
+            _envelope_event({'folder': 'INBOX', 'msg_id': '<a@b.example>'}), None)
+        self.assertEqual(response['statusCode'], 200)
+        payload = json.loads(response['body'])
+        self.assertEqual(payload['from'], 'someone@example.com')
+        self.assertEqual(payload['subject'], 'still here')
+        self.assertEqual(self.deleted, ['testuser/INBOX/37/raw'])
+        self.assertEqual(UPLOADED, ['testuser/INBOX/37/raw'])
+
+    def test_github_style_message_id_is_searched_not_degraded(self):
+        # Slash-bearing Message-IDs (every GitHub notification carries one)
+        # used to fail validation and silently fall back to the uid hint,
+        # which a delivery burst leaves stale.
+        PRESENT_UIDS[38] = RAW_MESSAGE
+        msg_id = '<owner/repo/pull/1253/review/5003175315@github.example>'
+        response = push_envelope.handler(
+            _envelope_event({'folder': 'INBOX', 'msg_id': msg_id}), None)
+        self.assertEqual(response['statusCode'], 200)
+        self.assertEqual(self.client.searches, [['HEADER', 'Message-ID', msg_id]])
+
+
+class ValidateMessageIdTest(unittest.TestCase):
+
+    def test_accepts_path_separators(self):
+        value = '<owner/repo/pull/1/issue_event/2@github.example>'
+        self.assertEqual(helper.validate_message_id(value), value)
+
+    def test_accepts_a_full_length_message_id(self):
+        value = '<' + 'a' * 994 + '@x>'  # exactly the 998-byte RFC 5322 cap
+        self.assertEqual(helper.validate_message_id(value), value)
+
+    def test_rejects_garbage(self):
+        for bad in ('', None, 'a@b', '<a b@c>', '<a\x00b@c>',
+                    '<' + 'a' * 995 + '@x>'):
+            with self.assertRaises(ValueError):
+                helper.validate_message_id(bad)
+
+    def test_content_id_still_rejects_path_separators(self):
+        # fetch_inline_image embeds its value in an S3 key; the widened
+        # message-id rules must not leak into that validator.
+        with self.assertRaises(ValueError):
+            helper.validate_content_id('<a/b@c>')
 
 
 class SuiteIsolationTest(unittest.TestCase):

@@ -1,0 +1,1115 @@
+[
+  {
+    "id": "r-000000000001",
+    "name": "Move on from",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "match-me"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000002",
+    "name": "Move on to",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "to",
+        "value": "match-me"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000003",
+    "name": "Move on cc",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "cc",
+        "value": "match-me"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000004",
+    "name": "Move on subject",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "match-me"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000005",
+    "name": "Move on body",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "body",
+        "value": "match-me"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000006",
+    "name": "Delete on from",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "spammy"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000007",
+    "name": "Delete on to",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "to",
+        "value": "spammy"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000008",
+    "name": "Delete on cc",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "cc",
+        "value": "spammy"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000009",
+    "name": "Delete on subject",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "spammy"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000000a",
+    "name": "Delete on body",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "body",
+        "value": "spammy"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000000b",
+    "name": "AND conditions",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "aws.amazon.com"
+      },
+      {
+        "field": "subject",
+        "value": "invoice"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000000c",
+    "name": "Three conditions",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "a"
+      },
+      {
+        "field": "to",
+        "value": "b"
+      },
+      {
+        "field": "body",
+        "value": "c"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Trash",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000000d",
+    "name": "Catch-all move",
+    "enabled": true,
+    "conditions": [],
+    "action": "move",
+    "moveFolder": "Newsletters",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000000e",
+    "name": "Move halt",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "halt"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000000f",
+    "name": "Move spill",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "spill"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-000000000010",
+    "name": "Archive halt",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "newsletter@x.example"
+      }
+    ],
+    "action": "archive",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000011",
+    "name": "Archive spill",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "news@y.example"
+      }
+    ],
+    "action": "archive",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-000000000012",
+    "name": "Move to INBOX",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "keepme"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "INBOX",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000013",
+    "name": "Nested folder",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "client@corp.example"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Work/Clients",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000014",
+    "name": "Folder with space",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "stuff"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "My Stuff",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000015",
+    "name": "Dotted wire form",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "dotted"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Work.Clients",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000016",
+    "name": "Copy single",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "copy@z.example"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [
+      "Receipts"
+    ],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000017",
+    "name": "Copy multi",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "multi@z.example"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [
+      "Receipts",
+      "Work/Clients"
+    ],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000018",
+    "name": "Copy spill",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "spill@z.example"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [
+      "Trash"
+    ],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-000000000019",
+    "name": "Delete everything",
+    "enabled": true,
+    "conditions": [],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000001a",
+    "name": "Forward halt",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "to",
+        "value": "fwd@me.example"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [
+      "other@example.com"
+    ],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000001b",
+    "name": "Forward spill",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "to",
+        "value": "fw2@me.example"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [
+      "other@example.com"
+    ],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-00000000001c",
+    "name": "Forward two",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "to",
+        "value": "fw3@me.example"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [
+      "a@example.com",
+      "b@example.org"
+    ],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000001d",
+    "name": "Forward plus move",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "both"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [
+      "keep@example.net"
+    ],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000001e",
+    "name": "None halt",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "stophere"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000001f",
+    "name": "None spill no-op",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "nothing"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-000000000020",
+    "name": "Regex dots",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "no-reply@bank.example.com"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000021",
+    "name": "Star and plus",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "50% off***buy+now"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000022",
+    "name": "Anchors",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "^top $100"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000023",
+    "name": "Pipes and parens",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "a|b(c)d"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000024",
+    "name": "Brackets braces",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "[urgent]{now}"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000025",
+    "name": "Backslash",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "body",
+        "value": "C:\\Windows\\system32"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000026",
+    "name": "Unicode",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "récépissé — 領収書"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000027",
+    "name": "Name with # hash",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "hashname"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000028",
+    "name": "Flag requested",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "flag@x.example"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000029",
+    "name": "Mark read requested",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "read@x.example"
+      }
+    ],
+    "action": "archive",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": true,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000002a",
+    "name": "Reply requested",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "to",
+        "value": "vac@me.example"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": true,
+    "replyBody": "On vacation.",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000002b",
+    "name": "Forward drop invalid",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "to",
+        "value": "fw4@me.example"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [
+      "good@example.com",
+      "not-an-email"
+    ],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000002c",
+    "name": "Forward all invalid",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "fwbad"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [
+      "nope",
+      "also bad"
+    ],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000002d",
+    "name": "Ghost folder",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "ghost"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Ghost",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000002e",
+    "name": "Unsafe folder",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "evil"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "evil|pipe",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000002f",
+    "name": "Empty move folder",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "nofolder"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000030",
+    "name": "Copy with ghost",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "cg"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [
+      "Receipts",
+      "Ghost"
+    ],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000031",
+    "name": "Empty copy list",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "cempty"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000032",
+    "name": "Flag and read",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "vip@corp.example"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": true,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000033",
+    "name": "Flag spill",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "flagspill"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-000000000034",
+    "name": "Read copy",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "readcopy"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [
+      "Receipts"
+    ],
+    "flag": false,
+    "markRead": true,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000035",
+    "name": "Flag inbox",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "flaginbox"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000036",
+    "name": "Disabled rule",
+    "enabled": false,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "off"
+      }
+    ],
+    "action": "delete",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-badbadbadbad",
+    "name": "Broken"
+  }
+]

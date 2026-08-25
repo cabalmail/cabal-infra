@@ -3,7 +3,7 @@
 #
 # /send delivers over SMTP first and never blocks on IMAP (the IMAP tier is
 # single-task and has a zero-task window on every redeploy). It stages the
-# Bcc-free Sent copy to S3 (sent-pending/<user>/<uuid>) and enqueues a job here;
+# Sent copy to S3 (sent-pending/<user>/<uuid>) and enqueues a job here;
 # this consumer writes the copy to the user's Sent folder when IMAP is
 # available. During a roll get_imap_client raises, the job stays queued, and SQS
 # redelivers it until the new IMAP container is serving; after maxReceiveCount it

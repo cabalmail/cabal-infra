@@ -136,4 +136,97 @@ class ReplyBuilderTest {
         assertEquals("Fwd: x", ReplyBuilder.prefixedSubject("Fwd: x", ReplyBuilder.Mode.FORWARD))
         assertEquals("Fwd: Re: x", ReplyBuilder.prefixedSubject("Re: x", ReplyBuilder.Mode.FORWARD))
     }
+
+    // ---- Reply from Sent: the user's own message inverts the addressing ----
+
+    private val ownEnvelope =
+        envelope.copy(
+            from = listOf("Me <me@shop.example.com>"),
+            to = listOf("\"Ann Vendor\" <ann@vendor.example>", "Bob <bob@vendor.example>"),
+            cc = listOf("carol@vendor.example"),
+            bcc = listOf("eve@home.example"),
+        )
+
+    private fun buildFromSent(mode: ReplyBuilder.Mode) =
+        ReplyBuilder.build(
+            envelope = ownEnvelope,
+            content = content,
+            mode = mode,
+            ownedAddresses = owned,
+            sourceFolder = "Sent",
+            now = Instant.parse("2026-08-02T00:00:00Z"),
+            zone = ZoneOffset.UTC,
+            id = "draft-1",
+        )
+
+    @Test
+    fun `reply from Sent reuses the sending alias and targets the original To`() {
+        val draft = buildFromSent(ReplyBuilder.Mode.REPLY)
+        assertEquals("me@shop.example.com", draft.fromAddress)
+        assertEquals(listOf("ann@vendor.example", "bob@vendor.example"), draft.to)
+        assertTrue(draft.cc.isEmpty())
+        assertTrue(draft.bcc.isEmpty())
+        assertEquals("Sent", draft.replySourceFolder)
+    }
+
+    @Test
+    fun `reply-all from Sent carries the original Cc and Bcc`() {
+        val draft = buildFromSent(ReplyBuilder.Mode.REPLY_ALL)
+        assertEquals("me@shop.example.com", draft.fromAddress)
+        assertEquals(listOf("ann@vendor.example", "bob@vendor.example"), draft.to)
+        assertEquals(listOf("carol@vendor.example"), draft.cc)
+        assertEquals(listOf("eve@home.example"), draft.bcc)
+    }
+
+    @Test
+    fun `reply-all from Sent drops owned aliases and cross-field duplicates`() {
+        val draft =
+            ReplyBuilder.build(
+                envelope =
+                    ownEnvelope.copy(
+                        to = listOf("ann@vendor.example", "me@work.example.com"),
+                        cc = listOf("ann@vendor.example", "carol@vendor.example"),
+                        bcc = listOf("carol@vendor.example"),
+                    ),
+                content = null,
+                mode = ReplyBuilder.Mode.REPLY_ALL,
+                ownedAddresses = owned,
+                sourceFolder = "Sent",
+                id = "d",
+            )
+        assertEquals(listOf("ann@vendor.example"), draft.to)
+        assertEquals(listOf("carol@vendor.example"), draft.cc)
+        assertTrue(draft.bcc.isEmpty())
+    }
+
+    @Test
+    fun `a Sent message the user did not author replies normally`() {
+        val draft =
+            ReplyBuilder.build(
+                envelope = envelope,
+                content = null,
+                mode = ReplyBuilder.Mode.REPLY,
+                ownedAddresses = owned,
+                sourceFolder = "Sent",
+                id = "d",
+            )
+        assertEquals(listOf("ann@vendor.example"), draft.to)
+        assertEquals("me@shop.example.com", draft.fromAddress)
+    }
+
+    @Test
+    fun `an own message outside Sent replies normally with no Bcc seed`() {
+        val draft =
+            ReplyBuilder.build(
+                envelope = ownEnvelope,
+                content = null,
+                mode = ReplyBuilder.Mode.REPLY_ALL,
+                ownedAddresses = owned,
+                sourceFolder = "Archive",
+                id = "d",
+            )
+        assertEquals(listOf("ann@vendor.example"), draft.to)
+        assertEquals(listOf("bob@vendor.example", "carol@vendor.example"), draft.cc)
+        assertTrue(draft.bcc.isEmpty())
+    }
 }

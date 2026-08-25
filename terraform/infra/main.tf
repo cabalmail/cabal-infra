@@ -233,6 +233,7 @@ module "admin" {
   dev_mode             = var.prod ? false : true
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
+  user_rules_topic_arn      = module.ecs.user_rules_topic_arn
   push_queue_arn            = module.ecs.push_queue_arn
 
   dmarc_healthcheck_ping_param = local.hc_ping_dmarc
@@ -356,8 +357,9 @@ module "ecs" {
   region              = var.aws_region
   control_domain      = var.control_domain
 
-  table_arn = module.table.table_arn
-  efs_id    = module.efs.efs_id
+  table_arn            = module.table.table_arn
+  user_rules_table_arn = module.table.user_rules_table_arn
+  efs_id               = module.efs.efs_id
 
   smtp_queue_access_point_id    = module.efs.smtp_queue_access_point_id
   smtp_in_queue_access_point_id = module.efs.smtp_in_queue_access_point_id

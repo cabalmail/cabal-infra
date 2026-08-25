@@ -83,7 +83,9 @@ resource "aws_iam_policy" "ecs_task" {
           "dynamodb:BatchGetItem",
           "dynamodb:DescribeTable",
         ]
-        Resource = var.table_arn
+        # cabal-addresses feeds generate-config.sh on every tier;
+        # cabal-user-rules feeds compile-user-rules.py on the imap tier.
+        Resource = [var.table_arn, var.user_rules_table_arn]
       },
       {
         Effect = "Allow"

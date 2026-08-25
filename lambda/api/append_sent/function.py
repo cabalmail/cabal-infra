@@ -2,7 +2,7 @@
 folder.
 
 Decoupled from /send so outbound delivery never blocks on IMAP: /send delivers
-over SMTP, stages the Bcc-free copy to S3, and enqueues a job here. During a
+over SMTP, stages the message copy to S3, and enqueues a job here. During a
 planned IMAP roll get_imap_client raises (MaintenanceError, or a plain
 connection failure on a genuine outage), the record is left on the queue, and
 SQS redelivers it after the visibility timeout until the new IMAP container is

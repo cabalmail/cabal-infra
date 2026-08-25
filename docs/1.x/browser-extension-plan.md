@@ -4,15 +4,15 @@
 
 Cabalmail's signature user behavior is per-vendor (or per-purpose) email addresses: spin one up before signing up for a new service, burn it when it goes bad. Today that flow lives in the React admin app (`react/admin/src/Addresses/Request.jsx`) and the native clients (`apple/`, the planned `android/`). The user must context-switch to a Cabalmail surface, generate or hand-craft an address, copy it, switch back to the signup tab, and paste.
 
-This version introduces a browser extension that collapses that flow into the sign-up form itself, in the same way 1Password's "Suggest strong password" UI collapses password generation into the sign-up form. The extension has three responsibilities:
+This plan introduces a browser extension that collapses that flow into the sign-up form itself, in the same way 1Password's "Suggest strong password" UI collapses password generation into the sign-up form. The extension has three responsibilities:
 
 1. **Suggest.** When the user lands on a sign-up form, detect the email field and offer a one-click insert of a freshly generated Cabalmail address on an apex domain the user is entitled to use. The address is created eagerly when the user commits to it (clicks "Use this address" in the popover) so that DNS and the sendmail tier have runway to converge before any verification mail arrives; addresses the user abandons without submitting are revoked by a TTL reaper, with the procmail-based clear-on-receive hook as the high-confidence "address really is in use" signal in between.
 2. **Adopt.** If the user manually types an address that parses as `<local>@<subdomain>.<apex>` where `<apex>` is one of the user's authorized apex domains and the full address is not already in their list, offer to create the address before they submit the form. The address is created at the moment the user accepts the offer (same eager-create model as Suggest). The only path that blocks submission is the typed-and-ignored case where the user dismisses the offer banner *and* hits submit -- there we hold the submit and surface a modal warning, since otherwise the destination service would receive a not-yet-deliverable address.
 3. **Open privately.** Act as the private-window bridge for links coming from the Cabalmail clients. The reader's link menu (shipped in the 0.11.x/1.x Apple clients) can copy a link or hand it to the share sheet, but no OS API lets a mail app open a Safari private window directly -- the WebExtensions API inside the browser is the only sanctioned route. The extension intercepts a redirector URL the mail app opens and re-opens the target in a private window. Desktop only; see [Opening links in private windows](#opening-links-in-private-windows) for the findings and Phase 7 for the design.
 
-Out of scope for 1.2.x:
+Out of scope for the initial release:
 - Saving site-to-address mappings, breach alerts, "show me what I gave this site," vault sync. Those are future work; the MVP is *generate and insert*, not a relationship store.
-- Filling existing addresses on **sign-in** forms (i.e. the autofill counterpart). The extension only operates on sign-up forms in 1.2.x. Storing which address was minted for which site is the natural prerequisite, and lives in a later version.
+- Filling existing addresses on **sign-in** forms (i.e. the autofill counterpart). The extension only operates on sign-up forms in the initial release. Storing which address was minted for which site is the natural prerequisite, and lives in a later version.
 - Replacing the address-management UI in the admin app, on Apple, or on Android. The extension is an *additional* surface, not a replacement.
 - Firefox, Edge, Brave, Opera, Arc, and other Chromium/Gecko derivatives. The MV3 build will likely run on most Chromium derivatives unchanged, but only Chrome and Safari are validated and shipped.
 
@@ -58,7 +58,7 @@ References worth reading before implementing the detector:
 
 **Our detector.** A scoring engine, not a tree of `if`s. Each form on the page gets a numeric score from each signal above, weighted by reliability (the table is a starting point for weights, not the final numbers -- we tune empirically). Total score above an upper threshold -> sign-up (offer suggest); below a lower threshold -> sign-in (do nothing); between the thresholds -> ambiguous (show a passive badge on the field that the user can click to open the popup, but no automatic action). The thresholds and per-signal weights live in a config file, are unit-tested against a corpus of captured form HTML from real sign-up and sign-in pages (Phase 4), and are tunable without a release.
 
-The corpus itself is the durable asset. Phase 4 builds a snapshot tool (a separate extension build that dumps form HTML on demand) and seeds it with 50+ sign-up and 50+ sign-in pages from a representative set: top SaaS apps, e-commerce, news sites, gov forms, banking, region-localized sites. Subsequent tuning, both in 1.2.x and beyond, regresses against this corpus.
+The corpus itself is the durable asset. Phase 4 builds a snapshot tool (a separate extension build that dumps form HTML on demand) and seeds it with 50+ sign-up and 50+ sign-in pages from a representative set: top SaaS apps, e-commerce, news sites, gov forms, banking, region-localized sites. Subsequent tuning, both before and after the initial release, regresses against this corpus.
 
 ### Opening links in private windows
 
@@ -331,13 +331,13 @@ The imap task role needs `dynamodb:UpdateItem` on `cabal-addresses` (it already 
 
 Reconfigure events must fire on every `pending` transition so the rule set converges quickly: `lambda/api/new/function.py` already publishes on creation; `lambda/api/confirm_address/function.py` (per 3.1.b) publishes after clearing the flag; the reaper (per 3.1.c) publishes after revoke. The procmail script itself does *not* need to publish -- the rule it just executed becomes a harmless no-op the moment the flag clears, and the next address-change event picks up the rule removal opportunistically.
 
-**Coexistence with the planned end-user procmail framework** (roadmap: the minor point release following 1.2.x). That framework will expose forward and move rules to end users through the admin app. The pending-confirmation rules introduced here coexist cleanly:
+**Coexistence with the planned end-user procmail framework** (on the roadmap for a later release). That framework will expose forward and move rules to end users through the admin app. The pending-confirmation rules introduced here coexist cleanly:
 
 1. The pending rules live in `/etc/procmail-pending.rc`, a system-owned file the end-user framework does not touch. The end-user framework will have its own data model and its own generated file (presumably one per user, sourced via a separate `INCLUDERC`).
 2. The pending rules are `:0 wc` -- side-effect-only, never divert delivery. A user-defined rule that *does* divert (a typical `:0` move-to-folder recipe) could otherwise suppress later rules in the file, but ours run *first* and as `wc` they never block what comes after.
 3. The ordering constraint is one line in `/etc/procmailrc`: put `INCLUDERC=/etc/procmail-pending.rc` ahead of any user-rule INCLUDERC. The end-user framework can append its own includes after ours without renegotiating anything from this version's work.
 
-No reordering of the roadmap is required. The 1.2.x work and the end-user framework live in adjacent procmail niches that don't collide.
+No reordering of the roadmap is required. This plan's work and the end-user framework live in adjacent procmail niches that don't collide.
 
 **Steady-state cost** (the case ~99% of the time): empty include file; procmail reads it, finds nothing, falls through. Approximately free.
 
@@ -373,7 +373,7 @@ Refresh:
 
 `shared/src/api/ApiClient.ts` -- a class wrapping `fetch`. All requests attach `Authorization: <idToken>` via an interceptor that calls the auth service. 401 responses trigger a single retry after a forced token refresh; a second 401 clears the session and surfaces `AuthError.SessionExpired`.
 
-Endpoints needed for 1.2.x:
+Endpoints needed for the initial release:
 
 | Method | HTTP | Endpoint | Notes |
 |---|---|---|---|
@@ -704,11 +704,11 @@ All three are a single iOS app extension target. The host app uses `WindowSizeCl
 
 The user prompt asks for Chrome on Android support. **As of this writing, Chrome stable on Android does not support extensions.** Google has shipped experimental MV3 extension support in Chrome's desktop-Android beta channel, but the rollout is narrow and the path to stable is uncertain. This means:
 
-- Chrome on Android cannot be a 1.2.x deliverable on the stable channel.
+- Chrome on Android cannot be a deliverable of the initial release on the stable channel.
 - Realistic Android browser-extension targets are: Firefox for Android (has supported WebExtensions for years), Microsoft Edge for Android (recent addition), Kiwi Browser (Chromium-based, supports MV2 extensions), Samsung Internet (limited extension support).
 
 Recommended scope:
-1. **In 1.2.x**: confirm the bundle loads in Firefox for Android (this is essentially free given the WebExtensions API parity). Do not commit to a store listing on Firefox; just verify it works. Document the limitation in the user-facing README.
+1. **In the initial release**: confirm the bundle loads in Firefox for Android (this is essentially free given the WebExtensions API parity). Do not commit to a store listing on Firefox; just verify it works. Document the limitation in the user-facing README.
 2. **Defer to a later version**: a proper Android target with a Chromium derivative or via a Firefox add-ons listing. Tracked as a follow-up issue. Re-evaluate when Chrome Android extension support reaches stable.
 
 This is *not* a quiet drop of the user's stated platform target -- it's a flag that the target is materially harder than they may have assumed, and that the right answer is to investigate before committing rather than ship a broken Android target. The trade-off is captured in Open Questions.
@@ -735,12 +735,12 @@ Document any per-platform divergences (popover positioning bugs, scroll behavior
 
 ---
 
-## Out of Scope for 1.2.0
+## Out of Scope for the Initial Release
 
 - **Chrome on Android stable.** Platform limitation; tracked as a follow-up. See Phase 8.
 - **Saved site-to-address mappings.** Knowing which address you gave Stripe is the natural next feature, but introducing a new persistent store (whether server-side or browser-storage-only) is its own design exercise.
 - **Fill existing addresses on sign-in.** Requires the mapping store above; sign-in autofill is the obvious follow-up once it exists.
-- **Reset-password forms.** Distinct heuristics, low immediate value (user already has an address on file with that site). Re-evaluate after 1.2.x ships.
+- **Reset-password forms.** Distinct heuristics, low immediate value (user already has an address on file with that site). Re-evaluate after the initial release ships.
 - **Bulk operations (one-click revoke all addresses for a site, etc.).** Future work.
 - **Token sharing with the React admin app.** If the user is signed in to the admin app in the same browser, it would be nice to share the session with the extension. Possible via `chrome.storage` and a permission to read from the admin domain, but adds complexity for marginal benefit. Defer.
 
@@ -769,7 +769,7 @@ Document any per-platform divergences (popover positioning bugs, scroll behavior
 3. **Single Cognito App Client for all platforms vs one per platform.** The Apple, React, and (planned) Android clients use distinct App Clients today. One per browser target (one Chrome, one Safari) is the same pattern. Default: one per target.
 4. **`manifest.json` per platform vs single shared with build-time post-processing.** Vite plugin can synthesize per-platform manifests from a base. Default: shared base + per-platform overrides in `extensions/{chrome,safari}/manifest.json`, with the build script merging. The overlap is high enough (>90%) that a shared base is worth the cost.
 5. **Pending TTL window.** Default 24h. The procmail clear-on-receive hook (3.1.d) doesn't actually let us shorten this much: the constraint that sets the TTL is not "how long until we're sure the extension's confirm failed" (the procmail hook covers that) but "what's the slowest legitimate form-fill we want to support." A user committing an address, then taking 90 minutes to finish an apartment application, then submitting -- if the TTL is too short, the reaper revokes the address mid-fill and the verification mail bounces. 24h is comfortable; 6h would still cover virtually all real form-fills; 1h is too aggressive. The reaper's env var lets us tune without a redeploy. Revisit after a quarter of usage data; default holds at 24h until then.
-6. **Corpus refresh cadence.** Sites change their sign-up forms frequently. The corpus drifts; the detector regresses against drift. Suggestion: a scheduled job (monthly) that re-snapshots the corpus URLs and surfaces fixtures whose HTML has changed for re-classification. Out of scope for 1.2.x but should be on the roadmap.
+6. **Corpus refresh cadence.** Sites change their sign-up forms frequently. The corpus drifts; the detector regresses against drift. Suggestion: a scheduled job (monthly) that re-snapshots the corpus URLs and surfaces fixtures whose HTML has changed for re-classification. Out of scope for the initial release but should be on the roadmap.
 7. **What happens when `listMyDomains()` returns an empty array?** The user has no authorized apex domains. The popover should explain this and link to the admin app where domains are assigned. The extension is not the right place to handle the empty-state case beyond a clear explanation.
 8. **Visibility of `pending` addresses in the admin app.** A `pending=true` address showing up in the user's address list in the admin app could be confusing -- "I never created this." Options: hide pending addresses from the list entirely, show them with a "pending" badge, or expose a filter. Recommend showing with a badge so the user has a way to manually clean up an orphan if needed. Coordinate with the existing admin app UI in a small follow-up PR.
 9. **Where does the Safari extension live -- the standalone host app (Phase 8) or embedded in the existing Cabalmail apps?** The private-link handoff (Phase 7) nudges toward embedding: an app can only query enablement (`SFSafariExtensionManager.getStateOfSafariExtension`) for an extension in its own bundle, one install covers both mail and extension, and the opaque-token fallback (if the fragment approach fails) needs a shared App Group anyway -- trivially available when the extension and mail app are one bundle. The costs are release coupling (extension updates ride mail-app releases and vice versa) and a larger review surface on every mail release. Default remains the standalone host with a preference-gated menu row; decide before Phase 7 implementation starts.

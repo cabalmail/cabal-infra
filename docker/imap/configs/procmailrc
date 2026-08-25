@@ -4,9 +4,47 @@ LOGFILE=$PMDIR/log
 LOG="
 "
 MAILDIR=$HOME/Maildir       # Make sure this directory exists!
+
+# Procmail runs any action line containing shell metacharacters via
+# $SHELL -c. The compiled user rules below must never reach a shell, so
+# SHELL points at false: the legitimate pipes in this pipeline
+# (push-enqueue here and in compiled rules) contain no metacharacters and
+# are exec'd directly, bypassing SHELL entirely, while a value that
+# somehow smuggled metacharacters past the rule compiler would exec
+# /usr/bin/false instead of a shell. docs/1.x/user-mail-rules-plan.md,
+# "Sandbox the recipient user".
+SHELL=/usr/bin/false
+
+# Procmail processes this file's /etc/procmailrc copy BEFORE setuiding to
+# the recipient, so without this every recipe below - including the
+# compiled user rules the include pulls in - would run as root and write
+# root-owned Maildir files the recipient's own dovecot session cannot
+# read (observed: root:mail 0600 folder deliveries, and a root-owned
+# ~/.procmail/log that then rejects the recipient's appends). DROPPRIVS
+# is procmail's purpose-built switch for exactly this: drop to the
+# recipient here, before the first recipe. The push-spool drain already
+# accepts recipient-owned signal files, so the push path is unaffected.
+DROPPRIVS=yes
+
 :0:
 *^X-Mailer: Outlook Express 3.14159
 IN-spam/
+
+# User-defined mail rules (docs/1.x/user-mail-rules-plan.md): compiled
+# server-side into /etc/procmail-user/<user>.rc, one file per user, by
+# compile-user-rules.py on the reconfigure loop. Placed after the system
+# spam rule and BEFORE the push recipe so a rule that consumes the
+# message decides its push: procmail stops at the first delivering
+# recipe, so deleted mail never buzzes, and filed mail gets its wake
+# signal from a compiler-emitted push-enqueue carrying the destination
+# folder. The CABALRULESDONE guard makes the include run exactly once
+# whichever rcfile copy runs first (same pattern as PUSH_ENQUEUED below).
+:0
+* ! CABALRULESDONE ?? yes
+{
+  CABALRULESDONE=yes
+  INCLUDERC=/etc/procmail-user/$LOGNAME.rc
+}
 
 # Push notifications (docs/0.11.x/push-notifications.md): enqueue a
 # content-free wake signal as a delivery side effect. The :0c carbon-copy

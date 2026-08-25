@@ -44,7 +44,27 @@ aws cognito-idp list-users \
     "/home/${username}/Maildir"
   install -d -o "$username" -g "$username" -m 755 \
     "/home/${username}/.procmail"
-  cp -n /etc/procmailrc "/home/${username}/.procmailrc" 2>/dev/null || true
+  # ~/.procmailrc is system-owned (users have no shell access), so install
+  # the CURRENT template on every sync rather than copy-once: recipe
+  # ordering changes (e.g. the user-rules include landing before the push
+  # recipe, docs/1.x/user-mail-rules-plan.md) must reach existing users,
+  # not just new ones. The in-file guards (CABALRULESDONE, PUSH_ENQUEUED)
+  # make double-processing of /etc/procmailrc + this copy harmless.
+  # Guarded: only the imap image ships /etc/procmailrc - smtp-out runs
+  # this script too (submission auth needs the OS users) but does no
+  # local delivery, and an unguarded install of a missing file aborts
+  # the whole sync under set -e.
+  if [ -f /etc/procmailrc ]; then
+    install -o "$username" -g "$username" -m 644 \
+      /etc/procmailrc "/home/${username}/.procmailrc"
+    # Heal ~/.procmail/log ownership: before DROPPRIVS landed in
+    # procmailrc, the privileged /etc/procmailrc pass could leave the
+    # log root-owned on EFS, permanently blocking the recipient's own
+    # appends. One chown per sync is cheap and idempotent.
+    if [ -f "/home/${username}/.procmail/log" ]; then
+      chown "$username:$username" "/home/${username}/.procmail/log"
+    fi
+  fi
 done
 
 echo "[sync-users] Done."
