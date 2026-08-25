@@ -31,6 +31,7 @@ set -euo pipefail
 
 SPOOL_DIR=/var/spool/cabal-forward
 VIRTUSERTABLE=/etc/mail/virtusertable
+ALIASES_DYNAMIC=/etc/aliases.dynamic
 CACHE_FILE="$HOME/.cabal-rules-reply-cache"
 COUNT_FILE="$HOME/.cabal-rules-reply-count"
 CACHE_WINDOW_SECONDS=$((7 * 24 * 3600))
@@ -86,16 +87,32 @@ if [ -f "$CACHE_FILE" ] \
 fi
 
 # Reply From: the user's own address the original was delivered to.
-# virtusertable rows are "<address>\t<user>"; intersect the user's
-# addresses with the original's To/Cc, first match wins; a user whose
-# addresses appear in neither (Bcc-style delivery) falls back to their
-# first provisioned address. No addresses at all = nothing valid to
-# reply from.
+# virtusertable rows are "<address>\t<target>" where target is either a
+# bare username or, for multi-user addresses, the combined alias name
+# (user1_user2) that /etc/aliases.dynamic expands ("alias: u1, u2") -
+# resolve through the alias file so shared addresses count as the
+# user's. Intersect with the original's To/Cc, first match wins; a user
+# whose addresses appear in neither (Bcc-style delivery) falls back to
+# their first provisioned address. No addresses at all = nothing valid
+# to reply from.
 recipient=""
+aliases_file="$ALIASES_DYNAMIC"
+[ -f "$aliases_file" ] || aliases_file=/dev/null
 declare -a my_addrs=()
 while IFS= read -r addr; do
   my_addrs+=("$addr")
-done < <(awk -v u="$user" '$2 == u { print tolower($1) }' "$VIRTUSERTABLE" 2>/dev/null)
+done < <(awk -v u="$user" '
+  FNR == NR {
+    if (match($0, /^[^:#[:space:]]+:/)) {
+      alias = substr($0, 1, RSTART + RLENGTH - 2)
+      rest = substr($0, RSTART + RLENGTH)
+      gsub(/[[:space:]]/, "", rest)
+      members[alias] = "," rest ","
+    }
+    next
+  }
+  $2 == u || index(members[$2], "," u ",") > 0 { print tolower($1) }
+' "$aliases_file" "$VIRTUSERTABLE")
 if [ ${#my_addrs[@]} -eq 0 ]; then
   echo "[cabal-rules-reply] no addresses for $user; skipping" >&2
   exit 0
