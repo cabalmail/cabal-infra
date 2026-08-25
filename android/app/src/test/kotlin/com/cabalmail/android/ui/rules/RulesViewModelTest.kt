@@ -7,6 +7,7 @@ import com.cabalmail.kit.models.RuleCondition
 import com.cabalmail.kit.models.RuleField
 import com.cabalmail.kit.models.RuleSet
 import com.cabalmail.kit.rules.RulesValidator
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -47,6 +48,11 @@ class RulesViewModelTest {
         var ruleSet = RuleSet()
         var folders = listOf("INBOX", "Receipts")
         var saveError: Exception? = null
+
+        /** When set, `saveRules` records the save then suspends on this gate
+         * — cancellably, like a real HTTP call — mimicking the "server
+         * committed, client hung up" case. */
+        var saveGate: CompletableDeferred<Unit>? = null
         val savedSets = mutableListOf<Pair<List<Rule>, Int>>()
         val createdFolders = mutableListOf<String>()
 
@@ -57,6 +63,7 @@ class RulesViewModelTest {
             expectedVersion: Int,
         ): RuleSet {
             savedSets += rules to expectedVersion
+            saveGate?.await()
             saveError?.let { throw it }
             return RuleSet(rules = rules, version = expectedVersion + 1)
         }
@@ -175,6 +182,50 @@ class RulesViewModelTest {
             assertFalse(state.conflict)
             assertEquals(listOf("Theirs"), state.rules?.map { it.name })
             assertEquals(9, state.version)
+        }
+
+    @Test
+    fun `a mutation during an in-flight save does not cancel the put`() =
+        runTest(dispatcher) {
+            // UAT regression: a keystroke landing while a PUT is in flight
+            // must not cancel that request. The server commits a PUT whether
+            // or not the client hangs up, so an aborted request left
+            // `version` stale and the next save's 409 masqueraded as another
+            // device's edit ("only the A in Amazon was saved").
+            val backend = FakeBackend()
+            backend.ruleSet = RuleSet(rules = listOf(sampleRule()), version = 1)
+            val model = RulesViewModel(backend)
+            advanceUntilIdle()
+
+            val gate = CompletableDeferred<Unit>()
+            backend.saveGate = gate
+            model.update(
+                model.state.value.rules!!
+                    .first()
+                    .copy(name = "A"),
+            )
+            advanceUntilIdle()
+            assertEquals(1, backend.savedSets.size)
+
+            // Keystroke while PUT 1 is parked at the gate: before the fix
+            // this cancelled the save's job, aborting the request.
+            model.update(
+                model.state.value.rules!!
+                    .first()
+                    .copy(name = "Amazon"),
+            )
+            advanceUntilIdle()
+            backend.saveGate = null
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            // The follow-up save carries PUT 1's response version, not a
+            // stale one, and no conflict is reported.
+            assertEquals(2, backend.savedSets.size)
+            assertEquals(2, backend.savedSets[1].second)
+            assertEquals(listOf("Amazon"), backend.savedSets[1].first.map { it.name })
+            assertFalse(model.state.value.conflict)
+            assertEquals(3, model.state.value.version)
         }
 
     @Test

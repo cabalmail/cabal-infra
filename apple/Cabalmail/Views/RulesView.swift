@@ -86,6 +86,18 @@ private struct RulesListView: View {
                 .onDelete { offsets in
                     model.delete(at: offsets)
                 }
+                #if os(macOS)
+                // The toolbar "+" doesn't reliably render in the Settings
+                // sheet, and swipe/EditButton deletion doesn't exist on
+                // macOS — the list itself must carry the affordances (the
+                // rows carry delete; see RuleRow).
+                Button {
+                    model.add()
+                } label: {
+                    Label("Add rule", systemImage: "plus")
+                }
+                .disabled(model.rules.count >= RulesValidator.maxRules)
+                #endif
             } footer: {
                 Text(
                     "Rules run top to bottom on every arriving message; "
@@ -118,19 +130,37 @@ private struct RuleRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+                #if os(macOS)
+                // Visible stand-in for the context menu below: right-click
+                // is the only other route to Duplicate/Delete on macOS,
+                // and nothing advertises it.
+                Spacer()
+                Menu {
+                    rowActions
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                #endif
             }
         }
         .contextMenu {
-            Button {
-                model.duplicate(rule.id)
-            } label: {
-                Label("Duplicate", systemImage: "plus.square.on.square")
-            }
-            Button(role: .destructive) {
-                model.delete(id: rule.id)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
+            rowActions
+        }
+    }
+
+    @ViewBuilder
+    private var rowActions: some View {
+        Button {
+            model.duplicate(rule.id)
+        } label: {
+            Label("Duplicate", systemImage: "plus.square.on.square")
+        }
+        Button(role: .destructive) {
+            model.delete(id: rule.id)
+        } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 }

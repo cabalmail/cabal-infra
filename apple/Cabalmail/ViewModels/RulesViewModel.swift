@@ -66,7 +66,7 @@ final class RulesViewModel {
     /// Debounce for the auto-save PUT; tests shrink it.
     var saveDebounce: Duration = .milliseconds(300)
 
-    private var saveTask: Task<Void, Never>?
+    private var debounceTask: Task<Void, Never>?
     private var saveInFlight = false
     private var pendingSave = false
 
@@ -184,16 +184,21 @@ final class RulesViewModel {
 
     /// Immediate retry for the error state's Retry affordance.
     func retrySave() {
-        saveTask?.cancel()
-        saveTask = Task { await performSave() }
+        debounceTask?.cancel()
+        Task { await performSave() }
     }
 
     private func scheduleSave() {
-        saveTask?.cancel()
-        saveTask = Task {
+        debounceTask?.cancel()
+        debounceTask = Task {
             try? await Task.sleep(for: saveDebounce)
             guard !Task.isCancelled else { return }
-            await performSave()
+            // The PUT runs in its own task: cancelling the debounce (the
+            // next keystroke) must never abort an in-flight request. The
+            // server commits a PUT whether or not the client hangs up, so
+            // an aborted request leaves `version` stale and the next save
+            // misreads its 409 as another device's edit.
+            Task { await performSave() }
         }
     }
 
