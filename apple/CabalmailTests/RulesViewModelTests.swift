@@ -125,6 +125,42 @@ final class RulesViewModelTests: XCTestCase {
         XCTAssertEqual(model.version, 9)
     }
 
+    /// UAT regression: a keystroke landing while a PUT is in flight must not
+    /// cancel that request. The server commits a PUT whether or not the
+    /// client hangs up, so an aborted request left `version` stale and the
+    /// next save's 409 masqueraded as another device's edit ("only the A in
+    /// Amazon was saved").
+    func testMutationDuringInFlightSaveDoesNotCancelThePut() async {
+        let backend = FakeRulesBackend()
+        backend.ruleSet = RuleSet(rules: [sampleRule()], version: 1)
+        let model = makeModel(backend)
+        await model.load()
+        backend.holdSaves = true
+
+        var edited = model.rules[0]
+        edited.name = "A"
+        model.update(edited)
+        await waitForSaves(backend, 1)
+        // Keystroke while PUT 1 is held in flight: before the fix this
+        // cancelled the save task, the (cancellation-aware) backend threw,
+        // and the committed version was never adopted.
+        edited.name = "Amazon"
+        model.update(edited)
+        try? await Task.sleep(for: .milliseconds(50))
+        backend.holdSaves = false
+        backend.releaseHeldSaves()
+        await waitForSaves(backend, 2)
+        for _ in 0..<200 where model.version < 3 {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        // The follow-up save carries PUT 1's response version, not a stale
+        // one, and no conflict is reported.
+        XCTAssertEqual(backend.savedSets[1].expectedVersion, 2)
+        XCTAssertEqual(backend.savedSets[1].rules.map(\.name), ["Amazon"])
+        XCTAssertFalse(model.conflict)
+        XCTAssertEqual(model.version, 3)
+    }
+
     func testListMutations() async {
         let backend = FakeRulesBackend()
         backend.ruleSet = RuleSet(rules: [sampleRule()], version: 1)
@@ -183,12 +219,26 @@ private final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
     var createdFolders: [String] = []
     /// When true, a created folder shows up in the next `listFolders`.
     var createdFolderAppears = false
+    /// When true, `saveRules` records the save then parks until
+    /// `releaseHeldSaves`, and — like URLSession — throws if its task was
+    /// cancelled while parked (the "server committed, client hung up" case).
+    var holdSaves = false
+    private var heldSaves: [CheckedContinuation<Void, Never>] = []
     private(set) var savedSets: [(rules: [Rule], expectedVersion: Int)] = []
+
+    func releaseHeldSaves() {
+        heldSaves.forEach { $0.resume() }
+        heldSaves.removeAll()
+    }
 
     func fetchRules() async throws -> RuleSet { ruleSet }
 
     func saveRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet {
         savedSets.append((rules, expectedVersion))
+        if holdSaves {
+            await withCheckedContinuation { heldSaves.append($0) }
+            try Task.checkCancellation()
+        }
         if let saveError { throw saveError }
         return RuleSet(rules: rules, version: expectedVersion + 1)
     }

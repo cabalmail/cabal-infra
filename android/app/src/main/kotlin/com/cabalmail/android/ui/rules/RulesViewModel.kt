@@ -103,7 +103,7 @@ class RulesViewModel(
     private val mutableState = MutableStateFlow(RulesUiState())
     val state: StateFlow<RulesUiState> = mutableState.asStateFlow()
 
-    private var saveJob: Job? = null
+    private var debounceJob: Job? = null
     private var saveInFlight = false
     private var pendingSave = false
 
@@ -230,16 +230,22 @@ class RulesViewModel(
 
     /** Immediate retry for the error state's Retry affordance. */
     fun retrySave() {
-        saveJob?.cancel()
-        saveJob = viewModelScope.launch { performSave() }
+        debounceJob?.cancel()
+        viewModelScope.launch { performSave() }
     }
 
     private fun scheduleSave() {
-        saveJob?.cancel()
-        saveJob =
+        debounceJob?.cancel()
+        debounceJob =
             viewModelScope.launch {
                 delay(saveDebounceMillis)
-                performSave()
+                // The PUT runs as its own job (a sibling on viewModelScope,
+                // not a child of the debounce): cancelling the debounce (the
+                // next keystroke) must never abort an in-flight request. The
+                // server commits a PUT whether or not the client hangs up,
+                // so an aborted request leaves `version` stale and the next
+                // save misreads its 409 as another device's edit.
+                viewModelScope.launch { performSave() }
             }
     }
 
