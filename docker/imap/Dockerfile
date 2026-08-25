@@ -172,6 +172,7 @@ COPY shared/compile-user-rules-selftest.py /usr/local/bin/compile-user-rules-sel
 # the helper because SHELL=/usr/bin/false forbids inline pipelines).
 COPY shared/cabal-maildir-deliver.sh       /usr/local/bin/cabal-maildir-deliver.sh
 COPY shared/cabal-rules-forward.sh         /usr/local/bin/cabal-rules-forward.sh
+COPY shared/cabal-forward-drain.sh         /usr/local/bin/cabal-forward-drain.sh
 COPY shared/test/compile-user-rules/fixture-rules.json \
      /usr/local/share/cabal/compile-user-rules/fixture-rules.json
 COPY shared/test/compile-user-rules/golden.rc \

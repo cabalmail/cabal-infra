@@ -40,6 +40,12 @@ regenerate() {
   if [ "$TIER" = "imap" ]; then
     makemap hash /etc/mail/access.db       < /etc/mail/access
     makemap hash /etc/mail/virtusertable.db < /etc/mail/virtusertable
+    # Present only when SINKHOLE_ENABLED (rule forwards to sinkhole.test
+    # originate on this tier - see generate-config.sh); the .mc FEATURE
+    # marks it optional, so absence is fine.
+    if [ -f /etc/mail/mailertable ]; then
+      makemap hash /etc/mail/mailertable.db < /etc/mail/mailertable
+    fi
     # Reassemble aliases (static + dynamic) and rebuild the alias db
     /usr/local/bin/assemble-aliases.sh
 

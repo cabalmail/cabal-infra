@@ -255,7 +255,13 @@ PYEOF
 # does not require a docker rebuild - only a task replacement that
 # picks up the new env var. See
 # docs/0.9.x/sinkhole-test-harness-plan.md.
-if [ "$TIER" = "smtp-out" ] && [ "${SINKHOLE_ENABLED:-false}" = "true" ]; then
+# The imap tier joins smtp-out here as of user-mail-rules Phase 2b:
+# rule forwards are submitted by cabal-forward-drain.sh on the imap
+# container, so forward-to-sinkhole test traffic originates there. imap
+# generates no mailertable otherwise (its FEATURE(mailertable) is
+# optional-file), so the sinkhole entry is the whole file on that tier.
+if { [ "$TIER" = "smtp-out" ] || [ "$TIER" = "imap" ]; } \
+    && [ "${SINKHOLE_ENABLED:-false}" = "true" ]; then
   echo "[generate-config] Appending sinkhole.test mailertable entry"
   echo "sinkhole.test	smtp:[sinkhole.cabal.internal]:25" >> /etc/mail/mailertable
 fi
