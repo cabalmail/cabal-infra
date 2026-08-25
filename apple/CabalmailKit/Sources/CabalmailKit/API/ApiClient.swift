@@ -147,6 +147,21 @@ public protocol ApiClient: Sendable {
     /// always sends its complete set; the server replaces the whole `app` map.
     func saveAppPreferences(_ prefs: [String: String]) async throws
 
+    // MARK: Mail rules
+    /// Fetches the caller's whole ordered rule set from `/get_rules`. A user
+    /// with no rules reads as `{rules: [], version: 0}` — never an error.
+    /// The Lambda reads consistently, so a reload right after a
+    /// `RuleSetConflictError` is guaranteed to see the winning write.
+    func listRules() async throws -> RuleSet
+
+    /// Replaces the caller's whole rule set via `/set_rules` (array order is
+    /// precedence). `expectedVersion` carries optimistic concurrency: the
+    /// server rejects a stale writer with 409, surfaced as
+    /// `RuleSetConflictError` so the UI can offer a reload instead of
+    /// interleaving two devices' orderings. Returns the canonicalized set
+    /// (server-assigned ids, invalid forwards stripped) and the new version.
+    func setRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet
+
     // MARK: Navigation cursor
     /// Loads the cross-client navigation cursor from `/get_nav_state`, or nil
     /// when none has been saved yet (the Lambda returns `{}`). See `NavState`.
