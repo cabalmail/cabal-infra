@@ -49,6 +49,17 @@ struct SearchSourceFolderIndex: Equatable {
 
     var isEmpty: Bool { byRow.isEmpty }
 
+    /// Extends the index with a later search page. Existing entries win,
+    /// matching the init's first-in-server-order rule — an earlier page's
+    /// row is the one the user sees highest.
+    mutating func add(_ rows: [SearchedEnvelope]) {
+        for row in rows {
+            let key = RowKey(uid: row.envelope.uid, messageID: row.envelope.messageId)
+            if byRow[key] == nil { byRow[key] = row.folder }
+            if byUID[row.envelope.uid] == nil { byUID[row.envelope.uid] = row.folder }
+        }
+    }
+
     /// The folder `envelope` came from, or nil when this index doesn't
     /// know it (folder mode, or a row that was never part of the result
     /// set).

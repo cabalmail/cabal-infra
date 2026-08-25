@@ -63,15 +63,29 @@ actor FakeImapClient: ImapClient {
         topEnvelopesResult = topEnvelopes
     }
 
-    // Structured-search script (one page; `searchEnvelopesChunked`'s
-    // default implementation stops when `nextCursor` is nil).
+    // Structured-search script. `scriptSearch` scripts one result returned
+    // on every call (fine while `nextCursor` is nil — the chunked walk and
+    // the scroll-driven load-more both stop there). Paging tests script a
+    // queue with `scriptSearchPages`, consumed one page per call; when the
+    // queue drains, calls fall back to the single result, then trap.
     private var searchResult: SearchResult?
+    private var searchPages: [SearchResult] = []
+
+    // Every search request, in order — lets tests assert the limit/cursor
+    // each fetch carried.
+    private(set) var searchCalls: [SearchQuery] = []
 
     func scriptSearch(_ result: SearchResult) {
         searchResult = result
     }
 
+    func scriptSearchPages(_ pages: [SearchResult]) {
+        searchPages = pages
+    }
+
     func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
+        searchCalls.append(query)
+        if !searchPages.isEmpty { return searchPages.removeFirst() }
         guard let searchResult else { return try trap() }
         return searchResult
     }
