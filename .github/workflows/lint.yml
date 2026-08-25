@@ -168,6 +168,11 @@ jobs:
       with:
         tflint_version: v0.63.1
     - name: init-tflint
+      # Authenticated so the ruleset download rides the token's rate
+      # limit; anonymous runner IPs share a 60/hr quota that other
+      # tenants exhaust (observed: 403 on the aws-ruleset fetch).
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       run: tflint --init
     - name: run-linter
       # tflint exits 2 on any finding, failing the PR check. The stacks are at
