@@ -1,13 +1,18 @@
 package com.cabalmail.android.ui.mail
 
+import androidx.annotation.StringRes
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
@@ -33,11 +38,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.theme.LocalLogoTint
+import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.settings.FolderCountDisplay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +61,9 @@ fun FolderListScreen(
     onPoll: () -> Unit = {},
     /** What the per-folder badge shows (plan §6.3 "Folder count display"). */
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
+    subscribedExpanded: Boolean = true,
+    allExpanded: Boolean = false,
+    onToggleSection: (FolderSection) -> Unit = {},
 ) {
     ForegroundPolling(onPoll)
 
@@ -87,6 +97,9 @@ fun FolderListScreen(
                 countDisplay = countDisplay,
                 onOpenFolder = onOpenFolder,
                 onEmptyTrash = onEmptyTrash,
+                subscribedExpanded = subscribedExpanded,
+                allExpanded = allExpanded,
+                onToggleSection = onToggleSection,
             )
         }
     }
@@ -109,6 +122,9 @@ fun FolderPane(
     /** Silent refresh, driven every minute while resumed (plan §7.3). */
     onPoll: () -> Unit = {},
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
+    subscribedExpanded: Boolean = true,
+    allExpanded: Boolean = false,
+    onToggleSection: (FolderSection) -> Unit = {},
 ) {
     ForegroundPolling(onPoll)
 
@@ -122,6 +138,9 @@ fun FolderPane(
             onOpenFolder = onOpenFolder,
             onEmptyTrash = onEmptyTrash,
             selectedFolder = selectedFolder,
+            subscribedExpanded = subscribedExpanded,
+            allExpanded = allExpanded,
+            onToggleSection = onToggleSection,
         )
     }
 }
@@ -144,9 +163,23 @@ private fun FolderListContent(
     onEmptyTrash: () -> Unit,
     modifier: Modifier = Modifier,
     selectedFolder: String? = null,
+    subscribedExpanded: Boolean = true,
+    allExpanded: Boolean = false,
+    onToggleSection: (FolderSection) -> Unit = {},
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
 
+    val folders = state.folders.orEmpty()
+    val folderRow: @Composable (String) -> Unit = { folder ->
+        FolderRow(
+            folder = folder,
+            status = state.statuses[folder],
+            countDisplay = countDisplay,
+            selected = folder == selectedFolder,
+            onOpenFolder = onOpenFolder,
+            onConfirmEmptyTrash = { confirmingEmptyTrash = true },
+        )
+    }
     LazyColumn(modifier = modifier.fillMaxSize()) {
         state.error?.let { message ->
             item {
@@ -158,44 +191,32 @@ private fun FolderListContent(
                 )
             }
         }
-        items(state.folders.orEmpty(), key = { it }) { folder ->
-            ListItem(
-                headlineContent = { Text(folder) },
-                colors =
-                    if (folder == selectedFolder) {
-                        ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                    } else {
-                        ListItemDefaults.colors()
-                    },
-                trailingContent = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val status = state.statuses[folder]
-                        val unseen = status?.unseen ?: 0
-                        val total = status?.messages ?: 0
-                        val badge =
-                            when (countDisplay) {
-                                FolderCountDisplay.UNREAD -> unseen.takeIf { it > 0 }?.toString()
-                                FolderCountDisplay.TOTAL -> total.takeIf { it > 0 }?.toString()
-                                FolderCountDisplay.BOTH ->
-                                    if (total > 0) "$unseen / $total" else null
-                            }
-                        if (badge != null) {
-                            Badge { Text(badge) }
-                        }
-                        if (folder == FoldersViewModel.TRASH_FOLDER) {
-                            IconButton(onClick = { confirmingEmptyTrash = true }) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.empty_trash),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier.clickable { onOpenFolder(folder) },
+        if (FolderSections.sectioned(state.subscribed)) {
+            // Two sections, as in the Apple sidebar: Subscribed, then the
+            // full list. A folder can appear in both, so row keys carry the
+            // section.
+            folderSection(
+                section = FolderSection.SUBSCRIBED,
+                title = R.string.folder_section_subscribed,
+                rows = FolderSections.subscribedRows(folders, state.subscribed),
+                expanded = subscribedExpanded,
+                onToggleSection = onToggleSection,
+                folderRow = folderRow,
             )
-            HorizontalDivider()
+            folderSection(
+                section = FolderSection.ALL,
+                title = R.string.folder_section_all,
+                rows = folders,
+                expanded = allExpanded,
+                onToggleSection = onToggleSection,
+                folderRow = folderRow,
+            )
+        } else {
+            // Nothing subscribed (or an older server): the flat list.
+            items(folders, key = { it }) { folder ->
+                folderRow(folder)
+                HorizontalDivider()
+            }
         }
     }
 
@@ -221,4 +242,110 @@ private fun FolderListContent(
             },
         )
     }
+}
+
+/** One collapsible section: a header item plus the rows it discloses. */
+private fun LazyListScope.folderSection(
+    section: FolderSection,
+    @StringRes title: Int,
+    rows: List<String>,
+    expanded: Boolean,
+    onToggleSection: (FolderSection) -> Unit,
+    folderRow: @Composable (String) -> Unit,
+) {
+    item(key = "header:${section.name}") {
+        SectionHeader(
+            title = stringResource(title),
+            expanded = expanded,
+            onToggle = { onToggleSection(section) },
+        )
+    }
+    items(
+        FolderSections.visibleRows(rows, expanded),
+        key = { "${section.name}:$it" },
+    ) { folder ->
+        folderRow(folder)
+        HorizontalDivider()
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val rotation by animateFloatAsState(FolderSections.chevronRotation(expanded), label = "chevron")
+    val actionLabel =
+        stringResource(
+            if (expanded) R.string.folder_section_collapse else R.string.folder_section_expand,
+            title,
+        )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClickLabel = actionLabel, onClick = onToggle)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+    ) {
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.rotate(rotation),
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun FolderRow(
+    folder: String,
+    status: FolderStatus?,
+    countDisplay: FolderCountDisplay,
+    selected: Boolean,
+    onOpenFolder: (String) -> Unit,
+    onConfirmEmptyTrash: () -> Unit,
+) {
+    ListItem(
+        headlineContent = { Text(folder) },
+        colors =
+            if (selected) {
+                ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            } else {
+                ListItemDefaults.colors()
+            },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val unseen = status?.unseen ?: 0
+                val total = status?.messages ?: 0
+                val badge =
+                    when (countDisplay) {
+                        FolderCountDisplay.UNREAD -> unseen.takeIf { it > 0 }?.toString()
+                        FolderCountDisplay.TOTAL -> total.takeIf { it > 0 }?.toString()
+                        FolderCountDisplay.BOTH ->
+                            if (total > 0) "$unseen / $total" else null
+                    }
+                if (badge != null) {
+                    Badge { Text(badge) }
+                }
+                if (folder == FoldersViewModel.TRASH_FOLDER) {
+                    IconButton(onClick = onConfirmEmptyTrash) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.empty_trash),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        },
+        modifier = Modifier.clickable { onOpenFolder(folder) },
+    )
 }

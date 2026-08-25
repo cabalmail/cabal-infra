@@ -349,6 +349,9 @@ private fun MailNavGraph(
             FolderListScreen(
                 state = state,
                 countDisplay = preferences.folderCountDisplay,
+                subscribedExpanded = preferences.folderSectionSubscribedExpanded,
+                allExpanded = preferences.folderSectionAllExpanded,
+                onToggleSection = viewModel::toggleSection,
                 onRefresh = viewModel::refresh,
                 onPoll = viewModel::poll,
                 onOpenFolder = { folder ->
@@ -426,6 +429,9 @@ private fun MailNavGraph(
                         FolderPane(
                             state = foldersState,
                             countDisplay = preferences.folderCountDisplay,
+                            subscribedExpanded = preferences.folderSectionSubscribedExpanded,
+                            allExpanded = preferences.folderSectionAllExpanded,
+                            onToggleSection = foldersViewModel::toggleSection,
                             selectedFolder = folder,
                             onOpenFolder = { target ->
                                 if (target != folder) {
