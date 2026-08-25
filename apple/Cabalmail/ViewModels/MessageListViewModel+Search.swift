@@ -18,7 +18,7 @@ extension MessageListViewModel {
     /// returns envelopes plus per-row source folders in a single round
     /// trip. Cross-folder results populate `sourceFolderIndex` so
     /// dispose / flag operations route per-row to the correct mailbox.
-    func runSearch(resetFilterTab: Bool = true) async {
+    func runSearch(resetFilterTab: Bool = true, preserveDepth: Bool = false) async {
         // A text search is "All" mode -- its loaded results drive the pill
         // counts. A pill-driven search (`selectFilter`) and the in-place
         // refresh of an active search pass false to keep the pill's `filterTab`.
@@ -39,24 +39,39 @@ extension MessageListViewModel {
         // placeholder asks is "has this term been sent yet", which a failed
         // request answers just as much as a successful one.
         submittedQuery = trimmed
+        // The depth an in-place refresh re-walks to. A fresh search starts
+        // from one page and pages in from there (`loadMoreSearchResults`);
+        // a refresh of an active search (pull, the 60-second background
+        // pass) re-fetches as many rows as the user has already paged in,
+        // so it can't silently truncate their scroll position back to one
+        // page. Cost stays proportional to the depth the user opted into.
+        let targetDepth = preserveDepth && isSearchActive
+            ? max(envelopes.count, Self.searchPageSize)
+            : Self.searchPageSize
+        // Invalidate the old cursor before the await: a load-more that's
+        // mid-flight checks its cursor is still current before appending,
+        // so this reset makes it drop a page that belongs to the outgoing
+        // result set.
+        searchNextCursor = nil
         isLoading = true
         defer { isLoading = false }
         do {
             try await client.imapClient.connectAndAuthenticate()
             let query = buildSearchQuery(text: trimmed, filters: searchFilters)
-            // Fetch the match set in bounded `searchPageSize` chunks by
-            // walking the cursor, rather than asking for the whole set in one
-            // request (Layer 3.2 of the large-mailbox-hardening plan).
+            // Fetch in bounded `searchPageSize` chunks by walking the cursor,
+            // rather than asking for the whole set in one request (Layer 3.2
+            // of the large-mailbox-hardening plan).
             let result = try await client.imapClient.searchEnvelopesChunked(
                 query,
                 pageSize: Self.searchPageSize,
-                maxResults: searchResultCap
+                maxResults: targetDepth
             )
             envelopes = result.envelopes.map(\.envelope)
             sourceFolderIndex = SearchSourceFolderIndex(result.envelopes)
             searchTotalEstimate = result.totalEstimate
             searchTruncated = result.truncated
             searchFoldersSearched = result.foldersSearched
+            searchNextCursor = result.nextCursor
             isSearchActive = true
             errorMessage = nil
         } catch {
@@ -64,13 +79,86 @@ extension MessageListViewModel {
         }
     }
 
+    /// View-facing trigger for the next search page. Hops onto a model-owned
+    /// task so the row `.task` that fired it can be cancelled by scrolling
+    /// without cancelling the fetch mid-flight — the folder window's
+    /// `loadMoreTask` pattern, and the same reason: a propagated cancellation
+    /// would surface as a spurious "cancelled" error. The guards make
+    /// redundant kicks free.
+    func requestMoreSearchResults() {
+        guard isSearchActive, !isLoading, !isLoadingMoreSearch,
+              searchNextCursor != nil else { return }
+        loadMoreSearchTask = Task { [weak self] in await self?.loadMoreSearchResults() }
+    }
+
+    /// Fetches the next page of the active search and appends it — the
+    /// scroll-driven leg of search pagination. Triggered (via
+    /// `requestMoreSearchResults`) by the list nearing the end of the loaded
+    /// matches, and by the visible rows emptying (a pill page the user has
+    /// fully dealt with — every row marked read under Unread — must still be
+    /// able to pull the next page). No-op unless a search is active with a
+    /// cursor and nothing else is fetching.
+    func loadMoreSearchResults() async {
+        guard isSearchActive, !isLoading, !isLoadingMoreSearch,
+              let cursor = searchNextCursor else { return }
+        isLoadingMoreSearch = true
+        defer { isLoadingMoreSearch = false }
+        do {
+            let query = buildSearchQuery(text: submittedQuery, filters: searchFilters)
+            let page = try await client.imapClient.searchEnvelopes(
+                query.page(limit: Self.searchPageSize, cursor: cursor)
+            )
+            // A clearSearch or fresh runSearch during the await owns
+            // `envelopes` now; this page belongs to the outgoing result set.
+            guard isSearchActive, searchNextCursor == cursor else { return }
+            appendSearchPage(page)
+            errorMessage = nil
+        } catch {
+            // Same staleness check: an error from a fetch the user has
+            // already navigated away from isn't worth a banner.
+            guard isSearchActive, searchNextCursor == cursor else { return }
+            errorMessage = "\(error)"
+        }
+    }
+
+    /// Appends one search page, dropping rows already loaded: the cursor is
+    /// date-based, so a page boundary shifting under mailbox churn can
+    /// re-deliver a row from the previous page, and a duplicate would draw
+    /// as a repeated row.
+    private func appendSearchPage(_ page: SearchResult) {
+        var seen = Set(envelopes.map {
+            PageRowKey(folder: sourceFolder(for: $0), uid: $0.uid, messageID: $0.messageId)
+        })
+        let fresh = page.envelopes.filter {
+            seen.insert(
+                PageRowKey(folder: $0.folder, uid: $0.envelope.uid, messageID: $0.envelope.messageId)
+            ).inserted
+        }
+        envelopes.append(contentsOf: fresh.map(\.envelope))
+        sourceFolderIndex.add(fresh)
+        searchTotalEstimate = page.totalEstimate
+        searchTruncated = searchTruncated || page.truncated
+        searchNextCursor = page.nextCursor
+    }
+
+    /// Row identity for the append dedupe. Folder + UID pins a row to its
+    /// mailbox (cross-folder results reuse UIDs); Message-ID separates the
+    /// same-message-filed-twice shape the source-folder index documents.
+    private struct PageRowKey: Hashable {
+        let folder: String
+        let uid: UInt32
+        let messageID: String?
+    }
+
     /// Drive a filter pill. Unread / Flagged run a fresh folder-scoped server
-    /// search so every match in the folder shows -- not just the loaded rows --
-    /// while All returns to folder mode. A pill replaces any text search; the
-    /// richer text-plus-flag combination stays available through the filter
-    /// sheet. The pill stays highlighted via `filterTab`, and because
-    /// `filterTab` is non-`.all` the counts stay server-sourced (see
-    /// `pillCount`) rather than counting the loaded results.
+    /// search so every match in the folder is reachable -- the first page
+    /// loads here and scrolling pages in the rest via
+    /// `loadMoreSearchResults` -- while All returns to folder mode. A pill
+    /// replaces any text search; the richer text-plus-flag combination stays
+    /// available through the filter sheet. The pill stays highlighted via
+    /// `filterTab`, and because `filterTab` is non-`.all` the counts stay
+    /// server-sourced (see `pillCount`) rather than counting the loaded
+    /// results.
     func selectFilter(_ filter: MessageFilter) async {
         guard filter != filterTab else { return }
         filterTab = filter
@@ -114,6 +202,7 @@ extension MessageListViewModel {
         searchTotalEstimate = 0
         searchTruncated = false
         searchFoldersSearched = []
+        searchNextCursor = nil
         envelopes.removeAll()
         totalMessages = 0
         unseen = 0
@@ -136,21 +225,13 @@ extension MessageListViewModel {
         sourceFolderIndex.folder(for: envelope) ?? folder.path
     }
 
-    /// Per-request chunk size for `runSearch`'s envelope fetch. The match set
-    /// is gathered by walking the `/search_envelopes` cursor in batches of
-    /// this size (Layer 3.2 of the large-mailbox-hardening plan), so no single
-    /// request asks the Lambda for the whole set. Mirrors the folder view's
-    /// page size and the Lambda's DEFAULT_LIMIT.
+    /// Per-request page size for search fetches — `runSearch`'s initial page
+    /// (and an in-place refresh's chunked re-walk) and each
+    /// `loadMoreSearchResults` page. No single request asks the Lambda for
+    /// the whole match set (Layer 3.2 of the large-mailbox-hardening plan);
+    /// depth comes from scroll-driven paging instead of an up-front cap.
+    /// Mirrors the folder view's page size and the Lambda's DEFAULT_LIMIT.
     static let searchPageSize = 50
-
-    /// Upper bound on the envelopes `runSearch` collects across all chunks. A
-    /// pill filter promises "all matches in the folder," so it pulls up to the
-    /// Lambda's MAX_LIMIT (200); a free-text search shows the first page and
-    /// leans on the count/disclosure banner for the rest. Derived from
-    /// `filterTab` so a background refresh keeps the wide cap.
-    private var searchResultCap: Int {
-        filterTab == .all ? Self.searchPageSize : 200
-    }
 
     private func buildSearchQuery(text: String, filters: MessageSearchFilters) -> SearchQuery {
         SearchQuery(
@@ -164,8 +245,9 @@ extension MessageListViewModel {
             unread: filters.unread,
             flagged: filters.flagged,
             hasAttachment: filters.hasAttachment
-            // `limit` and `cursor` are owned by `searchEnvelopesChunked`, which
-            // pages the fetch into `searchPageSize` chunks up to `searchResultCap`.
+            // `limit` and `cursor` are owned by the fetch paths: `runSearch`'s
+            // chunked walk and `loadMoreSearchResults`' single page both fill
+            // them per request via `page(limit:cursor:)`.
         )
     }
 }
