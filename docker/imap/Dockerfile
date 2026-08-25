@@ -166,6 +166,12 @@ COPY shared/push-spool-drain.sh            /usr/local/bin/push-spool-drain.sh
 # build-time run below fails the image build on any compiler regression.
 COPY shared/compile-user-rules.py          /usr/local/bin/compile-user-rules.py
 COPY shared/compile-user-rules-selftest.py /usr/local/bin/compile-user-rules-selftest.py
+# Phase 2b delivery helpers the compiled recipes exec: flagged Maildir
+# delivery (cur/ with :2,<flags>, which procmail cannot write natively)
+# and the X-Loop-guarded forward (the formail|sendmail pipeline lives in
+# the helper because SHELL=/usr/bin/false forbids inline pipelines).
+COPY shared/cabal-maildir-deliver.sh       /usr/local/bin/cabal-maildir-deliver.sh
+COPY shared/cabal-rules-forward.sh         /usr/local/bin/cabal-rules-forward.sh
 COPY shared/test/compile-user-rules/fixture-rules.json \
      /usr/local/share/cabal/compile-user-rules/fixture-rules.json
 COPY shared/test/compile-user-rules/golden.rc \

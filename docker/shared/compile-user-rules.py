@@ -20,9 +20,13 @@ rules still apply. Folder existence is checked directly on the filesystem
 (~user/Maildir/.<folder>/) rather than via IMAP LIST: the directory is
 exactly what the emitted recipe will deliver into.
 
-Auxiliary actions flag / markRead / reply are not implemented yet (Phase 2b
-and 2c); a rule carrying them compiles its conditions, destination, and
-forwards, and logs aux_not_implemented for the rest.
+Auxiliary actions (Phase 2b): flag / markRead deliver through the
+cabal-maildir-deliver helper, which writes cur/ with the :2,<flags> info
+suffix procmail's native maildir delivery cannot set; forward runs through
+the cabal-rules-forward helper behind an X-Loop guard condition, so a
+forward that routes back into the same mailbox is forwarded exactly once
+(issue #1266). Reply is not implemented yet (Phase 2c); a Reply rule is
+skipped whole rather than consuming precedence without replying.
 
 Output is deterministic (no timestamps, sorted iteration) so the golden-file
 self-test (compile-user-rules-selftest.py) can compare byte-for-byte.
@@ -39,6 +43,13 @@ OUTPUT_DIR = os.environ.get('RULES_OUTPUT_DIR', '/etc/procmail-user')
 HOME_ROOT = os.environ.get('RULES_HOME_ROOT', '/home')
 TABLE_NAME = os.environ.get('USER_RULES_TABLE_NAME', 'cabal-user-rules')
 PUSH_ENQUEUE = '/usr/local/bin/push-enqueue.sh'
+DELIVER_HELPER = '/usr/local/bin/cabal-maildir-deliver.sh'
+FORWARD_HELPER = '/usr/local/bin/cabal-rules-forward.sh'
+
+# OS usernames reach forward-helper argv and the X-Loop marker; sync-users
+# creates them from Cognito usernames, but re-check the shape before
+# emitting one into a recipe (skip-not-mangle, like everything else).
+USER_SAFE_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 
 MAX_RULES = 100
 MAX_NAME_LENGTH = 100
@@ -179,6 +190,36 @@ def delivery_path(dir_name):
     return '  $DEFAULT' if dir_name == '' else f'  $MAILDIR/{dir_name}/'
 
 
+def deliver_block(dir_name, flags, copy):
+    '''Delivery recipe lines for one maildir target, flagged or plain.
+
+    Unflagged targets keep procmail's native maildir delivery. Flagged
+    targets pipe through cabal-maildir-deliver, which writes cur/ with the
+    :2,<flags> suffix; the `w` flag makes procmail read the helper's exit
+    status, so a helper failure leaves the message for later recipes /
+    DEFAULT instead of losing it.
+    '''
+    if not flags:
+        return ['  :0c:' if copy else '  :0:', delivery_path(dir_name)]
+    target = '"$MAILDIR"' if dir_name == '' else f'"$MAILDIR/{dir_name}"'
+    return ['  :0cw' if copy else '  :0w',
+            f'  | {DELIVER_HELPER} {target} {flags}']
+
+
+def forward_block(user, forwards):
+    '''The guarded forward recipe (Phase 2b; issue #1266).
+
+    The condition skips messages already stamped with this user's X-Loop
+    marker; the helper stamps the outbound copy - together they bound any
+    forward cycle through this mailbox to a single hop.
+    '''
+    marker = escape_value(f'X-Loop: cabal-rules-{user}')
+    return ['  :0cw',
+            f'  * ! ^{marker}',
+            f'  | {FORWARD_HELPER} {user} ' + ' '.join(forwards),
+            '']
+
+
 def push_label(dir_name):
     '''The folder label the wake signal carries ('' = the Maildir root).'''
     return 'INBOX' if dir_name == '' else dir_name.lstrip('.')
@@ -194,12 +235,12 @@ def resolve_folder(folder, folder_exists):
     return dir_name, None
 
 
-def compile_rule(rule, folder_exists):
+def compile_rule(rule, folder_exists, user):
     '''Compiles one enabled rule into its recipe lines.
 
     Returns (lines, aux_skips, None) on success or (None, [], reason) when
-    the whole rule is skipped. aux_skips lists per-rule auxiliary features
-    that were requested but not compiled (logged, not fatal).
+    the whole rule is skipped. aux_skips lists per-rule auxiliary notes
+    (dropped forwards, unimplemented aux) that are logged but not fatal.
     '''
     reason = validate_rule(rule)
     if reason:
@@ -207,24 +248,28 @@ def compile_rule(rule, folder_exists):
     action = rule['action']
     # Reply is a primary effect (Phase 2c): compiling the rest of a reply
     # rule would consume the message's precedence without sending the reply
-    # the rule exists for, so the whole rule skips until reply lands. Flag
-    # and markRead (Phase 2b) are decorations - the rule still files or
-    # forwards correctly without them, so only the aux is skipped.
+    # the rule exists for, so the whole rule skips until reply lands.
     if rule.get('reply'):
         return None, [], 'aux_not_implemented:reply'
-    aux_skips = [f'aux_not_implemented:{key}'
-                 for key in ('flag', 'markRead') if rule.get(key)]
+    aux_skips = []
+    # Maildir info flags for this rule's own deliveries (sorted: F < S).
+    flags = ('F' if rule.get('flag') else '') + ('S' if rule.get('markRead') else '')
+    if action == 'delete':
+        flags = ''
 
-    forwards = [a for a in rule['forward']] if action != 'delete' else []
+    forwards = list(rule['forward']) if action != 'delete' else []
     dropped = [a for a in forwards if not valid_forward(a)]
     if dropped:
         aux_skips.append('forward_invalid_dropped')
     forwards = [a for a in forwards if valid_forward(a)]
+    if forwards and not USER_SAFE_RE.match(user):
+        aux_skips.append('forward_user_unsafe')
+        forwards = []
 
     spill = rule['continueToNext'] and action != 'delete'
     body = []
     if forwards:
-        body += ['  :0c', '  ! ' + ' '.join(forwards), '']
+        body += forward_block(user, forwards)
 
     if action in ('move', 'archive'):
         folder = 'Archive' if action == 'archive' else rule['moveFolder']
@@ -234,10 +279,10 @@ def compile_rule(rule, folder_exists):
         if reason:
             return None, [], reason
         if spill:
-            body += ['  :0c:', delivery_path(dir_name)]
+            body += deliver_block(dir_name, flags, copy=True)
         else:
             body += push_block(push_label(dir_name))
-            body += ['  :0:', delivery_path(dir_name)]
+            body += deliver_block(dir_name, flags, copy=False)
     elif action == 'delete':
         body += ['  :0', '  /dev/null']
     elif action == 'copy':
@@ -248,17 +293,17 @@ def compile_rule(rule, folder_exists):
             dir_name, reason = resolve_folder(folder, folder_exists)
             if reason:
                 return None, [], reason
-            copy_lines += ['  :0c:', delivery_path(dir_name), '']
+            copy_lines += deliver_block(dir_name, flags, copy=True) + ['']
         body += copy_lines
         if not spill:
             body += push_block('INBOX')
-            body += ['  :0:', '  $DEFAULT']
+            body += deliver_block('', flags, copy=False)
         elif body and body[-1] == '':
             body.pop()
     else:  # 'none'
         if not spill:
             body += push_block('INBOX')
-            body += ['  :0:', '  $DEFAULT']
+            body += deliver_block('', flags, copy=False)
         elif body and body[-1] == '':
             body.pop()
 
@@ -291,7 +336,7 @@ def compile_ruleset(user, rules, folder_exists):
             rule_id = rule.get('id', 'r-unknown') if isinstance(rule, dict) else 'r-unknown'
             if isinstance(rule, dict) and rule.get('enabled') is False:
                 continue
-            rule_lines, aux_skips, reason = compile_rule(rule, folder_exists)
+            rule_lines, aux_skips, reason = compile_rule(rule, folder_exists, user)
             skips += [(rule_id, aux) for aux in aux_skips]
             if reason:
                 skips.append((rule_id, reason))
@@ -404,11 +449,11 @@ def main():
             continue
         users_ok += 1
         rules_ok += compiled
-        # aux_ and forward_invalid_dropped are per-rule warnings on rules
-        # that still compiled; only whole-rule skips count here.
+        # aux_* and forward_* are per-rule warnings on rules that still
+        # compiled; only whole-rule skips count here.
         rules_skipped += sum(
             1 for _, r in skips
-            if not r.startswith('aux_') and r != 'forward_invalid_dropped')
+            if not r.startswith('aux_') and not r.startswith('forward_'))
         print(f'[compile-user-rules] compile_ok user={user} rules={compiled} '
               f'bytes={len(content)}')
     for user in sorted(set(rows) - set(users)):

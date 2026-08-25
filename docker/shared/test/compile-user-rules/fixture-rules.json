@@ -1008,6 +1008,88 @@
   },
   {
     "id": "r-000000000032",
+    "name": "Flag and read",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "vip@corp.example"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": true,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000033",
+    "name": "Flag spill",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "flagspill"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-000000000034",
+    "name": "Read copy",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "readcopy"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [
+      "Receipts"
+    ],
+    "flag": false,
+    "markRead": true,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000035",
+    "name": "Flag inbox",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "flaginbox"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000036",
     "name": "Disabled rule",
     "enabled": false,
     "conditions": [
