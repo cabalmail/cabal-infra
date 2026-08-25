@@ -107,6 +107,14 @@ class MessageDetailViewModel(
         load()
     }
 
+    /** Re-runs the initial envelope/body fetch after a failure (the reader's Retry button). */
+    fun retryLoad() {
+        if (mutableState.value.busy) {
+            return
+        }
+        load()
+    }
+
     private fun load() {
         viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
