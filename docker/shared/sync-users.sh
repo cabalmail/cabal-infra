@@ -50,8 +50,14 @@ aws cognito-idp list-users \
   # recipe, docs/1.x/user-mail-rules-plan.md) must reach existing users,
   # not just new ones. The in-file guards (CABALRULESDONE, PUSH_ENQUEUED)
   # make double-processing of /etc/procmailrc + this copy harmless.
-  install -o "$username" -g "$username" -m 644 \
-    /etc/procmailrc "/home/${username}/.procmailrc"
+  # Guarded: only the imap image ships /etc/procmailrc - smtp-out runs
+  # this script too (submission auth needs the OS users) but does no
+  # local delivery, and an unguarded install of a missing file aborts
+  # the whole sync under set -e.
+  if [ -f /etc/procmailrc ]; then
+    install -o "$username" -g "$username" -m 644 \
+      /etc/procmailrc "/home/${username}/.procmailrc"
+  fi
 done
 
 echo "[sync-users] Done."
