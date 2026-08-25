@@ -29,7 +29,7 @@
 # Note makepkg does *not* run this: PKGBUILD fetches the upstream npm tarballs
 # as pinned source=() entries instead, because prepare() must not reach the
 # network and npm is not a makedepend. See Phase 2 of
-# docs/1.1.x/linux-client-plan.md.
+# docs/1.x/linux-client-plan.md.
 #
 # Requires: node + npm.
 

@@ -1,0 +1,130 @@
+# Maintainer: Cabalmail <https://github.com/cabalmail/cabal-infra/issues>
+
+# The Arch package for the Cabalmail desktop client: one binary, `cabalmail`,
+# built from the tagged source.
+#
+# This file is what an AUR consumer builds. CI builds it too, through
+# `cargo xtask package arch`, which stages a copy with `pkgver` stamped from
+# the working tree and the git source pointed at the local checkout - two
+# substitutions and nothing else, so the dependency arrays, the pinned
+# JavaScript, and every build step below are exercised on the push that
+# changed them rather than at release time.
+#
+# `pkgver` is the version this package publishes to the AUR; a release bumps it
+# and resets `pkgrel`. It does not gate CI, which supplies its own.
+#
+# The dependency arrays are held to packaging/deps/arch.txt by a test in
+# xtask - add a package there, not here.
+
+pkgname=cabalmail
+pkgver=1.5.0
+pkgrel=1
+pkgdesc='GTK4 desktop client for Cabalmail, a self-hosted mail system'
+arch=('x86_64' 'aarch64')
+url='https://github.com/cabalmail/cabal-infra'
+license=('AGPL-3.0-or-later')
+depends=('glib2' 'gtk4' 'libadwaita')
+makedepends=('blueprint-compiler' 'git' 'glib2-devel' 'go-md2man' 'rust')
+
+# The composer renders Markdown inside a WebKit view with the same bytes the
+# React and Apple clients use, so a message round-trips identically wherever it
+# was written. react/admin/package.json holds the pins for all three clients -
+# that is where Dependabot bumps them - and a test in xtask fails if these
+# drift from its lockfile.
+#
+# A developer checkout gets these from `cargo xtask sync-vendored`, which
+# copies them out of react/admin/node_modules. makepkg cannot: prepare() must
+# not reach the network, and npm is not a makedepend. The upstream tarballs are
+# pinned sources instead, fetched and checksummed like any other source.
+_marked_version=18.0.2
+_turndown_version=7.2.4
+
+source=("$pkgname::git+$url.git#tag=$pkgver"
+        "marked-$_marked_version.tgz::https://registry.npmjs.org/marked/-/marked-$_marked_version.tgz"
+        "turndown-$_turndown_version.tgz::https://registry.npmjs.org/turndown/-/turndown-$_turndown_version.tgz")
+
+# Both npm tarballs unpack to a directory called `package/`, so the second
+# would overwrite the first. prepare() takes the four files it wants out of
+# each instead.
+noextract=("marked-$_marked_version.tgz"
+           "turndown-$_turndown_version.tgz")
+
+# The git source is verified by its tag, which is what SKIP means here.
+sha256sums=('SKIP'
+            '5e3fa42adc22af98ceb7cc24e53ec48ec70e020e460541d98321ec2a8435fcc9'
+            '05f61bc3f0aeca5e5cd7f1b5492e26b9040bb00708cd41fb1b0f7b216e296fa0')
+
+prepare() {
+  local editor="$srcdir/$pkgname/linux/cabalmail-gtk/resources/editor"
+  install -d "$editor"
+
+  # The same four files scripts/sync-vendored.sh writes, under the same names.
+  bsdtar -xOf "marked-$_marked_version.tgz" package/lib/marked.umd.js > "$editor/marked.umd.js"
+  bsdtar -xOf "marked-$_marked_version.tgz" package/LICENSE.md > "$editor/marked-LICENSE.md"
+  bsdtar -xOf "turndown-$_turndown_version.tgz" package/dist/turndown.js > "$editor/turndown.js"
+  bsdtar -xOf "turndown-$_turndown_version.tgz" package/LICENSE > "$editor/turndown-LICENSE"
+
+  cd "$srcdir/$pkgname/linux"
+  export RUSTUP_TOOLCHAIN=stable
+  # The one network call outside the download stage, and the standard Arch
+  # spelling: crates cannot be expressed as source=() entries without
+  # committing a vendor tree. Everything after this is offline - build() and
+  # check() pass --frozen, which fails rather than resolving.
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/^host: //p')"
+}
+
+build() {
+  cd "$srcdir/$pkgname/linux"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release --package cabalmail-gtk
+
+  # Generated files land under target/, never next to their sources: a build
+  # that dirties the tree it was handed is one nobody can run twice.
+  local staging="target/packaging"
+  install -d "$staging"
+
+  go-md2man -in cabalmail-gtk/data/cabalmail.5.md -out "$staging/cabalmail.5"
+
+  # AppStream wants a release date. The commit's own date is the one answer
+  # that is the same on every machine that builds this revision.
+  local released
+  released="$(git -C "$srcdir/$pkgname" log -1 --format=%cs)"
+
+  sed -e "s|@BINARY@|$pkgname|g" \
+    cabalmail-gtk/data/com.cabalmail.Cabalmail.desktop.in \
+    > "$staging/com.cabalmail.Cabalmail.desktop"
+  sed -e "s|@BINARY@|$pkgname|g" -e "s|@VERSION@|$pkgver|g" -e "s|@DATE@|$released|g" \
+    cabalmail-gtk/data/com.cabalmail.Cabalmail.metainfo.xml.in \
+    > "$staging/com.cabalmail.Cabalmail.metainfo.xml"
+}
+
+check() {
+  cd "$srcdir/$pkgname/linux"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  # The kit needs no display and no network, so it runs inside makepkg
+  # unmodified. --release reuses what build() already compiled.
+  cargo test --frozen --release --package cabalmail-kit
+}
+
+package() {
+  cd "$srcdir/$pkgname/linux"
+  local staging="target/packaging"
+
+  install -Dm755 target/release/cabalmail -t "$pkgdir/usr/bin/"
+  install -Dm644 "$staging/cabalmail.5" -t "$pkgdir/usr/share/man/man5/"
+  install -Dm644 "$staging/com.cabalmail.Cabalmail.desktop" -t "$pkgdir/usr/share/applications/"
+  install -Dm644 "$staging/com.cabalmail.Cabalmail.metainfo.xml" -t "$pkgdir/usr/share/metainfo/"
+  install -Dm644 cabalmail-gtk/data/icons/hicolor/scalable/apps/com.cabalmail.Cabalmail.svg \
+    -t "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
+
+  # A commented reference copy of every setting, for reading and for copying
+  # out of. Nothing is installed to /etc/xdg/cabalmail/: that path belongs to
+  # the administrator, and a file shipped there would make "no system
+  # configuration present" indistinguishable from "the administrator chose
+  # these defaults".
+  install -Dm644 cabalmail-gtk/data/config.example.toml -t "$pkgdir/usr/share/doc/$pkgname/"
+
+  install -Dm644 "$srcdir/$pkgname/LICENSE.md" -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

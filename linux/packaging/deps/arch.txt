@@ -1,0 +1,44 @@
+# System packages needed to build and lint the Arch package for the Linux
+# client. One list, read by the CI container today and by `makepkg` through the
+# arrays in packaging/arch/PKGBUILD, which a test in xtask holds to this file.
+#
+# Blank lines and lines starting with `#` are comments; everything else is a
+# pacman package name. Install with:
+#
+#   grep -vE '^\s*(#|$)' packaging/deps/arch.txt | xargs pacman -S --needed
+#
+# The bracketed section headings are how the drift test knows which PKGBUILD
+# array a package belongs in. They are comments to every other reader.
+#
+# Arch ships headers in the main package, so there is no -dev split to mirror
+# the Debian list. webkitgtk-6.0 joins [depends] in Phase 5, with the composer.
+
+# [depends]
+gtk4
+libadwaita
+# Linked directly, not only through gtk4: the binary calls into GLib, GObject,
+# and GIO, so it is a dependency in its own right rather than a transitive one.
+glib2
+
+# [makedepends]
+# Compiles resources/*.blp to GtkBuilder XML. Its absence is a hard build
+# failure, not a fallback — see cabalmail-gtk/build.rs.
+blueprint-compiler
+# The git source, and the tag `cargo xtask package arch` derives pkgver from.
+git
+# `glib-compile-resources`, which build.rs runs to bundle the GResource. Arch
+# splits it out of glib2; a machine with the library alone cannot build.
+glib2-devel
+# Renders cabalmail-gtk/data/cabalmail.5.md to roff. Chosen over pandoc, which
+# is the same conversion behind a gigabyte of Haskell, and packaged on every
+# distro this client targets - the Phase 8 control file and spec use it too.
+go-md2man
+# Arch's rust provides cargo; listing both is redundant. This build uses
+# whatever Arch ships rather than the rustup pin, which is always at or ahead
+# of it.
+rust
+
+# [tools]
+# Not a build dependency: what `cargo xtask package arch` lints the PKGBUILD
+# and the built package with once makepkg is done.
+namcap

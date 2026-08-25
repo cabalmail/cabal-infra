@@ -3,7 +3,7 @@
 A native GTK4 + libadwaita desktop client, packaged first for Arch (AUR) and,
 from Phase 8, for Debian/Ubuntu and Fedora/RHEL 10. The design, the phase plan,
 and the rationale behind every stack decision live in
-[`docs/1.1.x/linux-client-plan.md`](../docs/1.1.x/linux-client-plan.md).
+[`docs/1.x/linux-client-plan.md`](../docs/1.x/linux-client-plan.md).
 
 Like the Apple client, this client talks only to the existing Lambda API — no
 IMAP library, no SMTP transport.
@@ -46,6 +46,15 @@ compiled to GtkBuilder XML by `cabalmail-gtk/build.rs`, which fails loudly and
 names the package if the compiler is missing rather than falling back to a
 second UI format.
 
+Building the *package* needs more than building the source tree does —
+`glib2-devel`, `go-md2man`, and `namcap`. Those come from
+[`packaging/deps/arch.txt`](packaging/deps/arch.txt), which is also where the
+PKGBUILD's dependency arrays come from:
+
+```sh
+grep -vE '^\s*(#|$)' packaging/deps/arch.txt | sudo pacman -S --needed -
+```
+
 ## Build and test
 
 ```sh
@@ -66,19 +75,26 @@ by the workflow, so neither can drift from the other:
 | --- | --- |
 | `cargo xtask ci` | `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace checks, app tests — in that order, stopping at the first failure. Wraps the app tests in `xvfb-run` when there is no session to use. `--step <name>` runs one of them, which is how each CI job runs exactly one; `--list` prints the names. |
 | `cargo xtask sync-vendored` | Materializes marked and turndown into `cabalmail-gtk/resources/editor/` from `react/admin/node_modules`, running `npm ci` first if needed. Needs node and npm; the files it writes are gitignored. Wraps [`scripts/sync-vendored.sh`](scripts/sync-vendored.sh), the sibling of `apple/scripts/sync-vendored.sh`. |
-| `cargo xtask package <distro>` | Declared; lands with Arch packaging in Phase 2. |
+| `cargo xtask package arch` | Builds the Arch package from the working tree and lints it with `namcap`. Stages a copy of [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) with `pkgver` taken from `git describe` and the git source pointed at the local checkout, then runs `makepkg`. Needs an Arch machine with `packaging/deps/arch.txt` installed, and refuses to run as root, as makepkg does. `deb` and `rpm` name their Phase 8 work item. |
 | `cargo xtask smoke` | Declared; lands with the test harness in Phase 2. |
 | `cargo xtask fixtures` | Declared; lands with the HTTP contract fixtures in Phase 2. |
 
-The three that have not landed answer with the work item that implements them
+The two that have not landed answer with the work item that implements them
 rather than with "unknown subcommand" — the vocabulary is fixed now so the
 plan, the workflow, and this README can name an operation before it exists.
 
+makepkg builds from git, so `cargo xtask package arch` packages `HEAD`: an
+uncommitted change is not in the package, and the run says so before it starts.
+The version it stamps is `<latest tag>.r<commits since>.g<object>`, which pacman
+orders after the tag it came from. The `pkgver` committed in the PKGBUILD is the
+one an AUR publication carries; a release bumps it.
+
 `react/admin/package.json` holds the marked and turndown version pins for all
 three clients, which is what keeps the Linux composer inside Dependabot's
-reach. `makepkg` does not run `sync-vendored`: the PKGBUILD fetches the same
-upstream tarballs as pinned `source=()` entries, because `prepare()` must not
-reach the network (Phase 2).
+reach. `makepkg` does not run `sync-vendored`: npm is not a build dependency of
+the package, so the PKGBUILD fetches the same upstream tarballs as pinned,
+checksummed `source=()` entries and a test fails if those pins drift from
+React's lockfile.
 
 The app is built against **GTK 4.14 and libadwaita 1.4** — Ubuntu 24.04's
 versions — through the `v4_14` and `v1_4` crate features, so newer API fails to
@@ -111,6 +127,7 @@ pre-push gate and a failure names itself:
 | `workspace-checks` | `workspace-checks` | `ubuntu-latest` — the checks that reach outside the workspace, including the Lambda contract |
 | `app-build` | `clippy` | `ubuntu:24.04` container — the API floor |
 | `app-test` | `app-tests` | `ubuntu:24.04` container, under Xvfb |
+| `package-arch` | — | `archlinux:base-devel` container — `cargo xtask package arch` as an unprivileged build user |
 
 `app-build` runs clippy rather than a build of its own: `clippy --workspace
 --all-targets` is a full compile, so building against the floor and linting are
@@ -122,17 +139,27 @@ distro packaging builds offline against vendored crates, so a dependency bump
 whose lock update was never committed has to fail in CI rather than resolve
 silently there and fail in `makepkg`.
 
+`package-arch` is the exception to one-job-one-step: packaging needs an Arch
+container and several minutes, which no developer should pay for on every
+pre-push gate, so it runs `cargo xtask package arch` instead. It is also the
+only job that builds what a user installs rather than what a developer builds —
+`makepkg` clones the checkout, builds it offline against the committed lock,
+runs the kit tests inside `check()`, and `namcap` lints both the PKGBUILD and
+the package.
+
 System packages come from [`packaging/deps/ubuntu.txt`](packaging/deps/ubuntu.txt)
-— one list, read by the CI containers now and by the Debian packaging in Phase
+and [`packaging/deps/arch.txt`](packaging/deps/arch.txt) — one list per
+distribution, read by the CI containers now, by the PKGBUILD's dependency
+arrays (a test holds them to the list), and by the Debian packaging in Phase
 8. `xtask/tests/workflow_contract.rs` holds the pieces together: a step with no
 job, a job naming a step that does not exist, a job spelling its own `cargo`
 command, a floor step that escaped the container, or a file a job reaches for
 that is missing from the workflow's `paths:` filter all fail there rather than
 passing quietly.
 
-Packaging (`package-arch`), the packaged-artifact smoke test, coverage, and the
-`cargo-deny`/dependency-tree guards are the remaining Phase 2 work items; the
-workflow names the item that owns each.
+The packaged-artifact smoke test, coverage, and the `cargo-deny`/dependency-tree
+guards are the remaining Phase 2 work items; the workflow names the item that
+owns each.
 
 ## Configuration
 
@@ -162,8 +189,9 @@ in place. `cargo run -p cabalmail-gtk` opens a window; there is nothing to sign
 in to yet, which is Phase 3.
 
 Phase 2 is under way. The `linux.yml` workflow (work item 1) is in place, so
-every push to a named branch is gated on the same steps a developer runs. Still
-to come: toolchain and dependency pinning for the packaging containers (item 2),
-the contract-test harness and fixtures (item 3), Arch packaging (item 4),
-release artifacts (item 5), and the guard rails (item 6) — which together fill
-in `cargo xtask package`, `smoke`, and `fixtures`.
+every push to a named branch is gated on the same steps a developer runs, and
+Arch packaging (work item 4) builds and lints an installable package on every
+push. Still to come: the contract-test harness and fixtures (item 3), release
+artifacts (item 5), and the guard rails (item 6) — which together fill in
+`cargo xtask smoke` and `fixtures`. The remaining pinning of work item 2 — the
+coverage, licence, and advisory tools — lands with the jobs that run them.
