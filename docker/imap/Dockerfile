@@ -96,6 +96,7 @@ RUN dnf install -y \
       httpd-tools \
       make \
       procps-ng \
+      findutils \
       awscli-2 jq \
       pip \
       libicu \

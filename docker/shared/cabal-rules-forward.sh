@@ -39,7 +39,10 @@ if [ ! -d "$SPOOL_DIR" ]; then
   echo "[cabal-rules-forward] spool missing: $SPOOL_DIR" >&2
   exit 64
 fi
-count=$(find "$SPOOL_DIR" -maxdepth 1 -name 'fwd.*' 2>/dev/null | wc -l)
+# No stderr suppression here: under `set -e` a failing find (this died
+# silently for want of findutils once) must leave its reason in the
+# user's procmail log, not vanish.
+count=$(find "$SPOOL_DIR" -maxdepth 1 -name 'fwd.*' | wc -l)
 if [ "$count" -ge "$MAX_SPOOL_FILES" ]; then
   echo "[cabal-rules-forward] spool full ($count files)" >&2
   exit 75
