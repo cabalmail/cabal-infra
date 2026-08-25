@@ -15,6 +15,17 @@ MAILDIR=$HOME/Maildir       # Make sure this directory exists!
 # "Sandbox the recipient user".
 SHELL=/usr/bin/false
 
+# Procmail processes this file's /etc/procmailrc copy BEFORE setuiding to
+# the recipient, so without this every recipe below - including the
+# compiled user rules the include pulls in - would run as root and write
+# root-owned Maildir files the recipient's own dovecot session cannot
+# read (observed: root:mail 0600 folder deliveries, and a root-owned
+# ~/.procmail/log that then rejects the recipient's appends). DROPPRIVS
+# is procmail's purpose-built switch for exactly this: drop to the
+# recipient here, before the first recipe. The push-spool drain already
+# accepts recipient-owned signal files, so the push path is unaffected.
+DROPPRIVS=yes
+
 :0:
 *^X-Mailer: Outlook Express 3.14159
 IN-spam/

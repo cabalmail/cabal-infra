@@ -729,6 +729,13 @@ mailbox, not the container or other users' mailboxes.
 
 We additionally:
 
+- Set `DROPPRIVS=yes` at the top of the system `procmailrc`, ahead of
+  every recipe. Procmail processes the `/etc/procmailrc` copy BEFORE
+  setuiding to the recipient, so without the drop the compiled user
+  rules would execute privileged and write root-owned Maildir files
+  the recipient's own IMAP session cannot read (observed during Phase
+  2 verification). The push-spool drain already accepts
+  recipient-owned signal files, so the wake-signal path is unaffected.
 - Pin the procmail executable to the system-supplied binary
   (`/usr/bin/procmail`) and refuse to run if the binary is replaced.
 - Set `SHELL=/usr/bin/false` in the system `procmailrc` so any `|`

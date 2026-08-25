@@ -57,6 +57,13 @@ aws cognito-idp list-users \
   if [ -f /etc/procmailrc ]; then
     install -o "$username" -g "$username" -m 644 \
       /etc/procmailrc "/home/${username}/.procmailrc"
+    # Heal ~/.procmail/log ownership: before DROPPRIVS landed in
+    # procmailrc, the privileged /etc/procmailrc pass could leave the
+    # log root-owned on EFS, permanently blocking the recipient's own
+    # appends. One chown per sync is cheap and idempotent.
+    if [ -f "/home/${username}/.procmail/log" ]; then
+      chown "$username:$username" "/home/${username}/.procmail/log"
+    fi
   fi
 done
 
