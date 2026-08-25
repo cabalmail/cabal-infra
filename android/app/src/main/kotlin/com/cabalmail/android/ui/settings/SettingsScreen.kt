@@ -77,6 +77,8 @@ fun SettingsScreen(
     folderChoices: List<String>?,
     onLoadFolderChoices: () -> Unit,
     onPushFoldersChange: (Set<String>) -> Unit,
+    /** Opens the mail-rules editor (`docs/1.x/user-mail-rules-plan.md` 4b). */
+    onOpenRules: () -> Unit,
     onSignOut: () -> Unit,
     /** Null when hosted as a top-level destination (no back arrow). */
     onBack: (() -> Unit)?,
@@ -177,6 +179,13 @@ fun SettingsScreen(
                 empty = stringResource(R.string.settings_signature_empty),
                 singleLine = false,
                 onChange = { signature -> onUpdate { it.copy(signature = signature) } },
+            )
+
+            SectionHeader(stringResource(R.string.rules_title))
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.rules_title)) },
+                supportingContent = { Text(stringResource(R.string.rules_settings_hint)) },
+                modifier = Modifier.clickable(onClick = onOpenRules),
             )
 
             SectionHeader(stringResource(R.string.settings_actions))

@@ -43,4 +43,11 @@ sealed class CabalmailException(
         message: String,
         cause: Throwable? = null,
     ) : CabalmailException(message, cause)
+
+    /**
+     * A `/set_rules` write lost the optimistic-concurrency race (HTTP 409):
+     * another device saved first. Reload via `/get_rules` (which reads
+     * consistently, so the winning write is guaranteed visible) and reapply.
+     */
+    class RuleSetConflict : CabalmailException("Rules changed on another device; reload.")
 }

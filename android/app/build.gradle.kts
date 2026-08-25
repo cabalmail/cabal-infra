@@ -167,5 +167,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit.jupiter)
+    // RulesViewModelTest drives viewModelScope on a test main dispatcher.
+    testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
