@@ -601,7 +601,10 @@ Per-rule compilation:
      resolved at delivery time by intersecting the user's
      virtusertable addresses with the original's To/Cc (first
      provisioned address as the Bcc-delivery fallback) -- the compiler
-     cannot know it, since it varies per message.
+     cannot know it, since it varies per message. Multi-user addresses
+     map to a combined alias name in the virtusertable, so the
+     resolution expands aliases through `/etc/aliases.dynamic` and a
+     shared address counts as each member user's.
 8. **Spill-through wrapping.** Procmail's default is to stop after
    the first matching delivering recipe. To express "continue to
    next rule":
