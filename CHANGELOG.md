@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-08-26
+
+### Added
+- Android: **Retry for failed message loads.** When the reader can't load a
+  message body, the error now comes with a Retry button that re-fetches the
+  message, matching the Apple clients.
+- Android: **Collapsible folder list sections.** The mail tab's folder
+  list now mirrors the Apple clients' two sections: Subscribed, expanded
+  by default, and All folders, collapsed by default. Each section's
+  disclosure is remembered on the device, and unread badges now refresh
+  proactively for subscribed folders only.
+- Android: **Mail rules editor.** Settings gains a Mail rules screen:
+  author, reorder, enable, duplicate, and delete the server-side mail
+  rules the IMAP tier applies to arriving messages. Rules match
+  From / To / Cc / Subject / Body, file into existing folders (move,
+  copy, archive, delete), and can flag, mark read, forward, or
+  auto-reply. Edits auto-save with cross-device conflict detection,
+  matching the Apple clients.
+- Apple: **Mail rules editor.** Settings gains a Rules section on every
+  platform: author, reorder, enable, duplicate, and delete the server-side
+  mail rules the IMAP tier applies to arriving messages. Rules match
+  From / To / Cc / Subject / Body, file into existing folders (move, copy,
+  archive, delete), and can flag, mark read, forward, or auto-reply.
+  Edits auto-save with cross-device conflict detection; on macOS the
+  editor opens as a sheet from the Settings window.
+
+### Fixed
+- Android: **Filter pills search the whole folder.** The Unread and Flagged
+  pills narrowed only the already-loaded rows, so on a large folder they
+  showed an empty list whenever the matches sat deeper than the loaded
+  window — on a very large folder, effectively always. They now run the same
+  folder-scoped server search as the Apple clients and page through every
+  match as the list scrolls.
+- Apple: **Search and filter results page in as you scroll.** The Unread and
+  Flagged pills (and text search) loaded a fixed first batch — at most 200
+  rows for a pill — and stopped, so on a large folder most matches were
+  unreachable. Results now load a page at a time as the list scrolls, all the
+  way through the match set, and a refresh of an active search keeps the
+  depth already loaded instead of snapping back to the first page.
+- **Envelope decoding tolerates non-UTF-8 bytes in BODYSTRUCTURE.** A message
+  whose MIME metadata carries raw 8-bit bytes (an unencoded Latin-1 attachment
+  filename, for instance) failed the whole envelope page with a server error:
+  one such message broke every `/search_envelopes` or `/list_envelopes`
+  response whose page contained it, which surfaced as the Unread filter
+  showing an empty list. Byte strings in a BODYSTRUCTURE now decode with a
+  Latin-1 fallback instead of failing the request.
+- Apple: **Add and delete rules on macOS.** Once a first rule existed, the
+  macOS rules window offered no way to add another or delete one: the
+  toolbar add button doesn't render in the Settings sheet, and row deletion
+  hid behind iOS-only swipe gestures and an unadvertised right-click menu.
+  The list now carries an explicit "Add rule" row and a per-row menu with
+  Duplicate and Delete.
+- Android: **Reliable rule auto-save.** Typing in the rules editor could
+  cancel an in-flight save that the server had already committed, leaving
+  the app behind the server's rule-set version; the next auto-save was then
+  misreported as "Rules updated on another device", and Reload threw away
+  the newer edits. The debounce timer and the save request are now
+  independent, so a keystroke only resets the timer.
+- Apple: **Reliable rule auto-save.** Typing in the rules editor could
+  cancel an in-flight save that the server had already committed, leaving
+  the app behind the server's rule-set version; the next auto-save was then
+  misreported as "Rules updated on another device", and Reload threw away
+  the newer edits. The debounce timer and the save request are now
+  independent, so a keystroke only resets the timer.
+
 ## [1.6.0] - 2026-08-25
 
 ### Added
