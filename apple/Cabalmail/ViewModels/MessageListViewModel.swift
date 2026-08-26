@@ -131,6 +131,20 @@ final class MessageListViewModel {
     var searchTruncated: Bool = false
     var searchFoldersSearched: [String] = []
 
+    /// Opaque next-page cursor for the active search; nil = every match
+    /// loaded (or no search active). Cleared before every fresh search so
+    /// an in-flight load-more can detect it raced a reset and drop its
+    /// page. Written by the `+Search.swift` extension only.
+    var searchNextCursor: String?
+
+    /// A search load-more page is in flight — guards re-entry and drives
+    /// the list's tail spinner.
+    var isLoadingMoreSearch = false
+
+    /// Model-owned task for the search load-more fetch, so it outlives the
+    /// triggering row's `.task` cancellation (the `loadMoreTask` pattern).
+    var loadMoreSearchTask: Task<Void, Never>?
+
     /// Per-row source folder for cross-folder results. Empty in folder
     /// mode and single-folder searches; `sourceFolder(for:)` falls back
     /// to `folder.path` then. Internal (not private) so the search
@@ -333,7 +347,7 @@ final class MessageListViewModel {
         // search keeps the result set fresh against any concurrent
         // mailbox churn.
         if isSearchActive {
-            await runSearch(resetFilterTab: false)
+            await runSearch(resetFilterTab: false, preserveDepth: true)
             return
         }
         // Search scope with no active search has nothing to refresh — and no

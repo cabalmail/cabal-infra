@@ -213,6 +213,15 @@ struct MessageListView: View {
         .overlay {
             searchResultsPlaceholder(model: model, visibleRowCount: visible.count)
         }
+        // A search/filter list that empties out from under the user (every
+        // loaded Unread row marked read, say) has no rows left to fire the
+        // near-end prefetch, so kick the next page from here instead. The
+        // model's guards make this a no-op outside an active search or once
+        // the cursor runs dry.
+        .onChange(of: visible.isEmpty) { _, isEmpty in
+            guard isEmpty, model.isSearchActive else { return }
+            model.requestMoreSearchResults()
+        }
         // Search input lives on the search *surface*, not the folder list:
         // `.searchable` on the iPhone search tab (driving the iOS 26 tab-bar
         // morph) and the sidebar field on iPad/macOS — both bind this model's

@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 data class FoldersUiState(
     /** Null until the first load; server order (INBOX pinned first). */
     val folders: List<String>? = null,
+    /** Paths the user has subscribed to (`sub_folders` on the wire). */
+    val subscribed: Set<String> = emptySet(),
     val statuses: Map<String, FolderStatus> = emptyMap(),
     val refreshing: Boolean = false,
     val error: String? = null,
@@ -46,12 +48,18 @@ class FoldersViewModel(
             }
             try {
                 val api = container.requireApi()
-                val folders = api.listFolders().folders
-                mutableState.update { it.copy(folders = folders, refreshing = false, error = null) }
+                val list = api.listFolders()
+                val folders = list.folders
+                val subscribed = list.subscribedFolders.toSet()
+                mutableState.update {
+                    it.copy(folders = folders, subscribed = subscribed, refreshing = false, error = null)
+                }
                 // Unread badges arrive as their STATUS calls land; a folder
-                // whose STATUS fails just shows no badge.
+                // whose STATUS fails just shows no badge. Proactive STATUS
+                // is scoped to subscribed folders (see FolderSections).
                 val statuses =
-                    folders
+                    FolderSections
+                        .statusTargets(folders, subscribed)
                         .map { folder ->
                             async {
                                 folder to runCatching { api.folderStatus(folder) }.getOrNull()
@@ -65,6 +73,20 @@ class FoldersViewModel(
                     mutableState.update {
                         it.copy(refreshing = false, error = userMessage(exception, "Could not load folders"))
                     }
+                }
+            }
+        }
+    }
+
+    /** Flips a section's disclosure; persisted on the device via preferences. */
+    fun toggleSection(section: FolderSection) {
+        viewModelScope.launch {
+            container.preferences.update { prefs ->
+                when (section) {
+                    FolderSection.SUBSCRIBED ->
+                        prefs.copy(folderSectionSubscribedExpanded = !prefs.folderSectionSubscribedExpanded)
+                    FolderSection.ALL ->
+                        prefs.copy(folderSectionAllExpanded = !prefs.folderSectionAllExpanded)
                 }
             }
         }

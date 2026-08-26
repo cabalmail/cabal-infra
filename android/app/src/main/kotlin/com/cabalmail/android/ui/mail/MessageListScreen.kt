@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -138,12 +139,19 @@ fun MessageListScreen(
                 (info.visibleItemsInfo.lastOrNull()?.index ?: 0)
         }.distinctUntilChanged()
             .collect { (first, last) ->
-                if (first != null) {
-                    if (state.filter == MessageFilter.ALL) {
+                // Live state, not the captured parameter: the effect outlives
+                // the composition it launched in, and the load-more compare
+                // must see the rows earlier pages already appended.
+                val live = viewModel.state.value
+                if (live.filter == MessageFilter.ALL) {
+                    if (first != null) {
                         viewModel.onVisibleRange(first, last)
-                    } else if (last >= state.filteredRows.size - FILTER_LOAD_MARGIN) {
-                        viewModel.requestMoreForFilter()
                     }
+                } else if (first == null || last >= live.filteredRows.size - FILTER_LOAD_MARGIN) {
+                    // `first == null` is the emptied list — every loaded match
+                    // dealt with — which must still be able to pull the next
+                    // page; the view model's guards make the call idempotent.
+                    viewModel.loadMoreForFilter()
                 }
             }
     }
@@ -297,6 +305,25 @@ fun MessageListScreen(
                                     },
                                 )
                                 HorizontalDivider()
+                            }
+                        }
+                        if (state.filterLoading) {
+                            item(key = "filter-loading") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+                        } else if (state.filteredRows.isEmpty() && state.filterCursor == null) {
+                            item(key = "filter-empty") {
+                                Text(
+                                    text = stringResource(R.string.filter_no_matches),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(16.dp),
+                                )
                             }
                         }
                     }

@@ -70,6 +70,7 @@ struct SettingsView: View {
             accountSection
             readingSection(bindable: preferences)
             composingSection(bindable: preferences)
+            RulesSettingsSection()
             actionsSection(bindable: preferences)
             // Push ships on iOS and macOS only; the visionOS build has no
             // PushRegistrar, so the section is compiled out with it.
@@ -329,6 +330,58 @@ extension SettingsView {
                 .labelsHidden()
             }
         }
+    }
+}
+
+/// Rules block for the Settings form: the entry to the mail-rules editor
+/// (`docs/1.x/user-mail-rules-plan.md`, Phase 4), between Composing and
+/// Actions per the plan. Its own struct (like `AboutSettingsSection`) so
+/// `SettingsView` stays inside the type-body-length budget.
+private struct RulesSettingsSection: View {
+    #if os(macOS)
+    // Same platform split as the Acknowledgements row: the macOS Settings
+    // scene has no NavigationStack, so a NavigationLink would render
+    // permanently disabled — present the editor as a sheet with its own
+    // stack instead. Sized for the list-plus-pushed-editor flow.
+    @State private var showingRules = false
+    #endif
+
+    var body: some View {
+        Section {
+            rulesRow
+        } header: {
+            Text("Rules")
+        } footer: {
+            Text("File, flag, forward, or auto-answer incoming mail before it reaches your inbox.")
+        }
+    }
+
+    @ViewBuilder
+    private var rulesRow: some View {
+        #if os(macOS)
+        Button {
+            showingRules = true
+        } label: {
+            Label("Mail rules", systemImage: "list.bullet.rectangle")
+        }
+        .sheet(isPresented: $showingRules) {
+            NavigationStack {
+                RulesView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showingRules = false }
+                        }
+                    }
+            }
+            .frame(minWidth: 560, minHeight: 480)
+        }
+        #else
+        NavigationLink {
+            RulesView()
+        } label: {
+            Label("Mail rules", systemImage: "list.bullet.rectangle")
+        }
+        #endif
     }
 }
 

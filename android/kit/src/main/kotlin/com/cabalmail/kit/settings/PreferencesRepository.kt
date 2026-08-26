@@ -53,6 +53,8 @@ class PreferencesRepository(
         val PUSH_FOLDERS = stringSetPreferencesKey("push_folders")
         val DEFAULT_SORT = stringPreferencesKey("default_sort")
         val DEFAULT_SORT_DESCENDING = booleanPreferencesKey("default_sort_descending")
+        val FOLDER_SECTION_SUBSCRIBED_EXPANDED = booleanPreferencesKey("folder_section_subscribed_expanded")
+        val FOLDER_SECTION_ALL_EXPANDED = booleanPreferencesKey("folder_section_all_expanded")
     }
 
     private val pushRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -117,6 +119,10 @@ class PreferencesRepository(
             pushFolders = store[Keys.PUSH_FOLDERS] ?: defaults.pushFolders,
             defaultSort = wireEnum<DefaultSort>(store[Keys.DEFAULT_SORT]) ?: defaults.defaultSort,
             defaultSortDescending = store[Keys.DEFAULT_SORT_DESCENDING] ?: defaults.defaultSortDescending,
+            folderSectionSubscribedExpanded =
+                store[Keys.FOLDER_SECTION_SUBSCRIBED_EXPANDED] ?: defaults.folderSectionSubscribedExpanded,
+            folderSectionAllExpanded =
+                store[Keys.FOLDER_SECTION_ALL_EXPANDED] ?: defaults.folderSectionAllExpanded,
         )
     }
 
@@ -141,6 +147,8 @@ class PreferencesRepository(
         store[Keys.PUSH_FOLDERS] = value.pushFolders
         store[Keys.DEFAULT_SORT] = value.defaultSort.wire
         store[Keys.DEFAULT_SORT_DESCENDING] = value.defaultSortDescending
+        store[Keys.FOLDER_SECTION_SUBSCRIBED_EXPANDED] = value.folderSectionSubscribedExpanded
+        store[Keys.FOLDER_SECTION_ALL_EXPANDED] = value.folderSectionAllExpanded
     }
 
     companion object {

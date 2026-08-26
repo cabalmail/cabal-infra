@@ -4,6 +4,11 @@ import CabalmailKit
 import AppKit
 #endif
 
+/// How close to the end of the loaded search matches a row must be to
+/// trigger the next `/search_envelopes` page — the search-mode analogue of
+/// the folder window's `prefetchDistance`.
+private let searchPrefetchMargin = 10
+
 // Selection plumbing for `MessageListView`: the two `List` variants (native
 // multiple selection on wide/keyboard layouts, single selection on compact
 // iPhone) and the helpers that derive row state and handle the keyboard
@@ -53,8 +58,26 @@ extension MessageListView {
                             // `ForEach` given two elements with one id draws only
                             // the first — the other match disappears from the
                             // list while the header still counts it.
-                            ForEach(MessageRowIdentity.identify(visible)) { row in
+                            let rows = MessageRowIdentity.identify(visible)
+                            ForEach(rows) { row in
                                 messageRow(row.envelope, model: model, visible: visible)
+                                    .task {
+                                        // Nearing the end of the loaded matches
+                                        // pulls the next search page (no-op
+                                        // outside an active search or once the
+                                        // cursor runs dry). The fetch itself
+                                        // runs on a model-owned task so this
+                                        // row scrolling away can't cancel it.
+                                        if rows.suffix(searchPrefetchMargin)
+                                            .contains(where: { $0.id == row.id }) {
+                                            model.requestMoreSearchResults()
+                                        }
+                                    }
+                            }
+                            if model.isLoadingMoreSearch {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
                             }
                         }
                     }

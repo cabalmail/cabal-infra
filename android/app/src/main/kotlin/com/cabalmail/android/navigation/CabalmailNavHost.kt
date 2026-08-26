@@ -74,6 +74,9 @@ import com.cabalmail.android.ui.mail.MessageListViewModel
 import com.cabalmail.android.ui.mail.SearchScreen
 import com.cabalmail.android.ui.mail.SearchViewModel
 import com.cabalmail.android.ui.mail.disposeAdvanceTarget
+import com.cabalmail.android.ui.rules.RuleEditorScreen
+import com.cabalmail.android.ui.rules.RulesScreen
+import com.cabalmail.android.ui.rules.RulesViewModel
 import com.cabalmail.android.ui.settings.SettingsScreen
 import com.cabalmail.android.ui.settings.SettingsViewModel
 import com.cabalmail.kit.models.NavState
@@ -349,6 +352,9 @@ private fun MailNavGraph(
             FolderListScreen(
                 state = state,
                 countDisplay = preferences.folderCountDisplay,
+                subscribedExpanded = preferences.folderSectionSubscribedExpanded,
+                allExpanded = preferences.folderSectionAllExpanded,
+                onToggleSection = viewModel::toggleSection,
                 onRefresh = viewModel::refresh,
                 onPoll = viewModel::poll,
                 onOpenFolder = { folder ->
@@ -426,6 +432,9 @@ private fun MailNavGraph(
                         FolderPane(
                             state = foldersState,
                             countDisplay = preferences.folderCountDisplay,
+                            subscribedExpanded = preferences.folderSectionSubscribedExpanded,
+                            allExpanded = preferences.folderSectionAllExpanded,
+                            onToggleSection = foldersViewModel::toggleSection,
                             selectedFolder = folder,
                             onOpenFolder = { target ->
                                 if (target != folder) {
@@ -563,8 +572,48 @@ private fun MailNavGraph(
                 folderChoices = folderChoices,
                 onLoadFolderChoices = viewModel::loadFolderChoices,
                 onPushFoldersChange = viewModel::updatePushFolders,
+                onOpenRules = { navController.navigate("rules") },
                 onSignOut = onSignOut,
                 onBack = null,
+            )
+        }
+
+        composable("rules") {
+            val viewModel: RulesViewModel =
+                viewModel(factory = RulesViewModel.factory(container))
+            val state by viewModel.state.collectAsState()
+            RulesScreen(
+                state = state,
+                onAdd = { template ->
+                    val added = if (template == null) viewModel.add() else viewModel.add(template)
+                    added?.let { navController.navigate("rules/$it") }
+                },
+                onOpenRule = { navController.navigate("rules/$it") },
+                onSetEnabled = viewModel::setEnabled,
+                onMove = viewModel::move,
+                onDuplicate = { viewModel.duplicate(it) },
+                onDelete = viewModel::delete,
+                onReload = viewModel::load,
+                onRetrySave = viewModel::retrySave,
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable("rules/{ruleId}") { entry ->
+            // The editor shares the list's view model (and so its debounced
+            // whole-set save and version) by scoping to the "rules"
+            // back-stack entry.
+            val parentEntry = remember(entry) { navController.getBackStackEntry("rules") }
+            val viewModel: RulesViewModel =
+                viewModel(parentEntry, factory = RulesViewModel.factory(container))
+            val state by viewModel.state.collectAsState()
+            RuleEditorScreen(
+                state = state,
+                ruleId = entry.arguments?.getString("ruleId").orEmpty(),
+                onUpdate = viewModel::update,
+                onCreateArchiveFolder = viewModel::createArchiveFolder,
+                onReload = viewModel::load,
+                onBack = { navController.popBackStack() },
             )
         }
 

@@ -1503,7 +1503,22 @@ def decode_body_structure(data):
         elif isinstance(obj, tuple):
             return_value.append(decode_body_structure(obj))
         elif isinstance(obj, bytes):
-            return_value.append(obj.decode())
+            return_value.append(decode_struct_bytes(obj))
         else:
             return_value.append(obj)
     return return_value
+
+
+def decode_struct_bytes(raw):
+    '''Decodes one BODYSTRUCTURE byte string, tolerating non-UTF-8 bytes.
+
+    BODYSTRUCTURE strings are ASCII per RFC 3501, but real-world messages
+    leak raw 8-bit bytes into MIME parameter values (unencoded Latin-1
+    filenames and the like). A strict decode here fails the whole envelope
+    page over one such message, so fall back to Latin-1, which maps every
+    byte and keeps the common single-byte-charset case readable.
+    '''
+    try:
+        return raw.decode()
+    except UnicodeDecodeError:
+        return raw.decode('latin-1')
