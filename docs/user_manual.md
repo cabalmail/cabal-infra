@@ -43,6 +43,7 @@ Every address lives on its own subdomain (`foo@bar.example.com`) and delivers to
 - **Triage.** Swipe right to toggle read/unread; swipe left to archive (inside Archive, the same gesture restores). Multi-select for bulk move, flag, read/unread, and delete. Filter the list (All / Unread / Flagged) and change the sort order from the toolbar.
 
   <img src="./app_screens/ios_swipe.png" alt="Swiping a message row left on iPhone reveals the Archive action" width="300" />
+- **Rules.** Settings → Mail rules: ordered rules applied to every arriving message — file into a folder, flag, mark read, forward, auto-reply, or delete, with conditions on From / To / Cc / Subject / Body. Edits auto-save and follow your account across devices. See [Mail rules](./mail-rules.md) for the full behavior, limits, and the "why didn't my rule fire" checklist.
 - **Trash.** Deleting moves a message to Trash. Permanent deletion — per message or Empty Trash — happens only inside Trash and cannot be undone.
 - **Drafts** autosave and sync through the Drafts folder: start a reply on one device, finish it on another.
 - **Compose** supports rich text and attachments; replies pick the From address and recipients from the original message, and forwards carry the original attachments.
