@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-08-26
+
+### Added
+- **Mail-rules alarms and documentation.** Always-on CloudWatch alarms
+  for the rules pipeline — compiler self-test failures at imap start,
+  rule-skip counts breaking from their baseline, rule-driven
+  forward/reply bursts (loop indicator), and set_rules p99 write
+  latency past the 1s editor budget — plus docs/mail-rules.md, the
+  as-shipped user and operator reference, linked from the user manual
+  and operations docs.
+
 ## [1.7.0] - 2026-08-26
 
 ### Added
