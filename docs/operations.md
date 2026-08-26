@@ -58,6 +58,10 @@ Clients display senders' BIMI logos (fetched and sanitized server-side by the `f
 
 The smtp-in tier runs OpenDKIM and OpenDMARC milters that verify SPF, DKIM, and DMARC on every inbound message and stamp the verdicts into an `Authentication-Results` header under the control domain's authserv-id. The clients display the verdicts; nothing is rejected because of them. See [Inbound sender authentication](./inbound-auth.md) for the milter chain and the header trust rule.
 
+# Mail rules
+
+Users can author ordered mail-handling rules (file, flag, mark read, forward, auto-reply, delete) in the native clients' Settings; the imap tier compiles them into per-user procmail and applies them to every arriving message ahead of default delivery. User input never becomes procmail syntax directly — a hardened compiler validates, escapes, and sandboxes everything, and a golden-file self-test gates the image build and container start. See [Mail rules](./mail-rules.md) for the user-facing behavior, the limits, the "why didn't my rule fire" checklist, and where the compiled rules, logs, metrics, and alarms live.
+
 # Durable relay queues
 
 Both SMTP tiers keep sendmail's deferred-mail queue on shared EFS, so a task replacement cannot destroy queued mail — a sibling or successor task drains whatever was left behind. The roughly-15-minute sendmail restart cadence in the tier logs is the intentional reconfiguration fallback, not a crash loop. See [Durable relay queues](./mail-queues.md).
