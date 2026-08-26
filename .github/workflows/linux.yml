@@ -24,6 +24,16 @@ on:
       # would sit unreported until someone next touched linux/ - by which time
       # the client is 400ing on every preference push.
       - 'lambda/api/set_preferences/function.py'
+      # Same reasoning, for the other two files the workspace checks read from
+      # outside linux/. The Arch PKGBUILD carries the composer's marked and
+      # turndown versions verbatim, and Dependabot bumps them in React's
+      # lockfile: without this path a bump merges green and the package ships
+      # stale pins. LICENSE.md is what the package installs as its licence.
+      #
+      # Every such file is registered in linux/xtask/tests/support/mod.rs, and
+      # a test there fails if one is missing from this list.
+      - 'react/admin/package-lock.json'
+      - 'LICENSE.md'
 
 # A stale result is never worth finishing; keyed on the ref so the named
 # branches do not cancel each other.

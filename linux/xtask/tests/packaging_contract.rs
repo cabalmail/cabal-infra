@@ -13,6 +13,8 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+mod support;
+
 fn linux_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -21,10 +23,7 @@ fn linux_dir() -> PathBuf {
 }
 
 fn repo_root() -> PathBuf {
-    linux_dir()
-        .parent()
-        .expect("the workspace lives inside the repository")
-        .to_path_buf()
+    support::repo_root()
 }
 
 fn read(path: &Path) -> String {
@@ -91,7 +90,7 @@ fn section(name: &str) -> BTreeSet<String> {
 /// The version `npm ci` would install, out of React's lockfile — the pin the
 /// PKGBUILD has to carry, and the one Dependabot bumps.
 fn locked_version(package: &str) -> String {
-    let lock = read(&repo_root().join("react/admin/package-lock.json"));
+    let lock = read(&support::repo_input("react/admin/package-lock.json"));
     let key = format!("\"node_modules/{package}\"");
     let at = lock
         .find(&key)
@@ -242,7 +241,7 @@ fn everything_the_package_installs_exists() {
         );
     }
     assert!(
-        repo_root().join("LICENSE.md").is_file(),
+        support::repo_input("LICENSE.md").is_file(),
         "the PKGBUILD installs LICENSE.md, which does not exist"
     );
 }

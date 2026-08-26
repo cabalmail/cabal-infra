@@ -157,6 +157,14 @@ command, a floor step that escaped the container, or a file a job reaches for
 that is missing from the workflow's `paths:` filter all fail there rather than
 passing quietly.
 
+The same applies to files the *tests* read from outside `linux/` — the Lambda
+handler behind the preferences contract, React's lockfile behind the PKGBUILD's
+JavaScript pins. A check over a file this workflow does not fire on reports its
+drift on the next unrelated push, long after the change that caused it merged.
+Those files are registered in [`xtask/tests/support/mod.rs`](xtask/tests/support/mod.rs)
+and read through `repo_input`, which refuses an unregistered path; the workflow
+contract fails if a registered one is missing from `paths:`.
+
 The packaged-artifact smoke test, coverage, and the `cargo-deny`/dependency-tree
 guards are the remaining Phase 2 work items; the workflow names the item that
 owns each.
