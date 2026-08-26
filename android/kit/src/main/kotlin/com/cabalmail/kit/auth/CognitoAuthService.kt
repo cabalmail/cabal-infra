@@ -248,6 +248,9 @@ class CognitoAuthService(
                         put("REFRESH_TOKEN", refreshToken)
                     }
                 },
+                // A refresh Cognito refuses means the session is over, not
+                // that a credential was mistyped — nobody typed anything here.
+                notAuthorized = { CabalmailException.AuthExpired() },
             )
         // REFRESH_TOKEN_AUTH omits the refresh token from the response —
         // reuse the existing one so subsequent refreshes keep working.
@@ -255,9 +258,16 @@ class CognitoAuthService(
         return if (refreshed.refreshToken == null) refreshed.copy(refreshToken = refreshToken) else refreshed
     }
 
+    /**
+     * @param notAuthorized what a `NotAuthorizedException` means for this call.
+     *   Cognito answers it both to a sign-in with a bad password and to a
+     *   refresh whose token has expired or been revoked, and only the caller
+     *   knows which it asked for (#1288).
+     */
     private suspend fun call(
         target: String,
         body: JsonObject,
+        notAuthorized: () -> CabalmailException = { CabalmailException.InvalidCredentials() },
     ): JsonObject {
         val response =
             httpClient.post(endpoint) {
@@ -269,7 +279,7 @@ class CognitoAuthService(
         if (!response.status.isSuccess()) {
             val (code, message) = parseError(text)
             when (code) {
-                "NotAuthorizedException" -> throw CabalmailException.InvalidCredentials()
+                "NotAuthorizedException" -> throw notAuthorized()
                 // A pool trigger (require_admin_mfa, check_invite, ...)
                 // rejected the call; the trigger's own message is the
                 // user-facing part, not Cognito's wrapper around it.

@@ -183,6 +183,55 @@ final class AuthServiceTests: XCTestCase {
             XCTAssertEqual(error, .notSignedIn)
         }
     }
+
+    // #1288: Cognito answers `NotAuthorizedException` to a refresh whose
+    // token has expired or been revoked, exactly as it does to a sign-in
+    // with a bad password. Only the refresh path knows nobody typed
+    // anything, so it is the one that has to say "session expired".
+    func testExpiredRefreshTokenMapsToAuthExpired() async throws {
+        let initialTokens = """
+        {
+          "AuthenticationResult": {
+            "IdToken": "OLD-ID",
+            "AccessToken": "OLD-ACCESS",
+            "RefreshToken": "REFRESH",
+            "ExpiresIn": 1,
+            "TokenType": "Bearer"
+          }
+        }
+        """
+        let errorType = "com.amazonaws.cognito.identity.model#NotAuthorizedException"
+        let refusal = """
+        {"__type":"\(errorType)","message":"Refresh Token has been revoked"}
+        """
+        let http = RecordingHTTPTransport(responses: [
+            (Data(initialTokens.utf8), 200),
+            (Data(refusal.utf8), 400),
+        ])
+        let clockRef = ClockReference(value: Date(timeIntervalSince1970: 1_000))
+        let service = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: http,
+            secureStore: InMemorySecureStore(),
+            clock: { clockRef.value }
+        )
+
+        _ = try await service.signIn(username: "alice", password: "hunter2")
+        clockRef.value = Date(timeIntervalSince1970: 1_100)
+
+        do {
+            _ = try await service.currentIdToken()
+            XCTFail("Expected the refused refresh to surface as an expired session")
+        } catch let error as CabalmailError {
+            XCTAssertEqual(error, .authExpired)
+        }
+        // The refusal has to have come from the refresh, not the sign-in.
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 2)
+        let refreshBody = try JSONSerialization.jsonObject(with: requests[1].httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(refreshBody?["AuthFlow"] as? String, "REFRESH_TOKEN_AUTH")
+    }
+
 }
 
 /// MFA challenge and TOTP enrollment coverage (identity plan Phase 1).

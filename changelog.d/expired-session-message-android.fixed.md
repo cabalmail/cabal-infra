@@ -1,0 +1,1 @@
+- Android: **Expired sessions say so.** A refresh token that has aged out or been revoked draws the same `NotAuthorizedException` from Cognito as a mistyped password, and the client mapped both to "Invalid username or password". The refresh path now reports "Your session expired — sign in again" while a genuine sign-in failure still reports the credential.
