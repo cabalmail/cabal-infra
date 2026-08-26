@@ -457,7 +457,7 @@ private fun MailNavGraph(
                                     // messages entry rather than stacking one
                                     // per visited folder.
                                     navController.navigate("messages/${Uri.encode(target)}") {
-                                        popUpTo("folders")
+                                        popUpTo(MAIL_HUB_ROUTE)
                                         launchSingleTop = true
                                     }
                                 }
@@ -658,16 +658,14 @@ private fun NavHostController.openCursor(
     compactWidth: Boolean,
 ) {
     val folder = state.folder ?: return
-    val uid = state.uid?.takeIf { it > 0 }
-    // singleTop: the target list may already be on top (the INBOX launch
-    // view, or the list the user is looking at) — reuse it rather than
-    // stacking a duplicate.
-    if (!compactWidth && uid != null) {
-        navigate("messages/${Uri.encode(folder)}?uid=$uid") { launchSingleTop = true }
-        return
+    val plan = cursorNavigation(Uri.encode(folder), state.uid, compactWidth)
+    // The target list may already be on top (the INBOX launch view, or the
+    // list the user is looking at). Rewind to the hub rather than reusing
+    // that entry: singleTop matches on the destination, and every folder
+    // shares one — see CursorNavigation.
+    navigate(plan.listRoute) {
+        plan.popUpTo?.let { popUpTo(it) }
+        launchSingleTop = true
     }
-    navigate("messages/${Uri.encode(folder)}") { launchSingleTop = true }
-    if (uid != null) {
-        navigate("message/${Uri.encode(folder)}/$uid")
-    }
+    plan.readerRoute?.let { navigate(it) }
 }
