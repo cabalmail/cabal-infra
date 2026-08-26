@@ -127,6 +127,17 @@ extension FolderListView {
         #endif
     }
 
+    /// Foreground for the folder name: accent while the folder has
+    /// unread messages, dimmed to secondary once it's caught up. Uses
+    /// the same pinned asset-catalog accent and selected-row white
+    /// flip as `iconForeground` (see the tint note there).
+    func folderNameForeground(hasUnread: Bool, isSelected: Bool) -> AnyShapeStyle {
+        #if !os(macOS)
+        if isSelected { return AnyShapeStyle(Color.white) }
+        #endif
+        return hasUnread ? AnyShapeStyle(Color("AccentColor")) : AnyShapeStyle(.secondary)
+    }
+
     /// Render the count badge text honoring the user's
     /// `folderCountDisplay` preference. Returns `nil` when nothing
     /// should be shown so the badge capsule collapses entirely (no
