@@ -2,6 +2,7 @@ package com.cabalmail.android.navigation
 
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -74,6 +75,7 @@ import com.cabalmail.android.ui.mail.MessageListViewModel
 import com.cabalmail.android.ui.mail.SearchScreen
 import com.cabalmail.android.ui.mail.SearchViewModel
 import com.cabalmail.android.ui.mail.disposeAdvanceTarget
+import com.cabalmail.android.ui.mail.fitsThreePanes
 import com.cabalmail.android.ui.rules.RuleEditorScreen
 import com.cabalmail.android.ui.rules.RulesScreen
 import com.cabalmail.android.ui.rules.RulesViewModel
@@ -102,7 +104,7 @@ enum class TopLevel(
 private val MAIL_ROUTES =
     setOf("folders", "messages/{folder}?uid={uid}", "search?folder={folder}", "message/{folder}/{uid}")
 
-/** The folder phone-width launches open into. */
+/** The folder phone-width and three-pane-width launches open into. */
 private const val INBOX = "INBOX"
 
 /**
@@ -210,44 +212,6 @@ fun CabalmailNavHost(
         container.sendQueue.notices.collect { notice -> snackbarHostState.showSnackbar(notice) }
     }
 
-    // Phones launch straight into INBOX, with the folder list beneath it on
-    // the back stack; wide windows keep the folder list as the hub.
-    // Process-scoped (like the one-shots above) so an activity recreation
-    // doesn't push a second copy onto the restored stack, and consumed even
-    // on wide windows so a later resize to compact doesn't yank mid-session.
-    LaunchedEffect(Unit) {
-        if (!container.launchDestinationDone) {
-            container.launchDestinationDone = true
-            if (compactWidth) {
-                navController.navigate("messages/${Uri.encode(INBOX)}")
-            }
-        }
-    }
-
-    // Resume cursor (plan §4.5): a cursor this install wrote restores
-    // silently; one from another device only offers a prompt — hosted on the
-    // app-wide snackbar (like the unsent-draft prompt) so it shows over the
-    // INBOX launch view too — and launch never yanks the user unbidden.
-    val resumeMessage = stringResource(R.string.resume_prompt)
-    val resumeAction = stringResource(R.string.resume_action)
-    LaunchedEffect(Unit) {
-        val cursor = container.navCursor.restoreOnce() ?: return@LaunchedEffect
-        if (cursor.local) {
-            navController.openCursor(cursor.state, compactWidth)
-            return@LaunchedEffect
-        }
-        val result =
-            snackbarHostState.showSnackbar(
-                message = resumeMessage,
-                actionLabel = resumeAction,
-                withDismissAction = true,
-                duration = SnackbarDuration.Indefinite,
-            )
-        if (result == SnackbarResult.ActionPerformed) {
-            navController.openCursor(cursor.state, compactWidth)
-        }
-    }
-
     // The suite shows on top-level destinations; on phones it hides inside
     // nested mail screens (list / reader / compose / search) to give the
     // content the full height, while the rail stays put on wider windows.
@@ -289,12 +253,63 @@ fun CabalmailNavHost(
                 }
                 // The banner already sits under the status bar; tell the
                 // screens' Scaffolds not to pad for it a second time.
-                Box(
+                // BoxWithConstraints so the launch destination below can ask
+                // the same question MailListDetailScreen does, on the same
+                // width: the mail content area beside the rail.
+                BoxWithConstraints(
                     modifier =
                         Modifier
                             .weight(1f)
                             .then(if (!online) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
                 ) {
+                    // Phones launch straight into INBOX with the folder list
+                    // beneath it on the back stack, and windows wide enough
+                    // for the three-pane mail view do too — their folder
+                    // list rides along as the leading pane. Medium widths
+                    // (list | detail, no folder pane) keep the folder list
+                    // as the hub, since there it is otherwise only reachable
+                    // by backing out. Process-scoped (like the one-shots
+                    // above) so an activity recreation doesn't push a second
+                    // copy onto the restored stack, and consumed even when
+                    // staying on the hub so a later resize doesn't yank
+                    // mid-session.
+                    val launchIntoInbox = compactWidth || fitsThreePanes(maxWidth)
+                    LaunchedEffect(Unit) {
+                        if (!container.launchDestinationDone) {
+                            container.launchDestinationDone = true
+                            if (launchIntoInbox) {
+                                navController.navigate("messages/${Uri.encode(INBOX)}")
+                            }
+                        }
+                    }
+
+                    // Resume cursor (plan §4.5): a cursor this install wrote
+                    // restores silently; one from another device only offers
+                    // a prompt — hosted on the app-wide snackbar (like the
+                    // unsent-draft prompt) so it shows over the INBOX launch
+                    // view too — and launch never yanks the user unbidden.
+                    // Composed after the launch destination so its navigation
+                    // lands on top of the INBOX launch view, not under it.
+                    val resumeMessage = stringResource(R.string.resume_prompt)
+                    val resumeAction = stringResource(R.string.resume_action)
+                    LaunchedEffect(Unit) {
+                        val cursor = container.navCursor.restoreOnce() ?: return@LaunchedEffect
+                        if (cursor.local) {
+                            navController.openCursor(cursor.state, compactWidth)
+                            return@LaunchedEffect
+                        }
+                        val result =
+                            snackbarHostState.showSnackbar(
+                                message = resumeMessage,
+                                actionLabel = resumeAction,
+                                withDismissAction = true,
+                                duration = SnackbarDuration.Indefinite,
+                            )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            navController.openCursor(cursor.state, compactWidth)
+                        }
+                    }
+
                     MailNavGraph(
                         navController = navController,
                         container = container,
