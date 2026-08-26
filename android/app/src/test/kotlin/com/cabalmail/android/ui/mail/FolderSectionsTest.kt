@@ -1,5 +1,6 @@
 package com.cabalmail.android.ui.mail
 
+import com.cabalmail.kit.models.FolderStatus
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -54,5 +55,17 @@ class FolderSectionsTest {
     @Test
     fun `without subscription data every folder keeps its badge`() {
         assertEquals(folders, FolderSections.statusTargets(folders, emptySet()))
+    }
+
+    @Test
+    fun `only a known positive unseen count highlights the name`() {
+        assertTrue(FolderSections.hasUnread(FolderStatus(messages = 40, unseen = 3)))
+        assertFalse(FolderSections.hasUnread(FolderStatus(messages = 40, unseen = 0)))
+    }
+
+    @Test
+    fun `an unknown status rests dim, not highlighted`() {
+        assertFalse(FolderSections.hasUnread(null))
+        assertFalse(FolderSections.hasUnread(FolderStatus(messages = 40)))
     }
 }

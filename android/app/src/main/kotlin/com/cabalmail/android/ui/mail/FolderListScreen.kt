@@ -314,7 +314,17 @@ private fun FolderRow(
     onConfirmEmptyTrash: () -> Unit,
 ) {
     ListItem(
-        headlineContent = { Text(folder) },
+        headlineContent = {
+            Text(
+                folder,
+                color =
+                    if (FolderSections.hasUnread(status)) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
+        },
         colors =
             if (selected) {
                 ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
