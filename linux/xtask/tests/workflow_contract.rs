@@ -35,19 +35,45 @@ const STEPS_ON_THE_FLOOR: &[&str] = &["clippy", "app-tests"];
 const SKIP_MARKER: &str = "skipping: no display server";
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("the workspace lives inside the repository")
-        .to_path_buf()
+    support::repo_root()
 }
 
 fn workflow() -> String {
-    let path = repo_root()
-        .join(".github")
-        .join("workflows")
-        .join("linux.yml");
+    let path = support::repo_input(".github/workflows/linux.yml");
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+}
+
+/// The pull-request gate. `lint.yml`'s `rust` job runs the same
+/// `cargo xtask ci`, which is why its filter is held to the same rule.
+fn lint_workflow() -> String {
+    let path = support::repo_input(".github/workflows/lint.yml");
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+}
+
+/// The quoted entries under `rust:` in lint.yml's `dorny/paths-filter` block,
+/// which is what decides whether the Rust gate runs on a pull request.
+fn rust_filter_paths(lint: &str) -> Vec<String> {
+    let (_, below) = lint
+        .split_once("\n          rust:\n")
+        .expect("lint.yml filters a `rust` area");
+    let mut found = Vec::new();
+    for line in below.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("- '") {
+            found.push(
+                rest.strip_suffix('\'')
+                    .expect("a filter entry is quoted")
+                    .to_owned(),
+            );
+            continue;
+        }
+        // A comment belongs to the block it sits in; anything else ends it.
+        if !trimmed.is_empty() && !trimmed.starts_with('#') {
+            break;
+        }
+    }
+    assert!(!found.is_empty(), "lint.yml's rust filter matches nothing");
+    found
 }
 
 /// Whether `path` is a file a job could run. Unix-only, like everything else
@@ -363,34 +389,77 @@ fn every_file_the_jobs_reach_for_triggers_the_workflow() {
 }
 
 /// The other half of the coverage rule, and the half a job scan cannot see: a
-/// test that reads a file outside `linux/` is silent unless the workflow fires
-/// on that file too. Its trigger runs on `linux/**`, so a contract test
-/// pointed at `lambda/` or `react/` would otherwise report the drift it exists
-/// to catch on the next unrelated push to `linux/` - long after the change
-/// that caused it merged green.
+/// test that reads a file outside `linux/` is silent unless the workflows that
+/// run it fire on that file too. `linux.yml` triggers on `linux/**`, and
+/// `lint.yml`'s `rust` job filters on the same, so a contract test pointed at
+/// `lambda/` or `react/` would otherwise report the drift it exists to catch on
+/// the next unrelated push to `linux/` - long after the change that caused it
+/// merged green.
+///
+/// Both workflows are checked, because both run `cargo xtask ci`: `lint.yml` on
+/// the pull request, `linux.yml` on the push that merges it. A file covered by
+/// only one of them is caught in only one of those places.
 ///
 /// The registry in `tests/support/mod.rs` is what those tests read through, so
 /// a new cross-tree test cannot be written without appearing here.
 #[test]
-fn every_file_the_tests_read_outside_the_workspace_triggers_the_workflow() {
-    let workflow = workflow();
-    let paths = trigger_paths(&workflow);
+fn every_file_the_tests_read_outside_the_workspace_triggers_both_gates() {
     assert!(
         !support::REPO_INPUTS.is_empty(),
         "the cross-tree registry is empty - has it moved?"
     );
+
+    let push_gate = workflow();
+    let pull_request_gate = lint_workflow();
+    let filters = [
+        ("linux.yml push filter", trigger_paths(&push_gate)),
+        (
+            "lint.yml rust filter",
+            rust_filter_paths(&pull_request_gate),
+        ),
+    ];
 
     for file in support::REPO_INPUTS {
         assert!(
             repo_root().join(file).is_file(),
             "a test reads {file}, which does not exist"
         );
-        assert!(
-            paths.iter().any(|pattern| covers(pattern, file)),
-            "a test reads {file} but the workflow does not fire on changes to \
-             it, so the check cannot run when that file changes. Add it to the \
-             `paths:` filter."
-        );
+        for (name, patterns) in &filters {
+            assert!(
+                patterns.iter().any(|pattern| covers(pattern, file)),
+                "a test reads {file} but the {name} does not cover it, so the \
+                 check cannot run when that file changes. Add it there."
+            );
+        }
+    }
+}
+
+/// The shell every step is written for. The runner falls back to `sh -e {0}`
+/// where it is not told otherwise, and a container image whose `sh` is dash
+/// then rejects `set -o pipefail` - which is exactly how `app-build` and
+/// `app-test` failed on every run of this workflow until the default was
+/// declared. Cheap to state, and the failure it prevents costs a whole run.
+#[test]
+fn the_workflow_runs_its_steps_under_bash() {
+    let workflow = workflow();
+    assert!(
+        workflow.contains("defaults:\n  run:\n    shell: bash\n"),
+        "linux.yml no longer declares `shell: bash` as a run default, so its \
+         steps run under whatever the container calls `sh`"
+    );
+    for job in jobs(&workflow) {
+        for line in job.body.lines() {
+            let Some((_, shell)) = line.trim().split_once("shell: ") else {
+                continue;
+            };
+            assert_eq!(
+                shell.trim(),
+                "bash",
+                "job `{}` overrides the shell with `{shell}`; the steps are \
+                 written in bash",
+                job.name
+            );
+        }
     }
 }
 
