@@ -1,4 +1,4 @@
-% CABALMAIL(5) | File Formats Manual
+% "CABALMAIL" "5" "" "Cabalmail" "File Formats Manual"
 
 # NAME
 

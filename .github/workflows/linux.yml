@@ -24,6 +24,16 @@ on:
       # would sit unreported until someone next touched linux/ - by which time
       # the client is 400ing on every preference push.
       - 'lambda/api/set_preferences/function.py'
+      # Same reasoning, for the other two files the workspace checks read from
+      # outside linux/. The Arch PKGBUILD carries the composer's marked and
+      # turndown versions verbatim, and Dependabot bumps them in React's
+      # lockfile: without this path a bump merges green and the package ships
+      # stale pins. LICENSE.md is what the package installs as its licence.
+      #
+      # Every such file is registered in linux/xtask/tests/support/mod.rs, and
+      # a test there fails if one is missing from this list.
+      - 'react/admin/package-lock.json'
+      - 'LICENSE.md'
 
 # A stale result is never worth finishing; keyed on the ref so the named
 # branches do not cancel each other.
@@ -37,13 +47,13 @@ env:
   # artifacts are written and never read - they only make the cache bigger.
   CARGO_INCREMENTAL: '0'
 
-# Every job runs exactly one step of `cargo xtask ci`, selected by name. The
+# Every job but `package-arch` runs exactly one step of `cargo xtask ci`,
+# selected by name. The
 # list of steps lives in linux/xtask/src/ci.rs and nowhere else; a job that
 # named a step that does not exist, or a step no job runs, fails the drift test
 # in linux/xtask/tests/workflow_contract.rs rather than passing quietly.
 #
 # Still to come, each with the work item that owns it:
-#   package-arch  Phase 2, work item 4 - makepkg + namcap in an Arch container
 #   smoke         Phase 2, work item 3 - install the package, launch it headless
 #   coverage      Phase 2, work item 3 - cargo-llvm-cov on the kit, with a floor
 #   guards        Phase 2, work item 6 - cargo-deny, the GTK-free-kit tree check
@@ -244,3 +254,49 @@ jobs:
             echo "::error::The widget tests skipped themselves - Xvfb did not provide a display."
             exit 1
           fi
+
+  # -----------------------------------------------------------------------
+  # The package. This is the only job that builds what a user installs rather
+  # than what a developer builds: makepkg clones the checkout, builds it
+  # offline against the committed lock, runs the kit tests inside the build,
+  # and namcap lints both the PKGBUILD and the package that comes out.
+  #
+  # It runs `cargo xtask package arch` rather than a `ci` step: packaging needs
+  # an Arch container and several minutes, which is not something a developer
+  # should pay for on every pre-push gate.
+  # -----------------------------------------------------------------------
+  package-arch:
+    name: Package for Arch
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Bootstrap the container
+        # actions/checkout needs git to clone; everything else this job needs
+        # comes from packaging/deps/arch.txt, which does not exist until the
+        # repository is here.
+        run: pacman -Syu --needed --noconfirm git
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # makepkg builds from a clone of this checkout, and the package
+          # version comes from its latest release tag. A shallow checkout has
+          # neither the history to clone nor the tags to describe.
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: .github/scripts/install-linux-deps.sh arch
+
+      - name: Create the build user
+        # makepkg refuses to run as root, which a container job is. The
+        # checkout has to change hands with it - git also refuses to read a
+        # repository owned by somebody else.
+        run: |
+          set -euo pipefail
+          useradd --create-home builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Build and lint the package
+        working-directory: linux
+        run: su builder --command 'cargo xtask package arch'
