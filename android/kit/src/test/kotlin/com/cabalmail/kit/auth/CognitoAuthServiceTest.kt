@@ -200,6 +200,36 @@ class CognitoAuthServiceTest {
             assertTrue(exception is CabalmailException.InvalidCredentials)
         }
 
+    // #1288: Cognito answers NotAuthorizedException to a refresh whose token
+    // has expired or been revoked, exactly as it does to a sign-in with a bad
+    // password. Only the refresh path knows nobody typed anything, so it is
+    // the one that has to say "session expired".
+    @Test
+    fun `a refused refresh maps to AuthExpired, not InvalidCredentials`() =
+        runTest {
+            val store = InMemoryTokenStore()
+            store.tokens =
+                AuthTokens(
+                    idToken = "stale",
+                    accessToken = "a",
+                    refreshToken = "aged-out",
+                    // Within the 5-minute leeway of the fixed clock.
+                    expiresAtEpochMillis = 1_000_000L + 60_000L,
+                )
+            val stub =
+                CognitoStub(
+                    HttpStatusCode.BadRequest to
+                        """{"__type": "x#NotAuthorizedException", "message": "Refresh Token has been revoked"}""",
+                )
+
+            val exception =
+                runCatching { service(stub, store).currentIdToken() }.exceptionOrNull()
+
+            assertTrue(exception is CabalmailException.AuthExpired)
+            // The refusal has to have come from the refresh, not a sign-in.
+            assertTrue(stub.bodies.single().contains("\"AuthFlow\":\"REFRESH_TOKEN_AUTH\""))
+        }
+
     @Test
     fun `lambda trigger rejections surface the trigger's own message`() =
         runTest {

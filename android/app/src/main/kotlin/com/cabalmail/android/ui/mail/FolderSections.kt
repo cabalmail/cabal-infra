@@ -1,5 +1,7 @@
 package com.cabalmail.android.ui.mail
 
+import com.cabalmail.kit.models.FolderStatus
+
 /** The two collapsible sections of the mail tab's folder list. */
 enum class FolderSection { SUBSCRIBED, ALL }
 
@@ -47,4 +49,13 @@ object FolderSections {
         folders: List<String>,
         subscribed: Set<String>,
     ): List<String> = if (subscribed.isEmpty()) folders else folders.filter { it in subscribed }
+
+    /**
+     * Whether the row's name renders in the highlight color. Keyed off the
+     * unseen count itself, not the badge, which can show totals under the
+     * TOTAL/BOTH display modes. A missing status (unsubscribed folder, not
+     * yet fetched) counts as no unread, so those rows rest dim rather than
+     * guessing.
+     */
+    fun hasUnread(status: FolderStatus?): Boolean = (status?.unseen ?: 0) > 0
 }

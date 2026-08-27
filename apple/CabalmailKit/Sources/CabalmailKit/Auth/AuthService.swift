@@ -281,7 +281,9 @@ public actor CognitoAuthService: AuthService {
                 "REFRESH_TOKEN": refreshToken,
             ],
         ]
-        let response = try await call("InitiateAuth", body: body)
+        // A refresh Cognito refuses means the session is over, not that a
+        // credential was mistyped — nobody typed anything on this path.
+        let response = try await call("InitiateAuth", body: body, notAuthorized: .authExpired)
         // REFRESH_TOKEN_AUTH omits the refresh token from the response — reuse
         // the existing one so subsequent refreshes keep working.
         var refreshed = try parseAuthResult(response)
@@ -316,7 +318,15 @@ public actor CognitoAuthService: AuthService {
         return url
     }
 
-    private func call(_ target: String, body: [String: Any]) async throws -> [String: Any] {
+    /// - Parameter notAuthorized: what a `NotAuthorizedException` means for
+    ///   this call. Cognito answers it both to a sign-in with a bad password
+    ///   and to a refresh whose token has expired or been revoked, and only
+    ///   the caller knows which it asked for (#1288).
+    private func call(
+        _ target: String,
+        body: [String: Any],
+        notAuthorized: CabalmailError = .invalidCredentials
+    ) async throws -> [String: Any] {
         var request = URLRequest(url: try cognitoURL())
         request.httpMethod = "POST"
         request.setValue("application/x-amz-json-1.1", forHTTPHeaderField: "Content-Type")
@@ -327,7 +337,7 @@ public actor CognitoAuthService: AuthService {
         guard (200..<300).contains(response.statusCode) else {
             let (code, message) = parseError(data)
             if code == "NotAuthorizedException" {
-                throw CabalmailError.invalidCredentials
+                throw notAuthorized
             }
             if code == "UserLambdaValidationException" {
                 // A pool trigger (require_admin_mfa, check_invite, ...)

@@ -294,6 +294,9 @@ struct FolderListView: View {
         isCollapsed: Bool
     ) -> some View {
         let isSelected = selection?.path == folder.path
+        // Keyed off the unread count itself, not the badge string, which
+        // can show totals under the .total/.both display modes.
+        let hasUnread = (appState.folderUnreadCounts[folder.path] ?? 0) > 0
         HStack {
             if depth > 0 {
                 Spacer().frame(width: CGFloat(depth) * 14)
@@ -330,6 +333,7 @@ struct FolderListView: View {
                 // it on the regular tint.
                 .foregroundStyle(iconForeground(isSelected: isSelected))
             Text(folder.name)
+                .foregroundStyle(folderNameForeground(hasUnread: hasUnread, isSelected: isSelected))
             Spacer()
             if let badge {
                 Text(badge)
