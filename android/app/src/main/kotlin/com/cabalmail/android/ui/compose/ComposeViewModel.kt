@@ -1,6 +1,7 @@
 package com.cabalmail.android.ui.compose
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
@@ -62,6 +63,12 @@ data class ComposeUiState(
     val error: String? = null,
     /** Set once the screen should navigate away. */
     val dismissed: Boolean = false,
+    /**
+     * The session opened over a copy that already exists in the Drafts
+     * folder. Read once at load, so the title cannot change under the
+     * user when the 60 s autosave lands a server copy mid-compose.
+     */
+    val resumedFromServer: Boolean = false,
 ) {
     val recipientCount: Int get() = draft.to.size + draft.cc.size + draft.bcc.size
 
@@ -125,6 +132,7 @@ class ComposeViewModel(
                 ComposeUiState(
                     draft = draft,
                     body = TextFieldValue(draft.body, TextRange(0)),
+                    resumedFromServer = draft.serverRef != null,
                 )
             }
             loaded = true
@@ -453,13 +461,13 @@ class ComposeViewModel(
             try {
                 // Wait for any in-flight server save so the discard names
                 // the copy that save produced, not a stale one.
-                val outcome =
+                val (retiredDraftUid, outcome) =
                     serverSaveMutex.withLock {
                         val api = container.requireApi()
                         val staged = stageAttachments(api, draft.attachments)
                         val fields = ComposePayload.build(draft, from, messageId = messageId, staged = staged)
                         val ref = mutableState.value.draft.serverRef
-                        api.send(fields, ref?.uid, ref?.uidValidity)
+                        ref?.uid to api.send(fields, ref?.uid, ref?.uidValidity)
                     }
                 when (outcome) {
                     is SendOutcome.Submitted -> {
@@ -468,6 +476,8 @@ class ComposeViewModel(
                         container.recipientHistory.record(draft.to + draft.cc + draft.bcc)
                         container.draftStore.delete(draftId)
                         mutableState.update { it.copy(sending = false, dismissed = true) }
+                        // /send hands the superseded draft to discard_draft_uid.
+                        announceDraftsChange(removedUid = retiredDraftUid, appended = false)
                     }
                     SendOutcome.DuplicateInFlight ->
                         mutableState.update {
@@ -545,6 +555,7 @@ class ComposeViewModel(
                         finished = true
                         container.draftStore.delete(draftId)
                         mutableState.update { it.copy(dismissed = true) }
+                        announceDraftsChange(removedUid = null, appended = true)
                     } catch (exception: Exception) {
                         mutableState.update {
                             it.copy(closeSaveFailure = userMessage(exception, "Could not save draft"))
@@ -592,8 +603,31 @@ class ComposeViewModel(
                     replacesUidValidity = ref.uidValidity,
                     discard = true,
                 )
+            }.onSuccess { result ->
+                // `discarded` is the guarded expunge's own answer, and it
+                // rides inside a 200: false means the Drafts copy survived.
+                if (!result.discarded) {
+                    Log.w(TAG, "Drafts copy ${ref.uid} was not discarded; the server declined the expunge")
+                }
+                announceDraftsChange(removedUid = ref.uid.takeIf { result.discarded }, appended = false)
+            }.onFailure { exception ->
+                Log.w(TAG, "Discarding Drafts copy ${ref.uid} failed", exception)
+                announceDraftsChange(removedUid = null, appended = false)
             }
         }
+    }
+
+    /**
+     * Tells an open Drafts list what this session just did to the folder.
+     * Every other mutator of a message list emits on the mail event bus;
+     * the composer did not, which is why a discarded draft stayed on
+     * screen until the next foreground poll (#1290).
+     */
+    private fun announceDraftsChange(
+        removedUid: Long?,
+        appended: Boolean,
+    ) {
+        container.mailEvents.emit(DraftsMutationEvent.forDraftsChange(removedUid, appended))
     }
 
     /** The screen showed the transient error. */
@@ -625,6 +659,8 @@ class ComposeViewModel(
 
         /** Do not shorten: server saves are IMAP writes on a single-task tier. */
         const val SERVER_AUTOSAVE_MS = 60_000L
+
+        private const val TAG = "ComposeViewModel"
 
         fun factory(
             container: AppContainer,
