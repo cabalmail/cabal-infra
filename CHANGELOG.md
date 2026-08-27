@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-08-27
+
+### Changed
+- Android: **Unread folders stand out in the list.** Folder names with
+  unread messages now render in the theme highlight color, while caught-up
+  folders dim, so the folders needing attention read at a glance.
+- Apple: **Unread folders stand out in the sidebar.** Folder names with
+  unread messages now render in the accent color, while caught-up folders
+  dim to secondary, so the folders needing attention read at a glance.
+- Android: **Three-pane windows launch into INBOX.** Windows wide enough
+  for the folder + list + reader mail view now open on the INBOX message
+  list at launch, like phones, instead of the standalone folder hub — the
+  folder list is already on screen as the leading pane. Medium-width
+  windows (list and reader only) still launch on the folder list.
+
+### Fixed
+- Android: **Resumed folder opens its own list.** After a cold launch the remembered folder's title sat over INBOX's messages and pills, and tapping a row opened — and flagged, or trashed — whatever message held that uid in the remembered folder. The resume cursor now rewinds to the folder list before opening its target instead of reusing the INBOX launch entry, so title, list, pills and taps all name the same folder.
+- Android: **Expired sessions say so.** A refresh token that has aged out or been revoked draws the same `NotAuthorizedException` from Cognito as a mistyped password, and the client mapped both to "Invalid username or password". The refresh path now reports "Your session expired — sign in again" while a genuine sign-in failure still reports the credential.
+- Apple: **Expired sessions no longer read as a rejected password.** A refresh token that has aged out or been revoked draws the same `NotAuthorizedException` from Cognito as a mistyped password, and the client mapped both to "That username or password wasn't accepted." The refresh path now reports "Your session expired. Sign in again." while a genuine sign-in failure still reports the credential.
+
 ## [1.7.1] - 2026-08-26
 
 ### Added
