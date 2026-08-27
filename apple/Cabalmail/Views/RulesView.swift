@@ -113,40 +113,67 @@ private struct RuleRow: View {
     let rule: Rule
 
     var body: some View {
+        #if os(macOS)
+        // A NavigationLink's label is one hit target on macOS: controls
+        // nested inside it stop taking clicks (SwiftUI folds them into the
+        // link as accessibility custom actions), so every click in the row
+        // pushed the editor instead of hitting the toggle or the menu
+        // (#1299). Both therefore sit beside the link, not in its label.
+        HStack(spacing: 12) {
+            enabledToggle
+            NavigationLink {
+                RuleEditorView(model: model, ruleID: rule.id)
+            } label: {
+                summary
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // Visible stand-in for the context menu below: right-click
+            // is the only other route to Duplicate/Delete on macOS,
+            // and nothing advertises it.
+            Menu {
+                rowActions
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+        .contextMenu {
+            rowActions
+        }
+        #else
         NavigationLink {
             RuleEditorView(model: model, ruleID: rule.id)
         } label: {
             HStack(spacing: 12) {
-                Toggle("Enabled", isOn: Binding(
-                    get: { rule.enabled },
-                    set: { model.setEnabled(rule.id, $0) }
-                ))
-                .labelsHidden()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(rule.name.isEmpty ? "Untitled rule" : rule.name)
-                        .foregroundStyle(rule.enabled ? .primary : .secondary)
-                    Text(RuleSummary.describe(rule))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                #if os(macOS)
-                // Visible stand-in for the context menu below: right-click
-                // is the only other route to Duplicate/Delete on macOS,
-                // and nothing advertises it.
-                Spacer()
-                Menu {
-                    rowActions
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                #endif
+                enabledToggle
+                summary
             }
         }
         .contextMenu {
             rowActions
+        }
+        #endif
+    }
+
+    private var enabledToggle: some View {
+        Toggle("Enabled", isOn: Binding(
+            get: { rule.enabled },
+            set: { model.setEnabled(rule.id, $0) }
+        ))
+        .labelsHidden()
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(rule.name.isEmpty ? "Untitled rule" : rule.name)
+                .foregroundStyle(rule.enabled ? .primary : .secondary)
+            Text(RuleSummary.describe(rule))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
     }
 
