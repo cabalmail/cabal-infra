@@ -12,7 +12,8 @@
 //! that broke this parse would be a change worth looking at anyway.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+
+mod support;
 
 use cabalmail_kit::config::{Key, Kind, Scope, Wire};
 
@@ -34,14 +35,6 @@ const DELIBERATELY_UNSUPPORTED: &[&str] = &[
     "mark_read_advance",
 ];
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("the workspace lives inside the repository")
-        .to_path_buf()
-}
-
 /// What the Lambda accepts, read out of its source.
 struct LambdaContract {
     /// `APP_ALLOWED`: enum-valued keys and their permitted values.
@@ -54,11 +47,7 @@ struct LambdaContract {
 
 impl LambdaContract {
     fn read() -> Self {
-        let path = repo_root()
-            .join("lambda")
-            .join("api")
-            .join("set_preferences")
-            .join("function.py");
+        let path = support::repo_input("lambda/api/set_preferences/function.py");
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
 
@@ -253,13 +242,9 @@ fn the_display_name_rides_at_the_top_level_on_both_sides() {
         "`name` moved into the app map; the client sends it at the top level"
     );
 
-    let source = std::fs::read_to_string(
-        repo_root()
-            .join("lambda")
-            .join("api")
-            .join("set_preferences")
-            .join("function.py"),
-    )
+    let source = std::fs::read_to_string(support::repo_input(
+        "lambda/api/set_preferences/function.py",
+    ))
     .expect("the Lambda source reads");
     assert!(
         source.contains("if 'name' in body:"),

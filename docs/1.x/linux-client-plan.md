@@ -324,11 +324,27 @@ Each numbered work item below is sized to one branch and one PR. Executors must 
 
 ---
 
+## Progress
+
+Where the work stands, so it does not have to be reverse-engineered from git. Every work item below carries a **Status:** line once it lands; this table is the summary. A phase with no entry has not been started.
+
+| Phase | Status |
+| --- | --- |
+| 1. Workspace scaffolding | **Complete** (2026-08-08). All five items shipped; `cargo run -p cabalmail-gtk` opens a window. |
+| 2. Build pipeline, packaging & test harness | **In progress.** Items 1 and 4 done, item 2 done for the Ubuntu containers. Items 3, 5, 6 outstanding. |
+| 3-8 | Not started. |
+
+> **Paused (2026-08-24): AUR publication.** The AUR is closed to new account registrations, so the Arch package has no route to publication. Item 4's work is written, tested, and committed on the branch `claude/linux-phase-2-arch-packaging`, which is **not** pushed and has **no PR open** - deliberately, until the AUR question resolves. Item 5's AUR step was already a manual, human-gated act; it is now blocked outright. Nothing else in Phase 2 depends on either, so items 3 and 6 can proceed.
+
+---
+
 ## Phase 1: Workspace Scaffolding
 
 Goal: a workspace that builds an empty window, with the async bridge and the crate split already correct.
 
 ### 1. Cargo workspace
+
+**Status:** Shipped 2026-08-07 (`74f88e52`).
 
 - `linux/Cargo.toml` declaring members `cabalmail-kit`, `cabalmail-gtk`, `xtask`.
 - `rust-toolchain.toml` pinning `channel = "1.97.1"` exactly (not `stable`) with `components = ["clippy", "rustfmt", "llvm-tools"]`; `edition = "2024"` and `rust-version = "1.97"` in `Cargo.toml`. `linux/README.md` states that contributors need **rustup**, not the distro `rust` package — on Arch the two conflict, and only rustup honours the pin.
@@ -337,10 +353,14 @@ Goal: a workspace that builds an empty window, with the async bridge and the cra
 
 ### 2. `cabalmail-kit` skeleton
 
+**Status:** Shipped 2026-08-07 (`d598f7a6`).
+
 - Crate with module stubs matching the layout above. No GTK, no WebKit in `Cargo.toml` — add a CI check (Phase 2, work item 6) that fails if one ever appears.
 - `CabalmailError` enum covering the error taxonomy the Apple client settled on: `network`, `auth`, `http(status, body)`, `decode`, `protocol`, `cancelled`. The distinction between transport failure and application rejection is load-bearing for the outbox (Phase 5) — model it now.
 
 ### 3. Layered configuration
+
+**Status:** Shipped 2026-08-07 (`f7b480bc`), with follow-ups in `f64ed883` and `e414f2d5`.
 
 Land the configuration store and schema here, before anything reads a setting — retrofitting precedence and provenance after six phases of direct reads is the predictable disaster.
 
@@ -357,12 +377,16 @@ The propagation machinery itself (inotify watching, debounce, push/pull wiring) 
 
 ### 4. `cabalmail-gtk` shell
 
+**Status:** Shipped 2026-08-08 (`9437d213`).
+
 - `AdwApplication` with app ID `com.cabalmail.Cabalmail`, a single `AdwApplicationWindow`, and a placeholder `AdwStatusPage`.
 - GResource bundle wired through `build.rs`, compiling `.blp` sources via `blueprint-compiler`. Its absence is a **hard build failure naming the package to install**, not a silent fallback — a fallback path here would mean two UI formats in the tree and a build that succeeds differently depending on what happens to be installed.
 - `runtime.rs`: the tokio runtime handle plus the `spawn_to_ui!` macro described above, with unit tests proving a spawned future's result reaches a `glib::MainContext` callback.
 - `.desktop` and AppStream `metainfo.xml`. **No gschema** — window geometry is state (`$XDG_STATE_HOME`), configuration is TOML, and synced preferences are server-side. See the Configuration model.
 
 ### 5. `xtask`
+
+**Status:** Shipped 2026-08-08 (`ed7c8d7f`). `package arch` landed with Phase 2 item 4; `smoke` and `fixtures` are still declared-only.
 
 Subcommands, each a thin wrapper so both humans and CI have one spelling:
 
@@ -393,6 +417,8 @@ Goal: everything after this phase is developed under green CI and produces an in
 
 ### 1. Workflow layout
 
+**Status:** Shipped 2026-08-15 (`8999dd4a`, `c31e6031`). Five of the seven jobs exist; `smoke` and `coverage` wait on item 3.
+
 New `.github/workflows/linux.yml`, modelled on `apple.yml`: triggered by `workflow_dispatch` and by pushes to `main` / `stage` under `linux/**` and `.github/workflows/linux.yml`. Like `apple.yml`, it deploys nothing to AWS.
 
 ```yaml
@@ -409,6 +435,8 @@ jobs:
 `app-build` runs against **Ubuntu 24.04**, not Arch. Building the API floor on every push is the entire point — an Arch-only CI would let GTK 4.16+ API land silently and surface it as a Phase 8 packaging failure months later.
 
 ### 2. Toolchain pinning
+
+**Status:** Partly done. The pinned toolchain action, the Ubuntu dependency list, and the Arch one all exist; `cargo-llvm-cov` and `cargo-deny` land with the jobs that run them (items 3 and 6).
 
 - Rust from `rust-toolchain.toml` (1.97.1), installed by `dtolnay/rust-toolchain` pinned to a commit SHA (the repo's convention — every third-party action in `apple.yml` is SHA-pinned; match it). A toolchain bump is a deliberate PR touching one line, which is the point of pinning exactly rather than tracking `stable` under `clippy -D warnings`.
 - `blueprint-compiler` in every container that builds the app crate. Verifying it is present and new enough in the Ubuntu 24.04, Debian, and Fedora images is a Phase 2 acceptance criterion, not a Phase 8 discovery.
@@ -447,10 +475,14 @@ Anything in this table that ends up needing a `gtk::Widget` has been modelled wr
 
 ### 4. Arch packaging
 
+**Status:** Written and committed 2026-08-24 on `claude/linux-phase-2-arch-packaging`, **not merged** - see the AUR pause under Progress. `cargo xtask package arch` stages the PKGBUILD against the working tree, builds it with `makepkg`, and lints both with `namcap`; a `package-arch` job runs it in an `archlinux:base-devel` container.
+
 `packaging/arch/PKGBUILD`:
 
 - `pkgver` derived from the latest semver git tag (matching `scripts/promote.sh`, which is the version source of truth); `pkgrel` reset on version bump.
 - `depends=(gtk4 libadwaita webkitgtk-6.0 glib2)`, `makedepends=(rust git blueprint-compiler)`. Arch's `rust` provides `cargo`, so listing both is redundant. This build ignores `rust-toolchain.toml` (a rustup feature) and uses whatever Arch ships — currently 1.97.1, always at or ahead of the pin.
+
+> **Erratum (2026-08-24):** Two makedepends are missing from that list, and both are hard build failures. Arch splits `glib-compile-resources` out of `glib2` into **`glib2-devel`**, which `cabalmail-gtk/build.rs` needs to bundle the GResource; and rendering `cabalmail.5.md` to roff needs a converter — **`go-md2man`**, chosen over `pandoc`, which is the same conversion behind a gigabyte of Haskell and is packaged everywhere this client targets. As shipped, the arrays are not written in the PKGBUILD alone: they come from `packaging/deps/arch.txt` (the per-distro list `install-linux-deps.sh` already reads), and `xtask/tests/packaging_contract.rs` fails if the two disagree. `webkitgtk-6.0` joins `depends` with the composer in Phase 5.
 - Installs `config.example.toml` to `/usr/share/doc/cabalmail/` and `cabalmail.5` to the man path. It does **not** install anything into `/etc/xdg/cabalmail/` — that path is reserved for the administrator, and shipping a file there would make "no system config present" indistinguishable from "administrator chose these defaults".
 - `build()` runs `cargo build --release --frozen --offline` against vendored crates.
 - `check()` runs `cargo test -p cabalmail-kit` — kit tests need no display, so they run inside `makepkg` unmodified.
@@ -458,11 +490,15 @@ Anything in this table that ends up needing a `gtk::Widget` has been modelled wr
 
 **The vendored-JS problem.** `editor.html` needs `marked.umd.js` and `turndown.js`. The Apple client materializes them from `react/admin/node_modules/` at build time, which is right for a developer checkout but wrong for `makepkg` — `prepare()` must not reach the network, and requiring `nodejs`/`npm` as a makedepend to run `npm ci` breaks that rule. The resolution:
 
+> **Erratum (2026-08-24):** "`prepare()` must not reach the network" is too strong as stated, and the shipped PKGBUILD does not obey it: `prepare()` runs `cargo fetch --locked`, which is the standard Arch spelling for a Rust package, because crates cannot be expressed as `source=()` entries without committing a vendor tree. Everything after that is offline — `build()` and `check()` pass `--frozen`, which fails rather than resolving. The conclusion the rule was reached for is unaffected: `npm` is not a makedepend, and the npm tarballs are pinned, checksummed sources.
+
 - Add the upstream npm tarballs as explicit `source=()` entries pinned to the exact versions in `react/admin/package.json` (`marked@^18.0.2`, `turndown@^7.2.4`), with `sha256sums`. `makepkg` fetches and checksums them like any other source; the build is offline-after-fetch and reproducible.
 - Add a CI drift check that resolves `react/admin/package.json` and fails if the `PKGBUILD` pins diverge. This preserves the "React's manifest is the single source of truth" property the Apple client relies on, including Dependabot coverage, without committing upstream bytes.
 - Developer checkouts keep using `scripts/sync-vendored.sh` (via `cargo xtask sync-vendored`), identical to the Apple flow.
 
 ### 5. Release artifacts
+
+**Status:** Blocked on the AUR pause. The workflow-artifact upload is not blocked and is still to do.
 
 The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow artifacts on every run. Publishing to the AUR is a manual, human-gated step — not automated in this phase, and not something an AI-executed work item should perform.
 

@@ -1,7 +1,7 @@
 //! `cargo xtask` — one deterministic spelling per build operation, shared by
 //! humans and CI.
 //!
-//! Two of the five subcommands run today. The other three are declared rather
+//! Three of the five subcommands run today. The other two are declared rather
 //! than omitted: the vocabulary is fixed here so the workflow, the README, and
 //! the packaging notes can name the operation before the phase that implements
 //! it lands, and so asking for one gets an answer about which work item owns
@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod ci;
+mod package;
 mod process;
 mod sync_vendored;
 
@@ -28,8 +29,8 @@ const SUBCOMMANDS: &[Subcommand] = &[
     },
     Subcommand {
         name: "package",
-        purpose: "build a distribution package in a container and lint it",
-        status: Status::Pending("Phase 2, work item 4"),
+        purpose: "build a distribution package from the working tree and lint it",
+        status: Status::Live,
     },
     Subcommand {
         name: "smoke",
@@ -70,6 +71,10 @@ enum Action {
     /// `ci --list`: the step names, one per line, for the workflow drift test.
     CiSteps,
     SyncVendored,
+    /// `package <distro>`, for a distribution that is packaged today.
+    Package {
+        distro: String,
+    },
     Pending {
         name: &'static str,
         work_item: &'static str,
@@ -130,6 +135,10 @@ fn run(args: &[String]) -> Result<(), Failure> {
             Ok(())
         }
         Action::SyncVendored => Ok(sync_vendored::run(&workspace_dir())?),
+        Action::Package { distro } => match distro.as_str() {
+            "arch" => Ok(package::arch(&workspace_dir())?),
+            other => unreachable!("`{other}` parsed as packaged but has no builder"),
+        },
         Action::Pending { name, work_item } => Err(Failure {
             message: format!(
                 "`{name}` is declared but not implemented yet — it lands in {work_item}."
@@ -162,6 +171,7 @@ fn parse(args: &[String]) -> Result<Action, Failure> {
         }),
         Status::Live => match subcommand.name {
             "ci" => parse_ci(&args[1..]),
+            "package" => parse_package(&args[1..]),
             "sync-vendored" => {
                 if let Some(extra) = args.get(1) {
                     return Err(Failure::usage(format!(
@@ -204,6 +214,31 @@ fn parse_ci(rest: &[String]) -> Result<Action, Failure> {
     }
 }
 
+/// `package` names its distribution. One that is not packaged yet answers with
+/// the work item that will package it, the same way a pending subcommand does
+/// — the reader learns where to look rather than that they mistyped something.
+fn parse_package(rest: &[String]) -> Result<Action, Failure> {
+    let known = package::distro_names();
+    let [distro] = rest else {
+        return Err(Failure::usage(format!(
+            "`package` needs a distribution: {}",
+            known.join(", ")
+        )));
+    };
+    match package::pending_work_item(distro).map_err(Failure::usage)? {
+        None => Ok(Action::Package {
+            distro: distro.clone(),
+        }),
+        Some(work_item) => Err(Failure {
+            message: format!(
+                "`package {distro}` is declared but not implemented yet — it lands in \
+                 {work_item}."
+            ),
+            usage: false,
+        }),
+    }
+}
+
 fn usage() -> String {
     let width = SUBCOMMANDS
         .iter()
@@ -220,6 +255,10 @@ fn usage() -> String {
             text.push_str(&format!("  {:width$}  (not yet — {work_item})\n", ""));
         }
     }
+    text.push_str(&format!(
+        "\npackage takes a distribution: {}\n",
+        package::distro_names().join(", ")
+    ));
     text.push_str(&format!(
         "\nci runs every step; `ci --step <name>` runs one, which is how the\n\
          workflow gives each its own job. `ci --list` prints the names:\n  {}\n",
@@ -273,7 +312,6 @@ mod tests {
     #[test]
     fn a_pending_subcommand_names_the_work_item_that_implements_it() {
         for (name, work_item) in [
-            ("package", "Phase 2, work item 4"),
             ("smoke", "Phase 2, work item 3"),
             ("fixtures", "Phase 2, work item 3"),
         ] {
@@ -284,18 +322,47 @@ mod tests {
         }
     }
 
-    /// `cargo xtask package arch` is the spelling the plan uses; it must not
-    /// come back as an argument error before the reader ever learns the
-    /// subcommand has not landed.
     #[test]
-    fn a_pending_subcommand_accepts_the_arguments_it_will_take_later() {
-        assert!(matches!(
-            parse_args(&["package", "arch"]),
-            Ok(Action::Pending {
-                name: "package",
-                ..
+    fn packaging_takes_the_distribution_to_build() {
+        assert_eq!(
+            parse_args(&["package", "arch"]).ok(),
+            Some(Action::Package {
+                distro: "arch".to_owned()
             })
-        ));
+        );
+    }
+
+    /// Debian and RPM are Phase 8. Asking for one names the phase rather than
+    /// reporting an unknown distribution, which would read as a typo.
+    #[test]
+    fn a_distribution_that_is_not_packaged_yet_names_the_work_item() {
+        for distro in ["deb", "rpm"] {
+            let failure = parse_args(&["package", distro]).expect_err("not packaged yet");
+            assert!(
+                failure.message.contains("Phase 8"),
+                "`package {distro}` should say when it lands: {}",
+                failure.message
+            );
+        }
+    }
+
+    #[test]
+    fn packaging_without_a_distribution_lists_them() {
+        let failure = parse_args(&["package"]).expect_err("nothing to build");
+        for distro in package::distro_names() {
+            assert!(
+                failure.message.contains(distro),
+                "the rejection should list `{distro}`: {}",
+                failure.message
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_distribution_is_a_usage_error() {
+        let failure = parse_args(&["package", "slackware"]).expect_err("no such distribution");
+        assert!(failure.message.contains("slackware"));
+        assert!(failure.usage);
     }
 
     #[test]
@@ -353,15 +420,22 @@ mod tests {
         assert_eq!(parse_args(&["ci", "--list"]).ok(), Some(Action::CiSteps));
     }
 
+    /// Either it runs on its own or it says what it needs. What must not
+    /// happen is a live subcommand answering with "unknown subcommand".
     #[test]
-    fn every_live_subcommand_resolves_to_an_action() {
+    fn every_live_subcommand_either_runs_or_says_what_it_needs() {
         for command in SUBCOMMANDS {
-            if matches!(command.status, Status::Live) {
-                assert!(
-                    parse_args(&[command.name]).is_ok(),
-                    "`{}` is live but does not parse",
-                    command.name
-                );
+            if !matches!(command.status, Status::Live) {
+                continue;
+            }
+            match parse_args(&[command.name]) {
+                Ok(_) => {}
+                Err(failure) => assert!(
+                    failure.usage && !failure.message.contains("unknown subcommand"),
+                    "`{}` is live but reads as unknown: {}",
+                    command.name,
+                    failure.message
+                ),
             }
         }
     }

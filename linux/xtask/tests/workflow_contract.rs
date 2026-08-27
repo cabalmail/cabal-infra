@@ -14,6 +14,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod support;
+
 /// How a job selects its step. Also the string the test scans for.
 const STEP_FLAG: &str = "cargo xtask ci --step ";
 
@@ -356,6 +358,38 @@ fn every_file_the_jobs_reach_for_triggers_the_workflow() {
             paths.iter().any(|pattern| covers(pattern, &file)),
             "the workflow reaches for {file} but does not fire on changes to it. \
              Add it to the `paths:` filter."
+        );
+    }
+}
+
+/// The other half of the coverage rule, and the half a job scan cannot see: a
+/// test that reads a file outside `linux/` is silent unless the workflow fires
+/// on that file too. Its trigger runs on `linux/**`, so a contract test
+/// pointed at `lambda/` or `react/` would otherwise report the drift it exists
+/// to catch on the next unrelated push to `linux/` - long after the change
+/// that caused it merged green.
+///
+/// The registry in `tests/support/mod.rs` is what those tests read through, so
+/// a new cross-tree test cannot be written without appearing here.
+#[test]
+fn every_file_the_tests_read_outside_the_workspace_triggers_the_workflow() {
+    let workflow = workflow();
+    let paths = trigger_paths(&workflow);
+    assert!(
+        !support::REPO_INPUTS.is_empty(),
+        "the cross-tree registry is empty - has it moved?"
+    );
+
+    for file in support::REPO_INPUTS {
+        assert!(
+            repo_root().join(file).is_file(),
+            "a test reads {file}, which does not exist"
+        );
+        assert!(
+            paths.iter().any(|pattern| covers(pattern, file)),
+            "a test reads {file} but the workflow does not fire on changes to \
+             it, so the check cannot run when that file changes. Add it to the \
+             `paths:` filter."
         );
     }
 }
