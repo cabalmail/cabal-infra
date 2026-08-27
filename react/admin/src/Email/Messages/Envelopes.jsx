@@ -3,6 +3,7 @@ import { SwipeableList, Type } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import Envelope from './Envelope';
 import useApi from '../../hooks/useApi';
+import useEnvelopeSelection from '../../hooks/useEnvelopeSelection';
 import { fetchBimi } from '../../utils/bimiCache';
 import { PAGE_SIZE } from '../../constants';
 import './Envelopes.css';
@@ -236,33 +237,14 @@ function Envelopes({
     });
   }, [message_ids, envelopes, shownIds, onVisibleEnvelopesChange]);
 
-  const toggleSelect = useCallback(
-    (id, { shift, meta } = {}) => {
-      const next = new Set(selected);
-      if (shift && lastSelectedRef.current != null && shownIds.length) {
-        const a = shownIds.indexOf(Number(lastSelectedRef.current));
-        const b = shownIds.indexOf(Number(id));
-        if (a !== -1 && b !== -1) {
-          const [lo, hi] = a < b ? [a, b] : [b, a];
-          for (let i = lo; i <= hi; i++) next.add(shownIds[i]);
-        } else {
-          next.add(Number(id));
-        }
-      } else if (meta) {
-        const num = Number(id);
-        if (next.has(num)) next.delete(num);
-        else next.add(num);
-      } else {
-        const num = Number(id);
-        if (next.has(num)) next.delete(num);
-        else next.add(num);
-      }
-      setSelected(next);
-      lastSelectedRef.current = Number(id);
-      if (!bulkMode && next.size > 0) setBulkMode(true);
-    },
-    [selected, setSelected, shownIds, lastSelectedRef, bulkMode, setBulkMode],
-  );
+  const toggleSelect = useEnvelopeSelection({
+    selected,
+    setSelected,
+    shownIds,
+    lastSelectedRef,
+    bulkMode,
+    setBulkMode,
+  });
 
   const handleClick = useCallback(
     (envelope, id) => {

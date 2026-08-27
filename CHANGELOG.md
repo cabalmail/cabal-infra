@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.3] - 2026-08-27
+
+### Fixed
+- Android: **Discarded drafts leave the list.** Discarding a draft removed it from the server straight away, but the composer never told an open Drafts list what it had done, so the row — and the count pill still counting it — sat there for up to a minute until the next foreground poll, which read exactly like a discard that had failed. The composer now announces every change it makes to the Drafts folder on the same event bus every other screen uses, so a discarded draft disappears at once, a draft saved on close appears at once, and a sent message's draft copy goes with it. A discard the server declines is now logged and refetched rather than swallowed. Separately, a composer resumed from the Drafts folder is titled "Draft" rather than "New message".
+
 ## [1.7.2] - 2026-08-27
 
 ### Changed
