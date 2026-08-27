@@ -101,6 +101,7 @@
     <string name="compose_title_new">New message</string>
     <string name="compose_title_reply">Reply</string>
     <string name="compose_title_forward">Forward</string>
+    <string name="compose_title_draft">Draft</string>
     <string name="compose_close">Close</string>
     <string name="compose_send">Send</string>
     <string name="compose_from">From</string>

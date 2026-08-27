@@ -67,7 +67,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.cabalmail.android.R
 import com.cabalmail.kit.models.Address
-import com.cabalmail.kit.models.ComposeIntent
 import com.cabalmail.kit.models.DraftAttachment
 
 /**
@@ -136,10 +135,11 @@ fun ComposeScreen(
                 title = {
                     Text(
                         stringResource(
-                            when (state.draft.composeIntent) {
-                                ComposeIntent.NEW -> R.string.compose_title_new
-                                ComposeIntent.REPLY, ComposeIntent.REPLY_ALL -> R.string.compose_title_reply
-                                ComposeIntent.FORWARD -> R.string.compose_title_forward
+                            when (ComposeTitle.forSession(state.draft.composeIntent, state.resumedFromServer)) {
+                                ComposeTitleKind.NEW -> R.string.compose_title_new
+                                ComposeTitleKind.REPLY -> R.string.compose_title_reply
+                                ComposeTitleKind.FORWARD -> R.string.compose_title_forward
+                                ComposeTitleKind.DRAFT -> R.string.compose_title_draft
                             },
                         ),
                     )

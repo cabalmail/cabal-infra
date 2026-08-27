@@ -24,6 +24,7 @@ import { ArrowLeft, SlidersHorizontal, X } from 'lucide-react';
 import Envelope from '../Messages/Envelope';
 import Icon from '../Messages/icons';
 import useApi from '../../hooks/useApi';
+import useEnvelopeSelection from '../../hooks/useEnvelopeSelection';
 import { READ, UNREAD, FLAGGED } from '../../constants';
 import './Search.css';
 
@@ -304,29 +305,14 @@ function Search({
 
   const shownIds = useMemo(() => envelopes.map((e) => Number(e.id)), [envelopes]);
 
-  const toggleSelect = useCallback(
-    (id, { shift } = {}) => {
-      const next = new Set(selected);
-      if (shift && lastSelectedRef.current != null && shownIds.length) {
-        const a = shownIds.indexOf(Number(lastSelectedRef.current));
-        const b = shownIds.indexOf(Number(id));
-        if (a !== -1 && b !== -1) {
-          const [lo, hi] = a < b ? [a, b] : [b, a];
-          for (let i = lo; i <= hi; i += 1) next.add(shownIds[i]);
-        } else {
-          next.add(Number(id));
-        }
-      } else {
-        const num = Number(id);
-        if (next.has(num)) next.delete(num);
-        else next.add(num);
-      }
-      setSelected(next);
-      lastSelectedRef.current = Number(id);
-      if (!bulkMode && next.size > 0) setBulkMode(true);
-    },
-    [selected, setSelected, shownIds, bulkMode, setBulkMode],
-  );
+  const toggleSelect = useEnvelopeSelection({
+    selected,
+    setSelected,
+    shownIds,
+    lastSelectedRef,
+    bulkMode,
+    setBulkMode,
+  });
 
   const handleClick = useCallback(
     (envelope, id) => {
