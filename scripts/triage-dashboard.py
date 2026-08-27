@@ -839,7 +839,7 @@ const PR_ICON={open:'●', merged:'⛙', closed:'✕', draft:'○'};
 const INTERVALS=[{s:0,label:'Off'},{s:60,label:'1 minute'},{s:300,label:'5 minutes'},{s:900,label:'15 minutes'},{s:3600,label:'1 hour'}];
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-let MODEL=null, activeStage=null, activeRoute=false, sortKey='updated', sortDir=-1, inFlight=false, intervalSec=0, timer=null;
+let MODEL=null, activeStage=null, activeRoute=false, sortKey='created', sortDir=-1, inFlight=false, intervalSec=0, timer=null;
 
 function ago(iso){
   const ms=Date.now()-new Date(iso).getTime();
