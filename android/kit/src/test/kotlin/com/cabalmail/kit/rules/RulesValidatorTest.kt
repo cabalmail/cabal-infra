@@ -139,6 +139,49 @@ class RulesValidatorTest {
     }
 
     @Test
+    fun `a continuing rule without an effect is an issue`() {
+        // Client-strict, server-permissive: destination None + Continue +
+        // nothing outbound compiles to an empty procmail block (`no_effect`)
+        // and would silently evaporate.
+        val noEffect =
+            validRule().copy(
+                action = RuleAction.NONE,
+                moveFolder = "",
+                forward = emptyList(),
+                continueToNext = true,
+            )
+        assertTrue(RulesValidator.hasNoEffect(noEffect))
+        assertEquals(listOf("continueToNext"), issueFields(noEffect))
+
+        // Flag / mark-as-read alone don't rescue it: they are delivery
+        // metadata with no delivery to ride (until Phase 2's pending flags).
+        assertEquals(listOf("continueToNext"), issueFields(noEffect.copy(flag = true, markRead = true)))
+
+        // A continuing copy with no folders picked yet is the same trap.
+        assertEquals(
+            listOf("continueToNext"),
+            issueFields(noEffect.copy(action = RuleAction.COPY, copyFolders = emptyList())),
+        )
+    }
+
+    @Test
+    fun `effectful and terminal rules are not no-effect`() {
+        val continuingNone =
+            validRule().copy(action = RuleAction.NONE, moveFolder = "", forward = emptyList(), continueToNext = true)
+
+        // Forward or reply gives a continuing None rule an effect.
+        assertEquals(emptyList<String>(), issueFields(continuingNone.copy(forward = listOf("ops@example.com"))))
+        assertEquals(emptyList<String>(), issueFields(continuingNone.copy(reply = true, replyBody = "Away.")))
+        // A terminal None rule stops processing — that is an effect.
+        assertEquals(emptyList<String>(), issueFields(continuingNone.copy(continueToNext = false)))
+        // A continuing copy with folders delivers.
+        assertEquals(
+            emptyList<String>(),
+            issueFields(continuingNone.copy(action = RuleAction.COPY, copyFolders = listOf("Audit"))),
+        )
+    }
+
+    @Test
     fun `rule count cap`() {
         val many = List(101) { Rule(name = "r$it") }
 

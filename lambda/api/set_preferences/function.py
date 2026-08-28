@@ -42,6 +42,21 @@ APP_ALLOWED = {
 # so a runaway value can't bloat every row.
 MAX_SIGNATURE_LENGTH = 2000
 
+# Custom-flag palette (docs/1.x/rules-composition-and-custom-flags-plan.md,
+# Phase 3 / decision 4): up to 20 user-defined slots riding the app map. The
+# value is a JSON-encoded STRING, not a nested object, deliberately: every
+# shipped native client decodes the app map as {string: string}, and a
+# non-string value would make the whole preferences pull fail silently on
+# builds already in the field. The API is the palette's sole enforcement
+# point - slot atoms are the only vocabulary the mailstore ever sees.
+MAX_FLAG_PALETTE_RAW_LENGTH = 4000
+MAX_FLAG_LABEL_LENGTH = 32
+FLAG_PALETTE_SLOTS = {f'cabal-flag-{i:02d}' for i in range(1, 21)}
+FLAG_PALETTE_COLORS = {
+    'red', 'orange', 'yellow', 'green', 'teal', 'blue',
+    'indigo', 'purple', 'pink', 'gray',
+}
+
 
 def _validate_name(value):
     '''Returns the trimmed display name, or None if the value is invalid.'''
@@ -66,6 +81,53 @@ def _validate_signature(value):
     return value
 
 
+# Early-return-per-check is the validator idiom in this file; collapsing the
+# returns would only obscure which check failed.
+# pylint: disable-next=too-many-return-statements
+def _validate_flag_palette(value):
+    '''Returns the canonical palette JSON string, or None if invalid.
+
+    Structure: a JSON array of up to 20 entries, each
+    {slot, label, color[, enabled]}; array order is the display order. Slot
+    ids are the fixed cabal-flag-01..20 atoms (decision 4) and must be
+    unique; labels are bounded and control-free; colors come from the fixed
+    set. Whole-palette last-writer-wins is accepted - palette edits are rare
+    and single-device in practice.
+    '''
+    if not isinstance(value, str) or len(value) > MAX_FLAG_PALETTE_RAW_LENGTH:
+        return None
+    try:
+        entries = json.loads(value)
+    except ValueError:
+        return None
+    if not isinstance(entries, list) or len(entries) > 20:
+        return None
+    seen_slots = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+        keys = set(entry)
+        if not {'slot', 'label', 'color'} <= keys <= {'slot', 'label', 'color', 'enabled'}:
+            return None
+        slot = entry['slot']
+        if not isinstance(slot, str) or slot not in FLAG_PALETTE_SLOTS or slot in seen_slots:
+            return None
+        seen_slots.add(slot)
+        label = entry['label']
+        if (not isinstance(label, str)
+                or not 1 <= len(label) <= MAX_FLAG_LABEL_LENGTH
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in label)):
+            return None
+        color = entry['color']
+        if not isinstance(color, str) or color not in FLAG_PALETTE_COLORS:
+            return None
+        if not isinstance(entry.get('enabled', True), bool):
+            return None
+    # Canonical compact form: deterministic storage, order-preserving.
+    return json.dumps(entries, separators=(',', ':'), sort_keys=True)
+
+
+# pylint: disable-next=too-many-return-statements
 def _validate_app(value):
     '''Returns the validated `app` preference map, or None if it is invalid.
 
@@ -90,6 +152,11 @@ def _validate_app(value):
             if signature is None:
                 return None
             cleaned[key] = signature
+        elif key == 'flag_palette':
+            palette = _validate_flag_palette(val)
+            if palette is None:
+                return None
+            cleaned[key] = palette
         else:
             return None
     return cleaned

@@ -54,6 +54,31 @@ final class RulesViewModelTests: XCTestCase {
         XCTAssertTrue(model.folders.contains { $0.path == "Receipts" })
     }
 
+    func testLoadNormalizesLegacyContinueShapes() async {
+        // Stored move/archive + continue predates the gated editor and
+        // compiles identically to copy; the editor renders and saves it as
+        // Copy (truthful Continue, decision 2) without scheduling a save of
+        // its own — the normalized form persists on the next edit.
+        let backend = FakeRulesBackend()
+        var legacyMove = sampleRule()
+        legacyMove.continueToNext = true
+        var legacyDelete = sampleRule(name: "Purge")
+        legacyDelete.action = .delete
+        legacyDelete.continueToNext = true
+        backend.ruleSet = RuleSet(rules: [legacyMove, legacyDelete], version: 1)
+        let model = makeModel(backend)
+        await model.load()
+
+        XCTAssertEqual(model.rules[0].action, .copy)
+        XCTAssertEqual(model.rules[0].copyFolders, ["Receipts"])
+        XCTAssertTrue(model.rules[0].continueToNext)
+        XCTAssertEqual(model.rules[1].action, .delete)
+        XCTAssertFalse(model.rules[1].continueToNext)
+        // Render-only: no PUT until the user edits something.
+        try? await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(backend.savedSets.count, 0)
+    }
+
     func testUpdateSchedulesDebouncedWholeSetSave() async {
         let backend = FakeRulesBackend()
         backend.ruleSet = RuleSet(rules: [sampleRule()], version: 5)

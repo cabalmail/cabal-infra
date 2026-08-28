@@ -68,11 +68,26 @@ Each rule picks at most one **destination** and any combination of
 Destinations (mutually exclusive):
 
 - **Move** — deliver into a folder you pick.
-- **Copy** — deliver into the inbox *and* into one or more folders.
+- **Copy** — deliver a copy into one or more folders you pick. On a
+  rule that ends processing, the original is delivered to the inbox as
+  well; on a rule that continues, the message passes to later rules
+  (and lands in the inbox only if nothing further files it).
 - **Archive** — deliver into your `Archive` folder.
 - **Delete** — discard the message permanently at delivery time. It is
   not moved to Trash and cannot be recovered.
-- **None** — leave the message in the inbox; extras still apply.
+- **None** — don't deliver anywhere; extras still apply. On a rule that
+  ends processing the message stays in the inbox.
+
+Move, Archive, and Delete are only offered on rules that end
+processing. While **Continue to the next rule** is on, the destination
+choices narrow to Copy and None — a rule that continues passes the
+message along, so any delivery it makes is necessarily a copy, and the
+editor says so instead of letting a "Move" quietly behave as one.
+Turning Continue on while Move or Archive is selected converts the
+destination to Copy, carrying the folder; the delivered mail is
+identical either way, only the label is more honest. (Rules saved as
+Move or Archive with Continue on by older clients are likewise shown
+and saved as Copy.)
 
 Folder pickers offer only folders that already exist. **The system never
 creates a folder on your behalf** — not when you save a rule and not at
@@ -121,9 +136,29 @@ Rules run top to bottom in the order you arrange them. By default the
 first rule whose conditions match is the last one that runs for that
 message. Turning on a rule's **Continue to the next rule** lets
 evaluation keep going after it fires, so later rules also see the
-message — that is how "file receipts into Receipts AND flag anything
-from billing" composes from two rules. A Delete rule never continues
-(there is nothing left to evaluate).
+message. A Delete rule never continues (there is nothing left to
+evaluate).
+
+A continuing rule never settles the message's fate: it passes the
+message along, and any delivery it makes is a copy (which is why its
+destination can only be Copy or None). **The inbox is the fallback
+destination** — a message that runs off the end of the list without a
+rule ending processing for it is delivered to the inbox, copies
+intact. The editor refuses a continuing rule that neither files,
+forwards, nor replies; it would have no effect at all.
+
+To combine effects, write one rule per outcome, most specific first,
+without Continue. "File receipts into Receipts and flag anything from
+billing — including billing receipts" is three terminal rules:
+
+1. From contains `billing` **and** Subject contains `receipt` → Move to
+   Receipts, with Flag.
+2. Subject contains `receipt` → Move to Receipts.
+3. From contains `billing` → destination None, with Flag.
+
+Flag and Mark-as-read apply where the message is delivered, so they
+take effect only on the rule that ends processing — a continuing rule
+cannot "decorate" the message for a later rule to file.
 
 ## Limits
 
