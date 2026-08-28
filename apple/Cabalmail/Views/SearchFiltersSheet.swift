@@ -114,6 +114,7 @@ struct SearchFiltersSheet: View {
                                 ? "Search restricted to \(currentFolderName)."
                                 : "Search every subscribed folder except Trash."
                         )
+                        .sectionFooter()
                     }
                 }
             }

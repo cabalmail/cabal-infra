@@ -40,6 +40,7 @@ struct AcknowledgementsView: View {
                     Text(component.name)
                 } footer: {
                     Text(component.summary)
+                        .sectionFooter()
                 }
             }
         }

@@ -23,8 +23,10 @@ struct RuleExtrasSection: View {
         } footer: {
             if rule.action == .delete {
                 Text("These don't apply when the rule deletes the message.")
+                    .sectionFooter()
             } else if rule.reply {
                 Text("Replies come from the address the message was sent to, at most once a week per sender.")
+                    .sectionFooter()
             }
         }
     }
