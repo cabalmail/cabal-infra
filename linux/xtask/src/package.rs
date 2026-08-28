@@ -16,6 +16,10 @@ use std::process::Command;
 
 use crate::process::{self, Step};
 
+/// What `packaging/arch/PKGBUILD` calls itself. Stated here because the built
+/// file names are matched against it; a test holds the two together.
+const PKGNAME: &str = "cabalmail";
+
 /// The distributions `package` knows about, and what answers for each.
 const DISTROS: &[(&str, Option<&str>)] = &[
     ("arch", None),
@@ -89,10 +93,12 @@ pub fn arch(workspace: &Path) -> Result<(), String> {
         &staging,
     )?;
 
-    let package = built_package(&staging)?;
+    let package = built_package(&staging, PKGNAME, &pkgver)?;
     lint(&staging, Path::new("PKGBUILD"))?;
     lint(&staging, &package)?;
-    println!("[xtask] package: {}", staging.join(&package).display());
+    for artifact in packages_in(&staging)? {
+        println!("[xtask] package: {}", staging.join(&artifact).display());
+    }
     Ok(())
 }
 
@@ -231,21 +237,53 @@ fn packages_in(staging: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(found)
 }
 
-/// The package makepkg just wrote. There is exactly one; more than one means a
-/// stale build is still sitting in the staging directory, and picking either
-/// would be a guess.
-fn built_package(staging: &Path) -> Result<PathBuf, String> {
-    let mut found = packages_in(staging)?;
-    match found.len() {
-        1 => Ok(found.remove(0)),
+/// The package makepkg just wrote, out of everything in the staging directory.
+///
+/// There can legitimately be two: a build environment with `debug` in its
+/// `OPTIONS` — which is what the `archlinux:base-devel` image ships, unlike a
+/// stock `/etc/makepkg.conf` — splits the symbols into a second
+/// `<pkgname>-debug-…` package. That one is a real artifact, not a leftover, so
+/// it is named rather than counted.
+fn built_package(staging: &Path, pkgname: &str, pkgver: &str) -> Result<PathBuf, String> {
+    let built = packages_in(staging)?;
+    let names: Vec<String> = built
+        .iter()
+        .map(|name| name.to_string_lossy().into_owned())
+        .collect();
+    choose_package(&names, pkgname, pkgver).map(PathBuf::from)
+}
+
+/// Picks the package this build produced out of the file names in hand. Pure,
+/// so the cases that only arise on somebody else's makepkg.conf are testable
+/// here rather than discovered in a container.
+fn choose_package(names: &[String], pkgname: &str, pkgver: &str) -> Result<String, String> {
+    // `<pkgname>-<pkgver>-`: `cabalmail-debug-…` does not match it, and neither
+    // does a package left over from an earlier version.
+    let prefix = format!("{pkgname}-{pkgver}-");
+    let mut mine: Vec<&String> = names
+        .iter()
+        .filter(|name| name.starts_with(&prefix))
+        .collect();
+
+    match mine.len() {
+        1 => Ok(mine.remove(0).clone()),
         0 => Err(format!(
-            "makepkg reported success but left no package in {}",
-            staging.display()
+            "makepkg reported success but left no `{prefix}…` package behind. \
+             Found: {}",
+            if names.is_empty() {
+                "nothing".to_owned()
+            } else {
+                names.join(", ")
+            }
         )),
         _ => Err(format!(
-            "{} holds {} packages; remove the stale ones and run again",
-            staging.display(),
-            found.len()
+            "{} packages match `{prefix}…`: {}. Remove the stale ones and run \
+             again.",
+            mine.len(),
+            mine.iter()
+                .map(|name| name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         )),
     }
 }
@@ -430,6 +468,64 @@ sha256sums=('SKIP' 'abc')
                 "`{not_a_release}` was accepted as a release description"
             );
         }
+    }
+
+    /// The file names this matches against are makepkg's, so the name here
+    /// has to be the one the PKGBUILD declares.
+    #[test]
+    fn the_package_name_is_the_one_the_pkgbuild_declares() {
+        let pkgbuild = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .expect("xtask lives inside the workspace root")
+                .join("packaging/arch/PKGBUILD"),
+        )
+        .expect("the PKGBUILD reads");
+        let declared = pkgbuild
+            .lines()
+            .find_map(|line| line.strip_prefix("pkgname="))
+            .expect("the PKGBUILD declares pkgname");
+        assert_eq!(declared.trim_matches('\''), PKGNAME);
+    }
+
+    /// A build environment with `debug` in its OPTIONS writes a second
+    /// package. It is an artifact of this build, not a leftover from an
+    /// earlier one, and treating it as ambiguity failed a green build in CI.
+    #[test]
+    fn the_debug_package_is_not_mistaken_for_a_stale_one() {
+        let names = vec![
+            "cabalmail-1.5.0.r3.gabc1234-1-x86_64.pkg.tar.zst".to_owned(),
+            "cabalmail-debug-1.5.0.r3.gabc1234-1-x86_64.pkg.tar.zst".to_owned(),
+        ];
+        assert_eq!(
+            choose_package(&names, "cabalmail", "1.5.0.r3.gabc1234").unwrap(),
+            "cabalmail-1.5.0.r3.gabc1234-1-x86_64.pkg.tar.zst"
+        );
+    }
+
+    /// A package from an earlier version is a leftover, and picking it would
+    /// lint something nobody just built.
+    #[test]
+    fn a_package_from_another_version_is_not_this_build() {
+        let names = vec!["cabalmail-1.4.0.r1.gdeadbee-1-x86_64.pkg.tar.zst".to_owned()];
+        let error = choose_package(&names, "cabalmail", "1.5.0.r3.gabc1234")
+            .expect_err("that is not this build");
+        assert!(error.contains("1.4.0.r1.gdeadbee"), "{error}");
+    }
+
+    #[test]
+    fn two_packages_of_the_same_version_are_ambiguous() {
+        let names = vec![
+            "cabalmail-1.5.0-1-x86_64.pkg.tar.zst".to_owned(),
+            "cabalmail-1.5.0-1-aarch64.pkg.tar.zst".to_owned(),
+        ];
+        assert!(choose_package(&names, "cabalmail", "1.5.0").is_err());
+    }
+
+    #[test]
+    fn no_package_at_all_says_what_was_there_instead() {
+        let error = choose_package(&[], "cabalmail", "1.5.0").expect_err("nothing was built");
+        assert!(error.contains("nothing"), "{error}");
     }
 
     #[test]

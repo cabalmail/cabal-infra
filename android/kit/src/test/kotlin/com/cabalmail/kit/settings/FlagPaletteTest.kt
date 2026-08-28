@@ -54,6 +54,13 @@ class FlagPaletteTest {
     }
 
     @Test
+    fun `slotsIn filters and orders by fixed slot order`() {
+        val flags = listOf("\\Seen", "cabal-flag-07", "\\Flagged", "cabal-flag-02", "\$Forwarded")
+        assertEquals(listOf("cabal-flag-02", "cabal-flag-07"), FlagPalette.slotsIn(flags))
+        assertEquals(emptyList<String>(), FlagPalette.slotsIn(listOf("\\Seen")))
+    }
+
+    @Test
     fun `payload omits the palette until it is syncable`() {
         // A server that predates the key 400s the whole app map on it, so
         // an untouched palette must not ride the payload.

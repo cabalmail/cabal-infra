@@ -247,10 +247,13 @@ constructible in either editor compiles to `no_effect`.
 
 ## Phase 2 -- Pending decorations
 
-**Status:** Code complete (2026-08-28); the on-stage acceptance checks
-(decorate-then-move, decorate-then-fallback with a live message) are
-pending the stage rollout. One mechanism refinement over decision 3's
-sketch: deliveries fold pending flags through a per-delivery `DFLAGS`
+**Status:** Complete and stage-verified (2026-08-28): a decorate-only
+rule above a move rule delivered a `\Flagged` message into the
+destination folder with nothing extra in the inbox, and a decorate-only
+rule with no later match delivered a `\Flagged` inbox message through
+the procmailrc pending fallback; rule sets without decoration compile
+byte-identically (golden-file gate). One mechanism refinement over
+decision 3's sketch: deliveries fold pending flags through a per-delivery `DFLAGS`
 variable (own flags override their slot) rather than assigning
 `PENDING_*` before the delivery line — a spill copy's own flags must
 decorate the copy only, and mutating the pending variables there would
@@ -287,8 +290,11 @@ byte-identically to the pre-phase output.
 together — the contract test's exact-equality runs at PR time in both
 directions, so a standalone Linux-only change cannot pass CI), and the
 Apple/Android palette managers, which must merge after the server side.
-Stage round-trip verification pending. Two mechanism refinements over
-the sketch: (1) the palette value is a JSON-encoded *string* inside the
+Stage-verified (2026-08-28) against the live `set_preferences`: a
+two-entry palette round-trips exactly (including `enabled: false` and
+an entry with `enabled` absent), and a 21-entry list, an out-of-range
+slot, and an unknown color are each rejected with a clean 400. Two
+mechanism refinements over the sketch: (1) the palette value is a JSON-encoded *string* inside the
 `app` map, not a nested object — every shipped native client decodes
 the map as string-to-string, and a nested value would silently kill
 preference sync for builds in the field; (2) clients include the

@@ -53,6 +53,11 @@ final class MessageDetailViewModel {
     /// toolbar render the right icon and updates optimistically on toggle.
     var isFlagged: Bool
 
+    /// Mirrors the message's custom-flag slot atoms (rules-composition
+    /// plan, Phase 4). Same optimistic role as `isFlagged`; drives the
+    /// header chips and the flag menu's checkmarks.
+    var keywordSlots: Set<String>
+
     /// Gate for remote-content loading in the `WKWebView`. Seeded from the
     /// `Preferences.loadRemoteContent` preference — Off leaves the user in
     /// control per-message, Always drops the block entirely. "Ask" starts
@@ -127,6 +132,7 @@ final class MessageDetailViewModel {
         self.preferences = preferences
         self.isSeen = envelope.flags.contains(.seen)
         self.isFlagged = envelope.flags.contains(.flagged)
+        self.keywordSlots = Set(FlagPalette.slots(in: envelope.flags))
         self.remoteContentAllowed = preferences.loadRemoteContent == .always
         self.readerMode = preferences.defaultBodyRenderMode == .reader
     }

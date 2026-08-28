@@ -34,12 +34,26 @@ on:
       # a test there fails if one is missing from this list.
       - 'react/admin/package-lock.json'
       - 'LICENSE.md'
+      # The PR-time gate runs the same `cargo xtask ci`, so the contract test
+      # reads its path filter as well as this one.
+      - '.github/workflows/lint.yml'
 
 # A stale result is never worth finishing; keyed on the ref so the named
 # branches do not cancel each other.
 concurrency:
   group: linux-${{ github.ref }}
   cancel-in-progress: true
+
+# The container images this workflow uses do not all make `sh` a bash, and the
+# runner falls back to `sh -e {0}` when it is not told otherwise - which is how
+# `set -euo pipefail` in a step below became "Illegal option -o pipefail" and
+# failed app-build and app-test on every run of this workflow. Naming the shell
+# once here means a step is run by the shell it was written for. GitHub's
+# `bash` also implies `-o pipefail`, so a piped step fails on the first
+# command's status rather than the last.
+defaults:
+  run:
+    shell: bash
 
 env:
   CARGO_TERM_COLOR: always

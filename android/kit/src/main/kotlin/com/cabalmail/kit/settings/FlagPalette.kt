@@ -59,4 +59,11 @@ object FlagPalette {
     /** The lowest slot atom not yet used, or null at the 20-entry cap. */
     fun firstFreeSlot(entries: List<FlagPaletteEntry>): String? =
         SLOTS.firstOrNull { slot -> entries.none { it.slot == slot } }
+
+    /**
+     * The slot atoms present in a message's flag list, in fixed slot order
+     * — what chips and pickers render (Phase 4). System flags and foreign
+     * keywords never leak through.
+     */
+    fun slotsIn(flags: List<String>): List<String> = SLOTS.filter { it in flags }
 }

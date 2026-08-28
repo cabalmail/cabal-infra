@@ -163,7 +163,10 @@ JavaScript pins. A check over a file this workflow does not fire on reports its
 drift on the next unrelated push, long after the change that caused it merged.
 Those files are registered in [`xtask/tests/support/mod.rs`](xtask/tests/support/mod.rs)
 and read through `repo_input`, which refuses an unregistered path; the workflow
-contract fails if a registered one is missing from `paths:`.
+contract fails if a registered one is missing from either gate's filter — this
+workflow's `paths:`, or the `rust` filter in
+[`lint.yml`](../.github/workflows/lint.yml), which runs the same
+`cargo xtask ci` on pull requests.
 
 The packaged-artifact smoke test, coverage, and the `cargo-deny`/dependency-tree
 guards are the remaining Phase 2 work items; the workflow names the item that

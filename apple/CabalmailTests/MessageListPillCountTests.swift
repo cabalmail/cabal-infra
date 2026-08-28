@@ -67,6 +67,39 @@ final class MessageListPillCountTests: XCTestCase {
         XCTAssertEqual(model.flagged, 0)
     }
 
+    func testKeywordToggleLeavesPillsAloneAndTagsTheRow() throws {
+        // Custom-flag slots (Phase 4) ride the same optimistic path but are
+        // not what the Unread/Flagged pills count.
+        let model = try makeModel()
+        model.applyFlagChange(uid: 1, flag: .keyword("cabal-flag-01"), added: true)
+        XCTAssertEqual(model.unseen, 1)
+        XCTAssertEqual(model.flagged, 0)
+        XCTAssertTrue(model.envelopes[0].flags.contains(.keyword("cabal-flag-01")))
+    }
+
+    func testOptimisticRebuildPreservesThreadingAndAuthResults() throws {
+        // Regression: `rebuildEnvelope` dropped `references` and
+        // `authResults`, so every optimistic flag toggle silently stripped
+        // the threading chain and the auth verdict from the row. Phase 4
+        // makes the rebuild hotter (keyword toggles), so pin it.
+        let model = try TestFixtures.makeModel(
+            imap: FakeImapClient(),
+            envelopes: [
+                Envelope(
+                    uid: 9,
+                    subject: "keep my fields",
+                    references: ["<a@example.com>", "<b@example.com>"],
+                    flags: [],
+                    authResults: AuthResults(spf: "pass", dkim: "pass", dmarc: "pass")
+                ),
+            ]
+        )
+        model.applyFlagChange(uid: 9, flag: .keyword("cabal-flag-02"), added: true)
+        XCTAssertEqual(model.envelopes[0].references,
+                       ["<a@example.com>", "<b@example.com>"])
+        XCTAssertNotNil(model.envelopes[0].authResults)
+    }
+
     // MARK: - #850: a row disposed from the reader
 
     func testDisposedUnreadRowDropsTheUnreadPill() throws {
