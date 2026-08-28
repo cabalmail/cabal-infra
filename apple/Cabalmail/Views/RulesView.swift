@@ -103,6 +103,7 @@ private struct RulesListView: View {
                     "Rules run top to bottom on every arriving message; "
                     + "the first match applies unless it continues to the next rule."
                 )
+                .sectionFooter()
             }
         }
     }
