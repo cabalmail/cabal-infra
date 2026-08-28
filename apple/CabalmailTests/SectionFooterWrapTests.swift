@@ -14,7 +14,7 @@ final class SectionFooterWrapTests: XCTestCase {
         "Cabalmail/Views/RulesView.swift",
         "Cabalmail/Views/RuleEditorView.swift",
         "Cabalmail/Views/RuleEditorExtras.swift",
-        "Cabalmail/Views/SettingsView.swift",
+        "Cabalmail/Views/SettingsDetailViews.swift",
         "Cabalmail/Views/NotificationSettingsSection.swift",
         "Cabalmail/Views/SearchFiltersSheet.swift",
         "Cabalmail/Views/AcknowledgementsView.swift"
@@ -33,7 +33,7 @@ final class SectionFooterWrapTests: XCTestCase {
         }
         // Floor per file above, and over the corpus here: a scan that stops
         // finding footers passes everything vacuously.
-        XCTAssertGreaterThanOrEqual(total, 11, "footer corpus shrank — check the scan still matches")
+        XCTAssertGreaterThanOrEqual(total, 10, "footer corpus shrank — check the scan still matches")
         XCTAssertEqual(offenders, [], "section footers that can truncate instead of wrapping (#1300)")
     }
 

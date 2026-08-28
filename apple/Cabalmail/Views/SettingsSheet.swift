@@ -77,8 +77,9 @@ extension View {
 /// `SignedInRootView` via `AppState.settingsRequestTick` (sidebar gear button /
 /// ⌘, command) at regular width, where the section tab bar is gone.
 ///
-/// `SettingsView` supplies its own `NavigationStack` + Done button on iOS (its
-/// `#else` branch + `settingsSheetDoneButton()`), so it renders normally inside
+/// `SettingsView` supplies its own navigation (a category split view that
+/// collapses to a drill-in list at the sheet's compact width) and offers a
+/// Done button via `settingsSheetDoneButton()`, so it renders normally inside
 /// the sheet.
 struct SettingsSheet: View {
     var body: some View {

@@ -5,10 +5,10 @@ import CabalmailKit
 /// Phase 4): the ordered rule list with reorder / enable / add / duplicate /
 /// delete, pushing `RuleEditorView` for the detail form.
 ///
-/// Reached as a push from the Settings form on iOS / iPadOS / visionOS and
-/// inside a sheet-hosted `NavigationStack` from the macOS Settings window
-/// (the Settings scene has no stack of its own, so a push there is inert —
-/// same pattern as the Acknowledgements sheet).
+/// Reached as the Rules category's detail screen in Settings on every
+/// platform — the category row leads straight here, and the detail column's
+/// `NavigationStack` hosts the editor pushes (including on macOS, where the
+/// stack-less Settings scene used to require a sheet-hosted stack instead).
 struct RulesView: View {
     @Environment(AppState.self) private var appState
     @State private var model: RulesViewModel?
@@ -87,10 +87,10 @@ private struct RulesListView: View {
                     model.delete(at: offsets)
                 }
                 #if os(macOS)
-                // The toolbar "+" doesn't reliably render in the Settings
-                // sheet, and swipe/EditButton deletion doesn't exist on
-                // macOS — the list itself must carry the affordances (the
-                // rows carry delete; see RuleRow).
+                // The toolbar "+" doesn't reliably render when this list is
+                // hosted in the macOS Settings window, and swipe/EditButton
+                // deletion doesn't exist on macOS — the list itself must
+                // carry the affordances (the rows carry delete; see RuleRow).
                 Button {
                     model.add()
                 } label: {
