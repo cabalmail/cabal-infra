@@ -73,7 +73,7 @@ struct SettingsView: View {
 
 /// The selectable settings categories, in presentation order.
 enum SettingsCategory: CaseIterable, Identifiable, Hashable {
-    case account, reading, composing, rules, actions, notifications
+    case account, reading, composing, rules, flags, actions, notifications
     case appearance, diagnostics, about
 
     var id: Self { self }
@@ -96,6 +96,7 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         case .reading: "Reading"
         case .composing: "Composing"
         case .rules: "Rules"
+        case .flags: "Flags"
         case .actions: "Actions"
         case .notifications: "Notifications"
         case .appearance: "Appearance"
@@ -110,6 +111,7 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         case .reading: "envelope.open"
         case .composing: "square.and.pencil"
         case .rules: "list.bullet.rectangle"
+        case .flags: "flag"
         case .actions: "archivebox"
         case .notifications: "bell.badge"
         case .appearance: "paintbrush"
@@ -132,6 +134,7 @@ private struct SettingsCategoryDetail: View {
         case .reading: ReadingSettingsView()
         case .composing: ComposingSettingsView()
         case .rules: RulesView()
+        case .flags: FlagPaletteSettingsView()
         case .actions: ActionsSettingsView()
         case .notifications:
             #if os(iOS) || os(macOS)
