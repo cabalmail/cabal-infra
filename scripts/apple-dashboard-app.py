@@ -442,7 +442,7 @@ const INTERVALS=[{s:0,label:"Off"},{s:10,label:"10 seconds"},{s:60,label:"1 minu
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pill=(label,role)=>`<span class="pill ${role}"><span class="ic">${ROLE_ICON[role]||"○"}</span>${esc(label)}</span>`;
 
-let MODEL=null, sortKey='uploaded', sortDir=-1, ledgerShellBuilt=false, openGroups=null, inFlight=false, intervalSec=0, timer=null, gBuild=null;
+let MODEL=null, sortKey='uploaded', sortDir=-1, ledgerShellBuilt=false, openGroups=null, inFlight=false, intervalSec=0, timer=null, gBuild=null, lastFetch=0;
 
 /* ---------- global build-number floor (applies to both tabs) ---------- */
 function buildToDate(ts){ if(!(ts>=1e9 && ts<=4e9)) return ''; const d=new Date(ts*1000); return d.toISOString().slice(0,16).replace('T',' ')+' UTC'; }
@@ -470,7 +470,7 @@ async function fetchData(){
     if(data && data.error){ showError(data.error); } else { MODEL=data; clearError(); renderAll(); }
   }catch(e){ showError(String(e)); }
   finally{
-    inFlight=false; icon.classList.remove('spin'); btn.disabled=false;
+    inFlight=false; lastFetch=Date.now(); icon.classList.remove('spin'); btn.disabled=false;
     const now=new Date();
     document.getElementById('updated').textContent='Updated '+now.toLocaleTimeString()+(intervalSec?` · auto-refresh every ${INTERVALS.find(i=>i.s===intervalSec).label.toLowerCase()}`:'');
   }
@@ -648,6 +648,12 @@ function setIntervalSec(sec){
 }
 document.getElementById('g-build').addEventListener('input', applyGlobal);
 document.getElementById('g-clear').addEventListener('click',()=>{ document.getElementById('g-build').value=''; applyGlobal(); });
+/* Refresh when the tab regains focus, throttled to once per 15s so rapid
+   window-switching does not hammer App Store Connect. */
+function focusRefresh(){ if(!document.hidden && Date.now()-lastFetch>15000) fetchData(); }
+document.addEventListener('visibilitychange', focusRefresh);
+window.addEventListener('focus', focusRefresh);
+
 renderIntervalMenu(); fetchData();
 </script>
 </body>
