@@ -8,11 +8,19 @@ import CabalmailKit
 /// no message left to flag, forward, or answer).
 struct RuleExtrasSection: View {
     @Binding var rule: Rule
+    /// The user's custom-flag palette; the Flag extra grew into a picker of
+    /// the classic flag plus these (rules-composition plan, Phase 5). Read
+    /// from the environment like `FlagPaletteSettingsView` — the rules view
+    /// model deliberately knows nothing about preferences.
+    @Environment(Preferences.self) private var preferences
+
+    private var palette: [FlagPaletteEntry] { preferences.flagPalette }
 
     var body: some View {
         Section {
             Group {
                 Toggle("Flag", isOn: $rule.flag)
+                paletteToggles
                 Toggle("Mark as read", isOn: $rule.markRead)
                 forwardRows
                 replyRows
@@ -29,6 +37,46 @@ struct RuleExtrasSection: View {
                     .sectionFooter()
             }
         }
+    }
+
+    /// One toggle per enabled palette entry, plus any slot this rule already
+    /// sets whose entry is disabled or deleted — the compiler skips the rule
+    /// while such a slot remains (`flag_not_in_palette`), so the stray
+    /// toggle is the affordance for clearing it, labelled by slot id when
+    /// the entry is gone.
+    @ViewBuilder
+    private var paletteToggles: some View {
+        ForEach(pickerSlots, id: \.self) { slot in
+            let entry = palette.first { $0.slot == slot }
+            Toggle(isOn: slotBinding(slot)) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(FlagPaletteColor.color(for: entry?.color ?? ""))
+                        .frame(width: 10, height: 10)
+                    Text(entry?.label ?? slot)
+                }
+            }
+        }
+    }
+
+    private var pickerSlots: [String] {
+        let offered = palette.filter(\.enabled).map(\.slot)
+        let stray = FlagPalette.slots
+            .filter { rule.flags.contains($0) && !offered.contains($0) }
+        return offered + stray
+    }
+
+    private func slotBinding(_ slot: String) -> Binding<Bool> {
+        Binding(
+            get: { rule.flags.contains(slot) },
+            set: { isOn in
+                if isOn {
+                    if !rule.flags.contains(slot) { rule.flags.append(slot) }
+                } else {
+                    rule.flags.removeAll { $0 == slot }
+                }
+            }
+        )
     }
 
     // No on/off toggle for Forward: the address list itself is the state —

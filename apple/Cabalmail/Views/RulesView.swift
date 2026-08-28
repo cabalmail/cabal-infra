@@ -342,6 +342,12 @@ enum RuleSummary {
             parts.append(actionPhrase(rule))
         }
         if rule.flag { parts.append("flag") }
+        // Custom flags by count: the summary is pure (no palette access),
+        // so labels can't resolve here — the editor shows them.
+        if !rule.flags.isEmpty {
+            parts.append(rule.flags.count == 1
+                ? "1 custom flag" : "\(rule.flags.count) custom flags")
+        }
         if rule.markRead { parts.append("mark read") }
         if !rule.forward.isEmpty { parts.append("forward to \(rule.forward.joined(separator: ", "))") }
         if rule.reply { parts.append("reply") }

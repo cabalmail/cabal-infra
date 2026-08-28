@@ -111,6 +111,23 @@ class RulesModelsTest {
     }
 
     @Test
+    fun `empty flags stays off the wire and non-empty rides`() {
+        // A server predating the `flags` key rejects unknown fields, so an
+        // empty list is omitted (the server defaults it to []); a
+        // non-empty list — only authorable via the palette picker — rides
+        // and round-trips.
+        val plain = bodyJson.parseToJsonElement(bodyJson.encodeToString(Rule(name = "n"))).jsonObject
+        assertFalse("flags" in plain.keys)
+
+        val tagged = Rule(name = "n", flags = listOf("cabal-flag-03"))
+        val encoded = bodyJson.encodeToString(tagged)
+        assertTrue("\"flags\":[\"cabal-flag-03\"]" in encoded)
+        assertEquals(tagged, json.decodeFromString<Rule>(encoded))
+        // ...and a missing key decodes as the empty default.
+        assertTrue(json.decodeFromString<Rule>("{}").flags.isEmpty())
+    }
+
+    @Test
     fun `missing keys decode as the lambda defaults`() {
         val rule = json.decodeFromString<Rule>("{}")
 

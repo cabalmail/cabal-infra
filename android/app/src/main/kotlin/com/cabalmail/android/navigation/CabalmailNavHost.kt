@@ -625,6 +625,7 @@ private fun MailNavGraph(
             val viewModel: RulesViewModel =
                 viewModel(parentEntry, factory = RulesViewModel.factory(container))
             val state by viewModel.state.collectAsState()
+            val preferences by container.preferences.preferences.collectAsState()
             RuleEditorScreen(
                 state = state,
                 ruleId = entry.arguments?.getString("ruleId").orEmpty(),
@@ -632,6 +633,7 @@ private fun MailNavGraph(
                 onCreateArchiveFolder = viewModel::createArchiveFolder,
                 onReload = viewModel::load,
                 onBack = { navController.popBackStack() },
+                palette = preferences.flagPalette,
             )
         }
 

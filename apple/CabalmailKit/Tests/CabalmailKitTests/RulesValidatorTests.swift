@@ -149,6 +149,33 @@ final class RulesValidatorTests: XCTestCase {
         XCTAssertEqual(issueFields(rule), [])
     }
 
+    // MARK: - Custom-flag slots
+
+    func testRuleFlagsShapeIssues() {
+        var rule = validRule()
+        rule.flags = ["cabal-flag-01", "cabal-flag-20"]
+        XCTAssertEqual(issueFields(rule), [])
+        rule.flags = ["cabal-flag-21"]
+        XCTAssertEqual(issueFields(rule), ["flags[0]"])
+        rule.flags = ["cabal-flag-01", "cabal-flag-01"]
+        XCTAssertEqual(issueFields(rule), ["flags[1]"])
+        rule.flags = ["not-a-slot"]
+        XCTAssertEqual(issueFields(rule), ["flags[0]"])
+        rule.flags = (1...20).map { String(format: "cabal-flag-%02d", $0) }
+        XCTAssertEqual(issueFields(rule), [])
+    }
+
+    func testCustomFlagsGiveAContinuingRuleAnEffect() {
+        var rule = validRule()
+        rule.action = .none
+        rule.moveFolder = ""
+        rule.forward = []
+        rule.continueToNext = true
+        rule.flags = ["cabal-flag-01"]
+        XCTAssertFalse(RulesValidator.hasNoEffect(rule))
+        XCTAssertEqual(issueFields(rule), [])
+    }
+
     // MARK: - No-effect rules (client-strict; the server stays permissive)
 
     func testContinuingRuleWithoutAnEffectIsAnIssue() {
