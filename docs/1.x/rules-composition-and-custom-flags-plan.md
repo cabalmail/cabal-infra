@@ -6,7 +6,7 @@
 | ---------------------------------- | ----------------------- |
 | 1 -- Truthful Continue             | Complete (2026-08-28)   |
 | 2 -- Pending decorations           | Not started             |
-| 3 -- Flag palette                  | Not started             |
+| 3 -- Flag palette                  | Code complete (2026-08-28); stage verification pending |
 | 4 -- Keywords on the message plane | Not started             |
 | 5 -- Rules integration             | Not started             |
 
