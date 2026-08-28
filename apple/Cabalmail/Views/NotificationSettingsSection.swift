@@ -10,6 +10,16 @@ import OSLog
 import ServiceManagement
 #endif
 
+/// The Notifications category screen: `NotificationSettingsSection` in its
+/// own form now that Settings is a category list with detail screens.
+struct NotificationsSettingsView: View {
+    var body: some View {
+        SettingsForm(title: "Notifications") {
+            NotificationSettingsSection()
+        }
+    }
+}
+
 /// "Notifications" section of the Settings form (push phase 5).
 ///
 /// The master toggle drives `PushRegistrar.enablePush` / `disablePush`; the
@@ -36,11 +46,6 @@ struct NotificationSettingsSection: View {
     @State private var chosenFolders = Set(PushSettings.chosenFolders)
     @State private var systemDenied = false
     #if os(macOS)
-    // The macOS Settings scene has no NavigationStack (by design — see
-    // SettingsView's top comment), so a NavigationLink would render
-    // permanently disabled. Present the folder picker as a sheet instead,
-    // same pattern as the Acknowledgements row.
-    @State private var showingFolderPicker = false
     // Mac residency: Macs get silent pushes and the running app enriches
     // them, so a quit app gets no notification — these two rows exist to
     // make "quit" rare. The login-item toggle reflects the system's
@@ -87,8 +92,6 @@ struct NotificationSettingsSection: View {
             Toggle("Launch at login", isOn: launchAtLoginBinding)
             Toggle("Show in menu bar", isOn: $showInMenuBar)
             #endif
-        } header: {
-            Text("Notifications")
         } footer: {
             // Always present (content swaps, structure doesn't) so the
             // sections below never reflow when the permission state changes.
@@ -107,32 +110,15 @@ struct NotificationSettingsSection: View {
 
     // MARK: - Rows
 
-    @ViewBuilder
+    // A plain push on every platform: the settings detail column carries a
+    // NavigationStack, so the old macOS sheet workaround (the stack-less
+    // Settings scene rendered NavigationLinks permanently disabled) is gone.
     private var chooseFoldersRow: some View {
-        #if os(macOS)
-        Button {
-            showingFolderPicker = true
-        } label: {
-            folderRowLabel
-        }
-        .sheet(isPresented: $showingFolderPicker) {
-            NavigationStack {
-                NotificationFolderPickerView(selection: $chosenFolders)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { showingFolderPicker = false }
-                        }
-                    }
-            }
-            .frame(minWidth: 360, minHeight: 420)
-        }
-        #else
         NavigationLink {
             NotificationFolderPickerView(selection: $chosenFolders)
         } label: {
             folderRowLabel
         }
-        #endif
     }
 
     private var folderRowLabel: some View {

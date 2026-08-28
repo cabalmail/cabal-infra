@@ -1,50 +1,39 @@
 package com.cabalmail.android.ui.settings
 
-import android.Manifest
 import android.content.Intent
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.layout.AnimatedPane
+import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
+import androidx.compose.material3.adaptive.navigation.NavigableListDetailPaneScaffold
+import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.cabalmail.android.BuildConfig
 import com.cabalmail.android.R
-import com.cabalmail.android.notifications.NewMailSync
-import com.cabalmail.android.ui.mail.advanceLabelRes
 import com.cabalmail.kit.settings.Accent
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.AppTheme
@@ -56,16 +45,36 @@ import com.cabalmail.kit.settings.DisposeAdvance
 import com.cabalmail.kit.settings.FolderCountDisplay
 import com.cabalmail.kit.settings.LoadRemoteContent
 import com.cabalmail.kit.settings.MarkAsRead
+import kotlinx.coroutines.launch
 
 private const val ISSUES_URL = "https://github.com/cabalmail/cabal-infra/issues"
 
+/** The selectable settings categories, in presentation order. */
+enum class SettingsCategory(
+    val titleRes: Int,
+) {
+    ACCOUNT(R.string.settings_account),
+    READING(R.string.settings_reading),
+    COMPOSING(R.string.settings_composing),
+    RULES(R.string.rules_title),
+    ACTIONS(R.string.settings_actions),
+    NOTIFICATIONS(R.string.settings_notifications),
+    APPEARANCE(R.string.settings_appearance),
+    ABOUT(R.string.settings_about),
+}
+
 /**
- * Settings (plan §6.3): Account, Reading, Composing, Actions, Appearance,
- * About. Enum-valued rows open a radio dialog; free-text rows open a text
- * dialog; toggles are inline. Every change writes through the preference
- * repository (DataStore now, server on a short debounce).
+ * Settings (plan §6.3), System-Settings style: the categories are a
+ * selectable list in a [NavigableListDetailPaneScaffold] — side by side
+ * with the selected category's options on wide windows, a full-screen list
+ * that drills into each category on phones (system back / the top-bar
+ * arrow return to the list). Rules is a category like any other; its
+ * detail pane is the rules experience itself, supplied by the nav host so
+ * this screen stays unaware of the rules view model and editor routes.
+ * Every change writes through the preference repository (DataStore now,
+ * server on a short debounce).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun SettingsScreen(
     state: SettingsUiState,
@@ -77,19 +86,128 @@ fun SettingsScreen(
     folderChoices: List<String>?,
     onLoadFolderChoices: () -> Unit,
     onPushFoldersChange: (Set<String>) -> Unit,
-    /** Opens the mail-rules editor (`docs/1.x/user-mail-rules-plan.md` 4b). */
-    onOpenRules: () -> Unit,
+    /**
+     * The Rules category's detail pane (`docs/1.x/user-mail-rules-plan.md`
+     * 4b). `onBack` is null when the category list is visible alongside.
+     */
+    rulesPane: @Composable (onBack: (() -> Unit)?) -> Unit,
     onSignOut: () -> Unit,
-    /** Null when hosted as a top-level destination (no back arrow). */
-    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    Scaffold(
+    val scope = rememberCoroutineScope()
+    val navigator = rememberListDetailPaneScaffoldNavigator<SettingsCategory>()
+    val twoPane =
+        navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] == PaneAdaptedValue.Expanded &&
+            navigator.scaffoldValue[ListDetailPaneScaffoldRole.Detail] == PaneAdaptedValue.Expanded
+
+    // Wide windows land on the first category instead of an empty detail
+    // pane; on phones the list is the whole screen and nothing preselects.
+    LaunchedEffect(twoPane) {
+        if (twoPane && navigator.currentDestination?.contentKey == null) {
+            navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, SettingsCategory.ACCOUNT)
+        }
+    }
+
+    NavigableListDetailPaneScaffold(
+        navigator = navigator,
         modifier = modifier.fillMaxSize(),
+        listPane = {
+            AnimatedPane {
+                SettingsCategoryList(
+                    selected = navigator.currentDestination?.contentKey.takeIf { twoPane },
+                    onSelect = { category ->
+                        scope.launch { navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, category) }
+                    },
+                )
+            }
+        },
+        detailPane = {
+            AnimatedPane {
+                val category = navigator.currentDestination?.contentKey
+                val onBack: (() -> Unit)? =
+                    if (twoPane) null else ({ scope.launch { navigator.navigateBack() } })
+                when (category) {
+                    // Only visible in the wide layout for the frame before
+                    // the auto-select above lands.
+                    null -> Unit
+                    SettingsCategory.RULES -> rulesPane(onBack)
+                    else ->
+                        SettingsCategoryDetail(
+                            category = category,
+                            state = state,
+                            preferences = preferences,
+                            onUpdate = onUpdate,
+                            onPushChange = onPushChange,
+                            folderChoices = folderChoices,
+                            onLoadFolderChoices = onLoadFolderChoices,
+                            onPushFoldersChange = onPushFoldersChange,
+                            onSignOut = onSignOut,
+                            onBack = onBack,
+                        )
+                }
+            }
+        },
+    )
+}
+
+/** The category list pane: a top-level destination, so no back arrow. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsCategoryList(
+    selected: SettingsCategory?,
+    onSelect: (SettingsCategory) -> Unit,
+) {
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.settings_title)) }) },
+    ) { innerPadding ->
+        Column(
+            modifier =
+                Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+        ) {
+            SettingsCategory.entries.forEach { category ->
+                ListItem(
+                    headlineContent = { Text(stringResource(category.titleRes)) },
+                    colors =
+                        ListItemDefaults.colors(
+                            containerColor =
+                                if (category == selected) {
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                },
+                        ),
+                    modifier = Modifier.clickable { onSelect(category) },
+                )
+                HorizontalDivider()
+            }
+        }
+    }
+}
+
+/** One category's options: its own top bar (back arrow when collapsed). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsCategoryDetail(
+    category: SettingsCategory,
+    state: SettingsUiState,
+    preferences: AppPreferences,
+    onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+    onPushChange: (Boolean) -> Unit,
+    folderChoices: List<String>?,
+    onLoadFolderChoices: () -> Unit,
+    onPushFoldersChange: (Set<String>) -> Unit,
+    onSignOut: () -> Unit,
+    onBack: (() -> Unit)?,
+) {
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
+                title = { Text(stringResource(category.titleRes)) },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -103,593 +221,225 @@ fun SettingsScreen(
             )
         },
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).fillMaxSize().verticalScroll(rememberScrollState())) {
-            SectionHeader(stringResource(R.string.settings_account))
-            ListItem(
-                headlineContent = { Text(state.username ?: "") },
-                supportingContent = { Text(stringResource(R.string.settings_signed_in_as)) },
-            )
-            ListItem(
-                headlineContent = { Text(state.controlDomain ?: "") },
-                supportingContent = { Text(stringResource(R.string.settings_server)) },
-            )
-            TextRow(
-                title = stringResource(R.string.settings_display_name),
-                value = preferences.displayName,
-                empty = stringResource(R.string.settings_display_name_empty),
-                singleLine = true,
-                onChange = { name -> onUpdate { it.copy(displayName = name.trim()) } },
-            )
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.error) },
-                modifier = Modifier.clickable(onClick = onSignOut),
-            )
-
-            SectionHeader(stringResource(R.string.settings_reading))
-            EnumRow(
-                title = stringResource(R.string.settings_mark_as_read),
-                value = preferences.markAsRead,
-                options = MarkAsRead.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(markAsRead = value) } },
-            )
-            EnumRow(
-                title = stringResource(R.string.settings_load_remote_content),
-                value = preferences.loadRemoteContent,
-                options = LoadRemoteContent.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(loadRemoteContent = value) } },
-            )
-            EnumRow(
-                title = stringResource(R.string.settings_render_mode),
-                value = preferences.bodyRenderMode,
-                options = BodyRenderMode.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(bodyRenderMode = value) } },
-            )
-            EnumRow(
-                title = stringResource(R.string.settings_folder_count),
-                value = preferences.folderCountDisplay,
-                options = FolderCountDisplay.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(folderCountDisplay = value) } },
-            )
-            EnumRow(
-                title = stringResource(R.string.settings_default_sort),
-                value = preferences.defaultSort,
-                options = DefaultSort.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(defaultSort = value) } },
-            )
-            ToggleRow(
-                title = stringResource(R.string.sort_descending),
-                checked = preferences.defaultSortDescending,
-                onChange = { value -> onUpdate { it.copy(defaultSortDescending = value) } },
-            )
-
-            SectionHeader(stringResource(R.string.settings_composing))
-            DefaultFromRow(
-                value = preferences.defaultFromAddress,
-                addresses = state.addresses?.map { it.address }.orEmpty(),
-                onSelect = { value -> onUpdate { it.copy(defaultFromAddress = value) } },
-            )
-            TextRow(
-                title = stringResource(R.string.settings_signature),
-                value = preferences.signature,
-                empty = stringResource(R.string.settings_signature_empty),
-                singleLine = false,
-                onChange = { signature -> onUpdate { it.copy(signature = signature) } },
-            )
-
-            SectionHeader(stringResource(R.string.rules_title))
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.rules_title)) },
-                supportingContent = { Text(stringResource(R.string.rules_settings_hint)) },
-                modifier = Modifier.clickable(onClick = onOpenRules),
-            )
-
-            SectionHeader(stringResource(R.string.settings_actions))
-            EnumRow(
-                title = stringResource(R.string.settings_dispose_action),
-                value = preferences.disposeAction,
-                options = DisposeAction.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(disposeAction = value) } },
-            )
-            EnumRow(
-                title = stringResource(R.string.settings_dispose_advance),
-                value = preferences.disposeAdvance,
-                options = DisposeAdvance.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(disposeAdvance = value) } },
-            )
-
-            SectionHeader(stringResource(R.string.settings_notifications))
-            NotificationsRow(
-                enabled = preferences.notificationsEnabled,
-                onChange = { value -> onUpdate { it.copy(notificationsEnabled = value) } },
-                onPushChange = onPushChange,
-            )
-            PushFoldersRow(
-                pushFolders = preferences.pushFolders,
-                enabled = preferences.notificationsEnabled,
-                folderChoices = folderChoices,
-                onLoadFolderChoices = onLoadFolderChoices,
-                onChange = onPushFoldersChange,
-            )
-
-            SectionHeader(stringResource(R.string.settings_appearance))
-            EnumRow(
-                title = stringResource(R.string.settings_theme),
-                value = preferences.theme,
-                options = AppTheme.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(theme = value) } },
-            )
-            ToggleRow(
-                title = stringResource(R.string.settings_dynamic_color),
-                checked = preferences.dynamicColor,
-                onChange = { value -> onUpdate { it.copy(dynamicColor = value) } },
-                supporting = stringResource(R.string.settings_dynamic_color_hint),
-            )
-            EnumRow(
-                title = stringResource(R.string.settings_accent),
-                value = preferences.accent,
-                options = Accent.entries,
-                label = { it.label() },
-                enabled = !preferences.dynamicColor,
-                onSelect = { value -> onUpdate { it.copy(accent = value) } },
-            )
-            EnumRow(
-                title = stringResource(R.string.settings_density),
-                value = preferences.density,
-                options = Density.entries,
-                label = { it.label() },
-                onSelect = { value -> onUpdate { it.copy(density = value) } },
-            )
-
-            SectionHeader(stringResource(R.string.settings_about))
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_version)) },
-                supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") },
-            )
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_report_issue)) },
-                supportingContent = { Text(ISSUES_URL) },
-                modifier =
-                    Modifier.clickable {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, ISSUES_URL.toUri())) }
-                    },
-            )
+        Column(
+            modifier =
+                Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+        ) {
+            when (category) {
+                SettingsCategory.ACCOUNT -> AccountSettings(state, preferences, onUpdate, onSignOut)
+                SettingsCategory.READING -> ReadingSettings(preferences, onUpdate)
+                SettingsCategory.COMPOSING -> ComposingSettings(state, preferences, onUpdate)
+                // Handled by the caller (the pane comes from the nav host).
+                SettingsCategory.RULES -> Unit
+                SettingsCategory.ACTIONS -> ActionsSettings(preferences, onUpdate)
+                SettingsCategory.NOTIFICATIONS ->
+                    NotificationsSettings(
+                        preferences = preferences,
+                        onUpdate = onUpdate,
+                        onPushChange = onPushChange,
+                        folderChoices = folderChoices,
+                        onLoadFolderChoices = onLoadFolderChoices,
+                        onPushFoldersChange = onPushFoldersChange,
+                    )
+                SettingsCategory.APPEARANCE -> AppearanceSettings(preferences, onUpdate)
+                SettingsCategory.ABOUT -> AboutSettings()
+            }
         }
     }
 }
 
-// --------------------------------------------------------------- rows
+// ---------------------------------------------------------- categories
 
-/**
- * The new-mail toggle (plan §7.3, push since the FCM phase): turning it on
- * asks for the notification permission on API 33+, schedules the periodic
- * sync, and registers for push where available; off cancels and
- * deregisters.
- */
 @Composable
-private fun NotificationsRow(
-    enabled: Boolean,
-    onChange: (Boolean) -> Unit,
-    onPushChange: (Boolean) -> Unit,
+private fun AccountSettings(
+    state: SettingsUiState,
+    preferences: AppPreferences,
+    onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+    onSignOut: () -> Unit,
 ) {
-    val context = LocalContext.current
-    var denied by remember { mutableStateOf(false) }
-    val enable = {
-        NewMailSync.clearBaseline(context)
-        NewMailSync.schedule(context, enabled = true)
-        onChange(true)
-        onPushChange(true)
-    }
-    val permission =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) enable() else denied = true
-        }
-    ToggleRow(
-        title = stringResource(R.string.settings_new_mail_notifications),
-        checked = enabled,
-        supporting =
-            if (denied) {
-                stringResource(R.string.settings_notifications_denied)
-            } else {
-                stringResource(R.string.settings_new_mail_notifications_hint)
-            },
-        onChange = { value ->
-            if (!value) {
-                NewMailSync.schedule(context, enabled = false)
-                onChange(false)
-                onPushChange(false)
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !NewMailSync.canPost(context)) {
-                permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else {
-                enable()
-            }
-        },
+    ListItem(
+        headlineContent = { Text(state.username ?: "") },
+        supportingContent = { Text(stringResource(R.string.settings_signed_in_as)) },
+    )
+    ListItem(
+        headlineContent = { Text(state.controlDomain ?: "") },
+        supportingContent = { Text(stringResource(R.string.settings_server)) },
+    )
+    TextRow(
+        title = stringResource(R.string.settings_display_name),
+        value = preferences.displayName,
+        empty = stringResource(R.string.settings_display_name_empty),
+        singleLine = true,
+        onChange = { name -> onUpdate { it.copy(displayName = name.trim()) } },
+    )
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.error) },
+        modifier = Modifier.clickable(onClick = onSignOut),
     )
 }
 
-/**
- * The push folder opt-in (per device, like the Apple clients): Inbox only,
- * all folders, or an explicit selection. Disabled while notifications are
- * off. The fallback 15-minute check stays Inbox-only regardless — the
- * dialog says so.
- */
 @Composable
-private fun PushFoldersRow(
-    pushFolders: Set<String>,
-    enabled: Boolean,
+private fun ReadingSettings(
+    preferences: AppPreferences,
+    onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+) {
+    EnumRow(
+        title = stringResource(R.string.settings_mark_as_read),
+        value = preferences.markAsRead,
+        options = MarkAsRead.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(markAsRead = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_load_remote_content),
+        value = preferences.loadRemoteContent,
+        options = LoadRemoteContent.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(loadRemoteContent = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_render_mode),
+        value = preferences.bodyRenderMode,
+        options = BodyRenderMode.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(bodyRenderMode = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_folder_count),
+        value = preferences.folderCountDisplay,
+        options = FolderCountDisplay.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(folderCountDisplay = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_default_sort),
+        value = preferences.defaultSort,
+        options = DefaultSort.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(defaultSort = value) } },
+    )
+    ToggleRow(
+        title = stringResource(R.string.sort_descending),
+        checked = preferences.defaultSortDescending,
+        onChange = { value -> onUpdate { it.copy(defaultSortDescending = value) } },
+    )
+}
+
+@Composable
+private fun ComposingSettings(
+    state: SettingsUiState,
+    preferences: AppPreferences,
+    onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+) {
+    DefaultFromRow(
+        value = preferences.defaultFromAddress,
+        addresses = state.addresses?.map { it.address }.orEmpty(),
+        onSelect = { value -> onUpdate { it.copy(defaultFromAddress = value) } },
+    )
+    TextRow(
+        title = stringResource(R.string.settings_signature),
+        value = preferences.signature,
+        empty = stringResource(R.string.settings_signature_empty),
+        singleLine = false,
+        onChange = { signature -> onUpdate { it.copy(signature = signature) } },
+    )
+}
+
+@Composable
+private fun ActionsSettings(
+    preferences: AppPreferences,
+    onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+) {
+    EnumRow(
+        title = stringResource(R.string.settings_dispose_action),
+        value = preferences.disposeAction,
+        options = DisposeAction.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(disposeAction = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_dispose_advance),
+        value = preferences.disposeAdvance,
+        options = DisposeAdvance.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(disposeAdvance = value) } },
+    )
+}
+
+@Composable
+private fun NotificationsSettings(
+    preferences: AppPreferences,
+    onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+    onPushChange: (Boolean) -> Unit,
     folderChoices: List<String>?,
     onLoadFolderChoices: () -> Unit,
-    onChange: (Set<String>) -> Unit,
+    onPushFoldersChange: (Set<String>) -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
-    val scope = PushFolderScope.of(pushFolders)
-    val summary =
-        when (scope) {
-            PushFolderScope.InboxOnly -> stringResource(R.string.push_folders_inbox_only)
-            PushFolderScope.All -> stringResource(R.string.push_folders_all)
-            is PushFolderScope.Custom ->
-                pluralStringResource(R.plurals.push_folders_count, scope.folders.size, scope.folders.size)
-        }
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.settings_push_folders)) },
-        supportingContent = { Text(summary) },
-        modifier =
-            Modifier.clickable(enabled = enabled) {
-                onLoadFolderChoices()
-                open = true
-            },
-        colors =
-            androidx.compose.material3.ListItemDefaults.colors(
-                headlineColor =
-                    if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    },
-            ),
+    NotificationsRow(
+        enabled = preferences.notificationsEnabled,
+        onChange = { value -> onUpdate { it.copy(notificationsEnabled = value) } },
+        onPushChange = onPushChange,
     )
-    if (open) {
-        var custom by remember { mutableStateOf(scope is PushFolderScope.Custom) }
-        var all by remember { mutableStateOf(scope is PushFolderScope.All) }
-        var checked by
-            remember {
-                mutableStateOf((scope as? PushFolderScope.Custom)?.folders ?: setOf("INBOX"))
-            }
-        AlertDialog(
-            onDismissRequest = { open = false },
-            title = { Text(stringResource(R.string.settings_push_folders)) },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    Text(
-                        stringResource(R.string.push_folders_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    listOf(
-                        Triple(stringResource(R.string.push_folders_inbox_only), !all && !custom) {
-                            all = false
-                            custom = false
-                        },
-                        Triple(stringResource(R.string.push_folders_all), all) {
-                            all = true
-                            custom = false
-                        },
-                        Triple(stringResource(R.string.push_folders_custom), custom) {
-                            all = false
-                            custom = true
-                        },
-                    ).forEach { (label, selected, choose) ->
-                        androidx.compose.foundation.layout.Row(
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .selectable(selected = selected, onClick = choose)
-                                    .padding(vertical = 6.dp),
-                        ) {
-                            RadioButton(selected = selected, onClick = null)
-                            Text(label, modifier = Modifier.padding(start = 12.dp))
-                        }
-                    }
-                    if (custom) {
-                        val choices =
-                            (listOf("INBOX") + (folderChoices ?: checked.sorted())).distinct()
-                        choices.forEach { folder ->
-                            androidx.compose.foundation.layout.Row(
-                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            checked =
-                                                if (folder in checked) checked - folder else checked + folder
-                                        }.padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
-                            ) {
-                                Checkbox(
-                                    checked = folder in checked,
-                                    onCheckedChange = null,
-                                )
-                                Text(folder, modifier = Modifier.padding(start = 12.dp))
-                            }
-                        }
-                        if (folderChoices == null) {
-                            Text(
-                                stringResource(R.string.push_folders_loading),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(start = 12.dp, top = 4.dp),
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        open = false
-                        onChange(
-                            pushFoldersFor(
-                                when {
-                                    all -> PushFolderScope.All
-                                    custom -> PushFolderScope.Custom(checked)
-                                    else -> PushFolderScope.InboxOnly
-                                },
-                            ),
-                        )
-                    },
-                ) { Text(stringResource(R.string.save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) }
-            },
-        )
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    HorizontalDivider()
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+    PushFoldersRow(
+        pushFolders = preferences.pushFolders,
+        enabled = preferences.notificationsEnabled,
+        folderChoices = folderChoices,
+        onLoadFolderChoices = onLoadFolderChoices,
+        onChange = onPushFoldersChange,
     )
 }
 
 @Composable
-private fun <T> EnumRow(
-    title: String,
-    value: T,
-    options: List<T>,
-    label: @Composable (T) -> String,
-    onSelect: (T) -> Unit,
-    enabled: Boolean = true,
+private fun AppearanceSettings(
+    preferences: AppPreferences,
+    onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(label(value)) },
-        modifier = Modifier.clickable(enabled = enabled) { open = true },
-        colors =
-            androidx.compose.material3.ListItemDefaults.colors(
-                headlineColor =
-                    if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    },
-            ),
-    )
-    if (open) {
-        AlertDialog(
-            onDismissRequest = { open = false },
-            title = { Text(title) },
-            text = {
-                Column {
-                    options.forEach { option ->
-                        androidx.compose.foundation.layout.Row(
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .selectable(
-                                        selected = option == value,
-                                        onClick = {
-                                            open = false
-                                            onSelect(option)
-                                        },
-                                    ).padding(vertical = 6.dp),
-                        ) {
-                            RadioButton(selected = option == value, onClick = null)
-                            Text(label(option), modifier = Modifier.padding(start = 12.dp))
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) }
-            },
-        )
-    }
-}
-
-@Composable
-private fun ToggleRow(
-    title: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-    supporting: String? = null,
-) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = supporting?.let { { Text(it) } },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onChange) },
-        modifier = Modifier.clickable { onChange(!checked) },
-    )
-}
-
-@Composable
-private fun TextRow(
-    title: String,
-    value: String,
-    empty: String,
-    singleLine: Boolean,
-    onChange: (String) -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-    var draft by remember(value, open) { mutableStateOf(value) }
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(value.ifBlank { empty }, maxLines = 3) },
-        modifier = Modifier.clickable { open = true },
-    )
-    if (open) {
-        AlertDialog(
-            onDismissRequest = { open = false },
-            title = { Text(title) },
-            text = {
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    singleLine = singleLine,
-                    minLines = if (singleLine) 1 else 3,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        open = false
-                        onChange(draft)
-                    },
-                ) {
-                    Text(stringResource(R.string.settings_save))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) }
-            },
-        )
-    }
-}
-
-@Composable
-private fun DefaultFromRow(
-    value: String?,
-    addresses: List<String>,
-    onSelect: (String?) -> Unit,
-) {
-    val none = stringResource(R.string.settings_default_from_none)
-    // "None" first, then the owned addresses; a stale value still shows.
-    val options = listOf<String?>(null) + (addresses + listOfNotNull(value)).distinct()
     EnumRow(
-        title = stringResource(R.string.settings_default_from),
-        value = value,
-        options = options,
-        label = { it ?: none },
-        onSelect = onSelect,
+        title = stringResource(R.string.settings_theme),
+        value = preferences.theme,
+        options = AppTheme.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(theme = value) } },
+    )
+    ToggleRow(
+        title = stringResource(R.string.settings_dynamic_color),
+        checked = preferences.dynamicColor,
+        onChange = { value -> onUpdate { it.copy(dynamicColor = value) } },
+        supporting = stringResource(R.string.settings_dynamic_color_hint),
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_accent),
+        value = preferences.accent,
+        options = Accent.entries,
+        label = { it.label() },
+        enabled = !preferences.dynamicColor,
+        onSelect = { value -> onUpdate { it.copy(accent = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_density),
+        value = preferences.density,
+        options = Density.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(density = value) } },
     )
 }
 
-// ------------------------------------------------------------- labels
-
 @Composable
-private fun MarkAsRead.label(): String =
-    stringResource(
-        when (this) {
-            MarkAsRead.MANUAL -> R.string.opt_mark_read_manual
-            MarkAsRead.ON_OPEN -> R.string.opt_mark_read_on_open
-        },
+private fun AboutSettings() {
+    val context = LocalContext.current
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.settings_version)) },
+        supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") },
     )
-
-@Composable
-private fun LoadRemoteContent.label(): String =
-    stringResource(
-        when (this) {
-            LoadRemoteContent.OFF -> R.string.opt_off
-            LoadRemoteContent.ASK -> R.string.opt_ask
-            LoadRemoteContent.ALWAYS -> R.string.opt_always
-        },
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.settings_report_issue)) },
+        supportingContent = { Text(ISSUES_URL) },
+        modifier =
+            Modifier.clickable {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, ISSUES_URL.toUri())) }
+            },
     )
-
-@Composable
-private fun BodyRenderMode.label(): String =
-    stringResource(
-        when (this) {
-            BodyRenderMode.ORIGINAL -> R.string.opt_render_original
-            BodyRenderMode.READER -> R.string.opt_render_reader
-        },
-    )
-
-@Composable
-private fun FolderCountDisplay.label(): String =
-    stringResource(
-        when (this) {
-            FolderCountDisplay.UNREAD -> R.string.opt_count_unread
-            FolderCountDisplay.TOTAL -> R.string.opt_count_total
-            FolderCountDisplay.BOTH -> R.string.opt_count_both
-        },
-    )
-
-@Composable
-private fun DefaultSort.label(): String =
-    stringResource(
-        when (this) {
-            DefaultSort.RECEIVED -> R.string.opt_sort_received
-            DefaultSort.SENT -> R.string.opt_sort_sent
-            DefaultSort.FROM -> R.string.opt_sort_from
-            DefaultSort.SUBJECT -> R.string.opt_sort_subject
-        },
-    )
-
-@Composable
-private fun DisposeAction.label(): String =
-    stringResource(
-        when (this) {
-            DisposeAction.ARCHIVE -> R.string.archive
-            DisposeAction.TRASH -> R.string.opt_dispose_trash
-        },
-    )
-
-@Composable
-private fun DisposeAdvance.label(): String = stringResource(advanceLabelRes(this))
-
-@Composable
-private fun AppTheme.label(): String =
-    stringResource(
-        when (this) {
-            AppTheme.SYSTEM -> R.string.opt_theme_system
-            AppTheme.LIGHT -> R.string.opt_theme_light
-            AppTheme.DARK -> R.string.opt_theme_dark
-        },
-    )
-
-@Composable
-private fun Accent.label(): String =
-    stringResource(
-        when (this) {
-            Accent.INK -> R.string.opt_accent_ink
-            Accent.OXBLOOD -> R.string.opt_accent_oxblood
-            Accent.FOREST -> R.string.opt_accent_forest
-            Accent.AZURE -> R.string.opt_accent_azure
-            Accent.AMBER -> R.string.opt_accent_amber
-            Accent.PLUM -> R.string.opt_accent_plum
-        },
-    )
-
-@Composable
-private fun Density.label(): String =
-    stringResource(
-        when (this) {
-            Density.COMPACT -> R.string.opt_density_compact
-            Density.NORMAL -> R.string.opt_density_normal
-            Density.ROOMY -> R.string.opt_density_roomy
-        },
-    )
+}

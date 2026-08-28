@@ -273,7 +273,6 @@
     <string name="opt_density_normal">Normal</string>
     <string name="opt_density_roomy">Roomy</string>
     <string name="rules_title">Mail rules</string>
-    <string name="rules_settings_hint">File, flag, forward, or auto-answer incoming mail</string>
     <string name="rules_loading">Loading rules…</string>
     <string name="rules_empty_title">No rules yet</string>
     <string name="rules_empty_body">Rules file, flag, forward, or answer incoming mail for you. Start from a template or a blank rule.</string>
