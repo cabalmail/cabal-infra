@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.5] - 2026-08-28
+
+### Fixed
+- Apple: **Settings footers wrap instead of truncating.** On macOS the
+  explanatory grey text under a settings section was clamped to a single line
+  and cut off mid-sentence — most visibly under the mail-rules list, where the
+  clause explaining "continue to the next rule" was the part that disappeared.
+  Every section footer now wraps to as many lines as it needs.
+
 ## [1.7.4] - 2026-08-27
 
 ### Added
