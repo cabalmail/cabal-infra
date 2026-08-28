@@ -50,15 +50,23 @@ import com.cabalmail.kit.models.Rule
 import com.cabalmail.kit.models.RuleAction
 import com.cabalmail.kit.models.RuleCondition
 import com.cabalmail.kit.models.RuleField
+import com.cabalmail.kit.models.normalizeLegacyContinue
 import com.cabalmail.kit.rules.RulesValidator
 
 /**
- * Detail form for one mail rule: name, conditions, the mutually-exclusive
- * destination, the independent extras (flag / mark read / forward / reply),
- * and spill-through. Every change goes through [onUpdate], which schedules
- * the view model's debounced whole-set save. Folder pickers offer existing
- * folders only (the plan's "No folder auto-creation"); the one
+ * Detail form for one mail rule: name, spill-through, conditions, the
+ * mutually-exclusive destination, and the independent extras (flag / mark
+ * read / forward / reply). Every change goes through [onUpdate], which
+ * schedules the view model's debounced whole-set save. Folder pickers offer
+ * existing folders only (the plan's "No folder auto-creation"); the one
  * accommodation is the explicit Create Archive Folder button.
+ *
+ * Spill-through leads the form and gates the destination (truthful
+ * Continue, `docs/1.x/rules-composition-and-custom-flags-plan.md` decision
+ * 1): a continuing rule passes the message along, so any delivery it makes
+ * is a copy — Move and Archive render disabled in place while Continue is
+ * on, and turning Continue on converts them to Copy (identical compiled
+ * output, so a conversion is a relabel, not a behavior change).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,11 +111,26 @@ fun RuleEditorScreen(
                         .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Inline note shown after Continue-on auto-converts
+                // Move/Archive to Copy; cleared when the user picks a
+                // destination or turns Continue off.
+                var showConversionNote by rememberSaveable(ruleId) { mutableStateOf(false) }
                 NameSection(rule, onUpdate)
+                ContinueSection(
+                    rule = rule,
+                    showConversionNote = showConversionNote,
+                    onConversionNote = { showConversionNote = it },
+                    onUpdate = onUpdate,
+                )
                 ConditionsSection(rule, onUpdate)
-                DestinationSection(state, rule, onUpdate, onCreateArchiveFolder)
+                DestinationSection(
+                    state = state,
+                    rule = rule,
+                    onUpdate = onUpdate,
+                    onCreateArchiveFolder = onCreateArchiveFolder,
+                    onDestinationPicked = { showConversionNote = false },
+                )
                 ExtrasSection(rule, onUpdate)
-                ContinueSection(rule, onUpdate)
             }
         }
     }
@@ -253,22 +276,35 @@ private fun DestinationSection(
     rule: Rule,
     onUpdate: (Rule) -> Unit,
     onCreateArchiveFolder: () -> Unit,
+    onDestinationPicked: () -> Unit,
 ) {
     SectionLabel(stringResource(R.string.rules_destination))
     // Explicit order matching the other clients' segmented control
     // (Move / Copy / Archive / Delete / None), not enum declaration order.
     val actions =
         listOf(RuleAction.MOVE, RuleAction.COPY, RuleAction.ARCHIVE, RuleAction.DELETE, RuleAction.NONE)
+    // Decision 1's gate: a continuing rule can only Copy or None. Move and
+    // Archive stay visible but disabled because their spill-through
+    // compilation *is* Copy; Delete because the engine ignores Continue on
+    // Delete.
+    val gatedActions = setOf(RuleAction.MOVE, RuleAction.ARCHIVE, RuleAction.DELETE)
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         actions.forEachIndexed { index, action ->
             SegmentedButton(
                 selected = rule.action == action,
-                onClick = { onUpdate(rule.copy(action = action)) },
+                onClick = {
+                    onDestinationPicked()
+                    onUpdate(rule.copy(action = action))
+                },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = actions.size),
+                enabled = !(rule.continueToNext && action in gatedActions),
             ) {
                 Text(stringResource(action.labelRes()), maxLines = 1)
             }
         }
+    }
+    if (rule.continueToNext) {
+        Hint(stringResource(R.string.rules_continue_gate_hint))
     }
     when (rule.action) {
         RuleAction.MOVE -> MoveFolderPicker(state, rule, onUpdate)
@@ -281,7 +317,15 @@ private fun DestinationSection(
                 }
             }
         RuleAction.DELETE -> Hint(stringResource(R.string.rules_delete_hint))
-        RuleAction.NONE -> Hint(stringResource(R.string.rules_none_hint))
+        RuleAction.NONE ->
+            Hint(
+                stringResource(
+                    if (rule.continueToNext) R.string.rules_none_continue_hint else R.string.rules_none_hint,
+                ),
+            )
+    }
+    if (RulesValidator.hasNoEffect(rule)) {
+        Hint(stringResource(R.string.rules_no_effect_hint), error = true)
     }
 }
 
@@ -494,15 +538,26 @@ private fun ReplyBodyEditor(
 @Composable
 private fun ContinueSection(
     rule: Rule,
+    showConversionNote: Boolean,
+    onConversionNote: (Boolean) -> Unit,
     onUpdate: (Rule) -> Unit,
 ) {
     val locked = rule.action == RuleAction.DELETE
-    ToggleRow(stringResource(R.string.rules_continue), rule.continueToNext, enabled = !locked) {
-        onUpdate(rule.copy(continueToNext = it))
+    ToggleRow(stringResource(R.string.rules_continue), rule.continueToNext, enabled = !locked) { isOn ->
+        // Turning Continue on while Move/Archive is selected converts the
+        // destination to Copy, carrying the folder — safe, not a guess: the
+        // compiled output is identical (decision 1).
+        onConversionNote(
+            isOn && (rule.action == RuleAction.MOVE || rule.action == RuleAction.ARCHIVE),
+        )
+        onUpdate(rule.copy(continueToNext = isOn).normalizeLegacyContinue())
     }
     Hint(
         stringResource(if (locked) R.string.rules_continue_delete_hint else R.string.rules_continue_hint),
     )
+    if (showConversionNote) {
+        Hint(stringResource(R.string.rules_converted_to_copy))
+    }
 }
 
 @Composable

@@ -340,7 +340,9 @@ enum RuleSummary {
         if rule.markRead { parts.append("mark read") }
         if !rule.forward.isEmpty { parts.append("forward to \(rule.forward.joined(separator: ", "))") }
         if rule.reply { parts.append("reply") }
-        if rule.continueToNext { parts.append("continue to next rule") }
+        // "continue" last, so a spill-through rule reads as what it is:
+        // "copy to Receipts · continue" (truthful Continue, Phase 1).
+        if rule.continueToNext { parts.append("continue") }
         return parts.joined(separator: " · ")
     }
 

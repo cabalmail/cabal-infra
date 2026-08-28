@@ -149,6 +149,63 @@ final class RulesValidatorTests: XCTestCase {
         XCTAssertEqual(issueFields(rule), [])
     }
 
+    // MARK: - No-effect rules (client-strict; the server stays permissive)
+
+    func testContinuingRuleWithoutAnEffectIsAnIssue() {
+        // Destination None + Continue + nothing outbound compiles to an
+        // empty procmail block (`no_effect`) and would silently evaporate.
+        var rule = validRule()
+        rule.action = .none
+        rule.moveFolder = ""
+        rule.forward = []
+        rule.continueToNext = true
+        XCTAssertTrue(RulesValidator.hasNoEffect(rule))
+        XCTAssertEqual(issueFields(rule), ["continueToNext"])
+
+        // Flag / mark-as-read alone don't rescue it: they are delivery
+        // metadata with no delivery to ride (until Phase 2's pending flags).
+        rule.flag = true
+        rule.markRead = true
+        XCTAssertEqual(issueFields(rule), ["continueToNext"])
+
+        // A continuing copy with no folders picked yet is the same trap.
+        rule = validRule()
+        rule.action = .copy
+        rule.moveFolder = ""
+        rule.forward = []
+        rule.copyFolders = []
+        rule.continueToNext = true
+        XCTAssertEqual(issueFields(rule), ["continueToNext"])
+    }
+
+    func testEffectfulAndTerminalRulesAreNotNoEffect() {
+        // Forward or reply gives a continuing None rule an effect.
+        var rule = validRule()
+        rule.action = .none
+        rule.moveFolder = ""
+        rule.continueToNext = true
+        rule.forward = ["ops@example.com"]
+        XCTAssertEqual(issueFields(rule), [])
+        rule.forward = []
+        rule.reply = true
+        rule.replyBody = "Away."
+        XCTAssertEqual(issueFields(rule), [])
+
+        // A terminal None rule stops processing — that is an effect.
+        rule = validRule()
+        rule.action = .none
+        rule.moveFolder = ""
+        rule.forward = []
+        rule.continueToNext = false
+        XCTAssertEqual(issueFields(rule), [])
+
+        // A continuing copy with folders delivers.
+        rule.action = .copy
+        rule.copyFolders = ["Audit"]
+        rule.continueToNext = true
+        XCTAssertEqual(issueFields(rule), [])
+    }
+
     // MARK: - Set level
 
     func testRuleCountCap() {
