@@ -79,7 +79,9 @@ object RulesValidator {
      * the plan's Phase 2 — give them one).
      */
     fun hasNoEffect(rule: Rule): Boolean =
-        rule.continueToNext && rule.forward.isEmpty() && !rule.reply &&
+        rule.continueToNext &&
+            rule.forward.isEmpty() &&
+            !rule.reply &&
             (
                 rule.action == RuleAction.NONE ||
                     (rule.action == RuleAction.COPY && rule.copyFolders.isEmpty())
