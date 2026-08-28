@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.7] - 2026-08-28
+
+### Changed
+- Android: **Truthful Continue in the rule editor.** The
+  continue-to-next-rule toggle now leads the rule editor and gates the
+  destination: a continuing rule offers only Copy and None (Move, Archive,
+  and Delete stay visible but disabled, with an explanation), and turning
+  Continue on converts a selected Move or Archive to Copy, carrying the
+  folder — the delivered mail was already identical, only the label changes.
+  Stored Move/Archive rules with Continue on are shown and saved as Copy,
+  rule summaries read "copy to Receipts · continue", and the editor refuses
+  to save a continuing rule that neither files, forwards, nor replies
+  instead of letting it silently compile to nothing.
+- Apple: **Truthful Continue in the rule editor.** The continue-to-next-rule
+  toggle now leads the rule editor and gates the destination: a continuing
+  rule offers only Copy and None (Move, Archive, and Delete stay visible but
+  disabled, with an explanation), and turning Continue on converts a selected
+  Move or Archive to Copy, carrying the folder — the delivered mail was
+  already identical, only the label changes. Stored Move/Archive rules with
+  Continue on are shown and saved as Copy, rule summaries read
+  "copy to Receipts · continue", and the editor refuses to save a continuing
+  rule that neither files, forwards, nor replies instead of letting it
+  silently compile to nothing.
+
 ## [1.7.6] - 2026-08-28
 
 ### Changed

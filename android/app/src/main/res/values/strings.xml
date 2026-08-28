@@ -346,4 +346,20 @@
     <string name="rules_template_newsletter_hint">Archive a sender\'s mail already marked read</string>
     <string name="rules_template_vacation">Vacation reply</string>
     <string name="rules_template_vacation_hint">Answer every message with an away note</string>
+    <string name="settings_flags">Flags</string>
+    <string name="flags_add">Add flag</string>
+    <string name="flags_new_label">New flag</string>
+    <string name="flags_empty_hint">Flags you define here can be put on any message from any of your devices. Up to twenty.</string>
+    <string name="flags_footer">The order here is the order pickers use. Up to twenty flags.</string>
+    <string name="flags_name">Name</string>
+    <string name="flags_enabled">Enabled</string>
+    <string name="flags_enabled_hint">A disabled flag keeps its tags but is offered nowhere.</string>
+    <string name="flags_color">Color</string>
+    <string name="flags_disabled">Disabled</string>
+    <string name="flags_edit">Edit flag</string>
+    <string name="flags_move_up">Move up</string>
+    <string name="flags_move_down">Move down</string>
+    <string name="flags_delete">Delete flag</string>
+    <string name="flags_delete_title">Delete “%1$s”?</string>
+    <string name="flags_delete_body">Deleting a flag hides its name and color. Messages already tagged with it keep the tag (shown by its slot id) until untagged, and a new flag created later may reuse the slot.</string>
 </resources>
