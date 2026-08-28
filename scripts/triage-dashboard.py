@@ -839,7 +839,7 @@ const PR_ICON={open:'●', merged:'⛙', closed:'✕', draft:'○'};
 const INTERVALS=[{s:0,label:'Off'},{s:60,label:'1 minute'},{s:300,label:'5 minutes'},{s:900,label:'15 minutes'},{s:3600,label:'1 hour'}];
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-let MODEL=null, activeStage=null, activeRoute=false, sortKey='created', sortDir=-1, inFlight=false, intervalSec=0, timer=null;
+let MODEL=null, activeStage=null, activeRoute=false, sortKey='created', sortDir=-1, inFlight=false, intervalSec=0, timer=null, lastFetch=0;
 
 function ago(iso){
   const ms=Date.now()-new Date(iso).getTime();
@@ -861,7 +861,7 @@ async function fetchData(){
     if(data && data.error){ showError(data.error); } else { MODEL=data; clearError(); renderAll(); }
   }catch(e){ showError(String(e)); }
   finally{
-    inFlight=false; icon.classList.remove('spin'); btn.disabled=false;
+    inFlight=false; lastFetch=Date.now(); icon.classList.remove('spin'); btn.disabled=false;
     const now=new Date();
     document.getElementById('updated').textContent='Updated '+now.toLocaleTimeString()+(intervalSec?` · auto-refresh every ${INTERVALS.find(i=>i.s===intervalSec).label.toLowerCase()}`:'');
   }
@@ -1053,6 +1053,12 @@ function setIntervalSec(sec){
   document.getElementById('int-label').textContent=short[sec]||''; chev.classList.toggle('active', sec>0); renderIntervalMenu();
 }
 document.getElementById('f-q').addEventListener('input', renderRows);
+/* Refresh when the tab regains focus, throttled to once per 15s so rapid
+   window-switching does not hammer the GitHub API. */
+function focusRefresh(){ if(!document.hidden && Date.now()-lastFetch>15000) fetchData(); }
+document.addEventListener('visibilitychange', focusRefresh);
+window.addEventListener('focus', focusRefresh);
+
 renderIntervalMenu(); fetchData();
 </script>
 </body>

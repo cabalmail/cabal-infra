@@ -970,7 +970,7 @@ const INTERVALS=[{s:0,label:'Off'},{s:60,label:'1 minute'},{s:300,label:'5 minut
 const CATS=['added','changed','deprecated','removed','fixed','security'];
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-let MODEL=null, inFlight=false, intervalSec=0, timer=null, autoTimer=null;
+let MODEL=null, inFlight=false, intervalSec=0, timer=null, autoTimer=null, lastFetch=0;
 
 /* Minimal Markdown for changelog fragments - the house style only uses
    bullets (with two-space continuation lines and one sub-bullet level),
@@ -1025,7 +1025,7 @@ async function fetchData(){
     if(data && data.error){ showError(data.error); } else { MODEL=data; clearError(); renderAll(); }
   }catch(e){ showError(String(e)); }
   finally{
-    inFlight=false; icon.classList.remove('spin'); btn.disabled=false;
+    inFlight=false; lastFetch=Date.now(); icon.classList.remove('spin'); btn.disabled=false;
     const now=new Date();
     document.getElementById('updated').textContent='Updated '+now.toLocaleTimeString()+(intervalSec?` · auto-refresh every ${INTERVALS.find(i=>i.s===intervalSec).label.toLowerCase()}`:'');
     scheduleAuto();
@@ -1334,6 +1334,12 @@ function setIntervalSec(sec){
   const short={0:'',60:'1m',300:'5m',900:'15m',3600:'1h'};
   document.getElementById('int-label').textContent=short[sec]||''; chev.classList.toggle('active', sec>0); renderIntervalMenu();
 }
+/* Refresh when the tab regains focus, throttled to once per 15s so rapid
+   window-switching does not hammer the GitHub API. */
+function focusRefresh(){ if(!document.hidden && Date.now()-lastFetch>15000) fetchData(); }
+document.addEventListener('visibilitychange', focusRefresh);
+window.addEventListener('focus', focusRefresh);
+
 renderIntervalMenu(); fetchData();
 </script>
 </body>
