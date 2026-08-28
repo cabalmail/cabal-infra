@@ -5,9 +5,9 @@
 | Phase                              | Status                  |
 | ---------------------------------- | ----------------------- |
 | 1 -- Truthful Continue             | Complete (2026-08-28)   |
-| 2 -- Pending decorations           | Complete (2026-08-28); stage-verified |
-| 3 -- Flag palette                  | Complete (2026-08-28); stage-verified |
-| 4 -- Keywords on the message plane | Not started             |
+| 2 -- Pending decorations           | Code complete (2026-08-28); stage verification pending |
+| 3 -- Flag palette                  | Code complete (2026-08-28); stage verification pending |
+| 4 -- Keywords on the message plane | In progress (2026-08-28): server + container half in review |
 | 5 -- Rules integration             | Not started             |
 
 ## Context
@@ -185,6 +185,19 @@ undecorated inbox delivery, never a lost message. Deliveries carrying
 only F/S keep the existing raw-write path; unflagged deliveries keep
 native procmail delivery.
 
+> **Erratum (2026-08-28):** the helper cannot perform the APPEND
+> itself: it runs as the recipient from a sendmail-sanitized
+> environment, and the master credential — deliberately root-only,
+> since it opens every mailbox — cannot reach it without regressing
+> the 0.10.x hardening posture. The implementation instead uses the
+> container's established spool + root-drain split (as push-enqueue
+> and cabal-rules-forward do): the helper spools the message and a
+> request file, and a root supervisord daemon (`cabal-append-drain.py`)
+> performs the APPEND as `{user}*admin` and writes a response file the
+> helper synchronously waits on (bounded), which is what preserves the
+> `w`-contract fall-through described above. Everything else in this
+> decision stands.
+
 ### 6. Rules reference slots and are validated like folders
 
 A rule's flag set becomes a list of slot identifiers. `set_rules`
@@ -316,6 +329,22 @@ Acceptance: palette round-trips through preferences on both clients;
 a clear client error.
 
 ## Phase 4 -- Keywords on the message plane
+
+**Status:** In progress (2026-08-28). The server + container half is in
+review: `set_flag` narrows its keyword vocabulary to palette-validated
+slot atoms (set requires an enabled palette entry, unset only a
+well-formed slot so retired slots stay untaggable, everything else
+400s — it previously accepted any 64-char keyword unchecked), and the
+APPEND path is built per decision 5's erratum (spool +
+`cabal-append-drain.py`). Three findings against the phase's
+assumptions, verified in exploration: envelopes already carry keywords
+(`decode_flags` is a raw pass-through, so `list_envelopes` /
+`search_envelopes` need no change); `fetch_message` has never carried
+flags and its cache-hit path opens no IMAP session, so adding keywords
+there would cost a per-fetch round trip for data the envelopes already
+provide — deliberately not done; and the S3 cache stores body bytes
+only with flags always served live, so the cache-invalidation item is
+a verified no-op. Client chips/pickers follow in a second PR.
 
 Make custom flags visible and settable on messages; rules still cannot
 set them until Phase 5.

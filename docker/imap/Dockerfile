@@ -174,6 +174,7 @@ COPY shared/compile-user-rules-selftest.py /usr/local/bin/compile-user-rules-sel
 COPY shared/cabal-maildir-deliver.sh       /usr/local/bin/cabal-maildir-deliver.sh
 COPY shared/cabal-rules-forward.sh         /usr/local/bin/cabal-rules-forward.sh
 COPY shared/cabal-forward-drain.sh         /usr/local/bin/cabal-forward-drain.sh
+COPY shared/cabal-append-drain.py          /usr/local/bin/cabal-append-drain.py
 COPY shared/cabal-rules-reply.sh           /usr/local/bin/cabal-rules-reply.sh
 COPY shared/test/compile-user-rules/fixture-rules.json \
      /usr/local/share/cabal/compile-user-rules/fixture-rules.json
@@ -181,6 +182,7 @@ COPY shared/test/compile-user-rules/golden.rc \
      /usr/local/share/cabal/compile-user-rules/golden.rc
 RUN chmod +x /usr/local/bin/compile-user-rules.py \
              /usr/local/bin/compile-user-rules-selftest.py \
+             /usr/local/bin/cabal-append-drain.py \
     && mkdir -p /etc/procmail-user \
     && /usr/local/bin/compile-user-rules-selftest.py
 
