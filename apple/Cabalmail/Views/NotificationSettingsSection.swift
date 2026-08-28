@@ -97,8 +97,10 @@ struct NotificationSettingsSection: View {
                 Text(footerText)
                 Text(residencyFooterText)
             }
+            .sectionFooter()
             #else
             Text(footerText)
+                .sectionFooter()
             #endif
         }
     }

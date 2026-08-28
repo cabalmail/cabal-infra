@@ -182,6 +182,7 @@ struct SettingsView: View {
             Text("Composing")
         } footer: {
             Text("Name appears as the display name on mail you send, e.g. \"Chris Carr <address>\".")
+                .sectionFooter()
         }
     }
 
@@ -310,6 +311,7 @@ extension SettingsView {
             Text("Actions")
         } footer: {
             Text("Which message the reading pane opens after you archive, delete, or mark read from it.")
+                .sectionFooter()
         }
     }
 
@@ -353,6 +355,7 @@ private struct RulesSettingsSection: View {
             Text("Rules")
         } footer: {
             Text("File, flag, forward, or auto-answer incoming mail before it reaches your inbox.")
+                .sectionFooter()
         }
     }
 
