@@ -153,10 +153,6 @@ class RulesValidatorTest {
         assertTrue(RulesValidator.hasNoEffect(noEffect))
         assertEquals(listOf("continueToNext"), issueFields(noEffect))
 
-        // Flag / mark-as-read alone don't rescue it: they are delivery
-        // metadata with no delivery to ride (until Phase 2's pending flags).
-        assertEquals(listOf("continueToNext"), issueFields(noEffect.copy(flag = true, markRead = true)))
-
         // A continuing copy with no folders picked yet is the same trap.
         assertEquals(
             listOf("continueToNext"),
@@ -169,6 +165,11 @@ class RulesValidatorTest {
         val continuingNone =
             validRule().copy(action = RuleAction.NONE, moveFolder = "", forward = emptyList(), continueToNext = true)
 
+        // Flag / mark-as-read decorate: the compiler's pending state
+        // (rules-composition plan, decision 3) carries them into whatever
+        // delivery ends up happening, so a decorate-only rule is saveable.
+        assertEquals(emptyList<String>(), issueFields(continuingNone.copy(flag = true)))
+        assertEquals(emptyList<String>(), issueFields(continuingNone.copy(markRead = true)))
         // Forward or reply gives a continuing None rule an effect.
         assertEquals(emptyList<String>(), issueFields(continuingNone.copy(forward = listOf("ops@example.com"))))
         assertEquals(emptyList<String>(), issueFields(continuingNone.copy(reply = true, replyBody = "Away.")))

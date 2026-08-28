@@ -339,7 +339,7 @@
     <string name="rules_continue_gate_hint">A rule that continues passes the message along; use Copy.</string>
     <string name="rules_converted_to_copy">Changed to Copy: a continuing rule delivers a copy and passes the message along.</string>
     <string name="rules_none_continue_hint">The message passes to later rules; if none files it, it lands in the inbox.</string>
-    <string name="rules_no_effect_hint">This rule would have no effect: it continues to the next rule without filing, forwarding, or replying.</string>
+    <string name="rules_no_effect_hint">This rule would have no effect: it continues to the next rule without filing, flagging, marking read, forwarding, or replying.</string>
     <string name="rules_template_receipts">File AWS receipts</string>
     <string name="rules_template_receipts_hint">Move mail from aws.amazon.com to a folder you pick</string>
     <string name="rules_template_newsletter">Mute a newsletter</string>

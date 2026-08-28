@@ -183,8 +183,9 @@ private struct RuleDestinationSection: View {
             destinationDetail
             if RulesValidator.hasNoEffect(rule) {
                 Text(
-                    "This rule would have no effect: it continues to the "
-                    + "next rule without filing, forwarding, or replying."
+                    "This rule would have no effect: it continues to the next "
+                    + "rule without filing, flagging, marking read, "
+                    + "forwarding, or replying."
                 )
                 .font(.caption)
                 .foregroundStyle(.red)

@@ -143,22 +143,30 @@ A continuing rule never settles the message's fate: it passes the
 message along, and any delivery it makes is a copy (which is why its
 destination can only be Copy or None). **The inbox is the fallback
 destination** — a message that runs off the end of the list without a
-rule ending processing for it is delivered to the inbox, copies
-intact. The editor refuses a continuing rule that neither files,
-forwards, nor replies; it would have no effect at all.
+rule ending processing for it is delivered to the inbox, copies and
+decorations intact. The editor refuses a continuing rule that neither
+files, flags, marks read, forwards, nor replies; it would have no
+effect at all.
 
-To combine effects, write one rule per outcome, most specific first,
-without Continue. "File receipts into Receipts and flag anything from
-billing — including billing receipts" is three terminal rules:
+Flag and Mark-as-read on a continuing rule with destination None
+*decorate* the message: the marks are carried along and applied
+wherever the message ends up — a later rule's folder, or the inbox
+fallback. That is how "file receipts into Receipts AND flag anything
+from billing" composes from two rules, **decorators above filers**:
 
-1. From contains `billing` **and** Subject contains `receipt` → Move to
-   Receipts, with Flag.
+1. From contains `billing` → destination None, Flag, Continue on.
 2. Subject contains `receipt` → Move to Receipts.
-3. From contains `billing` → destination None, with Flag.
 
-Flag and Mark-as-read apply where the message is delivered, so they
-take effect only on the rule that ends processing — a continuing rule
-cannot "decorate" the message for a later rule to file.
+A billing receipt matches rule 1, picks up the flag, continues, and
+rule 2 files it — one flagged message in Receipts, nothing extra in
+the inbox. A billing message that is not a receipt runs off the end
+and lands in the inbox, flagged. Order matters: a decorator below the
+filer never sees a receipt (the filer ends processing first).
+
+On a rule that itself delivers — a Move, an Archive, a Copy, or a
+terminal None — Flag and Mark-as-read apply to that rule's own
+deliveries (plus any decorations picked up earlier), as they always
+have.
 
 ## Limits
 

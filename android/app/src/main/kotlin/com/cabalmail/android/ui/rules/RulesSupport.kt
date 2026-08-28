@@ -43,7 +43,12 @@ object RuleTemplates {
  * client's `RuleSummary` renders. Pure so it unit-tests without Compose.
  */
 fun describeRule(rule: Rule): String {
-    val parts = mutableListOf(conditionsPhrase(rule.conditions), actionPhrase(rule))
+    val parts = mutableListOf(conditionsPhrase(rule.conditions))
+    // A continuing None rule neither files nor stops; "no filing" would
+    // just be noise, so a decorate-only rule reads "flag · continue".
+    if (!(rule.action == RuleAction.NONE && rule.continueToNext)) {
+        parts += actionPhrase(rule)
+    }
     if (rule.flag) parts += "flag"
     if (rule.markRead) parts += "mark read"
     if (rule.forward.isNotEmpty()) parts += "forward to ${rule.forward.joinToString(", ")}"

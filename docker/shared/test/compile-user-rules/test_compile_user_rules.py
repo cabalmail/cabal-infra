@@ -108,7 +108,7 @@ class GoldenTest(unittest.TestCase):
         if not content.endswith('\n'):
             content += '\n'
         self.assertEqual(content, golden)
-        self.assertEqual(compiled, 51)
+        self.assertEqual(compiled, 59)
 
 
 class StructureTest(unittest.TestCase):
@@ -276,6 +276,109 @@ class StructureTest(unittest.TestCase):
         _, _, reason = compile_one(rule(reply=True, replyBody='away'),
                                    user='evil user')
         self.assertEqual(reason, 'user_unsafe')
+
+
+class PendingDecorationTest(unittest.TestCase):
+    '''Decision 3 of the rules-composition plan: decorate-only rules arm
+    per-message pending state; later deliveries fold it in; sets without
+    decorators compile exactly as before.'''
+
+    def test_decorate_only_compiles_to_assignments(self):
+        lines, _, reason = compile_one(rule(
+            flag=True, markRead=True, continueToNext=True,
+            conditions=[{'field': 'from', 'value': 'billing'}]))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertIn('  PENDING_F=F\n  PENDING_S=S', text)
+        # Non-terminal, no delivery, no copy, no push.
+        self.assertNotIn('cabal-maildir-deliver', text)
+        self.assertNotIn('push-enqueue', text)
+        self.assertNotIn(':0c', text)
+
+    def test_decorate_flag_only_sets_one_variable(self):
+        lines, _, reason = compile_one(rule(flag=True, continueToNext=True))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertIn('PENDING_F=F', text)
+        self.assertNotIn('PENDING_S', text)
+
+    def test_decorator_arms_only_later_deliveries(self):
+        early = rule(id='r-000000000001', name='Early move', action='move',
+                     moveFolder='Receipts')
+        decorator = rule(id='r-000000000002', name='Decorate',
+                         flag=True, continueToNext=True)
+        late = rule(id='r-000000000003', name='Late move', action='move',
+                    moveFolder='Receipts')
+        content, compiled, _ = cur.compile_ruleset(
+            'u', [early, decorator, late], lambda d: d in FIXTURE_FOLDERS)
+        self.assertEqual(compiled, 3)
+        early_block, late_block = content.split('# [r-000000000002]')
+        # Deliveries before the first decorator keep the native shape...
+        self.assertIn('  :0:\n  $MAILDIR/.Receipts/', early_block)
+        self.assertNotIn('DFLAGS', early_block)
+        # ...and everything after it folds the pending flags in.
+        self.assertIn('  DFLAGS=$PENDING_F$PENDING_S', late_block)
+        self.assertIn('  * ! DFLAGS ?? .', late_block)
+        self.assertIn('cabal-maildir-deliver.sh "$MAILDIR/.Receipts" "$DFLAGS"',
+                      late_block)
+
+    def test_no_decorators_means_no_pending_output(self):
+        content, _, _ = cur.compile_ruleset(
+            'u', [rule(action='move', moveFolder='Receipts', flag=True)],
+            lambda d: d in FIXTURE_FOLDERS)
+        self.assertNotIn('PENDING', content)
+        self.assertNotIn('DFLAGS', content)
+
+    def test_own_flags_never_mutate_pending_state(self):
+        # A spill copy's own flag decorates the copy only: it must ride
+        # DFLAGS, never a PENDING_* assignment that would leak into later
+        # rules and the inbox fallback.
+        lines, _, reason = cur.compile_rule(
+            rule(action='copy', copyFolders=['Receipts'], flag=True,
+                 continueToNext=True),
+            lambda d: d in FIXTURE_FOLDERS, 'fixtureuser', True)
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertNotIn('PENDING_F=', text)
+        self.assertIn('  DFLAGS=F$PENDING_S', text)
+        self.assertIn('cabal-maildir-deliver.sh "$MAILDIR/.Receipts" "$DFLAGS"',
+                      text)
+
+    def test_pending_spill_copy_recipes_are_mutually_exclusive(self):
+        lines, _, reason = cur.compile_rule(
+            rule(action='copy', copyFolders=['Receipts'],
+                 continueToNext=True),
+            lambda d: d in FIXTURE_FOLDERS, 'fixtureuser', True)
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        # Copy recipes continue after delivering, so the native and helper
+        # recipes need opposite conditions or both would deliver.
+        self.assertIn('  :0c:\n  * ! DFLAGS ?? .\n  $MAILDIR/.Receipts/', text)
+        self.assertIn('  :0cw\n  * DFLAGS ?? .\n  | /usr/local/bin/'
+                      'cabal-maildir-deliver.sh "$MAILDIR/.Receipts" "$DFLAGS"',
+                      text)
+
+    def test_pending_own_fs_keeps_constant_argument(self):
+        # Own F+S saturates both slots; pending adds nothing, so the
+        # constant-argument helper call is kept.
+        lines, _, reason = cur.compile_rule(
+            rule(action='move', moveFolder='Receipts', flag=True,
+                 markRead=True),
+            lambda d: d in FIXTURE_FOLDERS, 'fixtureuser', True)
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertIn('cabal-maildir-deliver.sh "$MAILDIR/.Receipts" FS', text)
+        self.assertNotIn('DFLAGS', text)
+
+    def test_decorator_with_forward_keeps_both(self):
+        lines, _, reason = compile_one(rule(
+            flag=True, continueToNext=True, forward=['a@example.com']))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertIn('cabal-rules-forward.sh', text)
+        self.assertIn('PENDING_F=F', text)
+        self.assertLess(text.index('cabal-rules-forward.sh'),
+                        text.index('PENDING_F=F'))
 
 
 class FolderTest(unittest.TestCase):

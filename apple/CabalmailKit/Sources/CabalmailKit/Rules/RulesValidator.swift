@@ -68,19 +68,20 @@ public enum RulesValidator {
         if hasNoEffect(rule) {
             issues.append(Issue(
                 ruleIndex: index, field: "continueToNext",
-                message: "A rule that continues must file, forward, or reply — this one would have no effect."
+                message: "A rule that continues must file, flag, mark read, forward, or reply "
+                    + "— this one would have no effect."
             ))
         }
         return issues
     }
 
     /// A continuing rule that neither files (a destination that delivers),
-    /// forwards, nor replies compiles to an empty procmail block and is
-    /// dropped. Flag / mark-as-read alone don't count: they are delivery
-    /// metadata and evaporate without a delivery (until pending decorations —
-    /// the plan's Phase 2 — give them one).
+    /// decorates (flag / mark-as-read arm the compiler's pending state —
+    /// the rules-composition plan's decision 3), forwards, nor replies
+    /// compiles to an empty procmail block and is dropped.
     public static func hasNoEffect(_ rule: Rule) -> Bool {
         rule.continueToNext && rule.forward.isEmpty && !rule.reply
+            && !rule.flag && !rule.markRead
             && (rule.action == .none || (rule.action == .copy && rule.copyFolders.isEmpty))
     }
 

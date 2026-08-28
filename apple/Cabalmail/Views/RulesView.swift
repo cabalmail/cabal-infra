@@ -335,7 +335,12 @@ enum RuleTemplates {
 /// handoff's `describeRule`.
 enum RuleSummary {
     static func describe(_ rule: Rule) -> String {
-        var parts = [conditionsPhrase(rule.conditions), actionPhrase(rule)]
+        var parts = [conditionsPhrase(rule.conditions)]
+        // A continuing None rule neither files nor stops; "no filing" would
+        // just be noise, so a decorate-only rule reads "flag · continue".
+        if !(rule.action == .none && rule.continueToNext) {
+            parts.append(actionPhrase(rule))
+        }
         if rule.flag { parts.append("flag") }
         if rule.markRead { parts.append("mark read") }
         if !rule.forward.isEmpty { parts.append("forward to \(rule.forward.joined(separator: ", "))") }

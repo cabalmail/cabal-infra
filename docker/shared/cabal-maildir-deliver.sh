@@ -8,9 +8,14 @@
 # native maildir delivery writes to new/ with no info suffix, so pre-flagged
 # delivery follows the maildir spec by hand: write tmp/, rename into cur/
 # with the :2,<flags> suffix (flags pre-sorted by the compiler; F=Flagged,
-# S=Seen). Runs as the recipient from a compiled recipe; procmail's `w` flag
-# reads our exit status, so any failure leaves the message undelivered for
-# procmail's later recipes / DEFAULT instead of losing it.
+# S=Seen). An EMPTY flags argument is a plain delivery into new/ with no
+# info suffix, exactly like native procmail - pending-decoration call sites
+# (docs/1.x/rules-composition-and-custom-flags-plan.md, decision 3) build
+# the argument from runtime variables, and an undecorated message must keep
+# normal unread semantics. Runs as the recipient from a compiled recipe;
+# procmail's `w` flag reads our exit status, so any failure leaves the
+# message undelivered for procmail's later recipes / DEFAULT instead of
+# losing it.
 #
 # Arguments arrive from the compiler, not from user input (the folder path
 # is resolved against the safe character set and the live Maildir at compile
@@ -18,13 +23,13 @@
 set -euo pipefail
 
 maildir="${1:?maildir path required}"
-flags="${2:?flags required}"
+flags="${2?flags argument required (may be empty)}"
 
 case "$flags" in
-  F|S|FS) ;;
+  ""|F|S|FS) ;;
   *) echo "[cabal-maildir-deliver] invalid flags: $flags" >&2; exit 64 ;;
 esac
-if [ ! -d "$maildir/tmp" ] || [ ! -d "$maildir/cur" ]; then
+if [ ! -d "$maildir/tmp" ] || [ ! -d "$maildir/cur" ] || [ ! -d "$maildir/new" ]; then
   echo "[cabal-maildir-deliver] not a maildir: $maildir" >&2
   exit 64
 fi
@@ -37,5 +42,9 @@ name="$(date +%s).P$$R${RANDOM}.$(uname -n)"
 tmp="$maildir/tmp/$name"
 trap 'rm -f "$tmp"' EXIT
 cat > "$tmp"
-mv "$tmp" "$maildir/cur/${name}:2,${flags}"
+if [ -z "$flags" ]; then
+  mv "$tmp" "$maildir/new/$name"
+else
+  mv "$tmp" "$maildir/cur/${name}:2,${flags}"
+fi
 trap - EXIT
