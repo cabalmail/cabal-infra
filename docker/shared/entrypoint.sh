@@ -201,6 +201,14 @@ if [ "$TIER" = "imap" ]; then
   echo "[entrypoint] Preparing rule-forward spool..."
   mkdir -p /var/spool/cabal-forward
   chmod 1777 /var/spool/cabal-forward
+  # And for keyworded deliveries (docs/1.x/rules-composition-and-custom-
+  # flags-plan.md, decision 5 erratum): recipients spool via
+  # cabal-maildir-deliver.sh, the root cabal-append-drain.py daemon
+  # performs the IMAP APPEND as the master user and answers with a
+  # response file the helper waits on.
+  echo "[entrypoint] Preparing keyworded-delivery spool..."
+  mkdir -p /var/spool/cabal-append
+  chmod 1777 /var/spool/cabal-append
 fi
 
 # ── Step 6: Prepare rsyslog working directory ─────────────────

@@ -266,6 +266,11 @@ jobs:
       # golden assertion also runs in the imap image build and at container
       # start-up via compile-user-rules-selftest.py.
       run: python3 -m unittest discover -s docker/shared/test/compile-user-rules -p "test_*.py"
+    - name: unittest-append-drain
+      # Request validation and handling for the keyworded-delivery APPEND
+      # drain (docs/1.x/rules-composition-and-custom-flags-plan.md, decision
+      # 5 erratum). Pure stdlib; the IMAP client is injected.
+      run: python3 -m unittest discover -s docker/shared/test/append-drain -p "test_*.py"
 
   # ---------------------------------------------------------------------------
   # Swift. swiftlint --strict, the same gate apple.yml runs on its macOS leg.
