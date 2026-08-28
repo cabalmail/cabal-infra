@@ -129,6 +129,47 @@ final class RuleModelTests: XCTestCase {
         XCTAssertEqual(empty, RuleSet())
     }
 
+    func testNormalizingLegacyContinueRewritesMoveAndArchiveToCopy() {
+        // Decision 2 of the rules-composition plan: move/archive + continue
+        // compiles byte-identically to copy, so editors render and save the
+        // Copy it is — carrying the folder over.
+        var rule = Rule(name: "n", action: .move, moveFolder: "Receipts", continueToNext: true)
+        var normalized = rule.normalizingLegacyContinue()
+        XCTAssertEqual(normalized.action, .copy)
+        XCTAssertEqual(normalized.copyFolders, ["Receipts"])
+        XCTAssertTrue(normalized.continueToNext)
+
+        // A folderless move converts to a folderless copy (the editor
+        // prompts for folders either way).
+        rule.moveFolder = ""
+        XCTAssertEqual(rule.normalizingLegacyContinue().copyFolders, [])
+
+        // Archive is an implicit move to `Archive`.
+        rule = Rule(name: "n", action: .archive, continueToNext: true)
+        normalized = rule.normalizingLegacyContinue()
+        XCTAssertEqual(normalized.action, .copy)
+        XCTAssertEqual(normalized.copyFolders, ["Archive"])
+
+        // The engine ignores Continue on Delete; the flag is dropped.
+        rule = Rule(name: "n", action: .delete, continueToNext: true)
+        normalized = rule.normalizingLegacyContinue()
+        XCTAssertEqual(normalized.action, .delete)
+        XCTAssertFalse(normalized.continueToNext)
+    }
+
+    func testNormalizingLegacyContinueLeavesTerminalAndCopyRulesAlone() {
+        // Terminal rules of every action are untouched, as are continuing
+        // copy/none rules — normalization is exactly the legacy shapes.
+        for action in Rule.Action.allCases {
+            let terminal = Rule(name: "n", action: action, moveFolder: "F")
+            XCTAssertEqual(terminal.normalizingLegacyContinue(), terminal)
+        }
+        let copy = Rule(name: "n", action: .copy, copyFolders: ["A"], continueToNext: true)
+        XCTAssertEqual(copy.normalizingLegacyContinue(), copy)
+        let none = Rule(name: "n", action: .none, flag: true, continueToNext: true)
+        XCTAssertEqual(none.normalizingLegacyContinue(), none)
+    }
+
     func testMintIDMatchesServerFormat() {
         // The Lambda keeps client ids matching ^r-[0-9a-f]{12}$ and re-mints
         // anything else; a drifting local format would re-id every rule on

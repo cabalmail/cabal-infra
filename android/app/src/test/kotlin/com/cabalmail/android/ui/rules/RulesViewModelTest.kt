@@ -101,6 +101,38 @@ class RulesViewModelTest {
         }
 
     @Test
+    fun `load normalizes legacy continue shapes without saving`() =
+        runTest(dispatcher) {
+            // Stored move/archive + continue predates the gated editor and
+            // compiles identically to copy; the editor renders and saves it
+            // as Copy (truthful Continue, decision 2) without scheduling a
+            // save of its own — the normalized form persists on the next
+            // edit.
+            val backend = FakeBackend()
+            backend.ruleSet =
+                RuleSet(
+                    rules =
+                        listOf(
+                            sampleRule().copy(continueToNext = true),
+                            sampleRule(name = "Purge").copy(action = RuleAction.DELETE, continueToNext = true),
+                        ),
+                    version = 1,
+                )
+
+            val model = RulesViewModel(backend)
+            advanceUntilIdle()
+
+            val rules = model.state.value.rules!!
+            assertEquals(RuleAction.COPY, rules[0].action)
+            assertEquals(listOf("Receipts"), rules[0].copyFolders)
+            assertTrue(rules[0].continueToNext)
+            assertEquals(RuleAction.DELETE, rules[1].action)
+            assertFalse(rules[1].continueToNext)
+            // Render-only: no PUT until the user edits something.
+            assertTrue(backend.savedSets.isEmpty())
+        }
+
+    @Test
     fun `update schedules a debounced whole-set save`() =
         runTest(dispatcher) {
             val backend = FakeBackend()

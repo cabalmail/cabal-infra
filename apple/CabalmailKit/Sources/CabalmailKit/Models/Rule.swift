@@ -141,6 +141,34 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
     public static func mintID() -> String {
         "r-" + String((0..<12).map { _ in "0123456789abcdef".randomElement()! })
     }
+
+    /// Truthful-Continue normalization
+    /// (`docs/1.x/rules-composition-and-custom-flags-plan.md`, decision 2).
+    /// A stored `move`/`archive` with spill-through predates the gated
+    /// editor; the compiler emits the exact same copy block for it as for
+    /// `copy`, so the editors render and save it as the Copy it is. A stored
+    /// `delete` with spill-through drops the flag the compiler ignores.
+    /// One-way and silent — the server and compiler stay permissive, so a
+    /// set that is never re-saved keeps working unchanged.
+    public func normalizingLegacyContinue() -> Rule {
+        guard continueToNext else { return self }
+        var rule = self
+        switch action {
+        case .move:
+            rule.action = .copy
+            rule.copyFolders = moveFolder.isEmpty ? [] : [moveFolder]
+        case .archive:
+            // The Archive action is an implicit move to the `Archive`
+            // folder, so that is the folder the copy carries over.
+            rule.action = .copy
+            rule.copyFolders = ["Archive"]
+        case .delete:
+            rule.continueToNext = false
+        case .copy, .none:
+            break
+        }
+        return rule
+    }
 }
 
 /// The whole ordered rule set as returned by `/get_rules` and `/set_rules`:
