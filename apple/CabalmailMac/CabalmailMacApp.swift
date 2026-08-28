@@ -102,7 +102,9 @@ struct CabalmailMacApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .preferredColorScheme(colorScheme(for: preferences.theme))
-                .frame(minWidth: 560, minHeight: 640)
+                // Wide enough for the category sidebar plus a detail form
+                // (the rules list needs ~560pt of detail width).
+                .frame(minWidth: 760, minHeight: 640)
         }
         // Menu-bar presence (Mac residency). Enriched notifications need
         // the app process alive (silent-push design, see

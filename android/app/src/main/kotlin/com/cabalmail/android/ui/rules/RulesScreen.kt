@@ -63,7 +63,8 @@ fun RulesScreen(
     onDelete: (String) -> Unit,
     onReload: () -> Unit,
     onRetrySave: () -> Unit,
-    onBack: () -> Unit,
+    /** Null when the settings category list is visible alongside. */
+    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -72,11 +73,13 @@ fun RulesScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.rules_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                        )
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
                     }
                 },
                 actions = {

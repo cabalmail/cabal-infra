@@ -587,38 +587,41 @@ private fun MailNavGraph(
                 folderChoices = folderChoices,
                 onLoadFolderChoices = viewModel::loadFolderChoices,
                 onPushFoldersChange = viewModel::updatePushFolders,
-                onOpenRules = { navController.navigate("rules") },
-                onSignOut = onSignOut,
-                onBack = null,
-            )
-        }
-
-        composable("rules") {
-            val viewModel: RulesViewModel =
-                viewModel(factory = RulesViewModel.factory(container))
-            val state by viewModel.state.collectAsState()
-            RulesScreen(
-                state = state,
-                onAdd = { template ->
-                    val added = if (template == null) viewModel.add() else viewModel.add(template)
-                    added?.let { navController.navigate("rules/$it") }
+                rulesPane = { onBack ->
+                    // Scoped to the settings back-stack entry (the enclosing
+                    // destination), so the editor route below reaches the
+                    // same instance — and its debounced whole-set save and
+                    // version — via getBackStackEntry("settings").
+                    val rulesViewModel: RulesViewModel =
+                        viewModel(factory = RulesViewModel.factory(container))
+                    val rulesState by rulesViewModel.state.collectAsState()
+                    RulesScreen(
+                        state = rulesState,
+                        onAdd = { template ->
+                            val added =
+                                if (template == null) rulesViewModel.add() else rulesViewModel.add(template)
+                            added?.let { navController.navigate("rules/$it") }
+                        },
+                        onOpenRule = { navController.navigate("rules/$it") },
+                        onSetEnabled = rulesViewModel::setEnabled,
+                        onMove = rulesViewModel::move,
+                        onDuplicate = { rulesViewModel.duplicate(it) },
+                        onDelete = rulesViewModel::delete,
+                        onReload = rulesViewModel::load,
+                        onRetrySave = rulesViewModel::retrySave,
+                        onBack = onBack,
+                    )
                 },
-                onOpenRule = { navController.navigate("rules/$it") },
-                onSetEnabled = viewModel::setEnabled,
-                onMove = viewModel::move,
-                onDuplicate = { viewModel.duplicate(it) },
-                onDelete = viewModel::delete,
-                onReload = viewModel::load,
-                onRetrySave = viewModel::retrySave,
-                onBack = { navController.popBackStack() },
+                onSignOut = onSignOut,
             )
         }
 
         composable("rules/{ruleId}") { entry ->
-            // The editor shares the list's view model (and so its debounced
-            // whole-set save and version) by scoping to the "rules"
+            // The editor shares the rules list's view model (and so its
+            // debounced whole-set save and version): the list lives in the
+            // settings destination's Rules pane, so scope to the "settings"
             // back-stack entry.
-            val parentEntry = remember(entry) { navController.getBackStackEntry("rules") }
+            val parentEntry = remember(entry) { navController.getBackStackEntry("settings") }
             val viewModel: RulesViewModel =
                 viewModel(parentEntry, factory = RulesViewModel.factory(container))
             val state by viewModel.state.collectAsState()
