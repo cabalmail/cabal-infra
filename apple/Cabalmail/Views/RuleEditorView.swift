@@ -38,6 +38,7 @@ struct RuleEditorView: View {
                 Text(isDelete
                     ? "A deleted message can't continue to later rules."
                     : "Off: the first matching rule is the last one that runs. On: later rules still see this message.")
+                    .sectionFooter()
             }
         }
         #if os(macOS)
@@ -106,6 +107,7 @@ private struct RuleConditionsSection: View {
             Text(rule.conditions.isEmpty
                 ? "No conditions: this rule matches every message."
                 : "All conditions must match (case-insensitive contains).")
+                .sectionFooter()
         }
     }
 
@@ -145,6 +147,7 @@ private struct RuleDestinationSection: View {
             Text("Destination")
         } footer: {
             footerText
+                .sectionFooter()
         }
     }
 
