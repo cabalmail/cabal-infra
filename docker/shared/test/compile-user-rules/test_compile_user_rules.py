@@ -25,6 +25,8 @@ spec.loader.exec_module(cur)
 
 FIXTURE_FOLDERS = {'', '.Receipts', '.Archive', '.Work.Clients', '.Trash',
                    '.My Stuff', '.Newsletters'}
+FIXTURE_PALETTE = frozenset({'cabal-flag-01', 'cabal-flag-02',
+                             'cabal-flag-07'})
 PUSH_LINE_PREFIX = '  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "'
 DELIVER_LINE_PREFIX = '  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR'
 FORWARD_LINE_PREFIX = '  | /usr/local/bin/cabal-rules-forward.sh '
@@ -91,8 +93,9 @@ def rule(**kw):
     return base
 
 
-def compile_one(r, user='fixtureuser'):
-    return cur.compile_rule(r, lambda d: d in FIXTURE_FOLDERS, user)
+def compile_one(r, user='fixtureuser', **kw):
+    kw.setdefault('palette_slots', FIXTURE_PALETTE)
+    return cur.compile_rule(r, lambda d: d in FIXTURE_FOLDERS, user, **kw)
 
 
 class GoldenTest(unittest.TestCase):
@@ -104,11 +107,12 @@ class GoldenTest(unittest.TestCase):
         with open(os.path.join(HERE, 'golden.rc'), encoding='utf-8') as f:
             golden = f.read()
         content, compiled, _ = cur.compile_ruleset(
-            'fixtureuser', rules, lambda d: d in FIXTURE_FOLDERS)
+            'fixtureuser', rules, lambda d: d in FIXTURE_FOLDERS,
+            FIXTURE_PALETTE)
         if not content.endswith('\n'):
             content += '\n'
         self.assertEqual(content, golden)
-        self.assertEqual(compiled, 59)
+        self.assertEqual(compiled, 64)
 
 
 class StructureTest(unittest.TestCase):
@@ -379,6 +383,106 @@ class PendingDecorationTest(unittest.TestCase):
         self.assertIn('PENDING_F=F', text)
         self.assertLess(text.index('cabal-rules-forward.sh'),
                         text.index('PENDING_F=F'))
+
+
+class KeywordTest(unittest.TestCase):
+    '''Decision 6: rules set custom-flag slots via the helper's APPEND form,
+    validated against the palette; PENDING_KW carries decorate-only slots.'''
+
+    def test_keyworded_delivery_routes_through_the_append_form(self):
+        lines, _, reason = compile_one(rule(
+            action='move', moveFolder='Receipts',
+            flags=['cabal-flag-02']))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        # Four-argument helper call: path, flags, IMAP folder name, keywords.
+        self.assertIn('cabal-maildir-deliver.sh "$MAILDIR/.Receipts" "" '
+                      '"Receipts" "cabal-flag-02"', text)
+        self.assertIn('  :0w', text)
+        self.assertNotIn('$MAILDIR/.Receipts/', text)
+
+    def test_keywords_dedupe_into_slot_order(self):
+        lines, _, reason = compile_one(rule(
+            action='move', moveFolder='Receipts', flag=True,
+            flags=['cabal-flag-07', 'cabal-flag-01', 'cabal-flag-07']))
+        self.assertIsNone(reason)
+        self.assertIn('"Receipts" "cabal-flag-01,cabal-flag-07"',
+                      '\n'.join(lines))
+
+    def test_slot_not_in_palette_skips_the_rule(self):
+        _, _, reason = compile_one(rule(
+            action='move', moveFolder='Receipts',
+            flags=['cabal-flag-19']))
+        self.assertEqual(reason, 'flag_not_in_palette')
+
+    def test_empty_palette_skips_every_keyworded_rule(self):
+        _, _, reason = compile_one(rule(
+            action='move', moveFolder='Receipts',
+            flags=['cabal-flag-01']), palette_slots=frozenset())
+        self.assertEqual(reason, 'flag_not_in_palette')
+
+    def test_malformed_slots_are_schema_failures(self):
+        for bad in (['cabal-flag-21'], ['cabal-flag-1'], ['x'], [42],
+                    'cabal-flag-01', ['cabal-flag-01'] * 21):
+            with self.subTest(bad=bad):
+                _, _, reason = compile_one(rule(
+                    action='move', moveFolder='Receipts', flags=bad))
+                self.assertEqual(reason, 'schema')
+
+    def test_delete_ignores_keywords(self):
+        lines, _, reason = compile_one(rule(
+            action='delete', flags=['cabal-flag-01']))
+        self.assertIsNone(reason)
+        self.assertNotIn('cabal-maildir-deliver', '\n'.join(lines))
+
+    def test_decorate_only_slots_arm_pending_kw(self):
+        lines, _, reason = compile_one(rule(
+            continueToNext=True, flags=['cabal-flag-01', 'cabal-flag-02']))
+        self.assertIsNone(reason)
+        text = '\n'.join(lines)
+        self.assertIn('  PENDING_KW=${PENDING_KW:+${PENDING_KW},}'
+                      'cabal-flag-01,cabal-flag-02', text)
+        self.assertNotIn('cabal-maildir-deliver', text)
+        self.assertNotIn('push-enqueue', text)
+
+    def test_pending_kw_gates_the_native_path_with_a_combined_sentinel(self):
+        decorator = rule(id='r-000000000001', name='KW decorate',
+                         flags=['cabal-flag-01'], continueToNext=True)
+        mover = rule(id='r-000000000002', name='Plain move', action='move',
+                     moveFolder='Receipts')
+        content, compiled, _ = cur.compile_ruleset(
+            'u', [decorator, mover], lambda d: d in FIXTURE_FOLDERS,
+            FIXTURE_PALETTE)
+        self.assertEqual(compiled, 2)
+        self.assertIn('  KWFLAGS=$PENDING_KW', content)
+        self.assertIn('  * ! KWFLAGS ?? .', content)
+        # No F/S decorator in this set: the flags argument stays a constant
+        # empty string and no DFLAGS machinery is emitted.
+        self.assertNotIn('DFLAGS', content)
+        self.assertIn('cabal-maildir-deliver.sh "$MAILDIR/.Receipts" "" '
+                      '"Receipts" "$KWFLAGS"', content)
+
+    def test_keywordless_sets_compile_without_keyword_variables(self):
+        content, _, _ = cur.compile_ruleset(
+            'u', [rule(action='move', moveFolder='Receipts', flag=True)],
+            lambda d: d in FIXTURE_FOLDERS, FIXTURE_PALETTE)
+        self.assertNotIn('KWFLAGS', content)
+        self.assertNotIn('PENDING_KW', content)
+        self.assertNotIn('PENDINGANY', content)
+
+    def test_palette_parsing_is_tolerant_and_enabled_only(self):
+        raw = json.dumps([
+            {'slot': 'cabal-flag-01', 'label': 'A', 'color': 'red'},
+            {'slot': 'cabal-flag-02', 'label': 'B', 'color': 'gray',
+             'enabled': False},
+            {'slot': 'not-a-slot', 'label': 'C', 'color': 'red'},
+            'garbage',
+        ])
+        self.assertEqual(cur.palette_enabled_slots(raw),
+                         frozenset({'cabal-flag-01'}))
+        self.assertEqual(cur.palette_enabled_slots('not json'), frozenset())
+        self.assertEqual(cur.palette_enabled_slots(''), frozenset())
+        self.assertEqual(cur.palette_enabled_slots('{}'), frozenset())
 
 
 class FolderTest(unittest.TestCase):

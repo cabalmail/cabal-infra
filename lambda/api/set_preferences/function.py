@@ -4,8 +4,15 @@ import os
 import boto3  # pylint: disable=import-error
 
 ddb = boto3.resource('dynamodb')
+sns = boto3.client('sns')
 TABLE_NAME = os.environ.get('USER_PREFERENCES_TABLE_NAME', 'cabal-user-preferences')
 table = ddb.Table(TABLE_NAME)
+# The user-rules reconfigure topic. A flag-palette edit changes what the
+# rule compiler may emit (a deleted or disabled slot must start skipping
+# its rules; rules-composition plan, decision 6), so palette writes nudge
+# the imap tier the same way set_rules does instead of waiting out the
+# ~15-minute fallback recompile. Best-effort, like set_rules' publish.
+RULES_TOPIC_ARN = os.environ.get('USER_RULES_TOPIC_ARN', '')
 
 ALLOWED = {
     'theme':   {'light', 'dark'},
@@ -272,6 +279,13 @@ def handler(event, _context):
         }
     if app is not None:
         updates['app'] = app
+        if 'flag_palette' in app and RULES_TOPIC_ARN:
+            try:
+                sns.publish(TopicArn=RULES_TOPIC_ARN,
+                            Message=json.dumps({'user': user,
+                                                'palette': True}))
+            except Exception as err:  # pylint: disable=broad-exception-caught
+                print(f'[set_preferences] SNS publish failed for {user}: {err}')
     return {
         'statusCode': 200,
         'body': json.dumps(updates)

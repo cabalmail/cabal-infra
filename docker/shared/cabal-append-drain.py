@@ -70,13 +70,19 @@ def validate_request(meta, owner):
             or folder.startswith('.') or '..' in folder:
         return 'bad folder'
     flags = meta.get('flags')
-    if not isinstance(flags, list) or not flags or len(flags) > MAX_FLAGS:
+    if not isinstance(flags, list) or not flags:
         return 'bad flags'
     for flag in flags:
         if not isinstance(flag, str):
             return 'bad flags'
         if flag not in SYSTEM_FLAGS and not SLOT_RE.match(flag):
             return f'flag not deliverable: {flag!r}'
+    # Dedupe before the cap: rule-own and pending keyword unions may repeat
+    # a slot (Phase 5), and 22 is the distinct-vocabulary bound (20 slots +
+    # 2 system flags), not a token count.
+    meta['flags'] = list(dict.fromkeys(flags))
+    if len(meta['flags']) > MAX_FLAGS:
+        return 'bad flags'
     return None
 
 

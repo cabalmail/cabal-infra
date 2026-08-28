@@ -58,6 +58,15 @@ ACTIONS = {'move', 'copy', 'delete', 'archive', 'none'}
 FORWARD_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
 RULE_ID_RE = re.compile(r'^r-[0-9a-f]{12}$')
 BOOL_KEYS = ('enabled', 'flag', 'markRead', 'reply', 'continueToNext')
+# Custom-flag slots a rule may set at delivery
+# (docs/1.x/rules-composition-and-custom-flags-plan.md, decision 6). Shape is
+# enforced hard here; palette membership is a WARNING, not an error, exactly
+# like folder targets: a palette edit after the rule was saved must not wedge
+# every subsequent whole-set save, and the compiler is the enforcement point
+# (flag_not_in_palette skip). The legacy `flag` boolean stays alongside,
+# meaning the system \Flagged, accepted indefinitely.
+SLOT_RE = re.compile(r'^cabal-flag-(0[1-9]|1[0-9]|20)$')
+MAX_RULE_FLAGS = 20
 DEFAULTS = {
     'name': '',
     'enabled': True,
@@ -66,6 +75,7 @@ DEFAULTS = {
     'moveFolder': '',
     'copyFolders': [],
     'flag': False,
+    'flags': [],
     'markRead': False,
     'forward': [],
     'reply': False,
@@ -150,6 +160,28 @@ def _scalar_errors(rule):
     return errors
 
 
+def _rule_flags_errors(flags):
+    '''Validates the custom-flag slot list; returns a list of (field, message).
+
+    Slot atoms only, unique, bounded. Whether a slot is (still) in the
+    user's palette is deliberately not checked here — see SLOT_RE's comment.
+    '''
+    if not isinstance(flags, list):
+        return [('flags', 'Must be a list.')]
+    if len(flags) > MAX_RULE_FLAGS:
+        return [('flags', f'At most {MAX_RULE_FLAGS} flags per rule.')]
+    errors = []
+    seen = set()
+    for i, slot in enumerate(flags):
+        if not isinstance(slot, str) or not SLOT_RE.match(slot):
+            errors.append((f'flags[{i}]', 'Unknown flag slot.'))
+        elif slot in seen:
+            errors.append((f'flags[{i}]', 'Duplicate flag slot.'))
+        else:
+            seen.add(slot)
+    return errors
+
+
 def _copy_folder_errors(folders):
     '''Validates the copyFolders list; returns a list of (field, message).'''
     if not isinstance(folders, list):
@@ -206,6 +238,7 @@ def _normalize_rules(rules_in):
         rule_errors += _scalar_errors(rule)
         rule_errors += _condition_errors(rule['conditions'])
         rule_errors += _copy_folder_errors(rule['copyFolders'])
+        rule_errors += _rule_flags_errors(rule['flags'])
         forwards, dropped = _clean_forwards(rule['forward'])
         if forwards is None:
             rule_errors.append(('forward', 'Must be a list.'))

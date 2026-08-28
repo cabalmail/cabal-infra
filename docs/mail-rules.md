@@ -101,7 +101,12 @@ button when you pick that action.
 Extras (independent; all disabled when the destination is Delete —
 there is no message left to act on):
 
-- **Flag** — the message arrives flagged.
+- **Flag** — the message arrives flagged, and/or tagged with any of
+  the custom flags you have defined in Settings → Flags (the rule
+  editor's flag picker offers the classic flag plus your palette). If
+  you later delete or disable a custom flag, rules that set it are
+  skipped entirely — pick a different flag or remove it from the rule
+  to re-arm them.
 - **Mark as read** — the message arrives read.
 - **Forward** — send a copy to up to 10 addresses. The forward carries
   the original message; forwarded copies are stamped with a loop-guard
@@ -148,9 +153,9 @@ decorations intact. The editor refuses a continuing rule that neither
 files, flags, marks read, forwards, nor replies; it would have no
 effect at all.
 
-Flag and Mark-as-read on a continuing rule with destination None
-*decorate* the message: the marks are carried along and applied
-wherever the message ends up — a later rule's folder, or the inbox
+Flag, custom flags, and Mark-as-read on a continuing rule with
+destination None *decorate* the message: the marks are carried along
+and applied wherever the message ends up — a later rule's folder, or the inbox
 fallback. That is how "file receipts into Receipts AND flag anything
 from billing" composes from two rules, **decorators above filers**:
 
@@ -199,17 +204,20 @@ Work down this list:
 3. **Does the destination folder still exist?** A rule whose folder was
    deleted is skipped and the message stays in the inbox; the editor
    marks the folder as missing.
-4. **Is the condition matching what you think?** Matching is a literal
+4. **Are the rule's custom flags still in your palette?** A rule that
+   sets a flag you have since deleted or disabled is skipped entirely
+   until you update it (Settings → Flags shows the palette).
+5. **Is the condition matching what you think?** Matching is a literal
    substring against the raw header line. `To contains` matches the
    `To:` header — not the envelope recipient — so mail where your
    address only appears as a BCC will not match a To condition.
-5. **Had the change propagated yet?** A rule saved moments before a
+6. **Had the change propagated yet?** A rule saved moments before a
    message arrived may not have compiled in time; anything after the
    ~15-minute worst case is in effect.
-6. **For replies:** the same sender within 7 days, bulk/list/auto-
+7. **For replies:** the same sender within 7 days, bulk/list/auto-
    submitted mail, and anything past the daily cap are all silently
    suppressed by design.
-7. Still stuck? An operator can check the compile log (below) for a
+8. Still stuck? An operator can check the compile log (below) for a
    `compile_skip_rule` line naming your rule and the reason.
 
 ## Operator notes: where rules live
@@ -230,7 +238,9 @@ Work down this list:
 - **Compile logs and metrics**: the compiler logs `compile_ok` /
   `compile_skip_rule` / `compile_skip_user` lines (with per-rule skip
   reasons such as `folder_not_found`, `folder_not_set`,
-  `unsafe_folder`) to the imap tier's CloudWatch log group, and emits
+  `unsafe_folder`, `flag_not_in_palette` — the last meaning the rule
+  sets a custom flag that is no longer in, or is disabled in, the
+  user's palette, the flag twin of `folder_not_found`) to the imap tier's CloudWatch log group, and emits
   per-run counts to the `Cabal/UserRules` metric namespace
   (`CompiledRules`, `SkippedRules`, `FailedUsers`, `CompileOkUsers`).
 - **Alarms** (always on, independent of the optional monitoring stack;

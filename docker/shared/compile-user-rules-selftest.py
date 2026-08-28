@@ -23,6 +23,9 @@ DATA_DIR = os.environ.get('SELFTEST_DATA_DIR',
 # Must match the folder set the golden file was generated against.
 FIXTURE_FOLDERS = {'', '.Receipts', '.Archive', '.Work.Clients', '.Trash',
                    '.My Stuff', '.Newsletters'}
+# And the enabled palette slots (rules-composition plan, decision 6).
+FIXTURE_PALETTE = frozenset({'cabal-flag-01', 'cabal-flag-02',
+                             'cabal-flag-07'})
 
 
 def main():
@@ -38,7 +41,8 @@ def main():
         golden = f.read()
 
     content, compiled, _skips = module.compile_ruleset(
-        'fixtureuser', rules, lambda d: d in FIXTURE_FOLDERS)
+        'fixtureuser', rules, lambda d: d in FIXTURE_FOLDERS,
+        FIXTURE_PALETTE)
     if not content.endswith('\n'):
         content += '\n'
     if content != golden:
