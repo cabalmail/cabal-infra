@@ -202,6 +202,7 @@ public final class Preferences {
         case crashReportingEnabled = "cabalmail.prefs.crash_reporting_enabled"
         case defaultBodyRenderMode = "cabalmail.prefs.default_body_render_mode"
         case folderCountDisplay = "cabalmail.prefs.folder_count_display"
+        case flagPalette = "cabalmail.prefs.flag_palette"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -252,10 +253,28 @@ public final class Preferences {
     public var folderCountDisplay: FolderCountDisplay {
         didSet { persist(.folderCountDisplay, folderCountDisplay.rawValue) }
     }
+    /// The user's custom-flag palette (rules-composition plan, Phase 3), in
+    /// display order. Stored and synced as the wire JSON string.
+    public var flagPalette: [FlagPaletteEntry] {
+        didSet {
+            // A palette that has existed must keep syncing even once
+            // emptied, or the deletion could never reach the server.
+            if !flagPalette.isEmpty { flagPaletteSyncable = true }
+            persist(.flagPalette, FlagPalette.encode(flagPalette))
+        }
+    }
 
     private let store: PreferenceStore
     private var isReloading = false
     private var isApplyingRemote = false
+    /// True once the `flag_palette` key has any reason to ride the payload:
+    /// a server pull carried it (proof the server build understands it) or
+    /// a palette existed locally at some point this session (a user act
+    /// that must sync, including a subsequent deletion). While false the
+    /// payload omits the key entirely: `set_preferences` rejects the whole
+    /// map on any unknown key, so an eager send against a not-yet-upgraded
+    /// server would break every preference push from this build.
+    private var flagPaletteSyncable = false
 
     /// Scope hash of the account whose settings are currently loaded, or
     /// `nil` before the first `activate` (fresh install, first launch
@@ -287,6 +306,7 @@ public final class Preferences {
         self.crashReportingEnabled = false
         self.defaultBodyRenderMode = .original
         self.folderCountDisplay = .unread
+        self.flagPalette = []
         store.startObserving { [weak self] in
             self?.reload()
         }
@@ -365,6 +385,7 @@ public final class Preferences {
         crashReportingEnabled = readString(.crashReportingEnabled) == "1"
         defaultBodyRenderMode = readEnum(.defaultBodyRenderMode, default: .original)
         folderCountDisplay = readEnum(.folderCountDisplay, default: .unread)
+        flagPalette = readString(.flagPalette).flatMap(FlagPalette.decode) ?? []
     }
 
     private func persist(_ key: Key, _ value: String?) {
@@ -430,6 +451,7 @@ public final class Preferences {
         static let crashReportingEnabled = "crash_reporting_enabled"
         static let defaultBodyRenderMode = "default_body_render_mode"
         static let folderCountDisplay = "folder_count_display"
+        static let flagPalette = "flag_palette"
     }
 
     /// The complete set of synced preferences as the `app` map the server
@@ -438,7 +460,7 @@ public final class Preferences {
     /// survive the push. `defaultFromAddress`'s "no default" (`nil`) is
     /// encoded as an empty string — key removal is never needed.
     public func appPreferencesPayload() -> [String: String] {
-        [
+        var payload = [
             AppWireKey.markAsRead: markAsRead.rawValue,
             AppWireKey.loadRemoteContent: loadRemoteContent.rawValue,
             AppWireKey.defaultFromAddress: defaultFromAddress ?? "",
@@ -451,6 +473,14 @@ public final class Preferences {
             AppWireKey.defaultBodyRenderMode: defaultBodyRenderMode.rawValue,
             AppWireKey.folderCountDisplay: folderCountDisplay.rawValue,
         ]
+        // One exception to "always send every key": `flag_palette` rides
+        // only once it is syncable (see `flagPaletteSyncable`). A server
+        // that predates the key 400s the whole map on it, which would
+        // break every preference push from this build.
+        if !flagPalette.isEmpty || flagPaletteSyncable {
+            payload[AppWireKey.flagPalette] = FlagPalette.encode(flagPalette)
+        }
+        return payload
     }
 
     /// Applies a server-fetched `app` map (server wins on login). Each value is
@@ -478,6 +508,14 @@ public final class Preferences {
         }
         applyEnum(remote[AppWireKey.defaultBodyRenderMode], to: \.defaultBodyRenderMode)
         applyEnum(remote[AppWireKey.folderCountDisplay], to: \.folderCountDisplay)
+        if let raw = remote[AppWireKey.flagPalette] {
+            flagPaletteSyncable = true
+            // An unparseable value leaves the current palette untouched,
+            // like every other unrecognized remote value.
+            if let entries = FlagPalette.decode(raw) {
+                flagPalette = entries
+            }
+        }
     }
 
     /// One enum-valued `applyRemote` arm: writes `raw` through `property`

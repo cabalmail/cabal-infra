@@ -48,6 +48,8 @@ class PreferencesRepository(
         val DISPOSE_ADVANCE = stringPreferencesKey("dispose_advance")
         val DEFAULT_FROM_ADDRESS = stringPreferencesKey("default_from_address")
         val SIGNATURE = stringPreferencesKey("signature")
+        val FLAG_PALETTE = stringPreferencesKey("flag_palette")
+        val FLAG_PALETTE_SYNCABLE = booleanPreferencesKey("flag_palette_syncable")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         val PUSH_FOLDERS = stringSetPreferencesKey("push_folders")
@@ -76,7 +78,12 @@ class PreferencesRepository(
 
     /** Applies a local change and schedules the server push. */
     suspend fun update(transform: (AppPreferences) -> AppPreferences) {
-        val next = transform(decode(dataStore.data.first()))
+        val next =
+            transform(decode(dataStore.data.first())).let {
+                // A palette that has existed must keep syncing even once
+                // emptied, or a deletion could never reach the server.
+                if (it.flagPalette.isNotEmpty()) it.copy(flagPaletteSyncable = true) else it
+            }
         dataStore.edit { store -> encode(store, next) }
         pushRequests.tryEmit(Unit)
     }
@@ -114,6 +121,8 @@ class PreferencesRepository(
             disposeAdvance = wireEnum<DisposeAdvance>(store[Keys.DISPOSE_ADVANCE]) ?: defaults.disposeAdvance,
             defaultFromAddress = store[Keys.DEFAULT_FROM_ADDRESS]?.ifEmpty { null },
             signature = store[Keys.SIGNATURE] ?: defaults.signature,
+            flagPalette = store[Keys.FLAG_PALETTE]?.let(FlagPalette::decode) ?: defaults.flagPalette,
+            flagPaletteSyncable = store[Keys.FLAG_PALETTE_SYNCABLE] ?: defaults.flagPaletteSyncable,
             dynamicColor = store[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
             notificationsEnabled = store[Keys.NOTIFICATIONS_ENABLED] ?: defaults.notificationsEnabled,
             pushFolders = store[Keys.PUSH_FOLDERS] ?: defaults.pushFolders,
@@ -142,6 +151,8 @@ class PreferencesRepository(
         store[Keys.DISPOSE_ADVANCE] = value.disposeAdvance.wire
         store[Keys.DEFAULT_FROM_ADDRESS] = value.defaultFromAddress.orEmpty()
         store[Keys.SIGNATURE] = value.signature
+        store[Keys.FLAG_PALETTE] = FlagPalette.encode(value.flagPalette)
+        store[Keys.FLAG_PALETTE_SYNCABLE] = value.flagPaletteSyncable
         store[Keys.DYNAMIC_COLOR] = value.dynamicColor
         store[Keys.NOTIFICATIONS_ENABLED] = value.notificationsEnabled
         store[Keys.PUSH_FOLDERS] = value.pushFolders

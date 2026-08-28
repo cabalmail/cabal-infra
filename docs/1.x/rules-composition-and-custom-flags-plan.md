@@ -6,7 +6,7 @@
 | ---------------------------------- | ----------------------- |
 | 1 -- Truthful Continue             | Complete (2026-08-28)   |
 | 2 -- Pending decorations           | Not started             |
-| 3 -- Flag palette                  | Not started             |
+| 3 -- Flag palette                  | Code complete (2026-08-28); stage verification pending |
 | 4 -- Keywords on the message plane | Not started             |
 | 5 -- Rules integration             | Not started             |
 
@@ -257,6 +257,21 @@ a flagged inbox delivery; rule sets without decoration compile
 byte-identically to the pre-phase output.
 
 ## Phase 3 -- Flag palette
+
+**Status:** Code complete (2026-08-28), split across two PRs: the
+`set_preferences` validator plus the Linux contract-test entry (landed
+together — the contract test's exact-equality runs at PR time in both
+directions, so a standalone Linux-only change cannot pass CI), and the
+Apple/Android palette managers, which must merge after the server side.
+Stage round-trip verification pending. Two mechanism refinements over
+the sketch: (1) the palette value is a JSON-encoded *string* inside the
+`app` map, not a nested object — every shipped native client decodes
+the map as string-to-string, and a nested value would silently kill
+preference sync for builds in the field; (2) clients include the
+`flag_palette` key in their push only once a palette exists or a server
+pull has carried the key, because `set_preferences` rejects the whole
+map on an unknown key and an eager send against a not-yet-upgraded
+server would break every preference push.
 
 Storage and palette management; no message-plane changes yet.
 

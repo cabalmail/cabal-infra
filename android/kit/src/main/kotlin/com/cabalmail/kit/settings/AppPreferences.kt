@@ -126,6 +126,20 @@ data class AppPreferences(
     /** Null = From picker starts empty (wire encoding: empty string). */
     val defaultFromAddress: String? = null,
     val signature: String = "",
+    /**
+     * The custom-flag palette (rules-composition plan, Phase 3), in display
+     * order; rides the `app` map as a JSON-encoded string.
+     */
+    val flagPalette: List<FlagPaletteEntry> = emptyList(),
+    /**
+     * True once the `flag_palette` key has any reason to ride the payload:
+     * a server pull carried it, or a palette existed locally at some point
+     * (a user act that must sync, including a later deletion). While false
+     * the push omits the key entirely — `set_preferences` rejects the whole
+     * map on any unknown key, so an eager send against a not-yet-upgraded
+     * server would break every preference push from this build.
+     */
+    val flagPaletteSyncable: Boolean = false,
     // ---- local only
     val dynamicColor: Boolean = true,
     /** Background new-mail notifications (plan §7.3); off until the user opts in. */

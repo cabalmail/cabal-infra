@@ -20,6 +20,7 @@ object PreferencesWire {
         const val THEME = "theme"
         const val DEFAULT_BODY_RENDER_MODE = "default_body_render_mode"
         const val FOLDER_COUNT_DISPLAY = "folder_count_display"
+        const val FLAG_PALETTE = "flag_palette"
     }
 
     /**
@@ -36,17 +37,24 @@ object PreferencesWire {
             density = preferences.density.wire,
             name = preferences.displayName,
             app =
-                mapOf(
-                    AppKey.MARK_AS_READ to preferences.markAsRead.wire,
-                    AppKey.LOAD_REMOTE_CONTENT to preferences.loadRemoteContent.wire,
-                    AppKey.DEFAULT_FROM_ADDRESS to preferences.defaultFromAddress.orEmpty(),
-                    AppKey.SIGNATURE to preferences.signature,
-                    AppKey.DISPOSE_ACTION to preferences.disposeAction.wire,
-                    AppKey.DISPOSE_ADVANCE to preferences.disposeAdvance.wire,
-                    AppKey.THEME to preferences.theme.wire,
-                    AppKey.DEFAULT_BODY_RENDER_MODE to preferences.bodyRenderMode.wire,
-                    AppKey.FOLDER_COUNT_DISPLAY to preferences.folderCountDisplay.wire,
-                ),
+                buildMap {
+                    put(AppKey.MARK_AS_READ, preferences.markAsRead.wire)
+                    put(AppKey.LOAD_REMOTE_CONTENT, preferences.loadRemoteContent.wire)
+                    put(AppKey.DEFAULT_FROM_ADDRESS, preferences.defaultFromAddress.orEmpty())
+                    put(AppKey.SIGNATURE, preferences.signature)
+                    put(AppKey.DISPOSE_ACTION, preferences.disposeAction.wire)
+                    put(AppKey.DISPOSE_ADVANCE, preferences.disposeAdvance.wire)
+                    put(AppKey.THEME, preferences.theme.wire)
+                    put(AppKey.DEFAULT_BODY_RENDER_MODE, preferences.bodyRenderMode.wire)
+                    put(AppKey.FOLDER_COUNT_DISPLAY, preferences.folderCountDisplay.wire)
+                    // One exception to "send every key": `flag_palette`
+                    // rides only once syncable — a server that predates the
+                    // key 400s the whole map on it (see
+                    // [AppPreferences.flagPaletteSyncable]).
+                    if (preferences.flagPalette.isNotEmpty() || preferences.flagPaletteSyncable) {
+                        put(AppKey.FLAG_PALETTE, FlagPalette.encode(preferences.flagPalette))
+                    }
+                },
         )
 
     /**
@@ -83,6 +91,13 @@ object PreferencesWire {
                     current.defaultFromAddress
                 },
             signature = app[AppKey.SIGNATURE] ?: current.signature,
+            // An unparseable palette leaves the current one untouched, like
+            // every other unrecognized remote value; a present key of any
+            // shape proves the server knows it.
+            flagPalette =
+                app[AppKey.FLAG_PALETTE]?.let(FlagPalette::decode) ?: current.flagPalette,
+            flagPaletteSyncable =
+                current.flagPaletteSyncable || app.containsKey(AppKey.FLAG_PALETTE),
         )
     }
 }
