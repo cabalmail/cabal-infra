@@ -5,7 +5,7 @@
 | Phase                              | Status                  |
 | ---------------------------------- | ----------------------- |
 | 1 -- Truthful Continue             | Complete (2026-08-28)   |
-| 2 -- Pending decorations           | Not started             |
+| 2 -- Pending decorations           | Code complete (2026-08-28); stage verification pending |
 | 3 -- Flag palette                  | Code complete (2026-08-28); stage verification pending |
 | 4 -- Keywords on the message plane | Not started             |
 | 5 -- Rules integration             | Not started             |
@@ -233,6 +233,17 @@ disabled destinations render in place on both platforms; no rule
 constructible in either editor compiles to `no_effect`.
 
 ## Phase 2 -- Pending decorations
+
+**Status:** Code complete (2026-08-28); the on-stage acceptance checks
+(decorate-then-move, decorate-then-fallback with a live message) are
+pending the stage rollout. One mechanism refinement over decision 3's
+sketch: deliveries fold pending flags through a per-delivery `DFLAGS`
+variable (own flags override their slot) rather than assigning
+`PENDING_*` before the delivery line — a spill copy's own flags must
+decorate the copy only, and mutating the pending variables there would
+leak them into later rules and the inbox fallback. Semantics are
+otherwise exactly as specified, including the F-then-S concatenation
+invariant.
 
 Compiler and container work; re-enables the flag-then-file composition.
 

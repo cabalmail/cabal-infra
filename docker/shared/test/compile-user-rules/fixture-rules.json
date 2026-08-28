@@ -1206,5 +1206,167 @@
   {
     "id": "r-badbadbadbad",
     "name": "Broken"
+  },
+  {
+    "id": "r-00000000003c",
+    "name": "Decorate flag billing",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "billing"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-00000000003d",
+    "name": "Decorate read newsletters",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "news"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": true,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-00000000003e",
+    "name": "Pending move plain",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "receipt"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-00000000003f",
+    "name": "Pending spill copy plain",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "client"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [
+      "Work/Clients"
+    ],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true
+  },
+  {
+    "id": "r-000000000040",
+    "name": "Pending move own flag",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "vip"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000041",
+    "name": "Pending move own read",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "digest"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Newsletters",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": true,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000042",
+    "name": "Pending move own both",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "fs"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": true,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000043",
+    "name": "Pending none terminal",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "stop"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
   }
 ]

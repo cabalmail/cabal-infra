@@ -651,3 +651,108 @@ LINEBUF=16384
   :0:
   $DEFAULT
 }
+
+# [r-00000000003c] Decorate flag billing
+:0
+* ^From:.*billing
+{
+  PENDING_F=F
+}
+
+# [r-00000000003d] Decorate read newsletters
+:0
+* ^From:.*news
+{
+  PENDING_S=S
+}
+
+# [r-00000000003e] Pending move plain
+:0
+* ^Subject:.*receipt
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Receipts"
+  PUSH_ENQUEUED=yes
+
+  DFLAGS=$PENDING_F$PENDING_S
+  :0:
+  * ! DFLAGS ?? .
+  $MAILDIR/.Receipts/
+
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Receipts" "$DFLAGS"
+}
+
+# [r-00000000003f] Pending spill copy plain
+:0
+* ^From:.*client
+{
+  DFLAGS=$PENDING_F$PENDING_S
+  :0c:
+  * ! DFLAGS ?? .
+  $MAILDIR/.Work.Clients/
+
+  :0cw
+  * DFLAGS ?? .
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Work.Clients" "$DFLAGS"
+}
+
+# [r-000000000040] Pending move own flag
+:0
+* ^Subject:.*vip
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Receipts"
+  PUSH_ENQUEUED=yes
+
+  DFLAGS=F$PENDING_S
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Receipts" "$DFLAGS"
+}
+
+# [r-000000000041] Pending move own read
+:0
+* ^From:.*digest
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Newsletters"
+  PUSH_ENQUEUED=yes
+
+  DFLAGS=${PENDING_F}S
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Newsletters" "$DFLAGS"
+}
+
+# [r-000000000042] Pending move own both
+:0
+* ^Subject:.*fs
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Receipts"
+  PUSH_ENQUEUED=yes
+
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Receipts" FS
+}
+
+# [r-000000000043] Pending none terminal
+:0
+* ^Subject:.*stop
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "INBOX"
+  PUSH_ENQUEUED=yes
+
+  DFLAGS=$PENDING_F$PENDING_S
+  :0:
+  * ! DFLAGS ?? .
+  $DEFAULT
+
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR" "$DFLAGS"
+}

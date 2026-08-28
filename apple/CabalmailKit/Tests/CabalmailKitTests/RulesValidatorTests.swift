@@ -162,12 +162,6 @@ final class RulesValidatorTests: XCTestCase {
         XCTAssertTrue(RulesValidator.hasNoEffect(rule))
         XCTAssertEqual(issueFields(rule), ["continueToNext"])
 
-        // Flag / mark-as-read alone don't rescue it: they are delivery
-        // metadata with no delivery to ride (until Phase 2's pending flags).
-        rule.flag = true
-        rule.markRead = true
-        XCTAssertEqual(issueFields(rule), ["continueToNext"])
-
         // A continuing copy with no folders picked yet is the same trap.
         rule = validRule()
         rule.action = .copy
@@ -179,11 +173,22 @@ final class RulesValidatorTests: XCTestCase {
     }
 
     func testEffectfulAndTerminalRulesAreNotNoEffect() {
-        // Forward or reply gives a continuing None rule an effect.
+        // Flag / mark-as-read decorate: the compiler's pending state
+        // (rules-composition plan, decision 3) carries them into whatever
+        // delivery ends up happening, so a decorate-only rule is saveable.
         var rule = validRule()
         rule.action = .none
         rule.moveFolder = ""
+        rule.forward = []
         rule.continueToNext = true
+        rule.flag = true
+        XCTAssertEqual(issueFields(rule), [])
+        rule.flag = false
+        rule.markRead = true
+        XCTAssertEqual(issueFields(rule), [])
+        rule.markRead = false
+
+        // Forward or reply gives a continuing None rule an effect.
         rule.forward = ["ops@example.com"]
         XCTAssertEqual(issueFields(rule), [])
         rule.forward = []

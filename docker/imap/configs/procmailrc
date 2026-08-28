@@ -62,3 +62,18 @@ IN-spam/
 * ! PUSH_ENQUEUED ?? yes
 | /usr/local/bin/push-enqueue.sh "$LOGNAME" "INBOX"
 PUSH_ENQUEUED=yes
+
+# Pending decorations from continuing user rules
+# (docs/1.x/rules-composition-and-custom-flags-plan.md, decision 3): a
+# decorate-only rule armed PENDING_F/PENDING_S, and no terminal rule
+# claimed the message, so it must land in the inbox WITH its flags -
+# which the implicit $DEFAULT delivery below cannot set. The condition
+# never matches unless a compiled rule set a PENDING_* variable, so
+# undecorated mail keeps the exact procmail-native fallback it has
+# today; if the helper fails (w flag), the message still falls through
+# to $DEFAULT, undecorated but delivered.
+DFLAGS=$PENDING_F$PENDING_S
+
+:0w
+* DFLAGS ?? .
+| /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR" "$DFLAGS"

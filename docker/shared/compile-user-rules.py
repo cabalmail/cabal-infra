@@ -31,6 +31,19 @@ body carried as an opaque base64 argv token - user text never appears as
 procmail syntax, and base64's alphabet contains no SHELLMETAS, so the
 recipe execs directly under SHELL=/usr/bin/false.
 
+Pending decorations (docs/1.x/rules-composition-and-custom-flags-plan.md,
+decision 3): a decorate-only rule - flag/markRead, destination none,
+spill-through - compiles to per-message variable assignments (PENDING_F=F /
+PENDING_S=S) instead of nothing. Once one has been emitted for a user, every
+LATER delivery point becomes pending-aware: it folds the pending flags into
+the helper argument via a per-delivery DFLAGS variable (own flags override
+their slot, so F-then-S order and dedupe hold by construction and the value
+is always '', F, S, or FS), keeping the native no-helper delivery for
+undecorated messages behind a runtime DFLAGS condition. The file-level
+inbox fallback lives in the procmailrc template, similarly runtime-guarded.
+A rule set with no decorate-only rules compiles byte-identically to the
+pre-decision-3 output.
+
 Output is deterministic (no timestamps, sorted iteration) so the golden-file
 self-test (compile-user-rules-selftest.py) can compare byte-for-byte.
 '''
@@ -202,7 +215,7 @@ def delivery_path(dir_name):
     return '  $DEFAULT' if dir_name == '' else f'  $MAILDIR/{dir_name}/'
 
 
-def deliver_block(dir_name, flags, copy):
+def deliver_block(dir_name, flags, copy, pending=False):
     '''Delivery recipe lines for one maildir target, flagged or plain.
 
     Unflagged targets keep procmail's native maildir delivery. Flagged
@@ -210,12 +223,63 @@ def deliver_block(dir_name, flags, copy):
     :2,<flags> suffix; the `w` flag makes procmail read the helper's exit
     status, so a helper failure leaves the message for later recipes /
     DEFAULT instead of losing it.
+
+    With `pending` (a decorate-only rule was emitted earlier in this set),
+    the delivery folds `PENDING_F`/`PENDING_S` in via a per-delivery DFLAGS
+    variable rather than mutating the pending state itself - a spill copy's
+    own flags must decorate the copy only, never leak into later rules.
+    An undecorated message still takes the native no-helper path behind a
+    runtime DFLAGS condition; own FS needs no folding (both slots are
+    already saturated) and keeps the constant-argument shape.
     '''
-    if not flags:
-        return ['  :0c:' if copy else '  :0:', delivery_path(dir_name)]
     target = '"$MAILDIR"' if dir_name == '' else f'"$MAILDIR/{dir_name}"'
-    return ['  :0cw' if copy else '  :0w',
-            f'  | {DELIVER_HELPER} {target} {flags}']
+    if not pending or flags == 'FS':
+        if not flags:
+            return ['  :0c:' if copy else '  :0:', delivery_path(dir_name)]
+        return ['  :0cw' if copy else '  :0w',
+                f'  | {DELIVER_HELPER} {target} {flags}']
+    # Own flags override their slot; concatenation order keeps F < S.
+    assign = {'F': '  DFLAGS=F$PENDING_S',
+              'S': '  DFLAGS=${PENDING_F}S',
+              '': '  DFLAGS=$PENDING_F$PENDING_S'}[flags]
+    helper_line = f'  | {DELIVER_HELPER} {target} "$DFLAGS"'
+    if flags:
+        # DFLAGS is non-empty by construction: the helper always delivers.
+        return [assign, '  :0cw' if copy else '  :0w', helper_line]
+    native = ['  :0c:' if copy else '  :0:', '  * ! DFLAGS ?? .',
+              delivery_path(dir_name)]
+    helper = ['  :0cw' if copy else '  :0w']
+    if copy:
+        # A copy recipe continues after delivering, so the two recipes need
+        # mutually exclusive conditions; a terminal pair does not (the
+        # second is only reached when the first did not deliver).
+        helper.append('  * DFLAGS ?? .')
+    helper.append(helper_line)
+    return [assign] + native + [''] + helper
+
+
+def pending_assignments(flags):
+    '''A decorate-only rule's body: arm the per-message pending state.
+
+    Assignment blocks are non-terminal and create no copy; every later
+    delivery point (and the procmailrc inbox fallback) folds the variables
+    into its flags argument. Procmail runs once per message, so per-message
+    isolation of the variables is free.
+    '''
+    lines = []
+    if 'F' in flags:
+        lines.append('  PENDING_F=F')
+    if 'S' in flags:
+        lines.append('  PENDING_S=S')
+    return lines
+
+
+def arms_pending(rule):
+    '''True for a validated decorate-only rule: flag/markRead, destination
+    none, spill-through. Compiling one makes every later delivery in the
+    set pending-aware.'''
+    return (rule['action'] == 'none' and rule['continueToNext']
+            and bool(rule.get('flag') or rule.get('markRead')))
 
 
 def reply_block(user, body):
@@ -273,12 +337,14 @@ def resolve_folder(folder, folder_exists):
     return dir_name, None
 
 
-def compile_rule(rule, folder_exists, user):
+def compile_rule(rule, folder_exists, user, pending_possible=False):
     '''Compiles one enabled rule into its recipe lines.
 
     Returns (lines, aux_skips, None) on success or (None, [], reason) when
     the whole rule is skipped. aux_skips lists per-rule auxiliary notes
     (dropped forwards, unimplemented aux) that are logged but not fatal.
+    `pending_possible` marks that a decorate-only rule was already emitted
+    for this user, so this rule's deliveries must fold pending flags in.
     '''
     reason = validate_rule(rule)
     if reason:
@@ -321,10 +387,12 @@ def compile_rule(rule, folder_exists, user):
         if reason:
             return None, [], reason
         if spill:
-            body += deliver_block(dir_name, flags, copy=True)
+            body += deliver_block(dir_name, flags, copy=True,
+                                  pending=pending_possible)
         else:
             body += push_block(push_label(dir_name))
-            body += deliver_block(dir_name, flags, copy=False)
+            body += deliver_block(dir_name, flags, copy=False,
+                                  pending=pending_possible)
     elif action == 'delete':
         body += ['  :0', '  /dev/null']
     elif action == 'copy':
@@ -335,17 +403,24 @@ def compile_rule(rule, folder_exists, user):
             dir_name, reason = resolve_folder(folder, folder_exists)
             if reason:
                 return None, [], reason
-            copy_lines += deliver_block(dir_name, flags, copy=True) + ['']
+            copy_lines += deliver_block(dir_name, flags, copy=True,
+                                        pending=pending_possible) + ['']
         body += copy_lines
         if not spill:
             body += push_block('INBOX')
-            body += deliver_block('', flags, copy=False)
+            body += deliver_block('', flags, copy=False,
+                                  pending=pending_possible)
         elif body and body[-1] == '':
             body.pop()
     else:  # 'none'
         if not spill:
             body += push_block('INBOX')
-            body += deliver_block('', flags, copy=False)
+            body += deliver_block('', flags, copy=False,
+                                  pending=pending_possible)
+        elif flags:
+            # Decorate-only (decision 3): arm the pending state instead of
+            # compiling to nothing.
+            body += pending_assignments(flags)
         elif body and body[-1] == '':
             body.pop()
 
@@ -375,18 +450,25 @@ def compile_ruleset(user, rules, folder_exists):
     lines = []
     compiled = 0
     skips = []
+    # Set once a decorate-only rule compiles: every later delivery in this
+    # set must fold the pending flags in. Stays False for sets without
+    # decorators, keeping their output byte-identical to the prior shape.
+    pending_possible = False
     if isinstance(rules, list) and len(rules) <= MAX_RULES:
         for rule in rules:
             rule_id = rule.get('id', 'r-unknown') if isinstance(rule, dict) else 'r-unknown'
             if isinstance(rule, dict) and rule.get('enabled') is False:
                 continue
-            rule_lines, aux_skips, reason = compile_rule(rule, folder_exists, user)
+            rule_lines, aux_skips, reason = compile_rule(
+                rule, folder_exists, user, pending_possible)
             skips += [(rule_id, aux) for aux in aux_skips]
             if reason:
                 skips.append((rule_id, reason))
                 continue
             lines += rule_lines
             compiled += 1
+            if arms_pending(rule):
+                pending_possible = True
     elif rules:
         skips.append(('*', 'ruleset_invalid'))
     if not lines:
