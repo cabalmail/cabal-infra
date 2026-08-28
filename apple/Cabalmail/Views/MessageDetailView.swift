@@ -317,8 +317,37 @@ struct MessageDetailView: View {
                     // states ("Not verified" muted). Bucketing lives in
                     // CabalmailKit; see `AuthResultsLine`.
                     AuthResultsLine(results: envelope.authResults)
+                    // Custom-flag chips (Phase 4): color dot + label per
+                    // tagged palette slot, live off the view model's
+                    // optimistic set so the flag menu's toggles reflect
+                    // here instantly. A deleted slot's surviving tag shows
+                    // its slot id in gray, per the palette editor's
+                    // delete-confirmation copy.
+                    if let model, !model.keywordSlots.isEmpty {
+                        keywordChips(model: model)
+                    }
                 }
                 Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func keywordChips(model: MessageDetailViewModel) -> some View {
+        HStack(spacing: 6) {
+            ForEach(FlagPalette.slots.filter { model.keywordSlots.contains($0) },
+                    id: \.self) { slot in
+                let entry = preferences.flagPalette.first { $0.slot == slot }
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(FlagPaletteColor.color(for: entry?.color ?? ""))
+                        .frame(width: 8, height: 8)
+                    Text(entry?.label ?? slot)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.quaternary, in: Capsule())
             }
         }
     }
