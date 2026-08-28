@@ -93,8 +93,17 @@ jobs:
             - 'linux/**'
             # The xtask repo-shape tests assert the client's synced-preference
             # keys match this Lambda's APP_ALLOWED set, so an edit on the
-            # Lambda side must run the Rust gate too.
+            # Lambda side must run the Rust gate too. The same goes for every
+            # other file those tests read from outside linux/: React's lockfile
+            # (the Arch package carries the composer's marked and turndown
+            # versions verbatim), the licence the package installs, and the two
+            # workflows the contract test reads. They are registered in
+            # linux/xtask/tests/support/mod.rs, and a test there fails if one is
+            # missing from this list or from linux.yml's.
             - 'lambda/api/set_preferences/function.py'
+            - 'react/admin/package-lock.json'
+            - 'LICENSE.md'
+            - '.github/workflows/linux.yml'
             - '.github/workflows/lint.yml'
           kotlin:
             - 'android/**'
