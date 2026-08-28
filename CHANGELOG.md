@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.6] - 2026-08-28
+
+### Changed
+- **Dashboards refresh when their tab regains focus.** The release, triage,
+  and Apple release dashboards re-fetch their data when the browser tab
+  becomes visible or the window regains focus, so a dashboard left open in
+  the background is current the moment you switch back to it. Focus-driven
+  refreshes are throttled to one per 15 seconds so rapid window-switching
+  doesn't hammer GitHub or App Store Connect.
+- Android: **Settings reorganized into categories.** The single
+  scrolling settings screen is now a selectable category list — shown
+  beside the selected category's options on wide screens (tablets,
+  landscape foldables), drilling into a sub-screen with a back arrow on
+  phones. Rules is a category like any other and opens the rules list
+  directly, without the old header-plus-launcher-row indirection.
+- Apple: **Settings reorganized into categories.** Account, Reading,
+  Composing, Rules, and the rest are now a selectable category list,
+  System-Settings style: side by side with the selected category's
+  options where there's room (the macOS Settings window, the visionOS
+  Settings tab), drilling into a sub-screen with a back chevron on
+  iPhone and in the iPad settings sheet. The Rules category opens the
+  rules list directly, replacing the old Rules section with its single
+  "Mail rules" launcher button, and the macOS sheet workarounds for
+  Rules, Acknowledgements, and the notification folder picker are gone —
+  those screens now push in place, and the Debug Log link works on
+  macOS.
+
 ## [1.7.5] - 2026-08-28
 
 ### Fixed
