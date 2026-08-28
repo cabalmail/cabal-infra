@@ -29,9 +29,17 @@ use cabalmail_kit::config::{Key, Kind, Scope, Wire};
 /// reads nor sends the key. `mark_read_advance` is its mark-as-read twin
 /// (where the Apple readers go after the toolbar's mark-read) and is
 /// unsupported for the same reason.
+///
+/// `flag_palette` is the custom-flags palette
+/// (docs/1.x/rules-composition-and-custom-flags-plan.md, Phase 3): a
+/// JSON-encoded string carrying structured data this client has no UI for
+/// yet, and the schema's `Kind` has no structured variant to model it with.
+/// The Lambda merges per key, so Apple/Android palettes survive a Linux
+/// push untouched.
 const DELIBERATELY_UNSUPPORTED: &[&str] = &[
     "crash_reporting_enabled",
     "dispose_advance",
+    "flag_palette",
     "mark_read_advance",
 ];
 
