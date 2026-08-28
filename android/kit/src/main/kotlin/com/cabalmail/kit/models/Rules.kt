@@ -113,3 +113,27 @@ data class RuleSet(
  * stable editing.
  */
 fun mintRuleId(): String = "r-" + List(12) { "0123456789abcdef".random() }.joinToString("")
+
+/**
+ * Truthful-Continue normalization
+ * (`docs/1.x/rules-composition-and-custom-flags-plan.md`, decision 2). A
+ * stored `move`/`archive` with spill-through predates the gated editor; the
+ * compiler emits the exact same copy block for it as for `copy`, so the
+ * editors render and save it as the Copy it is (Archive is an implicit move
+ * to the `Archive` folder, so that is the folder the copy carries over). A
+ * stored `delete` with spill-through drops the flag the compiler ignores.
+ * One-way and silent — the server and compiler stay permissive, so a set
+ * that is never re-saved keeps working unchanged.
+ */
+fun Rule.normalizeLegacyContinue(): Rule =
+    when {
+        !continueToNext -> this
+        action == RuleAction.MOVE ->
+            copy(
+                action = RuleAction.COPY,
+                copyFolders = if (moveFolder.isEmpty()) emptyList() else listOf(moveFolder),
+            )
+        action == RuleAction.ARCHIVE -> copy(action = RuleAction.COPY, copyFolders = listOf("Archive"))
+        action == RuleAction.DELETE -> copy(continueToNext = false)
+        else -> this
+    }

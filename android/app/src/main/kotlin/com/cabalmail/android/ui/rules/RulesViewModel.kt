@@ -11,6 +11,7 @@ import com.cabalmail.kit.CabalmailException
 import com.cabalmail.kit.models.Rule
 import com.cabalmail.kit.models.RuleSet
 import com.cabalmail.kit.models.mintRuleId
+import com.cabalmail.kit.models.normalizeLegacyContinue
 import com.cabalmail.kit.rules.RulesValidator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -120,7 +121,11 @@ class RulesViewModel(
                 val ruleSet = backend.fetchRules()
                 mutableState.update {
                     it.copy(
-                        rules = ruleSet.rules,
+                        // Legacy move/archive + continue renders and saves as
+                        // the Copy it compiles to (truthful Continue,
+                        // decision 2). One-way; the normalized form persists
+                        // on the next edit's save.
+                        rules = ruleSet.rules.map { rule -> rule.normalizeLegacyContinue() },
                         version = ruleSet.version,
                         loading = false,
                         saveState = RulesSaveState.Idle,
@@ -273,7 +278,12 @@ class RulesViewModel(
                     // forwards it stripped) only if nothing changed locally
                     // mid-flight; edits during the PUT have already
                     // scheduled their own save.
-                    rules = if (it.rules == snapshot) saved.rules else it.rules,
+                    rules =
+                        if (it.rules == snapshot) {
+                            saved.rules.map { rule -> rule.normalizeLegacyContinue() }
+                        } else {
+                            it.rules
+                        },
                     saveState = RulesSaveState.Saved,
                 )
             }

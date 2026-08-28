@@ -11,6 +11,13 @@ import Foundation
 /// are silently stripped (not rejected) server-side — the editors allow
 /// half-typed chips locally, and flagging them client-side is what keeps the
 /// server's stripping a dead code path.
+///
+/// A second deliberate divergence, client-strict rather than client-loose:
+/// a rule with no effect (see `hasNoEffect`) is an issue here although the
+/// server accepts it — the compiler would silently drop it
+/// (`compile_skip_rule reason=no_effect`), and nothing constructible in an
+/// editor may evaporate at compile time
+/// (`docs/1.x/rules-composition-and-custom-flags-plan.md`, Phase 1).
 public enum RulesValidator {
     public static let maxRules = 100
     public static let maxNameLength = 100
@@ -58,7 +65,23 @@ public enum RulesValidator {
         issues += conditionIssues(rule.conditions, at: index)
         issues += copyFolderIssues(rule.copyFolders, at: index)
         issues += forwardIssues(rule.forward, at: index)
+        if hasNoEffect(rule) {
+            issues.append(Issue(
+                ruleIndex: index, field: "continueToNext",
+                message: "A rule that continues must file, forward, or reply — this one would have no effect."
+            ))
+        }
         return issues
+    }
+
+    /// A continuing rule that neither files (a destination that delivers),
+    /// forwards, nor replies compiles to an empty procmail block and is
+    /// dropped. Flag / mark-as-read alone don't count: they are delivery
+    /// metadata and evaporate without a delivery (until pending decorations —
+    /// the plan's Phase 2 — give them one).
+    public static func hasNoEffect(_ rule: Rule) -> Bool {
+        rule.continueToNext && rule.forward.isEmpty && !rule.reply
+            && (rule.action == .none || (rule.action == .copy && rule.copyFolders.isEmpty))
     }
 
     /// The Lambda's `FORWARD_RE` (`^[^\s@]+@[^\s@]+\.[^\s@]+$`) plus its

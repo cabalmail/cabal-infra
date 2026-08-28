@@ -83,7 +83,10 @@ final class RulesViewModel {
         loadError = nil
         do {
             let ruleSet = try await backend.fetchRules()
-            rules = ruleSet.rules
+            // Legacy move/archive + continue renders and saves as the Copy
+            // it compiles to (truthful Continue, decision 2). One-way; the
+            // normalized form persists on the next edit's save.
+            rules = ruleSet.rules.map { $0.normalizingLegacyContinue() }
             version = ruleSet.version
             saveState = .idle
             pendingSave = false
@@ -224,7 +227,7 @@ final class RulesViewModel {
             // stripped) only if nothing changed locally mid-flight; edits
             // during the PUT have already scheduled their own save.
             if rules == snapshot {
-                rules = saved.rules
+                rules = saved.rules.map { $0.normalizingLegacyContinue() }
             }
             saveState = .saved
         } catch is RuleSetConflictError {

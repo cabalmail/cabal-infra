@@ -1,13 +1,23 @@
 import SwiftUI
 import CabalmailKit
 
-/// Detail form for one mail rule: name, conditions, the mutually-exclusive
-/// destination, the independent extras (flag / mark read / forward / reply),
-/// and spill-through. Every control writes through `RulesViewModel.update`,
-/// which schedules the debounced whole-set save.
+/// Detail form for one mail rule: name, spill-through, conditions, the
+/// mutually-exclusive destination, and the independent extras (flag / mark
+/// read / forward / reply). Every control writes through
+/// `RulesViewModel.update`, which schedules the debounced whole-set save.
+///
+/// Spill-through leads the form and gates the destination (truthful
+/// Continue, `docs/1.x/rules-composition-and-custom-flags-plan.md` decision
+/// 1): a continuing rule passes the message along, so any delivery it makes
+/// is a copy — Move and Archive are disabled in place while Continue is on,
+/// and turning Continue on converts them to Copy (identical compiled
+/// output, so a conversion is a relabel, not a behavior change).
 struct RuleEditorView: View {
     @Bindable var model: RulesViewModel
     let ruleID: String
+    /// Inline note shown after Continue-on auto-converts Move/Archive to
+    /// Copy; cleared when the user picks a destination or turns Continue off.
+    @State private var conversionNote: String?
 
     var body: some View {
         if model.rule(withID: ruleID) == nil {
@@ -28,11 +38,8 @@ struct RuleEditorView: View {
                 TextField("Name", text: rule.name)
                 Toggle("Enabled", isOn: rule.enabled)
             }
-            RuleConditionsSection(rule: rule)
-            RuleDestinationSection(model: model, rule: rule)
-            RuleExtrasSection(rule: rule)
             Section {
-                Toggle("Continue to the next rule", isOn: rule.continueToNext)
+                Toggle("Continue to the next rule", isOn: continueBinding)
                     .disabled(isDelete)
             } footer: {
                 Text(isDelete
@@ -40,6 +47,9 @@ struct RuleEditorView: View {
                     : "Off: the first matching rule is the last one that runs. On: later rules still see this message.")
                     .sectionFooter()
             }
+            RuleConditionsSection(rule: rule)
+            RuleDestinationSection(model: model, rule: rule, conversionNote: $conversionNote)
+            RuleExtrasSection(rule: rule)
         }
         #if os(macOS)
         .formStyle(.grouped)
@@ -60,6 +70,27 @@ struct RuleEditorView: View {
         Binding(
             get: { model.rule(withID: ruleID) ?? Rule(id: ruleID) },
             set: { model.update($0) }
+        )
+    }
+
+    /// The Continue toggle's write path: turning it on while Move or Archive
+    /// is selected converts the destination to Copy, carrying the folder.
+    private var continueBinding: Binding<Bool> {
+        Binding(
+            get: { model.rule(withID: ruleID)?.continueToNext ?? false },
+            set: { isOn in
+                guard var updated = model.rule(withID: ruleID) else { return }
+                updated.continueToNext = isOn
+                if isOn, updated.action == .move || updated.action == .archive {
+                    let from = updated.action == .move ? "Move" : "Archive"
+                    conversionNote = "\(from) changed to Copy: a continuing rule "
+                        + "delivers a copy and passes the message along."
+                    updated = updated.normalizingLegacyContinue()
+                } else {
+                    conversionNote = nil
+                }
+                model.update(updated)
+            }
         )
     }
 }
@@ -126,29 +157,74 @@ private struct RuleConditionsSection: View {
 /// only folders that already exist — no free text, no create affordance
 /// (the plan's "No folder auto-creation"); the one accommodation is the
 /// explicit Create Archive Folder prompt for the Archive action.
+///
+/// One row per option rather than a segmented control: while Continue is on,
+/// Move / Archive / Delete must render disabled in place (not hidden), which
+/// segments can't do.
 private struct RuleDestinationSection: View {
     @Bindable var model: RulesViewModel
     @Binding var rule: Rule
+    @Binding var conversionNote: String?
     @State private var archiveCreateFailed = false
+
+    private static let choices: [(action: Rule.Action, label: String)] = [
+        (.move, "Move"),
+        (.copy, "Copy"),
+        (.archive, "Archive"),
+        (.delete, "Delete"),
+        (.none, "None"),
+    ]
 
     var body: some View {
         Section {
-            Picker("Destination", selection: $rule.action) {
-                Text("Move").tag(Rule.Action.move)
-                Text("Copy").tag(Rule.Action.copy)
-                Text("Archive").tag(Rule.Action.archive)
-                Text("Delete").tag(Rule.Action.delete)
-                Text("None").tag(Rule.Action.none)
+            ForEach(Self.choices, id: \.action) { choice in
+                destinationRow(choice.action, choice.label)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             destinationDetail
+            if RulesValidator.hasNoEffect(rule) {
+                Text(
+                    "This rule would have no effect: it continues to the "
+                    + "next rule without filing, forwarding, or replying."
+                )
+                .font(.caption)
+                .foregroundStyle(.red)
+            }
         } header: {
             Text("Destination")
         } footer: {
             footerText
                 .sectionFooter()
         }
+    }
+
+    private func destinationRow(_ action: Rule.Action, _ label: String) -> some View {
+        let gated = isGated(action)
+        return Button {
+            conversionNote = nil
+            rule.action = action
+        } label: {
+            HStack {
+                Text(label)
+                    .foregroundStyle(gated ? Color.secondary : Color.primary)
+                Spacer()
+                if rule.action == action {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(gated)
+        .accessibilityAddTraits(rule.action == action ? .isSelected : [])
+    }
+
+    /// Decision 1's gate: a continuing rule can only Copy or None. Move and
+    /// Archive are disabled because their spill-through compilation *is*
+    /// Copy; Delete because the engine ignores Continue on Delete.
+    private func isGated(_ action: Rule.Action) -> Bool {
+        rule.continueToNext
+            && (action == .move || action == .archive || action == .delete)
     }
 
     @ViewBuilder
@@ -196,19 +272,29 @@ private struct RuleDestinationSection: View {
     }
 
     private var footerText: Text? {
+        var lines: [String] = []
+        if let conversionNote {
+            lines.append(conversionNote)
+        }
+        if rule.continueToNext {
+            lines.append("A rule that continues passes the message along; use Copy.")
+        }
         switch rule.action {
         case .move where !rule.moveFolder.isEmpty && !folderExists(rule.moveFolder):
-            return Text(
+            lines.append(
                 "That folder no longer exists; the rule is skipped until "
                 + "you pick another (mail stays in the inbox)."
             )
         case .delete:
-            return Text("Deleted messages are discarded permanently at delivery, not moved to Trash.")
+            lines.append("Deleted messages are discarded permanently at delivery, not moved to Trash.")
         case .none:
-            return Text("The message stays in the inbox; the actions below still apply.")
+            lines.append(rule.continueToNext
+                ? "The message passes to later rules; if none files it, it lands in the inbox."
+                : "The message stays in the inbox; the actions below still apply.")
         default:
-            return nil
+            break
         }
+        return lines.isEmpty ? nil : Text(lines.joined(separator: "\n"))
     }
 
     private func folderExists(_ path: String) -> Bool {

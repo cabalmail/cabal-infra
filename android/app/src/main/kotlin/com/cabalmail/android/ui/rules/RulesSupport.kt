@@ -48,7 +48,9 @@ fun describeRule(rule: Rule): String {
     if (rule.markRead) parts += "mark read"
     if (rule.forward.isNotEmpty()) parts += "forward to ${rule.forward.joinToString(", ")}"
     if (rule.reply) parts += "reply"
-    if (rule.continueToNext) parts += "continue to next rule"
+    // "continue" last, so a spill-through rule reads as what it is:
+    // "copy to Receipts · continue" (truthful Continue, Phase 1).
+    if (rule.continueToNext) parts += "continue"
     return parts.joinToString(" · ")
 }
 

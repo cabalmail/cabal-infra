@@ -1,5 +1,15 @@
 # Rules Composition and Custom Flags Plan
 
+## Progress
+
+| Phase                              | Status                  |
+| ---------------------------------- | ----------------------- |
+| 1 -- Truthful Continue             | Complete (2026-08-28)   |
+| 2 -- Pending decorations           | Not started             |
+| 3 -- Flag palette                  | Not started             |
+| 4 -- Keywords on the message plane | Not started             |
+| 5 -- Rules integration             | Not started             |
+
 ## Context
 
 The first days of mail rules running in prod (2026-08-26) surfaced three
@@ -187,6 +197,16 @@ decision 3; slot atoms are fixed safe strings, so the argv surface
 stays trivial.
 
 ## Phase 1 -- Truthful Continue
+
+**Status:** Complete (2026-08-28). Both editors gate the destination on
+Continue, normalize stored `move`/`archive` + `continueToNext` (and
+`delete` + `continueToNext`, whose flag the engine ignores) on read,
+and refuse no-effect rules via the kit validators (client-strict; the
+server stays permissive). One deliberate wording deviation:
+`docs/mail-rules.md` documents the cross-product form without a
+forward pointer to Phase 2 — user-facing docs describe shipped
+behavior only, so the two-rule composition lands in the docs with
+Phase 2 itself.
 
 Editor and documentation work only; no server or container changes.
 
