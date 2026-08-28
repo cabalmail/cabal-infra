@@ -60,6 +60,18 @@ final class FlagPaletteTests: XCTestCase {
         XCTAssertNil(FlagPalette.decode(#"{"slot":"x"}"#))
     }
 
+    func testSlotsInFlagsFiltersAndOrders() {
+        // Slot order is fixed regardless of set iteration order; system
+        // flags and foreign keywords never leak through.
+        let flags: Set<Flag> = [
+            .seen, .flagged, .keyword("cabal-flag-07"),
+            .keyword("cabal-flag-02"), .keyword("$Forwarded"),
+        ]
+        XCTAssertEqual(FlagPalette.slots(in: flags),
+                       ["cabal-flag-02", "cabal-flag-07"])
+        XCTAssertEqual(FlagPalette.slots(in: [.seen]), [])
+    }
+
     func testFirstFreeSlotSkipsUsedAndCapsAtTwenty() {
         XCTAssertEqual(FlagPalette.firstFreeSlot(in: []), "cabal-flag-01")
         XCTAssertEqual(FlagPalette.firstFreeSlot(in: samplePalette()), "cabal-flag-03")

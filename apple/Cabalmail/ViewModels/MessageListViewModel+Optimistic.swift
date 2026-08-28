@@ -172,11 +172,13 @@ extension MessageListViewModel {
             cc: source.cc,
             bcc: source.bcc,
             inReplyTo: source.inReplyTo,
+            references: source.references,
             flags: flags,
             internalDate: source.internalDate,
             size: source.size,
             hasAttachments: source.hasAttachments,
-            isImportant: source.isImportant
+            isImportant: source.isImportant,
+            authResults: source.authResults
         )
     }
 }

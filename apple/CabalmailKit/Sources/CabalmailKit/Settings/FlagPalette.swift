@@ -88,4 +88,10 @@ public enum FlagPalette {
         let used = Set(entries.map(\.slot))
         return slots.first { !used.contains($0) }
     }
+
+    /// The slot atoms present in a message's flag set, in fixed slot order
+    /// — what chips and pickers render (Phase 4).
+    public static func slots(in flags: Set<Flag>) -> [String] {
+        slots.filter { flags.contains(.keyword($0)) }
+    }
 }

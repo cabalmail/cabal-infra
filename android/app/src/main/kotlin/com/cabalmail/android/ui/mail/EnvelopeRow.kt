@@ -50,6 +50,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.theme.LocalRowPadding
 import com.cabalmail.android.ui.theme.disposeIconPainter
 import com.cabalmail.android.ui.theme.disposeLabelRes
@@ -59,6 +60,8 @@ import com.cabalmail.kit.models.hasAuthFailure
 import com.cabalmail.kit.models.mailboxAddress
 import com.cabalmail.kit.models.mailboxDisplayName
 import com.cabalmail.kit.models.sentInstant
+import com.cabalmail.kit.settings.FlagPalette
+import com.cabalmail.kit.settings.FlagPaletteEntry
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -81,6 +84,8 @@ fun EnvelopeRow(
     folderLabel: String? = null,
     bimiLookup: (suspend (String) -> String?)? = null,
     mailDomains: List<String> = emptyList(),
+    /** The custom-flag palette, for the keyword dots (Phase 4). */
+    palette: List<FlagPaletteEntry> = emptyList(),
 ) {
     val emphasis = if (envelope.isSeen) FontWeight.Normal else FontWeight.Bold
     Row(
@@ -170,6 +175,22 @@ fun EnvelopeRow(
                         contentDescription = stringResource(R.string.flagged),
                         tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+                // Custom-flag dots (Phase 4): one color dot per tagged
+                // palette slot, capped so the fixed-height indicator run
+                // never overflows. A tag whose palette entry was deleted
+                // renders gray.
+                FlagPalette.slotsIn(envelope.flags).take(4).forEach { slot ->
+                    val entry = palette.firstOrNull { it.slot == slot }
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(flagColor(entry?.color ?: ""))
+                                .semantics { contentDescription = entry?.label ?: slot },
                     )
                     Spacer(Modifier.width(4.dp))
                 }

@@ -471,3 +471,42 @@ extension ApiBackedImapClientTests {
         XCTAssertEqual(payload?["mark_seen"] as? Bool, true)
     }
 }
+
+/// Custom-flag wire shape (rules-composition plan, Phase 4). A separate
+/// case class so the main suite stays under SwiftLint's type-body cap.
+final class ApiBackedImapClientKeywordTests: XCTestCase {
+    private func makeConfiguration() -> Configuration {
+        Configuration(
+            controlDomain: "cabalmail.example",
+            domains: [MailDomain(domain: "cabalmail.example")],
+            invokeUrl: URL(string: "https://api.cabalmail.example/prod")!,
+            cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
+        )
+    }
+
+    func testSetFlagsSendsKeywordAtomBare() async throws {
+        // A custom-flag slot rides the wire as the bare atom — no backslash
+        // prefix, no escaping — which is what the Lambda's slot gate
+        // (Phase 4) validates against the palette.
+        let body = #"{"message_ids":[]}"#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
+        try await client.setFlags(
+            folder: "INBOX",
+            uids: [7],
+            flags: [.keyword("cabal-flag-03")],
+            operation: .remove
+        )
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: XCTUnwrap(requests[0].httpBody)) as? [String: Any])
+        XCTAssertEqual(payload["flag"] as? String, "cabal-flag-03")
+        XCTAssertEqual(payload["op"] as? String, "unset")
+    }
+}
