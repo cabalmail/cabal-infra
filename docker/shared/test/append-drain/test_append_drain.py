@@ -168,6 +168,25 @@ class HandleRequestTest(unittest.TestCase):
                   encoding='ascii') as handle:
             self.assertEqual(handle.read().strip(), 'ok')
 
+    def test_response_is_chowned_to_the_requester(self):
+        # The spool is sticky, so a root-owned response would be one the
+        # requesting helper cannot collect-and-delete - its rm under
+        # `set -e` then failed a SUCCESSFUL append into a duplicate
+        # fall-through delivery. The drain must hand the response to the
+        # request's owner before committing it.
+        self._path = self._spool(meta())
+        owner_uid = os.stat(self._path).st_uid
+        with mock.patch.object(drain.os, 'chown') as chown:
+            self.assertEqual(self._run(), 'ok')
+        tmp = os.path.join(self.spool.name, '.tmp.n1.resp')
+        chown.assert_called_once_with(tmp, owner_uid, -1)
+
+    def test_chown_failure_still_commits_the_response(self):
+        self._path = self._spool(meta())
+        with mock.patch.object(drain.os, 'chown', side_effect=OSError):
+            self.assertEqual(self._run(), 'ok')
+        self.assertIn('n1.resp', os.listdir(self.spool.name))
+
     def test_spoofed_owner_is_refused_without_imap(self):
         self.owner = 'mallory'
         self._path = self._spool(meta())
