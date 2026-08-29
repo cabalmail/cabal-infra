@@ -110,10 +110,22 @@ class _LoopbackIMAP(imaplib.IMAP4):
 
 
 def open_client(cert_domain, factory=_LoopbackIMAP):
-    '''STARTTLS-secured loopback connection, hostname-verified against the
-    tier's own CA bundle (rendered by entrypoint.sh).'''
-    context = ssl.create_default_context(
-        cafile=f'/etc/pki/tls/certs/{cert_domain}.ca-bundle')
+    '''STARTTLS-secured loopback connection, hostname-verified.
+
+    Verification uses the SYSTEM trust store (the served certificate is a
+    public wildcard, verified the same way the Lambda's internal route
+    verifies it) with the tier's rendered CA bundle added on top - added,
+    not substituted: passing the bundle as `cafile` to
+    create_default_context REPLACES the root store, and the bundle holds
+    the issuing intermediates without their root, which fails every
+    handshake with "unable to get issuer certificate" (observed on stage).
+    '''
+    context = ssl.create_default_context()
+    try:
+        context.load_verify_locations(
+            cafile=f'/etc/pki/tls/certs/{cert_domain}.ca-bundle')
+    except (OSError, ssl.SSLError):
+        pass  # system roots alone verify the public chain
     client = factory(f'imap.{cert_domain}', timeout=IMAP_TIMEOUT_SECONDS)
     client.starttls(context)
     return client
