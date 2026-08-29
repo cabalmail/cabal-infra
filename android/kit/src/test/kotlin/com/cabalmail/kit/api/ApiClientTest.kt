@@ -241,6 +241,19 @@ class ApiClientTest {
         }
 
     @Test
+    fun `setFlag sends a keyword slot as the bare atom`() =
+        runTest {
+            // Custom-flag slots (Phase 4) ride the wire unescaped, with no
+            // backslash prefix — what the Lambda's palette gate validates.
+            val server = Server(HttpStatusCode.OK to """{"status": "submitted"}""")
+
+            server.api.setFlag("INBOX", listOf(7L), "cabal-flag-03", set = false)
+
+            assertTrue(server.body(0).contains("\"flag\":\"cabal-flag-03\""))
+            assertTrue(server.body(0).contains("\"op\":\"unset\""))
+        }
+
+    @Test
     fun `moveMessages sends mark_seen only when asked`() =
         runTest {
             val submitted = HttpStatusCode.OK to """{"status": "submitted"}"""

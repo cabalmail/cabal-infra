@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -41,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.compositeOver
@@ -63,9 +67,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
+import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.theme.disposeIconPainter
 import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.models.Envelope
+import com.cabalmail.kit.settings.FlagPaletteEntry
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -91,6 +97,11 @@ fun MessageListScreen(
     showBack: Boolean = true,
 ) {
     val listState = rememberLazyListState()
+    // The custom-flag palette (Phase 4), for the row dots and the
+    // long-press Flags items; collected once here rather than per row.
+    val preferences by viewModel.container.preferences.preferences
+        .collectAsState()
+    val palette = preferences.flagPalette
     ForegroundPolling(viewModel::poll)
 
     // Keyboard row cursor (plan §7.2): j/k (or the arrows) move it, Enter
@@ -280,6 +291,7 @@ fun MessageListScreen(
                                             viewModel.loadFolderChoices()
                                             moveRequest = setOf(envelope.id)
                                         },
+                                        palette = palette,
                                     )
                                     HorizontalDivider()
                                 }
@@ -303,6 +315,7 @@ fun MessageListScreen(
                                         viewModel.loadFolderChoices()
                                         moveRequest = setOf(envelope.id)
                                     },
+                                    palette = palette,
                                 )
                                 HorizontalDivider()
                             }
@@ -574,6 +587,7 @@ private fun InteractiveRow(
     onOpen: () -> Unit,
     onDispose: () -> Unit,
     onMove: () -> Unit,
+    palette: List<FlagPaletteEntry> = emptyList(),
 ) {
     // A keyboard-cursor or open-in-pane row gets a primary state layer over
     // the surface, composited here so the swipe backing stays opaque.
@@ -593,6 +607,7 @@ private fun InteractiveRow(
                 checked = envelope.id in state.selected,
                 bimiLookup = bimiLookup,
                 mailDomains = mailDomains,
+                palette = palette,
             )
         } else {
             SwipeRow(
@@ -608,6 +623,7 @@ private fun InteractiveRow(
                     onLongClick = { onMenuChange(true) },
                     bimiLookup = bimiLookup,
                     mailDomains = mailDomains,
+                    palette = palette,
                 )
             }
         }
@@ -638,6 +654,32 @@ private fun InteractiveRow(
                     viewModel.setFlag(setOf(envelope.id), "\\Flagged", !envelope.isFlagged)
                 },
             )
+            // Custom flags (Phase 4): one check-marked item per enabled
+            // palette entry; a tagged item taps off, an untagged one taps
+            // on. Hidden entirely while the palette is empty.
+            palette.filter { it.enabled }.forEach { entry ->
+                val tagged = entry.slot in envelope.flags
+                DropdownMenuItem(
+                    text = { Text(entry.label) },
+                    leadingIcon = {
+                        if (tagged) {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        } else {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(flagColor(entry.color)),
+                            )
+                        }
+                    },
+                    onClick = {
+                        onMenuChange(false)
+                        viewModel.setFlag(setOf(envelope.id), entry.slot, !tagged)
+                    },
+                )
+            }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.move_to)) },
                 onClick = {

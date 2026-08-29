@@ -636,6 +636,11 @@ final class MessageListViewModel {
 // 250-line cap. Same-file extension — all helpers remain file-private to
 // the view model.
 extension MessageListViewModel {
+    /// The user's custom-flag palette, exposed for the row chips and the
+    /// Flags picker menu (same narrow-accessor rationale as
+    /// `disposeAction`; here rather than beside it for the type-body cap).
+    var flagPalette: [FlagPaletteEntry] { preferences.flagPalette }
+
     /// True when this is the global search surface (no anchor folder).
     var isSearchScope: Bool { scope.isSearch }
 

@@ -153,23 +153,9 @@ extension MessageDetailView {
     // macOS split-control menu it grew — the same arrangement as
     // `disposeButton` below.
 
-    @ViewBuilder
-    var flagButton: some View {
-        if let model {
-            Button {
-                Task { await model.toggleFlagged() }
-            } label: {
-                Label(
-                    model.isFlagged ? "Unflag" : "Flag",
-                    systemImage: model.isFlagged ? "flag.slash" : "flag"
-                )
-            }
-            // Cmd+Shift+L rides `readerChordHosts`, not this button — an
-            // equivalent on a toolbar item dies with the item when the
-            // toolbar overflows (#1047).
-            .accessibilityIdentifier("reader.toggleFlag")
-        }
-    }
+    // `flagButton` lives in `MessageDetailView+FlagOptions.swift` with the
+    // custom-flag menu it grew in Phase 4 — the same arrangement as
+    // `seenButton` above.
 
     @ViewBuilder
     var remoteContentButton: some View {

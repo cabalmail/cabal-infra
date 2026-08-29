@@ -43,8 +43,18 @@ object RuleTemplates {
  * client's `RuleSummary` renders. Pure so it unit-tests without Compose.
  */
 fun describeRule(rule: Rule): String {
-    val parts = mutableListOf(conditionsPhrase(rule.conditions), actionPhrase(rule))
+    val parts = mutableListOf(conditionsPhrase(rule.conditions))
+    // A continuing None rule neither files nor stops; "no filing" would
+    // just be noise, so a decorate-only rule reads "flag · continue".
+    if (!(rule.action == RuleAction.NONE && rule.continueToNext)) {
+        parts += actionPhrase(rule)
+    }
     if (rule.flag) parts += "flag"
+    // Custom flags by count: the summary is pure (no palette access), so
+    // labels can't resolve here — the editor shows them.
+    if (rule.flags.isNotEmpty()) {
+        parts += if (rule.flags.size == 1) "1 custom flag" else "${rule.flags.size} custom flags"
+    }
     if (rule.markRead) parts += "mark read"
     if (rule.forward.isNotEmpty()) parts += "forward to ${rule.forward.joinToString(", ")}"
     if (rule.reply) parts += "reply"

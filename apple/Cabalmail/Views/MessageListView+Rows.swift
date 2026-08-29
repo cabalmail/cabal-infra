@@ -44,7 +44,8 @@ extension MessageListView {
                     Button {
                         model.toggleSelection(envelope)
                     } label: {
-                        MessageRow(envelope: envelope, isChecked: isChecked, bulkMode: true)
+                        MessageRow(envelope: envelope, isChecked: isChecked, bulkMode: true,
+                                   palette: model.flagPalette)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("message.checkbox.\(envelope.uid)")
@@ -55,7 +56,8 @@ extension MessageListView {
                         orderedVisible: orderedVisible
                     )
                 } else {
-                    MessageRow(envelope: envelope, isChecked: false, bulkMode: false)
+                    MessageRow(envelope: envelope, isChecked: false, bulkMode: false,
+                       palette: model.flagPalette)
                         .tag(envelope)
                 }
             }
@@ -104,7 +106,8 @@ extension MessageListView {
         model: MessageListViewModel,
         orderedVisible: [Envelope]
     ) -> some View {
-        MessageRow(envelope: envelope, isChecked: false, bulkMode: false)
+        MessageRow(envelope: envelope, isChecked: false, bulkMode: false,
+                       palette: model.flagPalette)
             .tag(envelope.uid)
             #if os(iOS)
             .gesture(ModifierClickGesture { kind in
@@ -192,14 +195,7 @@ extension MessageListView {
         for envelope: Envelope,
         model: MessageListViewModel
     ) -> some View {
-        Button {
-            Task { await model.toggleFlag(envelope) }
-        } label: {
-            Label(
-                envelope.flags.contains(.flagged) ? "Unflag" : "Flag",
-                systemImage: envelope.flags.contains(.flagged) ? "flag.slash" : "flag"
-            )
-        }
+        flagMenuSection(for: envelope, model: model)
         Button {
             Task { await model.toggleSeen(envelope) }
         } label: {
@@ -245,6 +241,54 @@ extension MessageListView {
                 Task { await model.disposeMessages(uids: [envelope.uid], action: .trash) }
             } label: {
                 Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    /// The menu's flag block: the classic Flag toggle plus, when the
+    /// palette has enabled entries, a Flags submenu of custom-flag toggles
+    /// (Phase 4). Extracted so `rowContextMenu` stays under SwiftLint's
+    /// function-body cap.
+    @ViewBuilder
+    private func flagMenuSection(
+        for envelope: Envelope,
+        model: MessageListViewModel
+    ) -> some View {
+        Button {
+            Task { await model.toggleFlag(envelope) }
+        } label: {
+            Label(
+                envelope.flags.contains(.flagged) ? "Unflag" : "Flag",
+                systemImage: envelope.flags.contains(.flagged) ? "flag.slash" : "flag"
+            )
+        }
+        if !model.flagPalette.filter(\.enabled).isEmpty {
+            Menu {
+                keywordMenuItems(for: envelope, model: model)
+            } label: {
+                Label("Flags", systemImage: "tag")
+            }
+        }
+    }
+
+    /// The Flags submenu body: menu toggles so a tagged slot carries the
+    /// native checkmark (same construct as the reader's mark-read option
+    /// menu). Only enabled palette entries are offered; a tag on a
+    /// disabled or deleted slot still shows in the row dots and clears
+    /// from the reader, keeping the palette editor's promises.
+    @ViewBuilder
+    func keywordMenuItems(
+        for envelope: Envelope,
+        model: MessageListViewModel
+    ) -> some View {
+        ForEach(model.flagPalette.filter(\.enabled)) { entry in
+            Toggle(isOn: Binding(
+                get: { envelope.flags.contains(.keyword(entry.slot)) },
+                set: { _ in
+                    Task { await model.toggleKeyword(envelope, slot: entry.slot) }
+                }
+            )) {
+                Text(entry.label)
             }
         }
     }
@@ -336,9 +380,23 @@ private struct MessageRow: View {
     let envelope: Envelope
     let isChecked: Bool
     let bulkMode: Bool
+    /// The user's custom-flag palette, for the keyword dots. Passed in by
+    /// the call sites (which hold the model) so the row never reaches into
+    /// the preferences environment itself.
+    let palette: [FlagPaletteEntry]
 
     @Environment(AppState.self) private var appState
     @State private var contactName: String?
+
+    /// The row's tagged slots, capped so the fixed-height indicator run
+    /// can never overflow however many tags a message carries.
+    private var keywordSlots: [String] {
+        Array(FlagPalette.slots(in: envelope.flags).prefix(4))
+    }
+
+    private func paletteEntry(for slot: String) -> FlagPaletteEntry? {
+        palette.first { $0.slot == slot }
+    }
 
     var body: some View {
         HStack(alignment: .top) {
@@ -407,6 +465,18 @@ private struct MessageRow: View {
                         Image(systemName: "flag.fill")
                             .font(.caption)
                             .foregroundStyle(.orange)
+                    }
+                    // Custom-flag dots (Phase 4): one color dot per tagged
+                    // palette slot, capped so the indicator run can never
+                    // push the row past its fixed height. A tag whose
+                    // palette entry was deleted renders gray.
+                    ForEach(keywordSlots, id: \.self) { slot in
+                        Circle()
+                            .fill(FlagPaletteColor.color(
+                                for: paletteEntry(for: slot)?.color ?? ""))
+                            .frame(width: 8, height: 8)
+                            .accessibilityLabel(
+                                paletteEntry(for: slot)?.label ?? slot)
                     }
                     Text(dateLabel)
                         .font(.caption)

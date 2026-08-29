@@ -10,7 +10,8 @@ final class RuleModelTests: XCTestCase {
     {"id":"r-0123456789ab","name":"Receipts","enabled":true,\
     "conditions":[{"field":"subject","value":"invoice"},{"field":"from","value":"aws"}],\
     "action":"move","moveFolder":"Receipts/2026","copyFolders":["Audit"],\
-    "flag":true,"markRead":true,"forward":["ops@example.com"],\
+    "flag":true,"flags":["cabal-flag-01","cabal-flag-07"],\
+    "markRead":true,"forward":["ops@example.com"],\
     "reply":true,"replyBody":"On vacation.","continueToNext":true}
     """
 
@@ -25,6 +26,7 @@ final class RuleModelTests: XCTestCase {
         XCTAssertEqual(rule.moveFolder, "Receipts/2026")
         XCTAssertEqual(rule.copyFolders, ["Audit"])
         XCTAssertTrue(rule.flag)
+        XCTAssertEqual(rule.flags, ["cabal-flag-01", "cabal-flag-07"])
         XCTAssertTrue(rule.markRead)
         XCTAssertEqual(rule.forward, ["ops@example.com"])
         XCTAssertTrue(rule.reply)
@@ -75,6 +77,7 @@ final class RuleModelTests: XCTestCase {
         XCTAssertEqual(rule.moveFolder, "")
         XCTAssertEqual(rule.copyFolders, [])
         XCTAssertFalse(rule.flag)
+        XCTAssertEqual(rule.flags, [])
         XCTAssertFalse(rule.markRead)
         XCTAssertEqual(rule.forward, [])
         XCTAssertFalse(rule.reply)
@@ -95,6 +98,24 @@ final class RuleModelTests: XCTestCase {
         XCTAssertThrowsError(
             try JSONDecoder().decode(Rule.self, from: Data(futureAction.utf8))
         )
+    }
+
+    func testEmptyFlagsStaysOffTheWireAndNonEmptyRides() throws {
+        // A server predating the `flags` key rejects unknown fields, so an
+        // empty list is omitted (the server defaults it to []); a non-empty
+        // list — only authorable via the palette picker — rides and
+        // round-trips.
+        let plain = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(Rule(name: "n"))) as? [String: Any]
+        XCTAssertNil(plain?["flags"])
+
+        let tagged = Rule(name: "n", flags: ["cabal-flag-03"])
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(tagged)) as? [String: Any])
+        XCTAssertEqual(object["flags"] as? [String], ["cabal-flag-03"])
+        let decoded = try JSONDecoder().decode(
+            Rule.self, from: JSONEncoder().encode(tagged))
+        XCTAssertEqual(decoded, tagged)
     }
 
     func testConditionIdentityIsLocalOnly() throws {

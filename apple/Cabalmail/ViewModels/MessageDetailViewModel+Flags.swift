@@ -76,4 +76,29 @@ extension MessageDetailViewModel {
             errorMessage = "\(error)"
         }
     }
+
+    /// Flip one custom-flag slot (rules-composition plan, Phase 4). Same
+    /// optimistic shape as `toggleFlagged`; the cross-view signal carries
+    /// the keyword `Flag`, which the list's `applyFlagChange` handles like
+    /// any other (pills untouched via its `default` arm).
+    func toggleKeyword(_ slot: String) async {
+        let wasTagged = keywordSlots.contains(slot)
+        let shouldBeTagged = !wasTagged
+        if shouldBeTagged { keywordSlots.insert(slot) } else { keywordSlots.remove(slot) }
+        onFlagChanged?(.keyword(slot), shouldBeTagged)
+        onFlagWriteInFlight?(true)
+        defer { onFlagWriteInFlight?(false) }
+        do {
+            try await client.imapClient.setFlags(
+                folder: folder.path,
+                uids: [envelope.uid],
+                flags: [.keyword(slot)],
+                operation: shouldBeTagged ? .add : .remove
+            )
+        } catch {
+            if wasTagged { keywordSlots.insert(slot) } else { keywordSlots.remove(slot) }
+            onFlagChanged?(.keyword(slot), wasTagged)
+            errorMessage = "\(error)"
+        }
+    }
 }

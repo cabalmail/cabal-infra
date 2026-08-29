@@ -128,14 +128,20 @@ extension FolderListView {
     }
 
     /// Foreground for the folder name: accent while the folder has
-    /// unread messages, dimmed to secondary once it's caught up. Uses
-    /// the same pinned asset-catalog accent and selected-row white
-    /// flip as `iconForeground` (see the tint note there).
+    /// unread messages, dimmed once it's caught up, and left alone on
+    /// the selected row. `FolderNameTint` owns the rule and records
+    /// what each case is worth in contrast (#1297); this only spells
+    /// the cases as styles. The accent is the pinned asset-catalog
+    /// color, for the reason `iconForeground` gives.
     func folderNameForeground(hasUnread: Bool, isSelected: Bool) -> AnyShapeStyle {
-        #if !os(macOS)
-        if isSelected { return AnyShapeStyle(Color.white) }
-        #endif
-        return hasUnread ? AnyShapeStyle(Color("AccentColor")) : AnyShapeStyle(.secondary)
+        switch FolderNameTint.tint(hasUnread: hasUnread, isSelected: isSelected) {
+        case .inherited:
+            return AnyShapeStyle(.primary)
+        case .unread:
+            return AnyShapeStyle(Color("AccentColor"))
+        case .caughtUp:
+            return AnyShapeStyle(Color.primary.opacity(FolderNameTint.dimmedOpacity))
+        }
     }
 
     /// Render the count badge text honoring the user's

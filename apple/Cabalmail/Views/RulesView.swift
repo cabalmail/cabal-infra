@@ -335,8 +335,19 @@ enum RuleTemplates {
 /// handoff's `describeRule`.
 enum RuleSummary {
     static func describe(_ rule: Rule) -> String {
-        var parts = [conditionsPhrase(rule.conditions), actionPhrase(rule)]
+        var parts = [conditionsPhrase(rule.conditions)]
+        // A continuing None rule neither files nor stops; "no filing" would
+        // just be noise, so a decorate-only rule reads "flag · continue".
+        if !(rule.action == .none && rule.continueToNext) {
+            parts.append(actionPhrase(rule))
+        }
         if rule.flag { parts.append("flag") }
+        // Custom flags by count: the summary is pure (no palette access),
+        // so labels can't resolve here — the editor shows them.
+        if !rule.flags.isEmpty {
+            parts.append(rule.flags.count == 1
+                ? "1 custom flag" : "\(rule.flags.count) custom flags")
+        }
         if rule.markRead { parts.append("mark read") }
         if !rule.forward.isEmpty { parts.append("forward to \(rule.forward.joined(separator: ", "))") }
         if rule.reply { parts.append("reply") }

@@ -3,6 +3,7 @@ package com.cabalmail.kit.rules
 import com.cabalmail.kit.models.Rule
 import com.cabalmail.kit.models.RuleAction
 import com.cabalmail.kit.models.RuleCondition
+import com.cabalmail.kit.settings.FlagPalette
 
 /**
  * Client-side mirror of the `/set_rules` Lambda's write-time validation
@@ -36,6 +37,7 @@ object RulesValidator {
     const val MAX_ADDRESS_LENGTH = 320
     const val MAX_REPLY_BODY_LENGTH = 4000
     const val MAX_FOLDER_LENGTH = 255
+    const val MAX_RULE_FLAGS = 20
 
     /**
      * One structured finding, mirroring the Lambda's `{rule, field, error}`
@@ -69,23 +71,50 @@ object RulesValidator {
             conditionIssues(rule.conditions, index) +
             copyFolderIssues(rule.copyFolders, index) +
             forwardIssues(rule.forward, index) +
+            ruleFlagsIssues(rule.flags, index) +
             noEffectIssues(rule, index)
 
     /**
      * A continuing rule that neither files (a destination that delivers),
-     * forwards, nor replies compiles to an empty procmail block and is
-     * dropped. Flag / mark-as-read alone don't count: they are delivery
-     * metadata and evaporate without a delivery (until pending decorations —
-     * the plan's Phase 2 — give them one).
+     * decorates (flag / mark-as-read arm the compiler's pending state —
+     * the rules-composition plan's decision 3), forwards, nor replies
+     * compiles to an empty procmail block and is dropped.
      */
     fun hasNoEffect(rule: Rule): Boolean =
         rule.continueToNext &&
             rule.forward.isEmpty() &&
             !rule.reply &&
+            !rule.flag &&
+            rule.flags.isEmpty() &&
+            !rule.markRead &&
             (
                 rule.action == RuleAction.NONE ||
                     (rule.action == RuleAction.COPY && rule.copyFolders.isEmpty())
             )
+
+    /**
+     * The server's slot-shape rules for a rule's custom flags: fixed
+     * `cabal-flag-01..20` atoms, unique, bounded. Palette membership is
+     * deliberately NOT checked here (nor server-side at write): like a
+     * deleted destination folder, a slot that leaves the palette makes the
+     * compiler skip the rule rather than wedging the save.
+     */
+    private fun ruleFlagsIssues(
+        flags: List<String>,
+        index: Int,
+    ): List<Issue> {
+        if (flags.size > MAX_RULE_FLAGS) {
+            return listOf(Issue(index, "flags", "At most $MAX_RULE_FLAGS flags per rule."))
+        }
+        val seen = mutableSetOf<String>()
+        return flags.mapIndexedNotNull { position, slot ->
+            when {
+                slot !in FlagPalette.SLOTS -> Issue(index, "flags[$position]", "Unknown flag slot.")
+                !seen.add(slot) -> Issue(index, "flags[$position]", "Duplicate flag slot.")
+                else -> null
+            }
+        }
+    }
 
     private fun noEffectIssues(
         rule: Rule,
@@ -96,7 +125,8 @@ object RulesValidator {
                 Issue(
                     index,
                     "continueToNext",
-                    "A rule that continues must file, forward, or reply — this one would have no effect.",
+                    "A rule that continues must file, flag, mark read, forward, or reply — " +
+                        "this one would have no effect.",
                 ),
             )
         } else {

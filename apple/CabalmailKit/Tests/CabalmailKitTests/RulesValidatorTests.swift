@@ -149,6 +149,33 @@ final class RulesValidatorTests: XCTestCase {
         XCTAssertEqual(issueFields(rule), [])
     }
 
+    // MARK: - Custom-flag slots
+
+    func testRuleFlagsShapeIssues() {
+        var rule = validRule()
+        rule.flags = ["cabal-flag-01", "cabal-flag-20"]
+        XCTAssertEqual(issueFields(rule), [])
+        rule.flags = ["cabal-flag-21"]
+        XCTAssertEqual(issueFields(rule), ["flags[0]"])
+        rule.flags = ["cabal-flag-01", "cabal-flag-01"]
+        XCTAssertEqual(issueFields(rule), ["flags[1]"])
+        rule.flags = ["not-a-slot"]
+        XCTAssertEqual(issueFields(rule), ["flags[0]"])
+        rule.flags = (1...20).map { String(format: "cabal-flag-%02d", $0) }
+        XCTAssertEqual(issueFields(rule), [])
+    }
+
+    func testCustomFlagsGiveAContinuingRuleAnEffect() {
+        var rule = validRule()
+        rule.action = .none
+        rule.moveFolder = ""
+        rule.forward = []
+        rule.continueToNext = true
+        rule.flags = ["cabal-flag-01"]
+        XCTAssertFalse(RulesValidator.hasNoEffect(rule))
+        XCTAssertEqual(issueFields(rule), [])
+    }
+
     // MARK: - No-effect rules (client-strict; the server stays permissive)
 
     func testContinuingRuleWithoutAnEffectIsAnIssue() {
@@ -162,12 +189,6 @@ final class RulesValidatorTests: XCTestCase {
         XCTAssertTrue(RulesValidator.hasNoEffect(rule))
         XCTAssertEqual(issueFields(rule), ["continueToNext"])
 
-        // Flag / mark-as-read alone don't rescue it: they are delivery
-        // metadata with no delivery to ride (until Phase 2's pending flags).
-        rule.flag = true
-        rule.markRead = true
-        XCTAssertEqual(issueFields(rule), ["continueToNext"])
-
         // A continuing copy with no folders picked yet is the same trap.
         rule = validRule()
         rule.action = .copy
@@ -179,11 +200,22 @@ final class RulesValidatorTests: XCTestCase {
     }
 
     func testEffectfulAndTerminalRulesAreNotNoEffect() {
-        // Forward or reply gives a continuing None rule an effect.
+        // Flag / mark-as-read decorate: the compiler's pending state
+        // (rules-composition plan, decision 3) carries them into whatever
+        // delivery ends up happening, so a decorate-only rule is saveable.
         var rule = validRule()
         rule.action = .none
         rule.moveFolder = ""
+        rule.forward = []
         rule.continueToNext = true
+        rule.flag = true
+        XCTAssertEqual(issueFields(rule), [])
+        rule.flag = false
+        rule.markRead = true
+        XCTAssertEqual(issueFields(rule), [])
+        rule.markRead = false
+
+        // Forward or reply gives a continuing None rule an effect.
         rule.forward = ["ops@example.com"]
         XCTAssertEqual(issueFields(rule), [])
         rule.forward = []

@@ -153,10 +153,6 @@ class RulesValidatorTest {
         assertTrue(RulesValidator.hasNoEffect(noEffect))
         assertEquals(listOf("continueToNext"), issueFields(noEffect))
 
-        // Flag / mark-as-read alone don't rescue it: they are delivery
-        // metadata with no delivery to ride (until Phase 2's pending flags).
-        assertEquals(listOf("continueToNext"), issueFields(noEffect.copy(flag = true, markRead = true)))
-
         // A continuing copy with no folders picked yet is the same trap.
         assertEquals(
             listOf("continueToNext"),
@@ -169,6 +165,11 @@ class RulesValidatorTest {
         val continuingNone =
             validRule().copy(action = RuleAction.NONE, moveFolder = "", forward = emptyList(), continueToNext = true)
 
+        // Flag / mark-as-read decorate: the compiler's pending state
+        // (rules-composition plan, decision 3) carries them into whatever
+        // delivery ends up happening, so a decorate-only rule is saveable.
+        assertEquals(emptyList<String>(), issueFields(continuingNone.copy(flag = true)))
+        assertEquals(emptyList<String>(), issueFields(continuingNone.copy(markRead = true)))
         // Forward or reply gives a continuing None rule an effect.
         assertEquals(emptyList<String>(), issueFields(continuingNone.copy(forward = listOf("ops@example.com"))))
         assertEquals(emptyList<String>(), issueFields(continuingNone.copy(reply = true, replyBody = "Away.")))
@@ -179,6 +180,38 @@ class RulesValidatorTest {
             emptyList<String>(),
             issueFields(continuingNone.copy(action = RuleAction.COPY, copyFolders = listOf("Audit"))),
         )
+    }
+
+    @Test
+    fun `rule flags shape issues`() {
+        assertEquals(
+            emptyList<String>(),
+            issueFields(validRule().copy(flags = listOf("cabal-flag-01", "cabal-flag-20"))),
+        )
+        assertEquals(listOf("flags[0]"), issueFields(validRule().copy(flags = listOf("cabal-flag-21"))))
+        assertEquals(
+            listOf("flags[1]"),
+            issueFields(validRule().copy(flags = listOf("cabal-flag-01", "cabal-flag-01"))),
+        )
+        assertEquals(listOf("flags[0]"), issueFields(validRule().copy(flags = listOf("not-a-slot"))))
+        assertEquals(
+            emptyList<String>(),
+            issueFields(validRule().copy(flags = (1..20).map { "cabal-flag-%02d".format(it) })),
+        )
+    }
+
+    @Test
+    fun `custom flags give a continuing rule an effect`() {
+        val rule =
+            validRule().copy(
+                action = RuleAction.NONE,
+                moveFolder = "",
+                forward = emptyList(),
+                continueToNext = true,
+                flags = listOf("cabal-flag-01"),
+            )
+        assertFalse(RulesValidator.hasNoEffect(rule))
+        assertEquals(emptyList<String>(), issueFields(rule))
     }
 
     @Test

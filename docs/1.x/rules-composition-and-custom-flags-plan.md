@@ -1,15 +1,5 @@
 # Rules Composition and Custom Flags Plan
 
-## Progress
-
-| Phase                              | Status                  |
-| ---------------------------------- | ----------------------- |
-| 1 -- Truthful Continue             | Complete (2026-08-28)   |
-| 2 -- Pending decorations           | Not started             |
-| 3 -- Flag palette                  | Not started             |
-| 4 -- Keywords on the message plane | Not started             |
-| 5 -- Rules integration             | Not started             |
-
 ## Context
 
 The first days of mail rules running in prod (2026-08-26) surfaced three
@@ -185,6 +175,19 @@ undecorated inbox delivery, never a lost message. Deliveries carrying
 only F/S keep the existing raw-write path; unflagged deliveries keep
 native procmail delivery.
 
+> **Erratum (2026-08-28):** the helper cannot perform the APPEND
+> itself: it runs as the recipient from a sendmail-sanitized
+> environment, and the master credential — deliberately root-only,
+> since it opens every mailbox — cannot reach it without regressing
+> the 0.10.x hardening posture. The implementation instead uses the
+> container's established spool + root-drain split (as push-enqueue
+> and cabal-rules-forward do): the helper spools the message and a
+> request file, and a root supervisord daemon (`cabal-append-drain.py`)
+> performs the APPEND as `{user}*admin` and writes a response file the
+> helper synchronously waits on (bounded), which is what preserves the
+> `w`-contract fall-through described above. Everything else in this
+> decision stands.
+
 ### 6. Rules reference slots and are validated like folders
 
 A rule's flag set becomes a list of slot identifiers. `set_rules`
@@ -234,6 +237,20 @@ constructible in either editor compiles to `no_effect`.
 
 ## Phase 2 -- Pending decorations
 
+**Status:** Complete and stage-verified (2026-08-28): a decorate-only
+rule above a move rule delivered a `\Flagged` message into the
+destination folder with nothing extra in the inbox, and a decorate-only
+rule with no later match delivered a `\Flagged` inbox message through
+the procmailrc pending fallback; rule sets without decoration compile
+byte-identically (golden-file gate). One mechanism refinement over
+decision 3's sketch: deliveries fold pending flags through a per-delivery `DFLAGS`
+variable (own flags override their slot) rather than assigning
+`PENDING_*` before the delivery line — a spill copy's own flags must
+decorate the copy only, and mutating the pending variables there would
+leak them into later rules and the inbox fallback. Semantics are
+otherwise exactly as specified, including the F-then-S concatenation
+invariant.
+
 Compiler and container work; re-enables the flag-then-file composition.
 
 - `compile-user-rules.py`: emit variable assignments for decorate-only
@@ -257,6 +274,24 @@ a flagged inbox delivery; rule sets without decoration compile
 byte-identically to the pre-phase output.
 
 ## Phase 3 -- Flag palette
+
+**Status:** Code complete (2026-08-28), split across two PRs: the
+`set_preferences` validator plus the Linux contract-test entry (landed
+together — the contract test's exact-equality runs at PR time in both
+directions, so a standalone Linux-only change cannot pass CI), and the
+Apple/Android palette managers, which must merge after the server side.
+Stage-verified (2026-08-28) against the live `set_preferences`: a
+two-entry palette round-trips exactly (including `enabled: false` and
+an entry with `enabled` absent), and a 21-entry list, an out-of-range
+slot, and an unknown color are each rejected with a clean 400. Two
+mechanism refinements over the sketch: (1) the palette value is a JSON-encoded *string* inside the
+`app` map, not a nested object — every shipped native client decodes
+the map as string-to-string, and a nested value would silently kill
+preference sync for builds in the field; (2) clients include the
+`flag_palette` key in their push only once a palette exists or a server
+pull has carried the key, because `set_preferences` rejects the whole
+map on an unknown key and an eager send against a not-yet-upgraded
+server would break every preference push.
 
 Storage and palette management; no message-plane changes yet.
 
@@ -285,6 +320,32 @@ a clear client error.
 
 ## Phase 4 -- Keywords on the message plane
 
+**Status:** Complete and stage-verified (2026-08-28), shipped as a
+server + container PR and a clients PR. `set_flag` narrows its keyword
+vocabulary to palette-validated slot atoms (set requires an enabled
+palette entry, unset only a well-formed slot so retired slots stay
+untaggable, everything else 400s — it previously accepted any 64-char
+keyword unchecked), the APPEND path is built per decision 5's erratum
+(spool + `cabal-append-drain.py`), and both clients grew list dots,
+reader chips, and palette-driven flag pickers riding the existing
+optimistic flag paths. Stage acceptance, run live: tag via an enabled
+slot lands and reads back in envelopes; not-in-palette, disabled,
+reserved, and non-slot keywords each 400; unset works without palette
+membership; the keyword survives a cross-folder move (Dovecot's
+name-preserving translation); system flags are unaffected. The drain
+is RUNNING on the stage task with its environment intact (CloudWatch
+startup line); a live APPEND through it is deliberately left to Phase
+5's acceptance, whose rule-tagged delivery exercises the full
+helper-to-drain path. Three findings against the phase's assumptions,
+verified in exploration: envelopes already carry keywords
+(`decode_flags` is a raw pass-through, so `list_envelopes` /
+`search_envelopes` need no change); `fetch_message` has never carried
+flags and its cache-hit path opens no IMAP session, so adding keywords
+there would cost a per-fetch round trip for data the envelopes already
+provide — deliberately not done; and the S3 cache stores body bytes
+only with flags always served live, so the cache-invalidation item is
+a verified no-op. Client chips/pickers follow in a second PR.
+
 Make custom flags visible and settable on messages; rules still cannot
 set them until Phase 5.
 
@@ -306,6 +367,25 @@ translation); a keyword unknown to the palette is rejected by
 `set_flag`.
 
 ## Phase 5 -- Rules integration
+
+**Status:** In progress (2026-08-28); the server + container half is in
+review, editors follow. Three refinements over the sketch, recorded
+here as the decisions actually taken: (1) `flags: [slot-id]` is a NEW
+key beside the untouched `flag` boolean rather than replacing it — the
+boolean keeps meaning the system `\Flagged` forever, which is the
+least-invasive reading of "accepted on read indefinitely" and spares
+every client a migration; (2) `set_rules` hard-validates slot *shape*
+(atom format, uniqueness, count) but treats palette membership the way
+folder existence is treated — accepted at write, enforced by the
+compiler's `flag_not_in_palette` skip — because a hard 400 would wedge
+every whole-set save the moment a palette edit orphans one rule's
+slot; (3) `set_preferences` now publishes to the user-rules
+reconfigure topic when `flag_palette` changes, so deleting or
+disabling a flag re-arms its rules' skip within seconds instead of the
+~15-minute fallback. The compiler reads palettes via a projected scan
+of `cabal-user-preferences` (new task-role grant), failing closed to
+an empty palette so keyworded rules skip rather than compile against
+unknown state.
 
 - Rule schema: `flag: boolean` grows to `flags: [slot-id]` (boolean
   accepted on read indefinitely, mapped to the legacy `F` system flag).

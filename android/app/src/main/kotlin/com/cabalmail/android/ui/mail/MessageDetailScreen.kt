@@ -5,21 +5,26 @@ import android.content.Intent
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -49,7 +54,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -58,6 +65,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
+import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.AuthResults
@@ -67,6 +75,8 @@ import com.cabalmail.kit.models.readerModeHtml
 import com.cabalmail.kit.models.sentInstant
 import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.DisposeAdvance
+import com.cabalmail.kit.settings.FlagPalette
+import com.cabalmail.kit.settings.FlagPaletteEntry
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -233,6 +243,41 @@ fun MessageDetailScreen(
                         Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_actions))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        // Custom flags (Phase 4): one check-marked item per
+                        // enabled palette entry, plus any slot the message
+                        // carries whose entry is disabled or deleted — those
+                        // still need an untag affordance (the palette
+                        // editor's delete confirmation promises tags stay
+                        // removable). Hidden while there is nothing to show.
+                        readerFlagSlots(preferences.flagPalette, state.envelope?.flags.orEmpty())
+                            .forEach { (slot, label, tagged) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    leadingIcon = {
+                                        if (tagged) {
+                                            Icon(Icons.Default.Check, contentDescription = null)
+                                        } else {
+                                            Box(
+                                                modifier =
+                                                    Modifier
+                                                        .size(10.dp)
+                                                        .clip(CircleShape)
+                                                        .background(
+                                                            flagColor(
+                                                                preferences.flagPalette
+                                                                    .firstOrNull { it.slot == slot }
+                                                                    ?.color ?: "",
+                                                            ),
+                                                        ),
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        viewModel.setFlag(slot, !tagged)
+                                    },
+                                )
+                            }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.move_to)) },
                             onClick = {
@@ -276,7 +321,7 @@ fun MessageDetailScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             state.envelope?.let { envelope ->
-                MessageHeader(envelope = envelope, bimiLookup = bimiLookup)
+                MessageHeader(envelope = envelope, bimiLookup = bimiLookup, palette = preferences.flagPalette)
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
 
@@ -426,6 +471,7 @@ private fun ComposeActionsBar(
 private fun MessageHeader(
     envelope: Envelope,
     bimiLookup: suspend (String) -> String?,
+    palette: List<FlagPaletteEntry> = emptyList(),
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Row {
@@ -469,7 +515,70 @@ private fun MessageHeader(
             )
         }
         HeaderChips(envelope = envelope)
+        KeywordChips(envelope = envelope, palette = palette)
     }
+}
+
+/**
+ * Custom-flag chips (Phase 4): color dot + label per tagged palette slot.
+ * A deleted slot's surviving tag shows its slot id in gray, per the
+ * palette editor's delete-confirmation copy.
+ */
+@Composable
+private fun KeywordChips(
+    envelope: Envelope,
+    palette: List<FlagPaletteEntry>,
+) {
+    val slots = FlagPalette.slotsIn(envelope.flags)
+    if (slots.isEmpty()) {
+        return
+    }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(top = 6.dp),
+    ) {
+        slots.forEach { slot ->
+            val entry = palette.firstOrNull { it.slot == slot }
+            Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(flagColor(entry?.color ?: "")),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(text = entry?.label ?: slot, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The (slot, label, tagged) triples the reader's flag menu renders: enabled
+ * palette entries first, then stray tagged slots whose entry is disabled or
+ * deleted (labelled from the palette when present, else by slot id). Pure,
+ * so it unit-tests without Compose.
+ */
+internal fun readerFlagSlots(
+    palette: List<FlagPaletteEntry>,
+    flags: List<String>,
+): List<Triple<String, String, Boolean>> {
+    val offered = palette.filter { it.enabled }
+    val tagged = FlagPalette.slotsIn(flags).toSet()
+    val stray =
+        FlagPalette.SLOTS.filter { slot ->
+            slot in tagged && offered.none { it.slot == slot }
+        }
+    return offered.map { Triple(it.slot, it.label, it.slot in tagged) } +
+        stray.map { slot ->
+            Triple(slot, palette.firstOrNull { it.slot == slot }?.label ?: slot, true)
+        }
 }
 
 /** SPF/DKIM/DMARC verdicts and the priority marker (plan §4.3). */

@@ -57,6 +57,7 @@ enum class SettingsCategory(
     READING(R.string.settings_reading),
     COMPOSING(R.string.settings_composing),
     RULES(R.string.rules_title),
+    FLAGS(R.string.settings_flags),
     ACTIONS(R.string.settings_actions),
     NOTIFICATIONS(R.string.settings_notifications),
     APPEARANCE(R.string.settings_appearance),
@@ -234,6 +235,7 @@ private fun SettingsCategoryDetail(
                 SettingsCategory.COMPOSING -> ComposingSettings(state, preferences, onUpdate)
                 // Handled by the caller (the pane comes from the nav host).
                 SettingsCategory.RULES -> Unit
+                SettingsCategory.FLAGS -> FlagPaletteSettings(preferences, onUpdate)
                 SettingsCategory.ACTIONS -> ActionsSettings(preferences, onUpdate)
                 SettingsCategory.NOTIFICATIONS ->
                     NotificationsSettings(

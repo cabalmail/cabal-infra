@@ -7,11 +7,12 @@
 //! merges green, and the divergence surfaces later on somebody's unrelated
 //! push to `linux/`.
 //!
-//! Every such file is registered here, and `workflow_contract.rs` asserts the
-//! workflow's `paths:` filter covers all of them. Reading one goes through
-//! `repo_input`, which refuses a path that is not registered — so a new
-//! cross-tree test cannot be written without the trigger being extended in the
-//! same change.
+//! Every such file is registered here, and `workflow_contract.rs` asserts that
+//! the filters of *both* workflows that run these checks cover all of them:
+//! `linux.yml` on a push to a named branch, and `lint.yml`'s `rust` job on a
+//! pull request. Reading one goes through `repo_input`, which refuses a path
+//! that is not registered — so a new cross-tree test cannot be written without
+//! both triggers being extended in the same change.
 
 #![allow(dead_code)]
 
@@ -28,6 +29,10 @@ pub const REPO_INPUTS: &[&str] = &[
     "react/admin/package-lock.json",
     // The licence the Arch package installs.
     "LICENSE.md",
+    // The two workflows the contract test reads: the one that runs these
+    // checks on a push, and the one that runs them on a pull request.
+    ".github/workflows/linux.yml",
+    ".github/workflows/lint.yml",
 ];
 
 pub fn repo_root() -> PathBuf {
