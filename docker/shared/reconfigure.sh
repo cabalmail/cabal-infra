@@ -131,10 +131,16 @@ ping_healthcheck() {
   esac
 }
 
-# ── Drain remaining SQS messages after a regeneration ──────────
-# If several addresses were created in quick succession, we already
-# picked up all changes from DynamoDB in one scan. Delete the
-# remaining messages so we don't do redundant regenerations.
+# ── Coalesce queued SQS messages BEFORE a regeneration ─────────
+# If several changes were published in quick succession, one scan picks
+# them all up - so consume the burst first and regenerate once. Draining
+# must happen BEFORE the scan, never after: a message that arrives WHILE
+# the regeneration is running may announce a write the in-flight scan did
+# not see, and deleting it afterwards as "stale" loses that change until
+# the periodic fallback (observed with a palette edit followed seconds
+# later by a rule save - the rule stayed uncompiled for the fallback
+# interval). A message arriving mid-scan now simply stays queued and
+# triggers the next loop pass immediately.
 drain_queue() {
   while true; do
     DRAIN_MSG=$(aws sqs receive-message \
@@ -204,8 +210,8 @@ while true; do
         --receipt-handle "$RECEIPT" \
         --region "$AWS_REGION" 2>/dev/null || true
 
-      regenerate
       drain_queue
+      regenerate
       continue
     fi
 
