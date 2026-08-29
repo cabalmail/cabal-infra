@@ -5,6 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-08-29
+
+### Added
+- Android: **Custom flag palette.** Settings gains a Flags category:
+  define up to 20 named, colored flags, reorder them, disable or delete
+  them (with a caveat-aware confirmation), and they follow your account
+  to every device. This release manages the palette; putting the flags
+  on messages ships in a following release.
+- Apple: **Custom flag palette.** Settings gains a Flags category: define
+  up to 20 named, colored flags, reorder them, disable or delete them
+  (with a caveat-aware confirmation), and they follow your account to
+  every device. This release manages the palette; putting the flags on
+  messages ships in a following release.
+- Android: **Tag messages with your flags.** The flags you define in
+  Settings can now go on messages: colored dots in the message list,
+  chips in the reader header, and check-marked flag entries on a
+  message's long-press menu and the reader's overflow menu. Tags sync
+  through your account and follow a message between folders; a tag
+  whose flag was deleted stays removable from the reader.
+- Apple: **Tag messages with your flags.** The flags you define in
+  Settings can now go on messages: colored dots in the message list,
+  chips in the reader header, a Flags submenu on a message's context
+  menu, and the reader's flag button grows a menu with one toggle per
+  flag (the button itself still toggles the classic flag). Tags sync
+  through your account and follow a message between folders; a tag
+  whose flag was deleted stays removable from the reader.
+- **Flag-then-file rule composition.** A rule with Flag and/or Mark as read,
+  destination None, and Continue on now decorates the message instead of
+  silently compiling to nothing: the marks ride per-message pending state in
+  the rules engine and are applied wherever the message ends up — a later
+  rule's destination folder or the inbox fallback. "Flag anything from
+  billing" above "file receipts into Receipts" produces a flagged message in
+  Receipts and nothing extra in the inbox. Rule sets without decorate-only
+  rules compile byte-identically to before.
+- Android: **Rules can set your flags.** The rule editor's Flag extra
+  now lists your custom flags alongside the classic flag, so a rule can
+  tag arriving mail — including on a continuing decorator rule, whose
+  tags are carried to wherever the message is filed. A flag later
+  deleted from the palette shows in the rule by its slot id until you
+  clear it (the rule is skipped while it remains).
+- Apple: **Rules can set your flags.** The rule editor's Flag extra now
+  lists your custom flags alongside the classic flag, so a rule can tag
+  arriving mail — including on a continuing decorator rule, whose tags
+  are carried to wherever the message is filed. A flag later deleted
+  from the palette shows in the rule by its slot id until you clear it
+  (the rule is skipped while it remains).
+- **Rules can set custom flags.** A mail rule can now tag arriving
+  messages with the flags defined in Settings → Flags, both on a filing
+  rule (the message lands in its folder already tagged) and on a
+  decorate-then-file rule (a continuing rule's tags are carried to
+  wherever the message ends up, custom flags included). Tagged
+  deliveries go through Dovecot itself so per-folder keyword state
+  stays consistent; a rule whose flag was deleted or disabled from the
+  palette is skipped, like a rule whose folder is gone.
+
+### Changed
+- Android: **Decorate-only rules are saveable.** A rule that flags or marks
+  read, files nowhere, and continues to the next rule is a valid rule again —
+  the engine now carries its marks to wherever the message is eventually
+  delivered — and its summary line reads "flag · continue" instead of
+  "no filing · flag · continue".
+- Apple: **Decorate-only rules are saveable.** A rule that flags or marks
+  read, files nowhere, and continues to the next rule is a valid rule again —
+  the engine now carries its marks to wherever the message is eventually
+  delivered — and its summary line reads "flag · continue" instead of
+  "no filing · flag · continue".
+
+### Fixed
+- Apple: **Readable folder names in the sidebar.** Colouring names by unread
+  state had made the selected folder white on the light selection fill —
+  1.52:1 on iPadOS, and invisible outright in the second row "All folders"
+  draws for the folder already selected — while a caught-up folder's name
+  dimmed to 4.00:1 there and 2.90–3.31:1 on macOS 27, all under the 4.5:1
+  WCAG AA floor. The selected row now keeps whatever foreground its
+  selection fill calls for instead of pinning one, and caught-up names dim
+  by a fixed fraction of the label colour rather than by `.secondary`, whose
+  alpha the OS picks without regard to contrast. The unread signal is
+  unchanged; every state measured now clears AA on iPadOS and macOS.
+- **Arch packaging failed where makepkg splits debug symbols.** `cargo xtask
+  package arch` read the `-debug` package that a build environment with `debug`
+  in its `OPTIONS` produces — which is what the `archlinux:base-devel` image
+  ships — as a leftover from an earlier build, and refused to lint anything. It
+  now names the package it built and reports both artifacts.
+- **Linux CI ran its container steps under the wrong shell.** `linux.yml` now
+  declares `bash` as its run default. The runner falls back to `sh` where it is
+  not told otherwise, and the `ubuntu:24.04` container's `sh` rejects
+  `set -o pipefail`, so the API-floor build and the widget tests failed on every
+  run of that workflow since it landed. The path filters of both gates that run
+  `cargo xtask ci` — `linux.yml` on a push, `lint.yml`'s `rust` job on a pull
+  request — now also cover every file those tests read from outside `linux/`,
+  and a test fails if one is registered but missing from either.
+
 ## [1.7.7] - 2026-08-28
 
 ### Changed
