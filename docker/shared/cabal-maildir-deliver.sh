@@ -85,7 +85,17 @@ if [ -n "$keywords" ]; then
   msg="$SPOOL_DIR/$nonce.msg"
   meta="$SPOOL_DIR/$nonce.json"
   resp="$SPOOL_DIR/$nonce.resp"
-  cleanup() { rm -f "$msg" "$meta" "$SPOOL_DIR/.tmp.$nonce.json" "$resp"; }
+  # Response collection is best-effort everywhere: the drain writes the
+  # response as root and chowns it to us, but if that ever regresses (or
+  # an old drain is still running), a root-owned file in the sticky
+  # spool is one we cannot unlink - and under `set -e` a failing rm
+  # would turn a SUCCESSFUL append into a nonzero exit, which procmail
+  # reads as recipe failure and answers with a duplicate fall-through
+  # delivery. The drain's sweep owns stale responses regardless.
+  cleanup() {
+    rm -f "$msg" "$meta" "$SPOOL_DIR/.tmp.$nonce.json"
+    rm -f "$resp" 2>/dev/null || :
+  }
   trap cleanup EXIT
 
   cat > "$msg"
@@ -101,7 +111,7 @@ if [ -n "$keywords" ]; then
       verdict="$(cat "$resp" 2>/dev/null || echo fail)"
       if [ "$verdict" = "ok" ]; then
         trap - EXIT
-        rm -f "$resp"
+        rm -f "$resp" 2>/dev/null || :
         exit 0
       fi
       echo "[cabal-maildir-deliver] append drain refused $nonce" >&2

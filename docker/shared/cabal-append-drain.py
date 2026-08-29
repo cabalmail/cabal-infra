@@ -153,13 +153,26 @@ def append_message(client, meta, message, master_password):
             pass
 
 
-def _respond(nonce, verdict):
-    '''Writes the response file the helper is polling for (world-readable;
-    the spool is sticky, so only root and the requester can remove it).'''
+def _respond(nonce, verdict, owner_uid=None):
+    '''Writes the response file the helper is polling for.
+
+    Chowned to the requester: the spool is sticky, so a root-owned
+    response would be one the helper cannot collect-and-delete - its
+    `rm` under `set -e` then killed the helper AFTER a successful
+    APPEND, procmail read that as recipe failure, and every keyworded
+    delivery grew an extra undecorated fall-through copy. The chown is
+    best-effort (the sweep ages out uncollected responses either way);
+    what must never happen is a written-but-unrenamed response, so the
+    replace stays last.'''
     tmp = os.path.join(SPOOL_DIR, f'.tmp.{nonce}.resp')
     with open(tmp, 'w', encoding='ascii') as handle:
         handle.write(verdict + '\n')
     os.chmod(tmp, 0o644)
+    if owner_uid is not None:
+        try:
+            os.chown(tmp, owner_uid, -1)
+        except OSError:
+            pass
     os.replace(tmp, os.path.join(SPOOL_DIR, f'{nonce}.resp'))
 
 
@@ -169,6 +182,7 @@ def handle_request(meta_path, cert_domain, master_password,
     nonce = os.path.basename(meta_path)[len('.work.'):-len('.json')]
     msg_path = os.path.join(SPOOL_DIR, f'{nonce}.msg')
     verdict = 'fail'
+    owner_uid = None
     started = time.monotonic()
     try:
         owner_uid = os.stat(meta_path).st_uid
@@ -205,7 +219,7 @@ def handle_request(meta_path, cert_domain, master_password,
         except OSError:
             pass
     try:
-        _respond(nonce, verdict)
+        _respond(nonce, verdict, owner_uid)
     except OSError as err:
         print(f'[cabal-append-drain] respond {nonce} failed: {err}',
               flush=True)
