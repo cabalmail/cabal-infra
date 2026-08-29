@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-08-29
+
+### Fixed
+- **Extra inbox copies from flag-tagging rules.** A rule that tags a
+  message with a custom flag delivered the tagged message correctly but
+  also left an extra untagged copy in the inbox: the delivery helper
+  could not remove the append drain's root-owned response file from the
+  sticky spool, misread its own success as a failure, and fell through
+  to an additional delivery. The drain now hands the response file to
+  the requesting user, and the helper treats response collection as
+  best-effort.
+
 ## [1.8.0] - 2026-08-29
 
 ### Added
