@@ -1,13 +1,18 @@
 package com.cabalmail.android.ui.rules
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -41,17 +46,22 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.kit.models.Rule
 import com.cabalmail.kit.models.RuleAction
 import com.cabalmail.kit.models.RuleCondition
 import com.cabalmail.kit.models.RuleField
 import com.cabalmail.kit.models.normalizeLegacyContinue
 import com.cabalmail.kit.rules.RulesValidator
+import com.cabalmail.kit.settings.FlagPalette
+import com.cabalmail.kit.settings.FlagPaletteEntry
 
 /**
  * Detail form for one mail rule: name, spill-through, conditions, the
@@ -78,6 +88,9 @@ fun RuleEditorScreen(
     onReload: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The custom-flag palette; the Flag extra grew into a picker of the
+     * classic flag plus these (rules-composition plan, Phase 5). */
+    palette: List<FlagPaletteEntry> = emptyList(),
 ) {
     val rule = state.rules?.firstOrNull { it.id == ruleId }
     Scaffold(
@@ -130,7 +143,7 @@ fun RuleEditorScreen(
                     onCreateArchiveFolder = onCreateArchiveFolder,
                     onDestinationPicked = { showConversionNote = false },
                 )
-                ExtrasSection(rule, onUpdate)
+                ExtrasSection(rule, palette, onUpdate)
             }
         }
     }
@@ -433,12 +446,29 @@ private fun CopyFoldersPicker(
 @Composable
 private fun ExtrasSection(
     rule: Rule,
+    palette: List<FlagPaletteEntry>,
     onUpdate: (Rule) -> Unit,
 ) {
     SectionLabel(stringResource(R.string.rules_extras))
     val locked = rule.action == RuleAction.DELETE
     ToggleRow(stringResource(R.string.rules_flag), rule.flag, enabled = !locked) {
         onUpdate(rule.copy(flag = it))
+    }
+    // One toggle per enabled palette entry, plus any slot this rule already
+    // sets whose entry is disabled or deleted — the compiler skips the rule
+    // while such a slot remains (flag_not_in_palette), so the stray toggle
+    // is the affordance for clearing it, labelled by slot id when gone.
+    pickerSlots(palette, rule.flags).forEach { slot ->
+        val entry = palette.firstOrNull { it.slot == slot }
+        FlagToggleRow(
+            label = entry?.label ?: slot,
+            color = flagColor(entry?.color ?: ""),
+            checked = slot in rule.flags,
+            enabled = !locked,
+        ) { on ->
+            val next = if (on) rule.flags + slot else rule.flags - slot
+            onUpdate(rule.copy(flags = next))
+        }
     }
     ToggleRow(stringResource(R.string.rules_mark_read), rule.markRead, enabled = !locked) {
         onUpdate(rule.copy(markRead = it))
@@ -572,6 +602,42 @@ private fun ToggleRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
+    }
+}
+
+/** The slots the picker offers: enabled palette entries in palette order,
+ * then stray already-set slots (see ExtrasSection). Pure, tested. */
+internal fun pickerSlots(
+    palette: List<FlagPaletteEntry>,
+    ruleFlags: List<String>,
+): List<String> {
+    val offered = palette.filter { it.enabled }.map { it.slot }
+    val stray = FlagPalette.SLOTS.filter { it in ruleFlags && it !in offered }
+    return offered + stray
+}
+
+@Composable
+private fun FlagToggleRow(
+    label: String,
+    color: Color,
+    checked: Boolean,
+    enabled: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(color),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(label, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
 }

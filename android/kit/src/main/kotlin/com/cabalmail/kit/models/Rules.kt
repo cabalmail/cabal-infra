@@ -1,5 +1,7 @@
 package com.cabalmail.kit.models
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -75,6 +77,7 @@ data class RuleCondition(
  * unseen client id so edits stay stable across saves, which is why new
  * local rules mint one via [mintRuleId].
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class Rule(
     val id: String = mintRuleId(),
@@ -86,6 +89,16 @@ data class Rule(
     val moveFolder: String = "",
     val copyFolders: List<String> = emptyList(),
     val flag: Boolean = false,
+    /**
+     * Custom-flag slot atoms this rule sets at delivery (rules-composition
+     * plan, decision 6); [flag] above stays the system `\Flagged`. NEVER
+     * encoded when empty: a server predating the key rejects unknown
+     * fields, so sending it unconditionally would break every rule save
+     * against a not-yet-upgraded deployment — the server defaults a
+     * missing key to [], so omission never loses data.
+     */
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val flags: List<String> = emptyList(),
     val markRead: Boolean = false,
     val forward: List<String> = emptyList(),
     val reply: Boolean = false,

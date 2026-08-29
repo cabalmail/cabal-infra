@@ -28,6 +28,7 @@ public enum RulesValidator {
     public static let maxAddressLength = 320
     public static let maxReplyBodyLength = 4000
     public static let maxFolderLength = 255
+    public static let maxRuleFlags = 20
 
     /// One structured finding, mirroring the Lambda's
     /// `{rule, field, error}` entries. `ruleIndex` is nil for set-level
@@ -65,6 +66,7 @@ public enum RulesValidator {
         issues += conditionIssues(rule.conditions, at: index)
         issues += copyFolderIssues(rule.copyFolders, at: index)
         issues += forwardIssues(rule.forward, at: index)
+        issues += ruleFlagsIssues(rule.flags, at: index)
         if hasNoEffect(rule) {
             issues.append(Issue(
                 ruleIndex: index, field: "continueToNext",
@@ -76,13 +78,44 @@ public enum RulesValidator {
     }
 
     /// A continuing rule that neither files (a destination that delivers),
-    /// decorates (flag / mark-as-read arm the compiler's pending state —
-    /// the rules-composition plan's decision 3), forwards, nor replies
-    /// compiles to an empty procmail block and is dropped.
+    /// decorates (flag / custom flags / mark-as-read arm the compiler's
+    /// pending state — the rules-composition plan's decisions 3 and 6),
+    /// forwards, nor replies compiles to an empty procmail block and is
+    /// dropped.
     public static func hasNoEffect(_ rule: Rule) -> Bool {
         rule.continueToNext && rule.forward.isEmpty && !rule.reply
-            && !rule.flag && !rule.markRead
+            && !rule.flag && !rule.markRead && rule.flags.isEmpty
             && (rule.action == .none || (rule.action == .copy && rule.copyFolders.isEmpty))
+    }
+
+    /// The server's slot-shape rules for a rule's custom flags: fixed
+    /// `cabal-flag-01..20` atoms, unique, bounded. Palette membership is
+    /// deliberately NOT checked here (nor server-side at write): like a
+    /// deleted destination folder, a slot that leaves the palette makes
+    /// the compiler skip the rule rather than wedging the save.
+    private static func ruleFlagsIssues(_ flags: [String], at index: Int) -> [Issue] {
+        if flags.count > maxRuleFlags {
+            return [Issue(
+                ruleIndex: index, field: "flags",
+                message: "At most \(maxRuleFlags) flags per rule."
+            )]
+        }
+        var issues: [Issue] = []
+        var seen = Set<String>()
+        for (position, slot) in flags.enumerated() {
+            if !FlagPalette.slots.contains(slot) {
+                issues.append(Issue(
+                    ruleIndex: index, field: "flags[\(position)]",
+                    message: "Unknown flag slot."
+                ))
+            } else if !seen.insert(slot).inserted {
+                issues.append(Issue(
+                    ruleIndex: index, field: "flags[\(position)]",
+                    message: "Duplicate flag slot."
+                ))
+            }
+        }
+        return issues
     }
 
     /// The Lambda's `FORWARD_RE` (`^[^\s@]+@[^\s@]+\.[^\s@]+$`) plus its

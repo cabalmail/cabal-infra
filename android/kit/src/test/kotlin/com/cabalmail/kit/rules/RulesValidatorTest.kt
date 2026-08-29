@@ -183,6 +183,38 @@ class RulesValidatorTest {
     }
 
     @Test
+    fun `rule flags shape issues`() {
+        assertEquals(
+            emptyList<String>(),
+            issueFields(validRule().copy(flags = listOf("cabal-flag-01", "cabal-flag-20"))),
+        )
+        assertEquals(listOf("flags[0]"), issueFields(validRule().copy(flags = listOf("cabal-flag-21"))))
+        assertEquals(
+            listOf("flags[1]"),
+            issueFields(validRule().copy(flags = listOf("cabal-flag-01", "cabal-flag-01"))),
+        )
+        assertEquals(listOf("flags[0]"), issueFields(validRule().copy(flags = listOf("not-a-slot"))))
+        assertEquals(
+            emptyList<String>(),
+            issueFields(validRule().copy(flags = (1..20).map { "cabal-flag-%02d".format(it) })),
+        )
+    }
+
+    @Test
+    fun `custom flags give a continuing rule an effect`() {
+        val rule =
+            validRule().copy(
+                action = RuleAction.NONE,
+                moveFolder = "",
+                forward = emptyList(),
+                continueToNext = true,
+                flags = listOf("cabal-flag-01"),
+            )
+        assertFalse(RulesValidator.hasNoEffect(rule))
+        assertEquals(emptyList<String>(), issueFields(rule))
+    }
+
+    @Test
     fun `rule count cap`() {
         val many = List(101) { Rule(name = "r$it") }
 

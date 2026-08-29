@@ -80,6 +80,10 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
     /// Destinations when `action == .copy`.
     public var copyFolders: [String]
     public var flag: Bool
+    /// Custom-flag slot atoms this rule sets at delivery (rules-composition
+    /// plan, decision 6); `flag` above stays the system `\Flagged`. Omitted
+    /// from the wire when empty (see `encode(to:)`).
+    public var flags: [String]
     public var markRead: Bool
     public var forward: [String]
     public var reply: Bool
@@ -97,6 +101,7 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
         moveFolder: String = "",
         copyFolders: [String] = [],
         flag: Bool = false,
+        flags: [String] = [],
         markRead: Bool = false,
         forward: [String] = [],
         reply: Bool = false,
@@ -111,6 +116,7 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
         self.moveFolder = moveFolder
         self.copyFolders = copyFolders
         self.flag = flag
+        self.flags = flags
         self.markRead = markRead
         self.forward = forward
         self.reply = reply
@@ -128,11 +134,43 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
         moveFolder = try container.decodeIfPresent(String.self, forKey: .moveFolder) ?? ""
         copyFolders = try container.decodeIfPresent([String].self, forKey: .copyFolders) ?? []
         flag = try container.decodeIfPresent(Bool.self, forKey: .flag) ?? false
+        flags = try container.decodeIfPresent([String].self, forKey: .flags) ?? []
         markRead = try container.decodeIfPresent(Bool.self, forKey: .markRead) ?? false
         forward = try container.decodeIfPresent([String].self, forKey: .forward) ?? []
         reply = try container.decodeIfPresent(Bool.self, forKey: .reply) ?? false
         replyBody = try container.decodeIfPresent(String.self, forKey: .replyBody) ?? ""
         continueToNext = try container.decodeIfPresent(Bool.self, forKey: .continueToNext) ?? false
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, enabled, conditions, action, moveFolder, copyFolders
+        case flag, flags, markRead, forward, reply, replyBody, continueToNext
+    }
+
+    /// Hand-rolled so an EMPTY `flags` stays off the wire: a server that
+    /// predates the key rejects the whole set on it ("Unknown field."), so
+    /// sending it unconditionally would break every rule save against a
+    /// not-yet-upgraded deployment. A non-empty list (only authorable via
+    /// the palette picker) rides normally; the server defaults a missing
+    /// key to [], so omission never loses data.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(enabled, forKey: .enabled)
+        try container.encode(conditions, forKey: .conditions)
+        try container.encode(action, forKey: .action)
+        try container.encode(moveFolder, forKey: .moveFolder)
+        try container.encode(copyFolders, forKey: .copyFolders)
+        try container.encode(flag, forKey: .flag)
+        if !flags.isEmpty {
+            try container.encode(flags, forKey: .flags)
+        }
+        try container.encode(markRead, forKey: .markRead)
+        try container.encode(forward, forKey: .forward)
+        try container.encode(reply, forKey: .reply)
+        try container.encode(replyBody, forKey: .replyBody)
+        try container.encode(continueToNext, forKey: .continueToNext)
     }
 
     /// A fresh id in the server's `r-` + 12 lowercase hex format. Minted
