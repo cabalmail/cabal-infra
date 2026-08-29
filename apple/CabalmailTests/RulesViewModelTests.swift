@@ -237,7 +237,6 @@ final class RulesViewModelTests: XCTestCase {
     }
 }
 
-
 // MARK: - #1328: a cancelled load is not a load failure
 
 /// The push-transition cancellation (#1328) and what the loader owes it: on
