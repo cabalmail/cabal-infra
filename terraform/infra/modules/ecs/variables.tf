@@ -49,6 +49,11 @@ variable "user_rules_table_arn" {
   description = "ARN of the cabal-user-rules DynamoDB table (scanned by the imap tier's rule compiler)."
 }
 
+variable "user_preferences_table_arn" {
+  type        = string
+  description = "ARN of the cabal-user-preferences DynamoDB table (scanned by the imap tier's rule compiler for custom-flag palettes; rules-composition plan, decision 6)."
+}
+
 variable "efs_id" {
   type        = string
   description = "EFS file system ID for the mailstore."

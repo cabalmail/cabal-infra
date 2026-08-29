@@ -756,3 +756,70 @@ LINEBUF=16384
   :0w
   | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR" "$DFLAGS"
 }
+
+# [r-000000000044] KW decorate billing
+:0
+* ^From:.*kwbilling
+{
+  PENDING_KW=${PENDING_KW:+${PENDING_KW},}cabal-flag-01
+}
+
+# [r-000000000045] KW move receipts
+:0
+* ^Subject:.*kwfile
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Receipts"
+  PUSH_ENQUEUED=yes
+
+  DFLAGS=$PENDING_F$PENDING_S
+  KWFLAGS=cabal-flag-02${PENDING_KW:+,${PENDING_KW}}
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Receipts" "$DFLAGS" "Receipts" "$KWFLAGS"
+}
+
+# [r-000000000046] KW spill copy
+:0
+* ^From:.*kwcopy
+{
+  DFLAGS=$PENDING_F$PENDING_S
+  KWFLAGS=cabal-flag-01,cabal-flag-07${PENDING_KW:+,${PENDING_KW}}
+  :0cw
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Work.Clients" "$DFLAGS" "Work.Clients" "$KWFLAGS"
+}
+
+# [r-000000000048] Plain move after kw decorators
+:0
+* ^Subject:.*kwplain
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "Trash"
+  PUSH_ENQUEUED=yes
+
+  DFLAGS=$PENDING_F$PENDING_S
+  KWFLAGS=$PENDING_KW
+  PENDINGANY=${DFLAGS}${KWFLAGS}
+  :0:
+  * ! PENDINGANY ?? .
+  $MAILDIR/.Trash/
+
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR/.Trash" "$DFLAGS" "Trash" "$KWFLAGS"
+}
+
+# [r-000000000049] KW terminal none
+:0
+* ^Subject:.*kwstop
+{
+  :0c
+  * ! PUSH_ENQUEUED ?? yes
+  | /usr/local/bin/push-enqueue.sh "$LOGNAME" "INBOX"
+  PUSH_ENQUEUED=yes
+
+  DFLAGS=F$PENDING_S
+  KWFLAGS=cabal-flag-07${PENDING_KW:+,${PENDING_KW}}
+  :0w
+  | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR" "$DFLAGS" "INBOX" "$KWFLAGS"
+}

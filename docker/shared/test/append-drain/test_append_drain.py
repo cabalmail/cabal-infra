@@ -61,12 +61,23 @@ class ValidateRequestTest(unittest.TestCase):
                     'bad folder')
 
     def test_bad_flags(self):
-        for flags in ([], None, 'cabal-flag-01', [42],
-                      ['cabal-flag-01'] * 23):
+        for flags in ([], None, 'cabal-flag-01', [42]):
             with self.subTest(flags=flags):
                 self.assertEqual(
                     drain.validate_request(meta(flags=flags), 'alice'),
                     'bad flags')
+
+    def test_flags_dedupe_before_the_cap(self):
+        # Rule-own and pending keyword unions may repeat a slot (Phase 5);
+        # the cap bounds the distinct vocabulary, not the token count.
+        request = meta(flags=['cabal-flag-01'] * 30 + ['\\Seen'])
+        self.assertIsNone(drain.validate_request(request, 'alice'))
+        self.assertEqual(request['flags'], ['cabal-flag-01', '\\Seen'])
+        # Distinct overflow is still refused.
+        too_many = meta(flags=[f'cabal-flag-{i:02d}' for i in range(1, 21)]
+                        + ['\\Seen', '\\Flagged', 'cabal-flag-01'])
+        # 20 slots + 2 system = 22 distinct: at the cap, allowed.
+        self.assertIsNone(drain.validate_request(too_many, 'alice'))
         for flag in ('\\Deleted', '\\Answered', 'cabal-flag-21',
                      'cabal-flag-00', '$Forwarded', 'a b'):
             with self.subTest(flag=flag):

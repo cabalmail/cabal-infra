@@ -1368,5 +1368,143 @@
     "reply": false,
     "replyBody": "",
     "continueToNext": false
+  },
+  {
+    "id": "r-000000000044",
+    "name": "KW decorate billing",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "kwbilling"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true,
+    "flags": [
+      "cabal-flag-01"
+    ]
+  },
+  {
+    "id": "r-000000000045",
+    "name": "KW move receipts",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "kwfile"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false,
+    "flags": [
+      "cabal-flag-02"
+    ]
+  },
+  {
+    "id": "r-000000000046",
+    "name": "KW spill copy",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "from",
+        "value": "kwcopy"
+      }
+    ],
+    "action": "copy",
+    "moveFolder": "",
+    "copyFolders": [
+      "Work/Clients"
+    ],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": true,
+    "flags": [
+      "cabal-flag-07",
+      "cabal-flag-01"
+    ]
+  },
+  {
+    "id": "r-000000000047",
+    "name": "KW not in palette",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "kwbad"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Receipts",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false,
+    "flags": [
+      "cabal-flag-19"
+    ]
+  },
+  {
+    "id": "r-000000000048",
+    "name": "Plain move after kw decorators",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "kwplain"
+      }
+    ],
+    "action": "move",
+    "moveFolder": "Trash",
+    "copyFolders": [],
+    "flag": false,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false
+  },
+  {
+    "id": "r-000000000049",
+    "name": "KW terminal none",
+    "enabled": true,
+    "conditions": [
+      {
+        "field": "subject",
+        "value": "kwstop"
+      }
+    ],
+    "action": "none",
+    "moveFolder": "",
+    "copyFolders": [],
+    "flag": true,
+    "markRead": false,
+    "forward": [],
+    "reply": false,
+    "replyBody": "",
+    "continueToNext": false,
+    "flags": [
+      "cabal-flag-07"
+    ]
   }
 ]

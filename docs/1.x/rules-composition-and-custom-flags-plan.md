@@ -1,15 +1,5 @@
 # Rules Composition and Custom Flags Plan
 
-## Progress
-
-| Phase                              | Status                  |
-| ---------------------------------- | ----------------------- |
-| 1 -- Truthful Continue             | Complete (2026-08-28)   |
-| 2 -- Pending decorations           | Code complete (2026-08-28); stage verification pending |
-| 3 -- Flag palette                  | Code complete (2026-08-28); stage verification pending |
-| 4 -- Keywords on the message plane | Complete (2026-08-28); stage-verified |
-| 5 -- Rules integration             | Not started             |
-
 ## Context
 
 The first days of mail rules running in prod (2026-08-26) surfaced three
@@ -377,6 +367,25 @@ translation); a keyword unknown to the palette is rejected by
 `set_flag`.
 
 ## Phase 5 -- Rules integration
+
+**Status:** In progress (2026-08-28); the server + container half is in
+review, editors follow. Three refinements over the sketch, recorded
+here as the decisions actually taken: (1) `flags: [slot-id]` is a NEW
+key beside the untouched `flag` boolean rather than replacing it — the
+boolean keeps meaning the system `\Flagged` forever, which is the
+least-invasive reading of "accepted on read indefinitely" and spares
+every client a migration; (2) `set_rules` hard-validates slot *shape*
+(atom format, uniqueness, count) but treats palette membership the way
+folder existence is treated — accepted at write, enforced by the
+compiler's `flag_not_in_palette` skip — because a hard 400 would wedge
+every whole-set save the moment a palette edit orphans one rule's
+slot; (3) `set_preferences` now publishes to the user-rules
+reconfigure topic when `flag_palette` changes, so deleting or
+disabling a flag re-arms its rules' skip within seconds instead of the
+~15-minute fallback. The compiler reads palettes via a projected scan
+of `cabal-user-preferences` (new task-role grant), failing closed to
+an empty palette so keyworded rules skip rather than compile against
+unknown state.
 
 - Rule schema: `flag: boolean` grows to `flags: [slot-id]` (boolean
   accepted on read indefinitely, mapped to the legacy `F` system flag).
