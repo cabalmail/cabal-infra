@@ -1,15 +1,5 @@
 # Rules Composition and Custom Flags Plan
 
-## Progress
-
-| Phase                              | Status                  |
-| ---------------------------------- | ----------------------- |
-| 1 -- Truthful Continue             | Complete (2026-08-28)   |
-| 2 -- Pending decorations           | Code complete (2026-08-28); stage verification pending |
-| 3 -- Flag palette                  | Code complete (2026-08-28); stage verification pending |
-| 4 -- Keywords on the message plane | In progress (2026-08-28): server + container half in review |
-| 5 -- Rules integration             | In progress (2026-08-28): server + container half in review |
-
 ## Context
 
 The first days of mail rules running in prod (2026-08-26) surfaced three
@@ -330,14 +320,24 @@ a clear client error.
 
 ## Phase 4 -- Keywords on the message plane
 
-**Status:** In progress (2026-08-28). The server + container half is in
-review: `set_flag` narrows its keyword vocabulary to palette-validated
-slot atoms (set requires an enabled palette entry, unset only a
-well-formed slot so retired slots stay untaggable, everything else
-400s — it previously accepted any 64-char keyword unchecked), and the
-APPEND path is built per decision 5's erratum (spool +
-`cabal-append-drain.py`). Three findings against the phase's
-assumptions, verified in exploration: envelopes already carry keywords
+**Status:** Complete and stage-verified (2026-08-28), shipped as a
+server + container PR and a clients PR. `set_flag` narrows its keyword
+vocabulary to palette-validated slot atoms (set requires an enabled
+palette entry, unset only a well-formed slot so retired slots stay
+untaggable, everything else 400s — it previously accepted any 64-char
+keyword unchecked), the APPEND path is built per decision 5's erratum
+(spool + `cabal-append-drain.py`), and both clients grew list dots,
+reader chips, and palette-driven flag pickers riding the existing
+optimistic flag paths. Stage acceptance, run live: tag via an enabled
+slot lands and reads back in envelopes; not-in-palette, disabled,
+reserved, and non-slot keywords each 400; unset works without palette
+membership; the keyword survives a cross-folder move (Dovecot's
+name-preserving translation); system flags are unaffected. The drain
+is RUNNING on the stage task with its environment intact (CloudWatch
+startup line); a live APPEND through it is deliberately left to Phase
+5's acceptance, whose rule-tagged delivery exercises the full
+helper-to-drain path. Three findings against the phase's assumptions,
+verified in exploration: envelopes already carry keywords
 (`decode_flags` is a raw pass-through, so `list_envelopes` /
 `search_envelopes` need no change); `fetch_message` has never carried
 flags and its cache-hit path opens no IMAP session, so adding keywords
