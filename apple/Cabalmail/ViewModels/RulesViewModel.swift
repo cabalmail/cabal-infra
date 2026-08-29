@@ -56,6 +56,12 @@ final class RulesViewModel {
     private(set) var version = 0
     private(set) var isLoading = true
     private(set) var loadError: String?
+    /// A load attempt reached a definitive outcome (loaded, or failed for a
+    /// reason worth showing). A mid-flight cooperative cancellation leaves
+    /// this false so the next live `.task` takes the load over — the rule
+    /// `MessageDetailViewModel.load` already follows for the body fetch
+    /// (#403), applied here for #1328.
+    private(set) var hasAttemptedLoad = false
     private(set) var saveState: SaveState = .idle
     /// Another device saved first (409). Bound to the reload alert.
     var conflict = false
@@ -91,8 +97,20 @@ final class RulesViewModel {
             saveState = .idle
             pendingSave = false
         } catch {
+            // A cancellation raised by our own Task is SwiftUI tearing the
+            // view's `.task` down mid-transition, not a server or network
+            // failure: painting it would tell the user the rules couldn't be
+            // reached when nothing was ever asked of the server. Stay in the
+            // loading state with the attempt unrecorded so the re-created
+            // view's `.task` retries (#1328). `URLSessionHTTPTransport`
+            // normalizes the escaping error to `CabalmailError.network`, so
+            // the cancellation is read off the Task, not off the error.
+            if Task.isCancelled || error is CancellationError {
+                return
+            }
             loadError = "Couldn't load rules: \(error.localizedDescription)"
         }
+        hasAttemptedLoad = true
         isLoading = false
         await refreshFolders()
     }
