@@ -139,7 +139,9 @@ class HandleRequestTest(unittest.TestCase):
         msg = os.path.join(self.spool.name, 'n1.msg')
         with open(msg, 'wb') as handle:
             handle.write(message)
-        path = os.path.join(self.spool.name, 'n1.json')
+        # handle_request receives the CLAIMED (renamed) path, as the main
+        # loop hands it over after the rename-as-claim.
+        path = os.path.join(self.spool.name, '.work.n1.json')
         with open(path, 'w', encoding='utf-8') as handle:
             json.dump(request, handle)
         return path
@@ -201,7 +203,7 @@ class HandleRequestTest(unittest.TestCase):
         msg = os.path.join(self.spool.name, 'n2.msg')
         with open(msg, 'wb') as handle:
             handle.write(b'x')
-        self._path = os.path.join(self.spool.name, 'n2.json')
+        self._path = os.path.join(self.spool.name, '.work.n2.json')
         with open(self._path, 'w', encoding='utf-8') as handle:
             handle.write('not json')
         self.assertEqual(self._run(), 'fail')
