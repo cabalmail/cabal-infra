@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Compute the browser extension's OAuth redirect URIs and stage them for Terraform.
+"""Compute the browser extension's Chrome OAuth redirect URIs and stage them for Terraform.
 
-The extension signs in through the Cognito Hosted UI with PKCE, so the user
-pool's extension app client must whitelist one callback URL per shipped build.
-Chrome derives that URL from the extension ID:
+The extension signs in through the Cognito Hosted UI with PKCE. On Chrome the
+interactive leg runs through ``identity.launchWebAuthFlow``, whose redirect URL
+is derived from the extension ID, so the user pool's extension app client must
+whitelist one URL per shipped Chrome build:
 
   * The unpacked (development) build's ID is pinned by the ``key`` field in
     ``extensions/chrome/manifest.template.json`` -- it is the same on every
@@ -11,15 +12,17 @@ Chrome derives that URL from the extension ID:
   * The Chrome Web Store build's ID is assigned by the store at first upload
     and is *different*, because the store build strips the ``key``. Read it
     off the listing and pass it with ``--store-id``.
-  * Safari's redirect URL is whatever ``browser.identity.getRedirectURL()``
-    returns in the installed extension. Evaluate it in the extension's
-    background console and pass the result with ``--uri``.
 
-Terraform reads the list from the ``extension_redirect_uris`` variable, fed by
-the GitHub environment variable ``TF_VAR_EXTENSION_REDIRECT_URIS``. That value
-is expanded inside a double-quoted shell ``echo`` in ``infra.yml``, so every
-quote in the stored value must be backslash-escaped or the shell eats it and
-Terraform receives unparseable HCL. This script emits the escaped form, and
+Safari needs nothing here. It implements no WebExtensions ``identity`` API, so
+its sign-in runs the Hosted UI in an ordinary tab redirecting to
+``https://admin.<control-domain>/extension-auth``, which Terraform registers on
+the app client unconditionally.
+
+Terraform reads the Chrome list from the ``extension_redirect_uris`` variable,
+fed by the GitHub environment variable ``TF_VAR_EXTENSION_REDIRECT_URIS``. That
+value is expanded inside a double-quoted shell ``echo`` in ``infra.yml``, so
+every quote in the stored value must be backslash-escaped or the shell eats it
+and Terraform receives unparseable HCL. This script emits the escaped form, and
 with ``--set`` writes it to the environment for you.
 
 Usage:
@@ -27,9 +30,8 @@ Usage:
   # Just show the development build's redirect URI
   ./scripts/extension-redirect-uris.py
 
-  # Full list, ready to paste into the GitHub environment variable
-  ./scripts/extension-redirect-uris.py --store-id <chrome-store-id> \\
-      --uri 'safari-web-extension://<uuid>/'
+  # Both URIs, ready to paste into the GitHub environment variable
+  ./scripts/extension-redirect-uris.py --store-id <chrome-store-id>
 
   # ...and set it on an environment (needs the gh CLI, authenticated)
   ./scripts/extension-redirect-uris.py --store-id <id> --set --env stage
@@ -77,7 +79,7 @@ def escaped_hcl_list(uris):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compute the extension's OAuth redirect URIs.",
+        description="Compute the extension's Chrome OAuth redirect URIs.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -92,7 +94,7 @@ def main():
         action="append",
         default=[],
         metavar="URI",
-        help="a redirect URI to include verbatim, e.g. Safari's (repeatable)",
+        help="an extra redirect URI to include verbatim (repeatable)",
     )
     parser.add_argument(
         "--no-dev",

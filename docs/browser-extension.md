@@ -1,214 +1,310 @@
-# Browser extension: operator runbook
+# Browser extension
 
-The address-suggesting browser extension (Chrome MV3 + Safari Web Extension) lives in [`extensions/`](../extensions/README.md); its design and phase status live in [the plan doc](./1.x/browser-extension-plan.md). This runbook covers everything an operator must do by hand: verifying the pending-address backend in a live environment, provisioning the two store accounts, wiring the OAuth redirect URIs once store-assigned extension IDs exist, and growing the form-detection corpus. Steps are ordered roughly as you would perform them; each section is independent.
+Cabalmail's signature behaviour is a separate email address per vendor: mint one when you sign up for a service, revoke it when it starts attracting spam. The browser extension collapses that into the sign-up form itself, the way a password manager collapses password generation into it. It ships for Chrome (Manifest V3) and Safari (a Web Extension inside a small macOS host app) from one TypeScript codebase in [`extensions/`](../extensions/).
 
-The extension's server side is the eager-create model: an address created with `pending=true` is fully provisioned but unconfirmed, and is confirmed by any one of three signals — the extension's `/confirm_address` call on form submit, mail actually arriving at the address (the imap tier's procmail hook), or nothing, in which case the hourly `reap_pending_addresses` Lambda revokes it after the TTL (default 24h, `PENDING_TTL_HOURS` on the function).
+This document is the whole story for that extension: building it, pointing it at your environment, verifying its backend, and publishing it to both stores. It assumes you are comfortable with AWS and a JavaScript toolchain but know nothing else about Cabalmail. Design rationale and the implementation record live separately, in [the plan](./1.x/browser-extension-plan.md).
 
-## 1. Verify the pending-address backend
+## What the extension does
 
-Run this against a non-prod environment after the backend has deployed (both `app.yml` for the Lambdas and containers, and `infra.yml` for the new endpoint, the reaper, and the IAM changes). You need AWS credentials for the environment's account and a test user in its Cognito pool.
+- **Suggest.** On a page the detector scores as a sign-up form, the extension offers a freshly generated address for the email field. Accepting it creates the address immediately, before the form is submitted.
+- **Adopt.** If the user types an address on one of their own domains that does not exist yet, the extension offers to create it before submit.
+- **Open privately.** A mail app cannot open a private browser window directly — no OS API allows it — so the Cabalmail clients navigate to a redirector page at `https://admin.<control-domain>/private-link#<target>`, which the extension intercepts and re-opens in a private window. Without the extension the page renders the target with an "open normally" link, so nothing dead-ends.
 
-### 1.1 Get an API token
+The extension talks only to the API Gateway surface of your own deployment. It never connects to IMAP or SMTP, never parses mail, and never reports anything about the sites a user visits.
 
-```sh
-CONTROL_DOMAIN=example.net             # the environment's control domain
-MAIL_DOMAIN=example.com                # one of its mail domains
-API="https://admin.${CONTROL_DOMAIN}/prod"
-CLIENT_ID=$(curl -s "https://admin.${CONTROL_DOMAIN}/config.json" | jq -r .cognitoConfig.poolData.ClientId)
+### Terms
 
-aws cognito-idp initiate-auth \
-  --auth-flow USER_PASSWORD_AUTH \
-  --client-id "$CLIENT_ID" \
-  --auth-parameters "USERNAME=<user>,PASSWORD=<password>"
+| Term | Meaning |
+|---|---|
+| **Control domain** | The domain your deployment's own infrastructure lives on (`TF_VAR_CONTROL_DOMAIN`). The admin web app, the runtime configuration document, and the API are all served from `admin.<control-domain>`. |
+| **Mail domain** | A domain users' addresses live on (`TF_VAR_MAIL_DOMAINS`). Addresses are always on a subdomain — `user@subdomain.example.com` — never on the apex. |
+| **Pending address** | An address created eagerly, before the sign-up form is submitted: fully provisioned, but flagged unconfirmed and revoked automatically if never used. |
+
+### The pending-address model
+
+Most sign-up backends send a verification message within seconds of form submission, and a brand-new Cabalmail address needs DNS propagation plus a sendmail configuration reload before it can receive anything. So the extension creates the address the moment the user commits to it — while they are still filling in the rest of the form — which typically buys tens of seconds of runway.
+
+Such an address carries `pending=true` and a `pending_since` timestamp in the `cabal-addresses` DynamoDB table. Three things clear it:
+
+1. The extension calls `POST /confirm_address` when the form is actually submitted. A second call returns `409`, which the extension treats as success by contract.
+2. Mail arrives at the address. The IMAP tier keeps a generated procmail include (`/etc/procmail-pending.rc`) with one side-effect-only rule per pending address; the rule spools a signal file that a root daemon drains into a conditional DynamoDB update. Delivery is never diverted.
+3. Neither happens, and the hourly `reap_pending_addresses` Lambda revokes the address once it is older than `PENDING_TTL_HOURS` (default 24), removing the row and the subdomain's Route 53 records if no other address needs them. Every run — including zero-reap runs — emits a `PendingAddressesReaped` metric in the `Cabalmail` CloudWatch namespace, so absence of data means the schedule is not firing.
+
+## Prerequisites
+
+- Node 20.19+ or 22.12+ and npm. The workspace uses npm workspaces, not pnpm or yarn.
+- For the Safari target: macOS with Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). The `.xcodeproj` is generated, not committed.
+- A deployed Cabalmail environment whose API carries the pending-address endpoints (`POST /new` with `pending`, `POST /confirm_address`) and whose `config.json` advertises `cognitoConfig.extensionClientId` — anything built from this repository at or after release 1.9.0.
+- For publishing: a Chrome Web Store developer account and an Apple Developer Program membership.
+
+## Repository layout
+
+```
+extensions/
+  shared/     platform-agnostic core: auth (Cognito Hosted UI + PKCE), API client,
+              runtime configuration, the form-detection scoring engine, address
+              generation, the content-script controller, the message schema
+  chrome/     the extension proper — background service worker, content script,
+              Preact popup and overlay — plus the Chrome manifest template
+  safari/     Safari manifest template and the Xcode host-app project spec; the
+              web sources are Chrome's, rebuilt into the host app's bundle
+  fixtures/   the form-detection corpus the detector is regression-tested against
+  scripts/    the build orchestrator and the page-snapshot tool
 ```
 
-If the user is MFA-enrolled the response is a `SOFTWARE_TOKEN_MFA` challenge instead of tokens; answer it with the `Session` value from the response:
+`shared/` is the analog of `apple/CabalmailKit/` and `android/kit/`: everything with logic in it, nothing platform-specific. Per-platform code is confined to packaging glue.
+
+## Building
+
+[`scripts/build-extension.sh`](../scripts/build-extension.sh) wraps the workspace build. Run it from anywhere in the checkout:
 
 ```sh
-aws cognito-idp respond-to-auth-challenge \
-  --client-id "$CLIENT_ID" \
-  --challenge-name SOFTWARE_TOKEN_MFA \
-  --session "<Session from initiate-auth>" \
-  --challenge-responses "USERNAME=<user>,SOFTWARE_TOKEN_MFA_CODE=<6 digits>"
+# Development bundles for both browsers
+./scripts/build-extension.sh --control-domain example.net
+
+# An upload-ready Chrome package
+./scripts/build-extension.sh --control-domain example.net --store
 ```
 
-Either way, export the **IdToken** (the API takes it raw, no `Bearer` prefix):
+| Output | Contents |
+|---|---|
+| `extensions/chrome/dist/` | the unpacked Chrome extension |
+| `extensions/safari/CabalmailExtension/Resources/` | the same bundle with Safari's manifest, inside the host app |
+| `extensions/build/cabalmail-chrome-<version>.zip` | the Web Store package (`--store` only) |
+
+All three are generated; none are committed.
+
+**The control domain is the only value baked in at build time.** Everything else — API URL, Cognito pool and client IDs, the Hosted UI domain, the list of mail domains — is fetched at runtime from `https://admin.<control-domain>/config.json` and cached in `browser.storage.local`. Omitting `--control-domain` builds against the `cabalmail.example` placeholder, which compiles but reaches nothing; the popup says so rather than failing silently.
+
+Other options: `--browser chrome|safari|both`, `--version <semver>` (default: the newest release in `CHANGELOG.md`), `--report-url <url>` (see [Forking](#forking)), `--out <dir>`. `--help` prints the full list. The underlying workspace commands, if you would rather drive them directly, are `npm run lint`, `npm test` (vitest over `shared/` plus a `tsc` type-check of `chrome/`), and `npm run build`, all from `extensions/`.
+
+### Store builds and the manifest key
+
+The Chrome manifest carries a `key` field, which pins the extension ID of an unpacked build to one value on every machine. That matters because the OAuth redirect URI is derived from the extension ID: without a pinned key, every developer's build would need its own entry on the Cognito app client.
+
+The Web Store rejects a *new-item* upload whose manifest carries a `key` ("key field not allowed in manifest") and assigns the listing its own permanent ID instead. So `--store` strips the key, and the store build's extension ID — and therefore its redirect URI — differs from the development build's. Both must be registered; see [OAuth redirect URIs](#oauth-redirect-uris).
+
+## Running a development build
+
+Build against a real environment first. The `cabalmail.example` placeholder produces a bundle whose config fetch and host permission point nowhere.
+
+### Chrome
+
+`chrome://extensions` → Developer mode → "Load unpacked" → `extensions/chrome/dist`. Every unpacked install shares the one ID the manifest `key` pins, and therefore one registered Cognito redirect URI.
+
+### Safari
+
+Safari registers the extension by *running the host app*, so the host app has to be built and launched. Build it ad-hoc signed — not with `CODE_SIGNING_ALLOWED=NO`, which produces a bundle with no signature at all, and the extension machinery can refuse a signature-less appex even with the unsigned-extensions toggle on:
 
 ```sh
-TOKEN="<AuthenticationResult.IdToken>"
+cd extensions/safari
+CABALMAIL_CONTROL_DOMAIN=<control-domain> xcodegen generate
+xcodebuild -project Cabalmail.xcodeproj -scheme CabalmailExtensionHost \
+  -configuration Debug -destination 'platform=macOS' -derivedDataPath build \
+  build CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=-
+open "build/Build/Products/Debug/Cabalmail Extension.app"
 ```
 
-### 1.2 Create a pending address and watch it provision
+`xcodegen generate` runs the Safari web build first, so it needs `CABALMAIL_CONTROL_DOMAIN` in its environment.
+
+Then, in Safari: enable the Develop menu (Settings → Advanced), tick Develop → **Allow Unsigned Extensions** (admin password required; it resets every time Safari quits — re-tick each session, or run the scheme from Xcode with your team's automatic signing to avoid it), and enable the extension under Settings → Extensions, granting website access. Add "Allow in Private Browsing" to exercise the private-link handoff.
+
+While that toggle is off, Safari *hides* unsigned extensions from the Extensions pane entirely rather than graying them out. An empty pane after a Safari relaunch therefore means the toggle reset, not that registration was lost: `pluginkit -m | grep -i cabalmail` confirms the appex is still registered, and `pluginkit -a <path-to-.appex>` forces registration in the rare case it is not.
+
+Sign-in needs no extra configuration on Safari — see [OAuth redirect URIs](#oauth-redirect-uris).
+
+## Forking
+
+Nothing environment-specific is committed: the control domain is a build-time variable with a deliberately fake default, and every runtime value comes from your own deployment's `config.json`. Three identity-shaped values are still upstream's, and a fork should replace all three:
+
+1. **The Chrome manifest `key`** in `extensions/chrome/manifest.template.json`, which determines your development extension ID. Regenerate it so your fork has its own identity:
+
+   ```sh
+   openssl genrsa 2048 | openssl rsa -pubout -outform DER | base64 | tr -d '\n'
+   ```
+
+   Only the public half goes in the manifest; the private half is disposable, because store uploads strip the key entirely and the Web Store signs packages itself.
+
+2. **`CABALMAIL_REPORT_URL`**, where the popup's "Report wrong detection" link files issues. It defaults to the upstream cabal-infra tracker; point it at yours with `--report-url` (or the environment variable of the same name) at build time.
+
+3. **The Safari bundle identifiers** — `com.cabalmail.extension-host` and its `.web-extension` child in `extensions/safari/project.yml`. Replace the reverse-DNS prefix with your own before registering App IDs, the same as the mail clients under `apple/`.
+
+## OAuth redirect URIs
+
+The extension is a public OAuth client: it signs in through the Cognito Hosted UI with PKCE, so no client secret is embedded anywhere. Terraform provisions a dedicated app client for it (`cabal_extension_client`), whose callback URLs are one Terraform-derived entry plus whatever you supply for Chrome.
+
+**Safari needs no configuration at all.** Safari implements no WebExtensions `identity` API — `browser.identity` is simply undefined there — so its sign-in runs the Hosted UI in an ordinary tab redirecting to `https://admin.<control-domain>/extension-auth`, which the background intercepts via `tabs.onUpdated`; the same mechanism as the private-link handoff, with PKCE and the `state` check carrying the security. That redirect URI is registered on the app client unconditionally, and the page itself is provisioned in `modules/app/s3.tf`.
+
+Chrome needs up to two URIs, both of the form `https://<extension-id>.chromiumapp.org/`: one for unpacked development builds, whose ID is derived from the manifest `key`, and one for the store listing, whose ID the Web Store assigns at first upload.
+
+[`scripts/extension-redirect-uris.py`](../scripts/extension-redirect-uris.py) computes them and assembles the list:
 
 ```sh
-ADDR="rbtest1@rbsub1.${MAIL_DOMAIN}"
-curl -s -X POST "$API/new" -H "Authorization: $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"username\":\"rbtest1\",\"subdomain\":\"rbsub1\",\"tld\":\"${MAIL_DOMAIN}\",\"comment\":\"runbook\",\"address\":\"${ADDR}\",\"pending\":true}"
+# The development build's URI, computed offline from the committed manifest key
+./scripts/extension-redirect-uris.py
+
+# Both, once the listing exists
+./scripts/extension-redirect-uris.py --store-id <chrome-store-id>
 ```
 
-Expect `201` with the address. Confirm the row carries the marker:
+Terraform reads the list from the `extension_redirect_uris` variable, which `infra.yml` feeds from the GitHub environment variable `TF_VAR_EXTENSION_REDIRECT_URIS` (default `[]`). That value is expanded inside a double-quoted shell `echo` in the workflow, so every quote in the stored value must be backslash-escaped or the shell eats it and Terraform receives unparseable HCL — the same convention `TF_VAR_MAIL_DOMAINS` and `TF_VAR_AVAILABILITY_ZONES` follow. The script emits the escaped form, and `--set` writes it per environment:
 
 ```sh
-aws dynamodb get-item --table-name cabal-addresses \
-  --key "{\"address\":{\"S\":\"${ADDR}\"}}" \
-  --query 'Item.{pending:pending,since:pending_since}'
+./scripts/extension-redirect-uris.py --store-id <chrome-store-id> --set --env stage
 ```
 
-The `POST` publishes an SNS reconfigure event, so within ~20 seconds the imap tier rescans and regenerates `/etc/procmail-pending.rc` with one rule for the address. Two ways to see it:
+After the next `infra.yml` run, `aws cognito-idp describe-user-pool-client` should list the real callback URLs, and `https://admin.<control-domain>/config.json` should carry `cognitoConfig.extensionClientId` and `cognitoConfig.hostedUiDomain`. The Hosted UI lives on Cognito's own prefix domain (`<prefix>.auth.<region>.amazoncognito.com`), not on your control domain; `hostedUiDomain` is where the extension reads it from, so nothing needs hard-coding.
+
+## Verifying the pending-address backend
+
+Run this against a non-production environment after both deploy workflows have run: `app.yml` for the Lambdas and container images, `infra.yml` for the endpoint, the reaper, and the IAM changes.
+
+[`scripts/verify-pending-addresses.py`](../scripts/verify-pending-addresses.py) drives the lifecycle end to end. It creates a pending address, asserts the DynamoDB row carries the marker, checks that `GET /list` flags it, confirms it, checks that confirming twice returns `409`, then creates a second address, backdates it past the TTL, invokes the reaper, and asserts the row and the listing entry are gone. Addresses it creates are revoked on the way out unless you pass `--keep`.
 
 ```sh
-# From the container logs:
-aws logs tail /ecs/cabal-imap --since 5m | grep 'procmail-pending'
+export CABALMAIL_USERNAME='<a user in the environment Cognito pool>'
+export CABALMAIL_PASSWORD='...'
 
-# Or directly, via ECS exec:
+./scripts/verify-pending-addresses.py \
+    --control-domain example.net \
+    --mail-domain example.com \
+    --profile <aws profile for that account> \
+    --totp 123456            # only if the user is MFA-enrolled
+```
+
+Sign-in goes straight to Cognito, so the API checks need only a pool user. The DynamoDB assertions and the reaper invocation additionally need AWS credentials for the environment's account; `--no-aws` skips those and runs the rest.
+
+Two things cannot be automated, because they need a shell in the container or a real inbound message. Do them once per environment.
+
+**The procmail rule regenerates.** Creating a pending address publishes an SNS reconfigure event, and within about twenty seconds the IMAP tier rescans and rewrites its pending-rule include:
+
+```sh
+aws logs tail /ecs/cabal-imap --since 5m | grep procmail-pending
+
 TASK=$(aws ecs list-tasks --cluster cabal-mail --service-name cabal-imap \
   --query 'taskArns[0]' --output text)
 aws ecs execute-command --cluster cabal-mail --task "$TASK" --container imap \
   --interactive --command "cat /etc/procmail-pending.rc"
 ```
 
-`GET /list` should show the address with `"pending": true`, and it should also appear in the admin app's address list.
+Confirming the address removes the rule again on the next reconfigure cycle.
 
-### 1.3 Confirm via the endpoint, and check idempotency
-
-```sh
-curl -s -X POST "$API/confirm_address" -H "Authorization: $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"address\":\"${ADDR}\"}"
-```
-
-Expect `200`; the `get-item` above should now show no `pending` attribute, and after the next reconfigure cycle the procmail rule is gone. Repeat the same call: expect `409` ("already confirmed") — the extension treats that as success by contract.
-
-### 1.4 Clear-on-receive (the procmail hook)
-
-Create a second pending address (as in 1.2), then send a test message to it from an outside account. Watch for the drain to fire, then verify the flag cleared and the message still delivered:
+**Mail arriving clears the flag.** Create a pending address, send it a message from an outside account, and watch the drain:
 
 ```sh
 aws logs tail /ecs/cabal-imap --since 5m | grep confirm-spool-drain
 # expect: [confirm-spool-drain] confirmed <address>
-
-aws dynamodb get-item --table-name cabal-addresses \
-  --key "{\"address\":{\"S\":\"<address>\"}}" --query 'Item.pending'
-# expect: null
 ```
 
-The recipe is `:0 wc` — a pure side effect — so delivery must be unaffected; check the message landed in the test user's inbox. Sending a message to an already-confirmed address must NOT invoke the hook (the include file carries no rule for it; nothing new in the drain log).
+The message must still land in the user's inbox — the recipe is a pure side effect and must never divert delivery — and the row's `pending` attribute must be gone afterwards. Sending to an *already confirmed* address must not invoke the hook at all: the generated include carries no rule for it, so nothing new appears in the drain log.
 
-### 1.5 The TTL reaper
+One measurement is worth taking once, because it is the number the whole eager-create design exists to buy: the gap between creating an address and the relay accepting mail for it. Create a pending address and probe until `RCPT TO` succeeds (`swaks --to <address> --server smtp-in.<control-domain> --quit-after RCPT` is the easy way). Expect acceptance well inside thirty seconds — one reconfigure cycle, whose ceiling is about twenty.
 
-Create a third pending address, backdate its timestamp past the TTL, and invoke the reaper by hand:
+## Publishing to the Chrome Web Store
+
+### 1. Developer account
+
+Register a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) (a one-time $5 fee) under an organisation identity rather than a personal one.
+
+### 2. First upload
+
+The first upload is the one step that cannot be scripted: creating the item is what assigns its permanent ID. Build a store package and upload it as a **new item** in the developer console.
 
 ```sh
-aws dynamodb update-item --table-name cabal-addresses \
-  --key "{\"address\":{\"S\":\"<address>\"}}" \
-  --update-expression 'SET pending_since = :old' \
-  --expression-attribute-values '{":old":{"S":"2000-01-01T00:00:00+00:00"}}'
-
-aws lambda invoke --function-name reap_pending_addresses /dev/stdout
-aws logs tail /cabal/lambda/reap_pending_addresses --since 5m
+./scripts/build-extension.sh --control-domain <control-domain> --store
+# upload extensions/build/cabalmail-chrome-<version>.zip in the console
 ```
 
-Expect `{"scanned": 1, "reaped": 1}`, a `[reap-pending] reaped <address>` log line, the DynamoDB row gone, the subdomain's Route 53 records removed (unless another active address shares the subdomain), and the address absent from `/list`. The run also emits the `PendingAddressesReaped` metric in the `Cabalmail` CloudWatch namespace — every run, including zero-reap runs, so absence of data means the schedule is not firing.
+Record the assigned item ID. It is both an upload credential and the source of the store build's redirect URI. Two console quirks are worth knowing: items can never be deleted from the dashboard, only abandoned — so create a fresh item rather than fighting a broken draft — and the listing needs its [privacy-policy URL](#privacy-policy) before it can be published at all.
 
-### 1.6 DNS-propagation headroom (optional but worth doing once)
+### 3. API credentials
 
-The whole point of eager-create is that the address can receive mail by the time a sign-up flow sends its verification message. Measure the gap: create a pending address, then repeatedly probe until the relay accepts it (`swaks --to <address> --server smtp-in.${CONTROL_DOMAIN} --quit-after RCPT` if you have swaks, or any SMTP client issuing `RCPT TO`). Target is acceptance well under 30 seconds from creation; typical is one reconfigure cycle (~20s ceiling).
+Uploads authenticate with three values: an OAuth **client ID and client secret**, which identify the application, and a **refresh token**, which is the publisher account's standing grant. All three are needed; the refresh token is a separate artefact from the secret.
 
-Clean up any leftover runbook addresses via the admin app or `DELETE /revoke` when done.
+In the Google Cloud console: pick a project (which project is immaterial — reusing an existing one, such as the Android/Firebase project, disturbs neither FCM nor a Play-publisher service account, both of which are service-account based), enable the **Chrome Web Store API**, configure the OAuth consent screen, and create an OAuth client of type **Desktop Application**. Not the "Chrome Extension" type: that is a secretless client for an unrelated feature — extensions signing users into Google APIs via `chrome.identity.getAuthToken` — and cannot drive the upload API. Google's console UI churns; the [chrome-webstore-upload key guide](https://github.com/fregante/chrome-webstore-upload-keys) is the maintained recipe if the layout has moved again.
 
-## 2. Chrome Web Store
+Two details are load-bearing:
 
-One-time bring-up; needed before the Chrome build can be distributed and before the extension's real redirect URI exists.
+- Authorise as the **Google account that owns the Web Store developer account**. The token acts as the publisher; the hosting project is irrelevant to that.
+- Set the consent screen's publishing status to **"In production"**. In "Testing" mode Google expires refresh tokens after seven days, which silently kills unattended CI uploads weeks later. The `chromewebstore` scope is not on the sensitive list, so production status needs no verification review — the one-time authorisation just shows an "unverified app" interstitial.
 
-1. **Developer account.** Register a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) ($5 one-time) under an organization identity, not a personal one.
-2. **First upload (manual).** Build the store variant and zip it — `cd extensions && CABALMAIL_CONTROL_DOMAIN=<control-domain> EXTENSION_STORE_BUILD=1 npm run build && (cd chrome/dist && zip -r ../chrome.zip .)` — and upload it as a **new item** in the developer console. `EXTENSION_STORE_BUILD=1` strips the manifest `key`: the Web Store rejects any new-item upload that carries one ("key field not allowed in manifest") and instead assigns the listing its own permanent ID at this first upload — record it, because its redirect URI must be registered alongside the dev one (section 4). The `key` stays in normal (dev) builds, where it pins the unpacked-extension ID to one known value on every machine. Also note: items can never be deleted from the dashboard, only abandoned — upload to a fresh item rather than fighting a stale draft. The listing needs the privacy-policy URL (section 6) before it can be published.
-3. **API credentials for CI.** The upload automation authenticates with three values: an OAuth **client ID + client secret** (identifying the application) and a **refresh token** (the publisher account's standing grant — "minting" refers to this; it is a separate artifact from the secret, and you need all three). Google's console UI churns; the [chrome-webstore-upload key guide](https://github.com/fregante/chrome-webstore-upload-keys) is the maintained recipe. In outline: pick a Google Cloud project — which project is immaterial, and reusing an existing one (e.g. the Android/Firebase project; a new OAuth client disturbs neither FCM nor the Play-publisher service account, both service-account based) is fine — enable the **Chrome Web Store API**, configure the OAuth consent screen, and create an OAuth client of type **Desktop Application**. Not the "Chrome Extension" type: that is a secretless client for a different feature (extensions signing users into Google APIs via `chrome.identity.getAuthToken`) and cannot drive the upload API. Two details are load-bearing: authorize as the **Google account that owns the Web Store developer account** (the token acts as the publisher; the hosting project is irrelevant to that), and set the consent screen's publishing status to **"In production"** — in "Testing" mode Google expires refresh tokens after seven days, silently killing unattended CI uploads. The `chromewebstore` scope is not on the sensitive list, so production status needs no verification review; the one-time authorization just shows an "unverified app" interstitial. Then mint the refresh token, once, in a browser signed in as the publisher account (the endpoints are stable even when the console isn't):
+Then mint the refresh token once, on a machine whose browser is signed in as the publisher account:
 
-   ```sh
-   # 1. Open in the publisher account's browser and approve:
-   #    https://accounts.google.com/o/oauth2/auth?client_id=<CLIENT_ID>&response_type=code
-   #      &scope=https://www.googleapis.com/auth/chromewebstore
-   #      &redirect_uri=http://localhost:8818&access_type=offline&prompt=consent
-   # 2. The browser lands on http://localhost:8818/?code=4%2FXXXX (the page won't
-   #    load - nothing is listening); copy the code from the address bar and
-   #    decode %2F back to a slash (codes are single-use and expire in ~10 min).
-   # 3. Exchange it (deliberately one line: a mangled backslash continuation
-   #    silently drops the later fields and Google answers
-   #    "Invalid grant_type: ''"):
-   curl -s -X POST https://oauth2.googleapis.com/token -d client_id='<CLIENT_ID>' -d client_secret='<CLIENT_SECRET>' -d code='4/XXXX' -d grant_type=authorization_code -d redirect_uri=http://localhost:8818
-   ```
+```sh
+./scripts/mint-chrome-webstore-token.py --client-id <id> --client-secret <secret>
+```
 
-   The response's `refresh_token` is the mint; `access_type=offline&prompt=consent` are load-bearing — without them Google returns no refresh token. Short-lived access tokens are derived from it automatically by the upload tooling; you never handle those.
-4. **Secrets.** Store the four values as repository secrets: `CHROME_WEBSTORE_EXTENSION_ID`, `CHROME_WEBSTORE_CLIENT_ID`, `CHROME_WEBSTORE_CLIENT_SECRET`, `CHROME_WEBSTORE_REFRESH_TOKEN` (`gh secret set <NAME>`).
-5. **CI.** `extensions.yml`'s `upload-chrome` job ships a store-variant zip to the listing on every `stage`/`main` push, behind a `gate-*` environment approval (gate-prod waits for a reviewer; gate-stage passes on its own) and warn-green when the `CHROME_WEBSTORE_*` secrets are absent. It uploads a **draft only** — publishing, which is what triggers a store review each time, remains a deliberate act in the developer console (a deliberate deviation from the plan's publish-to-trustedTesters idea until the release cadence settles). Store versions are `<CHANGELOG version>.<run number>` so repeat uploads always increase. A listing locked by a pending review makes the upload warn and skip, not fail — expected around submissions; the next push after the review completes goes through. Related: never cancel an in-progress review just to swap the package; cancellation sends the item to the back of the review queue.
+[The script](../scripts/mint-chrome-webstore-token.py) opens the consent screen, catches the redirect on `localhost:8818`, and exchanges the code, which removes the three ways the manual version goes wrong: the code arrives URL-encoded in the address bar, it is single-use and expires in about ten minutes, and the exchange request needs `access_type=offline&prompt=consent` or Google returns no refresh token at all. The OAuth client must list `http://localhost:8818` as a redirect URI (`--port` changes both sides).
 
-### 2.1 Privacy-practices disclosures
+### 4. Store the credentials
 
-The listing's privacy tab requires a justification per requested permission. The manifest deliberately requests only `storage`, `identity`, and `history` (tab manipulation and the redirector interception ride the host permission instead, so `tabs` and `webNavigation` are not requested). Texts to paste, matching what the code actually does:
+Four repository secrets (`gh secret set <NAME>`): `CHROME_WEBSTORE_EXTENSION_ID`, `CHROME_WEBSTORE_CLIENT_ID`, `CHROME_WEBSTORE_CLIENT_SECRET`, `CHROME_WEBSTORE_REFRESH_TOKEN`.
+
+### 5. Uploads thereafter
+
+`extensions.yml`'s `upload-chrome` job ships a store-variant zip to the listing on every `stage`/`main` push, behind a `gate-*` environment approval (gate-prod waits for a reviewer; gate-stage passes on its own) and warn-green when the `CHROME_WEBSTORE_*` secrets are absent. It uploads a **draft only** — publishing, which is what triggers a store review each time, stays a deliberate act in the developer console. Store versions are `<CHANGELOG version>.<run number>`, so repeat uploads always increase.
+
+A listing locked by a pending review makes the upload warn and skip rather than fail; that is expected around submissions, and the next push after the review completes goes through. Never cancel an in-progress review just to swap the package — cancellation sends the item to the back of the review queue.
+
+### Privacy-practices disclosures
+
+The listing's privacy tab requires a justification per requested permission. The manifest deliberately requests only `storage`, `identity`, and `history`; tab manipulation and the redirector interception ride the host permission instead, so `tabs` and `webNavigation` are not requested. These texts match what the code does:
 
 - **storage** — "Caches the user's sign-in session (OAuth tokens) and the Cabalmail server's configuration locally so the user does not have to sign in on every browser start. No browsing data is stored."
 - **identity** — "Runs the OAuth 2.0 (PKCE) sign-in flow against the user's own Cabalmail server via launchWebAuthFlow. The extension never sees or stores the password."
 - **history** — "When the user opens a mail link in a private window through the extension, the intermediate redirector URL (which embeds the target link) is deleted from normal-window history so the private link does not linger there. History is never read for any other purpose and never transmitted."
 - **Host permissions** — "The extension contacts only the user's own self-hosted Cabalmail server: the admin origin for its API and configuration, and the Amazon Cognito domain for sign-in. The content script must run on sign-up pages to detect email fields and offer a freshly generated address — the same model as a password manager. No page content or browsing data is transmitted anywhere; the server is contacted only on explicit user action."
-- **Remote code** — answer **No**: all JavaScript ships in the package; the extension does not use eval or load external scripts. Exchanging *data* with the server (the JSON API, `config.json`) is not remote code — that question is strictly about fetching executable code at runtime, which MV3's CSP largely forbids anyway. The one code-adjacent trap: the server also serves `config.js`, the JS-flavored twin the React app executes; the extension must only ever fetch and `JSON.parse` the `.json` variant, or the "No" stops being true.
+- **Remote code** — answer **No**: all JavaScript ships in the package; the extension does not use eval or load external scripts. Exchanging *data* with the server (the JSON API, `config.json`) is not remote code — the question is strictly about fetching executable code at runtime, which MV3's CSP largely forbids anyway. The one code-adjacent trap: the server also serves `config.js`, the JS-flavoured twin the React app executes. The extension must only ever fetch and `JSON.parse` the `.json` variant, or the "No" stops being true.
 
-Expect a **"Broad Host Permissions" warning** at submission (from the content script's `https://*/*` match, not from the two named host permissions). It is inherent and correct to click through: automatic sign-up-form detection means running on pages the user visits — the same surface every password manager requests — and `activeTab` cannot replace it without removing the popover-on-focus and adopt-while-typing flows. It may route the listing into the longer in-depth review; the host-permissions justification above is written to answer exactly that reviewer's question.
+Expect a **"Broad Host Permissions" warning** at submission. It comes from the content script's `https://*/*` match, not from the two named host permissions, and it is inherent and correct to click through: automatic sign-up-form detection means running on the pages the user visits — the same surface every password manager requests — and `activeTab` cannot replace it without removing the popover-on-focus and adopt-while-typing flows. It may route the listing into the longer in-depth review; the host-permissions justification above is written to answer exactly that reviewer's question.
 
-## 3. App Store Connect (Safari)
+## Publishing to the App Store (Safari)
 
-The Safari extension ships inside a minimal host app (`extensions/safari/`). One-time bring-up, using the same Apple Developer Program membership as the mail clients:
+The Safari extension ships inside a minimal macOS host app (`extensions/safari/`), through the same Apple Developer Program membership as the Cabalmail mail clients.
 
-1. **App IDs.** In the developer portal, register two identifiers: `com.cabalmail.extension-host` (the macOS host app) and `com.cabalmail.extension-host.web-extension` (the extension; must be prefixed by the host's ID). No special capabilities are needed yet.
-2. **ASC record.** Create a new macOS app in App Store Connect against `com.cabalmail.extension-host`. Form choices that can't be revisited or that bite later: **SKU** is internal-only (financial reports) but immutable — reuse the bundle ID unless the existing Cabalmail records follow another pattern; **User Access** should be **Full Access** — "Limited Access" hides the app from team members (and therefore from App Store Connect API keys whose associated user lacks access), which would surface as a baffling app-not-found in the CI upload leg rather than anything obviously permission-shaped. (The iOS/iPadOS/visionOS host is a later phase and gets its own record when it exists.)
-3. **Secrets.** Most are the mail app's, reused as-is: `APPLE_TEAM_ID`, the signing certs (`APPLE_DISTRIBUTION_CERT_P12`/`_PASSWORD`, `MAC_INSTALLER_CERT_P12`/`_PASSWORD`), and the account-scoped ASC API key (`APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_API_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY_P8`). Two are new, because manual signing needs a Mac App Store provisioning profile **per bundle ID**: mint one for each of the two App IDs from step 1 and store them base64-encoded as `MAC_EXT_HOST_APP_STORE_PROFILE` and `MAC_EXT_WEB_APP_STORE_PROFILE`. Known pitfall from the mail app: the portal cannot mint macOS profiles for some App IDs through the UI; if it fights you, `scripts/make-mac-profile.py` is the workaround, and verify the produced profile's `Platform` array includes `OSX`.
-4. **CI.** `extensions.yml`'s `upload-safari` job (behind the same `gate-*` approval as the Chrome leg) archives the manually-signed host app + embedded extension, exports an app-store-connect `.pkg`, and uploads via `altool` with the API key — mirroring `apple.yml`'s `upload-mac` leg, including its trust-the-verdict-banner handling. It parks warn-green until the two profile secrets from step 3 exist. Versions: CHANGELOG marketing version, clock build number.
+1. **App IDs.** Register two identifiers in the developer portal: one for the host app (`com.cabalmail.extension-host` upstream — use your own prefix) and one for the extension, which must be the host's identifier plus a suffix (`...extension-host.web-extension`). Neither needs capabilities.
+2. **App Store Connect record.** Create a new macOS app against the host app's identifier. Two form choices cannot be revisited or bite later: **SKU** is internal-only (it appears in financial reports) but immutable, so reuse the bundle ID unless your other records follow another pattern; and **User Access** should be **Full Access** — "Limited Access" hides the app from team members, and therefore from App Store Connect API keys whose associated user lacks access, which surfaces as a baffling app-not-found in the CI upload leg rather than anything obviously permission-shaped.
+3. **Secrets.** Most are the mail app's, reused as-is: `APPLE_TEAM_ID`, the signing certificates (`APPLE_DISTRIBUTION_CERT_P12`/`_PASSWORD`, `MAC_INSTALLER_CERT_P12`/`_PASSWORD`), and the account-scoped ASC API key (`APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_API_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY_P8`). Two are specific to the extension, because manual signing needs a Mac App Store provisioning profile **per bundle ID**: mint one for each App ID from step 1 and store them base64-encoded as `MAC_EXT_HOST_APP_STORE_PROFILE` and `MAC_EXT_WEB_APP_STORE_PROFILE`. The portal cannot mint macOS profiles for some App IDs through its UI; if it fights you, [`scripts/make-mac-profile.py`](../scripts/make-mac-profile.py) is the workaround, and the produced profile's `Platform` array must include `OSX`.
+4. **Uploads.** `extensions.yml`'s `upload-safari` job — behind the same `gate-*` approval as the Chrome leg — archives the manually-signed host app with its embedded extension, exports an app-store-connect `.pkg`, and uploads it via `altool` with the API key, mirroring `apple.yml`'s `upload-mac` leg including its trust-the-verdict-banner handling. It parks warn-green until the two profile secrets exist. Versions are the CHANGELOG marketing version with a clock build number.
 
-## 4. OAuth redirect URIs
+## Privacy policy
 
-The extension's Cognito app client (`cabal_extension_client`) always carries one Terraform-derived callback — `https://admin.<control-domain>/extension-auth`, the tab-based flow's redirect target — plus whatever `var.extension_redirect_uris` supplies for Chrome's identity-API flow.
+Both store listings require a privacy-policy URL, and the extension's data story is distinct enough from the service's to need its own section. The service policy served at `https://www.<control-domain>/privacy.html` (source: [`front-door/privacy.html`](../front-door/privacy.html)) is its home. That section must state that the extension transmits no browsing data to anyone, that it contacts only the operator's own Cabalmail API, and that it does so only on explicit user action.
 
-**Safari needs no configuration at all.** Safari implements no WebExtensions `identity` API (`browser.identity` is simply undefined there), so its sign-in runs the Hosted UI in a regular tab redirecting to `/extension-auth` on the admin origin, which the background intercepts via `tabs.onUpdated` — the same mechanism as the private-link handoff, with PKCE and the `state` check carrying the security. That redirect URI is registered on the app client unconditionally, and the page itself is provisioned in `modules/app/s3.tf`.
+## Form-detection corpus
 
-1. **Collect the Chrome URIs.** Up to two, both of the form `https://<extension-id>.chromiumapp.org/`:
-   - **Chrome dev builds**: the ID is pinned by the manifest `key`, identical on every machine, known without any upload — printed by
+Sign-up and sign-in forms are not distinguishable by any single signal — notably not by HTTP verb, since both POST. The detector is a weighted scoring engine over about a dozen signals (`autocomplete="new-password"`, two password fields, submit-button vocabulary, form action, page path, headings, and so on), with an upper threshold for "sign-up", a lower one for "sign-in", and an ambiguous band between them where the extension shows a passive badge and does nothing on its own. Weights and thresholds live in `extensions/shared/src/detect/config.ts`.
 
-     ```sh
-     python3 - <<'EOF'
-     import base64, hashlib, json
-     key = json.load(open('extensions/chrome/manifest.template.json'))['key']
-     digest = hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]
-     print(''.join(chr(ord('a') + int(c, 16)) for c in digest))
-     EOF
-     ```
-   - **The Chrome store listing**: the Web Store strips-or-rejects the `key` on a new item and assigns its own permanent ID at first upload (section 2.2), so the store build gets a *different* redirect URI — read the ID off the listing and add its URI as a second entry.
-2. **Set the variable.** `infra.yml` already feeds `extension_redirect_uris` from the GitHub environment variable `TF_VAR_EXTENSION_REDIRECT_URIS` (defaulting to `[]`). The value expands inside a double-quoted shell `echo` in the workflow, so the quotes around each list element must be backslash-escaped in the stored value or the shell eats them and Terraform receives unparseable HCL — the same convention `TF_VAR_MAIL_DOMAINS` and `TF_VAR_AVAILABILITY_ZONES` already follow. Set it per environment:
+The corpus in `extensions/fixtures/` keeps that tuning honest. It is two levels deep — a tree name, then the expected classification: `synthetic/signup/`, `captured/signin/`, and so on. `synthetic/` is hand-authored seed material; sibling trees hold snapshots of real pages. The corpus test picks up any tree it finds and asserts every fixture still classifies as its category directory says. Accuracy in the wild depends on real pages, across SaaS, e-commerce, news, government, banking, and localized sites.
 
-   ```sh
-   gh variable set TF_VAR_EXTENSION_REDIRECT_URIS --env <environment> \
-     --body '[\"https://<dev-id>.chromiumapp.org/\", \"https://<store-id>.chromiumapp.org/\"]'
-   ```
-
-   (Safari's redirect is registered automatically; this variable is Chrome-only.)
-3. **Apply and check.** After `infra.yml` runs, the app client's callback URLs (Cognito console or `aws cognito-idp describe-user-pool-client`) should list the real URIs, and `https://admin.<control-domain>/config.json` should show `cognitoConfig.extensionClientId` and `cognitoConfig.hostedUiDomain`. The extension's "Sign in with Cabalmail" flow is now testable end to end.
-
-## 5. Form-detection corpus
-
-The committed corpus (`extensions/fixtures/synthetic/`) is hand-authored seed material. Accuracy in the wild depends on captured real pages — the plan targets ~50 sign-up, ~50 sign-in, and ~10 ambiguous fixtures across SaaS, e-commerce, news, government, banking, and localized sites.
+To add one:
 
 ```sh
 cd extensions
 npm i -D playwright && npx playwright install chromium   # local only; deliberately not a workspace dependency
-node scripts/snapshot.mjs https://github.com/signup captured/signup/github-2026-08.html
-npm run test --workspace shared                          # the corpus test picks the new fixture up automatically
+node scripts/snapshot.mjs https://example.com/signup captured/signup/example-2026-08.html
+npm run test --workspace shared
 ```
 
-The middle path segment (`signup`/`signin`/`ambiguous`) is the expected label the corpus test asserts. A fixture that misclassifies is the signal to tune `extensions/shared/src/detect/config.ts` (weights and thresholds) until the whole corpus passes — never special-case a site. Commit fixtures; do not commit the playwright dependency. Users can also report misdetections via the popup's "Report wrong detection" link, which opens a pre-labeled GitHub issue; each accepted report should become a fixture.
+Commit the fixture; do not commit the Playwright dependency. A fixture that misclassifies is the signal to tune the weights and thresholds until the whole corpus passes — never special-case a site, and never delete an inconvenient fixture. Users can also report a misdetection from the popup, which opens a pre-labelled issue on the tracker `CABALMAIL_REPORT_URL` points at; every accepted report should end up here as a fixture.
 
-## 6. Privacy policy
+## Continuous integration
 
-Both store listings require a privacy-policy URL. The service policy at `https://www.<control-domain>/privacy.html` (source: `front-door/privacy.html`) is the natural home; before the first store submission, extend it with an extension section stating the key claims: the extension transmits no browsing data to anyone, contacts only the operator's own Cabalmail API, and only on explicit user action (see the plan's "No telemetry" principle).
+`.github/workflows/extensions.yml` runs on any change under `extensions/`:
 
-## 7. Not operator work, but still open
+| Job | Runner | What it does |
+|---|---|---|
+| `test` | ubuntu | lint, vitest (including the corpus), `tsc` type-check, both bundle builds, and an artifact upload of the Chrome bundle |
+| `build-safari` | macOS | `xcodegen generate` plus an unsigned `xcodebuild` of the host app — Safari packaging breakage without needing signing credentials |
+| `upload-chrome` | ubuntu | on `stage`/`main` pushes only: store-variant zip to the Web Store listing as a draft |
+| `upload-safari` | macOS | on `stage`/`main` pushes only: signed host app to App Store Connect |
 
-- The Apple mail clients' "Open in Private Window" menu row (the sending side of the private-link handoff) is a separate code change, blocked on the plan's Open Question 9 (embed the Safari extension in the mail app vs. keep the standalone host).
-- The store-upload CI jobs themselves (sections 2.5 and 3.4).
-- The redirector page is already live at `https://admin.<control-domain>/private-link` and degrades gracefully without the extension, so nothing here blocks it.
+Both upload jobs sit behind a `gate-*` environment approval and go warn-green when their credentials are absent, so a fork that has not provisioned store accounts still gets a green pipeline. The `test` job builds against the repository variable `TF_VAR_CONTROL_DOMAIN`, falling back to the placeholder domain when it is unset.
+
+No job in this workflow deploys to AWS: the extension's backend rides the ordinary `app.yml` and `infra.yml` pipelines with the rest of the Lambda and Terraform code.
+
+## Related documents
+
+- [Browser extension plan](./1.x/browser-extension-plan.md) — design rationale, detector research, and the implementation record.
+- [Operations](./operations.md) — where the extension sits among the rest of the running system.
+- [Setup](./setup.md) — standing up an environment in the first place.
