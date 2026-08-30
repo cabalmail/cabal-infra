@@ -121,7 +121,23 @@ One-time bring-up; needed before the Chrome build can be distributed and before 
 
 1. **Developer account.** Register a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) ($5 one-time) under an organization identity, not a personal one.
 2. **First upload (manual).** Build the store variant and zip it — `cd extensions && CABALMAIL_CONTROL_DOMAIN=<control-domain> EXTENSION_STORE_BUILD=1 npm run build && (cd chrome/dist && zip -r ../chrome.zip .)` — and upload it as a **new item** in the developer console. `EXTENSION_STORE_BUILD=1` strips the manifest `key`: the Web Store rejects any new-item upload that carries one ("key field not allowed in manifest") and instead assigns the listing its own permanent ID at this first upload — record it, because its redirect URI must be registered alongside the dev one (section 4). The `key` stays in normal (dev) builds, where it pins the unpacked-extension ID to one known value on every machine. Also note: items can never be deleted from the dashboard, only abandoned — upload to a fresh item rather than fighting a stale draft. The listing needs the privacy-policy URL (section 6) before it can be published.
-3. **API credentials for CI.** The upload automation authenticates with an OAuth refresh token. Google's console UI churns; follow the maintained recipe in the [chrome-webstore-upload key guide](https://github.com/fregante/chrome-webstore-upload-keys). In outline: create a Google Cloud project, enable the **Chrome Web Store API**, configure the OAuth consent screen with your account as a test user, create an OAuth client, then mint a refresh token authorized for the `https://www.googleapis.com/auth/chromewebstore` scope.
+3. **API credentials for CI.** The upload automation authenticates with three values: an OAuth **client ID + client secret** (identifying the application) and a **refresh token** (the publisher account's standing grant — "minting" refers to this; it is a separate artifact from the secret, and you need all three). Google's console UI churns; the [chrome-webstore-upload key guide](https://github.com/fregante/chrome-webstore-upload-keys) is the maintained recipe. In outline: pick a Google Cloud project — which project is immaterial, and reusing an existing one (e.g. the Android/Firebase project; a new OAuth client disturbs neither FCM nor the Play-publisher service account, both service-account based) is fine — enable the **Chrome Web Store API**, configure the OAuth consent screen, and create an OAuth client of type **Desktop Application**. Not the "Chrome Extension" type: that is a secretless client for a different feature (extensions signing users into Google APIs via `chrome.identity.getAuthToken`) and cannot drive the upload API. Two details are load-bearing: authorize as the **Google account that owns the Web Store developer account** (the token acts as the publisher; the hosting project is irrelevant to that), and set the consent screen's publishing status to **"In production"** — in "Testing" mode Google expires refresh tokens after seven days, silently killing unattended CI uploads. The `chromewebstore` scope is not on the sensitive list, so production status needs no verification review; the one-time authorization just shows an "unverified app" interstitial. Then mint the refresh token, once, in a browser signed in as the publisher account (the endpoints are stable even when the console isn't):
+
+   ```sh
+   # 1. Open in the publisher account's browser and approve:
+   #    https://accounts.google.com/o/oauth2/auth?client_id=<CLIENT_ID>&response_type=code
+   #      &scope=https://www.googleapis.com/auth/chromewebstore
+   #      &redirect_uri=http://localhost:8818&access_type=offline&prompt=consent
+   # 2. The browser lands on http://localhost:8818/?code=4/XXXX (the page won't
+   #    load - nothing is listening); copy the code from the address bar.
+   # 3. Exchange it:
+   curl -s -X POST https://oauth2.googleapis.com/token \
+     -d client_id=<CLIENT_ID> -d client_secret=<CLIENT_SECRET> \
+     -d code='4/XXXX' -d grant_type=authorization_code \
+     -d redirect_uri=http://localhost:8818
+   ```
+
+   The response's `refresh_token` is the mint; `access_type=offline&prompt=consent` are load-bearing — without them Google returns no refresh token. Short-lived access tokens are derived from it automatically by the upload tooling; you never handle those.
 4. **Secrets.** Store the four values as repository secrets: `CHROME_WEBSTORE_EXTENSION_ID`, `CHROME_WEBSTORE_CLIENT_ID`, `CHROME_WEBSTORE_CLIENT_SECRET`, `CHROME_WEBSTORE_REFRESH_TOKEN` (`gh secret set <NAME>`).
 5. **CI.** The upload job in `extensions.yml` is deliberately absent until these exist; add it behind the same warn-green-when-secrets-absent pattern `android.yml` uses (trustedTesters track on `stage`, default track on `main`).
 
