@@ -49,6 +49,8 @@ final class RulesViewModelTests: XCTestCase {
         XCTAssertEqual(model.rules.map(\.name), ["Receipts"])
         XCTAssertEqual(model.version, 5)
         XCTAssertFalse(model.isLoading)
+        // The view's `.task` skips a reload on a model that already loaded.
+        XCTAssertTrue(model.hasAttemptedLoad)
         // \Noselect containers are not offerable destinations.
         XCTAssertFalse(model.folders.contains { $0.path == "Container" })
         XCTAssertTrue(model.folders.contains { $0.path == "Receipts" })
@@ -235,12 +237,123 @@ final class RulesViewModelTests: XCTestCase {
     }
 }
 
+// MARK: - #1328: a cancelled load is not a load failure
+
+/// The push-transition cancellation (#1328) and what the loader owes it: on
+/// iPhone the pushed Rules destination is built, torn down and rebuilt during
+/// the transition, cancelling the first `.task` mid-fetch while the `@State`
+/// model survives. The cancelled attempt must leave nothing to paint and no
+/// record of having tried, so the rebuilt view's `.task` takes the load over.
+@MainActor
+final class RulesLoadCancellationTests: XCTestCase {
+    private func makeModel(_ backend: FakeRulesBackend) -> RulesViewModel {
+        let model = RulesViewModel(backend: backend)
+        model.saveDebounce = .milliseconds(1)
+        return model
+    }
+
+    /// Starts a load, waits for the backend to park, then cancels it the way
+    /// SwiftUI cancels a `.task` whose view went away.
+    private func loadCancelledMidFetch(
+        _ model: RulesViewModel, _ backend: FakeRulesBackend
+    ) async {
+        backend.holdFetches = true
+        let load = Task { await model.load() }
+        for _ in 0..<200 where backend.fetchCount == 0 {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        load.cancel()
+        backend.releaseHeldFetches()
+        _ = await load.value
+    }
+
+    private func sampleRule() -> Rule {
+        Rule(
+            name: "Receipts",
+            conditions: [Rule.Condition(field: .subject, value: "invoice")],
+            action: .move,
+            moveFolder: "Receipts"
+        )
+    }
+
+    func testCooperativeCancellationPaintsNoErrorAndRecordsNoAttempt() async {
+        let backend = FakeRulesBackend()
+        backend.ruleSet = RuleSet(rules: [sampleRule()], version: 5)
+        let model = makeModel(backend)
+        await loadCancelledMidFetch(model, backend)
+        XCTAssertNil(model.loadError)
+        XCTAssertFalse(model.hasAttemptedLoad)
+        // Still loading, not empty: the rebuilt view shows the spinner rather
+        // than "No rules yet" while its own `.task` picks the fetch up.
+        XCTAssertTrue(model.isLoading)
+        XCTAssertTrue(model.rules.isEmpty)
+    }
+
+    /// The shape production actually sees: `URLSessionHTTPTransport`
+    /// normalizes the cancelled data task to `CabalmailError.network`, whose
+    /// `localizedDescription` is the reported "Couldn't reach the server.
+    /// cancelled." — so the cancellation has to be read off the Task, not off
+    /// the error.
+    func testCancellationNormalizedToANetworkErrorIsStillNotPainted() async {
+        let backend = FakeRulesBackend()
+        backend.heldFetchError = CabalmailError.network("cancelled")
+        let model = makeModel(backend)
+        await loadCancelledMidFetch(model, backend)
+        XCTAssertNil(model.loadError)
+        XCTAssertFalse(model.hasAttemptedLoad)
+    }
+
+    func testTheNextLoadTakesOverAndPopulates() async {
+        let backend = FakeRulesBackend()
+        backend.ruleSet = RuleSet(rules: [sampleRule()], version: 5)
+        backend.folders = [Folder(path: "INBOX"), Folder(path: "Receipts")]
+        let model = makeModel(backend)
+        await loadCancelledMidFetch(model, backend)
+        // What the rebuilt view's `.task` does, having seen no attempt.
+        backend.holdFetches = false
+        await model.load()
+        XCTAssertEqual(model.rules.map(\.name), ["Receipts"])
+        XCTAssertEqual(model.version, 5)
+        XCTAssertNil(model.loadError)
+        XCTAssertTrue(model.hasAttemptedLoad)
+        XCTAssertFalse(model.isLoading)
+    }
+
+    /// Control: a failure that is not a cancellation is still the user's to
+    /// see, and still ends the attempt — the fix must not swallow the error
+    /// state the Retry button exists for.
+    func testARealFailureIsStillPaintedAndEndsTheAttempt() async {
+        let backend = FakeRulesBackend()
+        backend.fetchError = CabalmailError.network("The request timed out.")
+        let model = makeModel(backend)
+        await model.load()
+        XCTAssertEqual(
+            model.loadError,
+            "Couldn't load rules: Couldn't reach the server. The request timed out."
+        )
+        XCTAssertTrue(model.hasAttemptedLoad)
+        XCTAssertFalse(model.isLoading)
+    }
+}
+
 /// Scripted backend. `@unchecked Sendable`: the view model is MainActor-
 /// bound and awaits every call, so access is serial in these tests.
 private final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
     var ruleSet = RuleSet()
     var folders: [Folder] = []
     var saveError: Error?
+    var fetchError: Error?
+    /// When true, `fetchRules` records the call then parks until
+    /// `releaseHeldFetches`, and — like a URLSession data task whose owning
+    /// Task was cancelled — fails instead of returning.
+    var holdFetches = false
+    /// How a released-while-cancelled fetch fails. `CancellationError` is the
+    /// cooperative throw; `CabalmailError.network("cancelled")` is what
+    /// `URLSessionHTTPTransport` actually normalizes a cancelled data task
+    /// into, which is the shape production sees.
+    var heldFetchError: Error = CancellationError()
+    private var heldFetches: [CheckedContinuation<Void, Never>] = []
+    private(set) var fetchCount = 0
     var createdFolders: [String] = []
     /// When true, a created folder shows up in the next `listFolders`.
     var createdFolderAppears = false
@@ -256,7 +369,20 @@ private final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
         heldSaves.removeAll()
     }
 
-    func fetchRules() async throws -> RuleSet { ruleSet }
+    func releaseHeldFetches() {
+        heldFetches.forEach { $0.resume() }
+        heldFetches.removeAll()
+    }
+
+    func fetchRules() async throws -> RuleSet {
+        fetchCount += 1
+        if holdFetches {
+            await withCheckedContinuation { heldFetches.append($0) }
+            if Task.isCancelled { throw heldFetchError }
+        }
+        if let fetchError { throw fetchError }
+        return ruleSet
+    }
 
     func saveRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet {
         savedSets.append((rules, expectedVersion))

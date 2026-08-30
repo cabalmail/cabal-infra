@@ -34,7 +34,15 @@
 set -euo pipefail
 
 SPOOL_DIR=/var/spool/cabal-append
-WAIT_SECONDS=20
+# Unclaimed bound: if the drain has not picked the request up by then, it
+# is down - withdraw the request (removing the .json BEFORE the drain
+# could claim it makes late delivery impossible) and fall through.
+UNCLAIMED_WAIT_SECONDS=20
+# Claimed bound: the drain renamed the request to .work.* and WILL answer
+# (its per-operation socket timeouts bound the APPEND); waiting it out is
+# what keeps delivery at-most-once - giving up on an in-flight APPEND is
+# how a message ends up both filed and fallen-through.
+CLAIMED_WAIT_SECONDS=90
 
 maildir="${1:?maildir path required}"
 flags="${2?flags argument required (may be empty)}"
@@ -77,7 +85,17 @@ if [ -n "$keywords" ]; then
   msg="$SPOOL_DIR/$nonce.msg"
   meta="$SPOOL_DIR/$nonce.json"
   resp="$SPOOL_DIR/$nonce.resp"
-  cleanup() { rm -f "$msg" "$meta" "$SPOOL_DIR/.tmp.$nonce.json" "$resp"; }
+  # Response collection is best-effort everywhere: the drain writes the
+  # response as root and chowns it to us, but if that ever regresses (or
+  # an old drain is still running), a root-owned file in the sticky
+  # spool is one we cannot unlink - and under `set -e` a failing rm
+  # would turn a SUCCESSFUL append into a nonzero exit, which procmail
+  # reads as recipe failure and answers with a duplicate fall-through
+  # delivery. The drain's sweep owns stale responses regardless.
+  cleanup() {
+    rm -f "$msg" "$meta" "$SPOOL_DIR/.tmp.$nonce.json"
+    rm -f "$resp" 2>/dev/null || :
+  }
   trap cleanup EXIT
 
   cat > "$msg"
@@ -88,21 +106,29 @@ if [ -n "$keywords" ]; then
   mv "$SPOOL_DIR/.tmp.$nonce.json" "$meta"
 
   waited=0
-  while [ "$waited" -lt $((WAIT_SECONDS * 5)) ]; do
+  while [ "$waited" -lt $((CLAIMED_WAIT_SECONDS * 5)) ]; do
     if [ -f "$resp" ]; then
       verdict="$(cat "$resp" 2>/dev/null || echo fail)"
       if [ "$verdict" = "ok" ]; then
         trap - EXIT
-        rm -f "$resp"
+        rm -f "$resp" 2>/dev/null || :
         exit 0
       fi
       echo "[cabal-maildir-deliver] append drain refused $nonce" >&2
       exit 75
     fi
+    if [ -f "$meta" ] && [ "$waited" -ge $((UNCLAIMED_WAIT_SECONDS * 5)) ]; then
+      # Never claimed: the drain is down. Withdrawing the .json first
+      # guarantees it can no longer be picked up, so falling through
+      # cannot become a double delivery.
+      rm -f "$meta"
+      echo "[cabal-maildir-deliver] append drain unresponsive for $nonce" >&2
+      exit 75
+    fi
     sleep 0.2
     waited=$((waited + 1))
   done
-  echo "[cabal-maildir-deliver] append drain timed out for $nonce" >&2
+  echo "[cabal-maildir-deliver] append drain timed out for claimed $nonce" >&2
   exit 75
 fi
 

@@ -139,7 +139,9 @@ class HandleRequestTest(unittest.TestCase):
         msg = os.path.join(self.spool.name, 'n1.msg')
         with open(msg, 'wb') as handle:
             handle.write(message)
-        path = os.path.join(self.spool.name, 'n1.json')
+        # handle_request receives the CLAIMED (renamed) path, as the main
+        # loop hands it over after the rename-as-claim.
+        path = os.path.join(self.spool.name, '.work.n1.json')
         with open(path, 'w', encoding='utf-8') as handle:
             json.dump(request, handle)
         return path
@@ -165,6 +167,25 @@ class HandleRequestTest(unittest.TestCase):
         with open(os.path.join(self.spool.name, 'n1.resp'),
                   encoding='ascii') as handle:
             self.assertEqual(handle.read().strip(), 'ok')
+
+    def test_response_is_chowned_to_the_requester(self):
+        # The spool is sticky, so a root-owned response would be one the
+        # requesting helper cannot collect-and-delete - its rm under
+        # `set -e` then failed a SUCCESSFUL append into a duplicate
+        # fall-through delivery. The drain must hand the response to the
+        # request's owner before committing it.
+        self._path = self._spool(meta())
+        owner_uid = os.stat(self._path).st_uid
+        with mock.patch.object(drain.os, 'chown') as chown:
+            self.assertEqual(self._run(), 'ok')
+        tmp = os.path.join(self.spool.name, '.tmp.n1.resp')
+        chown.assert_called_once_with(tmp, owner_uid, -1)
+
+    def test_chown_failure_still_commits_the_response(self):
+        self._path = self._spool(meta())
+        with mock.patch.object(drain.os, 'chown', side_effect=OSError):
+            self.assertEqual(self._run(), 'ok')
+        self.assertIn('n1.resp', os.listdir(self.spool.name))
 
     def test_spoofed_owner_is_refused_without_imap(self):
         self.owner = 'mallory'
@@ -201,7 +222,7 @@ class HandleRequestTest(unittest.TestCase):
         msg = os.path.join(self.spool.name, 'n2.msg')
         with open(msg, 'wb') as handle:
             handle.write(b'x')
-        self._path = os.path.join(self.spool.name, 'n2.json')
+        self._path = os.path.join(self.spool.name, '.work.n2.json')
         with open(self._path, 'w', encoding='utf-8') as handle:
             handle.write('not json')
         self.assertEqual(self._run(), 'fail')

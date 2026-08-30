@@ -1,5 +1,28 @@
 # Rules Composition and Custom Flags Plan
 
+## Progress
+
+| Phase | Status |
+| --- | --- |
+| 1 -- Truthful Continue | Complete (2026-08-28) |
+| 2 -- Pending decorations | Complete, stage-verified (2026-08-28) |
+| 3 -- Flag palette | Complete, stage-verified (2026-08-28) |
+| 4 -- Keywords on the message plane | Complete, stage-verified (2026-08-28) |
+| 5 -- Rules integration | Complete, stage-verified (2026-08-29) |
+
+All five phases have shipped; the plan is complete. Phase 5's stage
+acceptance runs doubled as end-to-end verification of the whole keyword
+pipeline and surfaced four latent defects, each fixed in its own PR:
+#1326 (the reconfigure loop drained its SQS queue after regenerating,
+eating triggers that arrived mid-scan), #1327 (the append drain's TLS
+context replaced the system trust store with the intermediate-only
+bundle), #1332 (a helper timeout could abandon an in-flight APPEND,
+double-delivering; delivery is now at-most-once via a claim-by-rename
+protocol), and #1333 (the helper could not remove the drain's
+root-owned response file from the sticky spool, so under `set -e`
+every successful APPEND exited nonzero and procmail added a duplicate
+fall-through delivery).
+
 ## Context
 
 The first days of mail rules running in prod (2026-08-26) surfaced three
@@ -368,9 +391,18 @@ translation); a keyword unknown to the palette is rejected by
 
 ## Phase 5 -- Rules integration
 
-**Status:** In progress (2026-08-28); the server + container half is in
-review, editors follow. Three refinements over the sketch, recorded
-here as the decisions actually taken: (1) `flags: [slot-id]` is a NEW
+**Status:** Complete and stage-verified (2026-08-29). The closing
+acceptance probe exercised every composition live on stage: a rule's
+own slots delivered a filed-and-tagged message through the APPEND
+drain; decorate-then-file composed (filed and tagged, nothing extra in
+the inbox); a decorator-only message landed tagged in the inbox via
+the procmailrc fallback; and emptying the palette re-armed the
+`flag_not_in_palette` skip within seconds (message left untagged in
+the inbox, other rules unaffected) - with exactly one delivery per
+message. Getting to that clean run surfaced four latent defects, fixed
+in #1326/#1327/#1332/#1333 (see Progress at the top). Three
+refinements over the sketch, recorded here as the decisions actually
+taken: (1) `flags: [slot-id]` is a NEW
 key beside the untouched `flag` boolean rather than replacing it — the
 boolean keeps meaning the system `\Flagged` forever, which is the
 least-invasive reading of "accepted on read indefinitely" and spares

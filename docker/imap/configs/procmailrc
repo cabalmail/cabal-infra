@@ -76,6 +76,14 @@ PUSH_ENQUEUED=yes
 DFLAGS=$PENDING_F$PENDING_S
 PENDINGANY=${DFLAGS}${PENDING_KW}
 
+# The PENDINGTRIED guard makes the attempt fire exactly once
+# whichever rcfile copy runs first (same pattern as PUSH_ENQUEUED
+# above): if the helper fails here, the ~/.procmailrc pass must NOT
+# spool a second attempt - the drain may still complete the first
+# one, and a retried spool is how one message became several
+# decorated inbox copies.
 :0w
 * PENDINGANY ?? .
+* ! PENDINGTRIED ?? yes
 | /usr/local/bin/cabal-maildir-deliver.sh "$MAILDIR" "$DFLAGS" "INBOX" "$PENDING_KW"
+PENDINGTRIED=yes

@@ -20,11 +20,17 @@ undecorated delivery, never a lost message.
 Request protocol (spool dir is sticky world-writable, like the siblings):
 the helper writes <nonce>.msg (raw message bytes) then <nonce>.json
 ({"user", "folder", "flags"}), the JSON written under a dot-prefixed name
-and renamed to commit. This daemon authenticates a request by file
-ownership - both files must be owned by the user the request names (or by
-root, for the pre-DROPPRIVS pass) - answers with <nonce>.resp containing
-"ok" or "fail", and deletes the request files. Responses and orphaned
-spool files are aged out.
+and renamed to commit. This daemon CLAIMS a request by renaming the .json
+to .work.<nonce>.json before touching it - the rename is what lets the
+helper distinguish "drain is on it, keep waiting" from "drain never saw
+it, safe to withdraw", which is what makes delivery at-most-once across
+the helper's timeout (a request withdrawn before the claim can never be
+delivered late; a claimed request always gets its response). It
+authenticates by file ownership - both files must be owned by the user
+the request names (or by root, for the pre-DROPPRIVS pass) - answers
+with <nonce>.resp containing "ok" or "fail", and deletes the request
+files. Responses and orphaned spool files (including .work files from a
+crash mid-request) are aged out.
 '''
 import json
 import os
@@ -110,10 +116,22 @@ class _LoopbackIMAP(imaplib.IMAP4):
 
 
 def open_client(cert_domain, factory=_LoopbackIMAP):
-    '''STARTTLS-secured loopback connection, hostname-verified against the
-    tier's own CA bundle (rendered by entrypoint.sh).'''
-    context = ssl.create_default_context(
-        cafile=f'/etc/pki/tls/certs/{cert_domain}.ca-bundle')
+    '''STARTTLS-secured loopback connection, hostname-verified.
+
+    Verification uses the SYSTEM trust store (the served certificate is a
+    public wildcard, verified the same way the Lambda's internal route
+    verifies it) with the tier's rendered CA bundle added on top - added,
+    not substituted: passing the bundle as `cafile` to
+    create_default_context REPLACES the root store, and the bundle holds
+    the issuing intermediates without their root, which fails every
+    handshake with "unable to get issuer certificate" (observed on stage).
+    '''
+    context = ssl.create_default_context()
+    try:
+        context.load_verify_locations(
+            cafile=f'/etc/pki/tls/certs/{cert_domain}.ca-bundle')
+    except (OSError, ssl.SSLError):
+        pass  # system roots alone verify the public chain
     client = factory(f'imap.{cert_domain}', timeout=IMAP_TIMEOUT_SECONDS)
     client.starttls(context)
     return client
@@ -135,22 +153,37 @@ def append_message(client, meta, message, master_password):
             pass
 
 
-def _respond(nonce, verdict):
-    '''Writes the response file the helper is polling for (world-readable;
-    the spool is sticky, so only root and the requester can remove it).'''
+def _respond(nonce, verdict, owner_uid=None):
+    '''Writes the response file the helper is polling for.
+
+    Chowned to the requester: the spool is sticky, so a root-owned
+    response would be one the helper cannot collect-and-delete - its
+    `rm` under `set -e` then killed the helper AFTER a successful
+    APPEND, procmail read that as recipe failure, and every keyworded
+    delivery grew an extra undecorated fall-through copy. The chown is
+    best-effort (the sweep ages out uncollected responses either way);
+    what must never happen is a written-but-unrenamed response, so the
+    replace stays last.'''
     tmp = os.path.join(SPOOL_DIR, f'.tmp.{nonce}.resp')
     with open(tmp, 'w', encoding='ascii') as handle:
         handle.write(verdict + '\n')
     os.chmod(tmp, 0o644)
+    if owner_uid is not None:
+        try:
+            os.chown(tmp, owner_uid, -1)
+        except OSError:
+            pass
     os.replace(tmp, os.path.join(SPOOL_DIR, f'{nonce}.resp'))
 
 
 def handle_request(meta_path, cert_domain, master_password,
                    client_factory=None):
-    '''Processes one committed request file; always answers and cleans up.'''
-    nonce = os.path.basename(meta_path)[:-len('.json')]
+    '''Processes one claimed request file; always answers and cleans up.'''
+    nonce = os.path.basename(meta_path)[len('.work.'):-len('.json')]
     msg_path = os.path.join(SPOOL_DIR, f'{nonce}.msg')
     verdict = 'fail'
+    owner_uid = None
+    started = time.monotonic()
     try:
         owner_uid = os.stat(meta_path).st_uid
         with open(meta_path, encoding='utf-8') as handle:
@@ -169,6 +202,9 @@ def handle_request(meta_path, cert_domain, master_password,
             client = (client_factory or open_client)(cert_domain)
             append_message(client, meta, message, master_password)
             verdict = 'ok'
+            print(f'[cabal-append-drain] delivered {nonce} '
+                  f"user={meta['user']} folder={meta['folder']} "
+                  f'in {time.monotonic() - started:.1f}s', flush=True)
         else:
             print(f'[cabal-append-drain] rejecting {nonce}: {error}',
                   flush=True)
@@ -183,7 +219,7 @@ def handle_request(meta_path, cert_domain, master_password,
         except OSError:
             pass
     try:
-        _respond(nonce, verdict)
+        _respond(nonce, verdict, owner_uid)
     except OSError as err:
         print(f'[cabal-append-drain] respond {nonce} failed: {err}',
               flush=True)
@@ -199,6 +235,8 @@ def sweep_stale():
         return
     for name in entries:
         path = os.path.join(SPOOL_DIR, name)
+        # .work files only outlive a drain crash mid-request; ordinary
+        # requests and responses age out on their own clocks.
         limit = (MAX_RESPONSE_AGE_SECONDS if name.endswith('.resp')
                  else MAX_REQUEST_AGE_SECONDS)
         try:
@@ -224,9 +262,18 @@ def main():
     last_sweep = 0.0
     while True:
         for name in sorted(os.listdir(SPOOL_DIR)):
-            if name.endswith('.json') and not name.startswith('.'):
-                handle_request(os.path.join(SPOOL_DIR, name), cert_domain,
-                               master_password)
+            if not name.endswith('.json') or name.startswith('.'):
+                continue
+            # Claim before touching: the rename tells a timing-out helper
+            # the request is in flight (keep waiting) versus never seen
+            # (safe to withdraw). A helper that withdrew first makes this
+            # rename fail - then there is nothing to do.
+            claimed = os.path.join(SPOOL_DIR, f'.work.{name}')
+            try:
+                os.rename(os.path.join(SPOOL_DIR, name), claimed)
+            except OSError:
+                continue
+            handle_request(claimed, cert_domain, master_password)
         if time.time() - last_sweep > 30:
             sweep_stale()
             last_sweep = time.time()
