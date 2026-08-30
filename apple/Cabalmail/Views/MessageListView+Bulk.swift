@@ -57,12 +57,14 @@ extension MessageListView {
         let count = model.selectedUIDs.count
         VStack(spacing: 0) {
             Divider()
-            HStack(spacing: 14) {
-                Text("\(count) selected")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                bulkActionButtons(model: model, count: count)
+            // Widest row that fits the message-list column, which is far
+            // narrower than the window on macOS — see BulkActionBarLayout
+            // for why the bar sheds elements rather than letting the
+            // captions hyphenate.
+            ViewThatFits(in: .horizontal) {
+                bulkActionRow(model: model, count: count, layout: .full)
+                bulkActionRow(model: model, count: count, layout: .captionsOnly)
+                bulkActionRow(model: model, count: count, layout: .glyphsOnly)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -71,10 +73,34 @@ extension MessageListView {
         .disabled(count == 0)
     }
 
+    /// One rung of the ladder. The buttons stay trailing-aligned whether or
+    /// not the count is drawn, so dropping it doesn't shift them.
+    @ViewBuilder
+    private func bulkActionRow(
+        model: MessageListViewModel,
+        count: Int,
+        layout: BulkActionBarLayout
+    ) -> some View {
+        HStack(spacing: 14) {
+            if layout.showsCount {
+                Text("\(count) selected")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            Spacer(minLength: 0)
+            bulkActionButtons(model: model, count: count, showsCaptions: layout.showsCaptions)
+        }
+    }
+
     /// The action buttons themselves — split from `bulkActionBar` to keep
     /// each function under SwiftLint's body-length cap.
     @ViewBuilder
-    private func bulkActionButtons(model: MessageListViewModel, count: Int) -> some View {
+    private func bulkActionButtons(
+        model: MessageListViewModel,
+        count: Int,
+        showsCaptions: Bool
+    ) -> some View {
         let hasUnread = bulkSelectionContainsUnread(model)
         let hasUnflagged = bulkSelectionContainsUnflagged(model)
         let archive = BulkArchiveButtonPolicy.button(in: model.folder.path)
@@ -82,7 +108,8 @@ extension MessageListView {
             systemImage: archive.systemImage,
             label: archive.title,
             accessibilityLabel: "\(archive.title) \(messageCount(count))",
-            identifier: "bulk.archive"
+            identifier: "bulk.archive",
+            showsCaption: showsCaptions
         ) {
             bulkArchive(model: model, intent: archive.intent)
         }
@@ -90,7 +117,8 @@ extension MessageListView {
             systemImage: "folder",
             label: "Move…",
             accessibilityLabel: "Move \(messageCount(count))",
-            identifier: "bulk.move"
+            identifier: "bulk.move",
+            showsCaption: showsCaptions
         ) {
             bulkMoveSheetPresented = true
         }
@@ -98,7 +126,8 @@ extension MessageListView {
             systemImage: hasUnread ? "envelope.open" : "envelope.badge",
             label: hasUnread ? "Read" : "Unread",
             accessibilityLabel: "Mark \(messageCount(count)) \(hasUnread ? "read" : "unread")",
-            identifier: "bulk.toggleRead"
+            identifier: "bulk.toggleRead",
+            showsCaption: showsCaptions
         ) {
             Task { await model.bulkSetSeen(hasUnread) }
         }
@@ -106,19 +135,31 @@ extension MessageListView {
             systemImage: hasUnflagged ? "flag" : "flag.slash",
             label: hasUnflagged ? "Flag" : "Unflag",
             accessibilityLabel: "\(hasUnflagged ? "Flag" : "Unflag") \(messageCount(count))",
-            identifier: "bulk.toggleFlag"
+            identifier: "bulk.toggleFlag",
+            showsCaption: showsCaptions
         ) {
             Task { await model.bulkSetFlagged(hasUnflagged) }
         }
-        // Trash only: permanent delete for the whole selection, behind
-        // the same "Delete Forever?" confirmation as the row swipe.
+        bulkDeleteButton(model: model, count: count, showsCaptions: showsCaptions)
+    }
+
+    /// Trash only: permanent delete for the whole selection, behind the same
+    /// "Delete Forever?" confirmation as the row swipe. Split out to keep
+    /// `bulkActionButtons` under SwiftLint's body-length cap.
+    @ViewBuilder
+    private func bulkDeleteButton(
+        model: MessageListViewModel,
+        count: Int,
+        showsCaptions: Bool
+    ) -> some View {
         if model.isTrashFolder {
             bulkActionButton(
                 systemImage: "trash.slash",
                 label: "Delete",
                 role: .destructive,
                 accessibilityLabel: "Delete \(messageCount(count)) forever",
-                identifier: "bulk.delete"
+                identifier: "bulk.delete",
+                showsCaption: showsCaptions
             ) {
                 purgeCandidate = PurgeCandidate(uids: model.selectedUIDs)
             }
@@ -171,13 +212,20 @@ extension MessageListView {
         role: ButtonRole? = nil,
         accessibilityLabel: String? = nil,
         identifier: String? = nil,
+        showsCaption: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(role: role, action: action) {
             VStack(spacing: 2) {
                 Image(systemName: systemImage)
-                Text(label)
-                    .font(.caption2)
+                if showsCaption {
+                    Text(label)
+                        .font(.caption2)
+                        // Keep the caption on one line; ViewThatFits reads
+                        // its natural width to tell whether this rung fits,
+                        // and a caption free to wrap always "fits".
+                        .fixedSize(horizontal: true, vertical: false)
+                }
             }
         }
         .buttonStyle(.plain)
