@@ -118,7 +118,10 @@ jobs:
   # would skip anyway) never waits at a gate.
   # -----------------------------------------------------------------------
   approval:
-    needs: [test]
+    # Both validation jobs gate the uploads (android.yml's approval needs
+    # test AND build the same way): a red unsigned Safari build must hold
+    # the signed upload behind the gate, not run disconnected beside it.
+    needs: [test, build-safari]
     if: github.ref_name == 'main' || github.ref_name == 'stage'
     environment: gate-${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     runs-on: ubuntu-latest
