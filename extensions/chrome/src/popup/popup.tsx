@@ -5,14 +5,23 @@ import { useEffect, useState } from 'preact/hooks';
 import { sendToBackground } from '@cabalmail/extension-shared/messaging/client';
 
 declare const __CONTROL_DOMAIN__: string;
+declare const __REPORT_URL__: string;
 
-const REPORT_URL =
-  'https://github.com/cabalmail/cabal-infra/issues/new?labels=needs-verification&title=Extension%3A%20wrong%20form%20detection';
+// Build-time (CABALMAIL_REPORT_URL) so forks point reports at their own
+// tracker; defaults to the upstream cabal-infra issue template.
+const REPORT_URL = __REPORT_URL__;
 
 function Popup() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [domains, setDomains] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Raw fetch errors name nothing actionable; translate the common case.
+  const friendly = (message: string): string =>
+    /failed to fetch/i.test(message)
+      ? `Can't reach https://admin.${__CONTROL_DOMAIN__}/ — check your network, ` +
+        `or rebuild with CABALMAIL_CONTROL_DOMAIN set if this is a dev build.`
+      : message;
 
   const refresh = async () => {
     setError(null);
@@ -24,11 +33,14 @@ function Popup() {
         if (result.ok && result.kind === 'domains') {
           setDomains(result.domains.map((d) => d.domain));
         } else if (!result.ok) {
-          setError(result.message);
+          setError(friendly(result.message));
         }
       }
     } else if (!state.ok) {
-      setError(state.message);
+      // Auth-state is local-only in the background; a failure here is
+      // unexpected, but never leave the popup stuck on "Loading…".
+      setSignedIn(false);
+      setError(friendly(state.message));
     }
   };
 
@@ -39,7 +51,7 @@ function Popup() {
   const signIn = async () => {
     setError(null);
     const result = await sendToBackground({ kind: 'sign-in' });
-    if (!result.ok) setError(result.message);
+    if (!result.ok) setError(friendly(result.message));
     await refresh();
   };
 
