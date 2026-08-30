@@ -6,7 +6,7 @@
 |---|---|
 | 1. Foundation & shared core | **Complete** (2026-08-29). npm workspaces (not pnpm), `extensions/` |
 | 2. CI/CD | **Partial.** `extensions.yml` runs lint/test/build + unsigned Safari build; store uploads pending accounts/secrets |
-| 3. Backend, auth & API client | **Stage-verified** (2026-08-30): create-pending, confirm + 409, procmail rule regen, live-mail clear-on-receive (4s), no-op on confirmed addresses, hourly reaper running with metric. Only the backdated-reap write test remains (needs write creds) |
+| 3. Backend, auth & API client | **Stage-verified** (2026-08-30), all paths: create-pending, confirm + 409, procmail rule regen, live-mail clear-on-receive (4s), no-op on confirmed addresses, and a backdated reap (row + DNS removed, metric emitted, reconfigure fan-out) |
 | 4. Form detection | **Engine complete** with synthetic seed corpus + snapshot tool; real-site corpus capture pending |
 | 5. Suggest flow | **Code complete** (unit-tested); in-browser verification pending |
 | 6. Adopt flow | **Code complete** (unit-tested); in-browser verification pending |
