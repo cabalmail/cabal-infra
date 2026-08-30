@@ -115,10 +115,17 @@ const template = readFileSync(
   join(workspaceRoot, browser, 'manifest.template.json'),
   'utf8',
 );
-const manifest = template
+const substituted = template
   .replaceAll('__CONTROL_DOMAIN__', controlDomain)
   .replaceAll('__VERSION__', version);
-JSON.parse(manifest); // fail the build on malformed output
-writeFileSync(join(outDir, 'manifest.json'), manifest);
+const manifest = JSON.parse(substituted); // fail the build on malformed output
+// The `key` field pins the extension ID for unpacked dev builds, but the
+// Chrome Web Store rejects any NEW-item upload that carries one ("key field
+// not allowed in manifest") and assigns the listing its own ID instead.
+// EXTENSION_STORE_BUILD=1 produces the store-uploadable variant.
+if (process.env.EXTENSION_STORE_BUILD) {
+  delete manifest.key;
+}
+writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
 console.log(`[build-extension] ${browser} v${version} -> ${outDir}`);

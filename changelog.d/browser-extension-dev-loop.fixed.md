@@ -4,6 +4,8 @@
   "Loading…" with a raw `TypeError: Failed to fetch`. Auth-state and
   sign-out now work from local token storage without touching the network,
   and fetch failures render as an actionable message naming the origin.
-  The Chrome extension ID is also now pinned via a manifest `key`, so dev
-  builds, the future store listing, and the Cognito OAuth redirect URI all
-  share one known ID.
+  The Chrome extension ID is also now pinned via a manifest `key` for
+  unpacked dev builds, so the dev Cognito OAuth redirect URI is one known
+  value on every machine (the Web Store rejects a `key` on new-item
+  uploads and assigns the listing its own ID; `EXTENSION_STORE_BUILD=1`
+  strips it for store zips).
