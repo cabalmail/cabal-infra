@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-08-30
+
+### Changed
+- **Extension permission surface trimmed to storage/identity/history.** The
+  private-link interception now rides `tabs.onUpdated` (whose URL visibility
+  comes from the extension's own host permission, and closing the redirector
+  tab needs no permission at all), so the `tabs` and `webNavigation`
+  permissions are no longer requested — a smaller store-review surface with
+  identical behavior. A failed private-window open is also logged now
+  instead of swallowed. The content script likewise no longer matches
+  plain-http sites (localhost excepted, for development): no sign-up form
+  should be handed a fresh address over cleartext, and the narrower match
+  halves the extension's site-access surface.
+
+### Fixed
+- **Extension popup no longer wedges when the control domain is
+  unreachable.** A dev build made without `CABALMAIL_CONTROL_DOMAIN` (or
+  any network failure reaching the admin origin) left the popup stuck on
+  "Loading…" with a raw `TypeError: Failed to fetch`. Auth-state and
+  sign-out now work from local token storage without touching the network,
+  and fetch failures render as an actionable message naming the origin.
+  The Chrome extension ID is also now pinned via a manifest `key` for
+  unpacked dev builds, so the dev Cognito OAuth redirect URI is one known
+  value on every machine (the Web Store rejects a `key` on new-item
+  uploads and assigns the listing its own ID; `EXTENSION_STORE_BUILD=1`
+  strips it for store zips).
+
 ## [1.9.0] - 2026-08-30
 
 ### Added
