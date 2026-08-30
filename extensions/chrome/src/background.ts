@@ -7,6 +7,7 @@
 import browser from 'webextension-polyfill';
 import { ApiClient } from '@cabalmail/extension-shared/api/ApiClient';
 import { AuthError, HostedUiAuth } from '@cabalmail/extension-shared/auth/HostedUiAuth';
+import { clearTokens, loadTokens } from '@cabalmail/extension-shared/auth/tokens';
 import { ConfigService } from '@cabalmail/extension-shared/config/ConfigService';
 import {
   isBackgroundRequest,
@@ -44,16 +45,22 @@ function invalidateAddresses(): void {
 }
 
 async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
+  // Auth-state and sign-out read/clear local token storage only; keep them
+  // independent of the config fetch so the popup can render a sensible
+  // signed-out state even when the control domain is unreachable (or a dev
+  // build was made without CABALMAIL_CONTROL_DOMAIN).
+  if (request.kind === 'get-auth-state') {
+    return { ok: true, kind: 'auth-state', signedIn: (await loadTokens()) !== null };
+  }
+  if (request.kind === 'sign-out') {
+    await clearTokens();
+    return { ok: true, kind: 'signed-out' };
+  }
   const { auth, api } = await services();
   switch (request.kind) {
-    case 'get-auth-state':
-      return { ok: true, kind: 'auth-state', signedIn: await auth.isSignedIn() };
     case 'sign-in':
       await auth.signIn();
       return { ok: true, kind: 'signed-in' };
-    case 'sign-out':
-      await auth.signOut();
-      return { ok: true, kind: 'signed-out' };
     case 'list-domains': {
       if (!domainsCache || Date.now() - domainsCache.at > CACHE_TTL_MS) {
         domainsCache = { at: Date.now(), domains: await api.listMyDomains() };

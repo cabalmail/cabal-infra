@@ -43,8 +43,19 @@ CHANGELOG release).
 
 ## Loading a dev build
 
+Build against a real environment first — the default `cabalmail.example`
+placeholder produces a bundle whose config fetch (and host permission)
+points nowhere, and the popup will say so:
+
+```sh
+CABALMAIL_CONTROL_DOMAIN=<control-domain> npm run build
+```
+
 - Chrome: `chrome://extensions` → Developer mode → "Load unpacked" →
-  `extensions/chrome/dist`.
+  `extensions/chrome/dist`. The extension ID is pinned by the manifest
+  `key`, so it is the same on every machine (and matches the future store
+  listing) — which is what lets one Cognito redirect URI cover dev and
+  store builds alike (see docs/browser-extension.md section 4).
 - Safari: build and run the `CabalmailExtensionHost` scheme, then enable
   the extension in Safari Settings → Extensions (allow unsigned extensions
   in Safari's Develop menu first).

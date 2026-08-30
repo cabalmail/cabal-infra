@@ -9,8 +9,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -18,9 +23,16 @@
     "default_popup": "popup.html",
     "default_title": "Cabalmail"
   },
-  "permissions": ["storage", "identity", "webNavigation", "tabs", "history"],
+  "permissions": [
+    "storage",
+    "identity",
+    "webNavigation",
+    "tabs",
+    "history"
+  ],
   "host_permissions": [
     "https://admin.__CONTROL_DOMAIN__/*",
     "https://*.amazoncognito.com/*"
-  ]
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvHwjCQwCc0x1TSqTWbjVkH2GCeJRHg3+JFG7nF7TDOPtq7vBWEeQYkZWyDhPNHbxZEPbdowdY1X7K5BOkzKfnZUZZU3bUlh6eH7gqZWzG8zVxnR8b9VOapNMZZSlZ0OKXjNrciJdZWxr2jBZ2I+MDo0Q4VDvbzBlYErtUTxd9h35OYAqLvpLCq4pPZe+vVadN/bOhdT0jJh41SyI4gkga5+cjbVO1DobukIcPhil/k8VULo/JJwFOGuooKuoksKTreFm6TQx3vdxRP9AbMhDMtUKZzuAGFZAYvUTnrWozeNfECeuXMih2OpUsard2lzF6ft0wSB5ASfLewMgzJ1DsQIDAQAB"
 }
