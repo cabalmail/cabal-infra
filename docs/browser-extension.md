@@ -120,7 +120,7 @@ Clean up any leftover runbook addresses via the admin app or `DELETE /revoke` wh
 One-time bring-up; needed before the Chrome build can be distributed and before the extension's real redirect URI exists.
 
 1. **Developer account.** Register a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) ($5 one-time) under an organization identity, not a personal one.
-2. **First upload (manual).** Build the bundle and zip it — `cd extensions && CABALMAIL_CONTROL_DOMAIN=<control-domain> npm run build && (cd chrome/dist && zip -r ../chrome.zip .)` — and upload it as a new item in the developer console. The **extension ID** is already pinned by the `key` field in `extensions/chrome/manifest.template.json`, so the store listing, unpacked dev builds, and the OAuth redirect URI (section 4) all share one known ID; the first upload keeps it as long as the key ships in the manifest. Forks must regenerate the key (`openssl genrsa 2048 | openssl rsa -pubout -outform DER | base64`) — a pinned ID can only exist once in the Web Store. The listing needs the privacy-policy URL (section 6) before it can be published.
+2. **First upload (manual).** Build the store variant and zip it — `cd extensions && CABALMAIL_CONTROL_DOMAIN=<control-domain> EXTENSION_STORE_BUILD=1 npm run build && (cd chrome/dist && zip -r ../chrome.zip .)` — and upload it as a **new item** in the developer console. `EXTENSION_STORE_BUILD=1` strips the manifest `key`: the Web Store rejects any new-item upload that carries one ("key field not allowed in manifest") and instead assigns the listing its own permanent ID at this first upload — record it, because its redirect URI must be registered alongside the dev one (section 4). The `key` stays in normal (dev) builds, where it pins the unpacked-extension ID to one known value on every machine. Also note: items can never be deleted from the dashboard, only abandoned — upload to a fresh item rather than fighting a stale draft. The listing needs the privacy-policy URL (section 6) before it can be published.
 3. **API credentials for CI.** The upload automation authenticates with an OAuth refresh token. Google's console UI churns; follow the maintained recipe in the [chrome-webstore-upload key guide](https://github.com/fregante/chrome-webstore-upload/blob/main/How%20to%20generate%20Google%20API%20keys.md). In outline: create a Google Cloud project, enable the **Chrome Web Store API**, configure the OAuth consent screen with your account as a test user, create an OAuth client, then mint a refresh token authorized for the `https://www.googleapis.com/auth/chromewebstore` scope.
 4. **Secrets.** Store the four values as repository secrets: `CHROME_WEBSTORE_EXTENSION_ID`, `CHROME_WEBSTORE_CLIENT_ID`, `CHROME_WEBSTORE_CLIENT_SECRET`, `CHROME_WEBSTORE_REFRESH_TOKEN` (`gh secret set <NAME>`).
 5. **CI.** The upload job in `extensions.yml` is deliberately absent until these exist; add it behind the same warn-green-when-secrets-absent pattern `android.yml` uses (trustedTesters track on `stage`, default track on `main`).
@@ -148,23 +148,24 @@ The Safari extension ships inside a minimal host app (`extensions/safari/`). One
 
 The extension's Cognito app client (`cabal_extension_client`) is created with a loopback placeholder callback until the real redirect URIs are configured.
 
-1. **Collect the URIs.** Chrome's extension ID is pinned by the manifest `key` (section 2.2), identical for unpacked dev builds and the store listing, so the Chrome redirect URI is known without any upload: `https://<pinned-id>.chromiumapp.org/`, where the pinned ID is printed by
+1. **Collect the URIs.** There are up to three, all of the form `https://<extension-id>.chromiumapp.org/` for Chrome:
+   - **Chrome dev builds**: the ID is pinned by the manifest `key`, identical on every machine, known without any upload — printed by
 
-   ```sh
-   python3 - <<'EOF'
-   import base64, hashlib, json
-   key = json.load(open('extensions/chrome/manifest.template.json'))['key']
-   digest = hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]
-   print(''.join(chr(ord('a') + int(c, 16)) for c in digest))
-   EOF
-   ```
-
-   Safari's is whatever `browser.identity.getRedirectURL()` returns in the installed extension — open the extension's background console in Safari and evaluate it; don't guess.
+     ```sh
+     python3 - <<'EOF'
+     import base64, hashlib, json
+     key = json.load(open('extensions/chrome/manifest.template.json'))['key']
+     digest = hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]
+     print(''.join(chr(ord('a') + int(c, 16)) for c in digest))
+     EOF
+     ```
+   - **The Chrome store listing**: the Web Store strips-or-rejects the `key` on a new item and assigns its own permanent ID at first upload (section 2.2), so the store build gets a *different* redirect URI — read the ID off the listing and add its URI as a second entry.
+   - **Safari**: whatever `browser.identity.getRedirectURL()` returns in the installed extension — open the extension's background console in Safari and evaluate it; don't guess.
 2. **Set the variable.** `infra.yml` already feeds `extension_redirect_uris` from the GitHub environment variable `TF_VAR_EXTENSION_REDIRECT_URIS` (defaulting to `[]`). The value expands inside a double-quoted shell `echo` in the workflow, so the quotes around each list element must be backslash-escaped in the stored value or the shell eats them and Terraform receives unparseable HCL — the same convention `TF_VAR_MAIL_DOMAINS` and `TF_VAR_AVAILABILITY_ZONES` already follow. Set it per environment:
 
    ```sh
    gh variable set TF_VAR_EXTENSION_REDIRECT_URIS --env <environment> \
-     --body '[\"https://<pinned-id>.chromiumapp.org/\"]'
+     --body '[\"https://<dev-id>.chromiumapp.org/\", \"https://<store-id>.chromiumapp.org/\"]'
    ```
 
    Append the Safari redirect to the list when it exists.

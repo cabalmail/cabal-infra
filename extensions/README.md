@@ -64,3 +64,23 @@ The suggest/adopt flows need an environment whose backend carries the
 pending-address endpoints (`/new` with `pending`, `/confirm_address`) and
 whose `config.json` exposes `cognitoConfig.extensionClientId` — see the
 plan's Phase 3 and the Prerequisites section.
+
+## Forking notes
+
+Nothing environment-specific is committed (the control domain is a
+build-time env var with a deliberately fake default; all runtime values
+come from your environment's `config.json`), but three identity-shaped
+values are upstream's and a fork should replace them:
+
+- **The manifest `key`** in `chrome/manifest.template.json` pins the
+  unpacked-dev extension ID. Regenerate your own so your fork has its own
+  identity: `openssl genrsa 2048 | openssl rsa -pubout -outform DER |
+  base64` (public key only; the private half is disposable — store uploads
+  strip the key entirely and the Web Store signs packages itself).
+- **`CABALMAIL_REPORT_URL`** (build-time env) — where the popup's "Report
+  wrong detection" link files issues. Defaults to the upstream
+  cabal-infra tracker; point it at your own.
+- **The Safari bundle identifiers** (`com.cabalmail.extension-host` and
+  its `.web-extension` child in `safari/project.yml`) — replace with your
+  own reverse-DNS prefix before registering App IDs, same as the mail
+  clients under `apple/`.

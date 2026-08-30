@@ -48,11 +48,19 @@ const outDir =
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
+// Where the popup's "Report wrong detection" link files issues. Forks set
+// CABALMAIL_REPORT_URL so their users' reports land in their tracker, not
+// upstream's.
+const reportUrl =
+  process.env.CABALMAIL_REPORT_URL ||
+  'https://github.com/cabalmail/cabal-infra/issues/new?labels=needs-verification&title=Extension%3A%20wrong%20form%20detection';
+
 const shared = {
   configFile: false,
   logLevel: 'warn',
   define: {
     __CONTROL_DOMAIN__: JSON.stringify(controlDomain),
+    __REPORT_URL__: JSON.stringify(reportUrl),
   },
   esbuild: {
     jsx: 'automatic',
@@ -115,10 +123,17 @@ const template = readFileSync(
   join(workspaceRoot, browser, 'manifest.template.json'),
   'utf8',
 );
-const manifest = template
+const substituted = template
   .replaceAll('__CONTROL_DOMAIN__', controlDomain)
   .replaceAll('__VERSION__', version);
-JSON.parse(manifest); // fail the build on malformed output
-writeFileSync(join(outDir, 'manifest.json'), manifest);
+const manifest = JSON.parse(substituted); // fail the build on malformed output
+// The `key` field pins the extension ID for unpacked dev builds, but the
+// Chrome Web Store rejects any NEW-item upload that carries one ("key field
+// not allowed in manifest") and assigns the listing its own ID instead.
+// EXTENSION_STORE_BUILD=1 produces the store-uploadable variant.
+if (process.env.EXTENSION_STORE_BUILD) {
+  delete manifest.key;
+}
+writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
 console.log(`[build-extension] ${browser} v${version} -> ${outDir}`);
