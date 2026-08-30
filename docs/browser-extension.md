@@ -139,7 +139,7 @@ One-time bring-up; needed before the Chrome build can be distributed and before 
 
    The response's `refresh_token` is the mint; `access_type=offline&prompt=consent` are load-bearing — without them Google returns no refresh token. Short-lived access tokens are derived from it automatically by the upload tooling; you never handle those.
 4. **Secrets.** Store the four values as repository secrets: `CHROME_WEBSTORE_EXTENSION_ID`, `CHROME_WEBSTORE_CLIENT_ID`, `CHROME_WEBSTORE_CLIENT_SECRET`, `CHROME_WEBSTORE_REFRESH_TOKEN` (`gh secret set <NAME>`).
-5. **CI.** The upload job in `extensions.yml` is deliberately absent until these exist; add it behind the same warn-green-when-secrets-absent pattern `android.yml` uses (trustedTesters track on `stage`, default track on `main`).
+5. **CI.** `extensions.yml`'s `upload-chrome` job ships a store-variant zip to the listing on every `stage`/`main` push, behind a `gate-*` environment approval (gate-prod waits for a reviewer; gate-stage passes on its own) and warn-green when the `CHROME_WEBSTORE_*` secrets are absent. It uploads a **draft only** — publishing, which is what triggers a store review each time, remains a deliberate act in the developer console (a deliberate deviation from the plan's publish-to-trustedTesters idea until the release cadence settles). Store versions are `<CHANGELOG version>.<run number>` so repeat uploads always increase. A listing locked by a pending review makes the upload warn and skip, not fail — expected around submissions; the next push after the review completes goes through. Related: never cancel an in-progress review just to swap the package; cancellation sends the item to the back of the review queue.
 
 ### 2.1 Privacy-practices disclosures
 
