@@ -48,17 +48,21 @@
       if (!raw) { return; }
       var target;
       try { target = decodeURIComponent(raw); } catch (e) { target = raw; }
-      // Same scheme blocklist the extension and the reader link menu apply:
-      // only plain web URLs may be rendered as a clickable anchor.
-      var ok = /^https?:\/\//i.test(target) &&
-               !/^\s*(javascript|data|file|about|blob|vbscript):/i.test(target);
+      // Only plain web URLs may be rendered as a clickable anchor: parse
+      // with the URL constructor and allowlist the protocol, so nothing
+      // javascript:/data:/etc-shaped can reach the href (the same policy
+      // the extension and the reader link menu apply). The anchor is
+      // user-activated, never auto-followed.
+      var url = null;
+      try { url = new URL(target); } catch (e) { url = null; }
+      var ok = url !== null && (url.protocol === 'http:' || url.protocol === 'https:');
       display.textContent = target;
       if (ok) {
-        open.href = target;
+        open.href = url.href;
         open.hidden = false;
         copy.hidden = false;
         copy.addEventListener('click', function () {
-          navigator.clipboard.writeText(target).then(function () {
+          navigator.clipboard.writeText(url.href).then(function () {
             copy.textContent = 'Copied';
           });
         });
