@@ -53,12 +53,39 @@ CABALMAIL_CONTROL_DOMAIN=<control-domain> npm run build
 
 - Chrome: `chrome://extensions` → Developer mode → "Load unpacked" →
   `extensions/chrome/dist`. The extension ID is pinned by the manifest
-  `key`, so it is the same on every machine (and matches the future store
-  listing) — which is what lets one Cognito redirect URI cover dev and
-  store builds alike (see docs/browser-extension.md section 4).
-- Safari: build and run the `CabalmailExtensionHost` scheme, then enable
-  the extension in Safari Settings → Extensions (allow unsigned extensions
-  in Safari's Develop menu first).
+  `key`, so every unpacked dev install shares one known ID and one
+  registered Cognito redirect URI (the store listing has its own,
+  store-assigned ID — see docs/browser-extension.md section 4).
+- Safari: the extension registers with Safari by *running the host app*.
+  Build ad-hoc signed — not `CODE_SIGNING_ALLOWED=NO`, which produces a
+  bundle with no signature at all, and the extension machinery can refuse
+  a signature-less appex even with the unsigned-extensions toggle on:
+
+  ```sh
+  cd safari
+  CABALMAIL_CONTROL_DOMAIN=<control-domain> xcodegen generate
+  xcodebuild -project Cabalmail.xcodeproj -scheme CabalmailExtensionHost \
+    -configuration Debug -destination 'platform=macOS' -derivedDataPath build \
+    build CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=-
+  open "build/Build/Products/Debug/Cabalmail Extension.app"
+  ```
+
+  Then in Safari: enable the Develop menu (Settings → Advanced), tick
+  Develop → **Allow Unsigned Extensions** (admin password; resets every
+  time Safari quits — re-tick each session, or run the scheme from Xcode
+  with your team's automatic signing to avoid it), and enable the
+  extension under Settings → Extensions, granting website access. Add
+  "Allow in Private Browsing" to exercise the private-link handoff.
+  While the toggle is off, Safari *hides* unsigned extensions from the
+  Extensions pane entirely rather than graying them out — so an "empty"
+  pane after a Safari relaunch means the toggle reset, not that
+  registration was lost (`pluginkit -m | grep -i cabalmail` confirms the
+  appex is still registered; `pluginkit -a <path-to-.appex>` forces
+  registration in the rare case it isn't).
+  Sign-in additionally needs Safari's redirect URI registered: evaluate
+  `browser.identity.getRedirectURL()` in Develop → Web Extension
+  Background Content → Cabalmail, then append it to
+  `TF_VAR_EXTENSION_REDIRECT_URIS` (docs/browser-extension.md section 4).
 
 The suggest/adopt flows need an environment whose backend carries the
 pending-address endpoints (`/new` with `pending`, `/confirm_address`) and
