@@ -5,9 +5,11 @@ import { useEffect, useState } from 'preact/hooks';
 import { sendToBackground } from '@cabalmail/extension-shared/messaging/client';
 
 declare const __CONTROL_DOMAIN__: string;
+declare const __REPORT_URL__: string;
 
-const REPORT_URL =
-  'https://github.com/cabalmail/cabal-infra/issues/new?labels=needs-verification&title=Extension%3A%20wrong%20form%20detection';
+// Build-time (CABALMAIL_REPORT_URL) so forks point reports at their own
+// tracker; defaults to the upstream cabal-infra issue template.
+const REPORT_URL = __REPORT_URL__;
 
 function Popup() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);

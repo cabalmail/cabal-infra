@@ -48,11 +48,19 @@ const outDir =
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
+// Where the popup's "Report wrong detection" link files issues. Forks set
+// CABALMAIL_REPORT_URL so their users' reports land in their tracker, not
+// upstream's.
+const reportUrl =
+  process.env.CABALMAIL_REPORT_URL ||
+  'https://github.com/cabalmail/cabal-infra/issues/new?labels=needs-verification&title=Extension%3A%20wrong%20form%20detection';
+
 const shared = {
   configFile: false,
   logLevel: 'warn',
   define: {
     __CONTROL_DOMAIN__: JSON.stringify(controlDomain),
+    __REPORT_URL__: JSON.stringify(reportUrl),
   },
   esbuild: {
     jsx: 'automatic',
