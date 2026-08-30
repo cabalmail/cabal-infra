@@ -19,8 +19,9 @@ extension MessageDetailView {
     @ViewBuilder
     var disposeButton: some View {
         if let model {
+            let rows = disposeRows(model: model)
             Menu {
-                disposeOptionItems(model: model)
+                disposeOptionItems(rows: rows, model: model)
             } label: {
                 disposeToolbarLabel(for: model.disposeIntent)
             } primaryAction: {
@@ -29,6 +30,11 @@ extension MessageDetailView {
             .menuIndicator(optionMenuIndicator)
             .tint(disposeTint(for: model.disposeIntent))
             .accessibilityIdentifier("reader.dispose")
+            // macOS keeps the AppKit menu it built the first time this
+            // `Menu` was opened, checkmarks and titles included, so the
+            // identity carries what the rows draw (#1337, same mechanism
+            // as #1329).
+            .id(ReaderOptionMenuPolicy.identity(rows))
         }
     }
 
@@ -95,37 +101,53 @@ extension MessageDetailView {
         }
     }
 
+    /// The rows the menu offers, read here so the enclosing body observes
+    /// the preferences and the reconciled verbs — the identity is derived
+    /// from the same values.
+    func disposeRows(model: MessageDetailViewModel) -> [ReaderMenuRow<DisposeOption>] {
+        ReaderOptionMenuPolicy.disposeRows(
+            verbs: DisposeAction.allCases.map {
+                (action: $0, verb: disposeVerb(for: model.intent(for: $0)))
+            },
+            selectedAction: preferences.disposeAction,
+            selectedAdvance: preferences.disposeAdvance
+        )
+    }
+
     /// The option menu: every Archive/Delete × after-dispose combination.
     /// Rendered as menu toggles so the pair currently in effect — the
     /// button face's default — carries the native checkmark. Choosing a row
     /// persists the pair — making it the default and what Settings shows —
     /// then disposes the open message with it.
+    ///
+    /// Each row reads its own drawn state off the row rather than the
+    /// preferences, so what is drawn and what the menu's identity is built
+    /// from can never disagree.
     @ViewBuilder
-    func disposeOptionItems(model: MessageDetailViewModel) -> some View {
-        ForEach(Array(DisposeAction.allCases.enumerated()), id: \.element) { index, action in
-            if index > 0 { Divider() }
-            ForEach(DisposeAdvance.allCases) { advance in
-                disposeOptionItem(model: model, action: action, advance: advance)
-            }
+    func disposeOptionItems(
+        rows: [ReaderMenuRow<DisposeOption>],
+        model: MessageDetailViewModel
+    ) -> some View {
+        ForEach(rows) { row in
+            if row.startsGroup { Divider() }
+            disposeOptionItem(model: model, row: row)
         }
     }
 
     @ViewBuilder
     private func disposeOptionItem(
         model: MessageDetailViewModel,
-        action: DisposeAction,
-        advance: DisposeAdvance
+        row: ReaderMenuRow<DisposeOption>
     ) -> some View {
-        // The verb comes from the reconciled intent, not the raw action, so
-        // the rows read true in the special folders: Delete Forever inside
-        // Trash, Restore inside Archive.
-        let intent = model.intent(for: action)
         Toggle(isOn: Binding(
-            get: { preferences.disposeAction == action && preferences.disposeAdvance == advance },
+            get: { row.isOn },
             set: { _ in
-                preferences.disposeAction = action
-                preferences.disposeAdvance = advance
-                switch intent {
+                preferences.disposeAction = row.option.action
+                preferences.disposeAdvance = row.option.advance
+                // The verb comes from the reconciled intent, not the raw
+                // action, so the rows read true in the special folders:
+                // Delete Forever inside Trash, Restore inside Archive.
+                switch model.intent(for: row.option.action) {
                 case .purge:
                     purgeConfirmPresented = true
                 case .restore:
@@ -135,16 +157,7 @@ extension MessageDetailView {
                 }
             }
         )) {
-            Text("\(disposeVerb(for: intent)) and \(advanceDescription(for: advance))")
-        }
-    }
-
-    private func advanceDescription(for advance: DisposeAdvance) -> String {
-        switch advance {
-        case .next:           return "Move to Next Message"
-        case .nextUnread:     return "Move to Next Unread"
-        case .previousUnread: return "Move to Previous Unread"
-        case .firstUnread:    return "Move to First Unread"
+            Text(row.label)
         }
     }
 }

@@ -174,11 +174,12 @@ resource "aws_cognito_user_pool_domain" "users" {
 
 # Public OAuth client for the browser extension
 # (docs/1.x/browser-extension-plan.md, Phase 3.2): Hosted UI + PKCE code
-# flow, no client secret (an extension cannot keep one). The callback URLs
-# are the browsers' web-auth-flow redirect origins, which embed the store-
-# assigned extension IDs; until those exist, var.extension_redirect_uris is
-# empty and a loopback placeholder keeps the client valid (Cognito requires
-# at least one callback URL when OAuth flows are enabled).
+# flow, no client secret (an extension cannot keep one). Two kinds of
+# callback URL: the always-registered /extension-auth page on the admin
+# origin (the tab-based flow Safari uses, since it has no WebExtensions
+# identity API — the page is provisioned in modules/app/s3.tf), plus the
+# Chrome identity-API redirects from var.extension_redirect_uris, which
+# embed extension IDs the operator supplies once they exist.
 resource "aws_cognito_user_pool_client" "extension" {
   name         = "cabal_extension_client"
   user_pool_id = aws_cognito_user_pool.users.id
@@ -187,9 +188,10 @@ resource "aws_cognito_user_pool_client" "extension" {
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["openid", "email"]
   supported_identity_providers         = ["COGNITO"]
-  callback_urls = length(var.extension_redirect_uris) > 0 ? (
-    var.extension_redirect_uris
-  ) : ["http://127.0.0.1/cabalmail-extension-placeholder"]
+  callback_urls = concat(
+    ["https://admin.${var.control_domain}/extension-auth"],
+    var.extension_redirect_uris,
+  )
   explicit_auth_flows = ["ALLOW_REFRESH_TOKEN_AUTH"]
 
   access_token_validity  = 1

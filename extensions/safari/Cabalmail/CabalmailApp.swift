@@ -42,17 +42,39 @@ struct ContentView: View {
                 SFSafariApplication.showPreferencesForExtension(
                     withIdentifier: Self.extensionBundleId
                 ) { error in
-                    if let error {
-                        Task { @MainActor in
-                            message = error.localizedDescription
-                        }
+                    guard error != nil else { return }
+                    // SFErrorNoExtensionFound (code 1) is the common case:
+                    // Safari has not registered the extension yet, which is
+                    // the normal state for a first run of an unsigned dev
+                    // build before Develop > Allow Unsigned Extensions is
+                    // on. The deep link cannot work until Safari lists the
+                    // extension, so open Safari and explain the manual path
+                    // instead of surfacing a raw error-domain string.
+                    Task { @MainActor in
+                        message = """
+                        Safari hasn't registered the extension yet. Open \
+                        Safari > Settings > Extensions and enable Cabalmail \
+                        there. For unsigned development builds, first turn \
+                        on Develop > Allow Unsigned Extensions, then \
+                        relaunch this app.
+                        """
+                    }
+                    if let safari = NSWorkspace.shared.urlForApplication(
+                        withBundleIdentifier: "com.apple.Safari"
+                    ) {
+                        NSWorkspace.shared.openApplication(
+                            at: safari,
+                            configuration: NSWorkspace.OpenConfiguration()
+                        )
                     }
                 }
             }
             if let message {
                 Text(message)
                     .font(.footnote)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
             }
         }
         .padding(32)

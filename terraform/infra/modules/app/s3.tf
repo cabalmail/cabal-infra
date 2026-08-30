@@ -99,6 +99,20 @@ resource "aws_s3_object" "private_link" {
   etag          = md5(file("${path.module}/templates/private-link.html"))
 }
 
+# OAuth redirect target for the browser extension's tab-based sign-in
+# (Safari has no WebExtensions identity API; docs/browser-extension.md
+# section 4). Same extensionless-key-with-explicit-content-type rationale
+# as private-link above. The matching redirect URI is registered on the
+# extension's Cognito app client in modules/user_pool.
+resource "aws_s3_object" "extension_auth" {
+  bucket        = var.bucket
+  key           = "/extension-auth"
+  content_type  = "text/html"
+  cache_control = "no-cache"
+  content       = file("${path.module}/templates/extension-auth.html")
+  etag          = md5(file("${path.module}/templates/extension-auth.html"))
+}
+
 # Runtime configuration for Node Lambdas
 resource "aws_s3_object" "node_config" {
   bucket       = var.bucket
