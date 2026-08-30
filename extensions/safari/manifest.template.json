@@ -9,8 +9,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -18,7 +23,11 @@
     "default_popup": "popup.html",
     "default_title": "Cabalmail"
   },
-  "permissions": ["storage", "identity", "webNavigation", "tabs", "history"],
+  "permissions": [
+    "storage",
+    "identity",
+    "history"
+  ],
   "host_permissions": [
     "https://admin.__CONTROL_DOMAIN__/*",
     "https://*.amazoncognito.com/*"

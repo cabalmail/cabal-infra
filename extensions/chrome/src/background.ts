@@ -139,22 +139,27 @@ export function extractPrivateLinkTarget(url: string): string | null {
   return target;
 }
 
-browser.webNavigation?.onCommitted.addListener(
-  (details) => {
-    if (details.frameId !== 0) return;
-    const target = extractPrivateLinkTarget(details.url);
-    if (!target) return;
-    void (async () => {
-      try {
-        await browser.windows.create({ incognito: true, url: target });
-        await browser.tabs.remove(details.tabId);
-        await browser.history?.deleteUrl({ url: details.url });
-      } catch {
-        // Most likely: the user has not granted private-browsing access.
-        // Never fail silently -- replace the redirector with the setup page
-        // (the redirector page itself doubles as the explainer).
-      }
-    })();
-  },
-  { url: [{ urlPrefix: REDIRECTOR_PREFIX }] },
-);
+// tabs.onUpdated rather than webNavigation.onCommitted: it needs no extra
+// permission (the URL is visible to us because the redirector lives under
+// our admin host permission, and tabs.remove is permission-free), which
+// keeps the store-listing permission surface to storage/identity/history.
+browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!changeInfo.url) return;
+  const url = changeInfo.url;
+  const target = extractPrivateLinkTarget(url);
+  if (!target) return;
+  void (async () => {
+    try {
+      await browser.windows.create({ incognito: true, url: target });
+      await browser.tabs.remove(tabId);
+      await browser.history?.deleteUrl({ url });
+    } catch (err) {
+      // Most likely: the user has not granted private-browsing access. The
+      // redirector tab is left in place, and its own page explains the
+      // "Allow in Private Browsing"/"Allow in Incognito" setup with an
+      // "Open normally" escape hatch -- so the failure is visible, not
+      // silent. Log for debuggability.
+      console.warn('[cabalmail] private-window open failed:', err);
+    }
+  })();
+});
