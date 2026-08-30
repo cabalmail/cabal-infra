@@ -140,8 +140,14 @@ jobs:
     name: Upload to Chrome Web Store
     needs: approval
     # The ref check (not an event check) is what keeps a workflow_dispatch
-    # run on a feature branch from uploading.
-    if: github.ref_name == 'main' || github.ref_name == 'stage'
+    # run on a feature branch from uploading. EXTENSIONS_UPLOAD_PAUSED is
+    # the operator kill-switch (gh variable set EXTENSIONS_UPLOAD_PAUSED
+    # --body true): it skips only the upload jobs, so pausing uploads does
+    # not cost the run's test and build coverage the way cancelling does.
+    # Note the store also self-protects - uploads against a listing under
+    # review are rejected (ITEM_NOT_UPDATABLE, handled warn-green below)
+    # and CI never publishes - so the switch is belt-and-braces.
+    if: (github.ref_name == 'main' || github.ref_name == 'stage') && vars.EXTENSIONS_UPLOAD_PAUSED != 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     defaults:
@@ -238,8 +244,9 @@ jobs:
     name: Upload macOS host app to App Store Connect
     needs: approval
     # The ref check (not an event check) is what keeps a workflow_dispatch
-    # run on a feature branch from uploading.
-    if: github.ref_name == 'main' || github.ref_name == 'stage'
+    # run on a feature branch from uploading; EXTENSIONS_UPLOAD_PAUSED is
+    # the shared operator kill-switch (see upload-chrome).
+    if: (github.ref_name == 'main' || github.ref_name == 'stage') && vars.EXTENSIONS_UPLOAD_PAUSED != 'true'
     runs-on: macos-26
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     steps:
