@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import useApi from '../hooks/useApi';
+import useUnassignAddress from '../hooks/useUnassignAddress';
 import { useAppMessage } from '../contexts/AppMessageContext';
 import ConfirmDialog from '../ConfirmDialog';
 import './Users.css';
@@ -20,7 +21,6 @@ function Users({ domains = [] }) {
   const [hoveredAddr, setHoveredAddr] = useState(null);
   const [stickyAddr, setStickyAddr] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
-  const [pendingUnassign, setPendingUnassign] = useState(null);
   const highlighted = hoveredAddr || stickyAddr;
 
   const loadUsers = useCallback(() => {
@@ -53,6 +53,18 @@ function Users({ domains = [] }) {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  const {
+    pendingUnassign,
+    handleUnassign,
+    cancelUnassign,
+    confirmUnassign,
+  } = useUnassignAddress({
+    api,
+    setMessage,
+    onDone: loadUsers,
+    failureLabel: 'Failed to remove assignment: ',
+  });
 
   const addressesByUser = useMemo(() => {
     const map = {};
@@ -143,31 +155,6 @@ function Users({ domains = [] }) {
       }
     );
   }, [api, setMessage, loadUsers]);
-
-  const handleUnassign = useCallback((username, address) => {
-    setPendingUnassign({ username, address });
-  }, []);
-
-  const cancelUnassign = useCallback(() => {
-    setPendingUnassign(null);
-  }, []);
-
-  const confirmUnassign = useCallback(() => {
-    const target = pendingUnassign;
-    if (!target) return;
-    setPendingUnassign(null);
-    const { username, address } = target;
-    api.unassignAddress(address, username).then(
-      () => {
-        setMessage(`Removed "${username}" from "${address}".`, false);
-        loadUsers();
-      },
-      (err) => {
-        const msg = err.response?.data?.Error || err.message || err;
-        setMessage('Failed to remove assignment: ' + msg, true);
-      }
-    );
-  }, [api, pendingUnassign, setMessage, loadUsers]);
 
   const renderDomainChips = (username) => {
     if (domains.length === 0) return null;
@@ -338,7 +325,7 @@ function Users({ domains = [] }) {
                         {canRemove && (
                           <button
                             className="chip-remove"
-                            onClick={() => handleUnassign(user.username, a.address)}
+                            onClick={() => handleUnassign(a.address, user.username)}
                             title={`Remove ${user.username} from ${a.address}`}
                           >&times;</button>
                         )}
