@@ -143,6 +143,7 @@ module "pool" {
   enforce_admin_mfa                = var.enforce_admin_mfa
   enforce_user_mfa                 = var.enforce_user_mfa
   threat_protection_enforced       = var.threat_protection_enforced
+  extension_redirect_uris          = var.extension_redirect_uris
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
@@ -241,6 +242,12 @@ module "admin" {
   invitation_required = module.pool.invitation_required
   sms_enabled         = module.pool.sms_enabled
   monitoring          = var.monitoring
+
+  # Browser extension (docs/1.x/browser-extension-plan.md): the PKCE app
+  # client and the Hosted-UI domain prefix, surfaced through config.js so
+  # the extension can drive the Hosted UI code flow.
+  extension_client_id = module.pool.extension_client_id
+  user_pool_domain    = module.pool.user_pool_domain
   imap_pool_enabled   = var.imap_pool_enabled
   access_logs_bucket  = module.s3_access_logs.bucket
 

@@ -6,9 +6,8 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
-from helper import active_addresses_on_subdomain  # pylint: disable=import-error
 from helper import authorized_address_request  # pylint: disable=import-error
-from helper import delete_address_dns_records  # pylint: disable=import-error
+from helper import teardown_address_dns_if_unused  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -31,25 +30,11 @@ def handler(event, _context):
                 'suspended': True
             })
         }
-    # Like revoke, take subdomain/tld/zone from the STORED row, never from the
-    # request body: authorization above is on `address` only, so honoring a
-    # client-supplied subdomain/tld would let a caller who owns any one address
-    # delete another user's DNS records.
-    subdomain = item.get('subdomain')
-    tld = item.get('tld')
-    # The zone is resolved from DOMAINS, never from the zone-id cached on the
-    # row: that value is a snapshot from address-creation time that goes stale
-    # if a hosted zone is ever recreated (legacy rows pointed at zones that no
-    # longer exist, failing Route 53 calls with NoSuchHostedZone). For a tld no
-    # longer in DOMAINS this resolves to None and the DNS step is skipped --
-    # the Lambda role's Route 53 grant only covers managed zones anyway.
-    zone_id = domains.get(tld)
     try:
-        # DNS records are shared by every address on the subdomain, so only
-        # remove them when no other ACTIVE (non-suspended) address needs them.
-        if subdomain and tld and zone_id and \
-                not active_addresses_on_subdomain(subdomain, tld, address):
-            delete_address_dns_records(zone_id, subdomain, tld, control_domain)
+        # Row-sourced subdomain/tld, DOMAINS-sourced zone, and the co-tenant
+        # guard all live in the shared teardown (see its docstring for the
+        # authorization and stale-zone-id rationale).
+        teardown_address_dns_if_unused(item, address, domains, control_domain)
         mark_suspended(address)
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f"Error suspending address {address}: {err}")

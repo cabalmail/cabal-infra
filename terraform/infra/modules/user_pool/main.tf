@@ -171,3 +171,36 @@ resource "aws_cognito_user_pool_domain" "users" {
   domain       = "cabal-${data.aws_caller_identity.current.account_id}"
   user_pool_id = aws_cognito_user_pool.users.id
 }
+
+# Public OAuth client for the browser extension
+# (docs/1.x/browser-extension-plan.md, Phase 3.2): Hosted UI + PKCE code
+# flow, no client secret (an extension cannot keep one). The callback URLs
+# are the browsers' web-auth-flow redirect origins, which embed the store-
+# assigned extension IDs; until those exist, var.extension_redirect_uris is
+# empty and a loopback placeholder keeps the client valid (Cognito requires
+# at least one callback URL when OAuth flows are enabled).
+resource "aws_cognito_user_pool_client" "extension" {
+  name         = "cabal_extension_client"
+  user_pool_id = aws_cognito_user_pool.users.id
+
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = ["openid", "email"]
+  supported_identity_providers         = ["COGNITO"]
+  callback_urls = length(var.extension_redirect_uris) > 0 ? (
+    var.extension_redirect_uris
+  ) : ["http://127.0.0.1/cabalmail-extension-placeholder"]
+  explicit_auth_flows = ["ALLOW_REFRESH_TOKEN_AUTH"]
+
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 7
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  # Same rationale as cabal_admin_client above.
+  enable_token_revocation = true
+}

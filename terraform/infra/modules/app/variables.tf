@@ -17,6 +17,16 @@ variable "mfa_enroll_client_id" {
   description = "Client ID for the locked-out MFA setup flow."
 }
 
+variable "extension_client_id" {
+  type        = string
+  description = "Client ID of the browser extension's public OAuth (PKCE) app client, surfaced through config.js."
+}
+
+variable "user_pool_domain" {
+  type        = string
+  description = "Hosted-UI domain prefix of the Cognito user pool (without the .auth.<region>.amazoncognito.com suffix), surfaced through config.js for the browser extension's Hosted UI flow."
+}
+
 variable "region" {
   type        = string
   description = "The AWS region."

@@ -209,6 +209,13 @@ if [ "$TIER" = "imap" ]; then
   echo "[entrypoint] Preparing keyworded-delivery spool..."
   mkdir -p /var/spool/cabal-append
   chmod 1777 /var/spool/cabal-append
+  # And for pending-address confirmations
+  # (docs/1.x/browser-extension-plan.md, Phase 3.1.d): procmail's
+  # confirm-cabal-address (recipient, no creds) spools; the root
+  # confirm-spool-drain.sh daemon clears the DynamoDB pending flag.
+  echo "[entrypoint] Preparing pending-confirmation spool..."
+  mkdir -p /var/spool/cabal-confirm
+  chmod 1777 /var/spool/cabal-confirm
 fi
 
 # ── Step 6: Prepare rsyslog working directory ─────────────────

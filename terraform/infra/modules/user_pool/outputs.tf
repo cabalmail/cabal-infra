@@ -33,6 +33,11 @@ output "user_pool_domain" {
   description = "Hosted-UI domain prefix for the Cognito user pool."
 }
 
+output "extension_client_id" {
+  value       = aws_cognito_user_pool_client.extension.id
+  description = "ID of the browser extension's public OAuth (PKCE) app client"
+}
+
 output "invitation_required" {
   value       = var.invitation_code != ""
   description = "True when the check_invite pre-signup Lambda enforces an invitation code. Consumed by the app module so the React signup form can hide the field when no code is configured."
