@@ -7,7 +7,7 @@
 # `upload-chrome` ships a new draft version to the Chrome Web Store listing,
 # and `upload-safari` archives the signed macOS host app and uploads it to
 # App Store Connect (parked with a warning until the two extension
-# provisioning-profile secrets exist; see docs/browser-extension.md 3).
+# provisioning-profile secrets exist; see docs/browser-extension.md, "Publishing to the App Store").
 
 name: Extensions
 
@@ -172,7 +172,7 @@ jobs:
         run: |
           if [ -z "$EXTENSION_ID" ] || [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ] || [ -z "$REFRESH_TOKEN" ]; then
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::CHROME_WEBSTORE_* secrets are not configured; skipping the Web Store upload. See docs/browser-extension.md sections 2.3-2.4."
+            echo "::warning::CHROME_WEBSTORE_* secrets are not configured; skipping the Web Store upload. See docs/browser-extension.md, \"Publishing to the Chrome Web Store\"."
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
@@ -231,7 +231,8 @@ jobs:
   # Signed macOS host app -> App Store Connect, mirroring apple.yml's
   # upload-mac leg (manual signing, disposable keychain, verdict-banner
   # altool check). Parks warn-green until the operator mints the two
-  # extension provisioning profiles (docs/browser-extension.md section 3;
+  # extension provisioning profiles (docs/browser-extension.md,
+  # "Publishing to the App Store";
   # scripts/make-mac-profile.py if the portal refuses macOS profiles) and
   # stores them as MAC_EXT_HOST_APP_STORE_PROFILE /
   # MAC_EXT_WEB_APP_STORE_PROFILE. Certs, team ID, and the ASC API key are
@@ -279,7 +280,7 @@ jobs:
           [ -z "$S9" ] && MISSING+=("MAC_EXT_HOST_APP_STORE_PROFILE")
           [ -z "$S10" ] && MISSING+=("MAC_EXT_WEB_APP_STORE_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
-            echo "::warning::Safari upload secrets missing: ${MISSING[*]}. Skipping upload. See docs/browser-extension.md section 3."
+            echo "::warning::Safari upload secrets missing: ${MISSING[*]}. Skipping upload. See docs/browser-extension.md, \"Publishing to the App Store\"."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"

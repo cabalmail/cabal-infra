@@ -20,9 +20,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Browser extensions workspace (docs/1.x/browser-extension-plan.md)
+# Browser extensions workspace (docs/browser-extension.md)
 extensions/node_modules/
 extensions/*/node_modules/
 extensions/chrome/dist/
 extensions/safari/CabalmailExtension/Resources/
 extensions/safari/Cabalmail.xcodeproj/
+extensions/build/

@@ -678,7 +678,7 @@ jobs:
         echo "enforce_user_mfa = ${{ vars.TF_VAR_ENFORCE_USER_MFA || 'false' }}" >> terraform.tfvars
         echo "threat_protection_enforced = ${{ vars.TF_VAR_THREAT_PROTECTION_ENFORCED || 'false' }}" >> terraform.tfvars
         # HCL list of the browser extension's OAuth callback URLs
-        # (docs/browser-extension.md section 4); empty until set.
+        # (see docs/browser-extension.md, "OAuth redirect URIs"); empty until set.
         echo "extension_redirect_uris = ${{ vars.TF_VAR_EXTENSION_REDIRECT_URIS || '[]' }}" >> terraform.tfvars
         # deploy_role_arn reuses the existing AWS_DEPLOY_ROLE_ARN variable
         # (the OIDC role this job already assumes); it is granted ECR pull
@@ -793,7 +793,7 @@ jobs:
         echo "enforce_user_mfa = ${{ vars.TF_VAR_ENFORCE_USER_MFA || 'false' }}" >> terraform.tfvars
         echo "threat_protection_enforced = ${{ vars.TF_VAR_THREAT_PROTECTION_ENFORCED || 'false' }}" >> terraform.tfvars
         # HCL list of the browser extension's OAuth callback URLs
-        # (docs/browser-extension.md section 4); empty until set.
+        # (see docs/browser-extension.md, "OAuth redirect URIs"); empty until set.
         echo "extension_redirect_uris = ${{ vars.TF_VAR_EXTENSION_REDIRECT_URIS || '[]' }}" >> terraform.tfvars
         # deploy_role_arn reuses the existing AWS_DEPLOY_ROLE_ARN variable
         # (the OIDC role this job already assumes); it is granted ECR pull
