@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2] - 2026-08-30
+
+### Added
+- **Scripted browser-extension build and release chores.**
+  `scripts/build-extension.sh` builds the Chrome and Safari bundles and
+  packages the Web Store zip, refusing one that still carries the manifest
+  `key` the store rejects; `scripts/extension-redirect-uris.py` derives the
+  Chrome OAuth redirect URIs from that key and sets
+  `TF_VAR_EXTENSION_REDIRECT_URIS` with the escaping `infra.yml` needs;
+  `scripts/mint-chrome-webstore-token.py` runs the Web Store API
+  refresh-token consent round-trip end to end; and
+  `scripts/verify-pending-addresses.py` drives the whole pending-address
+  lifecycle — create, list, confirm, confirm-again 409, backdate, reap —
+  against a live environment.
+
+### Changed
+- **Browser-extension documentation consolidated.**
+  [`docs/browser-extension.md`](docs/browser-extension.md) is now the
+  single build, distribution, and operations guide, written for someone
+  who has forked the repository and knows nothing else about Cabalmail;
+  `extensions/README.md` is a pointer to it. The plan document's errata
+  are folded into its text as first-class corrections.
+
+### Fixed
+- Apple: **Bulk action bar captions no longer break mid-word.** Selecting two
+  or more messages in a narrow message-list column — macOS at its default
+  column width — drew the bar's captions hyphenated and stacked ("Ar-chive",
+  "Rea d", a four-line "2 se-lect-ed") because nothing kept them on one line.
+  Each caption now stays whole, and where the column is too narrow for the
+  whole bar it drops the selection count, then the captions, rather than
+  breaking words.
+- **Safari sign-in driver lint break.** The tab-based auth driver declared
+  its timeout handle with `let` and assigned it once, which fails the
+  workspace's `prefer-const` rule and was reddening every `extensions`
+  CI run. Behaviour is unchanged.
+- Apple: **Deleting a custom flag no longer quits the app.** Confirming
+  "Delete Flag" in Settings ▸ Flags terminated the app outright and lost the
+  deletion — the palette still held the flag on the next launch — whenever
+  the flag was the last one in the list, which is every flag just added and
+  the only flag in a one-flag palette. The editor addressed its entry by
+  position, so the Name field and Enabled toggle read past the end of the
+  shortened palette while they were still on screen. Every read and write in
+  the editor now addresses the flag by its slot and copes with the flag
+  being gone, including when another device deletes it mid-edit.
+- Apple: **Reader menus follow the option you just chose.** On macOS the
+  mark-read and dispose menus in the reading pane kept whatever they drew
+  the first time they were opened: change the after-marking-read or
+  Archive/Delete default — from the menu itself or in Settings, with the
+  message still open — and re-opening the menu showed the checkmark still
+  on the old row, with the mark-read rows drawn as if they were still
+  available on a message that had just been read. Both menus now redraw
+  whenever anything they show changes.
+- **Safari extension sign-in.** Clicking "Sign in with Cabalmail" in the
+  Safari extension did nothing: Safari implements no WebExtensions
+  `identity` API, which the sign-in flow depended on. Safari now runs the
+  Hosted UI in a regular tab redirecting to a new
+  `https://admin.<control-domain>/extension-auth` page that the extension
+  intercepts and closes automatically (PKCE and the state check carry the
+  security, as before); the redirect URI is registered on the Cognito
+  client automatically, so Safari needs no per-install configuration.
+  Chrome keeps its existing identity-API flow.
+
 ## [1.9.1] - 2026-08-30
 
 ### Changed

@@ -101,33 +101,38 @@ enum FlagPaletteColor {
 /// route to deletion — which needs a confirmation, because per-message tags
 /// on a retired slot outlive the palette entry.
 private struct FlagPaletteEntryEditor: View {
-    @Bindable var preferences: Preferences
+    let preferences: Preferences
     let slot: String
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
 
+    /// Every read and write in this editor goes through the slot, never a
+    /// captured index — see `FlagPaletteEntryBindings` (#1340).
+    private var bindings: FlagPaletteEntryBindings {
+        FlagPaletteEntryBindings(preferences: preferences, slot: slot)
+    }
+
     var body: some View {
-        if let index = preferences.flagPalette.firstIndex(where: { $0.slot == slot }) {
-            editor(at: index)
+        if let entry = bindings.entry {
+            editor(entry)
         } else {
             // Deleted here or on another device while the editor was open.
             ContentUnavailableView("This flag was deleted", systemImage: "flag.slash")
         }
     }
 
-    private func editor(at index: Int) -> some View {
-        let entry = preferences.flagPalette[index]
-        return Form {
+    private func editor(_ entry: FlagPaletteEntry) -> some View {
+        Form {
             Section {
-                TextField("Name", text: labelBinding(at: index))
+                TextField("Name", text: bindings.label)
                     .autocorrectionDisabled()
-                Toggle("Enabled", isOn: binding(at: index, \.enabled))
+                Toggle("Enabled", isOn: bindings.value(\.enabled, or: false))
             } footer: {
                 Text("A disabled flag keeps its tags but is offered nowhere.")
                     .sectionFooter()
             }
             Section("Color") {
-                colorGrid(at: index, selected: entry.color)
+                colorGrid(selected: entry.color)
             }
             Section {
                 Button("Delete Flag", role: .destructive) {
@@ -139,7 +144,7 @@ private struct FlagPaletteEntryEditor: View {
                     titleVisibility: .visible
                 ) {
                     Button("Delete Flag", role: .destructive) {
-                        preferences.flagPalette.removeAll { $0.slot == slot }
+                        bindings.delete()
                         dismiss()
                     }
                 } message: {
@@ -160,11 +165,11 @@ private struct FlagPaletteEntryEditor: View {
         #endif
     }
 
-    private func colorGrid(at index: Int, selected: String) -> some View {
+    private func colorGrid(selected: String) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 12) {
             ForEach(FlagPalette.colors, id: \.self) { name in
                 Button {
-                    preferences.flagPalette[index].color = name
+                    bindings.set(\.color, to: name)
                 } label: {
                     ZStack {
                         Circle()
@@ -183,29 +188,5 @@ private struct FlagPaletteEntryEditor: View {
             }
         }
         .padding(.vertical, 4)
-    }
-
-    /// Label writes are capped to the server's length limit as they are
-    /// typed. A momentarily empty label (mid-edit) stays local: the server
-    /// rejects it, the push silently retries on the next keystroke, and
-    /// nothing is lost — the same transient-invalid posture the reply-body
-    /// editor takes.
-    private func labelBinding(at index: Int) -> Binding<String> {
-        Binding(
-            get: { preferences.flagPalette[index].label },
-            set: { newValue in
-                preferences.flagPalette[index].label =
-                    String(newValue.prefix(FlagPalette.maxLabelLength))
-            }
-        )
-    }
-
-    private func binding<Value>(
-        at index: Int, _ keyPath: WritableKeyPath<FlagPaletteEntry, Value>
-    ) -> Binding<Value> {
-        Binding(
-            get: { preferences.flagPalette[index][keyPath: keyPath] },
-            set: { preferences.flagPalette[index][keyPath: keyPath] = $0 }
-        )
     }
 }

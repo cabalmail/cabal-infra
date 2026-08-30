@@ -5,7 +5,7 @@
 | Phase | Status |
 |---|---|
 | 1. Foundation & shared core | **Complete** (2026-08-29). npm workspaces (not pnpm), `extensions/` |
-| 2. CI/CD | **Partial.** `extensions.yml` runs lint/test/build + unsigned Safari build; store uploads pending accounts/secrets |
+| 2. CI/CD | **Complete** (2026-08-30). `extensions.yml`: lint/test/build, unsigned Safari build, gated Chrome Web Store draft upload, and gated signed macOS ASC upload (parks warn-green until the two extension profile secrets exist). Draft-only Chrome uploads, not the trustedTesters publish — see docs/browser-extension.md, "Publishing to the Chrome Web Store" |
 | 3. Backend, auth & API client | **Stage-verified** (2026-08-30), all paths: create-pending, confirm + 409, procmail rule regen, live-mail clear-on-receive (4s), no-op on confirmed addresses, and a backdated reap (row + DNS removed, metric emitted, reconfigure fan-out) |
 | 4. Form detection | **Engine complete** with synthetic seed corpus + snapshot tool; real-site corpus capture pending |
 | 5. Suggest flow | **Code complete** (unit-tested); in-browser verification pending |
@@ -13,7 +13,7 @@
 | 7. Private-link handoff | **Extension + redirector page complete**; Apple-client menu row not started |
 | 8. Platform targets & distribution | **Scaffold only.** Safari macOS host builds unsigned; stores, iOS host, parity testing pending |
 
-The remaining manual/operator work (live verification, store accounts, redirect-URI wiring, corpus capture) is runbooked in [docs/browser-extension.md](../browser-extension.md).
+Building, configuring, verifying, and publishing the extension are documented in [docs/browser-extension.md](../browser-extension.md); this plan keeps the design rationale and the implementation record.
 
 ## Context
 
@@ -37,10 +37,10 @@ Eight phases: shared core; CI/CD (early, so every subsequent phase runs through 
 
 ### Guiding principles
 
-- **One codebase, two manifests.** Safari Web Extensions and Chrome MV3 share the same `manifest.json` schema, the same content-script model, the same `chrome.*`/`browser.*` API surface (Safari implements the WebExtensions API). The differences are real but localized: Safari packaging is an Xcode app extension target, Chrome packaging is a `.zip` uploaded to the Web Store. All extension *logic* lives in a single TypeScript codebase. Per-platform code is confined to packaging glue.
+- **One codebase, two manifests.** Safari Web Extensions and Chrome MV3 share the same `manifest.json` schema, the same content-script model, and most of the `chrome.*`/`browser.*` API surface. The differences are real but localized: Safari packaging is an Xcode app extension target, Chrome packaging is a `.zip` uploaded to the Web Store, and Safari's API surface has holes (notably `identity`, see the auth principle below). All extension *logic* lives in a single TypeScript codebase. Per-platform code is confined to packaging glue and a driver split where an API is missing.
 - **API-backed, no direct IMAP/SMTP.** The extension only ever touches the Lambda API surface. It does not parse mail, it does not connect to IMAP, it does not generate DKIM. The eager-create-and-reap model does require additive backend work (Phase 3.1): one extension to `POST /new`, a new `POST /confirm_address` endpoint, a scheduled reaper Lambda, and a procmail-based clear-on-receive hook on the IMAP tier. All purely additive, routed through `stage` -> `main` like everything else.
 - **Generate locally, create eagerly, reap on abandon.** Random address generation mirrors `react/admin/src/Addresses/Request.jsx` lines 69-71 exactly: 8-char local part (first/last alphanumeric, middle allows `._-`), 8-char subdomain (first/last alphanumeric, middle allows `-` only). Generation is pure client-side -- refreshing the suggestion does not hit the API. *Commit* (the user clicking "Use this address") creates the address immediately, ahead of form submit. This avoids the verification-email race: most sign-up backends send a verification mail within seconds of form submission, and a brand-new Cabalmail address needs DNS propagation + sendmail config reload before it can receive mail. Creating at commit time gives that pipeline runway -- typically tens of seconds while the user fills the rest of the form. Eagerly-created addresses are tagged `pending=true`; the extension issues a `confirm_address` call on actual form submit to clear the flag, and a server-side TTL reaper revokes any address that stays `pending` for longer than a window (default 24h). This handles the close-the-browser-without-submitting case the extension can't observe.
-- **Cognito Hosted UI + PKCE for auth.** The extension is a public client; embedding the Cognito SRP flow would require the user to type their password into a popup UI, which is worse for trust and worse for shared-device scenarios. PKCE via the platform's web-auth APIs (`chrome.identity.launchWebAuthFlow` on Chrome, `ASWebAuthenticationSession` via the Safari app extension host) is the right shape. Embedded SRP via `amazon-cognito-identity-js` is the fallback if Hosted UI work slips.
+- **Cognito Hosted UI + PKCE for auth.** The extension is a public client; embedding the Cognito SRP flow would require the user to type their password into a popup UI, which is worse for trust and worse for shared-device scenarios. PKCE against the Hosted UI is the right shape, but the interactive leg has to be driven differently per browser, so it lives behind a driver split in `extensions/shared/src/auth/webAuthDriver.ts`. Chrome uses `chrome.identity.launchWebAuthFlow`. Safari implements no WebExtensions `identity` API at all (`browser.identity` is undefined; MDN compat data records every `identity.*` member as unsupported), and `ASWebAuthenticationSession` is not viable either -- it needs a presentation context the UI-less web extension appex cannot provide, and brokering through the host app would require the host app to be running. So on Safari the interactive leg runs the Hosted UI in a regular tab redirecting to `https://admin.<control-domain>/extension-auth`, a static page provisioned next to `/private-link`, which the background intercepts via `tabs.onUpdated` and closes; PKCE and the `state` check carry the security. That redirect URI is Terraform-derived and registered on the app client unconditionally, so Safari sign-in needs no per-install configuration. Embedded SRP via `amazon-cognito-identity-js` is the fallback if Hosted UI work slips.
 - **Never block submission silently.** Any time the extension intercepts a form submit, the user sees a visible explanation (banner or popover) and an explicit "submit anyway" escape hatch. Surprise-blocking a form because of a Cabalmail decision is worse than letting a bad address through.
 - **No telemetry.** The extension does not phone home about which sites the user visits, which forms it detected, or which suggestions were accepted. Cabalmail is a privacy product; this surface is the most privacy-sensitive of all.
 
@@ -183,17 +183,12 @@ Create `extensions/` with the layout above. Set up:
 
 ### 2. Runtime configuration
 
-The extension needs `apiUrl`, `userPoolId`, `clientId`, and the list of apex mail domains from somewhere. The convention established by the React admin app (`react/admin/public/config.js`) and adopted by Apple is to fetch `https://<control-domain>/config.js` (or `.json`) at first launch.
-
-> **Erratum (2026-08-07):** `config.js` is not in the React source tree; it is
-> Terraform-generated (`terraform/infra/modules/app/s3.tf`, from
-> `templates/config.js.tftpl`) and served from the control domain via
-> CloudFront. The fetch-at-runtime convention is otherwise as described.
+The extension needs `apiUrl`, `userPoolId`, `clientId`, and the list of apex mail domains from somewhere. The convention established by the React admin app and adopted by Apple is to fetch that configuration document at first launch. It is not part of any client's source tree: Terraform generates it (`terraform/infra/modules/app/s3.tf`, from `templates/config.js.tftpl`) and CloudFront serves it from `https://admin.<control-domain>/config.js`, with a sibling `config.json` for clients that cannot execute JavaScript.
 
 The control domain itself is the only value baked at build time. Store it in a Vite-injected constant per build variant (dev/stage/prod), much like the Android plan's `buildConfigField`. In Vite this is `define: { __CONTROL_DOMAIN__: JSON.stringify(...) }` keyed off `process.env.CABALMAIL_ENV`.
 
 `shared/src/config/ConfigService.ts`:
-- Fetch `https://<control-domain>/config.js`, parse out the JSON literal it assigns
+- Fetch `https://admin.<control-domain>/config.json`
 - Cache the result in `browser.storage.local` with a 24h soft expiry (re-fetch on next launch, serve cache if offline)
 - Expose `apiUrl`, `userPoolId`, `clientId`, `apexDomains` (derived from `config.domains[].domain`) as observable signals
 
@@ -338,33 +333,9 @@ Three pieces:
   ```
   The `wc` flags mean "wait for the action, copy" -- the action is a pure side effect; mail still flows to the user's maildir regardless of the script's exit code. When no addresses are pending (the steady state), the file is regenerated empty. Written via the same atomic-mv idiom `generate-config.sh` already uses for virtusertable and friends.
 
-- **`/etc/procmailrc` template change.** Add `INCLUDERC=/etc/procmail-pending.rc` near the top of `docker/imap/configs/procmailrc`. Adjust `docker/shared/sync-users.sh` so existing users' `~/.procmailrc` files pick up the include line on next container start (`grep -q INCLUDERC || echo INCLUDERC=/etc/procmail-pending.rc >> ~/.procmailrc`, since the existing `cp -n` won't overwrite them).
+- **`/etc/procmailrc` template change.** Add `INCLUDERC=/etc/procmail-pending.rc` near the top of `docker/imap/configs/procmailrc`, behind a run-once guard (`CABALCONFIRMDONE`, mirroring `CABALRULESDONE`) because the same rcfile is processed twice per delivery. The guard deliberately avoids the `PENDING*` variable namespace, which the flag-decoration machinery already owns. No `docker/shared/sync-users.sh` change is needed: the user-mail-rules work replaced its `cp -n` with an unconditional `install` of the current template on every sync, so existing users' `~/.procmailrc` files pick up a new `INCLUDERC` for free -- and a grep-and-append would duplicate the line on every container start.
 
-> **Erratum (2026-08-29):** The `sync-users.sh` premise was stale before
-> implementation started: the user-mail-rules work replaced the `cp -n`
-> with an unconditional `install` of the current template on every sync,
-> so existing users pick up a new `INCLUDERC` for free and the proposed
-> grep-and-append would have duplicated the line on every container
-> start. No `sync-users.sh` change shipped. The include also gained a
-> run-once guard (`CABALCONFIRMDONE`, mirroring `CABALRULESDONE`) because
-> the same rcfile is processed twice per delivery, and deliberately avoids
-> the `PENDING*` variable namespace, which the flag-decoration machinery
-> already owns.
-
-- **`/usr/local/bin/confirm-cabal-address`** -- a ~20-line Python script baked into the imap image. One positional arg (the recipient address); conditional DynamoDB `UpdateItem` that removes `pending` and `pending_since` only if the row exists and is still pending. Exits 0 on success or no-op (a row confirmed or reaped between rule generation and mail arrival); exits non-zero only on genuinely unexpected errors. Idempotent against the reaper-and-mail-arrive-at-the-same-instant race.
-
-> **Erratum (2026-08-29):** A direct-UpdateItem script cannot work from a
-> procmail recipe: sendmail invokes the local mailer with a sanitized
-> environment and `DROPPRIVS=yes` runs the recipe as the recipient, so the
-> child has no AWS credentials, no region, and no task-role URI (the same
-> constraint that shaped push notifications and keyworded delivery). As
-> implemented, `confirm-cabal-address` is a bash spooler that writes a
-> signal file into `/var/spool/cabal-confirm`, and a root
-> `confirm-spool-drain.sh` supervisord daemon performs the conditional
-> `UpdateItem` with the task-role credentials -- the established
-> spool + root-drain pattern (`push-enqueue.sh` / `push-spool-drain.sh`).
-> The drain authenticates each file by comparing its owner to the address
-> row's assignees. Semantics are otherwise as described.
+- **`/usr/local/bin/confirm-cabal-address` plus a spool drain.** The recipe cannot touch DynamoDB itself: sendmail invokes the local mailer with a sanitized environment and `DROPPRIVS=yes` runs the recipe as the recipient, so the child has no AWS credentials, no region, and no task-role URI (the same constraint that shaped push notifications and keyworded delivery). So `confirm-cabal-address` is a small bash spooler baked into the imap image -- one positional arg, the recipient address -- that writes a signal file into `/var/spool/cabal-confirm`, and a root `confirm-spool-drain.sh` supervisord daemon does the work with the task-role credentials: it authenticates each file by comparing its owner to the address row's assignees, then issues a conditional `UpdateItem` that removes `pending` and `pending_since` only if the row exists and is still pending. This is the established spool + root-drain pattern (`push-enqueue.sh` / `push-spool-drain.sh`). A row confirmed or reaped between rule generation and mail arrival makes the update a no-op, so the whole path is idempotent against the reaper-and-mail-arrive-at-the-same-instant race.
 
 The imap task role needs `dynamodb:UpdateItem` on `cabal-addresses` (it already has `Scan`, so this is one additional action in the existing IAM policy).
 
@@ -384,13 +355,7 @@ No reordering of the roadmap is required. This plan's work and the end-user fram
 
 ### 2. Cognito Hosted UI + PKCE
 
-The Cognito User Pool already supports the Hosted UI; the existing infrastructure exposes it on `https://<control-domain>/auth/...` (configured in `terraform/infra/modules/user_pool/`). We add an App Client for the extension specifically -- a public client with no client secret, with allowed callback URLs of the form `https://<extension-id>.chromiumapp.org/oauth2/redirect` (Chrome's `chrome.identity.launchWebAuthFlow` redirect convention) and a Safari analog.
-
-> **Erratum (2026-08-07):** The Hosted UI lives on the Cognito-hosted prefix domain
-> `cabal-<account-id>.auth.<region>.amazoncognito.com` (provisioned for the
-> monitoring ALB's OIDC action), not on the control domain. The extension's
-> auth URLs must target that domain, or a custom domain must first be
-> added.
+The Cognito User Pool already supports the Hosted UI. It lives on the Cognito-hosted prefix domain (`cabal-<account-id>.auth.<region>.amazoncognito.com`, provisioned for the monitoring ALB's OIDC action), not on the control domain, so the extension's auth URLs must target that domain -- or a custom domain must be added first. We add an App Client for the extension specifically -- a public client with no client secret, with allowed callback URLs of the form `https://<extension-id>.chromiumapp.org/oauth2/redirect` (Chrome's `chrome.identity.launchWebAuthFlow` redirect convention) and a Safari analog.
 
 `shared/src/auth/HostedUiAuth.ts`:
 - Generates a PKCE code verifier + challenge
@@ -680,16 +645,7 @@ The adopted goal: links chosen in the Cabalmail clients can open in a private br
 
 ### 1. Redirector page
 
-A static page at `https://<control-domain>/private-link`, served from the same S3/CloudFront origin as the admin app and `config.js` (no new DNS, no new Lambda). The target URL travels in the URL fragment (`#<url-encoded target>`), which never leaves the client -- fragments are not sent to the server or CDN, so the target is never logged upstream.
-
-> **Erratum (2026-08-29):** The control-domain apex resolves to nothing --
-> the admin app and `config.js` live on `admin.<control-domain>`, so "the
-> same origin" means the page's URL is
-> `https://admin.<control-domain>/private-link`. Implemented as a
-> Terraform-managed `aws_s3_object` (`modules/app/s3.tf`, template at
-> `modules/app/templates/private-link.html`) with an explicit `text/html`
-> content type, because the react deploy's bare `aws s3 sync` would give an
-> extensionless key `binary/octet-stream` and browsers would download it.
+A static page at `https://admin.<control-domain>/private-link`, served from the same S3/CloudFront origin as the admin app and `config.js` (no new DNS, no new Lambda). The control-domain apex resolves to nothing, so the page lives on the `admin` host with everything else the browser fetches. It ships as a Terraform-managed `aws_s3_object` (`modules/app/s3.tf`, template at `modules/app/templates/private-link.html`) with an explicit `text/html` content type -- the react deploy's bare `aws s3 sync` would give an extensionless key `binary/octet-stream` and browsers would download it rather than render it. The target URL travels in the URL fragment (`#<url-encoded target>`), which never leaves the client -- fragments are not sent to the server or CDN, so the target is never logged upstream.
 
 The page doubles as the graceful-degradation path: its own JavaScript reads the fragment and renders the target with "the Cabalmail extension isn't active in this browser" messaging, an explicit "Open normally" anchor, a copy button, and enable-the-extension instructions. A user who lands here without the extension still gets their link; nothing dead-ends.
 
@@ -706,7 +662,7 @@ If `windows.create({ incognito: true })` throws because the user hasn't granted 
 
 ### 3. App side (Cabalmail clients)
 
-The macOS reader link menu regains an "Open in Private Window" row alongside "Share...". It does nothing but open `https://<control-domain>/private-link#<target>` in the target browser via `NSWorkspace` -- no state, no IPC. Discoverability of whether the extension is actually there to catch it depends on Open Question 9: if the Safari extension is embedded in the Cabalmail mail app itself, the app can query enablement (`SFSafariExtensionManager.getStateOfSafariExtension`) and show the row only when it will work; if the extension ships in the standalone host app, the mail app cannot see its state and the row is gated behind an explicit app preference instead (which is also the only option for Chrome, which offers no outside query at all). Either way the redirector's fallback page catches the misconfigured case.
+The macOS reader link menu regains an "Open in Private Window" row alongside "Share...". It does nothing but open `https://admin.<control-domain>/private-link#<target>` in the target browser via `NSWorkspace` -- no state, no IPC. Discoverability of whether the extension is actually there to catch it depends on Open Question 9: if the Safari extension is embedded in the Cabalmail mail app itself, the app can query enablement (`SFSafariExtensionManager.getStateOfSafariExtension`) and show the row only when it will work; if the extension ships in the standalone host app, the mail app cannot see its state and the row is gated behind an explicit app preference instead (which is also the only option for Chrome, which offers no outside query at all). Either way the redirector's fallback page catches the misconfigured case.
 
 ### Phase 7 verification
 

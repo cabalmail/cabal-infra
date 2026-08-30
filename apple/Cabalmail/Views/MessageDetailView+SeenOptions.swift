@@ -21,8 +21,9 @@ extension MessageDetailView {
     @ViewBuilder
     var seenButton: some View {
         if let model {
+            let rows = seenRows(model: model)
             Menu {
-                seenOptionItems(model: model)
+                seenOptionItems(rows: rows, model: model)
             } label: {
                 seenToolbarLabel(isSeen: model.isSeen)
             } primaryAction: {
@@ -34,6 +35,11 @@ extension MessageDetailView {
             // toolbar item dies with the item when the toolbar overflows
             // (#1047).
             .accessibilityIdentifier("reader.toggleRead")
+            // macOS keeps the AppKit menu it built the first time this
+            // `Menu` was opened — checkmarks, titles and disabled state
+            // included — so the identity carries what the rows draw
+            // (#1337, same mechanism as #1329).
+            .id(ReaderOptionMenuPolicy.identity(rows))
         }
     }
 
@@ -74,37 +80,45 @@ extension MessageDetailView {
         )
     }
 
+    /// The rows the menu offers, read here so the enclosing body observes
+    /// the preference and the seen state — the identity is derived from
+    /// the same values.
+    func seenRows(model: MessageDetailViewModel) -> [ReaderMenuRow<MarkReadAdvance>] {
+        ReaderOptionMenuPolicy.seenRows(
+            advance: preferences.markReadAdvance,
+            isSeen: model.isSeen
+        )
+    }
+
     /// The option menu: mark read × where to go next. Rendered as menu
     /// toggles so the row whose option is the button face's current default
     /// carries the native checkmark; choosing a row persists that option —
     /// making it the default and what Settings shows — then marks the open
     /// message read with it.
+    ///
+    /// Each row reads its own drawn state off the row rather than the
+    /// preference, so what is drawn and what the menu's identity is built
+    /// from can never disagree.
     @ViewBuilder
-    func seenOptionItems(model: MessageDetailViewModel) -> some View {
-        ForEach(MarkReadAdvance.allCases) { advance in
+    func seenOptionItems(
+        rows: [ReaderMenuRow<MarkReadAdvance>],
+        model: MessageDetailViewModel
+    ) -> some View {
+        ForEach(rows) { row in
             Toggle(isOn: Binding(
-                get: { preferences.markReadAdvance == advance },
+                get: { row.isOn },
                 set: { _ in
-                    preferences.markReadAdvance = advance
-                    markRead(model: model, advance: advance)
+                    preferences.markReadAdvance = row.option
+                    markRead(model: model, advance: row.option)
                 }
             )) {
-                Text("Mark Read and \(seenAdvanceDescription(for: advance))")
+                Text(row.label)
             }
             // The options are one-way: they mark read. On a read message
             // the face's next press means unread, where "and move to…"
             // has nothing to do, so the rows grey out (still showing the
             // checked default) rather than acting.
-            .disabled(model.isSeen)
-        }
-    }
-
-    private func seenAdvanceDescription(for advance: MarkReadAdvance) -> String {
-        switch advance {
-        case .stay:           return "Stay Here"
-        case .nextUnread:     return "Move to Next Unread"
-        case .previousUnread: return "Move to Previous Unread"
-        case .firstUnread:    return "Move to First Unread"
+            .disabled(!row.isEnabled)
         }
     }
 }
