@@ -120,7 +120,7 @@ Clean up any leftover runbook addresses via the admin app or `DELETE /revoke` wh
 One-time bring-up; needed before the Chrome build can be distributed and before the extension's real redirect URI exists.
 
 1. **Developer account.** Register a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) ($5 one-time) under an organization identity, not a personal one.
-2. **First upload (manual).** Build the bundle and zip it — `cd extensions && CABALMAIL_CONTROL_DOMAIN=<control-domain> npm run build && (cd chrome/dist && zip -r ../chrome.zip .)` — and upload it as a new item in the developer console. Saving the draft assigns the **extension ID** (a 32-character string, stable forever); you do not need to publish to get it. The listing needs the privacy-policy URL (section 6) before it can be published.
+2. **First upload (manual).** Build the bundle and zip it — `cd extensions && CABALMAIL_CONTROL_DOMAIN=<control-domain> npm run build && (cd chrome/dist && zip -r ../chrome.zip .)` — and upload it as a new item in the developer console. The **extension ID** is already pinned by the `key` field in `extensions/chrome/manifest.template.json`, so the store listing, unpacked dev builds, and the OAuth redirect URI (section 4) all share one known ID; the first upload keeps it as long as the key ships in the manifest. Forks must regenerate the key (`openssl genrsa 2048 | openssl rsa -pubout -outform DER | base64`) — a pinned ID can only exist once in the Web Store. The listing needs the privacy-policy URL (section 6) before it can be published.
 3. **API credentials for CI.** The upload automation authenticates with an OAuth refresh token. Google's console UI churns; follow the maintained recipe in the [chrome-webstore-upload key guide](https://github.com/fregante/chrome-webstore-upload/blob/main/How%20to%20generate%20Google%20API%20keys.md). In outline: create a Google Cloud project, enable the **Chrome Web Store API**, configure the OAuth consent screen with your account as a test user, create an OAuth client, then mint a refresh token authorized for the `https://www.googleapis.com/auth/chromewebstore` scope.
 4. **Secrets.** Store the four values as repository secrets: `CHROME_WEBSTORE_EXTENSION_ID`, `CHROME_WEBSTORE_CLIENT_ID`, `CHROME_WEBSTORE_CLIENT_SECRET`, `CHROME_WEBSTORE_REFRESH_TOKEN` (`gh secret set <NAME>`).
 5. **CI.** The upload job in `extensions.yml` is deliberately absent until these exist; add it behind the same warn-green-when-secrets-absent pattern `android.yml` uses (trustedTesters track on `stage`, default track on `main`).
@@ -134,19 +134,31 @@ The Safari extension ships inside a minimal host app (`extensions/safari/`). One
 3. **Secrets.** The App Store Connect API-key secrets used by `apple.yml` (`APPLE_APP_STORE_CONNECT_API_KEY_ID`, `..._ISSUER_ID`, `..._API_KEY`, `APPLE_DEVELOPER_TEAM_ID`) cover this app too — no new secrets, the key is account-scoped.
 4. **CI.** Add the archive/upload leg to `extensions.yml` once the record exists (mirror `apple.yml`'s API-key auth pattern). Note the known pitfall from the mail app: the portal cannot mint macOS provisioning profiles for universal App IDs through the UI; if signing fights you, `scripts/make-mac-profile.py` is the workaround and the profile's `Platform` array must include `OSX`.
 
-## 4. OAuth redirect URIs (after store IDs exist)
+## 4. OAuth redirect URIs
 
-The extension's Cognito app client (`cabal_extension_client`) is created with a loopback placeholder callback until the real redirect URIs exist, because they embed store-assigned extension IDs.
+The extension's Cognito app client (`cabal_extension_client`) is created with a loopback placeholder callback until the real redirect URIs are configured.
 
-1. **Collect the URIs.** Chrome's is `https://<extension-id>.chromiumapp.org/` (the ID from section 2.2). Safari's is whatever `browser.identity.getRedirectURL()` returns in the installed extension — open the extension's background console in Safari and evaluate it; don't guess.
-2. **Wire the Terraform variable.** `extension_redirect_uris` (a `list(string)`, default `[]`) is declared in `terraform/infra/variables.tf` but not yet fed by CI. To set it per environment: add one line to **both** `tfvars-terraform` steps of the infra stage in `.github/workflows/infra.yml` (the plan job and the apply job — a value present in only one of them produces a plan that doesn't match the apply):
+1. **Collect the URIs.** Chrome's extension ID is pinned by the manifest `key` (section 2.2), identical for unpacked dev builds and the store listing, so the Chrome redirect URI is known without any upload: `https://<pinned-id>.chromiumapp.org/`, where the pinned ID is printed by
 
-   ```yaml
-   echo "extension_redirect_uris = ${{ vars.TF_VAR_EXTENSION_REDIRECT_URIS || '[]' }}" >> terraform.tfvars
+   ```sh
+   python3 - <<'EOF'
+   import base64, hashlib, json
+   key = json.load(open('extensions/chrome/manifest.template.json'))['key']
+   digest = hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]
+   print(''.join(chr(ord('a') + int(c, 16)) for c in digest))
+   EOF
    ```
 
-   then create the GitHub environment variable `TF_VAR_EXTENSION_REDIRECT_URIS` with an HCL list value, e.g. `["https://abcdefghijklmnopqrstuvwxyzabcdef.chromiumapp.org/", "<safari redirect>"]`.
-3. **Apply and check.** After `infra.yml` runs, `https://admin.<control-domain>/config.json` should show `cognitoConfig.extensionClientId` and `cognitoConfig.hostedUiDomain`, and the app client's callback URLs (Cognito console or `aws cognito-idp describe-user-pool-client`) should list the real URIs. The extension's "Sign in with Cabalmail" flow is now testable end to end.
+   Safari's is whatever `browser.identity.getRedirectURL()` returns in the installed extension — open the extension's background console in Safari and evaluate it; don't guess.
+2. **Set the variable.** `infra.yml` already feeds `extension_redirect_uris` from the GitHub environment variable `TF_VAR_EXTENSION_REDIRECT_URIS` (defaulting to `[]`). Set it per environment with an HCL list value:
+
+   ```sh
+   gh variable set TF_VAR_EXTENSION_REDIRECT_URIS --env <environment> \
+     --body '["https://<pinned-id>.chromiumapp.org/"]'
+   ```
+
+   Append the Safari redirect to the list when it exists.
+3. **Apply and check.** After `infra.yml` runs, the app client's callback URLs (Cognito console or `aws cognito-idp describe-user-pool-client`) should list the real URIs, and `https://admin.<control-domain>/config.json` should show `cognitoConfig.extensionClientId` and `cognitoConfig.hostedUiDomain`. The extension's "Sign in with Cabalmail" flow is now testable end to end.
 
 ## 5. Form-detection corpus
 

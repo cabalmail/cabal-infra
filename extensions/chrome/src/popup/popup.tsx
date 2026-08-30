@@ -14,6 +14,13 @@ function Popup() {
   const [domains, setDomains] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Raw fetch errors name nothing actionable; translate the common case.
+  const friendly = (message: string): string =>
+    /failed to fetch/i.test(message)
+      ? `Can't reach https://admin.${__CONTROL_DOMAIN__}/ — check your network, ` +
+        `or rebuild with CABALMAIL_CONTROL_DOMAIN set if this is a dev build.`
+      : message;
+
   const refresh = async () => {
     setError(null);
     const state = await sendToBackground({ kind: 'get-auth-state' });
@@ -24,11 +31,14 @@ function Popup() {
         if (result.ok && result.kind === 'domains') {
           setDomains(result.domains.map((d) => d.domain));
         } else if (!result.ok) {
-          setError(result.message);
+          setError(friendly(result.message));
         }
       }
     } else if (!state.ok) {
-      setError(state.message);
+      // Auth-state is local-only in the background; a failure here is
+      // unexpected, but never leave the popup stuck on "Loading…".
+      setSignedIn(false);
+      setError(friendly(state.message));
     }
   };
 
@@ -39,7 +49,7 @@ function Popup() {
   const signIn = async () => {
     setError(null);
     const result = await sendToBackground({ kind: 'sign-in' });
-    if (!result.ok) setError(result.message);
+    if (!result.ok) setError(friendly(result.message));
     await refresh();
   };
 
