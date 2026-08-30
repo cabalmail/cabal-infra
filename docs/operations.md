@@ -58,6 +58,10 @@ Clients display senders' BIMI logos (fetched and sanitized server-side by the `f
 
 The smtp-in tier runs OpenDKIM and OpenDMARC milters that verify SPF, DKIM, and DMARC on every inbound message and stamp the verdicts into an `Authentication-Results` header under the control domain's authserv-id. The clients display the verdicts; nothing is rejected because of them. See [Inbound sender authentication](./inbound-auth.md) for the milter chain and the header trust rule.
 
+# Browser extension
+
+The address-suggesting browser extension (Chrome + Safari) lets users mint a fresh Cabalmail address directly inside a sign-up form. Its backend is the eager-create model: addresses are created `pending` at commit time so DNS and the mail tiers converge before any verification mail arrives, then confirmed on form submit, on first mail arrival, or revoked by an hourly TTL reaper. See [Browser extension: operator runbook](./browser-extension.md) for verifying the pending-address lifecycle in a live environment, provisioning the Chrome Web Store and App Store Connect accounts, wiring the OAuth redirect URIs, and growing the form-detection corpus.
+
 # Mail rules
 
 Users can author ordered mail-handling rules (file, flag, mark read, forward, auto-reply, delete) in the native clients' Settings; the imap tier compiles them into per-user procmail and applies them to every arriving message ahead of default delivery. User input never becomes procmail syntax directly — a hardened compiler validates, escapes, and sandboxes everything, and a golden-file self-test gates the image build and container start. See [Mail rules](./mail-rules.md) for the user-facing behavior, the limits, the "why didn't my rule fire" checklist, and where the compiled rules, logs, metrics, and alarms live.

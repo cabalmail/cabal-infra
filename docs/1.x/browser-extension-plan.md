@@ -13,6 +13,8 @@
 | 7. Private-link handoff | **Extension + redirector page complete**; Apple-client menu row not started |
 | 8. Platform targets & distribution | **Scaffold only.** Safari macOS host builds unsigned; stores, iOS host, parity testing pending |
 
+The remaining manual/operator work (live verification, store accounts, redirect-URI wiring, corpus capture) is runbooked in [docs/browser-extension.md](../browser-extension.md).
+
 ## Context
 
 Cabalmail's signature user behavior is per-vendor (or per-purpose) email addresses: spin one up before signing up for a new service, burn it when it goes bad. Today that flow lives in the React admin app (`react/admin/src/Addresses/Request.jsx`) and the native clients (`apple/`, the planned `android/`). The user must context-switch to a Cabalmail surface, generate or hand-craft an address, copy it, switch back to the signup tab, and paste.
