@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<!-- OAuth redirect target for the browser extension's tab-based sign-in
+     (Safari has no WebExtensions identity API, so its flow runs in a
+     regular tab redirecting here; see docs/browser-extension.md section 4
+     and extensions/shared/src/auth/webAuthDriver.ts). The extension's
+     background watches for this URL via tabs.onUpdated, reads the
+     ?code=...&state=... parameters, and closes the tab — usually before
+     this page is even visible. The page itself is the fallback for the
+     window between redirect and tab-close, and for a visit with the
+     extension missing. The authorization code in the query string is
+     single-use and useless without the extension-held PKCE verifier. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Cabalmail sign-in</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           max-width: 34rem; margin: 4rem auto; padding: 0 1rem; color: #222; }
+    h1 { font-size: 1.3rem; }
+    .hint { color: #555; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Completing Cabalmail sign-in&hellip;</h1>
+  <p>The Cabalmail browser extension finishes sign-in from here and closes
+  this tab automatically.</p>
+  <p class="hint">Still seeing this page? The extension may be disabled, or
+  it may not have permission for this site — check the browser's extension
+  settings, then start the sign-in again from the extension's toolbar
+  popup. This page holds no usable credentials on its own.</p>
+</body>
+</html>

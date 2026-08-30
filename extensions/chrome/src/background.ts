@@ -8,6 +8,7 @@ import browser from 'webextension-polyfill';
 import { ApiClient } from '@cabalmail/extension-shared/api/ApiClient';
 import { AuthError, HostedUiAuth } from '@cabalmail/extension-shared/auth/HostedUiAuth';
 import { clearTokens, loadTokens } from '@cabalmail/extension-shared/auth/tokens';
+import { defaultDriver } from '@cabalmail/extension-shared/auth/webAuthDriver';
 import { ConfigService } from '@cabalmail/extension-shared/config/ConfigService';
 import {
   isBackgroundRequest,
@@ -28,10 +29,15 @@ async function services(): Promise<{ auth: HostedUiAuth; api: ApiClient }> {
       'This environment has no extension app client provisioned yet',
     );
   }
-  const auth = new HostedUiAuth({
-    authDomain: config.authDomain,
-    clientId: config.extensionClientId,
-  });
+  const auth = new HostedUiAuth(
+    {
+      authDomain: config.authDomain,
+      clientId: config.extensionClientId,
+    },
+    // identity API on Chrome; admin-origin tab flow on Safari, which has
+    // no identity API at all (see webAuthDriver.ts).
+    defaultDriver(__CONTROL_DOMAIN__),
+  );
   return { auth, api: new ApiClient(config.apiUrl, auth) };
 }
 

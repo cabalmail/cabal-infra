@@ -164,9 +164,11 @@ The Safari extension ships inside a minimal host app (`extensions/safari/`). One
 
 ## 4. OAuth redirect URIs
 
-The extension's Cognito app client (`cabal_extension_client`) is created with a loopback placeholder callback until the real redirect URIs are configured.
+The extension's Cognito app client (`cabal_extension_client`) always carries one Terraform-derived callback — `https://admin.<control-domain>/extension-auth`, the tab-based flow's redirect target — plus whatever `var.extension_redirect_uris` supplies for Chrome's identity-API flow.
 
-1. **Collect the URIs.** There are up to three, all of the form `https://<extension-id>.chromiumapp.org/` for Chrome:
+**Safari needs no configuration at all.** Safari implements no WebExtensions `identity` API (`browser.identity` is simply undefined there), so its sign-in runs the Hosted UI in a regular tab redirecting to `/extension-auth` on the admin origin, which the background intercepts via `tabs.onUpdated` — the same mechanism as the private-link handoff, with PKCE and the `state` check carrying the security. That redirect URI is registered on the app client unconditionally, and the page itself is provisioned in `modules/app/s3.tf`.
+
+1. **Collect the Chrome URIs.** Up to two, both of the form `https://<extension-id>.chromiumapp.org/`:
    - **Chrome dev builds**: the ID is pinned by the manifest `key`, identical on every machine, known without any upload — printed by
 
      ```sh
@@ -178,7 +180,6 @@ The extension's Cognito app client (`cabal_extension_client`) is created with a 
      EOF
      ```
    - **The Chrome store listing**: the Web Store strips-or-rejects the `key` on a new item and assigns its own permanent ID at first upload (section 2.2), so the store build gets a *different* redirect URI — read the ID off the listing and add its URI as a second entry.
-   - **Safari**: whatever `browser.identity.getRedirectURL()` returns in the installed extension — open the extension's background console in Safari and evaluate it; don't guess.
 2. **Set the variable.** `infra.yml` already feeds `extension_redirect_uris` from the GitHub environment variable `TF_VAR_EXTENSION_REDIRECT_URIS` (defaulting to `[]`). The value expands inside a double-quoted shell `echo` in the workflow, so the quotes around each list element must be backslash-escaped in the stored value or the shell eats them and Terraform receives unparseable HCL — the same convention `TF_VAR_MAIL_DOMAINS` and `TF_VAR_AVAILABILITY_ZONES` already follow. Set it per environment:
 
    ```sh
@@ -186,7 +187,7 @@ The extension's Cognito app client (`cabal_extension_client`) is created with a 
      --body '[\"https://<dev-id>.chromiumapp.org/\", \"https://<store-id>.chromiumapp.org/\"]'
    ```
 
-   Append the Safari redirect to the list when it exists.
+   (Safari's redirect is registered automatically; this variable is Chrome-only.)
 3. **Apply and check.** After `infra.yml` runs, the app client's callback URLs (Cognito console or `aws cognito-idp describe-user-pool-client`) should list the real URIs, and `https://admin.<control-domain>/config.json` should show `cognitoConfig.extensionClientId` and `cognitoConfig.hostedUiDomain`. The extension's "Sign in with Cabalmail" flow is now testable end to end.
 
 ## 5. Form-detection corpus

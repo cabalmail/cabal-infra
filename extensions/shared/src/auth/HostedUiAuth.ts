@@ -1,12 +1,13 @@
 /**
  * Cognito Hosted UI + PKCE (public client, no secret). The interactive leg
- * rides the platform's web-auth API (`browser.identity.launchWebAuthFlow`);
- * the code-for-token exchange and refresh hit `/oauth2/token` directly.
+ * is delegated to a per-browser WebAuthDriver (identity API on Chrome, an
+ * admin-origin tab flow on Safari — see webAuthDriver.ts); the
+ * code-for-token exchange and refresh hit `/oauth2/token` directly.
  */
 
-import browser from 'webextension-polyfill';
 import { computeCodeChallenge, generateCodeVerifier, generateState } from './pkce';
 import { clearTokens, expiresSoon, loadTokens, saveTokens, type TokenSet } from './tokens';
+import type { WebAuthDriver } from './webAuthDriver';
 
 export class AuthError extends Error {
   constructor(
@@ -30,18 +31,17 @@ interface TokenEndpointResponse {
 }
 
 export class HostedUiAuth {
-  constructor(private readonly config: HostedUiConfig) {}
-
-  private redirectUri(): string {
-    return browser.identity.getRedirectURL();
-  }
+  constructor(
+    private readonly config: HostedUiConfig,
+    private readonly driver: WebAuthDriver,
+  ) {}
 
   /** Run the interactive Hosted UI flow and persist the resulting tokens. */
   async signIn(): Promise<void> {
     const verifier = generateCodeVerifier();
     const challenge = await computeCodeChallenge(verifier);
     const state = generateState();
-    const redirectUri = this.redirectUri();
+    const redirectUri = this.driver.redirectUri();
 
     const authorizeUrl = new URL(`https://${this.config.authDomain}/oauth2/authorize`);
     authorizeUrl.search = new URLSearchParams({
@@ -54,11 +54,12 @@ export class HostedUiAuth {
       code_challenge_method: 'S256',
     }).toString();
 
-    const resultUrl = await browser.identity.launchWebAuthFlow({
-      url: authorizeUrl.toString(),
-      interactive: true,
-    });
-    if (!resultUrl) throw new AuthError('flow-failed', 'auth flow returned no redirect');
+    let resultUrl: string;
+    try {
+      resultUrl = await this.driver.authorize(authorizeUrl.toString());
+    } catch (err) {
+      throw new AuthError('flow-failed', err instanceof Error ? err.message : String(err));
+    }
 
     const params = new URL(resultUrl).searchParams;
     if (params.get('state') !== state) {

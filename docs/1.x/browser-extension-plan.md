@@ -41,6 +41,21 @@ Eight phases: shared core; CI/CD (early, so every subsequent phase runs through 
 - **API-backed, no direct IMAP/SMTP.** The extension only ever touches the Lambda API surface. It does not parse mail, it does not connect to IMAP, it does not generate DKIM. The eager-create-and-reap model does require additive backend work (Phase 3.1): one extension to `POST /new`, a new `POST /confirm_address` endpoint, a scheduled reaper Lambda, and a procmail-based clear-on-receive hook on the IMAP tier. All purely additive, routed through `stage` -> `main` like everything else.
 - **Generate locally, create eagerly, reap on abandon.** Random address generation mirrors `react/admin/src/Addresses/Request.jsx` lines 69-71 exactly: 8-char local part (first/last alphanumeric, middle allows `._-`), 8-char subdomain (first/last alphanumeric, middle allows `-` only). Generation is pure client-side -- refreshing the suggestion does not hit the API. *Commit* (the user clicking "Use this address") creates the address immediately, ahead of form submit. This avoids the verification-email race: most sign-up backends send a verification mail within seconds of form submission, and a brand-new Cabalmail address needs DNS propagation + sendmail config reload before it can receive mail. Creating at commit time gives that pipeline runway -- typically tens of seconds while the user fills the rest of the form. Eagerly-created addresses are tagged `pending=true`; the extension issues a `confirm_address` call on actual form submit to clear the flag, and a server-side TTL reaper revokes any address that stays `pending` for longer than a window (default 24h). This handles the close-the-browser-without-submitting case the extension can't observe.
 - **Cognito Hosted UI + PKCE for auth.** The extension is a public client; embedding the Cognito SRP flow would require the user to type their password into a popup UI, which is worse for trust and worse for shared-device scenarios. PKCE via the platform's web-auth APIs (`chrome.identity.launchWebAuthFlow` on Chrome, `ASWebAuthenticationSession` via the Safari app extension host) is the right shape. Embedded SRP via `amazon-cognito-identity-js` is the fallback if Hosted UI work slips.
+
+> **Erratum (2026-08-30):** Safari implements no WebExtensions `identity`
+> API at all (`browser.identity` is undefined; MDN compat data records
+> every `identity.*` member as unsupported), and `ASWebAuthenticationSession`
+> is not viable either — it needs a presentation context the UI-less web
+> extension appex cannot provide, and brokering through the host app would
+> require it to be running. As implemented, Safari's interactive leg runs
+> the Hosted UI in a regular tab redirecting to
+> `https://admin.<control-domain>/extension-auth` (a static page provisioned
+> next to `/private-link`), which the background intercepts via
+> `tabs.onUpdated` and closes; PKCE and the `state` check carry the
+> security. The redirect URI is Terraform-derived and registered on the app
+> client unconditionally, so Safari sign-in needs no per-install
+> configuration. Chrome keeps `launchWebAuthFlow`; the driver split lives
+> in `extensions/shared/src/auth/webAuthDriver.ts`.
 - **Never block submission silently.** Any time the extension intercepts a form submit, the user sees a visible explanation (banner or popover) and an explicit "submit anyway" escape hatch. Surprise-blocking a form because of a Cabalmail decision is worse than letting a bad address through.
 - **No telemetry.** The extension does not phone home about which sites the user visits, which forms it detected, or which suggestions were accepted. Cabalmail is a privacy product; this surface is the most privacy-sensitive of all.
 
