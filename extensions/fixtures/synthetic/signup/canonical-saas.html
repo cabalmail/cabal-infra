@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head>
+<meta name="fixture-url" content="https://app.example.com/signup">
+<title>Create your account</title>
+</head><body>
+<h1>Create your account</h1>
+<form action="/api/auth" method="post">
+  <label for="email">Work email</label>
+  <input id="email" type="email" name="email" autocomplete="email">
+  <label for="pw">Password</label>
+  <input id="pw" type="password" name="password" autocomplete="new-password">
+  <label for="pw2">Confirm password</label>
+  <input id="pw2" type="password" name="password_confirm" autocomplete="new-password">
+  <label><input type="checkbox" name="tos"> I agree to the Terms of Service and Privacy Policy</label>
+  <button type="submit">Create account</button>
+</form>
+</body></html>

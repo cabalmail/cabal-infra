@@ -1,0 +1,16 @@
+{
+  "name": "@cabalmail/extension-chrome",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "node ../scripts/build-extension.mjs chrome",
+    "test": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@cabalmail/extension-shared": "*",
+    "@preact/signals": "^1.3.0",
+    "preact": "^10.24.0",
+    "webextension-polyfill": "^0.12.0"
+  }
+}

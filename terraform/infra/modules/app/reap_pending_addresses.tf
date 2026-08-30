@@ -27,9 +27,6 @@ resource "aws_iam_role_policy" "reap_pending_addresses" {
   name = "reap_pending_addresses_policy"
   role = aws_iam_role.reap_pending_addresses.id
 
-  # cloudwatch:PutMetricData has no resource-level scoping (metrics are not
-  # ARN-addressable); the namespace condition is the tightest available.
-  # iam-wildcard-ok: PutMetricData supports no resource ARNs - scoped by the cloudwatch:namespace condition instead
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -82,6 +79,10 @@ resource "aws_iam_role_policy" "reap_pending_addresses" {
         Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/master_password"
       },
       {
+        # cloudwatch:PutMetricData has no resource-level scoping (metrics
+        # are not ARN-addressable); the namespace condition below is the
+        # tightest scoping CloudWatch offers.
+        # iam-wildcard-ok: PutMetricData supports no resource ARNs - scoped by the cloudwatch:namespace condition instead
         Effect   = "Allow"
         Action   = "cloudwatch:PutMetricData"
         Resource = "*"
