@@ -125,6 +125,16 @@ One-time bring-up; needed before the Chrome build can be distributed and before 
 4. **Secrets.** Store the four values as repository secrets: `CHROME_WEBSTORE_EXTENSION_ID`, `CHROME_WEBSTORE_CLIENT_ID`, `CHROME_WEBSTORE_CLIENT_SECRET`, `CHROME_WEBSTORE_REFRESH_TOKEN` (`gh secret set <NAME>`).
 5. **CI.** The upload job in `extensions.yml` is deliberately absent until these exist; add it behind the same warn-green-when-secrets-absent pattern `android.yml` uses (trustedTesters track on `stage`, default track on `main`).
 
+### 2.1 Privacy-practices disclosures
+
+The listing's privacy tab requires a justification per requested permission. The manifest deliberately requests only `storage`, `identity`, and `history` (tab manipulation and the redirector interception ride the host permission instead, so `tabs` and `webNavigation` are not requested). Texts to paste, matching what the code actually does:
+
+- **storage** — "Caches the user's sign-in session (OAuth tokens) and the Cabalmail server's configuration locally so the user does not have to sign in on every browser start. No browsing data is stored."
+- **identity** — "Runs the OAuth 2.0 (PKCE) sign-in flow against the user's own Cabalmail server via launchWebAuthFlow. The extension never sees or stores the password."
+- **history** — "When the user opens a mail link in a private window through the extension, the intermediate redirector URL (which embeds the target link) is deleted from normal-window history so the private link does not linger there. History is never read for any other purpose and never transmitted."
+- **Host permissions** — "The extension contacts only the user's own self-hosted Cabalmail server: the admin origin for its API and configuration, and the Amazon Cognito domain for sign-in. The content script must run on sign-up pages to detect email fields and offer a freshly generated address — the same model as a password manager. No page content or browsing data is transmitted anywhere; the server is contacted only on explicit user action."
+- **Remote code** — answer **No**: all JavaScript ships in the package; the extension does not use eval or load external scripts.
+
 ## 3. App Store Connect (Safari)
 
 The Safari extension ships inside a minimal host app (`extensions/safari/`). One-time bring-up, using the same Apple Developer Program membership as the mail clients:
