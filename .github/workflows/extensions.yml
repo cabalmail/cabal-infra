@@ -2,12 +2,11 @@
 #
 # Two always-on jobs: `test` (lint + vitest + type-check + both bundle
 # builds on Linux) and `build-safari` (xcodegen + unsigned xcodebuild of the
-# Safari host app on macOS). Store uploads (Chrome Web Store, App Store
-# Connect) are deliberately NOT wired yet: they need developer accounts and
-# secrets that don't exist (see the plan's Phase 2.2/2.3 secret lists), and
-# a half-configured upload job would fail every stage push. Add them behind
-# the android.yml-style warn-green-when-secrets-absent pattern once the
-# accounts are provisioned.
+# Safari host app on macOS). On stage/main pushes, `upload-chrome` ships a
+# new draft version to the Chrome Web Store listing behind the same gate-*
+# approval + warn-green-when-secrets-absent pattern as android.yml. The
+# Safari App Store Connect upload is still unwired (no ASC record yet; see
+# docs/browser-extension.md section 3).
 
 name: Extensions
 
@@ -106,3 +105,120 @@ jobs:
             -destination 'platform=macOS' \
             build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+  # -----------------------------------------------------------------------
+  # Manual approval gate before the Chrome Web Store upload, mirroring the
+  # other mainline deploy workflows (android.yml's Play gate, apple.yml,
+  # app.yml/infra.yml). Whether the run actually pauses depends on the
+  # gate-${env} environment's protection rules: with required reviewers
+  # (gate-prod) it waits for an operator; without them (gate-stage,
+  # currently) the job passes on its own. Guarded by the same ref check as
+  # upload so a workflow_dispatch run on a feature branch (where upload
+  # would skip anyway) never waits at a gate.
+  # -----------------------------------------------------------------------
+  approval:
+    needs: [test]
+    if: github.ref_name == 'main' || github.ref_name == 'stage'
+    environment: gate-${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: approve
+        run: echo "Approved"
+
+  # -----------------------------------------------------------------------
+  # Store-variant zip -> Chrome Web Store listing, as a DRAFT version (no
+  # publish). Publishing — which is what triggers a store review each time —
+  # stays a deliberate act in the developer console until the release
+  # cadence settles; this deviates from the plan's publish-to-trustedTesters
+  # idea on purpose. Warn-green when the CHROME_WEBSTORE_* secrets are
+  # absent (android.yml posture) and when the listing is locked by a
+  # pending review (uploads then fail with ITEM_NOT_UPDATABLE / an
+  # in-review marker — expected around submissions, not an error).
+  # -----------------------------------------------------------------------
+  upload-chrome:
+    name: Upload to Chrome Web Store
+    needs: approval
+    # The ref check (not an event check) is what keeps a workflow_dispatch
+    # run on a feature branch from uploading.
+    if: github.ref_name == 'main' || github.ref_name == 'stage'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    defaults:
+      run:
+        working-directory: extensions
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: extensions/package-lock.json
+
+      # Secrets are not readable in a job-level `if`, so the gate is a step
+      # that every later step keys off.
+      - name: check-credentials
+        id: creds
+        env:
+          EXTENSION_ID: ${{ secrets.CHROME_WEBSTORE_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$EXTENSION_ID" ] || [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ] || [ -z "$REFRESH_TOKEN" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::CHROME_WEBSTORE_* secrets are not configured; skipping the Web Store upload. See docs/browser-extension.md sections 2.3-2.4."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: install
+        if: steps.creds.outputs.present == 'true'
+        run: npm ci
+
+      - name: build-store-zip
+        if: steps.creds.outputs.present == 'true'
+        env:
+          CABALMAIL_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+        run: |
+          # Store versions must strictly increase per upload; the CHANGELOG
+          # version alone would collide on repeat uploads, so suffix the
+          # monotonic run number (manifest versions allow four dot-separated
+          # integers). run_number is monotonic per workflow name; a rename
+          # resets it — if this workflow is ever renamed, add the last
+          # pre-rename run number as an offset here instead of renaming back.
+          BASE=$(sed -nE '/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/{ s//\1/p; q; }' ../CHANGELOG.md)
+          if [ -z "$BASE" ]; then
+            echo "::error::Could not parse a version from CHANGELOG.md"
+            exit 1
+          fi
+          export EXTENSION_VERSION="${BASE}.${{ github.run_number }}"
+          echo "Store version: $EXTENSION_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          EXTENSION_STORE_BUILD=1 npm run build --workspace chrome
+          (cd chrome/dist && zip -qr ../chrome.zip .)
+
+      - name: upload
+        if: steps.creds.outputs.present == 'true'
+        env:
+          EXTENSION_ID: ${{ secrets.CHROME_WEBSTORE_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
+        run: |
+          set +e
+          OUTPUT=$(npx --yes chrome-webstore-upload-cli@3 upload --source chrome/chrome.zip 2>&1)
+          STATUS=$?
+          set -e
+          echo "$OUTPUT"
+          if [ "$STATUS" -ne 0 ]; then
+            # A listing locked by a pending review is an expected state, not
+            # a broken pipeline; the next push after review completes will
+            # carry a higher version and go through.
+            if echo "$OUTPUT" | grep -qiE 'ITEM_NOT_UPDATABLE|in.?review|pending review'; then
+              echo "::warning::Web Store listing is locked by a pending review; upload skipped. It will succeed on the next push after the review completes."
+              exit 0
+            fi
+            exit "$STATUS"
+          fi
+          echo "Uploaded draft to the Web Store listing." >> "$GITHUB_STEP_SUMMARY"
