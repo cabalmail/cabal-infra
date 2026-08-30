@@ -2,11 +2,12 @@
 #
 # Two always-on jobs: `test` (lint + vitest + type-check + both bundle
 # builds on Linux) and `build-safari` (xcodegen + unsigned xcodebuild of the
-# Safari host app on macOS). On stage/main pushes, `upload-chrome` ships a
-# new draft version to the Chrome Web Store listing behind the same gate-*
-# approval + warn-green-when-secrets-absent pattern as android.yml. The
-# Safari App Store Connect upload is still unwired (no ASC record yet; see
-# docs/browser-extension.md section 3).
+# Safari host app on macOS). On stage/main pushes, behind the same gate-*
+# approval + warn-green-when-secrets-absent pattern as android.yml:
+# `upload-chrome` ships a new draft version to the Chrome Web Store listing,
+# and `upload-safari` archives the signed macOS host app and uploads it to
+# App Store Connect (parked with a warning until the two extension
+# provisioning-profile secrets exist; see docs/browser-extension.md 3).
 
 name: Extensions
 
@@ -222,3 +223,248 @@ jobs:
             exit "$STATUS"
           fi
           echo "Uploaded draft to the Web Store listing." >> "$GITHUB_STEP_SUMMARY"
+
+  # -----------------------------------------------------------------------
+  # Signed macOS host app -> App Store Connect, mirroring apple.yml's
+  # upload-mac leg (manual signing, disposable keychain, verdict-banner
+  # altool check). Parks warn-green until the operator mints the two
+  # extension provisioning profiles (docs/browser-extension.md section 3;
+  # scripts/make-mac-profile.py if the portal refuses macOS profiles) and
+  # stores them as MAC_EXT_HOST_APP_STORE_PROFILE /
+  # MAC_EXT_WEB_APP_STORE_PROFILE. Certs, team ID, and the ASC API key are
+  # the same secrets the mail app's uploads already use.
+  # -----------------------------------------------------------------------
+  upload-safari:
+    name: Upload macOS host app to App Store Connect
+    needs: approval
+    # The ref check (not an event check) is what keeps a workflow_dispatch
+    # run on a feature branch from uploading.
+    if: github.ref_name == 'main' || github.ref_name == 'stage'
+    runs-on: macos-26
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: check-credentials
+        # Skip-not-fail, matching apple.yml's upload legs: the archive
+        # cannot succeed without both embedded targets' profiles, so a
+        # missing secret parks the leg with a warning rather than painting
+        # every stage push red.
+        id: check
+        env:
+          S1: ${{ secrets.APPLE_TEAM_ID }}
+          S2: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          S3: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          S4: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          S5: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          S6: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          S7: ${{ secrets.MAC_INSTALLER_CERT_P12 }}
+          S8: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD }}
+          S9: ${{ secrets.MAC_EXT_HOST_APP_STORE_PROFILE }}
+          S10: ${{ secrets.MAC_EXT_WEB_APP_STORE_PROFILE }}
+        run: |
+          MISSING=()
+          [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
+          [ -z "$S2" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_P12")
+          [ -z "$S3" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_PASSWORD")
+          [ -z "$S4" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_ID")
+          [ -z "$S5" ] && MISSING+=("APP_STORE_CONNECT_API_ISSUER_ID")
+          [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
+          [ -z "$S7" ] && MISSING+=("MAC_INSTALLER_CERT_P12")
+          [ -z "$S8" ] && MISSING+=("MAC_INSTALLER_CERT_PASSWORD")
+          [ -z "$S9" ] && MISSING+=("MAC_EXT_HOST_APP_STORE_PROFILE")
+          [ -z "$S10" ] && MISSING+=("MAC_EXT_WEB_APP_STORE_PROFILE")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::warning::Safari upload secrets missing: ${MISSING[*]}. Skipping upload. See docs/browser-extension.md section 3."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: setup-node
+        if: steps.check.outputs.enabled == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: extensions/package-lock.json
+
+      - name: install-tools
+        if: steps.check.outputs.enabled == 'true'
+        # Same warning-hygiene pattern as apple.yml.
+        run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
+          for pkg in xcodegen xcbeautify; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
+
+      - name: install
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: extensions
+        run: npm ci
+
+      - name: generate-project
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: extensions/safari
+        env:
+          CABALMAIL_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+        run: xcodegen generate
+
+      - name: import-signing-certificates
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          APPLE_DIST_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          APPLE_DIST_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          INSTALLER_P12: ${{ secrets.MAC_INSTALLER_CERT_P12 }}
+          INSTALLER_PASSWORD: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Apple Distribution signs the .app; Mac Installer Distribution
+          # signs the outer .pkg. Disposable per-run keychain, same as
+          # apple.yml's upload-mac.
+          KEYCHAIN_PATH="$RUNNER_TEMP/ext-ci.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          import_cert() {
+            local label="$1" b64="$2" password="$3"
+            local p12="$RUNNER_TEMP/$label.p12"
+            echo "$b64" | base64 --decode > "$p12"
+            security import "$p12" -P "$password" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+            rm "$p12"
+          }
+          import_cert apple-distribution "$APPLE_DIST_P12" "$APPLE_DIST_PASSWORD"
+          import_cert mac-installer      "$INSTALLER_P12"  "$INSTALLER_PASSWORD"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user \
+            -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
+
+      - name: install-asc-api-key
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_FILE="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_KEY_P8" | tr -d '[:space:]' | base64 --decode > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          if ! head -c 27 "$KEY_FILE" | grep -q '^-----BEGIN PRIVATE KEY-----$'; then
+            echo "::error::APP_STORE_CONNECT_API_KEY_P8 decoded but does not start with the PEM header. Re-encode with 'base64 -i AuthKey_<KEYID>.p8'."
+            exit 1
+          fi
+
+      - name: install-host-profile
+        if: steps.check.outputs.enabled == 'true'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.MAC_EXT_HOST_APP_STORE_PROFILE }}
+          extension: provisionprofile
+          env-name: MAC_EXT_HOST_APP_STORE_PROFILE_UUID
+
+      - name: install-web-extension-profile
+        if: steps.check.outputs.enabled == 'true'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.MAC_EXT_WEB_APP_STORE_PROFILE }}
+          extension: provisionprofile
+          env-name: MAC_EXT_WEB_APP_STORE_PROFILE_UUID
+
+      - name: archive
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: extensions/safari
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          # Same version derivation as the other store legs: CHANGELOG
+          # marketing version, clock build number.
+          MARKETING_VERSION=$(sed -nE '/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/{ s//\1/p; q; }' "$GITHUB_WORKSPACE/CHANGELOG.md")
+          if [ -z "$MARKETING_VERSION" ]; then
+            echo "::error::Could not parse a marketing version from CHANGELOG.md"
+            exit 1
+          fi
+          BUILD_NUMBER="$(date -u +%s)"
+          echo "Version: $MARKETING_VERSION ($BUILD_NUMBER)" >> "$GITHUB_STEP_SUMMARY"
+          xcodebuild archive \
+            -project Cabalmail.xcodeproj \
+            -scheme CabalmailExtensionHost \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/CabalmailExtension.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            MAC_EXT_HOST_APP_STORE_PROFILE_UUID="$MAC_EXT_HOST_APP_STORE_PROFILE_UUID" \
+            MAC_EXT_WEB_APP_STORE_PROFILE_UUID="$MAC_EXT_WEB_APP_STORE_PROFILE_UUID" \
+            MARKETING_VERSION="$MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            2>&1 | xcbeautify --renderer github-actions
+
+      - name: export-pkg
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          set -o pipefail
+          PLIST="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$PLIST" <<PLISTEOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
+              <key>installerSigningCertificate</key>
+              <string>3rd Party Mac Developer Installer</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.cabalmail.extension-host</key>
+                  <string>$MAC_EXT_HOST_APP_STORE_PROFILE_UUID</string>
+                  <key>com.cabalmail.extension-host.web-extension</key>
+                  <string>$MAC_EXT_WEB_APP_STORE_PROFILE_UUID</string>
+              </dict>
+          </dict>
+          </plist>
+          PLISTEOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/CabalmailExtension.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$PLIST" \
+            2>&1 | xcbeautify --renderer github-actions
+
+      - name: upload
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          PKG=$(ls "$RUNNER_TEMP/export"/*.pkg | head -n1)
+          echo "Uploading $PKG"
+          LOG="$RUNNER_TEMP/altool.log"
+          xcrun altool --upload-app \
+            -f "$PKG" \
+            --type osx \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
+          # altool's exit code and ERROR lines are both unreliable; trust
+          # the final verdict banner (same rationale as apple.yml).
+          if grep -qE '(UPLOAD FAILED|iris-code : STATE_ERROR)' "$LOG" \
+             || ! grep -q 'UPLOAD SUCCEEDED' "$LOG"; then
+            echo "::error::altool did not report a clean UPLOAD SUCCEEDED. Review the log above."
+            exit 1
+          fi
+          if grep -q 'ERROR: ' "$LOG"; then
+            echo "::warning::altool logged transient error(s) but recovered - final verdict was UPLOAD SUCCEEDED."
+          fi
+          echo "::notice::altool upload completed cleanly."
