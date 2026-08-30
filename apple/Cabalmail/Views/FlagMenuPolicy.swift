@@ -60,8 +60,13 @@ enum FlagMenuPolicy {
     /// Identity for the `Menu`, covering everything a row draws so any
     /// visible change replaces the menu. Order is part of it: the palette's
     /// array order is the display order.
+    ///
+    /// The rule has one implementation, shared with the reader's other
+    /// option menus (#1337) — writing it a second time is what let those
+    /// menus keep the defect after this one was fixed.
     static func identity(_ rows: [FlagMenuRow]) -> String {
-        rows.map { "\($0.slot)|\($0.label)|\($0.isOn ? 1 : 0)" }
-            .joined(separator: "\u{1F}")
+        ReaderOptionMenuPolicy.identity(rows.map {
+            ReaderMenuRow(option: $0.slot, key: $0.slot, label: $0.label, isOn: $0.isOn)
+        })
     }
 }
