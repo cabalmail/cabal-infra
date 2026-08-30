@@ -62,7 +62,14 @@ export function tabDriver(
     authorize: (authorizeUrl) =>
       new Promise<string>((resolve, reject) => {
         let authTabId: number | undefined;
-        let timer: ReturnType<typeof setTimeout>;
+        // Declared before cleanup() so it can be `const`; cleanup() only ever
+        // runs from a listener or the timeout callback, never synchronously
+        // before this assignment completes.
+        const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
+          cleanup();
+          if (authTabId !== undefined) void tabs.remove(authTabId).catch(() => {});
+          reject(new Error('sign-in timed out'));
+        }, TAB_FLOW_TIMEOUT_MS);
 
         const cleanup = () => {
           clearTimeout(timer);
@@ -86,11 +93,6 @@ export function tabDriver(
 
         tabs.onUpdated.addListener(onUpdated);
         tabs.onRemoved.addListener(onRemoved);
-        timer = setTimeout(() => {
-          cleanup();
-          if (authTabId !== undefined) void tabs.remove(authTabId).catch(() => {});
-          reject(new Error('sign-in timed out'));
-        }, TAB_FLOW_TIMEOUT_MS);
 
         tabs
           .create({ url: authorizeUrl })
