@@ -150,11 +150,11 @@ The extension's Cognito app client (`cabal_extension_client`) is created with a 
    ```
 
    Safari's is whatever `browser.identity.getRedirectURL()` returns in the installed extension — open the extension's background console in Safari and evaluate it; don't guess.
-2. **Set the variable.** `infra.yml` already feeds `extension_redirect_uris` from the GitHub environment variable `TF_VAR_EXTENSION_REDIRECT_URIS` (defaulting to `[]`). Set it per environment with an HCL list value:
+2. **Set the variable.** `infra.yml` already feeds `extension_redirect_uris` from the GitHub environment variable `TF_VAR_EXTENSION_REDIRECT_URIS` (defaulting to `[]`). The value expands inside a double-quoted shell `echo` in the workflow, so the quotes around each list element must be backslash-escaped in the stored value or the shell eats them and Terraform receives unparseable HCL — the same convention `TF_VAR_MAIL_DOMAINS` and `TF_VAR_AVAILABILITY_ZONES` already follow. Set it per environment:
 
    ```sh
    gh variable set TF_VAR_EXTENSION_REDIRECT_URIS --env <environment> \
-     --body '["https://<pinned-id>.chromiumapp.org/"]'
+     --body '[\"https://<pinned-id>.chromiumapp.org/\"]'
    ```
 
    Append the Safari redirect to the list when it exists.
