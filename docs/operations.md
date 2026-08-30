@@ -60,7 +60,7 @@ The smtp-in tier runs OpenDKIM and OpenDMARC milters that verify SPF, DKIM, and 
 
 # Browser extension
 
-The address-suggesting browser extension (Chrome + Safari) lets users mint a fresh Cabalmail address directly inside a sign-up form. Its backend is the eager-create model: addresses are created `pending` at commit time so DNS and the mail tiers converge before any verification mail arrives, then confirmed on form submit, on first mail arrival, or revoked by an hourly TTL reaper. See [Browser extension: operator runbook](./browser-extension.md) for verifying the pending-address lifecycle in a live environment, provisioning the Chrome Web Store and App Store Connect accounts, wiring the OAuth redirect URIs, and growing the form-detection corpus.
+The address-suggesting browser extension (Chrome + Safari) lets users mint a fresh Cabalmail address directly inside a sign-up form. Its backend is the eager-create model: addresses are created `pending` at commit time so DNS and the mail tiers converge before any verification mail arrives, then confirmed on form submit, on first mail arrival, or revoked by an hourly TTL reaper. See [Browser extension](./browser-extension.md) for the whole build, distribution, and operations story: building and loading the bundles, wiring the OAuth redirect URIs, verifying the pending-address lifecycle in a live environment, publishing to the Chrome Web Store and the App Store, and maintaining the form-detection corpus.
 
 # Mail rules
 
