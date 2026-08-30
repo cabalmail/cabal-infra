@@ -1,0 +1,69 @@
+# XcodeGen project spec for the Safari Web Extension host
+# (docs/1.x/browser-extension-plan.md, Phase 8.2).
+#
+# Run `xcodegen generate` in this directory to produce Cabalmail.xcodeproj.
+# The generated project is not committed; CI regenerates it before every
+# build. The web-extension bundle (CabalmailExtension/Resources) is build
+# output too -- the preGenCommand materializes it from the shared
+# TypeScript build, mirroring apple/project.yml's vendored-assets pattern.
+#
+# macOS host only for now; the iOS/visionOS host app is Phase 8.3.
+
+name: Cabalmail
+
+options:
+  preGenCommand: cd .. && npm run build --workspace safari
+  bundleIdPrefix: com.cabalmail
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    # DEVELOPMENT_TEAM is intentionally unset here; CI passes it on the
+    # xcodebuild command line, unsigned verification passes
+    # CODE_SIGNING_ALLOWED=NO (same convention as apple/project.yml).
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  CabalmailExtensionHost:
+    type: application
+    platform: macOS
+    sources:
+      - path: Cabalmail
+    dependencies:
+      - target: CabalmailExtension
+        embed: true
+    settings:
+      base:
+        PRODUCT_NAME: "Cabalmail Extension"
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.extension-host
+    info:
+      path: Cabalmail/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail Extension
+        LSMinimumSystemVersion: "15.0"
+        LSApplicationCategoryType: public.app-category.productivity
+
+  CabalmailExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: CabalmailExtension/SafariWebExtensionHandler.swift
+      - path: CabalmailExtension/Resources
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.extension-host.web-extension
+    info:
+      path: CabalmailExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler

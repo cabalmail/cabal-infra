@@ -201,6 +201,14 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    confirm_address = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     suspend_address = {
       runtime = "python3.13"
 

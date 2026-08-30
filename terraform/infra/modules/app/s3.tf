@@ -14,6 +14,8 @@ resource "aws_s3_object" "website_config" {
     pool_id             = var.user_pool_id,
     pool_client_id      = var.user_pool_client_id,
     enroll_client_id    = var.mfa_enroll_client_id,
+    extension_client_id = var.extension_client_id,
+    hosted_ui_domain    = var.user_pool_domain,
     region              = var.region,
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
@@ -26,6 +28,8 @@ resource "aws_s3_object" "website_config" {
     pool_id             = var.user_pool_id,
     pool_client_id      = var.user_pool_client_id,
     enroll_client_id    = var.mfa_enroll_client_id,
+    extension_client_id = var.extension_client_id,
+    hosted_ui_domain    = var.user_pool_domain,
     region              = var.region,
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
@@ -51,6 +55,8 @@ resource "aws_s3_object" "website_config_json" {
     pool_id             = var.user_pool_id,
     pool_client_id      = var.user_pool_client_id,
     enroll_client_id    = var.mfa_enroll_client_id,
+    extension_client_id = var.extension_client_id,
+    hosted_ui_domain    = var.user_pool_domain,
     region              = var.region,
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
@@ -63,6 +69,8 @@ resource "aws_s3_object" "website_config_json" {
     pool_id             = var.user_pool_id,
     pool_client_id      = var.user_pool_client_id,
     enroll_client_id    = var.mfa_enroll_client_id,
+    extension_client_id = var.extension_client_id,
+    hosted_ui_domain    = var.user_pool_domain,
     region              = var.region,
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
@@ -72,6 +80,23 @@ resource "aws_s3_object" "website_config_json" {
     monitoring          = var.monitoring
     })
   )
+}
+
+# Private-link redirector for the browser extension
+# (docs/1.x/browser-extension-plan.md, Phase 7). Served at
+# https://admin.<control_domain>/private-link -- an extensionless key so the
+# URL carries no .html, which is why the object is managed here with an
+# explicit content type rather than shipped through the react bundle's
+# `aws s3 sync` (the CLI would guess binary/octet-stream and browsers would
+# download it). The target URL travels in the fragment, which never reaches
+# S3 or CloudFront.
+resource "aws_s3_object" "private_link" {
+  bucket        = var.bucket
+  key           = "/private-link"
+  content_type  = "text/html"
+  cache_control = "no-cache"
+  content       = file("${path.module}/templates/private-link.html")
+  etag          = md5(file("${path.module}/templates/private-link.html"))
 }
 
 # Runtime configuration for Node Lambdas

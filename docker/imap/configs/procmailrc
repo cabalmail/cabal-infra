@@ -26,6 +26,23 @@ SHELL=/usr/bin/false
 # accepts recipient-owned signal files, so the push path is unaffected.
 DROPPRIVS=yes
 
+# Pending-address confirmation (docs/1.x/browser-extension-plan.md, Phase
+# 3.1.d): one :0wc rule per still-pending eagerly-created address, generated
+# into /etc/procmail-pending.rc by generate-config.sh on the reconfigure
+# loop (comment-only in the steady state, when nothing is pending). The
+# rules only spool a confirmation signal for the root confirm-spool-drain.sh
+# daemon -- `c` keeps delivery flowing regardless -- and they run FIRST so a
+# user rule that consumes the message cannot suppress the confirmation. The
+# CABALCONFIRMDONE guard makes the include run exactly once whichever rcfile
+# copy runs first (same pattern as CABALRULESDONE below). Not PENDING*: that
+# prefix belongs to the flag-decoration variables at the bottom of this file.
+:0
+* ! CABALCONFIRMDONE ?? yes
+{
+  CABALCONFIRMDONE=yes
+  INCLUDERC=/etc/procmail-pending.rc
+}
+
 :0:
 *^X-Mailer: Outlook Express 3.14159
 IN-spam/

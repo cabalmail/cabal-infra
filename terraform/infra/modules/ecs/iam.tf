@@ -126,6 +126,16 @@ resource "aws_iam_policy" "ecs_task" {
         Resource = aws_sqs_queue.push.arn
       },
       {
+        # The imap container's confirm-spool-drain.sh clears the `pending`
+        # flag when mail arrives at an eagerly-created address
+        # (docs/1.x/browser-extension-plan.md, Phase 3.1.d). Shared task
+        # role, so scope the write to the one table and keep it out of the
+        # read-only statement above; the smtp tiers simply never update.
+        Effect   = "Allow"
+        Action   = ["dynamodb:UpdateItem"]
+        Resource = var.table_arn
+      },
+      {
         Effect = "Allow"
         Action = [
           "ssmmessages:CreateControlChannel",

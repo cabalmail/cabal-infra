@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!-- Private-link redirector (docs/1.x/browser-extension-plan.md, Phase 7).
+
+     The Cabalmail clients open this page with the target URL in the
+     fragment (#<url-encoded target>); fragments never reach the server or
+     CDN, so the target is never logged upstream. When the Cabalmail browser
+     extension is active it intercepts the navigation before this page's
+     script matters, re-opens the target in a private window, closes this
+     tab, and scrubs the history entry. This page is the graceful
+     degradation for every other case: extension absent, disabled, or not
+     yet granted private-browsing access. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Cabalmail private link</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           max-width: 34rem; margin: 4rem auto; padding: 0 1rem; color: #222; }
+    h1 { font-size: 1.3rem; }
+    .link-box { word-break: break-all; background: #f4f4f4; border-radius: 6px;
+                padding: 0.75rem; margin: 1rem 0; font-family: monospace; }
+    .actions a, .actions button { display: inline-block; margin-right: 0.75rem;
+                font-size: 1rem; }
+    .hint { color: #555; font-size: 0.9rem; }
+    .error { color: #a00; }
+  </style>
+</head>
+<body>
+  <h1>Cabalmail private link</h1>
+  <p id="explain">The Cabalmail extension isn't active in this browser, so this
+  link couldn't be opened in a private window automatically.</p>
+  <div class="link-box" id="target-display">(no link)</div>
+  <p class="actions">
+    <a id="open-link" href="#" hidden rel="noreferrer noopener">Open normally</a>
+    <button id="copy-link" hidden>Copy link</button>
+  </p>
+  <p class="hint">To open links privately in the future, install the Cabalmail
+  browser extension and enable "Allow in Private Browsing" (Safari) or
+  "Allow in Incognito" (Chrome) in the browser's extension settings.</p>
+  <script>
+    (function () {
+      var display = document.getElementById('target-display');
+      var open = document.getElementById('open-link');
+      var copy = document.getElementById('copy-link');
+      var raw = window.location.hash.slice(1);
+      if (!raw) { return; }
+      var target;
+      try { target = decodeURIComponent(raw); } catch (e) { target = raw; }
+      // Only plain web URLs may be rendered as a clickable anchor: parse
+      // with the URL constructor and allowlist the protocol, so nothing
+      // javascript:/data:/etc-shaped can reach the href (the same policy
+      // the extension and the reader link menu apply). The anchor is
+      // user-activated, never auto-followed.
+      var url = null;
+      try { url = new URL(target); } catch (e) { url = null; }
+      var ok = url !== null && (url.protocol === 'http:' || url.protocol === 'https:');
+      display.textContent = target;
+      if (ok) {
+        open.href = url.href;
+        open.hidden = false;
+        copy.hidden = false;
+        copy.addEventListener('click', function () {
+          navigator.clipboard.writeText(url.href).then(function () {
+            copy.textContent = 'Copied';
+          });
+        });
+      } else {
+        var err = document.createElement('p');
+        err.className = 'error';
+        err.textContent = 'This link uses a scheme that cannot be opened safely.';
+        display.after(err);
+      }
+    })();
+  </script>
+</body>
+</html>

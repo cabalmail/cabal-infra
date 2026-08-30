@@ -101,3 +101,9 @@ variable "threat_protection_enforced" {
   description = "When true, Cognito threat protection runs in ENFORCED mode (risky sign-ins are MFA-challenged or blocked). Default false = AUDIT (score and log only). Promote per environment after the risk metrics soak clean and TOTP enrollment is in place; see the user_pool_add_ons comment in main.tf."
   default     = false
 }
+
+variable "extension_redirect_uris" {
+  type        = list(string)
+  description = "OAuth callback URLs for the browser extension's app client, e.g. https://<extension-id>.chromiumapp.org/ for Chrome. The store-assigned extension IDs only exist after first store upload, so this defaults empty and the client is created with a loopback placeholder until then; see docs/1.x/browser-extension-plan.md."
+  default     = []
+}

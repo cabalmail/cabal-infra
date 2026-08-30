@@ -51,6 +51,7 @@ Anything posted to GitHub — issue bodies and comments, PR bodies, reviews, and
 react/admin/        React frontend (email client + address/folder management)
 apple/              Native Apple clients (iOS + macOS, SwiftUI) and CabalmailKit
 linux/              Native Linux client (GTK4 + libadwaita, Rust) — in progress, see docs/1.x/linux-client-plan.md
+extensions/         Browser extension (Chrome MV3 + Safari Web Extension, TypeScript/Preact) — in progress, see docs/1.x/browser-extension-plan.md
 lambda/api/         AWS Lambda functions behind API Gateway (Python)
 lambda/counter/     Cognito post-confirmation trigger (Python)
 lambda/certbot-renewal/  Let's Encrypt certificate renewal Lambda
@@ -108,6 +109,15 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - The control domain is typed on the sign-in screen and remembered per install (like the Apple client); nothing environment-specific is baked in. `BuildConfig.CONTROL_DOMAIN` (`cabalmail.controlDomain` in `~/.gradle/gradle.properties`) is only a developer prefill for an install that has never signed in — never commit a real domain, the checked-in default is empty
 - CI: `lint.yml`'s `kotlin` job runs the same gradle gate on PRs; `android.yml` runs it again on `stage`/`main` pushes and deploys nothing to AWS (its only side effect is a Play Console upload)
 
+### Browser Extensions (`extensions/`)
+- Toolchain: Node 20.19+/22.12+, npm workspaces (not pnpm, despite the plan doc's early text)
+- Install: `cd extensions && npm install`
+- Lint: `cd extensions && npm run lint`
+- Tests: `cd extensions && npm test` (vitest for `shared/` incl. the detector fixture corpus under `extensions/fixtures/`; `tsc` type-check for `chrome/`)
+- Build both bundles: `cd extensions && npm run build` — `chrome/dist/` and `safari/CabalmailExtension/Resources/` (gitignored). `CABALMAIL_CONTROL_DOMAIN` bakes the control domain; everything else comes from `config.json` at runtime
+- Safari host app: `cd extensions/safari && xcodegen generate` (builds the web bundle first via preGenCommand), then `xcodebuild -project Cabalmail.xcodeproj -scheme CabalmailExtensionHost -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO`
+- CI: `extensions.yml` runs lint/test/build on ubuntu and the unsigned Safari build on macOS; store uploads are not wired yet (accounts/secrets pending)
+
 ### Terraform
 - Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)
 - Two stacks: `terraform/dns` (bootstrap) and `terraform/infra` (main), both owned by `infra.yml`
@@ -135,6 +145,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 | `apple.yml` | `apple/**` | Builds and tests the iOS app on a macOS runner. Deploys nothing to AWS. |
 | `linux.yml` | `linux/**` | Runs the Linux client's gate, one `cargo xtask ci` step per job; the workspace build and widget tests run in an `ubuntu:24.04` container (the GTK 4.14 API floor), and `package-arch` builds and lints the Arch package in an `archlinux:base-devel` container. Deploys nothing to AWS. |
 | `android.yml` | `android/**` | On `main`/`stage` pushes: tests (unit + ktlint + Android Lint with warnings-as-errors), an unsigned release build, then — behind a `gate-*` environment approval like the other deploy workflows — a signed AAB upload to the Play Console internal track via gradle-play-publisher (warn-green while the Play/signing secrets are absent); on `main` the upload carries Play release notes generated from the `Android:` changelog headlines by `play-release-notes.py`. PR-time linting lives in `lint.yml`'s `kotlin` job, which runs the same gradle gate. Deploys nothing to AWS. |
+| `extensions.yml` | `extensions/**` | Lints, tests, and builds the browser-extension bundles (ubuntu) and the unsigned Safari host app (macOS). Deploys nothing; store uploads pending accounts/secrets. |
 | `dependabot.yml` | Schedule (daily) | Dependency update PRs. |
 Deploy workflows select environment based on branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys (see "Branches and environments" above).
 
@@ -182,6 +193,8 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 | `list` | List user's email addresses |
 | `new` | Create a new email address |
 | `revoke` | Delete an email address |
+| `confirm_address` | Clear the `pending` flag on an eagerly-created address (browser extension) |
+| `reap_pending_addresses` | Scheduled (not API Gateway): revoke pending addresses past the TTL |
 | `list_folders` | List IMAP folders |
 | `new_folder` / `delete_folder` | Create/delete IMAP folders |
 | `subscribe_folder` / `unsubscribe_folder` | Manage folder subscriptions |
