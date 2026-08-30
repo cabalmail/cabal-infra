@@ -128,13 +128,13 @@ One-time bring-up; needed before the Chrome build can be distributed and before 
    #    https://accounts.google.com/o/oauth2/auth?client_id=<CLIENT_ID>&response_type=code
    #      &scope=https://www.googleapis.com/auth/chromewebstore
    #      &redirect_uri=http://localhost:8818&access_type=offline&prompt=consent
-   # 2. The browser lands on http://localhost:8818/?code=4/XXXX (the page won't
-   #    load - nothing is listening); copy the code from the address bar.
-   # 3. Exchange it:
-   curl -s -X POST https://oauth2.googleapis.com/token \
-     -d client_id=<CLIENT_ID> -d client_secret=<CLIENT_SECRET> \
-     -d code='4/XXXX' -d grant_type=authorization_code \
-     -d redirect_uri=http://localhost:8818
+   # 2. The browser lands on http://localhost:8818/?code=4%2FXXXX (the page won't
+   #    load - nothing is listening); copy the code from the address bar and
+   #    decode %2F back to a slash (codes are single-use and expire in ~10 min).
+   # 3. Exchange it (deliberately one line: a mangled backslash continuation
+   #    silently drops the later fields and Google answers
+   #    "Invalid grant_type: ''"):
+   curl -s -X POST https://oauth2.googleapis.com/token -d client_id='<CLIENT_ID>' -d client_secret='<CLIENT_SECRET>' -d code='4/XXXX' -d grant_type=authorization_code -d redirect_uri=http://localhost:8818
    ```
 
    The response's `refresh_token` is the mint; `access_type=offline&prompt=consent` are load-bearing — without them Google returns no refresh token. Short-lived access tokens are derived from it automatically by the upload tooling; you never handle those.
