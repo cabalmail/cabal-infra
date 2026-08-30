@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useApi from '../hooks/useApi';
+import useUnassignAddress from '../hooks/useUnassignAddress';
 import ConfirmDialog from '../ConfirmDialog';
 import Request from './Request';
 import './Admin.css';
@@ -14,7 +15,6 @@ function AdminAddresses({ domains, setMessage }) {
   const [pickerFor, setPickerFor] = useState(null);
   const [pickerUser, setPickerUser] = useState('');
   const [pendingRevoke, setPendingRevoke] = useState(null);
-  const [pendingUnassign, setPendingUnassign] = useState(null);
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -37,6 +37,18 @@ function AdminAddresses({ domains, setMessage }) {
   }, [api, setMessage]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const {
+    pendingUnassign,
+    handleUnassign,
+    cancelUnassign,
+    confirmUnassign,
+  } = useUnassignAddress({
+    api,
+    setMessage,
+    onDone: loadData,
+    failureLabel: 'Failed to remove user: ',
+  });
 
   const usernameOptions = useMemo(() => (
     users
@@ -83,31 +95,6 @@ function AdminAddresses({ domains, setMessage }) {
       }
     );
   }, [api, setMessage, loadData]);
-
-  const handleUnassign = useCallback((address, username) => {
-    setPendingUnassign({ address, username });
-  }, []);
-
-  const cancelUnassign = useCallback(() => {
-    setPendingUnassign(null);
-  }, []);
-
-  const confirmUnassign = useCallback(() => {
-    const target = pendingUnassign;
-    if (!target) return;
-    setPendingUnassign(null);
-    const { address, username } = target;
-    api.unassignAddress(address, username).then(
-      () => {
-        setMessage && setMessage(`Removed "${username}" from "${address}".`, false);
-        loadData();
-      },
-      (err) => {
-        const msg = err.response?.data?.Error || err.message || err;
-        setMessage && setMessage('Failed to remove user: ' + msg, true);
-      }
-    );
-  }, [api, pendingUnassign, setMessage, loadData]);
 
   const handleRevoke = useCallback((a) => {
     setPendingRevoke(a);

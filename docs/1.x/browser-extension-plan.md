@@ -1,5 +1,18 @@
 # Browser Extension Plan (Address-Suggesting Plugin)
 
+## Progress
+
+| Phase | Status |
+|---|---|
+| 1. Foundation & shared core | **Complete** (2026-08-29). npm workspaces (not pnpm), `extensions/` |
+| 2. CI/CD | **Partial.** `extensions.yml` runs lint/test/build + unsigned Safari build; store uploads pending accounts/secrets |
+| 3. Backend, auth & API client | **Code complete** (2026-08-29); stage verification pending |
+| 4. Form detection | **Engine complete** with synthetic seed corpus + snapshot tool; real-site corpus capture pending |
+| 5. Suggest flow | **Code complete** (unit-tested); in-browser verification pending |
+| 6. Adopt flow | **Code complete** (unit-tested); in-browser verification pending |
+| 7. Private-link handoff | **Extension + redirector page complete**; Apple-client menu row not started |
+| 8. Platform targets & distribution | **Scaffold only.** Safari macOS host builds unsigned; stores, iOS host, parity testing pending |
+
 ## Context
 
 Cabalmail's signature user behavior is per-vendor (or per-purpose) email addresses: spin one up before signing up for a new service, burn it when it goes bad. Today that flow lives in the React admin app (`react/admin/src/Addresses/Request.jsx`) and the native clients (`apple/`, the planned `android/`). The user must context-switch to a Cabalmail surface, generate or hand-craft an address, copy it, switch back to the signup tab, and paste.
@@ -325,7 +338,31 @@ Three pieces:
 
 - **`/etc/procmailrc` template change.** Add `INCLUDERC=/etc/procmail-pending.rc` near the top of `docker/imap/configs/procmailrc`. Adjust `docker/shared/sync-users.sh` so existing users' `~/.procmailrc` files pick up the include line on next container start (`grep -q INCLUDERC || echo INCLUDERC=/etc/procmail-pending.rc >> ~/.procmailrc`, since the existing `cp -n` won't overwrite them).
 
+> **Erratum (2026-08-29):** The `sync-users.sh` premise was stale before
+> implementation started: the user-mail-rules work replaced the `cp -n`
+> with an unconditional `install` of the current template on every sync,
+> so existing users pick up a new `INCLUDERC` for free and the proposed
+> grep-and-append would have duplicated the line on every container
+> start. No `sync-users.sh` change shipped. The include also gained a
+> run-once guard (`CABALCONFIRMDONE`, mirroring `CABALRULESDONE`) because
+> the same rcfile is processed twice per delivery, and deliberately avoids
+> the `PENDING*` variable namespace, which the flag-decoration machinery
+> already owns.
+
 - **`/usr/local/bin/confirm-cabal-address`** -- a ~20-line Python script baked into the imap image. One positional arg (the recipient address); conditional DynamoDB `UpdateItem` that removes `pending` and `pending_since` only if the row exists and is still pending. Exits 0 on success or no-op (a row confirmed or reaped between rule generation and mail arrival); exits non-zero only on genuinely unexpected errors. Idempotent against the reaper-and-mail-arrive-at-the-same-instant race.
+
+> **Erratum (2026-08-29):** A direct-UpdateItem script cannot work from a
+> procmail recipe: sendmail invokes the local mailer with a sanitized
+> environment and `DROPPRIVS=yes` runs the recipe as the recipient, so the
+> child has no AWS credentials, no region, and no task-role URI (the same
+> constraint that shaped push notifications and keyworded delivery). As
+> implemented, `confirm-cabal-address` is a bash spooler that writes a
+> signal file into `/var/spool/cabal-confirm`, and a root
+> `confirm-spool-drain.sh` supervisord daemon performs the conditional
+> `UpdateItem` with the task-role credentials -- the established
+> spool + root-drain pattern (`push-enqueue.sh` / `push-spool-drain.sh`).
+> The drain authenticates each file by comparing its owner to the address
+> row's assignees. Semantics are otherwise as described.
 
 The imap task role needs `dynamodb:UpdateItem` on `cabal-addresses` (it already has `Scan`, so this is one additional action in the existing IAM policy).
 
@@ -642,6 +679,15 @@ The adopted goal: links chosen in the Cabalmail clients can open in a private br
 ### 1. Redirector page
 
 A static page at `https://<control-domain>/private-link`, served from the same S3/CloudFront origin as the admin app and `config.js` (no new DNS, no new Lambda). The target URL travels in the URL fragment (`#<url-encoded target>`), which never leaves the client -- fragments are not sent to the server or CDN, so the target is never logged upstream.
+
+> **Erratum (2026-08-29):** The control-domain apex resolves to nothing --
+> the admin app and `config.js` live on `admin.<control-domain>`, so "the
+> same origin" means the page's URL is
+> `https://admin.<control-domain>/private-link`. Implemented as a
+> Terraform-managed `aws_s3_object` (`modules/app/s3.tf`, template at
+> `modules/app/templates/private-link.html`) with an explicit `text/html`
+> content type, because the react deploy's bare `aws s3 sync` would give an
+> extensionless key `binary/octet-stream` and browsers would download it.
 
 The page doubles as the graceful-degradation path: its own JavaScript reads the fragment and renders the target with "the Cabalmail extension isn't active in this browser" messaging, an explicit "Open normally" anchor, a copy button, and enable-the-extension instructions. A user who lands here without the extension still gets their link; nothing dead-ends.
 

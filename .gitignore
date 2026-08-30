@@ -19,3 +19,10 @@ scripts/.venv/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Browser extensions workspace (docs/1.x/browser-extension-plan.md)
+extensions/node_modules/
+extensions/*/node_modules/
+extensions/chrome/dist/
+extensions/safari/CabalmailExtension/Resources/
+extensions/safari/Cabalmail.xcodeproj/

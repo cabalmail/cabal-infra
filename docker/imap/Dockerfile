@@ -160,6 +160,14 @@ COPY shared/clear-maintenance.sh           /usr/local/bin/clear-maintenance.sh
 COPY shared/push-enqueue.sh                /usr/local/bin/push-enqueue.sh
 COPY shared/push-spool-drain.sh            /usr/local/bin/push-spool-drain.sh
 
+# Pending-address confirmation (docs/1.x/browser-extension-plan.md, Phase
+# 3.1.d): procmail recipes generated into /etc/procmail-pending.rc spool a
+# signal via confirm-cabal-address; the confirm-spool-drain.sh supervisord
+# program clears the DynamoDB `pending` flag with the task-role credentials
+# the per-user delivery agents deliberately never see.
+COPY shared/confirm-cabal-address          /usr/local/bin/confirm-cabal-address
+COPY shared/confirm-spool-drain.sh         /usr/local/bin/confirm-spool-drain.sh
+
 # User-mail-rules compiler (imap only, docs/1.x/user-mail-rules-plan.md):
 # compiles the cabal-user-rules table into /etc/procmail-user/<user>.rc on
 # every reconfigure. The fixture + golden pair ships in the image so the
@@ -183,7 +191,12 @@ COPY shared/test/compile-user-rules/golden.rc \
 RUN chmod +x /usr/local/bin/compile-user-rules.py \
              /usr/local/bin/compile-user-rules-selftest.py \
              /usr/local/bin/cabal-append-drain.py \
+             # No .sh suffix, so the blanket *.sh chmod below misses it.
+             /usr/local/bin/confirm-cabal-address \
     && mkdir -p /etc/procmail-user \
+    # Baked empty so /etc/procmailrc's INCLUDERC resolves even before the
+    # first generate-config.sh run replaces it with the real rule set.
+    && install -m 0644 /dev/null /etc/procmail-pending.rc \
     && /usr/local/bin/compile-user-rules-selftest.py
 
 # Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)

@@ -4,9 +4,8 @@ import json
 import os
 import boto3  # pylint: disable=import-error
 from address_events import notify_containers  # pylint: disable=import-error
-from helper import active_addresses_on_subdomain  # pylint: disable=import-error
 from helper import authorized_address_request  # pylint: disable=import-error
-from helper import delete_address_dns_records  # pylint: disable=import-error
+from helper import teardown_address_dns_if_unused  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -20,30 +19,11 @@ def handler(event, _context):
     address, item, error = authorized_address_request(event)
     if error:
         return error
-    # Take subdomain/tld/zone from the STORED row for `address`, never from the
-    # request body. Authorization above is on `address` only, so honoring a
-    # client-supplied subdomain/tld would let a caller who owns any one address
-    # delete another user's DNS records: delete_address_dns_records targets
-    # `{subdomain}.{tld}`, and the co-tenant guard
-    # (active_addresses_on_subdomain) returns False for a single-tenant victim
-    # subdomain, so the DELETE would proceed. The caller owns `address`, so its
-    # row is the authoritative source.
-    subdomain = item.get('subdomain')
-    tld = item.get('tld')
-    # The zone is resolved from DOMAINS, never from the zone-id cached on the
-    # row: that value is a snapshot from address-creation time that goes stale
-    # if a hosted zone is ever recreated (legacy rows pointed at zones that no
-    # longer exist, failing Route 53 calls with NoSuchHostedZone). For a tld no
-    # longer in DOMAINS this resolves to None and the DNS step is skipped --
-    # the Lambda role's Route 53 grant only covers managed zones anyway.
-    zone_id = domains.get(tld)
     try:
-        # Only ACTIVE (non-suspended) co-tenants keep the records alive: a
-        # suspended address's contract is already "DNS absent", so it must not
-        # block the delete (reinstate republishes the records if it comes back).
-        if subdomain and tld and zone_id and \
-                not active_addresses_on_subdomain(subdomain, tld, address):
-            delete_address_dns_records(zone_id, subdomain, tld, control_domain)
+        # Row-sourced subdomain/tld, DOMAINS-sourced zone, and the co-tenant
+        # guard all live in the shared teardown (see its docstring for the
+        # authorization and stale-zone-id rationale).
+        teardown_address_dns_if_unused(item, address, domains, control_domain)
         revoke_address(address)
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught

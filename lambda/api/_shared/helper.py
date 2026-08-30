@@ -1025,6 +1025,33 @@ def active_addresses_on_subdomain(subdomain, tld, address):
     return False
 
 
+def teardown_address_dns_if_unused(item, address, domains_map, control_domain):
+    '''Removes an address subdomain's DNS record set when no other ACTIVE
+    (non-suspended) address still needs it. The one copy of the teardown
+    gate shared by revoke, suspend_address, and reap_pending_addresses, so
+    the three paths cannot drift the way the create paths once did (#1073).
+
+    subdomain/tld are taken from the STORED row (`item`), never from any
+    request body: callers authorize on `address` only, so honoring a
+    client-supplied subdomain/tld would let a caller who owns any one
+    address delete another user's DNS records. The zone is resolved from
+    DOMAINS, never from a zone-id cached on the row: that value is a
+    creation-time snapshot that goes stale if a hosted zone is recreated
+    (legacy rows pointed at zones that no longer exist, failing Route 53
+    calls with NoSuchHostedZone). For a tld no longer in DOMAINS this
+    resolves to None and the DNS step is skipped -- the Lambda role's
+    Route 53 grant only covers managed zones anyway. Pending (unconfirmed)
+    co-tenants DO keep the records alive: a pending address must be able
+    to receive its verification mail, which is the whole point of the
+    eager-create model (docs/1.x/browser-extension-plan.md).'''
+    subdomain = item.get('subdomain')
+    tld = item.get('tld')
+    zone_id = domains_map.get(tld)
+    if subdomain and tld and zone_id and \
+            not active_addresses_on_subdomain(subdomain, tld, address):
+        delete_address_dns_records(zone_id, subdomain, tld, control_domain)
+
+
 REPORT_PAGE_LIMIT = 50
 
 

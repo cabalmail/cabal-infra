@@ -1,0 +1,67 @@
+#!/bin/bash
+# Spools a pending-address confirmation signal for one delivered message.
+#
+# Invoked by a generated :0wc recipe in /etc/procmail-pending.rc (one per
+# still-pending eagerly-created address, docs/1.x/browser-extension-plan.md
+# Phase 3.1.d) with the message on stdin: confirm-cabal-address <address>.
+# Writes one JSON file {address} into /var/spool/cabal-confirm; the companion
+# confirm-spool-drain.sh daemon (supervisord, root) clears the row's
+# `pending` flag in DynamoDB with the task-role credentials from its own
+# environment. Splitting spool from write keeps this delivery-path hook fast
+# and credential-free: procmail's children run as the recipient user with a
+# sendmail-sanitized environment, and handing them AWS credentials would
+# regress the container-hardening posture for a best-effort side effect --
+# the same shape as push-enqueue.sh.
+#
+# Best-effort BY CONTRACT: this script must never fail (or slow) mail
+# delivery, so it deviates from the house `set -e` rule — every failure path
+# logs to stderr (procmail appends child stderr to its own $LOGFILE) and
+# exits 0. A lost signal is harmless: the extension's /confirm_address call
+# or the next delivery confirms the address, and the TTL reaper is the floor.
+set -uo pipefail
+
+SPOOL_DIR=/var/spool/cabal-confirm
+# The pending set is almost always empty, so a spool this deep means the
+# drain daemon has been failing for a long time. Shed instead.
+MAX_SPOOL_FILES=1000
+
+log() {
+  echo "[confirm-address] $*" >&2
+}
+
+# Always swallow the message so procmail's writer never sees SIGPIPE on the
+# carbon-copy pipe.
+cat > /dev/null 2>&1 || true
+
+address="${1:-}"
+if [ -z "$address" ] || [ ! -d "$SPOOL_DIR" ]; then
+  # Missing spool dir = not the imap tier / not provisioned; not an error.
+  exit 0
+fi
+
+count=$(find "$SPOOL_DIR" -maxdepth 1 -name 'sig.*' 2>/dev/null | wc -l)
+if [ "$count" -ge "$MAX_SPOOL_FILES" ]; then
+  log "spool full ($count files); dropping signal for $address"
+  exit 0
+fi
+
+body=$(jq -cn --arg address "$address" '{address: $address}') || {
+  log "failed to build signal body for $address"
+  exit 0
+}
+
+# Write-then-rename so the drain daemon never reads a partial file. The
+# daemon authenticates the signal by comparing the file's owner to the
+# address row's assignees, so the file must be created by this (recipient)
+# uid.
+tmp=$(mktemp "$SPOOL_DIR/.tmp.XXXXXXXX" 2>/dev/null) || {
+  log "cannot write to spool for $address"
+  exit 0
+}
+if printf '%s\n' "$body" > "$tmp" 2>/dev/null \
+    && mv -f "$tmp" "$SPOOL_DIR/sig.${tmp##*/.tmp.}" 2>/dev/null; then
+  exit 0
+fi
+log "failed to spool signal for $address"
+rm -f "$tmp" 2>/dev/null
+exit 0

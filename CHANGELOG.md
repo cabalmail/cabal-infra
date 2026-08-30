@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-08-30
+
+### Added
+- **Browser extension (initial implementation, not yet distributed).** A
+  new `extensions/` workspace holds the address-suggesting extension for
+  Chrome (MV3) and Safari: sign-up-form detection via a tunable scoring
+  engine with a fixture corpus, 1Password-style suggest popover that
+  eagerly creates the address while the form is being filled, an adopt flow
+  for hand-typed addresses with a submit-time guard, Cognito Hosted UI +
+  PKCE sign-in, and the private-window link handoff for the mail clients
+  (redirector page at `https://admin.<control-domain>/private-link`).
+  Store distribution and in-browser verification are still pending; see
+  docs/1.x/browser-extension-plan.md for phase status.
+- **Eager-create pending addresses.** `POST /new` accepts a `pending` flag
+  that marks an address created ahead of use (the browser extension's
+  commit-time create, giving DNS and the sendmail tier runway before a
+  verification mail arrives). A new `POST /confirm_address` endpoint clears
+  the flag on form submit; the imap tier clears it the moment mail actually
+  arrives at the address (a generated procmail rule spools a signal that a
+  root drain daemon applies); and an hourly `reap_pending_addresses`
+  scheduler Lambda revokes addresses still pending after 24h, including
+  their DNS records and mail-tier configuration. `GET /list` now reports
+  the flag so clients can badge unconfirmed addresses.
+
+### Fixed
+- Apple: **The reader's flag menu shows what is actually applied.** On macOS
+  the menu kept the checkmarks it opened with, so a flag applied from the menu
+  itself read as unapplied — and picking that row again removed it. The menu is
+  now replaced whenever the rows it draws change.
+- Apple: **Mail rules no longer opens on "Couldn't reach the server."** On
+  iPhone the Rules screen is torn down and rebuilt during the navigation
+  transition, which cancelled its first fetch; the cancellation was painted as
+  a server failure and nothing retried it, so every push after the first one in
+  a session needed Retry. A cancelled load now leaves the screen loading and
+  the fetch is taken over by the rebuilt screen.
+
 ## [1.8.1] - 2026-08-29
 
 ### Fixed

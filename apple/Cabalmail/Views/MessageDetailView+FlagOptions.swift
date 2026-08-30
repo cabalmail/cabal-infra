@@ -16,7 +16,8 @@ extension MessageDetailView {
     @ViewBuilder
     var flagButton: some View {
         if let model {
-            if menuSlots(model: model).isEmpty {
+            let rows = menuRows(model: model)
+            if rows.isEmpty {
                 Button {
                     Task { await model.toggleFlagged() }
                 } label: {
@@ -28,7 +29,7 @@ extension MessageDetailView {
                 .accessibilityIdentifier("reader.toggleFlag")
             } else {
                 Menu {
-                    keywordOptionItems(model: model)
+                    keywordOptionItems(rows: rows, model: model)
                 } label: {
                     flagToolbarLabel(isFlagged: model.isFlagged)
                 } primaryAction: {
@@ -36,6 +37,10 @@ extension MessageDetailView {
                 }
                 .menuIndicator(optionMenuIndicator)
                 .accessibilityIdentifier("reader.toggleFlag")
+                // macOS keeps the AppKit menu it built the first time this
+                // `Menu` was opened, checkmarks and titles included, so the
+                // identity carries what the rows draw (#1329).
+                .id(FlagMenuPolicy.identity(rows))
             }
         }
     }
@@ -48,30 +53,30 @@ extension MessageDetailView {
         )
     }
 
-    /// The slots the menu offers: every enabled palette entry, plus any
-    /// slot the message is already tagged with whose entry is disabled or
-    /// deleted — those still need an untag affordance (the palette
-    /// editor's delete confirmation promises tags stay removable).
-    private func menuSlots(model: MessageDetailViewModel) -> [String] {
-        let offered = preferences.flagPalette.filter(\.enabled).map(\.slot)
-        let stray = FlagPalette.slots
-            .filter { model.keywordSlots.contains($0) && !offered.contains($0) }
-        return offered + stray
+    /// The rows the menu offers, read here so the enclosing body observes
+    /// the tag set — the identity below is derived from the same values.
+    func menuRows(model: MessageDetailViewModel) -> [FlagMenuRow] {
+        FlagMenuPolicy.rows(
+            palette: preferences.flagPalette,
+            taggedSlots: model.keywordSlots
+        )
     }
 
-    /// One checkmark toggle per slot, labelled from the palette when the
-    /// entry exists (disabled entries keep their label) and by slot id for
-    /// a deleted slot's surviving tag.
+    /// One checkmark toggle per row. `isOn` reads the row rather than the
+    /// model so the drawn state and the menu's identity can never disagree.
     @ViewBuilder
-    func keywordOptionItems(model: MessageDetailViewModel) -> some View {
-        ForEach(menuSlots(model: model), id: \.self) { slot in
+    func keywordOptionItems(
+        rows: [FlagMenuRow],
+        model: MessageDetailViewModel
+    ) -> some View {
+        ForEach(rows) { row in
             Toggle(isOn: Binding(
-                get: { model.keywordSlots.contains(slot) },
+                get: { row.isOn },
                 set: { _ in
-                    Task { await model.toggleKeyword(slot) }
+                    Task { await model.toggleKeyword(row.slot) }
                 }
             )) {
-                Text(preferences.flagPalette.first { $0.slot == slot }?.label ?? slot)
+                Text(row.label)
             }
         }
     }

@@ -27,10 +27,22 @@ struct RulesView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task {
-            guard model == nil, let client = appState.client else { return }
-            let fresh = RulesViewModel(backend: LiveRulesBackend(client: client))
-            model = fresh
-            await fresh.load()
+            // Building the model and loading it are separate questions: on
+            // iPhone the pushed destination is built, torn down and rebuilt
+            // during the navigation transition, and the `@State` survives.
+            // Gating the load on `model == nil` therefore stranded the
+            // cancelled first attempt's error on screen forever (#1328), so
+            // the load is gated on the model's own attempt flag instead.
+            let target: RulesViewModel
+            if let model {
+                target = model
+            } else {
+                guard let client = appState.client else { return }
+                target = RulesViewModel(backend: LiveRulesBackend(client: client))
+                model = target
+            }
+            guard !target.hasAttemptedLoad else { return }
+            await target.load()
         }
     }
 }

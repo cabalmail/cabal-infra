@@ -29,13 +29,15 @@ def handler(event, _context):
             'ExpressionAttributeNames': {
                 '#user': 'user',
                 '#c': 'comment',
-                '#s': 'suspended'
+                '#s': 'suspended',
+                # `pending` is a DynamoDB reserved word, like the others here.
+                '#p': 'pending'
             },
             'ExpressionAttributeValues': {
                 ':user': user
             },
             'ProjectionExpression':
-                'subdomain, #c, tld, address, username, #user, favorites, #s'
+                'subdomain, #c, tld, address, username, #user, favorites, #s, #p'
         }
         while True:
             response = table.scan(**scan_kwargs)
@@ -44,6 +46,9 @@ def handler(event, _context):
                 if user in assigned:
                     item['favorite'] = user in (item.pop('favorites', None) or set())
                     item['suspended'] = bool(item.get('suspended'))
+                    # Unconfirmed eager-create rows (browser extension); absence
+                    # means confirmed. Surfaced so clients can badge them.
+                    item['pending'] = bool(item.get('pending'))
                     items.append(item)
             if 'LastEvaluatedKey' not in response:
                 break

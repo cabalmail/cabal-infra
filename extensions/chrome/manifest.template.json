@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Cabalmail",
+  "version": "__VERSION__",
+  "description": "Suggest and adopt per-vendor Cabalmail addresses on sign-up forms, and open Cabalmail links in private windows.",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Cabalmail"
+  },
+  "permissions": ["storage", "identity", "webNavigation", "tabs", "history"],
+  "host_permissions": [
+    "https://admin.__CONTROL_DOMAIN__/*",
+    "https://*.amazoncognito.com/*"
+  ]
+}

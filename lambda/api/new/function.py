@@ -61,7 +61,7 @@ def handler(event, _context):
 
 def record_address(user, body, address):
     '''Records the new address in DynamoDB'''
-    table.put_item(Item={
+    item = {
         'address': address,
         'tld': body['tld'],
         'user': user,
@@ -69,4 +69,15 @@ def record_address(user, body, address):
         'subdomain': body['subdomain'],
         'comment': body.get('comment', ''),
         'RequestTime': datetime.now(timezone.utc).isoformat()
-    })
+    }
+    # Eager-create support for the browser extension
+    # (docs/1.x/browser-extension-plan.md, Phase 3.1.a): a pending address is
+    # fully provisioned (DNS, sendmail maps) but unconfirmed. It is confirmed
+    # by /confirm_address or by mail arriving (the imap tier's procmail hook),
+    # and revoked by the reap_pending_addresses TTL reaper otherwise. Absent
+    # or false means a normal, immediately-confirmed address, so existing
+    # clients are unaffected.
+    if body.get('pending') is True:
+        item['pending'] = True
+        item['pending_since'] = item['RequestTime']
+    table.put_item(Item=item)

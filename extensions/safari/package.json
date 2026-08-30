@@ -1,0 +1,12 @@
+{
+  "name": "@cabalmail/extension-safari",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "node ../scripts/build-extension.mjs safari"
+  },
+  "dependencies": {
+    "@cabalmail/extension-chrome": "*"
+  }
+}

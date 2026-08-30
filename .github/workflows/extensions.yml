@@ -1,0 +1,108 @@
+# Browser extension CI (docs/1.x/browser-extension-plan.md, Phase 2).
+#
+# Two always-on jobs: `test` (lint + vitest + type-check + both bundle
+# builds on Linux) and `build-safari` (xcodegen + unsigned xcodebuild of the
+# Safari host app on macOS). Store uploads (Chrome Web Store, App Store
+# Connect) are deliberately NOT wired yet: they need developer accounts and
+# secrets that don't exist (see the plan's Phase 2.2/2.3 secret lists), and
+# a half-configured upload job would fail every stage push. Add them behind
+# the android.yml-style warn-green-when-secrets-absent pattern once the
+# accounts are provisioned.
+
+name: Extensions
+
+on:
+  push:
+    branches: [main, stage, development]
+    paths:
+      - 'extensions/**'
+      - '.github/workflows/extensions.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'extensions/**'
+      - '.github/workflows/extensions.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: extensions-${{ github.ref }}-${{ github.event.pull_request.number || 'push' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extensions
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: extensions/package-lock.json
+      - name: install
+        run: npm ci
+      - name: lint
+        run: npm run lint
+      - name: test
+        run: npm test
+      - name: build
+        # Falls back to the dev placeholder domain on forks where the
+        # repository variable is unset; the bundles are still buildable.
+        env:
+          CABALMAIL_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+        run: npm run build
+      - name: archive-chrome
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: chrome-extension
+          path: extensions/chrome/dist/
+          retention-days: 14
+
+  build-safari:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: extensions
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: extensions/package-lock.json
+      - name: install-xcodegen
+        # Same warning-hygiene pattern as apple.yml: only install what the
+        # runner image doesn't already carry, and untap the distrusted
+        # preinstalled aws/tap first.
+        run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
+          for pkg in xcodegen; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
+      - name: install
+        run: npm ci
+      - name: generate-project
+        # xcodegen's preGenCommand builds the web-extension bundle into
+        # CabalmailExtension/Resources first.
+        working-directory: extensions/safari
+        env:
+          CABALMAIL_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+        run: xcodegen generate
+      - name: build-unsigned
+        working-directory: extensions/safari
+        run: |
+          set -o pipefail
+          xcodebuild -project Cabalmail.xcodeproj \
+            -scheme CabalmailExtensionHost \
+            -destination 'platform=macOS' \
+            build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""

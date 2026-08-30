@@ -1,0 +1,34 @@
+{
+  "name": "cabalmail-extensions",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Cabalmail browser extension workspace (Chrome MV3 + Safari Web Extension)",
+  "workspaces": [
+    "shared",
+    "chrome",
+    "safari"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^22.20.1",
+    "@types/webextension-polyfill": "^0.12.1",
+    "eslint": "^9.39.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.46.0",
+    "vite": "^7.1.0",
+    "vitest": "^4.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
