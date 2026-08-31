@@ -2,9 +2,9 @@
 name: Logo Assets
 
 # Regenerate every logo derivative (Apple icons, Android Play Store icon,
-# React favicon/logo set, docs images, front-door favicon) from
-# vector/cabalmail-logo.svg whenever the source vector (or the generator
-# itself) changes, or on demand. The generator
+# browser-extension icons, React favicon/logo set, docs images, front-door
+# favicon) from vector/cabalmail-logo.svg whenever the source vector (or the
+# generator itself) changes, or on demand. The generator
 # fetches a version-pinned resvg + oxipng, so the linux runner produces the
 # same bytes a maintainer gets locally on macOS.
 #

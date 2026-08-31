@@ -49,8 +49,12 @@ extensions/
   safari/     Safari manifest template and the Xcode host-app project spec; the
               web sources are Chrome's, rebuilt into the host app's bundle
   fixtures/   the form-detection corpus the detector is regression-tested against
+  icons/      the manifest's `icons` map, generated from the source vector by
+              scripts/generate-logo-assets and copied flat into both bundles
   scripts/    the build orchestrator and the page-snapshot tool
 ```
+
+Bundle contents are flat by necessity, not taste: the Safari appex adds the bundle to an Xcode resources build phase, which flattens directories, so a file in a subdirectory would land loose in the appex and leave its manifest path dangling — while still looking correct in `chrome/dist`. The build fails if any path the manifest names is missing from the output, which is the guard against exactly that asymmetry.
 
 `shared/` is the analog of `apple/CabalmailKit/` and `android/kit/`: everything with logic in it, nothing platform-specific. Per-platform code is confined to packaging glue.
 
