@@ -184,6 +184,11 @@ private struct FlagPaletteEntryEditor: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(name)
+                // Without an explicit identifier the selected swatch inherits
+                // one from the decorative checkmark nested in its `ZStack`,
+                // so exactly one swatch answers to `checkmark` and the other
+                // nine to nothing at all (#1341).
+                .accessibilityIdentifier("flag.color.\(name)")
                 .accessibilityAddTraits(name == selected ? .isSelected : [])
             }
         }
