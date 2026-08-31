@@ -11,7 +11,7 @@
 //   EXTENSION_VERSION         manifest version (default: latest CHANGELOG
 //                             release, falling back to 0.0.1)
 
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
@@ -118,6 +118,17 @@ await build({
   },
 });
 
+// Icons: the manifest's `icons` map, shared by both browsers and generated
+// from the source vector by scripts/generate-logo-assets. Not optional --
+// App Store validation rejects a Safari extension whose manifest has no
+// icons (error 90849). Copied FLAT rather than as an icons/ subdirectory:
+// the Safari appex adds the bundle to an Xcode resources build phase, which
+// flattens directories, so a subdirectory would leave every manifest path
+// dangling inside the appex while still looking right in chrome/dist.
+for (const icon of readdirSync(join(workspaceRoot, 'icons'))) {
+  cpSync(join(workspaceRoot, 'icons', icon), join(outDir, icon));
+}
+
 // Manifest: per-browser template with build-time substitutions.
 const template = readFileSync(
   join(workspaceRoot, browser, 'manifest.template.json'),
@@ -135,5 +146,22 @@ if (process.env.EXTENSION_STORE_BUILD) {
   delete manifest.key;
 }
 writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+
+// Every path the manifest names must exist in the bundle. Cheap insurance
+// against packaging drift: a missing icon or script is otherwise invisible
+// until a store rejects the upload or a browser silently ignores the entry.
+const referenced = [
+  ...Object.values(manifest.icons ?? {}),
+  ...(manifest.content_scripts ?? []).flatMap((cs) => cs.js ?? []),
+  manifest.background?.service_worker,
+  manifest.action?.default_popup,
+].filter(Boolean);
+const missing = referenced.filter((rel) => !existsSync(join(outDir, rel)));
+if (missing.length > 0) {
+  console.error(
+    `[build-extension] manifest references missing files: ${missing.join(', ')}`,
+  );
+  process.exit(1);
+}
 
 console.log(`[build-extension] ${browser} v${version} -> ${outDir}`);
