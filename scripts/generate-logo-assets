@@ -116,6 +116,7 @@ Regenerated outputs (all committed; never hand-edit):
           apple/CabalmailMac/AppIcon.icon                           (macOS Liquid Glass, Default/Dark)
           apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack  (visionOS 3 layers)
           apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset   (watchOS single 1024)
+          extensions/safari/Cabalmail/AppIcon.icon                  (Safari extension host, macOS)
           apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset
           apple/CabalmailMac/Assets.xcassets/MenuBarMark.imageset      (menu-bar status item)
   Android — android/app/src/main/ic_launcher-playstore.png           (Play Store listing icon, 512x512)
@@ -123,6 +124,7 @@ Regenerated outputs (all committed; never hand-edit):
             android/app/src/main/res/drawable/ic_launcher_background.xml  (adaptive launcher plate layer)
             android/app/src/main/res/drawable/cabalmail_mark.xml      (in-app brand mark, folder-list top bar)
             android/app/src/main/res/values/logo.xml                  (brand colors: splash background, mark tints)
+  Ext   — extensions/icons/icon-{16,32,48,64,96,128,256,512}.png    (WebExtension icons map)
   React — react/admin/public/{favicon.svg,favicon.ico,logo192.png,logo384.png,mask.png}
           react/admin/src/assets/logo.svg
   Docs  — docs/logo.png, docs/mask.png
@@ -613,6 +615,13 @@ generate_all() {
   write_icon "${REPO_ROOT}/apple/Cabalmail"
   write_icon "${REPO_ROOT}/apple/CabalmailMac"
 
+  # --- Safari extension host: a separate macOS App Store product, so it
+  #     needs its own icon even though it is a minimal container app. Same
+  #     mark as the mail app -- one brand, and App Store validation rejects
+  #     a bundle with no ICNS 512pt@2x (error 90236), which actool emits
+  #     from this .icon alongside the Liquid Glass form. ---
+  write_icon "${REPO_ROOT}/extensions/safari/Cabalmail"
+
   # --- Apple: watchOS single universal slot (1024, opaque). The system
   #     applies the circular home-screen mask itself, so this is the same
   #     full-bleed light art as iOS; the optically-centered glyph sits well
@@ -657,6 +666,18 @@ generate_all() {
   render "${d}/favicon.svg" 48 48 "${tmp}/48.png" alpha
   assemble_ico "${pub}/favicon.ico" "${tmp}/16.png" "${tmp}/32.png" "${tmp}/48.png"
   rm -rf "${tmp}"
+
+  # --- Browser extensions: the WebExtension `icons` map. Apple rejects a
+  #     Safari extension whose manifest has no icons (App Store validation
+  #     error 90849), and both browsers use these for the extension manager
+  #     and the toolbar button. The favicon treatment, not the app-icon
+  #     tile: an extension icon lives in browser chrome next to favicons,
+  #     and the rounded plate is the treatment designed to read at 16px. ---
+  local ext="${REPO_ROOT}/extensions/icons"
+  local size
+  for size in 16 32 48 64 96 128 256 512; do
+    render "${d}/favicon.svg" "${size}" "${size}" "${ext}/icon-${size}.png" alpha
+  done
 
   # --- Repo docs ---
   render "${d}/AppIcon-ios-light.svg" 512 512 "${REPO_ROOT}/docs/logo.png" opaque

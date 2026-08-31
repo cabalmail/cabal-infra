@@ -2,15 +2,23 @@
  * The interactive leg of the Hosted UI flow, abstracted per browser.
  *
  * Chrome implements the WebExtensions `identity` API, so the flow rides
- * `launchWebAuthFlow` with the extension's `chromiumapp.org` redirect.
+ * `launchWebAuthFlow` with the extension's `chromiumapp.org` redirect, and
+ * the driver itself observes the redirect: `authorize()` resolves with the
+ * redirect URL.
+ *
  * Safari implements no `identity` API at all (MDN compat:
- * `version_added: false`), so there the flow runs in a regular tab whose
+ * `version_added: false`), so there the flow runs in an ordinary tab whose
  * redirect target is a page on the operator's own admin origin
- * (`/extension-auth`); the background watches for the redirect via
- * `tabs.onUpdated` — the same permission-free-for-our-host interception
- * the private-link handoff uses — then closes the tab. PKCE and the
- * `state` check keep the tab variant equivalent in security: the
- * authorization code is useless without the in-extension verifier.
+ * (`/extension-auth`). That driver is deliberately *fire-and-forget*:
+ * `authorize()` opens the tab and resolves `null`, and the redirect is
+ * caught by the background's top-level `tabs.onUpdated` listener, which
+ * calls `HostedUiAuth.completeSignIn`. Nothing may wait on a promise across
+ * the interactive leg: opening the tab closes the popup that asked for
+ * sign-in, and an MV3 background worker with no live caller is free to be
+ * suspended -- an in-memory listener registered inside `authorize()` would
+ * not survive to see the redirect. PKCE and the `state` check keep the tab
+ * variant equivalent in security: the authorization code is useless without
+ * the verifier, which lives in extension storage.
  */
 
 import browser from 'webextension-polyfill';
@@ -18,12 +26,13 @@ import browser from 'webextension-polyfill';
 export interface WebAuthDriver {
   /** The redirect URI to register and to pass as `redirect_uri`. */
   redirectUri(): string;
-  /** Run the interactive flow; resolve with the full redirect URL. */
-  authorize(authorizeUrl: string): Promise<string>;
+  /**
+   * Run the interactive flow. Resolves with the full redirect URL when the
+   * driver observes it itself, or `null` when the redirect arrives
+   * out-of-band and the caller must wait for `completeSignIn`.
+   */
+  authorize(authorizeUrl: string): Promise<string | null>;
 }
-
-/** Give a signing-in user ample time; abandonments must not leak listeners. */
-const TAB_FLOW_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function identityDriver(): WebAuthDriver {
   return {
@@ -42,15 +51,6 @@ export function identityDriver(): WebAuthDriver {
 /** Minimal surface of the tabs API the tab driver needs (injectable in tests). */
 export interface TabsLike {
   create(props: { url: string }): Promise<{ id?: number }>;
-  remove(tabId: number): Promise<void>;
-  onUpdated: {
-    addListener(cb: (tabId: number, changeInfo: { url?: string }) => void): void;
-    removeListener(cb: (tabId: number, changeInfo: { url?: string }) => void): void;
-  };
-  onRemoved: {
-    addListener(cb: (tabId: number) => void): void;
-    removeListener(cb: (tabId: number) => void): void;
-  };
 }
 
 export function tabDriver(
@@ -59,56 +59,10 @@ export function tabDriver(
 ): WebAuthDriver {
   return {
     redirectUri: () => redirectUri,
-    authorize: (authorizeUrl) =>
-      new Promise<string>((resolve, reject) => {
-        let authTabId: number | undefined;
-        // Declared before cleanup() so it can be `const`; cleanup() only ever
-        // runs from a listener or the timeout callback, never synchronously
-        // before this assignment completes.
-        const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
-          cleanup();
-          if (authTabId !== undefined) void tabs.remove(authTabId).catch(() => {});
-          reject(new Error('sign-in timed out'));
-        }, TAB_FLOW_TIMEOUT_MS);
-
-        const cleanup = () => {
-          clearTimeout(timer);
-          tabs.onUpdated.removeListener(onUpdated);
-          tabs.onRemoved.removeListener(onRemoved);
-        };
-
-        const onUpdated = (tabId: number, changeInfo: { url?: string }) => {
-          if (tabId !== authTabId || !changeInfo.url) return;
-          if (!changeInfo.url.startsWith(redirectUri)) return;
-          cleanup();
-          void tabs.remove(tabId).catch(() => {});
-          resolve(changeInfo.url);
-        };
-
-        const onRemoved = (tabId: number) => {
-          if (tabId !== authTabId) return;
-          cleanup();
-          reject(new Error('sign-in tab was closed'));
-        };
-
-        tabs.onUpdated.addListener(onUpdated);
-        tabs.onRemoved.addListener(onRemoved);
-
-        tabs
-          .create({ url: authorizeUrl })
-          .then((tab) => {
-            if (tab.id === undefined) {
-              cleanup();
-              reject(new Error('could not open a sign-in tab'));
-              return;
-            }
-            authTabId = tab.id;
-          })
-          .catch((err: unknown) => {
-            cleanup();
-            reject(err instanceof Error ? err : new Error(String(err)));
-          });
-      }),
+    authorize: async (authorizeUrl) => {
+      await tabs.create({ url: authorizeUrl });
+      return null;
+    },
   };
 }
 
@@ -121,5 +75,10 @@ export function defaultDriver(controlDomain: string): WebAuthDriver {
   if (identity && typeof identity.launchWebAuthFlow === 'function') {
     return identityDriver();
   }
-  return tabDriver(`https://admin.${controlDomain}/extension-auth`);
+  return tabDriver(authRedirectUri(controlDomain));
+}
+
+/** The tab flow's redirect target; also what the background watches for. */
+export function authRedirectUri(controlDomain: string): string {
+  return `https://admin.${controlDomain}/extension-auth`;
 }

@@ -1,7 +1,9 @@
 /** Toolbar popup: session state, authorized apex domains, escape hatches. */
 
+import browser from 'webextension-polyfill';
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
+import { TOKEN_KEY } from '@cabalmail/extension-shared/auth/tokens';
 import { sendToBackground } from '@cabalmail/extension-shared/messaging/client';
 
 declare const __CONTROL_DOMAIN__: string;
@@ -11,16 +13,48 @@ declare const __REPORT_URL__: string;
 // tracker; defaults to the upstream cabal-infra issue template.
 const REPORT_URL = __REPORT_URL__;
 
+// The origins the background must reach to sign in and to serve the API.
+// Chrome grants manifest host permissions at install; Safari grants them per
+// site at the user's discretion, and a background fetch to an ungranted
+// origin has no page to prompt on -- so ask for them here, in the click
+// handler, where a permission prompt is allowed.
+const HOST_ORIGINS = [`https://admin.${__CONTROL_DOMAIN__}/*`, 'https://*.amazoncognito.com/*'];
+
+/**
+ * Ask for the host permissions the flow needs. Returns null when the
+ * browser gives no usable answer, in which case we proceed and let the
+ * request itself report the failure. Must be the first await in a click
+ * handler: Chrome rejects `permissions.request` outside a user gesture.
+ */
+async function requestHostAccess(): Promise<boolean | null> {
+  const perms = browser.permissions as typeof browser.permissions | undefined;
+  if (!perms) return null;
+  try {
+    return await perms.request({ origins: HOST_ORIGINS });
+  } catch {
+    try {
+      return await perms.contains({ origins: HOST_ORIGINS });
+    } catch {
+      return null;
+    }
+  }
+}
+
 function Popup() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [domains, setDomains] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
 
-  // Raw fetch errors name nothing actionable; translate the common case.
-  const friendly = (message: string): string =>
-    /failed to fetch/i.test(message)
-      ? `Can't reach https://admin.${__CONTROL_DOMAIN__}/ — check your network, ` +
-        `or rebuild with CABALMAIL_CONTROL_DOMAIN set if this is a dev build.`
+  // Raw fetch errors name nothing actionable; translate the common cases.
+  // Never return something falsy: an empty error renders as no error at all.
+  const friendly = (message: string | undefined): string =>
+    !message
+      ? 'The extension hit an error it could not describe. Check the extension console.'
+      : /failed to fetch|timed out/i.test(message)
+      ? `Can't reach https://admin.${__CONTROL_DOMAIN__}/ — check your network and that ` +
+        `this extension is allowed to access that site, or rebuild with ` +
+        `CABALMAIL_CONTROL_DOMAIN set if this is a dev build.`
       : message;
 
   const refresh = async () => {
@@ -44,22 +78,71 @@ function Popup() {
     }
   };
 
+  // Every handler funnels through this: an unhandled rejection in a click
+  // handler is a button that visibly does nothing, which is the worst
+  // failure mode a sign-in button can have.
+  const guard = async (work: () => Promise<void>) => {
+    try {
+      await work();
+    } catch (err) {
+      setStatus(null);
+      setError(friendly(err instanceof Error ? err.message : String(err)));
+    }
+  };
+
   useEffect(() => {
-    void refresh();
+    void guard(refresh);
+    // The tab-based flow (Safari) completes in the background long after the
+    // click, so watch the session rather than waiting on the click's reply.
+    const onChanged = (
+      changes: Record<string, browser.Storage.StorageChange>,
+      area: string,
+    ) => {
+      if (area === 'local' && TOKEN_KEY in changes) {
+        setStatus(null);
+        void guard(refresh);
+      }
+    };
+    browser.storage.onChanged.addListener(onChanged);
+    return () => browser.storage.onChanged.removeListener(onChanged);
   }, []);
 
-  const signIn = async () => {
-    setError(null);
-    const result = await sendToBackground({ kind: 'sign-in' });
-    if (!result.ok) setError(friendly(result.message));
-    await refresh();
-  };
+  const signIn = () =>
+    guard(async () => {
+      setError(null);
+      setStatus('Opening the Cabalmail sign-in page…');
+      const granted = await requestHostAccess();
+      if (granted === false) {
+        setStatus(null);
+        setError(
+          `This extension needs permission to access admin.${__CONTROL_DOMAIN__} ` +
+            `to sign in. Grant it in the browser's extension settings, then try again.`,
+        );
+        return;
+      }
+      const result = await sendToBackground({ kind: 'sign-in' });
+      if (!result.ok) {
+        setStatus(null);
+        setError(friendly(result.message));
+        return;
+      }
+      if (result.kind === 'sign-in-started' && !result.signedIn) {
+        // Opening the sign-in tab usually closes this popup; the session
+        // lands via storage.onChanged, whether or not anyone is watching.
+        setStatus('Finish signing in on the tab that just opened.');
+        return;
+      }
+      setStatus(null);
+      await refresh();
+    });
 
-  const signOut = async () => {
-    await sendToBackground({ kind: 'sign-out' });
-    setSignedIn(false);
-    setDomains(null);
-  };
+  const signOut = () =>
+    guard(async () => {
+      await sendToBackground({ kind: 'sign-out' });
+      setSignedIn(false);
+      setDomains(null);
+      setStatus(null);
+    });
 
   return (
     <div>
@@ -96,6 +179,7 @@ function Popup() {
           <button onClick={signOut}>Sign out</button>
         </div>
       )}
+      {status && <p style={{ color: '#555' }}>{status}</p>}
       {error && <p style={{ color: '#a00' }}>{error}</p>}
       <hr />
       <p style={{ fontSize: '12px', color: '#555' }}>

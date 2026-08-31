@@ -22,7 +22,10 @@ export type BackgroundRequest =
 
 export type BackgroundResponse =
   | { ok: true; kind: 'auth-state'; signedIn: boolean }
-  | { ok: true; kind: 'signed-in' }
+  // `signedIn` is true when the flow completed inline (Chrome's identity
+  // API); false when it is running in a tab and the background will finish
+  // it out-of-band -- watch `storage.onChanged` for the session instead.
+  | { ok: true; kind: 'sign-in-started'; signedIn: boolean }
   | { ok: true; kind: 'signed-out' }
   | { ok: true; kind: 'domains'; domains: Domain[] }
   | { ok: true; kind: 'addresses'; addresses: Address[] }

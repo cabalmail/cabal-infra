@@ -2,6 +2,9 @@ import SwiftUI
 import CabalmailKit
 #if os(iOS) || os(visionOS)
 import PhotosUI
+// For the keyboard-frame notification the compose form scrolls on; SwiftUI
+// re-exports very little of UIKit.
+import UIKit
 #endif
 import UniformTypeIdentifiers
 
@@ -441,13 +444,47 @@ extension ComposeView {
 
     #if !os(macOS)
     private var composeForm: some View {
-        Form {
-            ForEach(ComposeFormSection.allCases, id: \.self) { section in
-                formSection(section)
+        ScrollViewReader { proxy in
+            Form {
+                ForEach(ComposeFormSection.allCases, id: \.self) { section in
+                    formSection(section)
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                composeErrorBanner
+            }
+            .onChange(of: model.editorFocused) { _, focused in
+                scrollBodyClearOfKeyboard(focused: focused, proxy: proxy)
+            }
+            // The other order: the editor takes focus with no keyboard up,
+            // and the keyboard arrives afterwards. The scroll above then
+            // ran against a form with no keyboard inset and clamped short,
+            // so it has to run again once the inset lands.
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIResponder.keyboardDidShowNotification
+            )) { _ in
+                scrollBodyClearOfKeyboard(focused: model.editorFocused, proxy: proxy)
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            composeErrorBanner
+    }
+
+    /// Brings the body editor above the keyboard when it takes DOM focus.
+    ///
+    /// Nothing else reliably will: the editor is a `WKWebView`, so SwiftUI's
+    /// focus system never sees it, and UIKit's own scroll-to-first-responder
+    /// reaches the form inconsistently at best — see
+    /// `ComposeBodyScrollPolicy`. The settle wait is what makes the scroll
+    /// land: the keyboard's inset (and the accessory bar's) arrives a beat
+    /// after focus does, and a scroll issued against the shorter
+    /// pre-keyboard content clamps partway with nothing to scroll it the
+    /// rest of the way (#1370).
+    private func scrollBodyClearOfKeyboard(focused: Bool, proxy: ScrollViewProxy) {
+        guard focused, ComposeBodyScrollPolicy.appMustScrollBodyIntoView else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(ComposeBodyScrollPolicy.bodyScrollTarget, anchor: .top)
+            }
         }
     }
 
@@ -507,6 +544,8 @@ extension ComposeView {
         case .message:
             Section("Message") {
                 ComposerBody(model: model)
+                    // What `scrollBodyClearOfKeyboard` scrolls to.
+                    .id(ComposeBodyScrollPolicy.bodyScrollTarget)
             }
         }
     }

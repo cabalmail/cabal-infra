@@ -49,8 +49,12 @@ extensions/
   safari/     Safari manifest template and the Xcode host-app project spec; the
               web sources are Chrome's, rebuilt into the host app's bundle
   fixtures/   the form-detection corpus the detector is regression-tested against
+  icons/      the manifest's `icons` map, generated from the source vector by
+              scripts/generate-logo-assets and copied flat into both bundles
   scripts/    the build orchestrator and the page-snapshot tool
 ```
+
+Bundle contents are flat by necessity, not taste: the Safari appex adds the bundle to an Xcode resources build phase, which flattens directories, so a file in a subdirectory would land loose in the appex and leave its manifest path dangling — while still looking correct in `chrome/dist`. The build fails if any path the manifest names is missing from the output, which is the guard against exactly that asymmetry.
 
 `shared/` is the analog of `apple/CabalmailKit/` and `android/kit/`: everything with logic in it, nothing platform-specific. Per-platform code is confined to packaging glue.
 
@@ -107,11 +111,24 @@ open "build/Build/Products/Debug/Cabalmail Extension.app"
 
 `xcodegen generate` runs the Safari web build first, so it needs `CABALMAIL_CONTROL_DOMAIN` in its environment.
 
+**`CabalmailExtension/Resources/` is build output, and it is gitignored.** Nothing about it comes from the repository: the web bundle is written there by `npm run build --workspace safari`, which `xcodegen generate` runs as its `preGenCommand`, and the Xcode target copies the whole directory into the appex as a folder reference (hence the `…/CabalmailExtension.appex/Contents/Resources/Resources/` path in a built product). So `git pull` followed by `xcodebuild` gives you new Swift and *stale JavaScript* — the extension keeps running whatever the last web build produced, which is a genuinely confusing failure because the source you are reading is correct. Re-run `xcodegen generate` (or `npm run build` directly) whenever you pull.
+
+For web-only iteration, skip Xcode entirely: point Safari's unpacked-extension loader (Develop → Web Extensions) at `extensions/safari/CabalmailExtension/Resources` — the directory `npm run build` writes — and the loop is `npm run build`, then reload the extension. An extension loaded that way reports an ID of the form `com.apple.Safari.UnpackedExtensions.<hash> (UNSIGNED)`, which is also how you tell the two install routes apart. The tab-based sign-in flow works unchanged under it, because its redirect target is the admin origin rather than an extension-scoped URL.
+
+The manifest `version` is a weak staleness check — it comes from the latest CHANGELOG release, so consecutive builds usually share one. Grep the loaded bundle for a string from the change you are testing instead:
+
+```sh
+# Non-zero means this bundle has the tab-based sign-in flow
+grep -c extension-auth extensions/safari/CabalmailExtension/Resources/background.js
+```
+
 Then, in Safari: enable the Develop menu (Settings → Advanced), tick Develop → **Allow Unsigned Extensions** (admin password required; it resets every time Safari quits — re-tick each session, or run the scheme from Xcode with your team's automatic signing to avoid it), and enable the extension under Settings → Extensions, granting website access. Add "Allow in Private Browsing" to exercise the private-link handoff.
 
 While that toggle is off, Safari *hides* unsigned extensions from the Extensions pane entirely rather than graying them out. An empty pane after a Safari relaunch therefore means the toggle reset, not that registration was lost: `pluginkit -m | grep -i cabalmail` confirms the appex is still registered, and `pluginkit -a <path-to-.appex>` forces registration in the rare case it is not.
 
-Sign-in needs no extra configuration on Safari — see [OAuth redirect URIs](#oauth-redirect-uris).
+Safari grants host permissions **per site, at the user's discretion** — unlike Chrome, which grants everything in `host_permissions` at install. The extension's sign-in button asks for the two origins it needs (`admin.<control-domain>` and `*.amazoncognito.com`) with `permissions.request` when you click it, so answering that prompt with Allow is normally the whole story; you can also set them ahead of time in Settings → Extensions → Cabalmail. Denying them is worth knowing about because of how it fails: the background worker's `config.json` fetch and its redirect interception both need that access, so a denied or unanswered grant reads as a sign-in button that does nothing.
+
+Sign-in itself needs no per-install configuration on Safari — see [OAuth redirect URIs](#oauth-redirect-uris). The flow opens a tab on the Cognito Hosted UI; when it redirects to `https://admin.<control-domain>/extension-auth`, the background finishes the token exchange and closes the tab. If that tab stays open on the "Completing Cabalmail sign-in…" page, the interception did not fire: check the host permission first, then the background's console (Develop → Web Extension Background Content → Cabalmail), which logs `[cabalmail] sign-in completion failed:` with the reason.
 
 ## Forking
 
@@ -265,7 +282,8 @@ The Safari extension ships inside a minimal macOS host app (`extensions/safari/`
 1. **App IDs.** Register two identifiers in the developer portal: one for the host app (`com.cabalmail.extension-host` upstream — use your own prefix) and one for the extension, which must be the host's identifier plus a suffix (`...extension-host.web-extension`). Neither needs capabilities.
 2. **App Store Connect record.** Create a new macOS app against the host app's identifier. Two form choices cannot be revisited or bite later: **SKU** is internal-only (it appears in financial reports) but immutable, so reuse the bundle ID unless your other records follow another pattern; and **User Access** should be **Full Access** — "Limited Access" hides the app from team members, and therefore from App Store Connect API keys whose associated user lacks access, which surfaces as a baffling app-not-found in the CI upload leg rather than anything obviously permission-shaped.
 3. **Secrets.** Most are the mail app's, reused as-is: `APPLE_TEAM_ID`, the signing certificates (`APPLE_DISTRIBUTION_CERT_P12`/`_PASSWORD`, `MAC_INSTALLER_CERT_P12`/`_PASSWORD`), and the account-scoped ASC API key (`APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_API_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY_P8`). Two are specific to the extension, because manual signing needs a Mac App Store provisioning profile **per bundle ID**: mint one for each App ID from step 1 and store them base64-encoded as `MAC_EXT_HOST_APP_STORE_PROFILE` and `MAC_EXT_WEB_APP_STORE_PROFILE`. The portal cannot mint macOS profiles for some App IDs through its UI; if it fights you, [`scripts/make-mac-profile.py`](../scripts/make-mac-profile.py) is the workaround, and the produced profile's `Platform` array must include `OSX`.
-4. **Uploads.** `extensions.yml`'s `upload-safari` job — behind the same `gate-*` approval as the Chrome leg — archives the manually-signed host app with its embedded extension, exports an app-store-connect `.pkg`, and uploads it via `altool` with the API key, mirroring `apple.yml`'s `upload-mac` leg including its trust-the-verdict-banner handling. It parks warn-green until the two profile secrets exist. Versions are the CHANGELOG marketing version with a clock build number.
+4. **TestFlight groups.** On the host app's record, create two internal testing groups named exactly **`stage`** and **`prod`** (lowercase — the upload job looks them up by name), under TestFlight → Internal Testing → **+**, and leave **"Enable automatic distribution" unchecked**. CI attaches each uploaded build to the group matching its branch (`stage` pushes → `stage`, `main` → `prod`) via [`assign-testflight-group.py`](../.github/scripts/assign-testflight-group.py), the same script and the same reasoning as the mail apps ([docs/apple.md](./apple.md)) — automatic distribution would give every group every build and erase the routing, and the API refuses explicit attaches to such groups. The routing matters more here than it does for the mail apps: the control domain is **baked into an extension build**, with no per-install domain entry like the Apple and Android clients have, so a stage build and a prod build are different products that must not reach the same testers. A build that cannot be attached fails the job rather than silently reaching nobody.
+5. **Uploads.** `extensions.yml`'s `upload-safari` job — behind the same `gate-*` approval as the Chrome leg — archives the manually-signed host app with its embedded extension, exports an app-store-connect `.pkg`, and uploads it via `altool` with the API key, mirroring `apple.yml`'s `upload-mac` leg including its trust-the-verdict-banner handling. It parks warn-green until the two profile secrets exist. Versions are the CHANGELOG marketing version with a clock build number.
 
 ## Privacy policy
 

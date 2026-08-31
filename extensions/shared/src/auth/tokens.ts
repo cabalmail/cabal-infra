@@ -2,7 +2,8 @@
 
 import browser from 'webextension-polyfill';
 
-const TOKEN_KEY = 'cabalmail.tokens';
+/** Exported so UI contexts can watch it via `storage.onChanged`. */
+export const TOKEN_KEY = 'cabalmail.tokens';
 
 export interface TokenSet {
   idToken: string;
