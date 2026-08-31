@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.3] - 2026-08-31
+
+### Added
+- **Branch-routed TestFlight groups for the Safari extension host.** Uploads
+  now attach to the internal test group matching the branch they were built
+  from — `stage` pushes to `stage`, `main` to `prod` — the same routing the
+  mail apps use. The control domain is baked into an extension build, so a
+  stage build and a prod build are different products and must not reach the
+  same testers.
+
+### Fixed
+- Apple: **Message body typed blind under the iPhone keyboard.** Focusing the
+  compose body barely scrolled the form, so the keyboard and its
+  input-accessory bar covered the Rich Text / Markdown picker, the whole
+  formatting toolbar and every character typed — the only way to read the
+  message back was to dismiss the keyboard. The body is a `WKWebView`, whose
+  focus SwiftUI's focus system never sees, and the UIKit behaviour that used
+  to scroll the form for it is not dependable. The composer now brings the
+  message row to the top itself, both when the editor takes focus and when
+  the keyboard arrives after it.
+- **Browser extension icons.** The extension shipped with no icons at all, so
+  browsers showed a generic placeholder in the toolbar and extension manager,
+  and the macOS App Store rejected the upload outright. Both bundles now carry
+  the standard icon set, generated from the same source vector as every other
+  Cabalmail icon.
+- **Safari extension packaging.** The web bundle was copied into the app
+  extension one directory too deep, so `manifest.json` never sat where Safari
+  and App Store validation look for it, and the host app shipped without an
+  icon. Both blocked the macOS App Store upload.
+- **Safari sign-in in the browser extension.** The Hosted UI flow no longer
+  waits on a promise that Safari can discard: the PKCE verifier is persisted
+  for the duration of the flow and the background's redirect interception
+  completes it, so sign-in survives the popup closing and the background
+  worker being suspended. The popup now also asks Safari for the host
+  permissions it needs (Safari grants those per site, not at install), and
+  reports any failure instead of leaving the button looking inert — a
+  config fetch that cannot reach the admin origin now times out with an
+  explanation rather than hanging.
+
 ## [1.9.2] - 2026-08-30
 
 ### Added
