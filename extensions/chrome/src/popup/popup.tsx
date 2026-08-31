@@ -47,8 +47,11 @@ function Popup() {
   const [status, setStatus] = useState<string | null>(null);
 
   // Raw fetch errors name nothing actionable; translate the common cases.
-  const friendly = (message: string): string =>
-    /failed to fetch|timed out/i.test(message)
+  // Never return something falsy: an empty error renders as no error at all.
+  const friendly = (message: string | undefined): string =>
+    !message
+      ? 'The extension hit an error it could not describe. Check the extension console.'
+      : /failed to fetch|timed out/i.test(message)
       ? `Can't reach https://admin.${__CONTROL_DOMAIN__}/ — check your network and that ` +
         `this extension is allowed to access that site, or rebuild with ` +
         `CABALMAIL_CONTROL_DOMAIN set if this is a dev build.`

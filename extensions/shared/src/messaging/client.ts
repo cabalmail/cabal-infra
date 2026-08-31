@@ -5,7 +5,19 @@ import type { BackgroundPort } from '../content/controller';
 import type { BackgroundRequest, BackgroundResponse } from './messages';
 
 export async function sendToBackground(request: BackgroundRequest): Promise<BackgroundResponse> {
-  return (await browser.runtime.sendMessage(request)) as BackgroundResponse;
+  const response: unknown = await browser.runtime.sendMessage(request);
+  // A background worker that failed to start does not always surface as a
+  // rejection: Safari can resolve the send with nothing at all. Untyped, that
+  // reads downstream as a response whose every field is undefined -- an error
+  // message that renders as empty text, which is to say a UI that silently
+  // does nothing. Fail loudly instead.
+  if (typeof response !== 'object' || response === null || !('ok' in response)) {
+    throw new Error(
+      `The extension's background worker did not answer "${request.kind}". ` +
+        `Reload the extension (or restart the browser) and try again.`,
+    );
+  }
+  return response as BackgroundResponse;
 }
 
 function unwrap<K extends Extract<BackgroundResponse, { ok: true }>['kind']>(
