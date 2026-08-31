@@ -112,19 +112,22 @@ extension FolderListView {
         if changed { collapsedPathsRaw = encodeCollapsed(set) }
     }
 
+    /// Foreground for the folder row's icon. `FolderIconTint` owns the
+    /// rule and records what each candidate is worth in contrast (#1318);
+    /// this only spells the cases as styles. The accent is the
+    /// asset-catalog color, pinned explicitly rather than ridden through
+    /// `.tint`: macOS repaints environment tints with the user's system
+    /// accent (System Settings > Appearance) whenever that isn't
+    /// "multicolor", which left the wide layouts' icons off-brand. The
+    /// pinned color resolves the same light/dark variants on every
+    /// platform, so compact renders identically to before.
     func iconForeground(isSelected: Bool) -> AnyShapeStyle {
-        // Folder icons carry the brand accent from the asset catalog,
-        // pinned explicitly rather than ridden through `.tint`: macOS
-        // repaints environment tints with the user's system accent
-        // (System Settings > Appearance) whenever that isn't
-        // "multicolor", which left the wide layouts' icons off-brand.
-        // The pinned color resolves the same light/dark variants on
-        // every platform, so compact renders identically to before.
-        #if os(macOS)
-        return AnyShapeStyle(Color("AccentColor"))
-        #else
-        return isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color("AccentColor"))
-        #endif
+        switch FolderIconTint.tint(isSelected: isSelected) {
+        case .inherited:
+            return AnyShapeStyle(.primary)
+        case .accent:
+            return AnyShapeStyle(Color("AccentColor"))
+        }
     }
 
     /// Foreground for the folder name: accent while the folder has

@@ -326,11 +326,10 @@ struct FolderListView: View {
             }
             .frame(width: 14, height: 14)
             Image(systemName: iconName(for: folder))
-                // iPadOS sidebar selection paints the row in the accent color,
-                // so a tinted icon vanishes against the highlight. Flip to
-                // white when selected to keep it readable. macOS uses a
-                // translucent gray selection that already contrasts, so leave
-                // it on the regular tint.
+                // Accent while unselected, and the row's own foreground
+                // once it is: the selection fill is the platform's to
+                // choose and no pinned color survives all of the ones it
+                // draws (#1318, `FolderIconTint`).
                 .foregroundStyle(iconForeground(isSelected: isSelected))
             Text(folder.name)
                 .foregroundStyle(folderNameForeground(hasUnread: hasUnread, isSelected: isSelected))
