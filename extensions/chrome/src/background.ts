@@ -1,14 +1,19 @@
 /**
  * MV3 service worker: the auth boundary. Owns tokens, talks to the
  * Cabalmail API, answers typed messages from the content script and popup,
- * and brokers the private-link handoff (Phase 7).
+ * completes the tab-based sign-in flow, and brokers the private-link
+ * handoff (Phase 7).
  */
 
 import browser from 'webextension-polyfill';
 import { ApiClient } from '@cabalmail/extension-shared/api/ApiClient';
-import { AuthError, HostedUiAuth } from '@cabalmail/extension-shared/auth/HostedUiAuth';
+import {
+  AuthError,
+  clearPendingFlow,
+  HostedUiAuth,
+} from '@cabalmail/extension-shared/auth/HostedUiAuth';
 import { clearTokens, loadTokens } from '@cabalmail/extension-shared/auth/tokens';
-import { defaultDriver } from '@cabalmail/extension-shared/auth/webAuthDriver';
+import { authRedirectUri, defaultDriver } from '@cabalmail/extension-shared/auth/webAuthDriver';
 import { ConfigService } from '@cabalmail/extension-shared/config/ConfigService';
 import {
   isBackgroundRequest,
@@ -59,14 +64,16 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
     return { ok: true, kind: 'auth-state', signedIn: (await loadTokens()) !== null };
   }
   if (request.kind === 'sign-out') {
+    await clearPendingFlow();
     await clearTokens();
     return { ok: true, kind: 'signed-out' };
   }
   const { auth, api } = await services();
   switch (request.kind) {
-    case 'sign-in':
-      await auth.signIn();
-      return { ok: true, kind: 'signed-in' };
+    case 'sign-in': {
+      const signedIn = await auth.signIn();
+      return { ok: true, kind: 'sign-in-started', signedIn };
+    }
     case 'list-domains': {
       if (!domainsCache || Date.now() - domainsCache.at > CACHE_TTL_MS) {
         domainsCache = { at: Date.now(), domains: await api.listMyDomains() };
@@ -122,6 +129,34 @@ browser.runtime.onMessage.addListener(async (message: unknown): Promise<Backgrou
   }
 });
 
+// ── Tab-flow sign-in completion (Safari) ───────────────────────────────────
+// Safari has no identity API, so its Hosted UI flow runs in an ordinary tab
+// that redirects to https://admin.<control-domain>/extension-auth. The
+// popup that started it is long gone by then, so completion has to be an
+// event, not the tail of a promise.
+
+const AUTH_REDIRECT_PREFIX = authRedirectUri(__CONTROL_DOMAIN__);
+/** Guards against onUpdated firing twice for the same navigation. */
+const completingTabs = new Set<number>();
+
+function completeSignIn(tabId: number, url: string): void {
+  if (completingTabs.has(tabId)) return;
+  completingTabs.add(tabId);
+  void (async () => {
+    try {
+      const { auth } = await services();
+      await auth.completeSignIn(url);
+      await browser.tabs.remove(tabId);
+    } catch (err) {
+      // Leave the tab open on failure: /extension-auth explains itself, and
+      // a vanished tab would be one more silent failure.
+      console.warn('[cabalmail] sign-in completion failed:', err);
+    } finally {
+      completingTabs.delete(tabId);
+    }
+  })();
+}
+
 // ── Private-link handoff (Phase 7) ──────────────────────────────────────────
 // The mail clients open https://admin.<control-domain>/private-link#<target>;
 // we intercept the navigation, validate the target, re-open it in a private
@@ -149,9 +184,17 @@ export function extractPrivateLinkTarget(url: string): string | null {
 // permission (the URL is visible to us because the redirector lives under
 // our admin host permission, and tabs.remove is permission-free), which
 // keeps the store-listing permission surface to storage/identity/history.
+// The same listener catches the tab flow's OAuth redirect (see
+// webAuthDriver.ts): both targets live on the admin origin, and both must
+// be caught by a top-level listener, since the worker may have been
+// suspended between opening the tab and the redirect landing.
 browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (!changeInfo.url) return;
   const url = changeInfo.url;
+  if (url.startsWith(AUTH_REDIRECT_PREFIX)) {
+    completeSignIn(tabId, url);
+    return;
+  }
   const target = extractPrivateLinkTarget(url);
   if (!target) return;
   void (async () => {
