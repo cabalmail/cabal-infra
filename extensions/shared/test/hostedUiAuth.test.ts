@@ -35,14 +35,16 @@ function tabLikeDriver(): WebAuthDriver & { authorizeUrl: string | null } {
 }
 
 function stubTokenEndpoint() {
-  const fetchMock = vi.fn(async () =>
-    new Response(
+  const bodies: string[] = [];
+  const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+    bodies.push(String(init?.body ?? ''));
+    return new Response(
       JSON.stringify({ id_token: jwt(3600), access_token: 'access', refresh_token: 'refresh' }),
       { status: 200 },
-    ),
-  );
+    );
+  });
   vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
+  return { fetchMock, bodies };
 }
 
 /** Pull the `state` the flow generated back out of the authorize URL. */
@@ -60,7 +62,7 @@ afterEach(() => {
 
 describe('HostedUiAuth tab flow', () => {
   it('reports that the flow is still running, then completes from the redirect', async () => {
-    const fetchMock = stubTokenEndpoint();
+    const { fetchMock, bodies } = stubTokenEndpoint();
     const driver = tabLikeDriver();
     const auth = new HostedUiAuth(CONFIG, driver);
 
@@ -75,7 +77,7 @@ describe('HostedUiAuth tab flow', () => {
     await auth.completeSignIn(`${REDIRECT}?code=abc&state=${stateOf(url)}`);
 
     expect(await auth.isSignedIn()).toBe(true);
-    const body = new URLSearchParams(fetchMock.mock.calls[0][1].body as string);
+    const body = new URLSearchParams(bodies[0]);
     expect(body.get('grant_type')).toBe('authorization_code');
     expect(body.get('code')).toBe('abc');
     expect(body.get('redirect_uri')).toBe(REDIRECT);
