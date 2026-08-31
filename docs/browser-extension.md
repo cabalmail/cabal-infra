@@ -111,7 +111,9 @@ Then, in Safari: enable the Develop menu (Settings → Advanced), tick Develop �
 
 While that toggle is off, Safari *hides* unsigned extensions from the Extensions pane entirely rather than graying them out. An empty pane after a Safari relaunch therefore means the toggle reset, not that registration was lost: `pluginkit -m | grep -i cabalmail` confirms the appex is still registered, and `pluginkit -a <path-to-.appex>` forces registration in the rare case it is not.
 
-Sign-in needs no extra configuration on Safari — see [OAuth redirect URIs](#oauth-redirect-uris).
+Safari grants host permissions **per site, at the user's discretion** — unlike Chrome, which grants everything in `host_permissions` at install. The extension's sign-in button asks for the two origins it needs (`admin.<control-domain>` and `*.amazoncognito.com`) with `permissions.request` when you click it, so answering that prompt with Allow is normally the whole story; you can also set them ahead of time in Settings → Extensions → Cabalmail. Denying them is worth knowing about because of how it fails: the background worker's `config.json` fetch and its redirect interception both need that access, so a denied or unanswered grant reads as a sign-in button that does nothing.
+
+Sign-in itself needs no per-install configuration on Safari — see [OAuth redirect URIs](#oauth-redirect-uris). The flow opens a tab on the Cognito Hosted UI; when it redirects to `https://admin.<control-domain>/extension-auth`, the background finishes the token exchange and closes the tab. If that tab stays open on the "Completing Cabalmail sign-in…" page, the interception did not fire: check the host permission first, then the background's console (Develop → Web Extension Background Content → Cabalmail), which logs `[cabalmail] sign-in completion failed:` with the reason.
 
 ## Forking
 
