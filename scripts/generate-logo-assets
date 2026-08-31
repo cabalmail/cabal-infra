@@ -116,6 +116,7 @@ Regenerated outputs (all committed; never hand-edit):
           apple/CabalmailMac/AppIcon.icon                           (macOS Liquid Glass, Default/Dark)
           apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack  (visionOS 3 layers)
           apple/CabalmailWatch/Assets.xcassets/AppIcon.appiconset   (watchOS single 1024)
+          extensions/safari/Cabalmail/AppIcon.icon                  (Safari extension host, macOS)
           apple/{Cabalmail,CabalmailMac}/Assets.xcassets/CabalmailMark.imageset
           apple/CabalmailMac/Assets.xcassets/MenuBarMark.imageset      (menu-bar status item)
   Android — android/app/src/main/ic_launcher-playstore.png           (Play Store listing icon, 512x512)
@@ -612,6 +613,13 @@ generate_all() {
   #     iOS light/dark/tinted SVGs above still feed watchOS / React / docs. ---
   write_icon "${REPO_ROOT}/apple/Cabalmail"
   write_icon "${REPO_ROOT}/apple/CabalmailMac"
+
+  # --- Safari extension host: a separate macOS App Store product, so it
+  #     needs its own icon even though it is a minimal container app. Same
+  #     mark as the mail app -- one brand, and App Store validation rejects
+  #     a bundle with no ICNS 512pt@2x (error 90236), which actool emits
+  #     from this .icon alongside the Liquid Glass form. ---
+  write_icon "${REPO_ROOT}/extensions/safari/Cabalmail"
 
   # --- Apple: watchOS single universal slot (1024, opaque). The system
   #     applies the circular home-screen mask itself, so this is the same
