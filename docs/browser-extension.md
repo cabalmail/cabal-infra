@@ -107,6 +107,17 @@ open "build/Build/Products/Debug/Cabalmail Extension.app"
 
 `xcodegen generate` runs the Safari web build first, so it needs `CABALMAIL_CONTROL_DOMAIN` in its environment.
 
+**`CabalmailExtension/Resources/` is build output, and it is gitignored.** Nothing about it comes from the repository: the web bundle is written there by `npm run build --workspace safari`, which `xcodegen generate` runs as its `preGenCommand`, and the Xcode target copies the whole directory into the appex as a folder reference (hence the `…/CabalmailExtension.appex/Contents/Resources/Resources/` path in a built product). So `git pull` followed by `xcodebuild` gives you new Swift and *stale JavaScript* — the extension keeps running whatever the last web build produced, which is a genuinely confusing failure because the source you are reading is correct. Re-run `xcodegen generate` (or `npm run build` directly) whenever you pull.
+
+For web-only iteration, skip Xcode entirely: point Safari's unpacked-extension loader (Develop → Web Extensions) at `extensions/safari/CabalmailExtension/Resources` — the directory `npm run build` writes — and the loop is `npm run build`, then reload the extension. An extension loaded that way reports an ID of the form `com.apple.Safari.UnpackedExtensions.<hash> (UNSIGNED)`, which is also how you tell the two install routes apart. The tab-based sign-in flow works unchanged under it, because its redirect target is the admin origin rather than an extension-scoped URL.
+
+The manifest `version` is a weak staleness check — it comes from the latest CHANGELOG release, so consecutive builds usually share one. Grep the loaded bundle for a string from the change you are testing instead:
+
+```sh
+# Non-zero means this bundle has the tab-based sign-in flow
+grep -c extension-auth extensions/safari/CabalmailExtension/Resources/background.js
+```
+
 Then, in Safari: enable the Develop menu (Settings → Advanced), tick Develop → **Allow Unsigned Extensions** (admin password required; it resets every time Safari quits — re-tick each session, or run the scheme from Xcode with your team's automatic signing to avoid it), and enable the extension under Settings → Extensions, granting website access. Add "Allow in Private Browsing" to exercise the private-link handoff.
 
 While that toggle is off, Safari *hides* unsigned extensions from the Extensions pane entirely rather than graying them out. An empty pane after a Safari relaunch therefore means the toggle reset, not that registration was lost: `pluginkit -m | grep -i cabalmail` confirms the appex is still registered, and `pluginkit -a <path-to-.appex>` forces registration in the rare case it is not.
