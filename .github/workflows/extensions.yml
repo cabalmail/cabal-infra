@@ -362,6 +362,9 @@ jobs:
             echo "::error::APP_STORE_CONNECT_API_KEY_P8 decoded but does not start with the PEM header. Re-encode with 'base64 -i AuthKey_<KEYID>.p8'."
             exit 1
           fi
+          # The group-assignment step below talks to the ASC API directly
+          # rather than through altool, so it needs the key by path.
+          echo "ASC_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
 
       - name: install-host-profile
         if: steps.check.outputs.enabled == 'true'
@@ -395,6 +398,8 @@ jobs:
           fi
           BUILD_NUMBER="$(date -u +%s)"
           echo "Version: $MARKETING_VERSION ($BUILD_NUMBER)" >> "$GITHUB_STEP_SUMMARY"
+          # The group-assignment step looks the build up by CFBundleVersion.
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           xcodebuild archive \
             -project Cabalmail.xcodeproj \
             -scheme CabalmailExtensionHost \
@@ -472,3 +477,27 @@ jobs:
             echo "::warning::altool logged transient error(s) but recovered - final verdict was UPLOAD SUCCEEDED."
           fi
           echo "::notice::altool upload completed cleanly."
+
+      - name: Assign build to TestFlight group
+        # Route builds to the internal group matching the branch, exactly as
+        # apple.yml does for the mail apps: the control domain is baked into
+        # an extension build (there is no per-install domain entry as on
+        # Apple and Android), so a stage build and a prod build are
+        # genuinely different products and must not reach the same testers.
+        # NOT best-effort: a build that cannot be attached never reaches
+        # anyone, so the failure has to be visible. Requires internal groups
+        # named exactly `stage` and `prod` on the extension-host app record,
+        # with automatic distribution OFF -- see docs/browser-extension.md.
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          BUNDLE_ID: com.cabalmail.extension-host
+          TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+        run: |
+          set -euo pipefail
+          # Isolated venv: the runner's Homebrew python is externally
+          # managed (PEP 668), so a bare `pip install` is refused.
+          python3 -m venv "$RUNNER_TEMP/ascvenv"
+          "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/assign-testflight-group.py"
