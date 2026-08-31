@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.4] - 2026-08-31
+
+### Fixed
+- **Extension config cache crossing environments.** The cached `config.json`
+  was not scoped to the control domain it came from, so a bundle rebuilt
+  against a different environment kept using the previous one's Cognito
+  client for up to a day — sign-in then failed at the Hosted UI with
+  `redirect_mismatch`, before any login form appeared.
+
 ## [1.9.3] - 2026-08-31
 
 ### Added
