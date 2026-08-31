@@ -41,6 +41,8 @@ export function parseRawConfig(raw: RawConfig): RuntimeConfig {
 
 interface CachedConfig {
   fetchedAt: number;
+  /** The control domain this entry was fetched for; see readCache. */
+  forDomain?: string;
   config: RuntimeConfig;
 }
 
@@ -49,7 +51,16 @@ export class ConfigService {
 
   private async readCache(): Promise<CachedConfig | null> {
     const stored = await browser.storage.local.get(CACHE_KEY);
-    return (stored[CACHE_KEY] as CachedConfig | undefined) ?? null;
+    const cached = (stored[CACHE_KEY] as CachedConfig | undefined) ?? null;
+    // An entry from another control domain is not stale, it is wrong.
+    // Extension storage survives a rebuild of the same install, so a bundle
+    // rebuilt against a different environment would otherwise keep serving
+    // the previous one's Cognito client id and Hosted UI domain -- against
+    // the new environment's redirect URI, which the Hosted UI rejects with
+    // `redirect_mismatch` before the user ever sees a login form. Entries
+    // written before this field existed carry no domain and are discarded.
+    if (!cached || cached.forDomain !== this.controlDomain) return null;
+    return cached;
   }
 
   private async fetchFresh(): Promise<RuntimeConfig> {
@@ -67,7 +78,11 @@ export class ConfigService {
     }
     if (!resp.ok) throw new Error(`config.json fetch failed: ${resp.status}`);
     const config = parseRawConfig((await resp.json()) as RawConfig);
-    const cached: CachedConfig = { fetchedAt: Date.now(), config };
+    const cached: CachedConfig = {
+      fetchedAt: Date.now(),
+      forDomain: this.controlDomain,
+      config,
+    };
     await browser.storage.local.set({ [CACHE_KEY]: cached });
     return config;
   }
