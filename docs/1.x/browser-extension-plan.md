@@ -11,7 +11,7 @@
 | 5. Suggest flow | **Code complete** (unit-tested); in-browser verification pending |
 | 6. Adopt flow | **Code complete** (unit-tested); in-browser verification pending |
 | 7. Private-link handoff | **Extension + redirector page complete**; Apple-client menu row not started |
-| 8. Platform targets & distribution | **Scaffold only.** Safari macOS host builds unsigned; stores, iOS host, parity testing pending |
+| 8. Platform targets & distribution | **Partial.** Safari sign-in verified end-to-end on a local unpacked build (2026-08-30): tab flow opens the Hosted UI, the background completes the exchange from the `/extension-auth` redirect and closes the tab. Stores, iOS host, and the suggest/adopt flows' in-browser parity testing still pending |
 
 Building, configuring, verifying, and publishing the extension are documented in [docs/browser-extension.md](../browser-extension.md); this plan keeps the design rationale and the implementation record.
 
