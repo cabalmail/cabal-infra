@@ -2,28 +2,11 @@
 
 import type { Classification, FormScore, SignalContribution } from '../models/index';
 import { SIGNIN_THRESHOLD, SIGNUP_THRESHOLD } from './config';
-import { SIGNAL_EXTRACTORS, type PageContext } from './signals';
+import { findEmailField, SIGNAL_EXTRACTORS, type PageContext } from './signals';
 
-/** Locate the form's email field, or null when the form has none we'd fill. */
-export function findEmailField(form: HTMLFormElement): HTMLInputElement | null {
-  const inputs = Array.from(form.querySelectorAll<HTMLInputElement>('input'));
-  const visible = inputs.filter((i) => i.type !== 'hidden' && !i.disabled);
-  const byType = visible.find((i) => i.type === 'email');
-  if (byType) return byType;
-  const byAutocomplete = visible.find((i) =>
-    i.autocomplete.toLowerCase().includes('email'),
-  );
-  if (byAutocomplete) return byAutocomplete;
-  const emailish = (s: string | null) => !!s && /e-?mail/i.test(s);
-  return (
-    visible.find(
-      (i) =>
-        i.type === 'text' &&
-        (emailish(i.name) || emailish(i.id) || emailish(i.placeholder) ||
-          emailish(i.getAttribute('aria-label'))),
-    ) ?? null
-  );
-}
+// Lives with the signal extractors, which need it too; re-exported here
+// because this is where callers have always found it.
+export { findEmailField };
 
 function classify(score: number, emailField: HTMLInputElement | null): Classification {
   if (!emailField) return 'not-an-auth-form';

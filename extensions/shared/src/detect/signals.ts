@@ -27,6 +27,33 @@ export type SignalExtractor = (
   ctx: PageContext,
 ) => SignalContribution | null;
 
+/** The form's fields a user can actually fill. */
+function fillableFields(form: HTMLFormElement): HTMLInputElement[] {
+  return Array.from(form.querySelectorAll<HTMLInputElement>('input')).filter(
+    (i) => i.type !== 'hidden' && !i.disabled,
+  );
+}
+
+/** Locate the form's email field, or null when the form has none we'd fill. */
+export function findEmailField(form: HTMLFormElement): HTMLInputElement | null {
+  const fillable = fillableFields(form);
+  const byType = fillable.find((i) => i.type === 'email');
+  if (byType) return byType;
+  const byAutocomplete = fillable.find((i) =>
+    i.autocomplete.toLowerCase().includes('email'),
+  );
+  if (byAutocomplete) return byAutocomplete;
+  const emailish = (s: string | null) => !!s && /e-?mail/i.test(s);
+  return (
+    fillable.find(
+      (i) =>
+        i.type === 'text' &&
+        (emailish(i.name) || emailish(i.id) || emailish(i.placeholder) ||
+          emailish(i.getAttribute('aria-label'))),
+    ) ?? null
+  );
+}
+
 function passwordFields(form: HTMLFormElement): HTMLInputElement[] {
   return Array.from(form.querySelectorAll<HTMLInputElement>('input[type="password"]'));
 }
@@ -159,25 +186,41 @@ export const pageUrl: SignalExtractor = (_form, ctx) => {
   return pathSignal('pageUrl', pathname);
 };
 
+/**
+ * How many preceding headings the walk may consult. One non-committal
+ * heading between the real one and the form used to be enough to lose the
+ * signal (#1396: WordPress puts a terms-of-service h2 between "Create your
+ * account" and its sign-up form), so the walk continues past a heading that
+ * matches neither vocabulary. It is bounded rather than open-ended because
+ * far enough up any page there is a nav or footer heading that says
+ * "Sign in" about something other than this form.
+ */
+const HEADING_LOOKBACK = 3;
+
 export const headingText: SignalExtractor = (form, ctx) => {
-  // Nearest heading: inside the form, else the closest preceding h1/h2/h3.
-  let heading = form.querySelector('h1, h2, h3')?.textContent ?? null;
-  if (!heading) {
-    const headings = Array.from(ctx.document.querySelectorAll('h1, h2, h3'));
-    for (const h of headings) {
-      const pos = form.compareDocumentPosition(h);
-      if (pos & Node.DOCUMENT_POSITION_PRECEDING) heading = h.textContent;
-    }
+  // Nearest first: headings inside the form, then the preceding ones walking
+  // back up the document.
+  const preceding = Array.from(ctx.document.querySelectorAll('h1, h2, h3')).filter(
+    (h) => !!(form.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_PRECEDING),
+  );
+  const candidates = [
+    ...Array.from(form.querySelectorAll('h1, h2, h3')),
+    ...preceding.reverse().slice(0, HEADING_LOOKBACK),
+  ];
+  for (const candidate of candidates) {
+    const heading = candidate.textContent;
+    if (!heading) continue;
+    const up = containsAny(heading, SIGNUP_TERMS);
+    const down = containsAny(heading, SIGNIN_TERMS);
+    // Says both or neither: not this heading's answer to give.
+    if (up === down) continue;
+    return {
+      name: 'headingText',
+      weight: WEIGHTS.headingText,
+      contribution: up ? WEIGHTS.headingText : -WEIGHTS.headingText,
+    };
   }
-  if (!heading) return null;
-  const up = containsAny(heading, SIGNUP_TERMS);
-  const down = containsAny(heading, SIGNIN_TERMS);
-  if (up === down) return null;
-  return {
-    name: 'headingText',
-    weight: WEIGHTS.headingText,
-    contribution: up ? WEIGHTS.headingText : -WEIGHTS.headingText,
-  };
+  return null;
 };
 
 const SIGNUP_FIELD_TERMS = ['confirm password', 'choose username', 'choose a username', 'pick a password', 'choose a password', 'create password', 'create a password', 'repeat password', 'verify password'];
@@ -188,6 +231,58 @@ export const fieldLabels: SignalExtractor = (form, ctx) => {
     name: 'fieldLabels',
     weight: WEIGHTS.fieldLabels,
     contribution: WEIGHTS.fieldLabels,
+  };
+};
+
+/**
+ * Everything a field says about itself, for role matching. Sites label the
+ * same field through any of these and agree on none of them.
+ */
+function fieldIdentity(input: HTMLInputElement): string {
+  return [
+    input.name,
+    input.id,
+    input.autocomplete,
+    input.placeholder,
+    input.getAttribute('aria-label') ?? '',
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
+const USERNAME_PATTERN = /user\s*[-_]?name|nickname|screen\s*[-_]?name|\bhandle\b|\bpseudo\b/;
+// `\bname\b` catches `name="name"` and `id="new-account-name"` without
+// matching `username`, where the `name` has a word character before it.
+const FULL_NAME_PATTERN = /full\s*[-_]?name|first\s*[-_]?name|last\s*[-_]?name|given\s*[-_]?name|family\s*[-_]?name|real\s*[-_]?name|\bname\b/;
+
+/**
+ * A form collecting an email *and* a separate username *and* a name is
+ * registration-shaped: sign-in forms ask for one identifier, not three.
+ * This is the general counterweight to a site that mislabels its sign-up
+ * password (#1395: Discourse's older sign-up form carries
+ * `autocomplete="current-password"` on a new-account password field, worth
+ * -3.0, on a form whose id is even `login-form`).
+ *
+ * Deliberately structural rather than vocabulary: the same page defeats a
+ * label-text fix twice over, because its "Password Again" label points at an
+ * id that does not exist on the page. Three *distinct* fillable fields are
+ * required, so the common "username or email" single input does not count
+ * twice.
+ */
+export const multipleIdentityFields: SignalExtractor = (form) => {
+  const email = findEmailField(form);
+  if (!email) return null;
+  const others = fillableFields(form).filter((i) => i !== email && i.type === 'text');
+  const username = others.find((i) => USERNAME_PATTERN.test(fieldIdentity(i)));
+  if (!username) return null;
+  const fullName = others.find(
+    (i) => i !== username && FULL_NAME_PATTERN.test(fieldIdentity(i)),
+  );
+  if (!fullName) return null;
+  return {
+    name: 'multipleIdentityFields',
+    weight: WEIGHTS.multipleIdentityFields,
+    contribution: WEIGHTS.multipleIdentityFields,
   };
 };
 
@@ -217,5 +312,6 @@ export const SIGNAL_EXTRACTORS: SignalExtractor[] = [
   pageUrl,
   headingText,
   fieldLabels,
+  multipleIdentityFields,
   termsCheckbox,
 ];

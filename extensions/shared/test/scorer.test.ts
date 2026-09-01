@@ -155,3 +155,136 @@ describe('formKey', () => {
     expect(formKey(c.form)).not.toBe(keyA);
   });
 });
+
+describe('headingText', () => {
+  /** The heading contribution, or null when the extractor gave up. */
+  function headingOf(html: string, url = 'https://example.com/start/account/user') {
+    const { form, ctx } = makeForm(html, url);
+    return scoreForm(form, ctx).signals.find((s) => s.name === 'headingText') ?? null;
+  }
+
+  it('walks past a non-committal heading to the one that decides', () => {
+    // #1396's shape: WordPress puts a terms-of-service h2 between its
+    // "Create your account" h1 and the passwordless sign-up form.
+    const signal = headingOf(`
+      <h1>Create your account</h1>
+      <h2>By continuing with any of the options below, you agree to our Terms of Service</h2>
+      <form novalidate><input type="email" name="email" /><button>Continue</button></form>`);
+    expect(signal?.contribution).toBe(1.5);
+  });
+
+  it('takes the nearest heading that decides, not the farthest', () => {
+    const signal = headingOf(`
+      <h1>Create your account</h1>
+      <h2>Log in</h2>
+      <form><input type="email" name="email" /></form>`);
+    expect(signal?.contribution).toBe(-1.5);
+  });
+
+  it('prefers a heading inside the form over anything preceding it', () => {
+    const signal = headingOf(`
+      <h1>Log in</h1>
+      <form><h2>Create your account</h2><input type="email" name="email" /></form>`);
+    expect(signal?.contribution).toBe(1.5);
+  });
+
+  it('gives up rather than reaching past the lookback for a match', () => {
+    const signal = headingOf(`
+      <h1>Create your account</h1>
+      <h2>Why you might want one</h2>
+      <h2>What it costs</h2>
+      <h2>Terms of service</h2>
+      <form><input type="email" name="email" /></form>`);
+    expect(signal).toBeNull();
+  });
+
+  it('walks past a heading that carries both vocabularies', () => {
+    const signal = headingOf(`
+      <h1>Create your account</h1>
+      <h2>Sign up or log in</h2>
+      <form><input type="email" name="email" /></form>`);
+    expect(signal?.contribution).toBe(1.5);
+  });
+});
+
+describe('multipleIdentityFields', () => {
+  /** The identity-field contribution, or null when the signal is absent. */
+  function identitySignal(html: string, url = 'https://forum.example.com/signup') {
+    const { form, ctx } = makeForm(html, url);
+    return (
+      scoreForm(form, ctx).signals.find((s) => s.name === 'multipleIdentityFields') ?? null
+    );
+  }
+
+  it('fires on a form collecting an email, a username, and a name', () => {
+    // #1395's shape, attribute for attribute: Discourse's older sign-up form.
+    const signal = identitySignal(`
+      <form id="login-form">
+        <input id="new-account-email" name="email" type="email" />
+        <input id="new-account-username" name="username" type="text" autocomplete="off" />
+        <input id="new-account-name" name="name" type="text" />
+        <input id="new-account-password" type="password" autocomplete="current-password" />
+      </form>`);
+    expect(signal?.contribution).toBe(1.5);
+  });
+
+  it('lifts a sign-up form its own markup mislabels out of signin', () => {
+    const { form, ctx } = makeForm(
+      `
+      <form id="login-form">
+        <input id="new-account-email" name="email" type="email" />
+        <input id="new-account-username" name="username" type="text" />
+        <input id="new-account-name" name="name" type="text" />
+        <input id="new-account-password" type="password" autocomplete="current-password" />
+      </form>`,
+      'https://discuss.example.org/signup',
+    );
+    const score = scoreForm(form, ctx);
+    // -3 (current-password) + 1.5 (page URL) + 1.5 = 0: reachable via the
+    // ambiguous badge, but never an automatic offer on this evidence.
+    expect(score.score).toBe(0);
+    expect(score.classification).toBe('ambiguous');
+  });
+
+  it('does not fire on a sign-in form with one identifier field', () => {
+    const signal = identitySignal(
+      `
+      <form action="/session">
+        <input name="username" type="text" placeholder="Username or email" />
+        <input name="password" type="password" autocomplete="current-password" />
+      </form>`,
+      'https://forum.example.com/login',
+    );
+    expect(signal).toBeNull();
+  });
+
+  it('does not read a username field as the name field as well', () => {
+    const signal = identitySignal(`
+      <form>
+        <input name="email" type="email" />
+        <input id="new-account-username" name="username" type="text" />
+        <input type="password" autocomplete="new-password" />
+      </form>`);
+    expect(signal).toBeNull();
+  });
+
+  it('needs a username as well as a name', () => {
+    const signal = identitySignal(`
+      <form>
+        <input name="email" type="email" />
+        <input name="name" type="text" placeholder="Your name" />
+        <input type="password" autocomplete="new-password" />
+      </form>`);
+    expect(signal).toBeNull();
+  });
+
+  it('ignores fields the user cannot fill', () => {
+    const signal = identitySignal(`
+      <form>
+        <input name="email" type="email" />
+        <input name="username" type="hidden" value="x" />
+        <input name="name" type="text" disabled />
+      </form>`);
+    expect(signal).toBeNull();
+  });
+});

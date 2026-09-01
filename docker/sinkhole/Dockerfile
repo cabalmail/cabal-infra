@@ -9,7 +9,16 @@
 # only from inside the VPC via Cloud Map (sinkhole.cabal.internal).
 FROM amazonlinux:2023@sha256:181f98c48832fe926f8ca3b6ffeafcce128e96e77b93d08fbe9a9bc9403ce284
 
-RUN dnf install -y python3 awscli-2 \
+# AL2023 pins $releasever to the base image's own release snapshot, so
+# dnf here only ever sees the package set frozen at base-image build
+# time; security updates AWS publishes later are invisible, and no
+# rebuild picks them up. Track the current snapshot and upgrade first.
+# The upgrade is the load-bearing half: packages that ship in the base
+# (openssl-libs, glib2, ...) are named in no install line below and
+# would otherwise keep the base image's versions forever.
+RUN echo latest > /etc/dnf/vars/releasever \
+    && dnf -y upgrade \
+    && dnf install -y python3 awscli-2 \
     && dnf clean all
 
 COPY sinkhole/listener.py /usr/local/bin/listener.py

@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.7] - 2026-09-01
+
+### Fixed
+- **Sign-up detection on `/sign_up`-style URLs.** The detector's path
+  vocabulary matched `signup` and `sign-up` but not the underscore spelling, so
+  a page like `login.gov/sign_up/enter_email` — an email-only first step with
+  no password field to score — fell into the ambiguous band and offered
+  nothing. Both underscore variants are now recognized.
+- **Sign-up detection on pages with a heading in the way.** The detector
+  consulted exactly one heading — the nearest one above the form — and gave
+  up when it matched neither sign-up nor sign-in vocabulary. A single
+  non-committal heading in between, such as the terms-of-service line
+  WordPress puts above its account form, was enough to lose an otherwise
+  clear "Create your account". The walk now continues past headings that say
+  neither, up to three back.
+- **Hidden forms no longer draw the extension's attention.** The detector
+  filtered inputs by HTML `type`, never by CSS, so a login page that also
+  ships a hidden sign-up modal — a common shape — had our listeners and, on
+  an ambiguous form, our badge attached to a form the user cannot see. Forms
+  hidden with `display: none` or `visibility: hidden` are now skipped, and
+  reconsidered the moment the page reveals one.
+- **Sign-up forms whose own markup calls them sign-in.** A site that tags its
+  new-account password `autocomplete="current-password"` — Discourse's older
+  sign-up form does, on a form whose id is `login-form` — outweighed every
+  other signal, and the extension stayed silent on a genuine sign-up page. A
+  form that collects an email *and* a separate username *and* a name is now
+  scored as the registration shape it is, which is enough to reach the
+  ambiguous band, where the badge is there to click.
+- Apple: **Sort menu states which sort is in effect.** The message list's
+  sort menu marked the active field with a drawn checkmark image and the
+  direction with an arrow, so an assistive client reading the menu was told
+  neither. Both groups now use the native menu mark, and the direction is a
+  marked Ascending / Descending pair rather than a single flip row.
+
+### Security
+- **Mail-tier images now build against current Amazon Linux packages.** AL2023
+  resolves `$releasever` from the base image's own release snapshot, so `dnf`
+  in the `imap`, `smtp-in`, `smtp-out`, and `sinkhole` builds only ever saw the
+  package set frozen when that base image was published — security updates AWS
+  shipped afterwards were invisible, and rebuilding picked up none of them.
+  Base packages such as `openssl-libs` were worse off still: named in no
+  install line, they kept the base image's versions indefinitely. All four
+  Dockerfiles now track the current snapshot and upgrade before installing.
+  This clears the standing Trivy backlog on `apr-util`, `openssl`, and
+  `rsyslog`, whose fixed builds had been published for weeks.
+
 ## [1.9.6] - 2026-09-01
 
 ### Added

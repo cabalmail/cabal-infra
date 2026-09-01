@@ -15,6 +15,11 @@ export const WEIGHTS = {
   pageUrl: 1.5,
   headingText: 1.5,
   fieldLabels: 1.5,
+  // Structural, so it sits with the other context signals rather than in the
+  // password-shaped 3.0 tier: on its own it can lift a mislabelled sign-up
+  // form out of `signin` into `ambiguous` (a badge the user can click), but
+  // never on its own into `signup` (an automatic offer).
+  multipleIdentityFields: 1.5,
   termsCheckbox: 0.5,
 } as const;
 
@@ -73,7 +78,7 @@ export const SIGNIN_TERMS = [
 ];
 
 /** URL-path fragments suggesting sign-up. */
-export const SIGNUP_PATH_TERMS = ['signup', 'sign-up', 'register', 'registration', 'join', 'create-account', 'create_account', 'getstarted', 'get-started'];
+export const SIGNUP_PATH_TERMS = ['signup', 'sign-up', 'sign_up', 'register', 'registration', 'join', 'create-account', 'create_account', 'getstarted', 'get-started'];
 
 /** URL-path fragments suggesting sign-in. */
-export const SIGNIN_PATH_TERMS = ['signin', 'sign-in', 'login', 'log-in', 'logon', 'session'];
+export const SIGNIN_PATH_TERMS = ['signin', 'sign-in', 'sign_in', 'login', 'log-in', 'log_in', 'logon', 'session'];

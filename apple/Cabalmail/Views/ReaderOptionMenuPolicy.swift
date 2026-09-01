@@ -52,9 +52,12 @@ struct ReaderMenuRow<Option: Hashable>: Identifiable {
 /// mark-read rows kept drawing *enabled* after the message became seen.
 /// So a menu's identity has to carry everything its rows draw.
 ///
-/// The list's sort menu is deliberately not here: it draws its own
-/// `Label(…, systemImage: "checkmark")` rather than a `Toggle`, and #1337
-/// measured it updating correctly.
+/// The list's sort menu keeps its own rows in `SortMenuPolicy` but shares
+/// this identity rule. It used to be exempt on the grounds that it drew
+/// its own `Label(…, systemImage: "checkmark")` rather than a `Toggle`,
+/// and #1337 measured it updating correctly — that glyph is what left its
+/// state unreadable to an assistive client (#1367), so it draws toggles
+/// now and needs the same identity they do.
 enum ReaderOptionMenuPolicy {
     /// The mark-read menu: one row per `MarkReadAdvance`, checked against
     /// the current default. The options only apply to an unread message —

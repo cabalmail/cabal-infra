@@ -8,9 +8,11 @@
 # (image-scan.yml). The two populations need different remediation and
 # the prompt below is explicit about each: source findings get code
 # fixes; image findings are OS-package CVEs whose real fix is an image
-# rebuild (the Dockerfiles pin amazonlinux:2023 by digest and install
-# packages unpinned, so a digest bump plus rebuild picks up the patched
-# packages).
+# rebuild. A base-image digest bump is not the lever it looks like:
+# AL2023 resolves $releasever from the base image's own release
+# snapshot, so what a rebuild picks up is governed by the Dockerfiles'
+# `echo latest > /etc/dnf/vars/releasever && dnf -y upgrade`, not by
+# the pinned digest.
 #
 # Each run hands Claude a bounded batch (max_alerts, default 5) so the
 # backlog draws down a few alerts a day instead of attempting all of
@@ -213,21 +215,33 @@ jobs:
                one): these live in a built image, so editing repo
                source cannot fix them directly.
                - OS package CVEs (Details lists Package, Installed
-                 Version, Fixed Version): the Dockerfiles under
-                 docker/ install packages unpinned with dnf, so a
-                 rebuild picks up the patched version. Compare the
-                 FROM amazonlinux:2023@sha256:... digest pinned in the
-                 affected tier's Dockerfile against the current
-                 upstream digest (docker buildx imagetools inspect
-                 amazonlinux:2023). If it is stale, update the digest
-                 in every docker/*/Dockerfile that pins the same base
-                 image, in a single commit — merging that triggers a
-                 rebuild and redeploy of those tiers, which resolves
-                 every fixable OS CVE in them, not just this batch's.
-                 If the digest is already current, make no change for
-                 these alerts; instead record in the PR body (or the
-                 issue, below) that the tier needs a manual rebuild
-                 via a workflow_dispatch of app.yml with force_tiers.
+                 Version, Fixed Version): the four AL2023 Dockerfiles
+                 (docker/{imap,smtp-in,smtp-out,sinkhole}) point dnf
+                 at the current AL2023 snapshot and run dnf -y upgrade
+                 before installing, so rebuilding the affected tier
+                 picks up every patched package AWS has published.
+                 That rebuild is the whole fix; make no repo change
+                 for these alerts. Record in the issue (below) that
+                 the tier needs a rebuild via a workflow_dispatch of
+                 app.yml with force_tiers set to the affected tiers.
+
+                 Never conclude that a fix is unpublished upstream
+                 from a "dnf list --showduplicates" run inside the
+                 pinned base image. AL2023 resolves $releasever from
+                 the base image's own /usr/lib/system-release, so dnf
+                 in that container reports a frozen package snapshot
+                 that can be weeks behind what AWS has shipped. To
+                 check real availability, read the current snapshot's
+                 repo metadata directly: resolve
+                 https://cdn.amazonlinux.com/al2023/core/mirrors/latest/aarch64/mirror.list
+                 then fetch repodata/primary.xml.gz from the mirror it
+                 names and look for the fixed version. aarch64 is the
+                 architecture app.yml builds.
+
+                 Bumping the FROM ...@sha256: digest is housekeeping
+                 dependabot already owns. It is not the remediation
+                 lever, and a current digest does not imply the
+                 image's packages are current.
                - Secrets or key material reported inside an image
                  (e.g. rule private-key): investigate how the file
                  could end up in the image by reading the tier's
