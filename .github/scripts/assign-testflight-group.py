@@ -197,10 +197,25 @@ def main():
         )
         return 0
     if last_refusal:
+        hint = ""
+        if "not in an internally testable state" in last_refusal:
+            # A build whose export-compliance question is unanswered sits in
+            # "Missing Compliance" and is not assignable to any group. The
+            # durable fix is ITSAppUsesNonExemptEncryption in the app's
+            # Info.plist; answering in the web UI unblocks the build in hand.
+            hint = (
+                " This refusal usually means the build is in \"Missing "
+                "Compliance\": the export-compliance question is unanswered, "
+                "and such a build is not internally testable. Set "
+                "ITSAppUsesNonExemptEncryption in the app's Info.plist so "
+                "future uploads answer it at build time, and answer the "
+                "question in App Store Connect to release this one."
+            )
         error(
             f"Build {build_number} was not attached to {group_name!r} within "
-            f"{timeout}s. Last refusal: {last_refusal}. Attach it manually: "
-            f"App Store Connect -> TestFlight -> {group_name} -> Builds -> +."
+            f"{timeout}s. Last refusal: {last_refusal}.{hint} Attach it "
+            f"manually: App Store Connect -> TestFlight -> {group_name} -> "
+            "Builds -> +."
         )
         return 1
     # Never surfaced in /v1/builds at all. altool verified the upload
