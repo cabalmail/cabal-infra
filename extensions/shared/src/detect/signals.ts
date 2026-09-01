@@ -186,25 +186,41 @@ export const pageUrl: SignalExtractor = (_form, ctx) => {
   return pathSignal('pageUrl', pathname);
 };
 
+/**
+ * How many preceding headings the walk may consult. One non-committal
+ * heading between the real one and the form used to be enough to lose the
+ * signal (#1396: WordPress puts a terms-of-service h2 between "Create your
+ * account" and its sign-up form), so the walk continues past a heading that
+ * matches neither vocabulary. It is bounded rather than open-ended because
+ * far enough up any page there is a nav or footer heading that says
+ * "Sign in" about something other than this form.
+ */
+const HEADING_LOOKBACK = 3;
+
 export const headingText: SignalExtractor = (form, ctx) => {
-  // Nearest heading: inside the form, else the closest preceding h1/h2/h3.
-  let heading = form.querySelector('h1, h2, h3')?.textContent ?? null;
-  if (!heading) {
-    const headings = Array.from(ctx.document.querySelectorAll('h1, h2, h3'));
-    for (const h of headings) {
-      const pos = form.compareDocumentPosition(h);
-      if (pos & Node.DOCUMENT_POSITION_PRECEDING) heading = h.textContent;
-    }
+  // Nearest first: headings inside the form, then the preceding ones walking
+  // back up the document.
+  const preceding = Array.from(ctx.document.querySelectorAll('h1, h2, h3')).filter(
+    (h) => !!(form.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_PRECEDING),
+  );
+  const candidates = [
+    ...Array.from(form.querySelectorAll('h1, h2, h3')),
+    ...preceding.reverse().slice(0, HEADING_LOOKBACK),
+  ];
+  for (const candidate of candidates) {
+    const heading = candidate.textContent;
+    if (!heading) continue;
+    const up = containsAny(heading, SIGNUP_TERMS);
+    const down = containsAny(heading, SIGNIN_TERMS);
+    // Says both or neither: not this heading's answer to give.
+    if (up === down) continue;
+    return {
+      name: 'headingText',
+      weight: WEIGHTS.headingText,
+      contribution: up ? WEIGHTS.headingText : -WEIGHTS.headingText,
+    };
   }
-  if (!heading) return null;
-  const up = containsAny(heading, SIGNUP_TERMS);
-  const down = containsAny(heading, SIGNIN_TERMS);
-  if (up === down) return null;
-  return {
-    name: 'headingText',
-    weight: WEIGHTS.headingText,
-    contribution: up ? WEIGHTS.headingText : -WEIGHTS.headingText,
-  };
+  return null;
 };
 
 const SIGNUP_FIELD_TERMS = ['confirm password', 'choose username', 'choose a username', 'pick a password', 'choose a password', 'create password', 'create a password', 'repeat password', 'verify password'];
