@@ -155,3 +155,54 @@ describe('formKey', () => {
     expect(formKey(c.form)).not.toBe(keyA);
   });
 });
+
+describe('headingText', () => {
+  /** The heading contribution, or null when the extractor gave up. */
+  function headingOf(html: string, url = 'https://example.com/start/account/user') {
+    const { form, ctx } = makeForm(html, url);
+    return scoreForm(form, ctx).signals.find((s) => s.name === 'headingText') ?? null;
+  }
+
+  it('walks past a non-committal heading to the one that decides', () => {
+    // #1396's shape: WordPress puts a terms-of-service h2 between its
+    // "Create your account" h1 and the passwordless sign-up form.
+    const signal = headingOf(`
+      <h1>Create your account</h1>
+      <h2>By continuing with any of the options below, you agree to our Terms of Service</h2>
+      <form novalidate><input type="email" name="email" /><button>Continue</button></form>`);
+    expect(signal?.contribution).toBe(1.5);
+  });
+
+  it('takes the nearest heading that decides, not the farthest', () => {
+    const signal = headingOf(`
+      <h1>Create your account</h1>
+      <h2>Log in</h2>
+      <form><input type="email" name="email" /></form>`);
+    expect(signal?.contribution).toBe(-1.5);
+  });
+
+  it('prefers a heading inside the form over anything preceding it', () => {
+    const signal = headingOf(`
+      <h1>Log in</h1>
+      <form><h2>Create your account</h2><input type="email" name="email" /></form>`);
+    expect(signal?.contribution).toBe(1.5);
+  });
+
+  it('gives up rather than reaching past the lookback for a match', () => {
+    const signal = headingOf(`
+      <h1>Create your account</h1>
+      <h2>Why you might want one</h2>
+      <h2>What it costs</h2>
+      <h2>Terms of service</h2>
+      <form><input type="email" name="email" /></form>`);
+    expect(signal).toBeNull();
+  });
+
+  it('walks past a heading that carries both vocabularies', () => {
+    const signal = headingOf(`
+      <h1>Create your account</h1>
+      <h2>Sign up or log in</h2>
+      <form><input type="email" name="email" /></form>`);
+    expect(signal?.contribution).toBe(1.5);
+  });
+});
