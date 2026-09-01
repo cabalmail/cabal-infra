@@ -2,12 +2,17 @@
  * The in-page overlay: suggest popover, adopt banner, submit-guard modal,
  * confirm-failed banner, ambiguous badge. Rendered into a Shadow DOM
  * attached to a host <div> at the end of document.body so host-page CSS
- * cannot leak in (and ours cannot leak out); styles are inline.
+ * cannot leak in (and ours cannot leak out). Styles are inline apart from
+ * theme.css, which is injected into the shadow root as a <style> because
+ * an inline style attribute cannot carry a media query -- the tokens it
+ * defines on :host are what the inline var() references below resolve to,
+ * and what flips the whole overlay when the system switches to dark.
  */
 
 import { render } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
+import themeCss from '../theme.css?inline';
 import type {
   OverlayPort,
   SuggestModel,
@@ -25,19 +30,18 @@ const active = signal<ActiveUi>({ kind: 'none' });
 const notice = signal<string | null>(null);
 
 const font = {
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  fontFamily: 'var(--cm-font)',
   fontSize: '14px',
-  color: '#1a1a1a',
+  color: 'var(--cm-fg)',
 } as const;
 
 const card = {
   ...font,
   position: 'absolute',
-  background: '#fff',
-  border: '1px solid #d0d0d0',
+  background: 'var(--cm-bg)',
+  border: '1px solid var(--cm-border)',
   borderRadius: '8px',
-  boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+  boxShadow: 'var(--cm-shadow)',
   padding: '12px',
   zIndex: '2147483647',
   maxWidth: '340px',
@@ -47,16 +51,16 @@ const buttonStyle = {
   ...font,
   padding: '6px 12px',
   borderRadius: '6px',
-  border: '1px solid #c0c0c0',
-  background: '#f6f6f6',
+  border: '1px solid var(--cm-control-border)',
+  background: 'var(--cm-control-bg)',
   cursor: 'pointer',
 } as const;
 
 const primaryButton = {
   ...buttonStyle,
-  background: '#1d4ed8',
-  borderColor: '#1d4ed8',
-  color: '#fff',
+  background: 'var(--cm-accent)',
+  borderColor: 'var(--cm-accent)',
+  color: 'var(--cm-accent-fg)',
 } as const;
 
 function anchoredPosition(anchor: HTMLElement): { top: string; left: string } {
@@ -167,7 +171,7 @@ function SuggestPopover(props: {
           onInput={(e) => setComment((e.target as HTMLInputElement).value)}
         />
       </label>
-      {error && <div style={{ color: '#a00', marginBottom: '8px' }}>{error}</div>}
+      {error && <div style={{ color: 'var(--cm-danger)', marginBottom: '8px' }}>{error}</div>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
         <button style={buttonStyle} disabled={busy} onClick={() => props.resolve({ kind: 'dismissed' })}>
           Cancel
@@ -213,7 +217,7 @@ function GuardModal(props: {
       style={{
         position: 'fixed',
         inset: '0',
-        background: 'rgba(0,0,0,0.4)',
+        background: 'var(--cm-scrim)',
         zIndex: '2147483647',
         display: 'flex',
         alignItems: 'center',
@@ -292,6 +296,9 @@ export function createOverlay(): OverlayPort {
   host.setAttribute('data-cabalmail-overlay', '');
   document.body.appendChild(host);
   const shadow = host.attachShadow({ mode: 'closed' });
+  const themeStyle = document.createElement('style');
+  themeStyle.textContent = themeCss;
+  shadow.appendChild(themeStyle);
   const mount = document.createElement('div');
   shadow.appendChild(mount);
   render(<OverlayRoot />, mount);
@@ -327,9 +334,9 @@ export function createOverlay(): OverlayPort {
         height: '20px',
         lineHeight: '18px',
         borderRadius: '10px',
-        border: '1px solid #c0c0c0',
-        background: '#fff',
-        color: '#1d4ed8',
+        border: '1px solid var(--cm-control-border)',
+        background: 'var(--cm-bg)',
+        color: 'var(--cm-accent-text)',
         cursor: 'pointer',
         fontSize: '12px',
         zIndex: '2147483647',
