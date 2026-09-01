@@ -73,7 +73,7 @@ export const SIGNIN_TERMS = [
 ];
 
 /** URL-path fragments suggesting sign-up. */
-export const SIGNUP_PATH_TERMS = ['signup', 'sign-up', 'register', 'registration', 'join', 'create-account', 'create_account', 'getstarted', 'get-started'];
+export const SIGNUP_PATH_TERMS = ['signup', 'sign-up', 'sign_up', 'register', 'registration', 'join', 'create-account', 'create_account', 'getstarted', 'get-started'];
 
 /** URL-path fragments suggesting sign-in. */
-export const SIGNIN_PATH_TERMS = ['signin', 'sign-in', 'login', 'log-in', 'logon', 'session'];
+export const SIGNIN_PATH_TERMS = ['signin', 'sign-in', 'sign_in', 'login', 'log-in', 'log_in', 'logon', 'session'];

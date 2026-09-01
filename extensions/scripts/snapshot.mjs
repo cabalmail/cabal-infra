@@ -37,16 +37,35 @@ try {
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle' });
-  await page.waitForSelector('form', { timeout: 15_000 });
+  // `networkidle` never settles on pages with long-polling or analytics
+  // beacons, so treat the quiet period as a best-effort extra: load first,
+  // then give client-rendered forms a chance to appear, then continue
+  // regardless.
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  // `attached`, not the default `visible`: we are capturing markup, not
+  // interacting, and the first form on a page is very often a hidden one
+  // (a collapsed search box, a CSRF stub). Waiting for visibility fails the
+  // capture on pages whose auth form is present and perfectly usable.
+  await page.waitForSelector('form', { state: 'attached', timeout: 15_000 });
   // eslint-disable-next-line no-undef -- runs in the page, where document exists
   const html = await page.evaluate(() => document.documentElement.outerHTML);
   const title = await page.title();
 
+  // Script bodies are dropped: no detector signal reads them (the engine
+  // works from attributes, structure, and text), they are the second-largest
+  // contributor to fixture size, and a corpus is a poor place to accumulate
+  // executable third-party code in a public repository. The elements and
+  // their attributes stay, so document structure is unchanged.
+  const stripped = html.replace(
+    /(<script\b[^>]*>)[\s\S]*?(<\/script\b[^>]*>)/gi,
+    (_match, open, close) => `${open}${close}`,
+  );
+
   const out = [
     '<!DOCTYPE html>',
     `<!-- captured from ${url} on ${new Date().toISOString().slice(0, 10)} -->`,
-    html.replace(
+    stripped.replace(
       /<head([^>]*)>/i,
       `<head$1>\n<meta name="fixture-url" content="${url}">` +
         `\n<meta name="fixture-title" content="${title.replaceAll('"', '&quot;')}">`,
