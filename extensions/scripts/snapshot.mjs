@@ -58,7 +58,7 @@ try {
   // executable third-party code in a public repository. The elements and
   // their attributes stay, so document structure is unchanged.
   const stripped = html.replace(
-    /(<script\b[^>]*>)[\s\S]*?(<\/script>)/gi,
+    /(<script\b[^>]*>)[\s\S]*?(<\/script\b[^>]*>)/gi,
     (_match, open, close) => `${open}${close}`,
   );
 
