@@ -179,10 +179,10 @@ function Popup() {
           <button onClick={signOut}>Sign out</button>
         </div>
       )}
-      {status && <p style={{ color: '#555' }}>{status}</p>}
-      {error && <p style={{ color: '#a00' }}>{error}</p>}
+      {status && <p style={{ color: 'var(--cm-muted)' }}>{status}</p>}
+      {error && <p style={{ color: 'var(--cm-danger)' }}>{error}</p>}
       <hr />
-      <p style={{ fontSize: '12px', color: '#555' }}>
+      <p style={{ fontSize: '12px', color: 'var(--cm-muted)' }}>
         <a href={`https://admin.${__CONTROL_DOMAIN__}/`} target="_blank" rel="noreferrer">
           Manage addresses
         </a>

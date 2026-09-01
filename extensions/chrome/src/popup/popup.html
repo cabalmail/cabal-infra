@@ -3,9 +3,17 @@
 <head>
   <meta charset="utf-8">
   <title>Cabalmail</title>
+  <!-- Linked rather than injected from popup.tsx: the popup is small enough
+       that a deferred module script would repaint it, and a white flash on
+       every toolbar click is exactly the thing dark mode is meant to spare
+       you. -->
+  <link rel="stylesheet" href="../theme.css">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-           width: 320px; margin: 0; padding: 12px; font-size: 14px; color: #1a1a1a; }
+    body { font-family: var(--cm-font);
+           width: 320px; margin: 0; padding: 12px; font-size: 14px;
+           color: var(--cm-fg); background: var(--cm-bg); }
+    a { color: var(--cm-accent-text); }
+    hr { border: 0; border-top: 1px solid var(--cm-border); }
   </style>
 </head>
 <body>

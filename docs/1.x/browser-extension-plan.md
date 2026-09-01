@@ -103,6 +103,8 @@ Findings from the reader link-menu work in the Apple clients (July 2026), record
 | Testing | **Vitest** for unit, **Playwright** for integration (against a fixture page set) | Same Vitest setup as `react/admin/`; Playwright loads the extension into a controlled browser instance |
 | Linting | **eslint + `@typescript-eslint`** | Standard |
 
+> **Erratum (2026-08-31):** The Styling row is no longer accurate in either half. The popup never used CSS modules -- it uses a plain `<style>` block in `popup.html` -- and the overlay's styles are no longer purely inline: honouring the system light/dark setting needs a `prefers-color-scheme` media query, which an inline `style` attribute cannot express. Both surfaces now share `extensions/chrome/src/theme.css`, a custom-property token file declared on `:root, :host`; the popup links it and the overlay injects it into its shadow root as a `<style>`, and the per-element styles stay inline, referencing the tokens through `var()`. Shadow-DOM encapsulation -- the rationale the row actually turned on -- is unchanged.
+
 ### Repository layout
 
 A new top-level directory, sibling to `apple/`, `react/admin/`, and the planned `android/`:
