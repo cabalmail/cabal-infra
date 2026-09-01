@@ -63,8 +63,8 @@ phase being present.
   bodies are proxied and cached for an operator-tunable TTL (default
   7 days, per D13).
 - New items in subscribed feeds with notifications enabled produce
-  APNs push (and eventually FCM, when Android lands) within ~6 minutes
-  of publication, reusing the 1.0.x push path.
+  APNs and FCM push within ~6 minutes of publication, reusing the
+  0.11.0 push path.
 - A user can import an OPML file at signup and export one at any time.
 - Paywalled feeds with per-feed cookie scoping work on Apple clients;
   the React client renders public feeds and reports the limitation for
@@ -135,11 +135,11 @@ phase being present.
                                         |  rows in TransactWriteItems
                                         |  alongside item upsert)
                                         v
-                                   +----+-----+    SNS / SQS    +-----------+
-                                   |  rss-    | --------------> |  push-    |
-                                   |  notify  |                 |  sender   |
-                                   |  Lambda  |                 |  Lambda   |
-                                   +----------+                 |  (1.0.x)  |
+                                   +----+-----+  cabal-push-    +-----------+
+                                   |  rss-    |     queue       |  push_    |
+                                   |  notify  | --------------> |  dispatch |
+                                   |  Lambda  |      (SQS)      |  Lambda   |
+                                   +----------+                 | (0.11.0)  |
                                                                 +-----+-----+
                                                                       |
                                                                   APNs / FCM
@@ -222,16 +222,16 @@ below for the sparse-GSI design that makes filtered queries cheap.
 60 seconds, scans `pending_notification` (small table, drains quickly),
 queries the sparse GSI `subscription.by_feed_notify` for each
 pending item to find subscribers with notifications-on, and enqueues
-one SNS message per (user, item) onto the existing push topic with a
-`type=rss` attribute. The push-sender Lambda from 1.0.x handles
-APNs/FCM delivery; on-device NSE enriches the notification by calling
-`/rss/items/{id}`.
-
-> **Erratum (2026-08-07):** The shipped push path (0.11.0) is SQS-only —
-> procmail-spooled wake signals land on `cabal-push-queue`, consumed by
-> `push_dispatch`; there is no SNS push topic or topic-attribute filtering
-> to reuse. RSS notification fan-in must target the SQS queue or add new
-> SNS plumbing.
+one message per (user, item) onto the existing `cabal-push-queue` SQS
+queue with a `type=rss` marker in the body. The shipped push path
+(0.11.0) is SQS-only — procmail-spooled mail wake signals land on that
+same queue and are consumed by `push_dispatch` — so there is no SNS
+topic or message-attribute filtering to reuse; RSS fan-in targets the
+queue directly and `push_dispatch` branches on the marker. (Adding SNS
+in front of the queue purely to get attribute filtering is a
+deliberate non-goal: one consumer, one branch.) `push_dispatch`
+handles APNs/FCM delivery; on-device NSE enriches the notification by
+calling `/rss/items/{id}`.
 
 **Apple sync path.** When online, the Apple client polls
 `GET /rss/items?subscription_id=X&since=<cursor>` (or one call per
@@ -452,8 +452,8 @@ server with last-write-wins semantics.
 Three sync paths cooperate:
 
 - **APNs-assisted (notification-on feeds).** The notification service
-  extension that enriches push payloads (already in CabalmailKit per
-  the 1.0.x design) gets an `RssEnrichment` branch that, in addition
+  extension that enriches push payloads (already in CabalmailKit as
+  shipped in 0.11.0) gets an `RssEnrichment` branch that, in addition
   to enriching the notification body, writes the fetched item into
   the local cache and updates `feed_sync_state`.
 - **Background refresh (notification-off feeds).** Registered iOS
@@ -546,14 +546,11 @@ smaller:
     `lambda/api/`; `boto3` only)
 - **API Gateway routes** under `/rss/*`, Cognito-authorized identically
   to the existing email API.
-- **SNS topic + SQS queue** reusing the 1.0.x push fanout, with a new
-  topic-attribute filter for RSS payloads.
-
-  > **Erratum (2026-08-07):** There is no existing push SNS topic or fanout; the
-  > shipped (0.11.x) pipeline is `cabal-push-queue` (SQS + DLQ) consumed by
-  > `push_dispatch`. Message-attribute filtering as described requires new
-  > SNS infrastructure. All "1.0.x" push references in this plan mean the
-  > path that actually shipped in 0.11.0.
+- **No new push infrastructure.** The shipped 0.11.0 pipeline is
+  `cabal-push-queue` (SQS + DLQ) consumed by `push_dispatch`; `rss-notify`
+  writes to that queue and `push_dispatch` gains a `type=rss` branch. The
+  only additions are the IAM grant letting `rss-notify` send to the queue
+  and the RSS read grants `push_dispatch` needs for enrichment.
 
 What this does **not** add:
 
@@ -915,18 +912,18 @@ independently.
 ### Phase 7: Push notification integration
 
 **Goal.** New items in subscribed feeds with notifications enabled
-produce APNs (and FCM-when-ready) notifications via the existing
-1.0.x push path.
+produce APNs and FCM notifications via the existing 0.11.0 push
+path.
 
 **Work.**
 
 - `lambda/rss/notify/function.py`: EventBridge-triggered every 60
   seconds. Scans `pending_notification` (small table), for each item:
   Query `subscription.by_feed_notify` for subscribers with
-  notifications-on, enqueue one SNS message per (user, item) onto the
-  existing push topic with a `type=rss` attribute. Delete the
+  notifications-on, enqueue one message per (user, item) onto the
+  existing `cabal-push-queue` with a `type=rss` marker. Delete the
   pending row on success.
-- Extend the push-sender Lambda (from 1.0.x) to handle `type=rss`
+- Extend `push_dispatch` (from 0.11.0) to handle `type=rss`
   payloads: lookup device tokens for the user, build an APNs payload
   with `feed_id` and `item_id` (no content — NSE enriches on device),
   send.
@@ -985,7 +982,7 @@ isolation, offline reading, and per-feed FTS.
 - OPML import/export via the share sheet.
 - Background refresh registered with `BGTaskScheduler` (iOS) or
   scheduled timer (macOS).
-- Push handling already in place from 1.0.x; the `type=rss` NSE
+- Push handling already in place from 0.11.0; the `type=rss` NSE
   branch from phase 7 makes RSS notifications work and feeds the
   ItemCache.
 
@@ -1064,7 +1061,7 @@ month):
 | Notify Lambda invocations         | <$1 (1440 invocations/day)    |
 | API Lambda invocations            | scales with reader use, <$1   |
 | EventBridge schedules             | negligible                    |
-| SNS/SQS                           | negligible (reuses 1.0.x)     |
+| SQS                               | negligible (reuses 0.11.0)    |
 | KMS                               | <$1                           |
 | **Total per environment**         | **~$5/month**                 |
 
