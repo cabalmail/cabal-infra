@@ -60,6 +60,35 @@ interface TrackedAddress {
   status: 'pending' | 'confirmed';
 }
 
+/**
+ * Is the form drawn on the page? A form the site has hidden with CSS is
+ * scored exactly like a visible one (the `type !== 'hidden'` filter in
+ * `findEmailField` is the HTML input type, not CSS), so pages that ship a
+ * hidden signup modal alongside the login form they display would get our
+ * listeners on a form the user cannot reach (#1393).
+ *
+ * `visibility` is inherited, so the form's own computed value already
+ * answers for an ancestor that hid it - and for a descendant that opted
+ * back in. `display: none` is not inherited and a child of a `display: none`
+ * parent still reports its own display, so that one wants the walk.
+ *
+ * Deliberately not a layout-box test (`getClientRects()`/`offsetParent`):
+ * the shape this was reported for, `#signup-modal-signup-form` on
+ * stackoverflow.com/users/login, is `visibility: hidden` and *does* have a
+ * box, and jsdom does no layout at all, which would read every form under
+ * test as hidden.
+ */
+function isRendered(form: HTMLFormElement, document: Document): boolean {
+  const view = document.defaultView;
+  if (!view) return true;
+  const visibility = view.getComputedStyle(form).visibility;
+  if (visibility === 'hidden' || visibility === 'collapse') return false;
+  for (let el: Element | null = form; el; el = el.parentElement) {
+    if (view.getComputedStyle(el).display === 'none') return false;
+  }
+  return true;
+}
+
 const SCAN_DEBOUNCE_MS = 200;
 const ADOPT_DEBOUNCE_MS = 300;
 
@@ -83,23 +112,35 @@ export class ContentController {
   start(): void {
     this.scan();
     const observer = new MutationObserver((mutations) => {
-      const relevant = mutations.some((m) =>
-        Array.from(m.addedNodes).some(
-          (n) =>
-            n instanceof HTMLElement &&
-            (n.matches('form, input') || n.querySelector('form, input') !== null),
-        ),
+      const relevant = mutations.some(
+        (m) =>
+          // A form we skipped as hidden becomes ours the moment the page
+          // reveals it, and revealing a modal is an attribute write.
+          m.type === 'attributes' ||
+          Array.from(m.addedNodes).some(
+            (n) =>
+              n instanceof HTMLElement &&
+              (n.matches('form, input') || n.querySelector('form, input') !== null),
+          ),
       );
       if (!relevant) return;
       if (this.scanTimer) clearTimeout(this.scanTimer);
       this.scanTimer = setTimeout(() => this.scan(), SCAN_DEBOUNCE_MS);
     });
-    observer.observe(this.ctx.document.documentElement, { childList: true, subtree: true });
+    observer.observe(this.ctx.document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class', 'hidden', 'open'],
+    });
   }
 
   /** Score every form once per stable key; attach behavior per class. */
   scan(): void {
     for (const form of Array.from(this.ctx.document.querySelectorAll('form'))) {
+      // Nothing is recorded for a hidden form, so the next scan reconsiders
+      // it - the page revealing it is what makes it ours.
+      if (!isRendered(form, this.ctx.document)) continue;
       const key = formKey(form);
       if (this.scoredKeys.has(`${key}|connected`) && form.isConnected && this.scored.has(form)) {
         continue;
