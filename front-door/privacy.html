@@ -17,7 +17,7 @@
 <body>
 	<div class="page">
 <h1>Privacy Policy</h1>
-<p class="meta">Last updated: 2026-05-17</p>
+<p class="meta">Last updated: 2026-08-31</p>
 
 <p>This privacy policy describes how Cabalmail (the "Service", operated by the entity identified in our <a href="/terms.html">Terms of Service</a>) collects, uses, and protects personal information of users who create an account at this Cabalmail instance.</p>
 
@@ -59,6 +59,37 @@
 
 <h2>Phone number retention</h2>
 <p>Your phone number is retained for as long as your account exists. If you delete your account, your phone number is removed from the Cognito user pool within 30 days. We do not log SMS bodies; only delivery metadata (timestamp, masked phone number, success/failure code) is retained in CloudWatch Logs, and that metadata is purged after 30 days.</p>
+
+<h2>Browser extension</h2>
+
+<p>Cabalmail publishes an optional browser extension for Chrome and Safari. It is installed separately, it is not required to use the Service, and removing it removes everything described here. This section describes it in full because its permissions look broader than what it does.</p>
+
+<h3>What it does with the pages you visit</h3>
+<p>The extension examines pages you visit to decide whether they contain a sign-up form, so that it can offer you a freshly generated Cabalmail address in the email field. <strong>That examination happens entirely inside your browser.</strong> No page content, no page address, and no record of which sites you visit is transmitted to the operator, to us, or to anyone else &mdash; not in aggregate, not anonymized, not for diagnostics. The extension performs no analytics and contains no third-party tracking, advertising, or crash-reporting code.</p>
+
+<h3>What it sends, and to whom</h3>
+<p>The extension makes network requests to exactly two destinations, both belonging to your own Cabalmail deployment:</p>
+<ul>
+  <li><strong>Your Cabalmail server</strong>, to read its public configuration and to create, list, confirm, or revoke addresses.</li>
+  <li><strong>The Amazon Cognito sign-in domain</strong> for your deployment, to sign you in and to refresh your session.</li>
+</ul>
+<p>Requests that create or change an address happen only when you explicitly act &mdash; accepting a suggested address, accepting an offer to adopt one you typed, or submitting a form you used one on. The extension contacts no other host.</p>
+
+<h3>Sign-in</h3>
+<p>Signing in opens your deployment's hosted sign-in page. <strong>The extension never sees your password</strong>: you type it into the Cognito page, and the extension receives only the resulting session tokens.</p>
+
+<h3>What it stores on your device</h3>
+<ul>
+  <li><strong>Session tokens</strong> from sign-in, so you need not sign in on every browser start.</li>
+  <li><strong>A cached copy of your server's public configuration</strong> (its address, its sign-in domain, and the mail domains available to you).</li>
+</ul>
+<p>Both live in your browser's extension storage and are erased when you sign out or remove the extension. No browsing history, form contents, or page data is stored.</p>
+
+<h3>Addresses awaiting confirmation</h3>
+<p>An address is created the moment you choose it, before you submit the form, so it can receive mail by the time the site sends a verification message. If you never submit that form, the address is never confirmed, and the Service automatically revokes it after a waiting period (24 hours by default). Addresses you do use are confirmed and behave like any other address you create.</p>
+
+<h3>Opening links in a private window</h3>
+<p>On the desktop, the Cabalmail apps can hand a link from a message to the extension to be opened in a private browsing window. The link travels in the part of a web address that browsers never send to a server, so its destination is not disclosed to your Cabalmail server or logged by it. The extension then removes that intermediate address from your normal browsing history, which is the sole reason it requests history access. It never reads your history for any other purpose, and never transmits it.</p>
 
 <h2>Third parties</h2>
 <p>The Service runs on Amazon Web Services. AWS processes account data (Cognito), DNS (Route 53), email storage (EFS), and SMS delivery (End User Messaging / SNS) under its standard data processing terms. No other third-party services receive your account information.</p>
