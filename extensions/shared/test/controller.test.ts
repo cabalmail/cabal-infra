@@ -328,3 +328,118 @@ describe('abandonment', () => {
     });
   });
 });
+
+describe('form visibility', () => {
+  // The shape #1393 was reported for: a hidden signup modal earlier in the
+  // DOM than the login form the page actually shows. The modal scores
+  // `signup` (new-password + signup button + signup action), the login form
+  // scores `signin`.
+  const LOGIN_PAGE = `
+    <div id="modal-wrap">
+      <form id="signup-modal" action="/users/signup">
+        <input type="email" name="email" />
+        <input type="password" name="pw" autocomplete="new-password" />
+        <button type="submit">Sign up</button>
+      </form>
+    </div>
+    <form id="login-form" action="/users/login">
+      <input type="email" name="email" />
+      <input type="password" name="pw" autocomplete="current-password" />
+      <button type="submit">Log in</button>
+    </form>`;
+
+  function page(html: string, url = 'https://forum.example.com/users/login') {
+    document.body.innerHTML = html;
+    const fakes = makeFakes();
+    const suggested: HTMLElement[] = [];
+    const badged: HTMLElement[] = [];
+    fakes.overlay.showSuggestPopover = async (anchor) => {
+      suggested.push(anchor);
+      return { kind: 'dismissed' };
+    };
+    fakes.overlay.showAmbiguousBadge = (anchor) => {
+      badged.push(anchor);
+    };
+    const controller = new ContentController(fakes.background, fakes.overlay, { url, document });
+    return { ...fakes, controller, suggested, badged };
+  }
+
+  /**
+   * Focus the form's email field and let the async suggest path settle.
+   * The event is dispatched directly because jsdom does not enforce
+   * focusability - which is the point: we are asserting on whether the
+   * listener was ever attached, not on whether the field can be reached.
+   */
+  async function focusEmail(id: string): Promise<void> {
+    document.querySelector<HTMLInputElement>(`#${id} input[type="email"]`)!
+      .dispatchEvent(new Event('focus'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it('ignores a signup form its ancestor hid with visibility: hidden', async () => {
+    const { controller, suggested } = page(LOGIN_PAGE);
+    document.getElementById('modal-wrap')!.setAttribute('style', 'visibility: hidden');
+    controller.scan();
+    await focusEmail('signup-modal');
+    expect(suggested).toEqual([]);
+  });
+
+  it('ignores a signup form its ancestor hid with display: none', async () => {
+    const { controller, suggested } = page(LOGIN_PAGE);
+    document.getElementById('modal-wrap')!.setAttribute('style', 'display: none');
+    controller.scan();
+    await focusEmail('signup-modal');
+    expect(suggested).toEqual([]);
+  });
+
+  it('still attaches to a visible signup form', async () => {
+    const { controller, suggested } = page(LOGIN_PAGE);
+    controller.scan();
+    await focusEmail('signup-modal');
+    expect(suggested).toHaveLength(1);
+  });
+
+  it('draws no ambiguous badge on a hidden form', () => {
+    // A bare email field on a URL with no auth vocabulary scores 0, which is
+    // the ambiguous band - the one classification that draws UI passively.
+    const { controller, badged } = page(
+      '<div id="wrap" style="visibility: hidden">' +
+        '<form id="maybe"><input type="email" name="email" /></form></div>',
+      'https://forum.example.com/account',
+    );
+    controller.scan();
+    expect(badged).toEqual([]);
+  });
+
+  it('draws the ambiguous badge once that form is visible', () => {
+    const { controller, badged } = page(
+      '<div id="wrap"><form id="maybe"><input type="email" name="email" /></form></div>',
+      'https://forum.example.com/account',
+    );
+    controller.scan();
+    expect(badged).toHaveLength(1);
+  });
+
+  it('picks the form up once the page reveals it', async () => {
+    const { controller, suggested } = page(LOGIN_PAGE);
+    const wrap = document.getElementById('modal-wrap')!;
+    wrap.setAttribute('style', 'visibility: hidden');
+    controller.scan();
+    wrap.setAttribute('style', '');
+    controller.scan();
+    await focusEmail('signup-modal');
+    expect(suggested).toHaveLength(1);
+  });
+
+  it('rescans when an attribute write reveals a hidden form', async () => {
+    const { controller, suggested } = page(LOGIN_PAGE);
+    const wrap = document.getElementById('modal-wrap')!;
+    wrap.setAttribute('style', 'visibility: hidden');
+    controller.start();
+    wrap.setAttribute('style', '');
+    // The observer debounces at 200ms.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await focusEmail('signup-modal');
+    expect(suggested).toHaveLength(1);
+  });
+});

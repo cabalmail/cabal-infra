@@ -27,6 +27,33 @@ export type SignalExtractor = (
   ctx: PageContext,
 ) => SignalContribution | null;
 
+/** The form's fields a user can actually fill. */
+function fillableFields(form: HTMLFormElement): HTMLInputElement[] {
+  return Array.from(form.querySelectorAll<HTMLInputElement>('input')).filter(
+    (i) => i.type !== 'hidden' && !i.disabled,
+  );
+}
+
+/** Locate the form's email field, or null when the form has none we'd fill. */
+export function findEmailField(form: HTMLFormElement): HTMLInputElement | null {
+  const fillable = fillableFields(form);
+  const byType = fillable.find((i) => i.type === 'email');
+  if (byType) return byType;
+  const byAutocomplete = fillable.find((i) =>
+    i.autocomplete.toLowerCase().includes('email'),
+  );
+  if (byAutocomplete) return byAutocomplete;
+  const emailish = (s: string | null) => !!s && /e-?mail/i.test(s);
+  return (
+    fillable.find(
+      (i) =>
+        i.type === 'text' &&
+        (emailish(i.name) || emailish(i.id) || emailish(i.placeholder) ||
+          emailish(i.getAttribute('aria-label'))),
+    ) ?? null
+  );
+}
+
 function passwordFields(form: HTMLFormElement): HTMLInputElement[] {
   return Array.from(form.querySelectorAll<HTMLInputElement>('input[type="password"]'));
 }
@@ -207,6 +234,58 @@ export const fieldLabels: SignalExtractor = (form, ctx) => {
   };
 };
 
+/**
+ * Everything a field says about itself, for role matching. Sites label the
+ * same field through any of these and agree on none of them.
+ */
+function fieldIdentity(input: HTMLInputElement): string {
+  return [
+    input.name,
+    input.id,
+    input.autocomplete,
+    input.placeholder,
+    input.getAttribute('aria-label') ?? '',
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
+const USERNAME_PATTERN = /user\s*[-_]?name|nickname|screen\s*[-_]?name|\bhandle\b|\bpseudo\b/;
+// `\bname\b` catches `name="name"` and `id="new-account-name"` without
+// matching `username`, where the `name` has a word character before it.
+const FULL_NAME_PATTERN = /full\s*[-_]?name|first\s*[-_]?name|last\s*[-_]?name|given\s*[-_]?name|family\s*[-_]?name|real\s*[-_]?name|\bname\b/;
+
+/**
+ * A form collecting an email *and* a separate username *and* a name is
+ * registration-shaped: sign-in forms ask for one identifier, not three.
+ * This is the general counterweight to a site that mislabels its sign-up
+ * password (#1395: Discourse's older sign-up form carries
+ * `autocomplete="current-password"` on a new-account password field, worth
+ * -3.0, on a form whose id is even `login-form`).
+ *
+ * Deliberately structural rather than vocabulary: the same page defeats a
+ * label-text fix twice over, because its "Password Again" label points at an
+ * id that does not exist on the page. Three *distinct* fillable fields are
+ * required, so the common "username or email" single input does not count
+ * twice.
+ */
+export const multipleIdentityFields: SignalExtractor = (form) => {
+  const email = findEmailField(form);
+  if (!email) return null;
+  const others = fillableFields(form).filter((i) => i !== email && i.type === 'text');
+  const username = others.find((i) => USERNAME_PATTERN.test(fieldIdentity(i)));
+  if (!username) return null;
+  const fullName = others.find(
+    (i) => i !== username && FULL_NAME_PATTERN.test(fieldIdentity(i)),
+  );
+  if (!fullName) return null;
+  return {
+    name: 'multipleIdentityFields',
+    weight: WEIGHTS.multipleIdentityFields,
+    contribution: WEIGHTS.multipleIdentityFields,
+  };
+};
+
 export const termsCheckbox: SignalExtractor = (form) => {
   const checkboxes = Array.from(
     form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
@@ -233,5 +312,6 @@ export const SIGNAL_EXTRACTORS: SignalExtractor[] = [
   pageUrl,
   headingText,
   fieldLabels,
+  multipleIdentityFields,
   termsCheckbox,
 ];
