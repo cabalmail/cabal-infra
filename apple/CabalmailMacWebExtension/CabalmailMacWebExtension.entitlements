@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The pair Apple's Safari Web Extension template ships (App Sandbox
+         is required for the Mac App Store; network client covers the
+         extension's config/API/auth fetches), plus the App Group the mail
+         app publishes the control domain into -- see
+         ExtensionControlDomainStore.swift. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.cabalmail.Cabalmail</string>
+    </array>
+</dict>
+</plist>

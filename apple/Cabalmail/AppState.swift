@@ -307,6 +307,10 @@ final class AppState {
         // network. `wireSession` re-activates with the confirmed username;
         // for the normal restore path that's the same scope and a no-op.
         preferences.activate(controlDomain: controlDomain, username: lastUsername)
+        // Existing installs signed in long ago and the setter above never
+        // re-fires for them; re-publish at launch so the embedded Safari
+        // extension learns the domain without a fresh sign-in.
+        ExtensionControlDomainStore.publish(controlDomain)
     }
 
     /// Launch-time auto-restore. Looks at the UserDefaults-persisted
@@ -601,24 +605,6 @@ extension AppState {
                 pendingMoveUIDs[folderPath] = nil
             }
         }
-    }
-}
-
-// MARK: - Persisted last-session fields
-
-extension AppState {
-    /// Last-used control domain, persisted so repeat launches skip re-entry.
-    var controlDomain: String {
-        get { UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.controlDomain") }
-    }
-
-    /// Last-used username, same persistence rationale. Passwords are never
-    /// persisted here — `CognitoAuthService` holds them in the data-protection
-    /// keychain via `KeychainSecureStore`.
-    var lastUsername: String {
-        get { UserDefaults.standard.string(forKey: "cabalmail.lastUsername") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.lastUsername") }
     }
 }
 

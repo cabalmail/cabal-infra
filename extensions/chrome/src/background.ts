@@ -16,6 +16,7 @@ import { clearTokens, loadTokens } from '@cabalmail/extension-shared/auth/tokens
 import { authRedirectUri, defaultDriver } from '@cabalmail/extension-shared/auth/webAuthDriver';
 import { ConfigService } from '@cabalmail/extension-shared/config/ConfigService';
 import {
+  forgetNativeControlDomain,
   resolveControlDomain,
   saveControlDomain,
 } from '@cabalmail/extension-shared/config/controlDomain';
@@ -85,6 +86,7 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
   }
   if (request.kind === 'set-control-domain') {
     await saveControlDomain(request.domain);
+    forgetNativeControlDomain();
     // Anything cached belongs to the previous deployment.
     domainsCache = null;
     invalidateAddresses();
