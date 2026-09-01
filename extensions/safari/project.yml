@@ -71,6 +71,14 @@ targets:
         # Required by App Store validation for asset-catalog icons, same as
         # the targets in apple/project.yml.
         CFBundleIconName: AppIcon
+        # The extension uses only standard TLS and the browser's own
+        # WebCrypto (a SHA-256 PKCE challenge -- a hash, not a cipher), so
+        # it is exempt. Without this key every upload lands in App Store
+        # Connect as "Missing Compliance", which is not merely a paperwork
+        # state: a build sitting in it is not internally testable, so the
+        # TestFlight group attach fails with HTTP 422 "Build is not
+        # assignable". Same declaration the mail-app targets carry.
+        ITSAppUsesNonExemptEncryption: false
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSMinimumSystemVersion: "15.0"

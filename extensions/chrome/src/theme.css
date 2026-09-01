@@ -1,0 +1,69 @@
+/*
+ * Design tokens shared by both extension surfaces: the toolbar popup and
+ * the in-page overlay. Declared on :root (the popup document) and :host
+ * (the overlay's shadow root) so one file serves both -- in each context
+ * the other selector simply matches nothing.
+ *
+ * The dark values hang off prefers-color-scheme, so the extension follows
+ * the *system* setting rather than the host page's. That is deliberate:
+ * the overlay is browser chrome that happens to be drawn in the page, and
+ * a white popover is the wrong thing to put in front of someone who has
+ * asked their whole desktop to be dark, even on a site that only ships a
+ * light theme.
+ *
+ * `color-scheme` is what makes the *native* widgets -- text inputs, the
+ * apex-domain select, the popup's unstyled buttons, scrollbars, the focus
+ * ring -- follow along. Without it they stay light no matter what the
+ * custom properties below say.
+ */
+
+:root,
+:host {
+  color-scheme: light dark;
+
+  --cm-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --cm-bg: #ffffff;
+  --cm-fg: #1a1a1a;
+  --cm-muted: #555555;
+  --cm-border: #d0d0d0;
+
+  --cm-control-bg: #f6f6f6;
+  --cm-control-border: #c0c0c0;
+
+  /* --cm-accent is a fill that carries --cm-accent-fg text; --cm-accent-text
+     is the same idea inverted, for accent-coloured text on --cm-bg. They are
+     separate because one blue cannot clear 4.5:1 in both roles. */
+  --cm-accent: #1d4ed8;
+  --cm-accent-fg: #ffffff;
+  --cm-accent-text: #1d4ed8;
+
+  --cm-danger: #aa0000;
+
+  --cm-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --cm-scrim: rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  :host {
+    --cm-bg: #1f1f23;
+    --cm-fg: #e9e9ec;
+    --cm-muted: #a2a2ac;
+    --cm-border: #3c3c44;
+
+    --cm-control-bg: #2c2c33;
+    --cm-control-border: #4c4c56;
+
+    --cm-accent: #2563eb;
+    --cm-accent-fg: #ffffff;
+    --cm-accent-text: #60a5fa;
+
+    --cm-danger: #f87171;
+
+    /* A shadow that reads as depth on a dark surface has to be darker and
+       harder than the same shadow on white, not lighter. */
+    --cm-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+    --cm-scrim: rgba(0, 0, 0, 0.6);
+  }
+}

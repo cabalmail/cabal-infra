@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.6] - 2026-09-01
+
+### Added
+- **System light and dark mode in the browser extensions.** Both surfaces —
+  the toolbar popup and the in-page overlay (suggest popover, adopt banner,
+  submit-guard modal, ambiguous badge) — now follow the operating system's
+  appearance setting instead of always rendering light. Colours come from a
+  shared token file that the popup links and the overlay injects into its
+  shadow root, and `color-scheme` is set so the native text inputs, the
+  apex-domain picker, and the popup's buttons adopt the dark palette too.
+  The overlay deliberately tracks the system setting rather than the host
+  page's, so a light-only site does not force a white popover onto a dark
+  desktop.
+- **Browser-extension section in the privacy policy.** States in full what the
+  extension does and does not do: form detection happens entirely in the
+  browser, no browsing data is transmitted anywhere, the only two network
+  destinations are the operator's own server and its Cognito sign-in domain,
+  and history access exists solely to remove the private-window redirector
+  from normal browsing history. Both store listings require this before the
+  extension can be published.
+
+### Fixed
+- **TestFlight uploads of the Safari extension host.** The host app never
+  declared its export-compliance status, so every upload landed in App Store
+  Connect as "Missing Compliance" — a state in which the build is not
+  internally testable, which made the automatic TestFlight group assignment
+  fail outright rather than merely awaiting paperwork.
+
 ## [1.9.5] - 2026-08-31
 
 ### Fixed
