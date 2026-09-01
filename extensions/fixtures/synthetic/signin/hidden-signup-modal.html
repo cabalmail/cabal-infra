@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<!-- The shape #1393 was reported for, reduced from stackoverflow.com/users/login:
+     a sign-in page that ships a hidden sign-up modal EARLIER in the DOM than
+     the login form it displays. Without the rendered-form filter the modal
+     wins "primary form" and the page reads as sign-up, so the extension would
+     offer an address anchored to a form the user cannot see.
+
+     The hiding is an embedded <style> block on purpose. The real page hides
+     its modal from an external stylesheet, which jsdom does not fetch, so a
+     capture of it cannot reproduce the runtime decision here - see the note in
+     corpus.test.ts. Keep the rule embedded when editing this fixture. -->
+<html><head>
+<meta name="fixture-url" content="https://app.example.com/users/login">
+<title>Log in</title>
+<style>
+  .modal { display: none; }
+</style>
+</head><body>
+<h1>Log in</h1>
+
+<div class="modal">
+  <form id="signup-modal-form" action="/users/signup" method="post">
+    <h2>Create an account</h2>
+    <input type="text" name="display-name" autocomplete="name">
+    <input type="email" name="email" autocomplete="email">
+    <input type="password" name="password" autocomplete="new-password">
+    <button type="submit">Sign up</button>
+  </form>
+</div>
+
+<form id="login-form" action="/users/login" method="post">
+  <input type="email" name="email">
+  <input type="password" name="password" autocomplete="current-password">
+  <button type="submit">Log in</button>
+</form>
+</body></html>
