@@ -39,8 +39,7 @@
     "identity",
     "history"
   ],
-  "host_permissions": [
-    "https://admin.__CONTROL_DOMAIN__/*",
-    "https://*.amazoncognito.com/*"
+  "optional_host_permissions": [
+    "https://*/*"
   ]
 }
