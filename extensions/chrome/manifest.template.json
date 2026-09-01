@@ -39,9 +39,8 @@
     "identity",
     "history"
   ],
-  "host_permissions": [
-    "https://admin.__CONTROL_DOMAIN__/*",
-    "https://*.amazoncognito.com/*"
+  "optional_host_permissions": [
+    "https://*/*"
   ],
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvHwjCQwCc0x1TSqTWbjVkH2GCeJRHg3+JFG7nF7TDOPtq7vBWEeQYkZWyDhPNHbxZEPbdowdY1X7K5BOkzKfnZUZZU3bUlh6eH7gqZWzG8zVxnR8b9VOapNMZZSlZ0OKXjNrciJdZWxr2jBZ2I+MDo0Q4VDvbzBlYErtUTxd9h35OYAqLvpLCq4pPZe+vVadN/bOhdT0jJh41SyI4gkga5+cjbVO1DobukIcPhil/k8VULo/JJwFOGuooKuoksKTreFm6TQx3vdxRP9AbMhDMtUKZzuAGFZAYvUTnrWozeNfECeuXMih2OpUsard2lzF6ft0wSB5ASfLewMgzJ1DsQIDAQAB"
 }

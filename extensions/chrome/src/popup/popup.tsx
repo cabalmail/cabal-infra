@@ -1,39 +1,40 @@
-/** Toolbar popup: session state, authorized apex domains, escape hatches. */
+/** Toolbar popup: server, session state, authorized apex domains, escape hatches. */
 
 import browser from 'webextension-polyfill';
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { TOKEN_KEY } from '@cabalmail/extension-shared/auth/tokens';
+import { requiredOrigins } from '@cabalmail/extension-shared/config/controlDomain';
 import { sendToBackground } from '@cabalmail/extension-shared/messaging/client';
 
-declare const __CONTROL_DOMAIN__: string;
 declare const __REPORT_URL__: string;
 
 // Build-time (CABALMAIL_REPORT_URL) so forks point reports at their own
 // tracker; defaults to the upstream cabal-infra issue template.
 const REPORT_URL = __REPORT_URL__;
 
-// The origins the background must reach to sign in and to serve the API.
-// Chrome grants manifest host permissions at install; Safari grants them per
-// site at the user's discretion, and a background fetch to an ungranted
-// origin has no page to prompt on -- so ask for them here, in the click
-// handler, where a permission prompt is allowed.
-const HOST_ORIGINS = [`https://admin.${__CONTROL_DOMAIN__}/*`, 'https://*.amazoncognito.com/*'];
-
 /**
- * Ask for the host permissions the flow needs. Returns null when the
- * browser gives no usable answer, in which case we proceed and let the
- * request itself report the failure. Must be the first await in a click
- * handler: Chrome rejects `permissions.request` outside a user gesture.
+ * Ask for the host permissions the flow needs, for the deployment this
+ * install is pointed at. The origins are not known at build time any more,
+ * so they are requested rather than declared: Chrome grants declared host
+ * permissions at install, Safari grants them per site at the user's
+ * discretion, and a background fetch to an ungranted origin has no page to
+ * prompt on.
+ *
+ * Returns null when the browser gives no usable answer, in which case we
+ * proceed and let the request itself report the failure. Must be the first
+ * await in a click handler: Chrome rejects `permissions.request` outside a
+ * user gesture.
  */
-async function requestHostAccess(): Promise<boolean | null> {
+async function requestHostAccess(controlDomain: string): Promise<boolean | null> {
   const perms = browser.permissions as typeof browser.permissions | undefined;
   if (!perms) return null;
+  const origins = requiredOrigins(controlDomain);
   try {
-    return await perms.request({ origins: HOST_ORIGINS });
+    return await perms.request({ origins });
   } catch {
     try {
-      return await perms.contains({ origins: HOST_ORIGINS });
+      return await perms.contains({ origins });
     } catch {
       return null;
     }
@@ -41,6 +42,9 @@ async function requestHostAccess(): Promise<boolean | null> {
 }
 
 function Popup() {
+  // undefined = still asking the background; null = not configured yet.
+  const [domain, setDomain] = useState<string | null | undefined>(undefined);
+  const [editingDomain, setEditingDomain] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [domains, setDomains] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,13 +56,20 @@ function Popup() {
     !message
       ? 'The extension hit an error it could not describe. Check the extension console.'
       : /failed to fetch|timed out/i.test(message)
-      ? `Can't reach https://admin.${__CONTROL_DOMAIN__}/ — check your network and that ` +
-        `this extension is allowed to access that site, or rebuild with ` +
-        `CABALMAIL_CONTROL_DOMAIN set if this is a dev build.`
-      : message;
+        ? `Can't reach https://admin.${domain ?? ''}/ — check your network, that this ` +
+          `extension is allowed to access that site, and that the server name is right.`
+        : message;
 
   const refresh = async () => {
     setError(null);
+    const configured = await sendToBackground({ kind: 'get-control-domain' });
+    if (configured.ok && configured.kind === 'control-domain') {
+      setDomain(configured.domain);
+      if (configured.domain === null) {
+        setSignedIn(null);
+        return;
+      }
+    }
     const state = await sendToBackground({ kind: 'get-auth-state' });
     if (state.ok && state.kind === 'auth-state') {
       setSignedIn(state.signedIn);
@@ -107,16 +118,34 @@ function Popup() {
     return () => browser.storage.onChanged.removeListener(onChanged);
   }, []);
 
+  const saveDomain = (event: Event) => {
+    event.preventDefault();
+    const value = new FormData(event.target as HTMLFormElement).get('domain');
+    void guard(async () => {
+      const result = await sendToBackground({
+        kind: 'set-control-domain',
+        domain: String(value ?? ''),
+      });
+      if (!result.ok) {
+        setError(friendly(result.message));
+        return;
+      }
+      setEditingDomain(false);
+      await refresh();
+    });
+  };
+
   const signIn = () =>
     guard(async () => {
+      if (!domain) return;
       setError(null);
       setStatus('Opening the Cabalmail sign-in page…');
-      const granted = await requestHostAccess();
+      const granted = await requestHostAccess(domain);
       if (granted === false) {
         setStatus(null);
         setError(
-          `This extension needs permission to access admin.${__CONTROL_DOMAIN__} ` +
-            `to sign in. Grant it in the browser's extension settings, then try again.`,
+          `This extension needs permission to access admin.${domain} to sign in. ` +
+            `Grant it in the browser's extension settings, then try again.`,
         );
         return;
       }
@@ -144,49 +173,86 @@ function Popup() {
       setStatus(null);
     });
 
+  const domainForm = (
+    <form onSubmit={saveDomain}>
+      <p style={{ margin: '0 0 6px' }}>Which Cabalmail server should this extension use?</p>
+      <input
+        name="domain"
+        placeholder="example.com"
+        style={{ width: '100%', boxSizing: 'border-box', marginBottom: '6px' }}
+        defaultValue={domain ?? ''}
+      />
+      <button type="submit">Use this server</button>
+    </form>
+  );
+
   return (
     <div>
       <h1 style={{ fontSize: '16px', margin: '0 0 8px' }}>Cabalmail</h1>
-      {signedIn === null && <p>Loading…</p>}
-      {signedIn === false && (
+      {domain === undefined && <p>Loading…</p>}
+      {domain !== undefined && (domain === null || editingDomain) && domainForm}
+      {domain && !editingDomain && (
         <div>
-          <p>Sign in to suggest fresh Cabalmail addresses on sign-up forms.</p>
-          <button onClick={signIn}>Sign in with Cabalmail</button>
-        </div>
-      )}
-      {signedIn === true && (
-        <div>
-          {domains && domains.length > 0 && (
+          {signedIn === null && <p>Loading…</p>}
+          {signedIn === false && (
             <div>
-              <p style={{ margin: '0 0 4px' }}>Your apex domains:</p>
-              <ul style={{ margin: '0 0 8px' }}>
-                {domains.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
+              <p>Sign in to suggest fresh Cabalmail addresses on sign-up forms.</p>
+              <button onClick={signIn}>Sign in with Cabalmail</button>
             </div>
           )}
-          {domains && domains.length === 0 && (
-            <p>
-              No apex domains are assigned to your account yet, so the
-              extension can't suggest addresses. Domains are assigned in the{' '}
-              <a href={`https://admin.${__CONTROL_DOMAIN__}/`} target="_blank" rel="noreferrer">
-                admin app
-              </a>
-              .
-            </p>
+          {signedIn === true && (
+            <div>
+              {domains && domains.length > 0 && (
+                <div>
+                  <p style={{ margin: '0 0 4px' }}>Your apex domains:</p>
+                  <ul style={{ margin: '0 0 8px' }}>
+                    {domains.map((d) => (
+                      <li key={d}>{d}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {domains && domains.length === 0 && (
+                <p>
+                  No apex domains are assigned to your account yet, so the extension
+                  can't suggest addresses. Domains are assigned in the{' '}
+                  <a href={`https://admin.${domain}/`} target="_blank" rel="noreferrer">
+                    admin app
+                  </a>
+                  .
+                </p>
+              )}
+              <button onClick={signOut}>Sign out</button>
+            </div>
           )}
-          <button onClick={signOut}>Sign out</button>
         </div>
       )}
-      {status && <p style={{ color: 'var(--cm-muted)' }}>{status}</p>}
-      {error && <p style={{ color: 'var(--cm-danger)' }}>{error}</p>}
+      {status && <p style={{ color: '#555' }}>{status}</p>}
+      {error && <p style={{ color: '#a00' }}>{error}</p>}
       <hr />
-      <p style={{ fontSize: '12px', color: 'var(--cm-muted)' }}>
-        <a href={`https://admin.${__CONTROL_DOMAIN__}/`} target="_blank" rel="noreferrer">
-          Manage addresses
-        </a>
-        {' · '}
+      <p style={{ fontSize: '12px', color: '#555' }}>
+        {domain && (
+          <>
+            <a href={`https://admin.${domain}/`} target="_blank" rel="noreferrer">
+              Manage addresses
+            </a>
+            {' · '}
+            <button
+              onClick={() => setEditingDomain(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                color: '#06c',
+                cursor: 'pointer',
+              }}
+            >
+              Change server
+            </button>
+            {' · '}
+          </>
+        )}
         <a href={REPORT_URL} target="_blank" rel="noreferrer">
           Report wrong detection
         </a>

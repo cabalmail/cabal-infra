@@ -16,18 +16,35 @@ import { clearTokens, loadTokens } from '@cabalmail/extension-shared/auth/tokens
 import { authRedirectUri, defaultDriver } from '@cabalmail/extension-shared/auth/webAuthDriver';
 import { ConfigService } from '@cabalmail/extension-shared/config/ConfigService';
 import {
+  resolveControlDomain,
+  saveControlDomain,
+} from '@cabalmail/extension-shared/config/controlDomain';
+import {
   isBackgroundRequest,
   type BackgroundRequest,
   type BackgroundResponse,
 } from '@cabalmail/extension-shared/messaging/messages';
 import type { Address, Domain } from '@cabalmail/extension-shared/models/index';
 
-declare const __CONTROL_DOMAIN__: string;
-
-const configService = new ConfigService(__CONTROL_DOMAIN__);
+/**
+ * The deployment this install talks to, resolved per call: it can be set
+ * (or changed) at runtime, and the embedded Safari build learns it from the
+ * mail app rather than from a build constant.
+ */
+async function requireControlDomain(): Promise<string> {
+  const domain = await resolveControlDomain();
+  if (!domain) {
+    throw new AuthError(
+      'flow-failed',
+      'This install has not been told which Cabalmail server to use',
+    );
+  }
+  return domain;
+}
 
 async function services(): Promise<{ auth: HostedUiAuth; api: ApiClient }> {
-  const config = await configService.get();
+  const controlDomain = await requireControlDomain();
+  const config = await new ConfigService(controlDomain).get();
   if (!config.extensionClientId || !config.authDomain) {
     throw new AuthError(
       'flow-failed',
@@ -41,7 +58,7 @@ async function services(): Promise<{ auth: HostedUiAuth; api: ApiClient }> {
     },
     // identity API on Chrome; admin-origin tab flow on Safari, which has
     // no identity API at all (see webAuthDriver.ts).
-    defaultDriver(__CONTROL_DOMAIN__),
+    defaultDriver(controlDomain),
   );
   return { auth, api: new ApiClient(config.apiUrl, auth) };
 }
@@ -62,6 +79,16 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
   // build was made without CABALMAIL_CONTROL_DOMAIN).
   if (request.kind === 'get-auth-state') {
     return { ok: true, kind: 'auth-state', signedIn: (await loadTokens()) !== null };
+  }
+  if (request.kind === 'get-control-domain') {
+    return { ok: true, kind: 'control-domain', domain: await resolveControlDomain() };
+  }
+  if (request.kind === 'set-control-domain') {
+    await saveControlDomain(request.domain);
+    // Anything cached belongs to the previous deployment.
+    domainsCache = null;
+    invalidateAddresses();
+    return { ok: true, kind: 'control-domain', domain: await resolveControlDomain() };
   }
   if (request.kind === 'sign-out') {
     await clearPendingFlow();
@@ -135,7 +162,6 @@ browser.runtime.onMessage.addListener(async (message: unknown): Promise<Backgrou
 // popup that started it is long gone by then, so completion has to be an
 // event, not the tail of a promise.
 
-const AUTH_REDIRECT_PREFIX = authRedirectUri(__CONTROL_DOMAIN__);
 /** Guards against onUpdated firing twice for the same navigation. */
 const completingTabs = new Set<number>();
 
@@ -163,11 +189,10 @@ function completeSignIn(tabId: number, url: string): void {
 // window, close the redirector tab, and scrub the history entry. Fragments
 // never reach the server, so the target is never logged upstream.
 
-const REDIRECTOR_PREFIX = `https://admin.${__CONTROL_DOMAIN__}/private-link`;
 const BLOCKED_SCHEMES = /^\s*(javascript|data|file|about|blob|vbscript):/i;
 
-export function extractPrivateLinkTarget(url: string): string | null {
-  if (!url.startsWith(REDIRECTOR_PREFIX)) return null;
+export function extractPrivateLinkTarget(url: string, controlDomain: string): string | null {
+  if (!url.startsWith(`https://admin.${controlDomain}/private-link`)) return null;
   const hash = new URL(url).hash.slice(1);
   if (!hash) return null;
   let target: string;
@@ -191,13 +216,17 @@ export function extractPrivateLinkTarget(url: string): string | null {
 browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (!changeInfo.url) return;
   const url = changeInfo.url;
-  if (url.startsWith(AUTH_REDIRECT_PREFIX)) {
-    completeSignIn(tabId, url);
-    return;
-  }
-  const target = extractPrivateLinkTarget(url);
-  if (!target) return;
   void (async () => {
+    // Both targets live on the admin origin of whichever deployment this
+    // install is configured for, so the domain has to be read per event.
+    const controlDomain = await resolveControlDomain();
+    if (!controlDomain) return;
+    if (url.startsWith(authRedirectUri(controlDomain))) {
+      completeSignIn(tabId, url);
+      return;
+    }
+    const target = extractPrivateLinkTarget(url, controlDomain);
+    if (!target) return;
     try {
       await browser.windows.create({ incognito: true, url: target });
       await browser.tabs.remove(tabId);
