@@ -91,11 +91,35 @@ def main():
         sys.exit(f'no registered App ID matches {bundle_id!r} - register it first')
     bundle = matches[0]
 
-    certs = api(token, '/v1/certificates?filter[certificateType]=DISTRIBUTION&limit=50')['data']
+    # A profile can only carry certificates of its own distribution family:
+    # Apple Distribution for App Store profiles, Developer ID Application
+    # for MAC_APP_DIRECT. The G2 flavor is the post-2021 Developer ID
+    # sub-CA; profiles accept either, so both count. Fetched unfiltered and
+    # matched client-side rather than via filter[certificateType], so an
+    # enum-name mismatch surfaces as a clear "none eligible" message
+    # instead of an opaque API 400.
+    wanted = (
+        {'DEVELOPER_ID_APPLICATION', 'DEVELOPER_ID_APPLICATION_G2'}
+        if profile_type == 'MAC_APP_DIRECT'
+        else {'DISTRIBUTION', 'MAC_APP_DISTRIBUTION'}
+    )
+    all_certs = api(token, '/v1/certificates?limit=200')['data']
+    certs = [c for c in all_certs
+             if c['attributes']['certificateType'] in wanted]
     if not certs:
-        sys.exit('no Apple Distribution certificates on the team')
+        have = sorted({c['attributes']['certificateType'] for c in all_certs})
+        sys.exit(
+            f'no certificate on the team matches {profile_type} '
+            f'(need one of {sorted(wanted)}; team has {have}). For a missing '
+            'Developer ID Application certificate: only the Account Holder '
+            'can create one, and a NEW cert means a new .p12 export and '
+            're-minting every Developer ID profile against it.')
+    for cert in certs:
+        attrs = cert['attributes']
+        print(f"  using certificate {attrs['certificateType']} "
+              f"(expires {attrs.get('expirationDate', '?')[:10]})")
     print(f"bundleId {bundle['id']} ({bundle_id}); "
-          f'{len(certs)} distribution certificate(s) attached')
+          f'{len(certs)} certificate(s) attached')
 
     profile = api(token, '/v1/profiles', {
         'data': {
