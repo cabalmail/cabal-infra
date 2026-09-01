@@ -8,10 +8,10 @@
 | 2. CI/CD | **Complete** (2026-08-30). `extensions.yml`: lint/test/build, unsigned Safari build, gated Chrome Web Store draft upload, and gated signed macOS ASC upload (parks warn-green until the two extension profile secrets exist). Draft-only Chrome uploads, not the trustedTesters publish — see docs/browser-extension.md, "Publishing to the Chrome Web Store" |
 | 3. Backend, auth & API client | **Stage-verified** (2026-08-30), all paths: create-pending, confirm + 409, procmail rule regen, live-mail clear-on-receive (4s), no-op on confirmed addresses, and a backdated reap (row + DNS removed, metric emitted, reconfigure fan-out) |
 | 4. Form detection | **Engine complete** with synthetic seed corpus + snapshot tool; real-site corpus capture pending |
-| 5. Suggest flow | **Code complete** (unit-tested); in-browser verification pending |
-| 6. Adopt flow | **Code complete** (unit-tested); in-browser verification pending |
+| 5. Suggest flow | **Code complete** (unit-tested); exercised in Safari during ordinary use (2026-08-31). No systematic parity pass yet — see Phase 8.5 |
+| 6. Adopt flow | **Code complete** (unit-tested); exercised in Safari during ordinary use (2026-08-31). No systematic parity pass yet — see Phase 8.5 |
 | 7. Private-link handoff | **Extension + redirector page complete**; Apple-client menu row not started |
-| 8. Platform targets & distribution | **Partial.** Safari sign-in verified end-to-end on a local unpacked build (2026-08-30): tab flow opens the Hosted UI, the background completes the exchange from the `/extension-auth` redirect and closes the tab. Stores, iOS host, and the suggest/adopt flows' in-browser parity testing still pending |
+| 8. Platform targets & distribution | **Partial.** Safari sign-in verified end-to-end (2026-08-30) and the macOS App Store upload lands cleanly and attaches to the branch's TestFlight group (2026-08-31, after three rounds of App Store validation: appex layout, host-app icon, manifest `icons`). Chrome listing is in its first review. iOS/iPadOS/visionOS host (8.3) and parity testing (8.5) not started |
 
 Building, configuring, verifying, and publishing the extension are documented in [docs/browser-extension.md](../browser-extension.md); this plan keeps the design rationale and the implementation record.
 
@@ -778,6 +778,12 @@ Document any per-platform divergences (popover positioning bugs, scroll behavior
 7. **What happens when `listMyDomains()` returns an empty array?** The user has no authorized apex domains. The popover should explain this and link to the admin app where domains are assigned. The extension is not the right place to handle the empty-state case beyond a clear explanation.
 8. **Visibility of `pending` addresses in the admin app.** A `pending=true` address showing up in the user's address list in the admin app could be confusing -- "I never created this." Options: hide pending addresses from the list entirely, show them with a "pending" badge, or expose a filter. Recommend showing with a badge so the user has a way to manually clean up an orphan if needed. Coordinate with the existing admin app UI in a small follow-up PR.
 9. **Where does the Safari extension live -- the standalone host app (Phase 8) or embedded in the existing Cabalmail apps?** The private-link handoff (Phase 7) nudges toward embedding: an app can only query enablement (`SFSafariExtensionManager.getStateOfSafariExtension`) for an extension in its own bundle, one install covers both mail and extension, and the opaque-token fallback (if the fragment approach fails) needs a shared App Group anyway -- trivially available when the extension and mail app are one bundle. The costs are release coupling (extension updates ride mail-app releases and vice versa) and a larger review surface on every mail release. Default remains the standalone host with a preference-gated menu row; decide before Phase 7 implementation starts.
+
+## Planned but not built
+
+Recorded so a later reader does not mistake these for unfinished work:
+
+- **`EmbeddedSrpAuth.ts`, the dev-only SRP fallback** (Phase 3.3, Open Question 2). Its purpose was to unblock local development before the Hosted UI app client existed. The Hosted UI client was provisioned by Terraform before the auth code landed, so the fallback never had a window in which it was useful. Building it now would add a second auth path — and a second place for a password to be typed — for no remaining benefit.
 
 ## Settled design decisions worth noting
 
