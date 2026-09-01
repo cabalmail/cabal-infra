@@ -78,7 +78,7 @@ interface TrackedAddress {
  * box, and jsdom does no layout at all, which would read every form under
  * test as hidden.
  */
-function isRendered(form: HTMLFormElement, document: Document): boolean {
+export function isRendered(form: HTMLFormElement, document: Document): boolean {
   const view = document.defaultView;
   if (!view) return true;
   const visibility = view.getComputedStyle(form).visibility;
