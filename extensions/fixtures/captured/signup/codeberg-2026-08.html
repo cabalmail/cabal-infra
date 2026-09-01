@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<!-- captured from https://codeberg.org/user/sign_up on 2026-09-01 -->
+<html lang="en-US" data-theme="codeberg-auto"><head>
+<meta name="fixture-url" content="https://codeberg.org/user/sign_up">
+<meta name="fixture-title" content="Register - Codeberg.org">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	
+	<title>Register - Codeberg.org</title>
+	<link rel="manifest" href="/manifest.json">
+	<meta name="author" content="Codeberg">
+	<meta name="description" content="Codeberg is a non-profit community-led organization that aims to help free and open source projects prosper by giving them a safe and friendly home.">
+	<meta name="keywords" content="git,non-profit,foss,oss,free,software,open,source,code,hosting">
+	<meta name="referrer" content="same-origin">
+
+
+	<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+	<link rel="alternate icon" href="/assets/img/favicon.png" type="image/png">
+
+	
+<script></script>
+<script src="/assets/js/webcomponents.js?v=16.0.0-dev-722-8571d12f~gitea-1.22.0"></script>
+
+	
+
+	
+	<meta property="og:title" content="Register">
+
+
+	<meta property="og:url" content="https://codeberg.org//user/sign_up">
+
+
+	<meta property="og:type" content="website">
+
+
+		<meta property="og:image" content="/assets/img/logo.png">
+
+<meta property="og:site_name" content="Codeberg.org">
+
+	<link rel="stylesheet" href="/assets/css/index.css?v=16.0.0-dev-722-8571d12f~gitea-1.22.0">
+<link rel="stylesheet" href="/assets/css/theme-codeberg-auto.css?v=16.0.0-dev-722-8571d12f~gitea-1.22.0">
+
+	
+<style>.htmx-indicator{opacity:0;visibility: hidden} .is-loading .htmx-indicator, .is-loading.htmx-indicator{opacity:1;visibility: visible;transition: opacity 200ms ease-in}</style></head>
+<body class="" hx-swap="outerHTML" hx-ext="morph" hx-push-url="false">
+	
+	<noscript>
+		<style>
+			#tou-announcement { display: flex !important; justify-content: center; }
+			#tou-announcement > :first-child, #tou-announcement > :last-child { display: none; }
+		</style>
+	</noscript>
+	<div id="tou-announcement" class="">
+		<div style="width: 108.3px"></div>
+		<div>
+		<span>Codeberg has changed its Terms of Use. <a href="https://codeberg.org/Codeberg/org/compare/17bdb39b0c1ecd0e423f3ba592650ce57fcdfbf5..71149c7fc95ccfeae36109b5cddca339e4aa1473?files=TermsOfUse.md#diff-d760d688bb9b929b62db808bfc76abe4493d095a">View complete changes</a>.</span>
+		<ol>
+			<li>LLM-generated content is being restricted. <a href="https://codeberg.org/Codeberg/org/commit/71149c7fc95ccfeae36109b5cddca339e4aa1473">View change</a> or <a href="https://blog.codeberg.org/protecting-our-floss-commons-from-llms.html">read the blog post</a></li>
+			<li>Cryptocurrency projects are no longer allowed. <a href="https://codeberg.org/Codeberg/org/commit/f383b648fd733ab88083dc390b91e77cd7589980">View change</a></li>
+		</ol>
+		</div>
+		<button class="ui secondary button small"><svg viewBox="0 0 16 16" class="svg octicon-x" aria-hidden="true" width="16" height="16"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.75.75 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.75.75 0 0 1-.734-.215L8 9.06l-3.22 3.22a.75.75 0 0 1-1.042-.018.75.75 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06"></path></svg> Dismiss</button>
+	</div>
+	<div class="full height">
+		<noscript>
+			<div class="tw-ml-2 tw-mr-2 tw-text-center tw-text-text-light-2">This website requires JavaScript.</div>
+		</noscript>
+
+		
+
+		
+			
+
+
+<nav id="navbar" aria-label="Navigation bar">
+	<div class="navbar-left ui secondary menu">
+		
+		<a class="item" id="navbar-logo" href="/" aria-label="Home">
+			<div class="branding" aria-hidden="true">
+				<img width="30" height="30" loading="lazy" class="light-logo" src="/assets/img/svg/cb-logo.svg" alt="Logo">
+				<img width="30" height="30" loading="lazy" class="dark-logo" src="/assets/img/svg/cb-logo-mono.svg" alt="Logo">
+			</div>
+		</a>
+
+		
+		<div class="ui secondary menu item navbar-mobile-right only-mobile">
+			
+			<button class="item tw-w-auto ui icon mini button tw-p-2 tw-m-0" id="navbar-expand-toggle" aria-label="Toggle menu"><svg viewBox="0 0 16 16" class="svg octicon-three-bars" aria-hidden="true" width="16" height="16"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75m0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75M1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5"></path></svg></button>
+		</div>
+
+		
+		
+			<a class="item" href="/explore/repos">Explore</a>
+		
+
+		
+			<a class="item" target="_blank" href="https://docs.codeberg.org/getting-started/what-is-codeberg/#what-is-codeberg-e.v.%3F">About</a>
+			<a class="item" target="_blank" href="https://docs.codeberg.org/getting-started/faq/">FAQ</a>
+			<a class="item" target="_blank" rel="noopener noreferrer" href="https://docs.codeberg.org">Help</a>
+		
+
+		<a class="item donation-pretty" href="https://donate.codeberg.org">Donate</a>
+	</div>
+
+	
+	<div class="navbar-right ui secondary menu">
+		
+			
+				<a class="item active" href="/user/sign_up">
+					<svg viewBox="0 0 16 16" class="tw-mr-1 svg octicon-person" aria-hidden="true" width="16" height="16"><path d="M10.561 8.073a6 6 0 0 1 3.432 5.142.75.75 0 1 1-1.498.07 4.5 4.5 0 0 0-8.99 0 .75.75 0 0 1-1.498-.07 6 6 0 0 1 3.431-5.142 3.999 3.999 0 1 1 5.123 0M10.5 5a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0"></path></svg>
+					<span>Register</span>
+				</a>
+			
+			<a class="item" rel="nofollow" href="/user/login?redirect_to=%2fuser%2fsign_up">
+				<svg viewBox="0 0 16 16" class="tw-mr-1 svg octicon-sign-in" aria-hidden="true" width="16" height="16"><path d="M2 2.75C2 1.784 2.784 1 3.75 1h2.5a.75.75 0 0 1 0 1.5h-2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h2.5a.75.75 0 0 1 0 1.5h-2.5A1.75 1.75 0 0 1 2 13.25Zm6.56 4.5h5.69a.75.75 0 0 1 0 1.5H8.56l1.97 1.97a.749.749 0 0 1-.326 1.275.75.75 0 0 1-.734-.215L6.22 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.749.749 0 0 1 1.275.326.75.75 0 0 1-.215.734Z"></path></svg>
+				<span>Sign in</span>
+			</a>
+		
+	</div>
+</nav>
+
+		
+
+
+
+<div role="main" aria-label="Register" class="page-content user signin">
+	<div class="ui middle very relaxed page grid">
+		<div class="column tw-flex tw-flex-col tw-gap-4 tw-max-w-2xl tw-m-auto">
+			<div class="ui container fluid">
+	<h4 class="ui top attached header center">
+		
+			Register
+		
+	</h4>
+	<div class="ui attached segment">
+		<form class="ui form" action="/user/sign_up" method="post">
+			
+			
+
+
+
+
+	<div id="flash-message" hx-swap-oob="true"></div>
+
+
+			
+			
+				
+
+				<div class="required field " data-field-patched="true">
+					<label for="user_name">Username</label>
+					<input id="user_name" type="text" name="user_name" value="" autofocus="" required="" autocorrect="off" autocapitalize="none" dir="auto">
+				</div>
+				<div class="required field " data-field-patched="true">
+					<label for="email">Email address</label>
+					<input id="email" name="email" type="email" value="" required="" dir="auto">
+				</div>
+
+				
+					<div class="required field " data-field-patched="true">
+						<label for="password">Password</label>
+						<input id="password" name="password" type="password" value="" autocomplete="new-password" required="" dir="auto">
+					</div>
+					<div class="required field " data-field-patched="true">
+						<label for="retype">Confirm password</label>
+						<input id="retype" name="retype" type="password" value="" autocomplete="new-password" required="" dir="auto">
+					</div>
+				
+
+				
+	<div class="required field " data-field-patched="true">
+		<label for="captcha">
+			CAPTCHA:
+			<span id="captcha-aid">Please enter the following number or word into the captcha field:</span>
+		</label>
+		<div class="inline field tw-text-center" aria-hidden="true">
+			<input type="hidden" name="img-captcha-id" value="AREb2qrdPU2ITqOJhbjt">
+			<img alt="" style="transform: scaleX(-1);background-color: white" onclick="this.src=`/captcha/AREb2qrdPU2ITqOJhbjt.png?reload=${Date.now()}`" class="captcha-img" src="/captcha/AREb2qrdPU2ITqOJhbjt.png">
+		</div>
+		
+		<input id="captcha" name="img-captcha-response" autocomplete="off" aria-labelledby="captcha-intro captcha-aid codeberg-service captcha-morehelp" required="" dir="auto">
+	</div>
+
+
+
+				<div class="ui message" style="text-align: start;" tabindex="0" aria-labelledby="consent">
+					<p id="consent">By registering for a Codeberg account, you consent to our <a href="https://codeberg.org/codeberg/org/src/PrivacyPolicy.md">Privacy Policy</a> and agree to our <a href="https://codeberg.org/codeberg/org/src/TermsOfUse.md">Terms of Use</a>.</p>
+				</div>
+
+				<div class="ui message" style="text-align: start; color:var(--color-warning-text);" tabindex="0" aria-labelledby="warning">
+					<p id="warning">Using Codeberg to spread SEO spam, malware, links to IPTV services ("tvbox") or pirated content <b>will</b> result in an immediate ban with <b>no prior warning</b>.</p>
+				</div>
+
+
+				<div class="inline field">
+					<button class="ui primary button tw-w-full">
+						
+							Register account
+						
+					</button>
+				</div>
+				<div class="ui message" style="text-align: start;" tabindex="0" aria-labelledby="captcha-intro captcha-aid codeberg-service captcha-morehelp">
+					
+					<p id="captcha-intro">This page currently has a captcha required to complete the registration.</p>
+					<p id="captcha-plan">We are <a href="https://codeberg.org/Codeberg/Community/issues/1797">planning to drop the captcha</a> by improving moderation and spam detection. (state: March 2025).</p>
+					<p id="captcha-morehelp">If you have difficulties solving the captcha, please contact us at <a href="mailto:contact@codeberg.org">contact@codeberg.org</a> in the meantime and let us know your preferred account name.</p>
+				</div>
+			
+
+			
+
+	<div class="divider divider-text">
+		or
+	</div>
+
+
+<details>
+	<summary>Sign in with ...</summary>
+<div id="oauth2-login-navigator" class="tw-py-1">
+	<div class="tw-flex tw-flex-col tw-justify-center">
+		<div id="oauth2-login-navigator-inner" class="tw-flex tw-flex-col tw-flex-wrap tw-items-center tw-gap-2">
+			
+				<a class="github ui button tw-flex tw-items-center tw-justify-center tw-py-2 tw-w-full oauth-login-link" href="/user/oauth2/GitHub">
+					<svg viewBox="0 0 16 16" class="tw-mr-2 svg octicon-mark-github" aria-hidden="true" width="28" height="28"><path d="M8 0c4.42 0 8 3.58 8 8a8.01 8.01 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27s-1.36.09-2 .27c-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"></path></svg>
+					Sign in with GitHub
+				</a>
+			
+				<a class="gitlab ui button tw-flex tw-items-center tw-justify-center tw-py-2 tw-w-full oauth-login-link" href="/user/oauth2/GitLab">
+					<svg viewBox="0 0 32 32" class="tw-mr-2 svg gitea-gitlab" aria-hidden="true" width="28" height="28"><path fill="#e24329" d="m31.462 12.779-.045-.115-4.35-11.35a1.14 1.14 0 0 0-.447-.541 1.16 1.16 0 0 0-1.343.071c-.187.15-.322.356-.386.587l-2.94 9.001h-11.9l-2.941-9a1.14 1.14 0 0 0-1.045-.84 1.15 1.15 0 0 0-1.13.72L.579 12.68l-.045.113a8.09 8.09 0 0 0 2.68 9.34l.016.012.038.03 6.635 4.967 3.28 2.484 1.994 1.51a1.35 1.35 0 0 0 1.627 0l1.994-1.51 3.282-2.484 6.673-4.997.018-.013a8.09 8.09 0 0 0 2.69-9.352Z"></path><path fill="#fc6d26" d="m31.462 12.779-.045-.115a14.75 14.75 0 0 0-5.856 2.634l-9.553 7.24L22.1 27.14l6.673-4.997.019-.013a8.09 8.09 0 0 0 2.67-9.352Z"></path><path fill="#fca326" d="m9.908 27.14 3.275 2.485 1.994 1.51a1.35 1.35 0 0 0 1.627 0l1.994-1.51 3.282-2.484s-2.835-2.14-6.092-4.603z"></path><path fill="#fc6d26" d="M6.435 15.305A14.7 14.7 0 0 0 .58 12.672l-.045.113a8.09 8.09 0 0 0 2.68 9.347l.016.012.038.03 6.635 4.967 6.105-4.603-9.573-7.233Z"></path></svg>
+					Sign in with GitLab
+				</a>
+			
+			
+		</div>
+	</div>
+</div>
+<div class="ui message" style="text-align: start;" tabindex="0" aria-labelledby="consent">
+	<p id="consent">By registering for a Codeberg account, you consent to our <a href="https://codeberg.org/codeberg/org/src/PrivacyPolicy.md">Privacy Policy</a> and agree to our <a href="https://codeberg.org/codeberg/org/src/TermsOfUse.md">Terms of Use</a>.</p>
+</div>
+
+</details>
+
+
+
+		</form>
+	</div>
+</div>
+
+
+<div class="ui container fluid">
+	<div class="ui attached segment header top tw-flex tw-flex-col tw-items-center">
+		<div class="field">
+			Already have an account? <a href="/user/login">Sign in now!</a>
+		</div>
+	</div>
+</div>
+
+
+		</div>
+	</div>
+</div>
+
+
+	
+
+	</div>
+
+	
+
+	<footer class="page-footer" role="group" aria-label="Footer">
+	<div class="grid" aria-label="Links">
+		<div class="not-mobile">
+			<div class="branding" aria-hidden="true">
+				<img class="light-logo" loading="lazy" src="/assets/img/svg/cb-logo.svg" alt="Logo">
+				<img class="dark-logo" loading="lazy" src="/assets/img/svg/cb-logo-mono.svg" alt="Logo">
+			</div>
+			<div class="powered-by">
+				<div class="title">Powered by </div>
+				<a target="_blank" rel="noopener noreferrer" href="https://forgejo.org" aria-label="Forgejo">
+					<div class="branding" aria-hidden="true">
+						<img class="light-logo" loading="lazy" src="/assets/img/svg/forgejo-wordmark.svg" alt="Forgejo logo">
+						<img class="dark-logo" loading="lazy" src="/assets/img/svg/forgejo-wordmark-mono.svg" alt="Forgejo logo">
+					</div>
+				</a>
+				with <a class="tw-mt-0" href="/Codeberg-Infrastructure/forgejo" target="_blank">modifications</a>
+			</div>
+		</div>
+		<div>
+			<b id="codeberg-codeberg">Codeberg</b>
+			<ul>
+				<li><a href="https://blog.codeberg.org" target="_blank">Blog</a></li>
+				<li><a href="https://docs.codeberg.org" target="_blank">Documentation</a></li>
+				<li><a href="/Codeberg/Community/issues">Community issues</a></li>
+				
+				<li><a href="/Codeberg/Contributing">Contributing</a>
+				</li><li><a href="https://docs.codeberg.org/contact/#abuse" target="_blank">Report abuse</a>
+			</li></ul>
+		</div>
+		<div>
+			<b id="codeberg-association">Association</b>
+			<ul>
+				<li><a href="https://docs.codeberg.org/getting-started/what-is-codeberg/#what-is-codeberg-e.v.%3F" target="_blank">Who are we?</a></li>
+				<li><a href="https://codeberg.org/codeberg/org/src/en/bylaws.md" target="_blank">Bylaws / Satzung</a></li>
+				<li><a href="https://docs.codeberg.org/improving-codeberg/donate/" target="_blank">Donate</a></li>
+				<li><a href="https://join.codeberg.org" target="_blank">Join / Support</a></li>
+				<li><a href="https://docs.codeberg.org/contact/" target="_blank">Contact</a></li>
+			</ul>
+		</div>
+		<div>
+			<b id="codeberg-service">Services</b>
+			<ul>
+				<li><a href="https://codeberg.page" target="_blank">Codeberg Pages</a></li>
+				<li><a href="https://translate.codeberg.org" target="_blank">Codeberg Translate</a></li>
+				<li><a href="https://docs.codeberg.org/ci/#using-codeberg's-instance-of-woodpecker-ci" target="_blank">Woodpecker CI</a></li>
+				
+					<li><a href="/api/swagger">Forgejo API</a></li>
+				
+				<li><a href="https://status.codeberg.eu" target="_blank">Status page</a></li>
+			</ul>
+		</div>
+		<div>
+			<b id="codeberg-legal">Legal</b>
+			<ul>
+				<li><a href="https://codeberg.org/codeberg/org/src/Imprint.md" target="_blank">Imprint / Impressum</a></li>
+				<li><a href="/codeberg/org/src/PrivacyPolicy.md" target="_blank">Privacy Policy</a></li>
+				<li><a href="/assets/licenses.txt">Licenses</a></li>
+				<li><a href="/codeberg/org/src/TermsOfUse.md">Terms of Use</a></li>
+			</ul>
+		</div>
+	</div>
+	<div class="footer-bottom-grid">
+		<div class="footer-social">
+			<a href="https://social.anoxinon.de/@Codeberg" target="_blank" rel="noopener noreferrer">Mastodon</a> |
+			<a href="matrix:r/codeberg-space:matrix.org?action=join" target="_blank" rel="noopener noreferrer">Matrix Space</a>
+			<a href="https://matrix.to/#/#codeberg-space:matrix.org" target="_blank" rel="noopener noreferrer">(Web link)</a>
+			<button class="btn interact-fg tw-p-2 tw-inline" data-clipboard-text="#codeberg-space:matrix.org" data-tooltip-content="Copy to clipboard" aria-label="Copy to clipboard"><svg viewBox="0 0 16 16" class="svg octicon-copy" aria-hidden="true" width="14" height="14"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button>
+			<p class="only-mobile">
+				<a target="_blank" rel="noopener noreferrer" href="https://forgejo.org">Powered by Forgejo</a>
+			</p>
+		</div>
+		<div class="footer-language-switch">
+			<div class="ui language bottom floating slide up dropdown link item button" tabindex="0" role="menu" aria-haspopup="" aria-controls="_aria_auto_id_0" aria-expanded="false">
+				<svg viewBox="0 0 16 16" class="svg octicon-globe" aria-hidden="true" width="16" height="16"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0M5.78 8.75a9.64 9.64 0 0 0 1.363 4.177q.383.64.857 1.215c.245-.296.551-.705.857-1.215A9.64 9.64 0 0 0 10.22 8.75Zm4.44-1.5a9.64 9.64 0 0 0-1.363-4.177c-.307-.51-.612-.919-.857-1.215a10 10 0 0 0-.857 1.215A9.64 9.64 0 0 0 5.78 7.25Zm-5.944 1.5H1.543a6.51 6.51 0 0 0 4.666 5.5q-.184-.271-.352-.552c-.715-1.192-1.437-2.874-1.581-4.948m-2.733-1.5h2.733c.144-2.074.866-3.756 1.58-4.948q.18-.295.353-.552a6.51 6.51 0 0 0-4.666 5.5m10.181 1.5c-.144 2.074-.866 3.756-1.58 4.948q-.18.296-.353.552a6.51 6.51 0 0 0 4.666-5.5Zm2.733-1.5a6.51 6.51 0 0 0-4.666-5.5q.184.272.353.552c.714 1.192 1.436 2.874 1.58 4.948Z"></path></svg>
+				<div class="text">English</div>
+				<div class="menu language-menu" tabindex="-1" id="_aria_auto_id_0" role="">
+					
+						<a lang="id-ID" data-url="/?lang=id-ID" class="item " id="_aria_auto_id_1" role="menuitem" tabindex="-1">Bahasa Indonesia</a>
+					
+						<a lang="da" data-url="/?lang=da" class="item " id="_aria_auto_id_2" role="menuitem" tabindex="-1">Dansk</a>
+					
+						<a lang="de-DE" data-url="/?lang=de-DE" class="item " id="_aria_auto_id_3" role="menuitem" tabindex="-1">Deutsch</a>
+					
+						<a lang="en-US" data-url="/?lang=en-US" class="item active selected" id="_aria_auto_id_4" role="menuitem" tabindex="-1">English</a>
+					
+						<a lang="es-ES" data-url="/?lang=es-ES" class="item " id="_aria_auto_id_5" role="menuitem" tabindex="-1">Español</a>
+					
+						<a lang="eo" data-url="/?lang=eo" class="item " id="_aria_auto_id_6" role="menuitem" tabindex="-1">Esperanto</a>
+					
+						<a lang="fil" data-url="/?lang=fil" class="item " id="_aria_auto_id_7" role="menuitem" tabindex="-1">Filipino</a>
+					
+						<a lang="fr-FR" data-url="/?lang=fr-FR" class="item " id="_aria_auto_id_8" role="menuitem" tabindex="-1">Français</a>
+					
+						<a lang="it-IT" data-url="/?lang=it-IT" class="item " id="_aria_auto_id_9" role="menuitem" tabindex="-1">Italiano</a>
+					
+						<a lang="lv-LV" data-url="/?lang=lv-LV" class="item " id="_aria_auto_id_10" role="menuitem" tabindex="-1">Latviešu</a>
+					
+						<a lang="hu-HU" data-url="/?lang=hu-HU" class="item " id="_aria_auto_id_11" role="menuitem" tabindex="-1">Magyar nyelv</a>
+					
+						<a lang="nl-NL" data-url="/?lang=nl-NL" class="item " id="_aria_auto_id_12" role="menuitem" tabindex="-1">Nederlands</a>
+					
+						<a lang="nds" data-url="/?lang=nds" class="item " id="_aria_auto_id_13" role="menuitem" tabindex="-1">Plattdüütsch</a>
+					
+						<a lang="pl-PL" data-url="/?lang=pl-PL" class="item " id="_aria_auto_id_14" role="menuitem" tabindex="-1">Polski</a>
+					
+						<a lang="pt-PT" data-url="/?lang=pt-PT" class="item " id="_aria_auto_id_15" role="menuitem" tabindex="-1">Português de Portugal</a>
+					
+						<a lang="pt-BR" data-url="/?lang=pt-BR" class="item " id="_aria_auto_id_16" role="menuitem" tabindex="-1">Português do Brasil</a>
+					
+						<a lang="sl" data-url="/?lang=sl" class="item " id="_aria_auto_id_17" role="menuitem" tabindex="-1">Slovenščina</a>
+					
+						<a lang="fi-FI" data-url="/?lang=fi-FI" class="item " id="_aria_auto_id_18" role="menuitem" tabindex="-1">Suomi</a>
+					
+						<a lang="sv-SE" data-url="/?lang=sv-SE" class="item " id="_aria_auto_id_19" role="menuitem" tabindex="-1">Svenska</a>
+					
+						<a lang="tr-TR" data-url="/?lang=tr-TR" class="item " id="_aria_auto_id_20" role="menuitem" tabindex="-1">Türkçe</a>
+					
+						<a lang="cs-CZ" data-url="/?lang=cs-CZ" class="item " id="_aria_auto_id_21" role="menuitem" tabindex="-1">Čeština</a>
+					
+						<a lang="el-GR" data-url="/?lang=el-GR" class="item " id="_aria_auto_id_22" role="menuitem" tabindex="-1">Ελληνικά</a>
+					
+						<a lang="bg" data-url="/?lang=bg" class="item " id="_aria_auto_id_23" role="menuitem" tabindex="-1">Български</a>
+					
+						<a lang="ru-RU" data-url="/?lang=ru-RU" class="item " id="_aria_auto_id_24" role="menuitem" tabindex="-1">Русский</a>
+					
+						<a lang="uk-UA" data-url="/?lang=uk-UA" class="item " id="_aria_auto_id_25" role="menuitem" tabindex="-1">Українська</a>
+					
+						<a lang="fa-IR" data-url="/?lang=fa-IR" class="item " id="_aria_auto_id_26" role="menuitem" tabindex="-1">فارسی</a>
+					
+						<a lang="ja-JP" data-url="/?lang=ja-JP" class="item " id="_aria_auto_id_27" role="menuitem" tabindex="-1">日本語</a>
+					
+						<a lang="zh-CN" data-url="/?lang=zh-CN" class="item " id="_aria_auto_id_28" role="menuitem" tabindex="-1">简体中文</a>
+					
+						<a lang="zh-TW" data-url="/?lang=zh-TW" class="item " id="_aria_auto_id_29" role="menuitem" tabindex="-1">繁體中文（台灣）</a>
+					
+						<a lang="zh-HK" data-url="/?lang=zh-HK" class="item " id="_aria_auto_id_30" role="menuitem" tabindex="-1">繁體中文（香港）</a>
+					
+						<a lang="ko-KR" data-url="/?lang=ko-KR" class="item " id="_aria_auto_id_31" role="menuitem" tabindex="-1">한국어</a>
+					
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="tw-hidden">
+		
+			Page: 6ms<br>
+			Template: 4ms
+		
+	</div>
+  
+	
+		<div class="symbol-of-tolerance" role="img"></div>
+	
+</footer>
+
+
+	<script src="/assets/js/index.js?v=16.0.0-dev-722-8571d12f~gitea-1.22.0" onerror="alert('Failed to load asset files from {path}. Please make sure the asset files can be accessed.'.replace('{path}', this.src))"></script>
+
+	
+
+
+
+</body></html>
