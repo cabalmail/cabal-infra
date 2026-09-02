@@ -331,10 +331,12 @@ Where the work stands, so it does not have to be reverse-engineered from git. Ev
 | Phase | Status |
 | --- | --- |
 | 1. Workspace scaffolding | **Complete** (2026-08-08). All five items shipped; `cargo run -p cabalmail-gtk` opens a window. |
-| 2. Build pipeline, packaging & test harness | **In progress.** Items 1 and 4 done, item 2 done for the Ubuntu containers. Items 3, 5, 6 outstanding. |
+| 2. Build pipeline, packaging & test harness | **In progress.** Items 1, 4, and 6 done; item 2 done for the Ubuntu containers. Items 3 and 5 outstanding. |
 | 3-8 | Not started. |
 
 > **Paused (2026-08-24): AUR publication.** The AUR is closed to new account registrations, so the Arch package has no route to publication. Item 4's work is written, tested, and committed on the branch `claude/linux-phase-2-arch-packaging`, which is **not** pushed and has **no PR open** - deliberately, until the AUR question resolves. Item 5's AUR step was already a manual, human-gated act; it is now blocked outright. Nothing else in Phase 2 depends on either, so items 3 and 6 can proceed.
+
+> **Update (2026-09-02):** Item 4 merged - `5973542b` is on `stage`, `linux/packaging/arch/PKGBUILD` is in the tree, and `package-arch` runs on every push. The paragraph above is the record of a hold that has since lifted for the packaging itself; what remains blocked is item 5's AUR upload, which is the only step that needs an AUR account.
 
 ---
 
@@ -475,7 +477,7 @@ Anything in this table that ends up needing a `gtk::Widget` has been modelled wr
 
 ### 4. Arch packaging
 
-**Status:** Written and committed 2026-08-24 on `claude/linux-phase-2-arch-packaging`, **not merged** - see the AUR pause under Progress. `cargo xtask package arch` stages the PKGBUILD against the working tree, builds it with `makepkg`, and lints both with `namcap`; a `package-arch` job runs it in an `archlinux:base-devel` container.
+**Status:** Shipped 2026-08-24 (`5973542b`). Publication to the AUR is still paused - see the note under Progress - but the packaging itself is on `stage`. `cargo xtask package arch` stages the PKGBUILD against the working tree, builds it with `makepkg`, and lints both with `namcap`; a `package-arch` job runs it in an `archlinux:base-devel` container.
 
 `packaging/arch/PKGBUILD`:
 
