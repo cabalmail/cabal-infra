@@ -66,6 +66,11 @@ cargo run -p cabalmail-gtk
 cargo xtask ci                   # what CI runs, in CI's order — run before every push
 ```
 
+`cargo test -p xtask` also asserts that `cabalmail-kit` reaches no GTK,
+libadwaita, or WebKit crate at any depth. That is the property that lets its
+tests run on a bare runner with no display, and the one a new transitive
+dependency can take away without anyone typing it.
+
 ## Tasks
 
 `cargo xtask` is the one spelling of each build operation, shared by humans and
