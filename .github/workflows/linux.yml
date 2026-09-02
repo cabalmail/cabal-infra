@@ -70,7 +70,6 @@ env:
 # Still to come, each with the work item that owns it:
 #   smoke         Phase 2, work item 3 - install the package, launch it headless
 #   coverage      Phase 2, work item 3 - cargo-llvm-cov on the kit, with a floor
-#   guards        Phase 2, work item 6 - cargo-deny, the GTK-free-kit tree check
 jobs:
   # -----------------------------------------------------------------------
   # Formatting only. No system libraries, because `cargo fmt` parses rather
@@ -95,8 +94,9 @@ jobs:
 
   # -----------------------------------------------------------------------
   # The kit's own tests: no display server, no network, no GUI dependency.
-  # That is the property that lets this job run on a bare runner, and the
-  # tree check in the guards job (work item 6) is what keeps it true.
+  # That is the property that lets this job run on a bare runner, and
+  # linux/xtask/tests/kit_purity.rs - run by workspace-checks - is what keeps
+  # it true.
   # -----------------------------------------------------------------------
   kit-test:
     name: Test cabalmail-kit
@@ -268,6 +268,42 @@ jobs:
             echo "::error::The widget tests skipped themselves - Xvfb did not provide a display."
             exit 1
           fi
+
+  # -----------------------------------------------------------------------
+  # Licences, advisories, and where the crates came from. The one job whose
+  # result can change without anything in this repository changing: an advisory
+  # published against a dependency reddens the next push, which is the point.
+  #
+  # The other guard rail from the same work item - that cabalmail-kit pulls in
+  # no GTK, libadwaita, or WebKit at any depth - is a test rather than a job.
+  # It needs no tool that is not already here, so it runs in workspace-checks
+  # and in the pre-push gate: see linux/xtask/tests/kit_purity.rs.
+  # -----------------------------------------------------------------------
+  supply-chain:
+    name: Licences and advisories
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-linux-rust
+        with:
+          cache-key: supply-chain
+
+      - name: Install cargo-deny
+        # A prebuilt binary rather than a from-source build, which would take
+        # minutes on every run for a check that takes seconds. Pinned to an
+        # exact version for the same reason the toolchain is: this
+        # job can fail on something nobody in this repository changed, and a
+        # tool that moved under it makes that harder to read, not easier.
+        uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b  # v2.87.4
+        with:
+          tool: cargo-deny@0.20.2
+
+      - name: Check licences and advisories
+        working-directory: linux
+        run: cargo xtask ci --step supply-chain
 
   # -----------------------------------------------------------------------
   # The package. This is the only job that builds what a user installs rather
