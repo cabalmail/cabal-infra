@@ -33,6 +33,12 @@ const STEPS_ON_THE_FLOOR: &[&str] = &["clippy", "app-tests"];
 /// toolchain. Both workflows install it, and they have to install the same one.
 const DENY_TOOL: &str = "tool: cargo-deny@";
 
+/// How `xtask/src/ci.rs` names the version it tells a developer to install,
+/// and how `linux/README.md` spells the same instruction. Four files carry
+/// that version and none can see the others.
+const DENY_PIN_CONST: &str = "const CARGO_DENY_PIN: &str = \"";
+const DENY_INSTALL: &str = "cargo install --locked cargo-deny@";
+
 /// What a widget test prints when it has nothing to draw on, and what the
 /// app-test job greps its log for. It is written in two places that cannot see
 /// each other - a Rust source file and a YAML file - so it is pinned here.
@@ -467,6 +473,12 @@ fn the_workflow_runs_its_steps_under_bash() {
     }
 }
 
+/// A file inside the workspace, read as text.
+fn workspace_file(relative: &str) -> String {
+    let path = repo_root().join("linux").join(relative);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+}
+
 /// The version each workflow installs `cargo-deny` at, by job.
 fn cargo_deny_versions(workflow: &str) -> Vec<(String, String)> {
     jobs(workflow)
@@ -486,11 +498,13 @@ fn cargo_deny_versions(workflow: &str) -> Vec<(String, String)> {
 /// `linux.yml` by name on a push, `lint.yml` as part of the whole gate on a
 /// pull request - and neither can see what the other installs.
 ///
-/// Both are asserted, and asserted to agree: a pull request checked against one
-/// version of the advisory rules and merged against another is a difference
-/// nobody would think to look for.
+/// Both are asserted, and asserted to agree with the version `xtask/src/ci.rs`
+/// and the README tell a developer to install. A pull request checked against
+/// one version of the advisory rules and merged against another is a
+/// difference nobody would think to look for, and a developer sent to a fifth
+/// version reproduces neither.
 #[test]
-fn both_gates_install_the_same_pinned_cargo_deny() {
+fn every_copy_of_the_cargo_deny_pin_agrees() {
     let push_gate = workflow();
     let pull_request_gate = lint_workflow();
 
@@ -542,9 +556,53 @@ fn both_gates_install_the_same_pinned_cargo_deny() {
         "the two gates check the dependency graph with different cargo-deny versions"
     );
     assert!(
-        on_pull_request.split('.').count() == 3,
-        "cargo-deny is pinned to `{on_pull_request}`, which is not an exact x.y.z version"
+        on_push.split('.').count() == 3,
+        "cargo-deny is pinned to `{on_push}`, which is not an exact x.y.z version"
     );
+
+    for (file, found) in [
+        ("xtask/src/ci.rs", pin_in_source()),
+        ("README.md", pin_in_readme()),
+    ] {
+        assert_eq!(
+            found, on_push,
+            "{file} names cargo-deny {found}, the workflows install {on_push}. A \
+             developer following that instruction checks the dependency graph \
+             against different rules than the gate that has to pass."
+        );
+    }
+}
+
+/// The version `cargo xtask ci` prints when the binary is missing, taken from
+/// the constant rather than from the message, so a reworded message still
+/// points at one place.
+fn pin_in_source() -> String {
+    let source = workspace_file("xtask/src/ci.rs");
+    let (_, after) = source
+        .split_once(DENY_PIN_CONST)
+        .expect("ci.rs declares CARGO_DENY_PIN");
+    after
+        .split_once('"')
+        .expect("CARGO_DENY_PIN is a string literal")
+        .0
+        .to_owned()
+}
+
+/// The version the README tells a developer to install.
+fn pin_in_readme() -> String {
+    let readme = workspace_file("README.md");
+    let (_, after) = readme.split_once(DENY_INSTALL).unwrap_or_else(|| {
+        panic!(
+            "linux/README.md does not spell the install as `{DENY_INSTALL}<version>`, \
+             so nothing holds it to the version CI uses"
+        )
+    });
+    after
+        .split_whitespace()
+        .next()
+        .expect("the install line names a version")
+        .trim_end_matches('`')
+        .to_owned()
 }
 
 /// The `on:` block: everything above the first job.

@@ -336,7 +336,7 @@ Where the work stands, so it does not have to be reverse-engineered from git. Ev
 
 > **Paused (2026-08-24): AUR publication.** The AUR is closed to new account registrations, so the Arch package has no route to publication. Item 4's work is written, tested, and committed on the branch `claude/linux-phase-2-arch-packaging`, which is **not** pushed and has **no PR open** - deliberately, until the AUR question resolves. Item 5's AUR step was already a manual, human-gated act; it is now blocked outright. Nothing else in Phase 2 depends on either, so items 3 and 6 can proceed.
 
-> **Update (2026-09-02):** Item 4 merged - `5973542b` is on `stage`, `linux/packaging/arch/PKGBUILD` is in the tree, and `package-arch` runs on every push. The paragraph above is the record of a hold that has since lifted for the packaging itself; what remains blocked is item 5's AUR upload, which is the only step that needs an AUR account.
+> **Erratum (2026-09-02):** Item 4 merged - `5973542b` is on `stage`, `linux/packaging/arch/PKGBUILD` is in the tree, and `package-arch` runs on every push. The paragraph above is the record of a hold that has since lifted for the packaging itself; what remains blocked is item 5's AUR upload, which is the only step that needs an AUR account.
 
 ---
 
@@ -516,7 +516,7 @@ The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow
 
 ### Phase 2 verification
 
-- A push to `stage` under `linux/**` runs all eight jobs green.
+- A push to `stage` under `linux/**` runs every job in `linux.yml` green.
 - `cargo xtask package arch` produces an installable package on a clean Arch container.
 - `cargo xtask smoke` passes against that package.
 - Deliberately introducing a GTK 4.16-only call fails `app-build` and not `lint` — proving the floor is enforced where intended.

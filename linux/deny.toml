@@ -17,9 +17,15 @@ targets = [
 ]
 
 [advisories]
-# Everything the RustSec database reports is a failure. There is no ignore list
-# and this is the place to put one, with the advisory id and a sentence saying
-# why it does not reach us — never a bare id.
+# Both of these are stated rather than left to their defaults, which are
+# looser: `yanked` warns, and `unmaintained` reports only the crates the
+# workspace names itself. Nearly every crate here is transitive, so the default
+# would have this job stay green through exactly the reports it was added to
+# surface.
+yanked = "deny"
+unmaintained = "all"
+# There is no ignore list, and this is the place to put one: an advisory id and
+# a sentence saying why it does not reach us — never a bare id.
 ignore = []
 
 [licenses]
@@ -42,6 +48,9 @@ allow = [
   # option-ext, under directories, is the only one today.
   "MPL-2.0",
 ]
+# How sure the licence text has to look before a match is accepted; above
+# cargo-deny's default of 0.8, so a file that only resembles a known licence is
+# reported as unmatched rather than resolved to a guess.
 confidence-threshold = 0.93
 
 [bans]

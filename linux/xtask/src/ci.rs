@@ -65,14 +65,13 @@ pub fn run(workspace: &Path, only: Option<&str>) -> Result<(), String> {
     if steps.iter().any(|step| step.label == SUPPLY_CHAIN) && !on_path("cargo-deny") {
         let shortfall =
             "`cargo-deny` is not on PATH, so the licence and advisory policy is unchecked";
+        let remedy = format!("cargo install --locked cargo-deny@{CARGO_DENY_PIN}");
         if missing_tool_is_fatal(in_ci(), only.is_some()) {
-            return Err(format!(
-                "{shortfall}. Install it with `cargo install --locked cargo-deny`."
-            ));
+            return Err(format!("{shortfall}. Install it with `{remedy}`."));
         }
         eprintln!(
-            "[xtask] ci: {shortfall}. `cargo install --locked cargo-deny` to run it \
-             here; CI runs it on every push."
+            "[xtask] ci: {shortfall}. `{remedy}` to run it here; CI runs it on \
+             every push."
         );
         steps.retain(|step| step.label != SUPPLY_CHAIN);
     }
@@ -120,6 +119,14 @@ const APP_TESTS: &str = "app-tests";
 
 /// The one step run by a binary that is not part of the toolchain.
 const SUPPLY_CHAIN: &str = "supply-chain";
+
+/// The version of that binary this gate is calibrated against. An advisory
+/// result is only comparable between a developer's run and CI's while both
+/// read the same rules, so the instruction printed here names the version the
+/// workflows install rather than whatever `cargo install` resolves today.
+/// `xtask/tests/workflow_contract.rs` fails if this and the two workflows and
+/// the README stop agreeing.
+const CARGO_DENY_PIN: &str = "0.20.2";
 
 /// Whether starting the app tests with nothing to draw on should stop the run
 /// rather than warn. On a developer's machine a skip is the right answer — a

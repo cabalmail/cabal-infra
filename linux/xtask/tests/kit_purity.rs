@@ -69,11 +69,15 @@ fn dependency_tree(package: &str) -> Vec<String> {
 
 /// Whether a crate name is part of the GUI stack. Substrings rather than an
 /// exact list, so `gtk4-sys`, `libadwaita-sys`, and a future `webkit7` are all
-/// caught without an edit. `glib` and `gio` are deliberately not here: they are
-/// GLib, not a toolkit, and the kit is free to grow one if it ever needs it.
+/// caught without an edit. `gdk4` and `gsk4` are named because neither spells
+/// "gtk": they are GTK's display and scene-graph layers, they need a display
+/// at run time, and a crate can depend on them without touching `gtk4` itself.
+/// `glib` and `gio` are deliberately not here: they are GLib, not a toolkit,
+/// and the kit is free to grow one if it ever needs it. Nor is `gdk-pixbuf`,
+/// which decodes images and draws nothing.
 fn is_gui_crate(name: &str) -> bool {
     let lowered = name.to_lowercase();
-    ["gtk", "adw", "webkit"]
+    ["gtk", "adw", "webkit", "gdk4", "gsk4"]
         .iter()
         .any(|marker| lowered.contains(marker))
 }
@@ -124,6 +128,9 @@ fn the_toolkit_is_recognised_and_glib_is_not() {
         "libadwaita",
         "libadwaita-sys",
         "webkit6",
+        "gdk4",
+        "gdk4-sys",
+        "gsk4",
     ] {
         assert!(is_gui_crate(name), "`{name}` should read as a GUI crate");
     }
