@@ -510,6 +510,8 @@ The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow
 - A CI step asserting `cabalmail-kit` has no GTK/WebKit dependency (`cargo tree` grep).
 - A CI step asserting the reader WebView's settings are hardened, grepping for `enable_javascript(false)` on the reader configuration — the analog of the CLAUDE.md rule forbidding `allow-scripts` on the React reader iframe. Add the corresponding prohibition to `CLAUDE.md` in this phase.
 
+> **Erratum (2026-09-02):** The third bullet cannot be written in this phase. There is no reader, no `WebKitWebView`, and no `webkit6` dependency until Phase 4, so a grep written now matches nothing and passes for reasons unrelated to what it guards — a check that cannot be made to fail is not a guard. It moves to Phase 4, work item 3, alongside the code it protects. The `CLAUDE.md` prohibition is written in this phase, since a rule can precede its enforcement.
+
 ### Phase 2 verification
 
 - A push to `stage` under `linux/**` runs all eight jobs green.
@@ -609,7 +611,7 @@ The control domain comes from `Settings.control_domain` (so it can be set in `co
 
 Body render in a `WebKitWebView`, hardened:
 
-- `enable_javascript(false)` on the reader view. Non-negotiable; CI greps for it.
+- `enable_javascript(false)` on the reader view. Non-negotiable. This work item owns the CI grep that enforces it — deferred here from Phase 2, work item 6, which had nothing to grep. Write the check with the view: break it once and watch it fail.
 - Remote content blocked by default via `WebKitWebContext` request interception, honouring the `load_remote_content` preference (off / ask / always). "Ask" shows an `AdwBanner` with a per-message allow.
 - Inline images served through a custom `cabalmail-cid:` URI scheme handler backed by `/fetch_inline_image`.
 - All navigation intercepted in `decide-policy`; links never load in-view. Hovering shows the target; activating opens the system browser after confirmation for mismatched display text (the `LinkMenu` / `HTMLRewrite` behaviour).
