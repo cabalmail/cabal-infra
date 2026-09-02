@@ -55,6 +55,18 @@ PKGBUILD's dependency arrays come from:
 grep -vE '^\s*(#|$)' packaging/deps/arch.txt | sudo pacman -S --needed -
 ```
 
+The gate's last step checks the dependency graph against
+[`deny.toml`](deny.toml) and needs `cargo-deny`, which is not part of the
+toolchain:
+
+```sh
+cargo install --locked cargo-deny@0.20.2
+```
+
+Without it `cargo xtask ci` says so and runs everything else. CI installs the
+same pinned version and treats a missing one as a failure, so the check is never
+skipped where it counts.
+
 ## Build and test
 
 ```sh
@@ -78,7 +90,7 @@ by the workflow, so neither can drift from the other:
 
 | Subcommand | What it does |
 | --- | --- |
-| `cargo xtask ci` | `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace checks, app tests — in that order, stopping at the first failure. Wraps the app tests in `xvfb-run` when there is no session to use. `--step <name>` runs one of them, which is how each CI job runs exactly one; `--list` prints the names. |
+| `cargo xtask ci` | `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace checks, app tests, `cargo deny check` — in that order, stopping at the first failure. Wraps the app tests in `xvfb-run` when there is no session to use. `--step <name>` runs one of them, which is how each CI job runs exactly one; `--list` prints the names. |
 | `cargo xtask sync-vendored` | Materializes marked and turndown into `cabalmail-gtk/resources/editor/` from `react/admin/node_modules`, running `npm ci` first if needed. Needs node and npm; the files it writes are gitignored. Wraps [`scripts/sync-vendored.sh`](scripts/sync-vendored.sh), the sibling of `apple/scripts/sync-vendored.sh`. |
 | `cargo xtask package arch` | Builds the Arch package from the working tree and lints it with `namcap`. Stages a copy of [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) with `pkgver` taken from `git describe` and the git source pointed at the local checkout, then runs `makepkg`. Needs an Arch machine with `packaging/deps/arch.txt` installed, and refuses to run as root, as makepkg does. `deb` and `rpm` name their Phase 8 work item. |
 | `cargo xtask smoke` | Declared; lands with the test harness in Phase 2. |

@@ -34,7 +34,7 @@ pub enum Display {
 /// how each CI job runs exactly one of them.
 pub fn run(workspace: &Path, only: Option<&str>) -> Result<(), String> {
     let display = detect_display();
-    let steps: Vec<Step> = match only {
+    let mut steps: Vec<Step> = match only {
         Some(name) => plan(&cargo(), display)
             .into_iter()
             .filter(|step| step.label == name)
@@ -52,6 +52,29 @@ pub fn run(workspace: &Path, only: Option<&str>) -> Result<(), String> {
             only.unwrap_or(""),
             step_names().join(", ")
         ));
+    }
+
+    // `cargo deny` is a separate binary rather than a toolchain component, so
+    // the gate has to say what it does when it is absent. In CI, nothing: a
+    // check that quietly did not run is the failure this whole file is
+    // arranged against. On a developer's machine a whole-gate run says so and
+    // carries on, the same bargain the widget tests strike with a missing
+    // display — but `--step supply-chain` is a request to run this and
+    // nothing else, so that fails rather than reporting success having run
+    // no step at all.
+    if steps.iter().any(|step| step.label == SUPPLY_CHAIN) && !on_path("cargo-deny") {
+        let shortfall =
+            "`cargo-deny` is not on PATH, so the licence and advisory policy is unchecked";
+        if missing_tool_is_fatal(in_ci(), only.is_some()) {
+            return Err(format!(
+                "{shortfall}. Install it with `cargo install --locked cargo-deny`."
+            ));
+        }
+        eprintln!(
+            "[xtask] ci: {shortfall}. `cargo install --locked cargo-deny` to run it \
+             here; CI runs it on every push."
+        );
+        steps.retain(|step| step.label != SUPPLY_CHAIN);
     }
 
     if steps.iter().any(|step| step.label == APP_TESTS) {
@@ -95,6 +118,9 @@ fn cargo() -> String {
 /// The one step name that cares whether there is a display to draw on.
 const APP_TESTS: &str = "app-tests";
 
+/// The one step run by a binary that is not part of the toolchain.
+const SUPPLY_CHAIN: &str = "supply-chain";
+
 /// Whether starting the app tests with nothing to draw on should stop the run
 /// rather than warn. On a developer's machine a skip is the right answer — a
 /// bare SSH session should still get the rest of the app crate's tests. In CI
@@ -102,6 +128,14 @@ const APP_TESTS: &str = "app-tests";
 /// virtual display and would report success having exercised no widget.
 fn missing_display_is_fatal(display: Display, in_ci: bool) -> bool {
     display == Display::None && in_ci
+}
+
+/// Whether a missing external tool should stop the run rather than warn. In CI
+/// there is no acceptable skip. Naming the step explicitly is the other case:
+/// it asks for that step and nothing else, and answering it with a warning and
+/// a successful exit would be a job that reported success having run nothing.
+fn missing_tool_is_fatal(in_ci: bool, selected_by_name: bool) -> bool {
+    in_ci || selected_by_name
 }
 
 /// Every CI provider sets this; GitHub Actions sets it to `true`.
@@ -144,6 +178,12 @@ fn plan(cargo: &str, display: Display) -> Vec<Step> {
             ["test", "--locked", "-p", "xtask"],
         ),
         app_tests(cargo, display),
+        // Last because it is the one step that needs the network: it fetches
+        // the RustSec advisory database. A run that fails for want of a
+        // network connection should do it after everything local has had its
+        // say. `--locked` goes before the subcommand — it is cargo-deny's own
+        // flag, not `check`'s.
+        Step::new(SUPPLY_CHAIN, cargo, ["deny", "--locked", "check"]),
     ]
 }
 
@@ -218,7 +258,8 @@ mod tests {
                 "clippy",
                 "kit-tests",
                 "workspace-checks",
-                "app-tests"
+                "app-tests",
+                "supply-chain"
             ]
         );
     }
@@ -352,6 +393,30 @@ mod tests {
                 "the error should list `{name}`: {error}"
             );
         }
+    }
+
+    /// The policy `cargo deny` is run under. A whole-gate run on a machine
+    /// without the binary warns and moves on; CI does not, and neither does a
+    /// run that asked for this step by name — that one would otherwise print
+    /// "0 steps passed" and exit 0, which is the shape of every silent failure
+    /// this file is arranged against.
+    #[test]
+    fn a_missing_tool_stops_ci_and_a_named_step_but_not_a_local_gate_run() {
+        assert!(missing_tool_is_fatal(true, false));
+        assert!(missing_tool_is_fatal(true, true));
+        assert!(missing_tool_is_fatal(false, true));
+        assert!(!missing_tool_is_fatal(false, false));
+    }
+
+    /// `--locked` is cargo-deny's own flag and has to precede the subcommand;
+    /// after it, `check` rejects it as an unknown argument.
+    #[test]
+    fn the_supply_chain_step_locks_before_it_names_the_subcommand() {
+        let step = plan("cargo", Display::Session)
+            .into_iter()
+            .find(|step| step.label == SUPPLY_CHAIN)
+            .expect("the plan checks the dependency graph");
+        assert_eq!(step.command_line(), "cargo deny --locked check");
     }
 
     /// A session in hand beats a virtual one, and `xvfb-run` is only reached

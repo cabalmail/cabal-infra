@@ -29,6 +29,10 @@ const FLOOR_IMAGE: &str = "image: ubuntu:24.04";
 /// quietly stop enforcing the floor the first time GitHub rolls the label.
 const STEPS_ON_THE_FLOOR: &[&str] = &["clippy", "app-tests"];
 
+/// How a job installs the one binary the gate runs that is not part of the
+/// toolchain. Both workflows install it, and they have to install the same one.
+const DENY_TOOL: &str = "tool: cargo-deny@";
+
 /// What a widget test prints when it has nothing to draw on, and what the
 /// app-test job greps its log for. It is written in two places that cannot see
 /// each other - a Rust source file and a YAML file - so it is pinned here.
@@ -461,6 +465,86 @@ fn the_workflow_runs_its_steps_under_bash() {
             );
         }
     }
+}
+
+/// The version each workflow installs `cargo-deny` at, by job.
+fn cargo_deny_versions(workflow: &str) -> Vec<(String, String)> {
+    jobs(workflow)
+        .into_iter()
+        .filter_map(|job| {
+            job.body
+                .lines()
+                .find_map(|line| line.trim().split_once(DENY_TOOL))
+                .map(|(_, version)| (job.name.clone(), version.trim().to_owned()))
+        })
+        .collect()
+}
+
+/// The gate's `supply-chain` step runs `cargo deny`, which is a separate
+/// binary: a job that runs the step without installing it fails with "not on
+/// PATH" rather than reporting a licence result. Two workflows run that step -
+/// `linux.yml` by name on a push, `lint.yml` as part of the whole gate on a
+/// pull request - and neither can see what the other installs.
+///
+/// Both are asserted, and asserted to agree: a pull request checked against one
+/// version of the advisory rules and merged against another is a difference
+/// nobody would think to look for.
+#[test]
+fn both_gates_install_the_same_pinned_cargo_deny() {
+    let push_gate = workflow();
+    let pull_request_gate = lint_workflow();
+
+    let running_the_step: Vec<String> = jobs(&push_gate)
+        .into_iter()
+        .filter(|job| job.steps().iter().any(|step| step == "supply-chain"))
+        .map(|job| job.name)
+        .collect();
+    assert_eq!(
+        running_the_step.len(),
+        1,
+        "expected exactly one job in linux.yml to run the supply-chain step, found {running_the_step:?}"
+    );
+
+    let whole_gate: Vec<String> = jobs(&pull_request_gate)
+        .into_iter()
+        .filter(|job| {
+            job.body
+                .lines()
+                .any(|line| line.trim().ends_with("run: cargo xtask ci"))
+        })
+        .map(|job| job.name)
+        .collect();
+    assert_eq!(
+        whole_gate.len(),
+        1,
+        "expected exactly one job in lint.yml to run the whole gate, found {whole_gate:?}"
+    );
+
+    let installed = |name: &str, workflow: &str, job: &str| -> String {
+        let found = cargo_deny_versions(workflow);
+        let (_, version) = found
+            .iter()
+            .find(|(installed_in, _)| installed_in == job)
+            .unwrap_or_else(|| {
+                panic!(
+                    "job `{job}` in {name} runs the gate's supply-chain step but \
+                     installs no cargo-deny, so it will fail with `not on PATH` \
+                     instead of checking anything. Add a `{DENY_TOOL}<version>` step."
+                )
+            });
+        version.clone()
+    };
+
+    let on_push = installed("linux.yml", &push_gate, &running_the_step[0]);
+    let on_pull_request = installed("lint.yml", &pull_request_gate, &whole_gate[0]);
+    assert_eq!(
+        on_push, on_pull_request,
+        "the two gates check the dependency graph with different cargo-deny versions"
+    );
+    assert!(
+        on_pull_request.split('.').count() == 3,
+        "cargo-deny is pinned to `{on_pull_request}`, which is not an exact x.y.z version"
+    );
 }
 
 /// The `on:` block: everything above the first job.

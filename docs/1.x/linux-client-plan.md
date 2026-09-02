@@ -506,6 +506,8 @@ The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow
 
 ### 6. Guard rails
 
+**Status:** Shipped 2026-09-02. `cargo deny check` runs as the `supply-chain` step in its own job; the kit's freedom from GUI dependencies is asserted transitively by `xtask/tests/kit_purity.rs`, under the existing `workspace-checks` step. The reader WebView grep moved to Phase 4 — see below.
+
 - `cargo deny check` for licence and advisory policy.
 - A CI step asserting `cabalmail-kit` has no GTK/WebKit dependency (`cargo tree` grep).
 - A CI step asserting the reader WebView's settings are hardened, grepping for `enable_javascript(false)` on the reader configuration — the analog of the CLAUDE.md rule forbidding `allow-scripts` on the React reader iframe. Add the corresponding prohibition to `CLAUDE.md` in this phase.
