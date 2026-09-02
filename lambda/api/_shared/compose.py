@@ -24,11 +24,14 @@ from helper import CACHE_BUCKET # pylint: disable=import-error
 # at 20 MB so clients can present a friendly warning while a malformed
 # or hostile request still hits a server-side ceiling.
 MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024
-# Hard ceiling on attachment count per message (Phase 2 of
-# docs/0.10.x/application-surface-hardening-plan.md). The React/Apple UIs
-# never attach more than a handful; this bounds a hostile request whose
-# individual parts each stay under the byte cap.
-MAX_ATTACHMENTS = 10
+# There is deliberately no cap on attachment *count*. Phase 2 of
+# docs/0.10.x/application-surface-hardening-plan.md set one at 10 on the
+# premise that "the React/Apple UIs never attach more than a handful";
+# uncapping the iOS photo picker retired that premise, and a count is the
+# wrong axis anyway — what a recipient's server rejects is total message
+# size, which MAX_TOTAL_ATTACHMENT_BYTES above already bounds. The residual
+# cost of a bundle of many tiny parts is one S3 GET each, from a caller who
+# is already authenticated and could spend the same budget on repeat sends.
 # Matches `outbound/<user>/<uuid>/<filename>` keys minted by upload_url.
 # The user segment must equal the authenticated caller; we still pin the
 # overall shape here so a malformed key is rejected before any S3 call.
@@ -111,8 +114,6 @@ def load_attachments(raw, bucket, user):
         return []
     if not isinstance(raw, list):
         raise ValueError("attachments must be a list")
-    if len(raw) > MAX_ATTACHMENTS:
-        raise ValueError(f"at most {MAX_ATTACHMENTS} attachments per message")
     decoded = []
     total = 0
     for index, entry in enumerate(raw):
