@@ -44,6 +44,32 @@ final class PrivateLinkHandoffTests: XCTestCase {
         _ = target
     }
 
+    /// The shape that shipped broken on the stage build: the app stores the
+    /// admin host the user typed at sign-in, and prefixing it again gave
+    /// `admin.admin.cabalmail.net`, which nothing serves.
+    func testStoredAdminHostIsNotPrefixedTwice() throws {
+        let url = try XCTUnwrap(redirector("https://example.com/", domain: "admin.cabalmail.net"))
+        XCTAssertEqual(url.host, "admin.cabalmail.net")
+    }
+
+    func testControlDomainInputsReduceLikeTheExtensionDoes() {
+        // Same table as normalizeControlDomain's tests in controlDomain.test.ts.
+        XCTAssertEqual(PrivateLinkHandoff.normalizedControlDomain("cabalmail.net"), "cabalmail.net")
+        XCTAssertEqual(
+            PrivateLinkHandoff.normalizedControlDomain("https://admin.cabalmail.net/"), "cabalmail.net"
+        )
+        XCTAssertEqual(
+            PrivateLinkHandoff.normalizedControlDomain("  HTTPS://Admin.Cabalmail.NET/prod  "),
+            "cabalmail.net"
+        )
+        XCTAssertEqual(
+            PrivateLinkHandoff.normalizedControlDomain("admin.cabal-mail.example"), "cabal-mail.example"
+        )
+        for bad in ["", "   ", "localhost", "not a domain", "https://", ".com", "a..b", "-x.com"] {
+            XCTAssertNil(PrivateLinkHandoff.normalizedControlDomain(bad), bad)
+        }
+    }
+
     func testControlDomainIsTrimmed() throws {
         let url = try XCTUnwrap(redirector("https://example.com/", domain: "  cabalmail.example \n"))
         XCTAssertEqual(url.host, "admin.cabalmail.example")
