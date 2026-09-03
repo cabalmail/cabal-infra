@@ -47,6 +47,10 @@ struct CabalmailMacApp: App {
                     // a cold launch from a Spotlight result parks its
                     // activity in the router until this runs.
                     SpotlightRouter.shared.attach(appState)
+                    // Warm the "Open in Private Window" availability cache
+                    // so the first link menu of the session lays out with
+                    // its rows decided (see PrivateLinkHandoff).
+                    PrivateLinkHandoff.prime()
                     await appState.restoreIfPossible()
                     if preferences.crashReportingEnabled {
                         appState.client?.setCrashReportingEnabled(true)
