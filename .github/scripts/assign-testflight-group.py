@@ -103,13 +103,15 @@ def attach(group_id, build_id, token_factory):
     ("no resource of type 'builds'") even after /v1/builds reports the
     same build as VALID; this direction is the one fastlane exercises and
     works for every platform. Adding a build to a group it is already in
-    is a no-op success, so retrying after a lost response is safe.
+    is a no-op success, so retrying after a lost response is safe — which
+    is why this POST opts into api_request's transient-failure retry.
     """
     api_request(
         "POST",
         f"/v1/builds/{build_id}/relationships/betaGroups",
         token_factory,
         body={"data": [{"type": "betaGroups", "id": group_id}]},
+        idempotent=True,
     )
 
 
