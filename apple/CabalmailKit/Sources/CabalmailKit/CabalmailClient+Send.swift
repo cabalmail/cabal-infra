@@ -71,6 +71,15 @@ extension CabalmailClient {
         ))
     }
 
+    /// Slots requested per `/upload_url` call. The endpoint refuses more
+    /// than 32 files in one request, but that bound is about the shape of a
+    /// single request rather than how many attachments a message may carry
+    /// — so stage in batches instead of letting it become a de-facto
+    /// attachment cap. Minting each batch's URLs just before its uploads
+    /// also keeps them inside the endpoint's 120-second presign expiry,
+    /// which one up-front mint for a large bundle could outlive.
+    static let uploadSlotsPerRequest = 32
+
     /// Uploads each attachment to a presigned `/upload_url` slot and
     /// returns the wire references the compose endpoints expect.
     static func stageAttachments(
@@ -79,22 +88,26 @@ extension CabalmailClient {
         imapHost: String
     ) async throws -> [ApiSendAttachment] {
         guard !message.attachments.isEmpty else { return [] }
-        let slots = message.attachments.map {
-            AttachmentUploadSlot(filename: $0.filename, mimeType: $0.mimeType)
-        }
-        let uploads = try await api.requestAttachmentUploads(host: imapHost, files: slots)
+        let all = message.attachments
         var wireAttachments: [ApiSendAttachment] = []
-        for (attachment, upload) in zip(message.attachments, uploads) {
-            try await api.uploadAttachment(
-                url: upload.url,
-                mimeType: attachment.mimeType,
-                data: attachment.data
-            )
-            wireAttachments.append(ApiSendAttachment(
-                filename: attachment.filename,
-                mimeType: attachment.mimeType,
-                s3Key: upload.key
-            ))
+        for start in stride(from: 0, to: all.count, by: uploadSlotsPerRequest) {
+            let batch = all[start..<min(start + uploadSlotsPerRequest, all.count)]
+            let slots = batch.map {
+                AttachmentUploadSlot(filename: $0.filename, mimeType: $0.mimeType)
+            }
+            let uploads = try await api.requestAttachmentUploads(host: imapHost, files: slots)
+            for (attachment, upload) in zip(batch, uploads) {
+                try await api.uploadAttachment(
+                    url: upload.url,
+                    mimeType: attachment.mimeType,
+                    data: attachment.data
+                )
+                wireAttachments.append(ApiSendAttachment(
+                    filename: attachment.filename,
+                    mimeType: attachment.mimeType,
+                    s3Key: upload.key
+                ))
+            }
         }
         return wireAttachments
     }
