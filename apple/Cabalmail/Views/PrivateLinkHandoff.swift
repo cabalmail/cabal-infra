@@ -35,9 +35,8 @@ enum PrivateLinkHandoff {
     /// link (only http/https can be opened in a browser window) or the
     /// control domain is unknown.
     static func redirectorURL(for target: URL, controlDomain: String) -> URL? {
-        let domain = controlDomain.trimmingCharacters(in: .whitespacesAndNewlines)
         guard
-            !domain.isEmpty,
+            let domain = normalizedControlDomain(controlDomain),
             let scheme = target.scheme?.lowercased(),
             scheme == "http" || scheme == "https",
             let encoded = target.absoluteString.addingPercentEncoding(
@@ -45,6 +44,39 @@ enum PrivateLinkHandoff {
             )
         else { return nil }
         return URL(string: "https://admin.\(domain)/private-link#\(encoded)")
+    }
+
+    /// Reduce what the app stores as the control domain to the bare apex
+    /// the redirector lives under. The sign-in field takes the admin host
+    /// verbatim (the config.json host; the bare control domain has no DNS
+    /// by design), so `AppState.controlDomain` is usually
+    /// `admin.<domain>` already -- prefixing `admin.` again produced
+    /// `admin.admin.<domain>`, which nothing serves. The same reduction the
+    /// extension applies to this exact value when it arrives over the App
+    /// Group (`normalizeControlDomain` in controlDomain.ts): drop scheme
+    /// and path, drop a leading `admin.`, lowercase, and demand something
+    /// domain-shaped. Keep the two in step.
+    static func normalizedControlDomain(_ raw: String) -> String? {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let range = value.range(of: "://") {
+            value = String(value[range.upperBound...])
+        }
+        if let slash = value.firstIndex(of: "/") {
+            value = String(value[..<slash])
+        }
+        if value.hasPrefix("admin.") {
+            value = String(value.dropFirst("admin.".count))
+        }
+        let labels = value.split(separator: ".", omittingEmptySubsequences: false)
+        let labelOK: (Substring) -> Bool = { label in
+            guard let first = label.first, let last = label.last else { return false }
+            return first.isLetter || first.isNumber
+                ? (last.isLetter || last.isNumber)
+                    && label.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" }
+                : false
+        }
+        guard labels.count >= 2, labels.allSatisfy(labelOK) else { return nil }
+        return value
     }
 
     /// `encodeURIComponent`'s unreserved set: the redirector page and the
