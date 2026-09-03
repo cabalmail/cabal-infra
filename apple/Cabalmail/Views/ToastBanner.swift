@@ -17,6 +17,11 @@ struct BannerView: View {
     /// post-creation address banner's Copy, the cross-client Resume); nil for
     /// plain status banners.
     var onAction: (() -> Void)?
+    /// When non-nil the banner can be got rid of: a close button and a swipe
+    /// in any direction. Nil for a banner that reports a state rather than an
+    /// event (the offline banner), where dismissing would only hide something
+    /// still true.
+    var onDismiss: (() -> Void)?
 
     init(
         icon: String,
@@ -24,7 +29,8 @@ struct BannerView: View {
         tint: Color,
         actionTitle: String = "Copy",
         actionIcon: String = "doc.on.doc",
-        onAction: (() -> Void)? = nil
+        onAction: (() -> Void)? = nil,
+        onDismiss: (() -> Void)? = nil
     ) {
         self.icon = icon
         self.text = text
@@ -32,6 +38,7 @@ struct BannerView: View {
         self.actionTitle = actionTitle
         self.actionIcon = actionIcon
         self.onAction = onAction
+        self.onDismiss = onDismiss
     }
 
     var body: some View {
@@ -51,6 +58,17 @@ struct BannerView: View {
                 .buttonStyle(.borderless)
                 .tint(tint)
             }
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Dismiss")
+                .accessibilityIdentifier("banner.dismiss")
+                .padding(.leading, ToastDismissal.closeButtonLeadingGap(hasAction: onAction != nil))
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -63,6 +81,18 @@ struct BannerView: View {
         // toolbar/action buttons it would otherwise overlap. Text wraps within
         // this width (no lineLimit) and the capsule grows vertically to fit.
         .containerRelativeFrame(.horizontal) { width, _ in width * 0.7 }
+        // A plain `.gesture` rather than a high-priority one, so the trailing
+        // action and the close button keep winning their own taps.
+        .gesture(dismissSwipe)
+    }
+
+    private var dismissSwipe: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onEnded { value in
+                guard let onDismiss,
+                      ToastDismissal.dismisses(translation: value.translation) else { return }
+                onDismiss()
+            }
     }
 }
 
@@ -72,6 +102,7 @@ struct BannerView: View {
 struct ToastBanner: View {
     let toast: Toast
     var onAction: (() -> Void)?
+    var onDismiss: (() -> Void)?
 
     var body: some View {
         BannerView(
@@ -80,7 +111,8 @@ struct ToastBanner: View {
             tint: tint,
             actionTitle: actionTitle,
             actionIcon: actionIcon,
-            onAction: onAction
+            onAction: onAction,
+            onDismiss: onDismiss
         )
     }
 
@@ -113,7 +145,9 @@ struct ToastBanner: View {
 
 extension View {
     /// Hosts a transient, auto-dismissing toast anchored to the top of this
-    /// view. Use on surfaces presented modally — compose windows / sheets and
+    /// view. Unlike the root status banners (#1426) this host stays at the
+    /// top: its callers are the compose and settings sheets, whose bottom edge
+    /// is where the keyboard comes up. Use on surfaces presented modally — compose windows / sheets and
     /// the settings sheet — where the root `AppState.toast` overlay would be
     /// hidden behind the presented content. A toast carrying a `copyAddress`
     /// renders a Copy button that copies the address and swaps in the shared
@@ -134,7 +168,11 @@ private struct ToastOverlayModifier: ViewModifier {
         content
             .overlay(alignment: .top) {
                 if let toast {
-                    ToastBanner(toast: toast, onAction: copyHandler(for: toast))
+                    ToastBanner(
+                        toast: toast,
+                        onAction: copyHandler(for: toast),
+                        onDismiss: { self.toast = nil }
+                    )
                         .padding(.top, 6)
                         .padding(.horizontal, 12)
                         .transition(.move(edge: .top).combined(with: .opacity))
