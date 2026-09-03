@@ -507,9 +507,15 @@ class ApiClientTest {
                     "body-$index".toByteArray()
                 }
 
-            val mints = server.requests.withIndex().filter { it.value.url.encodedPath.endsWith("upload_url") }
-            assertEquals(2, mints.size, "one mint per batch")
-            assertEquals(listOf(0, 33), mints.map { it.index }, "each batch is minted after the previous one uploads")
+            val mintIndices = mutableListOf<Int>()
+            server.requests.forEachIndexed { index, request ->
+                if (request.url.encodedPath.endsWith("upload_url")) {
+                    mintIndices += index
+                }
+            }
+            // Two mints, and the second one comes after the first batch's 32
+            // uploads rather than up front — that is the presign-expiry half.
+            assertEquals(listOf(0, 33), mintIndices)
             val firstBatch = server.body(0)
             assertTrue(firstBatch.contains("\"f0.txt\"") && firstBatch.contains("\"f31.txt\""))
             assertFalse(firstBatch.contains("\"f32.txt\""), "the 33rd file belongs to the second batch")
@@ -530,13 +536,16 @@ class ApiClientTest {
             repeat(32) { responses += HttpStatusCode.OK to "" }
             val server = Server(*responses.toTypedArray())
 
-            val grants = server.api.stageUploads((0..31).map { "f$it.txt" to "text/plain" }) { ByteArray(1) }
+            val files = (0..31).map { "f$it.txt" to "text/plain" }
+
+            val grants = server.api.stageUploads(files) { ByteArray(1) }
 
             assertEquals(32, grants.size)
-            assertEquals(33, server.requests.size, "32 is the boundary, not 33 requests' worth of mints")
+            assertEquals(33, server.requests.size, "one mint plus 32 uploads: 32 is the boundary, not 33")
 
             val empty = Server()
-            assertTrue(empty.api.stageUploads(emptyList()) { ByteArray(0) }.isEmpty())
+            val none = empty.api.stageUploads(emptyList()) { ByteArray(0) }
+            assertTrue(none.isEmpty())
             assertTrue(empty.requests.isEmpty())
         }
 }
