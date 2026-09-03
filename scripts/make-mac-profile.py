@@ -91,6 +91,22 @@ def main():
         sys.exit(f'no registered App ID matches {bundle_id!r} - register it first')
     bundle = matches[0]
 
+    # A profile inherits its entitlements from the App ID as configured at
+    # mint time, and nothing downstream checks that until `-exportArchive`
+    # validates the built product against it -- an archive signs happily
+    # with a capability-less profile and the export then fails with
+    # "doesn't include the App Groups capability". Show what the App ID
+    # carries so the gap is visible before the profile exists.
+    caps = api(token, f"/v1/bundleIds/{bundle['id']}/bundleIdCapabilities")['data']
+    cap_types = sorted(c['attributes']['capabilityType'] for c in caps)
+    print(f"App ID capabilities: {', '.join(cap_types) or '(none)'}")
+    if 'APP_GROUPS' not in cap_types:
+        print('  warning: APP_GROUPS is not enabled on this App ID. Every '
+              'Cabalmail appex carries an application-groups entitlement, '
+              'so a profile minted now will fail at export; enable App '
+              'Groups on the App ID (and assign the group) first, then '
+              're-run -- adding a capability invalidates existing profiles.')
+
     # A profile can only carry certificates of its own distribution family:
     # Apple Distribution for App Store profiles, Developer ID Application
     # for MAC_APP_DIRECT. The G2 flavor is the post-2021 Developer ID
