@@ -67,9 +67,21 @@ export class ApiClient {
     return data.Domains;
   }
 
+  /**
+   * `/list` answers `{ Items: [...] }` -- the DynamoDB scan's key, the same
+   * one the React client and CabalmailKit read, and the same capitalised
+   * convention as `/list_my_domains`' `Domains` above. Anything else is a
+   * contract break and is thrown, not smoothed into an empty list: the
+   * previous version read a shape the endpoint never returned and fell
+   * through to `[]` with `ok: true`, which left every consumer unable to
+   * tell an empty account from a lost response (#1418).
+   */
   async listAddresses(): Promise<Address[]> {
-    const data = await this.request<{ addresses?: Address[] } | Address[]>('GET', '/list');
-    return Array.isArray(data) ? data : (data.addresses ?? []);
+    const data = await this.request<{ Items?: unknown }>('GET', '/list');
+    if (!data || !Array.isArray(data.Items)) {
+      throw new ApiError(200, '/list returned no Items array');
+    }
+    return data.Items as Address[];
   }
 
   async newAddress(req: NewAddressRequest): Promise<string> {
