@@ -20,7 +20,7 @@ struct LinkMenuTarget: Identifiable, Equatable {
     ]
 
     /// True when a web view can render the destination — gates the
-    /// "Open in Private Window" action.
+    /// "Open in Private Window" row (macOS) and the "Open in Browser" title.
     var isWebLink: Bool {
         let scheme = url.scheme?.lowercased()
         return scheme == "http" || scheme == "https"
@@ -75,10 +75,26 @@ struct LinkActionMenuView: View {
         case copyText
         case copyAddress
         case open
+        /// Hand the link to the browser extension via the redirector page
+        /// (PrivateLinkHandoff). Only ever emitted on macOS; the row is
+        /// not rendered elsewhere.
+        case openPrivate
     }
 
     let target: LinkMenuTarget
     let onAction: (Action) -> Void
+
+    #if os(macOS)
+    /// Read once from PrivateLinkHandoff's cache so the row is decided
+    /// before the popover lays out — a row arriving late would shift the
+    /// ones below it. `prime()` at launch keeps the cache warm; an
+    /// unprimed first open falls back to querying for the next one.
+    private var offersPrivateWindow: Bool {
+        if let known = PrivateLinkHandoff.isAvailable { return known }
+        PrivateLinkHandoff.prime()
+        return false
+    }
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -100,6 +116,15 @@ struct LinkActionMenuView: View {
                     systemImage: "safari",
                     action: .open
                 )
+                #if os(macOS)
+                if target.isWebLink && offersPrivateWindow {
+                    actionRow(
+                        "Open in Private Window",
+                        systemImage: "eye.slash",
+                        action: .openPrivate
+                    )
+                }
+                #endif
                 ShareLink(item: target.url) {
                     rowLabel("Share…", systemImage: "square.and.arrow.up")
                 }

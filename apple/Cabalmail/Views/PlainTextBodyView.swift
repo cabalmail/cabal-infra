@@ -65,6 +65,7 @@ struct PlainTextBodyView: View {
     /// the text below — the menu's "Open" action must reach the system opener,
     /// not bounce back into the menu.
     @Environment(\.openURL) private var openURL
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         let scanned = links ?? PlainTextLinks.empty
@@ -99,6 +100,10 @@ struct PlainTextBodyView: View {
             copyToPasteboard(target.url.absoluteString)
         case .open:
             openURL(target.url)
+        case .openPrivate:
+            #if os(macOS)
+            PrivateLinkHandoff.open(target.url, controlDomain: appState.controlDomain)
+            #endif
         }
         linkMenu = nil
     }

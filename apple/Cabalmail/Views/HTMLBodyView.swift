@@ -55,6 +55,7 @@ struct HTMLBodyView: View {
     /// Href under the pointer (trackpad / mouse), shown in the status pill.
     @State private var hoveredHref: String?
     @Environment(\.openURL) private var openURL
+    @Environment(AppState.self) private var appState
 
     init(
         html: String,
@@ -155,6 +156,10 @@ struct HTMLBodyView: View {
             copyToPasteboard(target.url.absoluteString)
         case .open:
             openURL(target.url)
+        case .openPrivate:
+            #if os(macOS)
+            PrivateLinkHandoff.open(target.url, controlDomain: appState.controlDomain)
+            #endif
         }
         linkMenu = nil
     }
