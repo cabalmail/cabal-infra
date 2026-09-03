@@ -629,6 +629,37 @@ class ApiClient(
     }
 
     /**
+     * Stages [files] in batches and returns every grant, in order (#1424).
+     * `/upload_url` mints at most [MAX_FILES_PER_REQUEST] grants per call,
+     * so handing it a whole bundle turns a limit on the shape of one request
+     * into a limit on what a message may carry. Each batch is also minted
+     * immediately before its own uploads, which keeps every grant inside the
+     * endpoint's ~2 minute expiry — a single up-front mint starts a clock the
+     * last upload has to finish inside.
+     *
+     * [bytesFor] supplies a file's bytes at upload time, by its index into
+     * [files], so the caller decides where they are read from.
+     */
+    suspend fun stageUploads(
+        files: List<Pair<String, String>>,
+        bytesFor: (Int) -> ByteArray,
+    ): List<UploadGrant> {
+        val staged = mutableListOf<UploadGrant>()
+        files.chunked(MAX_FILES_PER_REQUEST).forEach { batch ->
+            val grants = requestUploadUrls(batch)
+            if (grants.size != batch.size) {
+                throw CabalmailException.ProtocolError("Upload grant count mismatch")
+            }
+            val offset = staged.size
+            grants.forEachIndexed { index, grant ->
+                uploadToGrant(grant.url, files[offset + index].second, bytesFor(offset + index))
+            }
+            staged += grants
+        }
+        return staged
+    }
+
+    /**
      * PUTs [bytes] to a presigned grant URL. No Authorization header — the
      * URL carries its own signature — and the exact Content-Type the grant
      * was requested with.
@@ -792,4 +823,9 @@ class ApiClient(
                     },
             ),
         )
+
+    companion object {
+        /** Mirrors `MAX_FILES_PER_REQUEST` in `lambda/api/upload_url/function.py`. */
+        const val MAX_FILES_PER_REQUEST = 32
+    }
 }
