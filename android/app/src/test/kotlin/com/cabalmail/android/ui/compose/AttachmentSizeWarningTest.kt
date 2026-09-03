@@ -7,8 +7,15 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class AttachmentSizeWarningTest {
-    private fun attachment(size: Long, name: String = "f.bin") =
-        DraftAttachment(filename = name, mimeType = "application/octet-stream", path = "/$name", size = size)
+    private fun attachment(
+        size: Long,
+        name: String = "f.bin",
+    ) = DraftAttachment(
+        filename = name,
+        mimeType = "application/octet-stream",
+        path = "/$name",
+        size = size,
+    )
 
     @Test
     fun `matches the threshold the other two composers use`() {
