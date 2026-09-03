@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -266,6 +267,11 @@ fun ComposeScreen(
                         attachments = state.draft.attachments,
                         onRemove = viewModel::removeAttachment,
                     )
+                    if (AttachmentSizeWarning.exceedsWarning(state.draft.attachments)) {
+                        AttachmentSizeWarningRow(
+                            totalBytes = AttachmentSizeWarning.totalBytes(state.draft.attachments),
+                        )
+                    }
                 }
                 MarkdownToolbar(onAction = viewModel::applyMarkdown, enabled = !state.sending)
                 TextField(
@@ -495,9 +501,25 @@ private fun AttachmentChips(
     }
 }
 
-private fun formatSize(bytes: Long): String =
-    when {
-        bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
-        bytes >= 1024 -> "%.0f KB".format(bytes / 1024.0)
-        else -> "$bytes B"
+@Composable
+private fun AttachmentSizeWarningRow(totalBytes: Long) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Icon(
+            Icons.Default.Warning,
+            // The text beside it says the same thing; a second announcement
+            // would only make TalkBack read the warning twice.
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = stringResource(R.string.compose_attachment_size_warning, formatSize(totalBytes)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
     }
+}
