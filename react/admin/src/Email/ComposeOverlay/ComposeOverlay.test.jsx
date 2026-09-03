@@ -470,6 +470,69 @@ describe('ComposeOverlay', () => {
     }
   });
 
+  it('stages more than 32 attachments in batches of 32 (#1424)', async () => {
+    // /upload_url refuses more than 32 files in one request, so a 33-file
+    // message has to mint twice. Answer each call with slots matching the
+    // batch it was handed.
+    mockGetAttachmentUploadUrls.mockImplementation((batch) => Promise.resolve({
+      data: {
+        uploads: batch.map(a => ({
+          key: `outbound/cog-user/uuid/${a.filename}`,
+          url: `https://s3/put/${a.filename}`,
+        })),
+      },
+    }));
+    const { container, unmount } = renderCompose();
+    try {
+      await waitFor(() => {
+        expect(mockGetAddresses).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByLabelText('From'));
+      fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+
+      const toInput = screen.getByLabelText('Recipients');
+      fireEvent.change(toInput, { target: { value: 'dest@test.com' } });
+      fireEvent.keyDown(toInput, { key: 'Enter' });
+      fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'hi' } });
+
+      const files = Array.from({ length: 33 }, (_, i) =>
+        new File(['x'], `f${i}.txt`, { type: 'text/plain' }));
+      const fileInput = container.querySelector('.compose-attachment-input');
+      fireEvent.change(fileInput, { target: { files } });
+
+      await waitFor(() => {
+        expect(screen.getByText('f32.txt')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await waitFor(() => {
+        expect(mockSendMessage).toHaveBeenCalled();
+      });
+
+      // Two mint calls, 32 then 1 — never one call with all 33.
+      expect(mockGetAttachmentUploadUrls).toHaveBeenCalledTimes(2);
+      const [first, second] = mockGetAttachmentUploadUrls.mock.calls.map(c => c[0]);
+      expect(first).toHaveLength(32);
+      expect(second).toHaveLength(1);
+      expect(first[0].filename).toBe('f0.txt');
+      expect(first[31].filename).toBe('f31.txt');
+      expect(second[0].filename).toBe('f32.txt');
+
+      // Every file uploaded, and the keys reach /send in the original order
+      // across the batch seam.
+      expect(mockUploadAttachmentToS3).toHaveBeenCalledTimes(33);
+      const wireAttachments = mockSendMessage.mock.calls[0][10];
+      expect(wireAttachments).toHaveLength(33);
+      expect(wireAttachments.map(a => a.filename))
+        .toEqual(files.map(f => f.name));
+      expect(wireAttachments[32].s3_key).toBe('outbound/cog-user/uuid/f32.txt');
+    } finally {
+      unmount();
+    }
+  });
+
   it('removes an attached file when the chip remove button is clicked', async () => {
     const { container, unmount } = renderCompose();
     try {
