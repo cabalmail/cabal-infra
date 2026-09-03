@@ -99,3 +99,44 @@ final class SearchResultsPlaceholderTests: XCTestCase {
         XCTAssertTrue(SearchResultsPlaceholder.pressReturn.title.contains("Return"))
     }
 }
+
+/// Issue #1419: "No messages matched X" is the same confident wrong answer
+/// #1027 was about, one step later — it cannot distinguish "nowhere in your
+/// mail" from "not in the folders I looked at". The scope sentence is what
+/// makes it answerable.
+extension SearchResultsPlaceholderTests {
+    private func crossFolderScope() -> SearchScopeSummary {
+        SearchScopeSummary(
+            foldersSearched: ["INBOX", "Archive"],
+            thisFolderOnly: false,
+            anchorFolderName: "INBOX"
+        )
+    }
+
+    func testNoMatchesStatesTheScopeItSearched() {
+        let message = SearchResultsPlaceholder.noMatches.message(
+            for: "p5own1787999023",
+            scope: crossFolderScope()
+        )
+        XCTAssertTrue(message.contains("p5own1787999023"), message)
+        XCTAssertTrue(message.contains("INBOX"), message)
+        XCTAssertTrue(message.contains("Archive"), message)
+    }
+
+    /// The pre-fix string is still the whole message when no scope is known,
+    /// so an unreported search does not gain an invented claim.
+    func testNoMatchesWithoutAScopeIsUnchanged() {
+        XCTAssertEqual(
+            SearchResultsPlaceholder.noMatches.message(for: "delta"),
+            SearchResultsPlaceholder.noMatches.message(for: "delta", scope: nil)
+        )
+    }
+
+    /// Nothing was searched, so there is no scope to report.
+    func testPressReturnIgnoresTheScope() {
+        XCTAssertEqual(
+            SearchResultsPlaceholder.pressReturn.message(for: "delta", scope: crossFolderScope()),
+            SearchResultsPlaceholder.pressReturn.message(for: "delta")
+        )
+    }
+}

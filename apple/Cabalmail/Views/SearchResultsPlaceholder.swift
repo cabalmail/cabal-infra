@@ -49,8 +49,12 @@ enum SearchResultsPlaceholder: Equatable, CaseIterable {
     }
 
     /// Second line. Names the term for `.noMatches` so a stale-looking empty
-    /// list says which query it belongs to.
-    func message(for query: String) -> String {
+    /// list says which query it belongs to, and — given a `scope` — where it
+    /// looked. Without the scope, "No messages matched X" reads as "that word
+    /// is nowhere in your mail" for a search that never covered the folder
+    /// holding it (#1419); the scope sentence is what makes it an answer the
+    /// user can act on. `.pressReturn` takes no scope: nothing was searched.
+    func message(for query: String, scope: SearchScopeSummary? = nil) -> String {
         switch self {
         case .hidden:
             return ""
@@ -58,9 +62,11 @@ enum SearchResultsPlaceholder: Equatable, CaseIterable {
             return "Nothing has been searched yet."
         case .noMatches:
             let trimmed = query.trimmingCharacters(in: .whitespaces)
-            return trimmed.isEmpty
+            let matched = trimmed.isEmpty
                 ? "No messages matched your search."
                 : "No messages matched \u{201C}\(trimmed)\u{201D}."
+            guard let note = scope?.emptyStateNote else { return matched }
+            return "\(matched) \(note)"
         }
     }
 }
@@ -85,7 +91,9 @@ extension MessageListView {
             ContentUnavailableView(
                 placeholder.title,
                 systemImage: "magnifyingglass",
-                description: Text(placeholder.message(for: model.searchQuery))
+                description: Text(
+                    placeholder.message(for: model.searchQuery, scope: searchScope(model))
+                )
             )
         }
     }
