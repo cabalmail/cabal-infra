@@ -529,6 +529,25 @@ class ApiClientTest {
             assertEquals(35, server.requests.size)
         }
 
+    /**
+     * Negative control for the test above: the pre-fix shape — one
+     * `requestUploadUrls` with the whole list — reads as a single mint at
+     * index 0, which is exactly what `listOf(0, 33)` rejects. The live
+     * endpoint answers that request `400 at most 32 files per request`.
+     */
+    @Test
+    fun `an unbatched mint asks for all 33 files in one request`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to grantsJson(0..32))
+            val files = (0..32).map { "f$it.txt" to "text/plain" }
+
+            server.api.requestUploadUrls(files)
+
+            assertEquals(1, server.requests.size)
+            val body = server.body(0)
+            assertTrue(body.contains("\"f0.txt\"") && body.contains("\"f32.txt\""))
+        }
+
     @Test
     fun `stageUploads makes one mint for exactly 32 files and none for zero`() =
         runTest {
