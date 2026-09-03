@@ -227,6 +227,8 @@ def set_notes(build_id, locale, notes, token_factory):
     data = existing.get("data") or []
     if data:
         loc_id = data[0]["id"]
+        # Retryable: this replaces whatsNew wholesale on a localization we
+        # already resolved by id, so a repeat lands the same end state.
         api_request(
             "PATCH",
             f"/v1/betaBuildLocalizations/{loc_id}",
@@ -238,9 +240,14 @@ def set_notes(build_id, locale, notes, token_factory):
                     "attributes": {"whatsNew": notes},
                 }
             },
+            idempotent=True,
         )
         notice(f"Updated existing {locale} TestFlight notes.")
     else:
+        # Deliberately not retried: a create whose 5xx arrived after the
+        # localization was made would be re-sent as a second create. Notes
+        # are best-effort here (main() warns and exits 0), so a lost create
+        # costs a warning where a duplicate would need cleaning up by hand.
         api_request(
             "POST",
             "/v1/betaBuildLocalizations",

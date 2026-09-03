@@ -6,9 +6,12 @@ name: Scripts Tests
 # that combined cleanly-passing PRs is still verified). scripts/ has no deploy
 # workflow, so unlike the areas lint.yml mirrors there is no merge-time check
 # to duplicate — this workflow is the only gate for scripts/**. It also runs on
-# changelog.d/** and the Play release-notes generator: one suite renders the
-# pending `Android:` fragments as Play Console notes and fails if their
-# headlines overrun Google Play's 500-character cap.
+# changelog.d/**, the Play release-notes generator and the App Store Connect
+# upload scripts: one suite renders the pending `Android:` fragments as Play
+# Console notes and fails if their headlines overrun Google Play's
+# 500-character cap, another pins asc_api.py's transient-failure retry. The
+# .github/scripts/** entries are listed one file at a time so only the
+# scripts this suite actually covers trigger it.
 #
 # The suites are stdlib-only (scripts/apple-release-dashboard.py imports its
 # third-party ASC deps lazily), so no pip install is needed — just a pinned
@@ -20,6 +23,9 @@ on:
     paths:
       - 'scripts/**'
       - '.github/scripts/play-release-notes.py'
+      - '.github/scripts/asc_api.py'
+      - '.github/scripts/assign-testflight-group.py'
+      - '.github/scripts/set-testflight-notes.py'
       - 'changelog.d/**'
       - '.github/workflows/scripts-tests.yml'
   push:
@@ -30,6 +36,9 @@ on:
     paths:
       - 'scripts/**'
       - '.github/scripts/play-release-notes.py'
+      - '.github/scripts/asc_api.py'
+      - '.github/scripts/assign-testflight-group.py'
+      - '.github/scripts/set-testflight-notes.py'
       - 'changelog.d/**'
       - '.github/workflows/scripts-tests.yml'
 
