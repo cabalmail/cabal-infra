@@ -477,4 +477,94 @@ class ApiClientTest {
             assertTrue(server.body(1).contains("\"enabled_folders\":[]"))
             assertTrue(server.body(2).contains("\"enabled_folders\":[\"INBOX\",\"Receipts\"]"))
         }
+
+    // ------------------------------------------------------- attachment staging
+
+    /** `{"uploads": [...]}` for the file indices [range], one grant each. */
+    private fun grantsJson(range: IntRange): String =
+        range.joinToString(
+            prefix = """{"uploads": [""",
+            postfix = "]}",
+        ) { """{"key": "outbound/$it", "url": "https://s3.example.com/put/$it", "expires_in": 120}""" }
+
+    @Test
+    fun `stageUploads mints in batches of 32 instead of one call for the whole bundle`() =
+        runTest {
+            // 33 files: a mint of 32, its 32 uploads, then a mint of 1 and its
+            // upload. /upload_url refuses more than 32 files in one request, so
+            // an unbatched mint would cap a message at 32 attachments (#1424).
+            val responses = mutableListOf(HttpStatusCode.OK to grantsJson(0..31))
+            repeat(32) { responses += HttpStatusCode.OK to "" }
+            responses += HttpStatusCode.OK to grantsJson(32..32)
+            responses += HttpStatusCode.OK to ""
+            val server = Server(*responses.toTypedArray())
+            val files = (0..32).map { "f$it.txt" to "text/plain" }
+            val bytesRead = mutableListOf<Int>()
+
+            val grants =
+                server.api.stageUploads(files) { index ->
+                    bytesRead += index
+                    "body-$index".toByteArray()
+                }
+
+            val mintIndices = mutableListOf<Int>()
+            server.requests.forEachIndexed { index, request ->
+                if (request.url.encodedPath.endsWith("upload_url")) {
+                    mintIndices += index
+                }
+            }
+            // Two mints, and the second one comes after the first batch's 32
+            // uploads rather than up front — that is the presign-expiry half.
+            assertEquals(listOf(0, 33), mintIndices)
+            val firstBatch = server.body(0)
+            assertTrue(firstBatch.contains("\"f0.txt\"") && firstBatch.contains("\"f31.txt\""))
+            assertFalse(firstBatch.contains("\"f32.txt\""), "the 33rd file belongs to the second batch")
+            assertTrue(server.body(33).contains("\"f32.txt\""))
+
+            // Every file uploaded once, in order, and the grants come back in
+            // the caller's order across the batch seam.
+            assertEquals((0..32).toList(), bytesRead)
+            assertEquals(33, grants.size)
+            assertEquals("outbound/32", grants[32].key)
+            assertEquals(35, server.requests.size)
+        }
+
+    /**
+     * Negative control for the test above: the pre-fix shape — one
+     * `requestUploadUrls` with the whole list — reads as a single mint at
+     * index 0, which is exactly what `listOf(0, 33)` rejects. The live
+     * endpoint answers that request `400 at most 32 files per request`.
+     */
+    @Test
+    fun `an unbatched mint asks for all 33 files in one request`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to grantsJson(0..32))
+            val files = (0..32).map { "f$it.txt" to "text/plain" }
+
+            server.api.requestUploadUrls(files)
+
+            assertEquals(1, server.requests.size)
+            val body = server.body(0)
+            assertTrue(body.contains("\"f0.txt\"") && body.contains("\"f32.txt\""))
+        }
+
+    @Test
+    fun `stageUploads makes one mint for exactly 32 files and none for zero`() =
+        runTest {
+            val responses = mutableListOf(HttpStatusCode.OK to grantsJson(0..31))
+            repeat(32) { responses += HttpStatusCode.OK to "" }
+            val server = Server(*responses.toTypedArray())
+
+            val files = (0..31).map { "f$it.txt" to "text/plain" }
+
+            val grants = server.api.stageUploads(files) { ByteArray(1) }
+
+            assertEquals(32, grants.size)
+            assertEquals(33, server.requests.size, "one mint plus 32 uploads: 32 is the boundary, not 33")
+
+            val empty = Server()
+            val none = empty.api.stageUploads(emptyList()) { ByteArray(0) }
+            assertTrue(none.isEmpty())
+            assertTrue(empty.requests.isEmpty())
+        }
 }
