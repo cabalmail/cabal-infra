@@ -26,6 +26,9 @@ struct SearchView: View {
     @State private var model: MessageListViewModel?
     @State private var selectedEnvelope: Envelope?
 
+    /// Drives the `.searchable` field so the tab arrives ready to type (#1425).
+    @FocusState private var searchFieldFocused: Bool
+
     var body: some View {
         NavigationStack {
             Group {
@@ -69,6 +72,15 @@ struct SearchView: View {
             onSelectionCountChanged: { _ in }
         )
         .searchable(text: $model.searchQuery, prompt: "Search all mail")
+        .searchFocused($searchFieldFocused)
+        .onAppear {
+            // The tab has one thing to type into, so opening it is the whole
+            // of the intent — unless a previous search is still on screen,
+            // which the keyboard would cover (#1425).
+            searchFieldFocused = SearchFieldFocusPolicy.focusesOnAppear(
+                query: model.searchQuery
+            )
+        }
         .onSubmit(of: .search) {
             Task { await model.runSearch() }
         }
