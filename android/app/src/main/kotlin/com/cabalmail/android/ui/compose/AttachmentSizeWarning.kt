@@ -23,8 +23,7 @@ object AttachmentSizeWarning {
      * Strictly greater, as in both sibling composers: a message sitting
      * exactly on the threshold is under every ceiling this warns about.
      */
-    fun exceedsWarning(attachments: List<DraftAttachment>): Boolean =
-        totalBytes(attachments) > WARN_BYTES
+    fun exceedsWarning(attachments: List<DraftAttachment>): Boolean = totalBytes(attachments) > WARN_BYTES
 }
 
 /** Human-readable byte count for an attachment chip or the size warning. */
