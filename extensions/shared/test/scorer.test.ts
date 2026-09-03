@@ -89,7 +89,85 @@ describe('scoreForm', () => {
     const names = score.signals.map((s) => s.name);
     expect(names).toContain('pageUrl');
     expect(names).toContain('headingText');
-    expect(names).toContain('termsCheckbox');
+    expect(names).toContain('legalAgreement');
+  });
+
+  // #1408: a passwordless first-step sign-up has none of the password-shaped
+  // signals, so it reaches `signup` only if something positive says an
+  // account is being created. The agreement prose is that something -- and
+  // the tests below pin what must NOT count as it.
+  it('reads agreement prose above the form as a legal agreement', () => {
+    const { form, ctx } = makeForm(
+      `
+      <div class="signup-form">
+        <h1>Create your account</h1>
+        <h2>By continuing, you agree to our <a href="/tos">Terms of Service</a>.</h2>
+        <div class="card">
+          <form novalidate>
+            <label for="signup-email">Your email</label>
+            <input type="email" name="email" id="signup-email" />
+            <button type="submit">Continue</button>
+          </form>
+        </div>
+      </div>`,
+      'https://example.com/start/account/user',
+    );
+    const score = scoreForm(form, ctx);
+    expect(score.signals.map((x) => x.name)).toContain('legalAgreement');
+    expect(score.classification).toBe('signup');
+  });
+
+  it('does not read a bare terms link as an agreement', () => {
+    const { form, ctx } = makeForm(
+      `
+      <div>
+        <h1>Create your account</h1>
+        <form novalidate>
+          <input type="email" name="email" />
+          <button type="submit">Continue</button>
+          <a href="/tos">Terms of Service</a>
+        </form>
+      </div>`,
+      'https://example.com/start',
+    );
+    const score = scoreForm(form, ctx);
+    expect(score.signals.map((x) => x.name)).not.toContain('legalAgreement');
+    expect(score.classification).toBe('ambiguous');
+  });
+
+  it('does not read a privacy notice without an agreement phrase as one', () => {
+    const { form, ctx } = makeForm(
+      `
+      <div class="newsletter-signup">
+        <h2>Sign up for our newsletter</h2>
+        <form action="/subscribe">
+          <input type="email" name="email" />
+          <p>We handle your address according to our <a href="/privacy">Privacy Policy</a>.</p>
+          <button type="submit">Subscribe</button>
+        </form>
+      </div>`,
+      'https://blog.example.com/posts/hello',
+    );
+    const score = scoreForm(form, ctx);
+    expect(score.signals.map((x) => x.name)).not.toContain('legalAgreement');
+    expect(score.classification).toBe('ambiguous');
+  });
+
+  it('does not reach past the agreement lookback for the prose', () => {
+    const { form, ctx } = makeForm(
+      `
+      <div>
+        <p>By continuing you agree to our Terms of Service.</p>
+        <div><div><div><div><div>
+          <form novalidate>
+            <input type="email" name="email" />
+            <button type="submit">Continue</button>
+          </form>
+        </div></div></div></div></div>
+      </div>`,
+      'https://example.com/start',
+    );
+    expect(scoreForm(form, ctx).signals.map((x) => x.name)).not.toContain('legalAgreement');
   });
 
   it('treats a magic-link email-only form as ambiguous, not signup', () => {

@@ -1180,6 +1180,7 @@ jobs:
           S8: ${{ secrets.MAC_INSTALLER_CERT_P12 }}
           S9: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD }}
           S10: ${{ secrets.MAC_NSE_APP_STORE_PROFILE }}
+          S11: ${{ secrets.MAC_WEBEXT_APP_STORE_PROFILE }}
         run: |
           MISSING=()
           [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
@@ -1192,6 +1193,9 @@ jobs:
           [ -z "$S8" ] && MISSING+=("MAC_INSTALLER_CERT_P12")
           [ -z "$S9" ] && MISSING+=("MAC_INSTALLER_CERT_PASSWORD")
           [ -z "$S10" ] && MISSING+=("MAC_NSE_APP_STORE_PROFILE")
+          # The embedded Safari web extension (CabalmailMacWebExtension)
+          # signs with its own per-bundle-id profile, same as the NSE.
+          [ -z "$S11" ] && MISSING+=("MAC_WEBEXT_APP_STORE_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -1312,6 +1316,17 @@ jobs:
           extension: provisionprofile
           env-name: MAC_NSE_APP_STORE_PROFILE_UUID
 
+      - name: Install macOS web-extension App Store provisioning profile
+        # The embedded Safari web extension, same shape as the NSE profile
+        # step above. scripts/make-mac-profile.py if the portal refuses to
+        # mint it (docs/browser-extension.md).
+        if: steps.check.outputs.enabled == 'true'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.MAC_WEBEXT_APP_STORE_PROFILE }}
+          extension: provisionprofile
+          env-name: MAC_WEBEXT_APP_STORE_PROFILE_UUID
+
       - name: Archive CabalmailMac
         if: steps.check.outputs.enabled == 'true'
         working-directory: apple
@@ -1346,6 +1361,7 @@ jobs:
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             MAC_APP_STORE_PROFILE_UUID="$MAC_APP_STORE_PROFILE_UUID" \
             MAC_NSE_APP_STORE_PROFILE_UUID="${MAC_NSE_APP_STORE_PROFILE_UUID:-}" \
+            MAC_WEBEXT_APP_STORE_PROFILE_UUID="${MAC_WEBEXT_APP_STORE_PROFILE_UUID:-}" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-archive.log" \
@@ -1380,6 +1396,8 @@ jobs:
                   <string>$MAC_APP_STORE_PROFILE_UUID</string>
                   <key>com.cabalmail.CabalmailMac.NotificationService</key>
                   <string>$MAC_NSE_APP_STORE_PROFILE_UUID</string>
+                  <key>com.cabalmail.CabalmailMac.web-extension</key>
+                  <string>$MAC_WEBEXT_APP_STORE_PROFILE_UUID</string>
               </dict>
           </dict>
           </plist>
@@ -1440,6 +1458,7 @@ jobs:
           DEVID_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
           DEVID_PROFILE: ${{ secrets.MAC_DEVID_PROFILE }}
           DEVID_NSE_PROFILE: ${{ secrets.MAC_NSE_DEVID_PROFILE }}
+          DEVID_WEBEXT_PROFILE: ${{ secrets.MAC_WEBEXT_DEVID_PROFILE }}
         run: |
           MISSING=()
           [ -z "$DEVID_P12" ] && MISSING+=("DEVELOPER_ID_CERT_P12")
@@ -1447,6 +1466,8 @@ jobs:
           # The embedded Notification Service Extension needs its own
           # Developer ID profile for the developer-id export method.
           [ -z "$DEVID_NSE_PROFILE" ] && MISSING+=("MAC_NSE_DEVID_PROFILE")
+          # Likewise the embedded Safari web extension.
+          [ -z "$DEVID_WEBEXT_PROFILE" ] && MISSING+=("MAC_WEBEXT_DEVID_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::notice::Developer-ID secrets missing (${MISSING[*]}); skipping notarized .app artifact. TestFlight upload already completed."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -1490,6 +1511,14 @@ jobs:
           extension: provisionprofile
           env-name: MAC_NSE_DEVID_PROFILE_UUID
 
+      - name: Install macOS web-extension Developer ID provisioning profile
+        if: steps.devid.outputs.enabled == 'true'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.MAC_WEBEXT_DEVID_PROFILE }}
+          extension: provisionprofile
+          env-name: MAC_WEBEXT_DEVID_PROFILE_UUID
+
       - name: Export developer-id build for notarization
         if: steps.devid.outputs.enabled == 'true'
         working-directory: apple
@@ -1519,6 +1548,8 @@ jobs:
                   <string>$MAC_DEVID_PROFILE_UUID</string>
                   <key>com.cabalmail.CabalmailMac.NotificationService</key>
                   <string>$MAC_NSE_DEVID_PROFILE_UUID</string>
+                  <key>com.cabalmail.CabalmailMac.web-extension</key>
+                  <string>$MAC_WEBEXT_DEVID_PROFILE_UUID</string>
               </dict>
           </dict>
           </plist>

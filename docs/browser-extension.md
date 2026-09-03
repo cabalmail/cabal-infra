@@ -277,6 +277,12 @@ The listing's privacy tab requires a justification per requested permission. The
 
 Expect a **"Broad Host Permissions" warning** at submission. It comes from the content script's `https://*/*` match, not from the two named host permissions, and it is inherent and correct to click through: automatic sign-up-form detection means running on the pages the user visits — the same surface every password manager requests — and `activeTab` cannot replace it without removing the popover-on-focus and adopt-while-typing flows. It may route the listing into the longer in-depth review; the host-permissions justification above is written to answer exactly that reviewer's question.
 
+## The extension embedded in the Mac mail app
+
+Per the plan's OQ9 resolution, the Safari extension's long-term home is inside the Cabalmail mail apps rather than the standalone host: `apple/project.yml` embeds it in `CabalmailMac` as the `CabalmailMacWebExtension` appex, whose Resources are the same web bundle this workspace builds (`scripts/sync-vendored.sh` builds it as part of `xcodegen generate`, with no control domain baked — the extension asks the mail app at runtime). The mail app publishes the control domain the user signed in with to the shared App Group (`ExtensionControlDomainStore`), and the extension's background asks its native handler for it, so the user never types the server twice; an explicit "Change server" choice in the extension popup still overrides it. The embedded and standalone extensions have different identities (`com.cabalmail.CabalmailMac.web-extension` vs `com.cabalmail.extension-host.web-extension`), so both can be enabled during the transition — expect two "Cabalmail" rows in Safari's Extensions pane on a machine that has both.
+
+Signing needs two more per-bundle-id profiles for the new appex, one per export method, exactly as the macOS NSE did: mint both for `com.cabalmail.CabalmailMac.web-extension` and store them as `MAC_WEBEXT_APP_STORE_PROFILE` and `MAC_WEBEXT_DEVID_PROFILE` (`scripts/make-mac-profile.py` if the portal refuses; `Platform` must include `OSX`). **Until both exist, `apple.yml`'s macOS upload leg parks warn-green** — the same skip-not-fail posture as every other missing signing secret, but it does pause macOS mail-app TestFlight uploads, so mint them promptly.
+
 ## Publishing to the App Store (Safari)
 
 The Safari extension ships inside a minimal macOS host app (`extensions/safari/`), through the same Apple Developer Program membership as the Cabalmail mail clients.

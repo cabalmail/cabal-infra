@@ -7,15 +7,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clearControlDomain,
+  forgetNativeControlDomain,
   normalizeControlDomain,
   requiredOrigins,
   resolveControlDomain,
   saveControlDomain,
 } from '../src/config/controlDomain';
-import { resetStorage } from './support/browser-stub';
+import { resetStorage, setNativeResponder } from './support/browser-stub';
 
 beforeEach(() => {
   resetStorage();
+  forgetNativeControlDomain();
 });
 
 describe('normalizeControlDomain', () => {
@@ -59,6 +61,34 @@ describe('resolveControlDomain', () => {
   it('forgets the deployment on clear', async () => {
     await saveControlDomain('cabalmail.net');
     await clearControlDomain();
+    expect(await resolveControlDomain()).toBeNull();
+  });
+});
+
+describe('resolveControlDomain with a containing mail app', () => {
+  it('uses the mail app\'s domain when nothing is stored', async () => {
+    setNativeResponder(() => ({ domain: 'cabalmail.net' }));
+    expect(await resolveControlDomain()).toBe('cabalmail.net');
+  });
+
+  it('normalizes what the mail app hands over', async () => {
+    setNativeResponder(() => ({ domain: 'https://admin.cabalmail.net/' }));
+    expect(await resolveControlDomain()).toBe('cabalmail.net');
+  });
+
+  it('prefers an explicit in-extension choice over the mail app', async () => {
+    setNativeResponder(() => ({ domain: 'cabalmail.net' }));
+    await saveControlDomain('other.example');
+    expect(await resolveControlDomain()).toBe('other.example');
+  });
+
+  it('treats a refusing native host as no opinion', async () => {
+    // Chrome and the standalone Safari host both land here.
+    expect(await resolveControlDomain()).toBeNull();
+  });
+
+  it('ignores a malformed native reply', async () => {
+    setNativeResponder(() => ({ domain: 42 }));
     expect(await resolveControlDomain()).toBeNull();
   });
 });

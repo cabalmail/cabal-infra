@@ -22,6 +22,52 @@ import browser from 'webextension-polyfill';
 
 const DOMAIN_KEY = 'cabalmail.controlDomain';
 
+/**
+ * The embedded Safari build lives inside the Cabalmail mail app, and the
+ * mail app already knows the control domain -- the user typed it at
+ * sign-in. Ask the containing app through the native-messaging bridge
+ * (`SafariWebExtensionHandler` answers from the shared App Group) so the
+ * user never types it twice. Chrome has no native host registered, and the
+ * standalone Safari host does not answer this message; both reject, and we
+ * treat that as "no opinion".
+ *
+ * Cached briefly in module state: `tabs.onUpdated` resolves the domain per
+ * event, and a native round-trip per navigation would be silly. Module
+ * state is safe here -- a suspended worker loses the cache and re-asks.
+ */
+const NATIVE_CACHE_MS = 60_000;
+let nativeCache: { at: number; domain: string | null } | null = null;
+
+/** Drop the cached native answer (tests, and after a server change). */
+export function forgetNativeControlDomain(): void {
+  nativeCache = null;
+}
+
+async function nativeControlDomain(): Promise<string | null> {
+  if (nativeCache && Date.now() - nativeCache.at < NATIVE_CACHE_MS) {
+    return nativeCache.domain;
+  }
+  let domain: string | null = null;
+  try {
+    const runtime = browser.runtime as {
+      sendNativeMessage?: (app: string, message: unknown) => Promise<unknown>;
+    };
+    if (runtime.sendNativeMessage) {
+      // Safari ignores the application id and routes to the containing app.
+      const reply = (await runtime.sendNativeMessage('application.id', {
+        kind: 'get-control-domain',
+      })) as { domain?: unknown } | null;
+      if (reply && typeof reply.domain === 'string') {
+        domain = normalizeControlDomain(reply.domain);
+      }
+    }
+  } catch {
+    domain = null;
+  }
+  nativeCache = { at: Date.now(), domain };
+  return domain;
+}
+
 /** The deliberately non-functional default in `build-extension.mjs`. */
 const PLACEHOLDER_DOMAIN = 'cabalmail.example';
 
@@ -51,12 +97,19 @@ export function buildDefaultDomain(): string | null {
   return baked;
 }
 
-/** The domain this install should use, or null when it has not been told. */
+/**
+ * The domain this install should use, or null when it has not been told.
+ * Precedence: an explicit in-extension choice, then the containing mail
+ * app's domain (embedded Safari), then the build default. The mail app's
+ * value is a live layer rather than copied into storage, so changing the
+ * server in the mail app carries the extension along unless the user
+ * overrode it here.
+ */
 export async function resolveControlDomain(): Promise<string | null> {
   const stored = await browser.storage.local.get(DOMAIN_KEY);
   const value = stored[DOMAIN_KEY];
   if (typeof value === 'string' && value) return value;
-  return buildDefaultDomain();
+  return (await nativeControlDomain()) ?? buildDefaultDomain();
 }
 
 /** Persist an explicit choice, overriding any build default. */

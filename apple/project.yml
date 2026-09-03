@@ -231,6 +231,10 @@ targets:
       # Shared with AppState.swift: the no-op stub branch compiles here
       # (WatchConnectivity is iOS-only). See WatchSessionBridge.swift.
       - path: Cabalmail/WatchSessionBridge.swift
+      # Publishes the control domain to the App Group for the embedded
+      # Safari extension (compiled into the appex too).
+      - path: Cabalmail/ExtensionControlDomainStore.swift
+      - path: Cabalmail/AppStateSessionPersistence.swift
       # Push notifications (phase 6, macOS parity): one implementation for
       # both platforms — each file carries an `#if os(iOS)` / `#else`
       # (AppKit) branch around the small platform seams.
@@ -244,6 +248,9 @@ targets:
       # source as the iOS target's extension, compiled into a separate
       # macOS appex (see the CabalmailMacNotificationService target).
       - target: CabalmailMacNotificationService
+      # Safari web extension (OQ9: embedded in the mail app, not the
+      # standalone host). Registration with Safari rides this embedding.
+      - target: CabalmailMacWebExtension
     info:
       path: CabalmailMac/Info.plist
       properties:
@@ -518,6 +525,63 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "$(MAC_NSE_APP_STORE_PROFILE_UUID)"
+
+  # Safari web extension, embedded in the Mac mail app (OQ9 resolution:
+  # docs/1.x/browser-extension-plan.md). The extension's logic lives in the
+  # bundled WebExtension resources, built from extensions/ by
+  # scripts/sync-vendored.sh (preGenCommand) -- a group, NOT `type: folder`,
+  # so the files land flat at Contents/Resources where Safari and App Store
+  # validation expect manifest.json (the standalone host shipped nested
+  # once; App Store error 90850). The native handler answers one message:
+  # the control domain the mail app published to the shared App Group, so
+  # the user never types the server twice.
+  CabalmailMacWebExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: CabalmailMacWebExtension/SafariWebExtensionHandler.swift
+      # Shared with the app targets (WatchSessionBridge.swift pattern):
+      # the appex reads what AppState publishes.
+      - path: Cabalmail/ExtensionControlDomainStore.swift
+      - path: ../extensions/safari/CabalmailExtension/Resources
+        buildPhase: resources
+    info:
+      path: CabalmailMacWebExtension/Info.plist
+      properties:
+        # Shown in Safari's Extensions pane; "Cabalmail", not the target name.
+        CFBundleDisplayName: Cabalmail
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).SafariWebExtensionHandler"
+        # Host/extension version match is enforced at App Store validation;
+        # CI passes both on the xcodebuild command line, reaching every
+        # target at once (see the NSE target's equivalent comment).
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+    settings:
+      base:
+        # Apple's convention: the host app's bundle id plus a suffix. This
+        # is a different extension identity from the standalone host's
+        # com.cabalmail.extension-host.web-extension -- Safari treats them
+        # as unrelated extensions, which is what makes the two coexist
+        # during the transition.
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac.web-extension
+        # Lockstep with CabalmailMac (validation requirement, as above).
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        # Sandbox + outbound network (the Safari Web Extension template
+        # pair) plus the App Group the control-domain handoff reads.
+        CODE_SIGN_ENTITLEMENTS: CabalmailMacWebExtension/CabalmailMacWebExtension.entitlements
+      configs:
+        # Same rationale as the NSE target: manual-signing settings live
+        # per-target; CI injects MAC_WEBEXT_APP_STORE_PROFILE_UUID when
+        # archiving the mac app.
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "$(MAC_WEBEXT_APP_STORE_PROFILE_UUID)"
 
   # Unit tests for the shared app layer (view models, app state). Hosted
   # by CabalmailMac rather than the iOS app deliberately: the mac target

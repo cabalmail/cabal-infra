@@ -10,9 +10,27 @@ const store = new Map<string, unknown>();
 
 export function resetStorage(): void {
   store.clear();
+  nativeResponder = null;
+}
+
+/**
+ * Test hook for `runtime.sendNativeMessage` (the embedded Safari build asks
+ * its containing mail app for the control domain). Null -- the default --
+ * makes the call reject, which is what Chrome and the standalone host do.
+ */
+let nativeResponder: ((message: unknown) => unknown) | null = null;
+
+export function setNativeResponder(fn: ((message: unknown) => unknown) | null): void {
+  nativeResponder = fn;
 }
 
 export default {
+  runtime: {
+    sendNativeMessage: async (_app: string, message: unknown) => {
+      if (!nativeResponder) throw new Error('no native host');
+      return nativeResponder(message);
+    },
+  },
   storage: {
     local: {
       get: async (key: string) =>

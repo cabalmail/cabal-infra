@@ -72,3 +72,18 @@ cp "$MARKED_LICENSE"  "$DEST_DIR/marked-LICENSE.md"
 cp "$TURNDOWN_LICENSE" "$DEST_DIR/turndown-LICENSE"
 
 echo "[sync-vendored] Synced marked + turndown into $DEST_DIR"
+
+# ---------------------------------------------------------------------------
+# Safari web-extension bundle for the embedded appex (CabalmailMacWebExtension
+# in project.yml references extensions/safari/CabalmailExtension/Resources,
+# which is gitignored build output). No CABALMAIL_CONTROL_DOMAIN: the
+# extension resolves its server at runtime -- from the mail app through the
+# App Group -- so the mail app's builds stay environment-agnostic.
+# ---------------------------------------------------------------------------
+EXT_DIR="$REPO_ROOT/extensions"
+if [ ! -d "$EXT_DIR/node_modules" ]; then
+    echo "[sync-vendored] extensions/node_modules missing; running 'npm ci'..."
+    (cd "$EXT_DIR" && npm ci --no-audit --no-fund)
+fi
+(cd "$EXT_DIR" && npm run build --workspace safari)
+echo "[sync-vendored] Built the Safari web-extension bundle"
