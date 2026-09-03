@@ -70,15 +70,15 @@ extension MessageListView {
 
     /// In-list banner shown above the message list while a search is
     /// active. Mirrors the React webmail's search header: scope label
-    /// ("in N folders" or the folder name), match count with truncation
-    /// hint, and a clear button that drops back to the folder view.
+    /// (which folders were searched), match count with truncation hint,
+    /// and a clear button that drops back to the folder view.
     @ViewBuilder
     func searchMetadataBanner(model: MessageListViewModel) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass.circle.fill")
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text(searchScopeLabel(model))
+                Text(searchScope(model).bannerLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(searchMatchLabel(model))
@@ -100,14 +100,14 @@ extension MessageListView {
         .background(.thinMaterial)
     }
 
-    private func searchScopeLabel(_ model: MessageListViewModel) -> String {
-        let folders = model.searchFoldersSearched
-        if model.searchFilters.thisFolderOnly {
-            return "in \(folders.first ?? folder.name)"
-        }
-        if folders.isEmpty { return "in all folders" }
-        if folders.count == 1 { return "in \(folders[0])" }
-        return "in \(folders.count) folders"
+    /// The scope both the banner and the empty state describe. One value so
+    /// the two surfaces cannot disagree about where the search looked (#1419).
+    func searchScope(_ model: MessageListViewModel) -> SearchScopeSummary {
+        SearchScopeSummary(
+            foldersSearched: model.searchFoldersSearched,
+            thisFolderOnly: model.searchFilters.thisFolderOnly,
+            anchorFolderName: folder.name
+        )
     }
 
     private func searchMatchLabel(_ model: MessageListViewModel) -> String {
