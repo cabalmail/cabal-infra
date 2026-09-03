@@ -30,12 +30,20 @@ secret), and reminds you of the platform check to run before uploading.
 
 Optional third argument: the ASC profileType (default MAC_APP_STORE; use
 MAC_APP_DIRECT for a Developer ID profile).
+
+--replace deletes any existing profile with the same name before creating
+the new one. The API refuses a duplicate name outright, and re-minting is
+exactly what a capability change on the App ID demands (it invalidates the
+old profile), so the collision is the normal case rather than an accident.
+Deleting an invalidated profile is safe: CI installs profiles from the
+GitHub secret, not by name, and the secret gets the new bytes anyway.
 '''
 import base64
 import json
 import os
 import sys
 import time
+import urllib.parse
 import urllib.request
 
 try:
@@ -61,17 +69,18 @@ def asc_token():
         key, algorithm='ES256', headers={'kid': os.environ['ASC_KEY_ID']})
 
 
-def api(token, path, body=None):
-    '''One authenticated ASC API call; GET without a body, POST with one.'''
+def api(token, path, body=None, method=None):
+    '''One authenticated ASC API call; GET without a body, POST with one,
+    or an explicit method (DELETE answers 204 with no body).'''
     request = urllib.request.Request(
         API + path,
         data=json.dumps(body).encode() if body else None,
         headers={'Authorization': f'Bearer {token}',
                  'Content-Type': 'application/json'},
-        method='POST' if body else 'GET')
+        method=method or ('POST' if body else 'GET'))
     try:
         with urllib.request.urlopen(request) as response:
-            return json.load(response)
+            return json.load(response) if response.status != 204 else None
     except urllib.error.HTTPError as err:
         sys.exit(f'ASC API {err.code} on {path}:\n{err.read().decode()}')
 
@@ -79,12 +88,26 @@ def api(token, path, body=None):
 def main():
     '''Resolves the bundle id and certificates, creates the profile, and
     prints the base64 for the GitHub secret.'''
-    if len(sys.argv) not in (3, 4):
-        sys.exit('usage: make-mac-profile.py <bundle-id> <profile-name> [profile-type]')
-    bundle_id, name = sys.argv[1], sys.argv[2]
-    profile_type = sys.argv[3] if len(sys.argv) == 4 else 'MAC_APP_STORE'
+    args = [a for a in sys.argv[1:] if a != '--replace']
+    replace = '--replace' in sys.argv[1:]
+    if len(args) not in (2, 3):
+        sys.exit('usage: make-mac-profile.py [--replace] <bundle-id> <profile-name> [profile-type]')
+    bundle_id, name = args[0], args[1]
+    profile_type = args[2] if len(args) == 3 else 'MAC_APP_STORE'
 
     token = asc_token()
+
+    existing = api(token, f'/v1/profiles?filter[name]={urllib.parse.quote(name)}')['data']
+    existing = [p for p in existing if p['attributes']['name'] == name]
+    if existing and not replace:
+        states = ', '.join(p['attributes'].get('profileState', '?') for p in existing)
+        sys.exit(f'{len(existing)} profile(s) already named {name!r} ({states}); the API '
+                 'refuses a duplicate name. Re-run with --replace to delete them first, '
+                 'or pick another name.')
+    for old_profile in existing:
+        api(token, f"/v1/profiles/{old_profile['id']}", method='DELETE')
+        print(f"deleted existing profile {old_profile['id']} "
+              f"({old_profile['attributes'].get('profileState', '?')})")
     bundles = api(token, f'/v1/bundleIds?filter[identifier]={bundle_id}')['data']
     matches = [b for b in bundles if b['attributes']['identifier'] == bundle_id]
     if not matches:
