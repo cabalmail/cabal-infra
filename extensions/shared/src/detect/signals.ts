@@ -8,6 +8,8 @@
 
 import type { SignalContribution } from '../models/index';
 import {
+  AGREEMENT_TERMS,
+  LEGAL_DOCUMENT_TERMS,
   SIGNIN_PATH_TERMS,
   SIGNIN_TERMS,
   SIGNUP_PATH_TERMS,
@@ -286,19 +288,66 @@ export const multipleIdentityFields: SignalExtractor = (form) => {
   };
 };
 
-export const termsCheckbox: SignalExtractor = (form) => {
+/**
+ * How far above the form the agreement text may sit. A passwordless
+ * first-step sign-up puts it outside the form entirely: WordPress's
+ * `/start/account/user` renders "By continuing ... you agree to our Terms of
+ * Service" in an h2 four levels above the <form> (#1408). The walk stops at
+ * <body> as well as at this bound, so a site-wide footer linking the terms
+ * never counts as this form's agreement.
+ */
+const AGREEMENT_LOOKUP = 4;
+
+/** The form and the bounded run of ancestors an agreement may live in. */
+function agreementRegions(form: HTMLFormElement): Element[] {
+  const regions: Element[] = [form];
+  let parent = form.parentElement;
+  for (
+    let level = 0;
+    level < AGREEMENT_LOOKUP && parent && parent.tagName !== 'BODY' && parent.tagName !== 'HTML';
+    level += 1
+  ) {
+    regions.push(parent);
+    parent = parent.parentElement;
+  }
+  return regions;
+}
+
+/**
+ * The user is being asked to enter a legal agreement, which is what account
+ * creation is and what signing in, subscribing to a newsletter or sending a
+ * contact form is not. Two shapes count, and they are one signal rather than
+ * two because they are one piece of evidence: an explicit terms checkbox
+ * inside the form, or agreement prose next to it naming a legal document.
+ *
+ * Both halves are required in the prose case. A reference on its own is a
+ * link (every page footer has one) and an agreement phrase on its own is
+ * ordinary copy ("by continuing you accept a longer delivery time"); it is
+ * the pair, inside a bounded region around the form, that means an account.
+ *
+ * Weighted below the contextual signals on purpose: on its own it can only
+ * move a form within `ambiguous`, so it takes a second signal -- a committal
+ * heading, a self-describing URL -- to reach an automatic offer.
+ */
+export const legalAgreement: SignalExtractor = (form) => {
   const checkboxes = Array.from(
     form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
   );
-  const hit = checkboxes.some((box) => {
+  const checked = checkboxes.some((box) => {
     const label = box.closest('label') ?? box.parentElement;
     return containsAny(label?.textContent ?? '', ['terms', 'privacy policy', 'conditions']);
   });
-  if (!hit) return null;
+  const acknowledged =
+    checked ||
+    agreementRegions(form).some((region) => {
+      const text = region.textContent ?? '';
+      return containsAny(text, AGREEMENT_TERMS) && containsAny(text, LEGAL_DOCUMENT_TERMS);
+    });
+  if (!acknowledged) return null;
   return {
-    name: 'termsCheckbox',
-    weight: WEIGHTS.termsCheckbox,
-    contribution: WEIGHTS.termsCheckbox,
+    name: 'legalAgreement',
+    weight: WEIGHTS.legalAgreement,
+    contribution: WEIGHTS.legalAgreement,
   };
 };
 
@@ -313,5 +362,5 @@ export const SIGNAL_EXTRACTORS: SignalExtractor[] = [
   headingText,
   fieldLabels,
   multipleIdentityFields,
-  termsCheckbox,
+  legalAgreement,
 ];

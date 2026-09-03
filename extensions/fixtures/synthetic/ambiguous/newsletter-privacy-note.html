@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html><head>
+<meta name="fixture-url" content="https://blog.example.com/posts/hello">
+<title>Example</title>
+</head><body>
+<article><h1>A blog post</h1><p>Body copy.</p></article>
+<!-- A mailing-list box, not an account: it borrows sign-up vocabulary in its
+     heading and its class names, and it links a privacy policy, but nobody is
+     agreeing to anything by subscribing. It must stay `ambiguous` (a badge the
+     user can click), never an automatic offer. -->
+<div class="newsletter-signup">
+  <h2>Sign up for our newsletter</h2>
+  <form class="newsletter-signup__form" action="/subscribe">
+    <input type="email" name="email" id="newsletter-signup-email" placeholder="Your email">
+    <p>We handle your address according to our <a href="/privacy">Privacy Policy</a>.</p>
+    <button type="submit">Subscribe</button>
+  </form>
+</div>
+<footer><a href="/terms">Terms of Service</a> &middot; <a href="/privacy">Privacy Policy</a></footer>
+</body></html>

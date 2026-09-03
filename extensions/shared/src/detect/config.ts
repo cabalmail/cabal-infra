@@ -20,7 +20,7 @@ export const WEIGHTS = {
   // form out of `signin` into `ambiguous` (a badge the user can click), but
   // never on its own into `signup` (an automatic offer).
   multipleIdentityFields: 1.5,
-  termsCheckbox: 0.5,
+  legalAgreement: 0.5,
 } as const;
 
 /** Score at or above which a form is classified `signup`. */
@@ -82,3 +82,48 @@ export const SIGNUP_PATH_TERMS = ['signup', 'sign-up', 'sign_up', 'register', 'r
 
 /** URL-path fragments suggesting sign-in. */
 export const SIGNIN_PATH_TERMS = ['signin', 'sign-in', 'sign_in', 'login', 'log-in', 'log_in', 'logon', 'session'];
+
+/**
+ * Legal documents a form's agreement points at. Deliberately the named
+ * documents rather than the bare word "terms", which appears in unrelated
+ * prose ("search terms", "payment terms").
+ */
+export const LEGAL_DOCUMENT_TERMS = [
+  'terms of service',
+  'terms of use',
+  'terms and conditions',
+  'terms & conditions',
+  'terms of sale',
+  'privacy policy',
+  'privacy notice',
+  'user agreement',
+  'conditions of use',
+];
+
+/**
+ * Phrases that turn a reference to one of those documents into an agreement
+ * the user is entering into by submitting. A footer that merely links the
+ * Terms of Service says nothing about the form above it; "by continuing you
+ * agree to our Terms of Service" says an account is being created.
+ * English-only for now, like SIGNUP_FIELD_TERMS: every non-English fixture in
+ * the corpus already clears the threshold on structural signals.
+ */
+export const AGREEMENT_TERMS = [
+  'you agree',
+  'i agree',
+  'we agree',
+  'agree to',
+  'agreeing to',
+  'agree that',
+  'by continuing',
+  'by signing up',
+  'by creating',
+  'by registering',
+  'by joining',
+  'by clicking',
+  'by submitting',
+  'by proceeding',
+  'i accept',
+  'accept the',
+  'acknowledge',
+];
