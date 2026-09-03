@@ -313,6 +313,15 @@ node scripts/snapshot.mjs https://example.com/signup captured/signup/example-202
 npm run test --workspace shared
 ```
 
+Some sites serve a bot interstitial to headless Chromium and the real page to a visible one — `stackoverflow.com/users/login` answers 403 `Just a moment...` headless and 200 `Log In - Stack Overflow` headed. A capture that hits one says so, naming the status and the title; re-run it with `--headed`.
+
+What a capture does and does not preserve:
+
+- **Markup, attributes and text are exact.** Script *bodies* are stripped — the `<script>` elements and their attributes stay, so structure is unchanged and no detector signal is affected.
+- **CSS is inlined at capture time**, so the fixture carries whatever `visibility` and `display` the live page computed. This matters: a fixture is replayed from a different origin than it was captured from, and jsdom fetches no external resources at all, so a `<link>` stylesheet would simply never apply. Before inlining, Stack Overflow's sign-up modal computed `visibility: hidden; display: flex` live and `visible / block` from the capture — a hidden form reading as a visible one.
+- **A stylesheet the capture could not fetch is named on stderr** (`not inlined: <href> (HTTP 403)`) and left as a `<link>`. Treat a visibility-dependent expectation about that part of the page as unsupported by the fixture.
+- **Relative `url()` targets inside an inlined sheet are rewritten absolute**; `@import` is not followed, and neither are images or fonts, so a fixture is not a pixel-accurate reproduction. It is a structural and computed-style one, which is what the scorer reads.
+
 Commit the fixture; do not commit the Playwright dependency. A fixture that misclassifies is the signal to tune the weights and thresholds until the whole corpus passes — never special-case a site, and never delete an inconvenient fixture. Users can also report a misdetection from the popup, which opens a pre-labelled issue on the tracker `CABALMAIL_REPORT_URL` points at; every accepted report should end up here as a fixture.
 
 ## Continuous integration
