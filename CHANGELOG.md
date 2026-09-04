@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-09-04
+
+### Added
+- Android: **Warning when attachments get too big.** The composer now shows an advisory line under the attachment
+  chips once they total more than 20 MB — "Attachments total 24.0 MB. Many mail servers reject messages over 25 MB;
+  delivery may fail." — matching the React and Apple composers. Like both of them it is advisory only and does not
+  block the send: the recipient's server may accept more. Previously the first sign of the problem was the server's
+  400 at send time, after every attachment had already uploaded.
+- Apple: **Safari extension on iPhone and iPad.** The address-suggesting
+  extension now ships inside the iOS mail app too — enable it under
+  Settings → Apps → Safari → Extensions, no separate install. It learns
+  which server to use from the mail app's sign-in. Opening links in a
+  private window stays a Mac-only feature; iOS Safari has no way for an
+  extension to do that.
+- Apple: **Open in Private Window.** The reader's link menu on macOS gains
+  a row that opens the link in a private browsing window, by way of the
+  Cabalmail browser extension. The row appears when Safari is the default
+  browser and the extension bundled with the app is enabled; with another
+  default browser it is offered and the extension's own page explains the
+  setup if nothing catches the link.
+
+### Changed
+- Android: **Messages with many attachments send.** Attachment staging now mints presign grants in batches of 32 —
+  the most `/upload_url` will issue in one call — and uploads each batch before minting the next. What a message may
+  carry is bounded by its total size rather than by how many attachments one staging request may name, and grants no
+  longer have to outlive the endpoint's 120-second expiry while later uploads finish.
+- **Batched attachment staging in the React composer.** `/upload_url` mints at most 32 presign grants per call, so a
+  message with more attachments than that failed the moment it was staged — after every file had already uploaded to
+  S3. The composer now stages in batches of 32, minting each batch immediately before its own uploads, so what a
+  message may carry is bounded by its total size rather than by the shape of one staging request. Minting late also
+  keeps every grant inside the endpoint's 120-second expiry, which a single up-front mint for a large bundle can
+  outlive.
+- Apple: **Unlimited photo selection when attaching.** The compose photo
+  picker on iOS and visionOS no longer caps a single selection at five
+  images. What affects deliverability is the total size of a message, not
+  how many items went into it, and the composer already warns once all
+  attachments together cross 20 MB — whatever their number, kind, or
+  origin.
+- Apple: **Status banners are dismissable, and sit at the bottom.** The launch
+  resume offer hung from the top of the list, covering the filter pills and
+  clipping the first message row, and nothing the user could do would get rid
+  of it — it cleared itself after ten seconds and that was the only way out.
+  Banners now hang from the bottom of the window, as on the Android client, and
+  carry a close button plus a swipe-to-dismiss in any direction.
+- Apple: **Search says which folders it searched.** The search banner reported
+  its scope as a bare "in 2 folders", stacked directly over the match count —
+  so "1 of 1 match" read as self-contradictory, and "No matches" read as "that
+  word is nowhere in your mail" when the message was sitting in a folder the
+  search never covered. The banner now names the folders ("Searched INBOX and
+  Archive"), and an empty result adds where it looked and how to widen it:
+  folders you are not subscribed to are not searched, and Trash never is.
+- Apple: **Search opens ready to type.** Tapping the Search tab on iPhone left
+  the field unfocused, so reaching a search term cost a second tap on the field
+  itself. The tab now takes keyboard focus as it opens — unless a previous
+  search is still in the field, where the keyboard would cover the results you
+  came back to read.
+- **Fixture capture names a bot interstitial and carries its own CSS.** `extensions/scripts/snapshot.mjs` used to fail a challenged page with Playwright's bare selector timeout, which named the locator and nothing else; it now reports the status and page title, says when that title is an interstitial, and takes `--headed` to retry in a visible browser. Captures also inline their external stylesheets, so a fixture preserves the `visibility` and `display` the live page computed instead of losing them when the sheets are re-requested at replay time — and any sheet the capture could not fetch is named rather than dropped silently.
+
+### Removed
+- **Per-message attachment count limit.** Sending a message with more than
+  ten attachments no longer fails with a 400. The cap was introduced on the
+  premise that the clients never attach more than a handful, which the
+  uncapped photo picker retires; total message size is what a recipient's
+  server actually rejects, and the 25 MB server-side ceiling still bounds
+  that. Clients now stage uploads in batches so the presigned-URL
+  endpoint's own per-request limit no longer caps a message either.
+
+### Fixed
+- **A single App Store Connect hiccup no longer strands a TestFlight build.**
+  The scripts that attach an upload to its TestFlight group and set its "What
+  to Test" notes made every App Store Connect call without any retry, so one
+  transient 500 from Apple failed the whole upload job — after the binary had
+  already been accepted, leaving it on App Store Connect attached to no group
+  and needing a manual fix-up. Those calls now retry a transient refusal (5xx
+  or 429) a few times with backoff, honouring Apple's own `Retry-After` when
+  it sends one. Only calls that a repeat cannot double are retried: reads
+  always, and the two writes whose effect is the same however many times they
+  land; creating the notes record is deliberately left alone.
+
 ## [1.10.0] - 2026-09-03
 
 ### Added
