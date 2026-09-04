@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Wired via `apple/project.yml` (CODE_SIGN_ENTITLEMENTS on the
+        CabalmailWebExtension target). The iOS twin of the macOS appex's
+        entitlements minus the macOS-only sandbox keys: the only container
+        the web extension reads is the App Group the mail app publishes the
+        control domain into (ExtensionControlDomainStore). No keychain
+        access -- the extension holds its own Cognito session in
+        browser.storage.local, never the app's.
+    -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.cabalmail.Cabalmail</string>
+    </array>
+</dict>
+</plist>
