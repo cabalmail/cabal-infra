@@ -786,6 +786,7 @@ jobs:
           S7: ${{ secrets.IOS_APP_STORE_PROFILE }}
           S8: ${{ secrets.WATCHOS_APP_STORE_PROFILE }}
           S9: ${{ secrets.IOS_NSE_APP_STORE_PROFILE }}
+          S10: ${{ secrets.IOS_WEBEXT_APP_STORE_PROFILE }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           MISSING=()
@@ -810,6 +811,11 @@ jobs:
           # legs skip cleanly instead of failing codesign against stale
           # profiles.
           [ -z "$S9" ] && MISSING+=("IOS_NSE_APP_STORE_PROFILE")
+          # The embedded Safari web extension signs with its own profile.
+          # iOS leg only, like the watch: the embed is destination-filtered
+          # to iOS, and unlike the NSE it adds no entitlement to the shared
+          # host target (the App Group is already there).
+          [ "$PLATFORM" = "iOS" ] && [ -z "$S10" ] && MISSING+=("IOS_WEBEXT_APP_STORE_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -920,6 +926,16 @@ jobs:
           extension: mobileprovision
           env-name: IOS_NSE_APP_STORE_PROFILE_UUID
 
+      - name: Install web-extension App Store provisioning profile
+        # iOS leg only: the Safari web extension embed is destination-filtered
+        # to iOS in project.yml (plan Phase 8.3).
+        if: steps.check.outputs.enabled == 'true' && matrix.platform == 'iOS'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.IOS_WEBEXT_APP_STORE_PROFILE }}
+          extension: mobileprovision
+          env-name: IOS_WEBEXT_APP_STORE_PROFILE_UUID
+
       - name: Archive Cabalmail
         if: steps.check.outputs.enabled == 'true'
         working-directory: apple
@@ -980,6 +996,7 @@ jobs:
             IOS_APP_STORE_PROFILE_UUID="$IOS_APP_STORE_PROFILE_UUID" \
             WATCHOS_APP_STORE_PROFILE_UUID="${WATCHOS_APP_STORE_PROFILE_UUID:-}" \
             IOS_NSE_APP_STORE_PROFILE_UUID="${IOS_NSE_APP_STORE_PROFILE_UUID:-}" \
+            IOS_WEBEXT_APP_STORE_PROFILE_UUID="${IOS_WEBEXT_APP_STORE_PROFILE_UUID:-}" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-archive.log" \
@@ -1008,6 +1025,11 @@ jobs:
           if [ -n "${IOS_NSE_APP_STORE_PROFILE_UUID:-}" ]; then
             NSE_PROFILE_ENTRY="<key>com.cabalmail.Cabalmail.NotificationService</key><string>$IOS_NSE_APP_STORE_PROFILE_UUID</string>"
           fi
+          # And for the embedded Safari web extension (iOS leg only).
+          WEBEXT_PROFILE_ENTRY=""
+          if [ -n "${IOS_WEBEXT_APP_STORE_PROFILE_UUID:-}" ]; then
+            WEBEXT_PROFILE_ENTRY="<key>com.cabalmail.Cabalmail.web-extension</key><string>$IOS_WEBEXT_APP_STORE_PROFILE_UUID</string>"
+          fi
           cat > "$PLIST" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1031,6 +1053,7 @@ jobs:
                   <string>$IOS_APP_STORE_PROFILE_UUID</string>
                   $WATCH_PROFILE_ENTRY
                   $NSE_PROFILE_ENTRY
+                  $WEBEXT_PROFILE_ENTRY
               </dict>
           </dict>
           </plist>

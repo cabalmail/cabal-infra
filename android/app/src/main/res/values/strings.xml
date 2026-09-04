@@ -117,6 +117,7 @@
     <string name="compose_attach_photos">Photos and videos</string>
     <string name="compose_attach_files">Files</string>
     <string name="compose_remove_attachment">Remove attachment</string>
+    <string name="compose_attachment_size_warning">Attachments total %1$s. Many mail servers reject messages over 25 MB; delivery may fail.</string>
     <string name="compose_remove_recipient">Remove %1$s</string>
     <string name="compose_discard">Discard draft</string>
     <string name="compose_discard_confirm_title">Discard this draft?</string>

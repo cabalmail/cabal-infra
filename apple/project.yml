@@ -70,6 +70,10 @@ targets:
       # embed an extension its provisioning doesn't cover.
       - target: CabalmailNotificationService
         destinationFilters: [iOS]
+      # Safari web extension (plan Phase 8.3). iOS only for the same
+      # provisioning reason as the NSE; visionOS is a later decision.
+      - target: CabalmailWebExtension
+        destinationFilters: [iOS]
     info:
       path: Cabalmail/Info.plist
       properties:
@@ -465,6 +469,55 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "$(IOS_NSE_APP_STORE_PROFILE_UUID)"
+
+  # Safari web extension, embedded in the iOS mail app (plan Phase 8.3;
+  # OQ9 resolution). The iOS twin of CabalmailMacWebExtension: the same
+  # native handler source, the same shared control-domain store, and the
+  # same web bundle resources (built by scripts/sync-vendored.sh during
+  # xcodegen generate, added as a group so the files land flat). What it
+  # cannot do on iOS: the private-link handoff -- iOS Safari does not
+  # support windows.create -- so this appex serves the suggest and adopt
+  # flows only. Embedded with a destination filter of iOS: visionOS Safari
+  # extension support and provisioning are not in place, and an archive
+  # must not embed an extension its profiles do not cover.
+  CabalmailWebExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: CabalmailMacWebExtension/SafariWebExtensionHandler.swift
+      - path: Cabalmail/ExtensionControlDomainStore.swift
+      - path: ../extensions/safari/CabalmailExtension/Resources
+        buildPhase: resources
+    info:
+      path: CabalmailWebExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).SafariWebExtensionHandler"
+        # Host/extension version match is enforced at App Store validation;
+        # CI passes both on the xcodebuild command line (see the NSE).
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+    settings:
+      base:
+        # Host bundle id plus a suffix, Apple's convention; a different
+        # identity from the macOS appex, as each platform's Safari expects.
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail.web-extension
+        # Lockstep with the Cabalmail target (validation requirement).
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        # The App Group the control-domain handoff reads; nothing else.
+        CODE_SIGN_ENTITLEMENTS: CabalmailWebExtension/CabalmailWebExtension.entitlements
+      configs:
+        # Same rationale as the NSE targets: manual-signing settings live
+        # per-target; CI injects IOS_WEBEXT_APP_STORE_PROFILE_UUID when
+        # archiving the iOS app.
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "$(IOS_WEBEXT_APP_STORE_PROFILE_UUID)"
 
   # macOS twin of CabalmailNotificationService (push phase 6). Compiles the
   # SAME Swift source — the NSE is Foundation + UserNotifications + Security

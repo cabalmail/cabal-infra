@@ -139,10 +139,16 @@ struct ComposeView: View {
                 .environment(appState)
             }
             #if os(iOS) || os(visionOS)
+            // No `maxSelectionCount`: omitting it leaves the parameter at its
+            // `nil` default, which is PhotosUI's unlimited selection. An
+            // arbitrary count cap was the wrong control — what actually
+            // breaks delivery is total bytes, not how many items produced
+            // them, and that is already soft-warned by
+            // `attachmentTotalExceedsWarning` over every attachment
+            // regardless of kind or origin.
             .photosPicker(
                 isPresented: $showPhotoPicker,
                 selection: $photoSelection,
-                maxSelectionCount: 5,
                 matching: .images
             )
             .onChange(of: photoSelection) { _, items in

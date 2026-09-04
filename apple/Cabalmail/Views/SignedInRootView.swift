@@ -43,7 +43,9 @@ struct SignedInRootView: View {
 
     var body: some View {
         sectionLayout
-            .overlay(alignment: .top) {
+            // Bottom-anchored since #1426: at the top the banners covered the
+            // filter pills and clipped the first message row.
+            .overlay(alignment: .bottom) {
                 statusBanners
                     .animation(.default, value: isOffline)
                     .animation(.default, value: appState.toast)
@@ -140,21 +142,28 @@ struct SignedInRootView: View {
                 )
             }
             if let toast = appState.toast {
-                ToastBanner(toast: toast, onAction: actionHandler(for: toast))
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                // The offline banner above carries no dismissal: it reports a
+                // state that is still true, so hiding it would only make the
+                // app quieter about being offline (#1426).
+                ToastBanner(
+                    toast: toast,
+                    onAction: actionHandler(for: toast),
+                    onDismiss: { appState.toast = nil }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .padding(.top, bannerTopInset)
+        .padding(.bottom, bannerBottomInset)
         .padding(.horizontal, 12)
     }
 
-    /// Drop the banners below the navigation bar wherever the bar's trailing
-    /// items share that band — see `StatusBannerPlacement`.
-    private var bannerTopInset: CGFloat {
+    /// Lift the banners above the tab bar wherever one occupies that band —
+    /// see `StatusBannerPlacement`.
+    private var bannerBottomInset: CGFloat {
         #if os(iOS)
-        StatusBannerPlacement.topInset(isRegularWidth: horizontalSizeClass == .regular)
+        StatusBannerPlacement.bottomInset(isRegularWidth: horizontalSizeClass == .regular)
         #else
-        StatusBannerPlacement.defaultTopInset
+        StatusBannerPlacement.defaultBottomInset
         #endif
     }
 

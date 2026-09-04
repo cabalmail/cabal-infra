@@ -1,54 +1,54 @@
 import XCTest
 @testable import Cabalmail
 
-// Regression coverage for #931: the launch resume banner ("Pick up where you
-// left off in Archive?") is an overlay on the whole section layout, so at
-// regular width it drew across the navigation bar's trailing items and hid New
-// Message, Addresses and the search field for the banner's whole ~60s life.
-// The same placement carries every other banner (the "Created <address>"
-// confirmation was reported behaving identically), so the inset is the fix's
-// one number — pinned here against the frames the report measured.
+// The status banners moved from the top of the window to the bottom in #1426,
+// so what this file pins moved with them.
+//
+// The old rule (#931, #958) was "clear the navigation bar": at regular width
+// the banner covered New Message, Addresses and the search field, and at
+// compact width it covered the centre title slot carrying the folder name.
+// Both were real and both are now unreachable — a banner anchored to the
+// bottom cannot cover the top band at all — so those two cases are retired
+// rather than kept passing against a constant nothing reads.
+//
+// What replaces them is the same shape of claim about the other end of the
+// window: the one thing in the bottom band is the compact-width tab bar.
 final class StatusBannerPlacementTests: XCTestCase {
 
-    /// Where the banner overlay's own top edge sits: the window's top safe
-    /// area. Derived from the report — the capsule's top landed at y≈22pt on
-    /// the iPad Pro 11" with the 6pt default inset applied.
-    private let overlayOrigin: CGFloat = 16
+    /// iPhone 17 frames, measured live for #1426: the window is 874pt tall and
+    /// the tab bar occupies {{0, 791}, {402, 83}}. The overlay's own bottom
+    /// edge is not the window's bottom safe area — with the shipped inset the
+    /// banner's close button measured {{314.7, 741.7}, {15, 15}}, which puts
+    /// the overlay's edge at about y 822.
+    private let compactWindowHeight: CGFloat = 874
+    private let compactOverlayBottom: CGFloat = 822
+    private let compactTabBarTop: CGFloat = 791
 
-    /// The navigation bar's band on the same device: the trailing toolbar
-    /// items measured {y 36, height 36}.
-    private let toolbarBandBottom: CGFloat = 72
-
-    func testRegularWidthBannersClearTheToolbarBand() {
-        let bannerTop = overlayOrigin + StatusBannerPlacement.topInset(isRegularWidth: true)
-        XCTAssertGreaterThan(
-            bannerTop, toolbarBandBottom,
-            "a banner starting inside the bar's band covers New Message, Addresses and search"
+    func testCompactWidthBannersClearTheTabBar() {
+        let bannerBottom = compactOverlayBottom
+            - StatusBannerPlacement.bottomInset(isRegularWidth: false)
+        XCTAssertLessThan(
+            bannerBottom, compactTabBarTop,
+            "a banner ending inside the tab bar's band covers Mail / Folders / Search"
         )
     }
 
-    /// #958's iPhone 16 Pro frames: the overlay's origin is the top safe area,
-    /// which is also where the navigation bar starts ({{0, 62}, {402, 54}}).
-    private let compactOverlayOrigin: CGFloat = 62
-    private let compactNavigationBarBottom: CGFloat = 116
-
-    // Regression coverage for #958: the same overlay hid the compact-width
-    // navigation bar's centre title slot, which is not empty — it carries the
-    // folder name you just landed in. The banner has to clear the bar at both
-    // widths, so the compact inset gets pinned against the iPhone frames the
-    // same way the regular-width one is pinned against the iPad's.
-    func testCompactWidthBannersClearTheNavigationBar() {
-        let bannerTop = compactOverlayOrigin + StatusBannerPlacement.topInset(isRegularWidth: false)
-        XCTAssertGreaterThan(
-            bannerTop, compactNavigationBarBottom,
-            "a banner starting inside the bar's band covers the folder-name title"
-        )
+    /// …and not so far above it that it climbs back into the message list it
+    /// was moved out of. The first message row starts at y 154 on the same
+    /// device, so anything in the lower third is comfortably clear; this pins
+    /// the inset as a small clearance rather than an open-ended lift.
+    func testCompactWidthBannersStayNearTheBottom() {
+        let bannerBottom = compactOverlayBottom
+            - StatusBannerPlacement.bottomInset(isRegularWidth: false)
+        XCTAssertGreaterThan(bannerBottom, compactWindowHeight * 0.75)
     }
 
-    func testPlatformsWithoutANavigationBarInTheBandKeepThePlainGap() {
-        // macOS and visionOS bypass `topInset(isRegularWidth:)` entirely and
-        // read this constant, so nothing above may quietly push their banners
-        // down past the window chrome they already sit below.
-        XCTAssertEqual(StatusBannerPlacement.defaultTopInset, 6)
+    func testPlatformsWithoutATabBarInTheBandKeepThePlainGap() {
+        // iPad, macOS and visionOS draw no tab bar across the window's bottom
+        // (visionOS's is an ornament outside it), and macOS/visionOS bypass
+        // `bottomInset(isRegularWidth:)` entirely to read this constant — so
+        // nothing above may quietly lift their banners off the window edge.
+        XCTAssertEqual(StatusBannerPlacement.defaultBottomInset, 6)
+        XCTAssertEqual(StatusBannerPlacement.bottomInset(isRegularWidth: true), 6)
     }
 }

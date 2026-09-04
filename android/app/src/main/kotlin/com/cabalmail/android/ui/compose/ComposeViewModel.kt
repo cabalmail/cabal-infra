@@ -12,7 +12,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.isTransient
 import com.cabalmail.android.userMessage
-import com.cabalmail.kit.CabalmailException
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.compose.ComposePayload
 import com.cabalmail.kit.compose.MessageIds
@@ -423,13 +422,13 @@ class ComposeViewModel(
         if (attachments.isEmpty()) {
             return emptyList()
         }
-        val grants = api.requestUploadUrls(attachments.map { it.filename to it.mimeType })
-        if (grants.size != attachments.size) {
-            throw CabalmailException.ProtocolError("Upload grant count mismatch")
-        }
+        // Batched (#1424): /upload_url mints at most 32 grants per call, so
+        // one call with the whole list caps a message at 32 attachments.
+        val grants =
+            api.stageUploads(attachments.map { it.filename to it.mimeType }) { index ->
+                File(attachments[index].path).readBytes()
+            }
         return attachments.zip(grants).map { (attachment, grant) ->
-            val bytes = File(attachment.path).readBytes()
-            api.uploadToGrant(grant.url, attachment.mimeType, bytes)
             OutgoingAttachment(filename = attachment.filename, mimeType = attachment.mimeType, s3Key = grant.key)
         }
     }

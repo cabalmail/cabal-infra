@@ -20,6 +20,10 @@ import { folderMeta } from '../../utils/folderMeta';
 
 const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
 
+// Mirrors MAX_FILES_PER_REQUEST in lambda/api/upload_url/function.py: the
+// most presign grants that endpoint will mint in one call.
+const UPLOAD_BATCH_SIZE = 32;
+
 // Round-trip with the editor: Enter inserts a hard break (<br>), not a new
 // paragraph, so a single newline in Markdown maps to a single newline in HTML.
 // Override turndown's defaults — which would otherwise wrap each <p> in blank
@@ -751,18 +755,26 @@ function ComposeOverlay({
 
     // Upload any attachments directly to S3 first, then send the message
     // referencing them by key. Bypasses API Gateway's 10 MB request ceiling.
+    //
+    // /upload_url mints at most UPLOAD_BATCH_SIZE grants per call, so stage
+    // in batches rather than handing it the whole list — otherwise a request
+    // shape limit becomes a limit on what a message may carry. Minting each
+    // batch immediately before its own uploads also keeps every grant inside
+    // the endpoint's 120-second expiry, which one up-front mint for a large
+    // bundle can outlive.
     const uploadAndSend = async () => {
-      let wireAttachments = [];
-      if (attachments.length > 0) {
-        const resp = await api.getAttachmentUploadUrls(attachments);
+      const wireAttachments = [];
+      for (let start = 0; start < attachments.length; start += UPLOAD_BATCH_SIZE) {
+        const batch = attachments.slice(start, start + UPLOAD_BATCH_SIZE);
+        const resp = await api.getAttachmentUploadUrls(batch);
         const uploads = resp?.data?.uploads || [];
-        if (uploads.length !== attachments.length) {
+        if (uploads.length !== batch.length) {
           throw new Error('upload_url returned the wrong number of slots');
         }
-        await Promise.all(attachments.map((a, i) =>
+        await Promise.all(batch.map((a, i) =>
           api.uploadAttachmentToS3(uploads[i].url, a.file)
         ));
-        wireAttachments = attachments.map((a, i) => ({
+        batch.forEach((a, i) => wireAttachments.push({
           filename: a.filename,
           mime_type: a.mimeType,
           s3_key: uploads[i].key,

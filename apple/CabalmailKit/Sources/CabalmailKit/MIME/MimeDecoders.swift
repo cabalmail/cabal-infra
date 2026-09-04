@@ -64,27 +64,12 @@ enum MimeDecoders {
             return 2
         }
         // Hex escape: `=HH` → one output byte.
-        if index + 2 < bytes.count,
-           let high = hexDigit(bytes[index + 1]),
-           let low = hexDigit(bytes[index + 2]) {
-            output.append(UInt8(high * 16 + low))
+        if let decoded = MimeHex.escapedByte(at: index, in: bytes) {
+            output.append(decoded)
             return 3
         }
         // Malformed — pass `=` through and move on.
         output.append(UInt8(ascii: "="))
         return 1
-    }
-
-    private static func hexDigit(_ byte: UInt8) -> Int? {
-        switch byte {
-        case UInt8(ascii: "0")...UInt8(ascii: "9"):
-            return Int(byte - UInt8(ascii: "0"))
-        case UInt8(ascii: "A")...UInt8(ascii: "F"):
-            return Int(byte - UInt8(ascii: "A") + 10)
-        case UInt8(ascii: "a")...UInt8(ascii: "f"):
-            return Int(byte - UInt8(ascii: "a") + 10)
-        default:
-            return nil
-        }
     }
 }
