@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.1] - 2026-09-05
+
+### Fixed
+- **A timed-out App Store Connect request no longer fails a TestFlight
+  upload job.** The retry added in 1.11.0 covered refusals Apple actually
+  answered; a request that never reached a status code — a connect
+  timeout, a read timeout, a DNS failure, a reset connection — still
+  failed the job on its first attempt, twice on the same day. Those now
+  retry on the same terms as a transient 5xx, with the same bound and the
+  same rule about which calls a repeat is safe for.
+- **A transient Play Console refusal no longer loses an Android stage
+  build.** A single 503 from Google failed the upload job after the bundle
+  had already been built and signed, and since the artifact lives only
+  inside that job, the commit produced no internal-track build at all. The
+  publish now retries a transient refusal a few times with backoff — but
+  only when the run's own output shows the Play edit was never committed,
+  since re-running a publish that committed would publish the bundle twice.
+
 ## [1.11.0] - 2026-09-04
 
 ### Added
