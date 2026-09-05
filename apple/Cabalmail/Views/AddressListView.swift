@@ -197,7 +197,16 @@ extension AddressListView {
         Button("Revoke", role: .destructive) {
             let target = address
             pendingRevoke = nil
-            Task { await model?.revoke(target) }
+            Task {
+                // Same confirmation the reader's per-address menu raises,
+                // and the same one this screen's create path raises — the
+                // row pruning on its own left the list's revoke as the one
+                // silent copy of the action (#1454). A failure still shows
+                // up as the model's error banner, not as this toast.
+                if await model?.revoke(target) == true {
+                    appState.showToast(.addressRevoked(target.address))
+                }
+            }
         }
         Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
             pendingRevoke = nil
