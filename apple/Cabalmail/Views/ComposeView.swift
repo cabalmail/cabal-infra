@@ -40,6 +40,9 @@ struct ComposeView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    /// Read by `attachmentSizeWarning` in `ComposeView+Subviews`, which is
+    /// why this one isn't `private` — Swift's `private` is file-scoped.
+    @Environment(\.colorScheme) var colorScheme
 
     @FocusState private var focusedField: Field?
     @State private var showNewAddressSheet = false
