@@ -109,6 +109,13 @@ import XCTest
 ///   exists <query>             "exists=<bool> hittable=<bool>"
 ///   wait <query> [timeout:<s>] wait for existence (default 10s)
 ///   quit                       end the loop (the test finishes)
+///
+/// Every verb that reads the target app's own tree first waits, bounded, for
+/// that tree to exist at all: for a few seconds after a host-side `simctl
+/// terminate` + `launch` the app is running and has drawn nothing, and each
+/// of those verbs used to answer a successful negative that no caller could
+/// tell from a real one (#1436). An app that has drawn is one probe and no
+/// delay; an app that never draws gets an error saying so instead.
 final class SimDriveTests: XCTestCase {
 
     private struct DriveError: LocalizedError {
@@ -141,6 +148,10 @@ final class SimDriveTests: XCTestCase {
         "com.apple.RealityLauncher",
         "com.apple.RealityHUD"
     ]
+
+    /// How long a command waits for the target app's tree to arrive before
+    /// answering that nothing has been drawn (#1436).
+    private static let treeReadyGate = TreeReadyGate()
 
     /// Set by `sysapp`; when nil every candidate is probed in order.
     private var pinnedSystemBundleId: String?
@@ -245,6 +256,7 @@ final class SimDriveTests: XCTestCase {
         let systemScoped = Self.queryingVerbs.contains(verb) && remainder.hasPrefix("sys")
         if Self.appDependentVerbs.contains(verb), !systemScoped {
             try requireRunningApp()
+            try requirePopulatedTree()
         }
         switch verb {
         case "quit":
@@ -802,6 +814,27 @@ final class SimDriveTests: XCTestCase {
                 "target app \(targetBundleId) is not running — 'launch' it first"
             )
         }
+    }
+
+    /// Throws rather than letting a query answer out of an empty tree.
+    ///
+    /// `requireRunningApp` covers the app not being there; this covers the
+    /// app being there and having drawn nothing yet, which is the state a
+    /// host-side `simctl terminate` + `launch` leaves behind for a few
+    /// seconds and which every verb above reports as an ordinary negative
+    /// (#1436). The probe is the application element having any children at
+    /// all: an app that has drawn has at least a window, and an app whose
+    /// snapshot is empty has nothing. One rule, one call site — a copy per
+    /// verb is what produced #1230.
+    private func requirePopulatedTree() throws {
+        try Self.treeReadyGate.wait(
+            bundleId: targetBundleId,
+            now: { Date().timeIntervalSinceReferenceDate },
+            sleep: { Thread.sleep(forTimeInterval: $0) },
+            isPopulated: { [self] in
+                targetApp().children(matching: .any).firstMatch.exists
+            }
+        )
     }
 
     /// The rule every `typeText` call has to follow, in one place.
