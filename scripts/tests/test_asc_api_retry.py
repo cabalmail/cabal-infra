@@ -12,6 +12,14 @@ double an effect, so GET and HEAD retry unconditionally and anything else
 only when its call site passes `idempotent=True`. The call-site tests at
 the bottom pin which of the three mutating calls in the tree opted in.
 
+That first fix covered HTTP refusals only, so a request that never reached
+a status code still failed the job on its first attempt (issue #1441: a
+connect timeout on `GET /v1/builds`; #1445: a read timeout on the same
+line). TransportFailureRetryTests below pin the transport half, including
+the ordering that keeps HTTPError in its own branch — URLError is its
+parent class, so an `except URLError` placed first would swallow every
+status the suite above asserts on.
+
 PyJWT is a CI-step dependency of the scripts, not of this suite, so `jwt`
 is faked in sys.modules before the module under test is imported.
 
@@ -26,7 +34,9 @@ import importlib.util
 import io
 import json
 import os
+import socket
 import sys
+import tempfile
 import types
 import unittest
 import urllib.error
@@ -80,8 +90,9 @@ class FakeResponse:
 class Transport:
     """A urlopen stub driven by a list of outcomes; the last one repeats.
 
-    An outcome is either `bytes` (a 200 with that body) or an `(int, dict)`
-    pair (an HTTPError with that status and those headers).
+    An outcome is `bytes` (a 200 with that body), an `(int, dict)` pair (an
+    HTTPError with that status and those headers), or an exception instance
+    (raised as-is — that is how the transport failures below are scripted).
     """
 
     def __init__(self, *outcomes):
@@ -93,6 +104,8 @@ class Transport:
         outcome = self.outcomes[min(len(self.calls) - 1, len(self.outcomes) - 1)]
         if isinstance(outcome, bytes):
             return FakeResponse(outcome)
+        if isinstance(outcome, BaseException):
+            raise outcome
         status, headers = outcome
         message = email.message.Message()
         for name, value in (headers or {}).items():
@@ -110,6 +123,17 @@ class Transport:
         return len(self.calls)
 
 
+# Spelled out rather than taken from asc_api.RETRY_TRANSPORT_ERRORS, so
+# that shimming the module back to a pre-fix copy still runs the suite
+# instead of erroring out of the harness itself.
+CAUGHT_BY_THE_HARNESS = (
+    urllib.error.HTTPError,
+    urllib.error.URLError,
+    TimeoutError,
+    ConnectionError,
+)
+
+
 class RetryHarness(unittest.TestCase):
     """Runs the real api_request over a stubbed transport and clock."""
 
@@ -120,7 +144,7 @@ class RetryHarness(unittest.TestCase):
                 mock.patch.object(asc_api.time, "sleep", sleeps.append):
             try:
                 return asc_api.api_request(*args, **kwargs), sleeps
-            except urllib.error.HTTPError as err:
+            except CAUGHT_BY_THE_HARNESS as err:
                 return err, sleeps
 
 
@@ -221,6 +245,151 @@ class MethodEligibilityTests(RetryHarness):
         )
         self.assertIsInstance(result, urllib.error.HTTPError)
         self.assertEqual(transport.attempts, 1)
+
+
+class TransportFailureRetryTests(RetryHarness):
+    """A request that never reached a status code (#1441/#1445).
+
+    Each arm scripts one transport failure followed by a 200, so the only
+    question is whether a second attempt happens at all. Pre-fix every one
+    of these raised on attempt 1.
+    """
+
+    #: The shapes urlopen raises when the call does not reach the server.
+    #: `URLError(TimeoutError)` is the connect timeout from #1441, the bare
+    #: `TimeoutError` the read timeout from #1445; the other two are the
+    #: same class of failure and escaped identically.
+    TRANSPORT_FAILURES = (
+        ("connect timeout", urllib.error.URLError(TimeoutError("timed out"))),
+        ("read timeout", TimeoutError("The read operation timed out")),
+        ("dns failure", urllib.error.URLError(socket.gaierror("nodename nor servname"))),
+        ("connection reset", ConnectionResetError("Connection reset by peer")),
+    )
+
+    def test_a_transport_failure_then_200_returns_the_200(self):
+        for name, failure in self.TRANSPORT_FAILURES:
+            with self.subTest(failure=name):
+                transport = Transport(failure, OK)
+                result, sleeps = self.drive(
+                    transport, "GET", "/v1/builds", token_factory
+                )
+                self.assertEqual(result["data"][0]["id"], "GRP1")
+                self.assertEqual(transport.attempts, 2)
+                self.assertEqual(sleeps, [2.0])
+
+    def test_a_persistent_transport_failure_raises_after_the_budget(self):
+        # Bounded, and it raises the transport error itself rather than
+        # something synthesised, so the traceback still names the cause.
+        failure = urllib.error.URLError(TimeoutError("timed out"))
+        transport = Transport(failure)
+        result, sleeps = self.drive(transport, "GET", "/v1/builds", token_factory)
+        self.assertIs(result, failure)
+        self.assertEqual(transport.attempts, asc_api.RETRY_ATTEMPTS)
+        self.assertEqual(sleeps, [2.0, 4.0, 8.0])
+
+    def test_a_post_is_not_retried_through_a_transport_failure(self):
+        # The control the report asks for: we cannot tell whether a request
+        # that timed out reached the server, so a mutation the caller has
+        # not vouched for still fails fast.
+        transport = Transport(TimeoutError("timed out"), OK)
+        result, sleeps = self.drive(
+            transport, "POST", "/v1/betaBuildLocalizations", token_factory, {"a": 1}
+        )
+        self.assertIsInstance(result, TimeoutError)
+        self.assertEqual(transport.attempts, 1)
+        self.assertEqual(sleeps, [])
+
+    def test_a_post_marked_idempotent_is_retried_through_a_transport_failure(self):
+        transport = Transport(urllib.error.URLError(TimeoutError("timed out")), b"")
+        result, _ = self.drive(
+            transport,
+            "POST",
+            "/v1/builds/B1/relationships/betaGroups",
+            token_factory,
+            {"data": []},
+            True,
+        )
+        self.assertIsNone(result)
+        self.assertEqual(transport.attempts, 2)
+
+    def test_an_http_error_still_takes_the_http_branch(self):
+        # HTTPError subclasses URLError, so this is the ordering guard: only
+        # the HTTP branch reads Retry-After, and only it stops on a non-429
+        # 4xx. If the transport branch caught these, the first would sleep 2s
+        # and the second would retry four times.
+        transport = Transport((429, {"Retry-After": "5"}), OK)
+        _, sleeps = self.drive(transport, "GET", "/v1/apps", token_factory)
+        self.assertEqual(sleeps, [5.0])
+
+        transport = Transport((404, {}))
+        result, sleeps = self.drive(transport, "GET", "/v1/apps", token_factory)
+        self.assertIsInstance(result, urllib.error.HTTPError)
+        self.assertEqual(transport.attempts, 1)
+        self.assertEqual(sleeps, [])
+
+    def test_each_retried_attempt_mints_a_fresh_token(self):
+        minted = []
+
+        def counting_factory():
+            minted.append(len(minted))
+            return f"token-{len(minted)}"
+
+        transport = Transport(
+            TimeoutError("timed out"), TimeoutError("timed out"), OK
+        )
+        self.drive(transport, "GET", "/v1/builds", counting_factory)
+        self.assertEqual(len(minted), 3)
+
+
+class ReportedTransportPathTests(RetryHarness):
+    """The exact frame both reports name: find_build, from the attach loop."""
+
+    def test_find_build_survives_a_connect_timeout(self):
+        payload = json.dumps({"data": [{"id": "B1"}]}).encode()
+        transport = Transport(
+            urllib.error.URLError(TimeoutError("timed out")), payload
+        )
+        with mock.patch.object(asc_api.urllib.request, "urlopen", transport), \
+                mock.patch.object(asc_api.time, "sleep", lambda _s: None):
+            build = asc_api.find_build("APP1", "42", token_factory)
+        self.assertEqual(build["id"], "B1")
+        self.assertEqual(transport.attempts, 2)
+
+    def test_the_attach_loop_rides_out_a_transport_failure(self):
+        # #1445's proposed fix was a guard in this loop; fixing api_request
+        # instead also covers find_app_id and find_group_id, which the loop
+        # calls before it starts. Scripting the failure onto the loop's
+        # first find_build (call 3) drove an uncaught URLError out of main()
+        # pre-fix; it now completes and attaches.
+        transport = Transport(
+            json.dumps({"data": [{"id": "APP1"}]}).encode(),
+            json.dumps(
+                {"data": [{"id": "GRP1", "attributes": {"name": "stage"}}]}
+            ).encode(),
+            urllib.error.URLError(TimeoutError("timed out")),
+            json.dumps(
+                {"data": [{"id": "B1", "attributes": {"processingState": "VALID"}}]}
+            ).encode(),
+            b"",
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".p8") as key_file:
+            key_file.write("-----BEGIN PRIVATE KEY-----\n")
+            key_file.flush()
+            env = {
+                "ASC_KEY_ID": "K1",
+                "ASC_ISSUER_ID": "I1",
+                "ASC_KEY_PATH": key_file.name,
+                "BUNDLE_ID": "com.cabalmail.Cabalmail",
+                "BUILD_NUMBER": "42",
+                "TF_GROUP": "stage",
+            }
+            with mock.patch.dict(os.environ, env, clear=False), \
+                    mock.patch.object(
+                        asc_api.urllib.request, "urlopen", transport
+                    ), \
+                    mock.patch.object(asc_api.time, "sleep", lambda _s: None):
+                self.assertEqual(assign.main(), 0)
+        self.assertEqual(transport.attempts, 5)
 
 
 class RetryAfterTests(RetryHarness):

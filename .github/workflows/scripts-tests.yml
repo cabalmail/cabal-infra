@@ -9,7 +9,9 @@ name: Scripts Tests
 # changelog.d/**, the Play release-notes generator and the App Store Connect
 # upload scripts: one suite renders the pending `Android:` fragments as Play
 # Console notes and fails if their headlines overrun Google Play's
-# 500-character cap, another pins asc_api.py's transient-failure retry. The
+# 500-character cap, another pins asc_api.py's transient-failure retry, and
+# a third pins the Play Console publish wrapper's retry — in particular its
+# refusal to re-run a publish that may already have committed its edit. The
 # .github/scripts/** entries are listed one file at a time so only the
 # scripts this suite actually covers trigger it.
 #
@@ -23,6 +25,7 @@ on:
     paths:
       - 'scripts/**'
       - '.github/scripts/play-release-notes.py'
+      - '.github/scripts/publish-play-bundle.py'
       - '.github/scripts/asc_api.py'
       - '.github/scripts/assign-testflight-group.py'
       - '.github/scripts/set-testflight-notes.py'
@@ -36,6 +39,7 @@ on:
     paths:
       - 'scripts/**'
       - '.github/scripts/play-release-notes.py'
+      - '.github/scripts/publish-play-bundle.py'
       - '.github/scripts/asc_api.py'
       - '.github/scripts/assign-testflight-group.py'
       - '.github/scripts/set-testflight-notes.py'
