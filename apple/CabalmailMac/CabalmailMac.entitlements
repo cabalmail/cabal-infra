@@ -46,5 +46,22 @@
         <string>$(AppIdentifierPrefix)com.cabalmail.CabalmailMac</string>
         <string>$(AppIdentifierPrefix)com.cabalmail.shared</string>
     </array>
+    <!--
+        Associated domain for Password AutoFill (docs/password-autofill.md).
+        `webcredentials:` tells the OS, and any third-party credential
+        provider such as 1Password, that logins saved for the admin web app
+        belong to this app too, which is what makes the saved one-time code
+        fillable on the native MFA step. CABALMAIL_CONTROL_DOMAIN is a build
+        setting (Base.xcconfig default, Local.xcconfig or the CI xcodebuild
+        command line for the real value); Xcode expands $(...) in
+        entitlements at sign time. The admin origin must serve the matching
+        apple-app-site-association file, which Terraform publishes when
+        `apple_team_id` is set. Requires the Associated Domains capability
+        on the App ID.
+    -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>webcredentials:admin.$(CABALMAIL_CONTROL_DOMAIN)</string>
+    </array>
 </dict>
 </plist>

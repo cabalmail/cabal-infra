@@ -3,5 +3,19 @@
 // Local overrides (notably DEVELOPMENT_TEAM) live in Local.xcconfig, which
 // is gitignored. The `#include?` directive is Xcode's "optional include":
 // if Local.xcconfig is missing (e.g. on CI), the include is silently skipped.
+//
+// CABALMAIL_CONTROL_DOMAIN is baked into the app and macOS app entitlements
+// as the `webcredentials:admin.<domain>` associated domain, which is what
+// lets Password AutoFill and third-party password managers (1Password etc.)
+// match the native sign-in form to the login item saved for the web app.
+// The default is an RFC 2606 reserved name that can never resolve, so an
+// unconfigured build still signs and merely gets no autofill match. CI
+// passes the real value on the xcodebuild command line from the GitHub
+// environment variable TF_VAR_CONTROL_DOMAIN (see apple.yml); a local
+// build sets it in Local.xcconfig. Defaults must come BEFORE the include:
+// in an xcconfig the last assignment wins, and a command-line setting beats
+// both. See docs/password-autofill.md.
+
+CABALMAIL_CONTROL_DOMAIN = cabalmail.invalid
 
 #include? "Local.xcconfig"

@@ -113,6 +113,62 @@ resource "aws_s3_object" "extension_auth" {
   etag          = md5(file("${path.module}/templates/extension-auth.html"))
 }
 
+# Associated-domain documents for the native clients' Password AutoFill
+# (docs/password-autofill.md). Both live under /.well-known on the admin
+# origin, which is the host the web app's login is saved against, so a
+# password manager that matches the app to this domain offers that login
+# (and its one-time code) on the native sign-in form. Each is published
+# only when the operator has supplied the platform identity it names;
+# an empty document would be worse than none (Apple caches a fetched
+# AASA for hours). Both are extensionless keys with an explicit JSON
+# content type, like private-link above. Apple fetches the AASA through
+# its own CDN, and Android's assetlinks.json must be served without a
+# redirect, so both sit on the default (S3) cache behaviour.
+resource "aws_s3_object" "apple_app_site_association" {
+  count         = var.apple_team_id != "" ? 1 : 0
+  bucket        = var.bucket
+  key           = "/.well-known/apple-app-site-association"
+  content_type  = "application/json"
+  cache_control = "no-cache"
+  content       = local.apple_app_site_association
+  etag          = md5(local.apple_app_site_association)
+}
+
+resource "aws_s3_object" "assetlinks" {
+  count         = length(var.android_signing_cert_fingerprints) > 0 ? 1 : 0
+  bucket        = var.bucket
+  key           = "/.well-known/assetlinks.json"
+  content_type  = "application/json"
+  cache_control = "no-cache"
+  content       = local.assetlinks
+  etag          = md5(local.assetlinks)
+}
+
+locals {
+  # Bundle identifiers of the two app targets in apple/project.yml. The
+  # watch app and the extensions never show a sign-in form.
+  apple_app_site_association = jsonencode({
+    webcredentials = {
+      apps = [
+        "${var.apple_team_id}.com.cabalmail.Cabalmail",
+        "${var.apple_team_id}.com.cabalmail.CabalmailMac",
+      ]
+    }
+  })
+
+  # applicationId in android/app/build.gradle.kts. Only get_login_creds:
+  # the app registers no https intent filters, so handle_all_urls would
+  # claim App Links it cannot open.
+  assetlinks = jsonencode([{
+    relation = ["delegate_permission/common.get_login_creds"]
+    target = {
+      namespace                = "android_app"
+      package_name             = "com.cabalmail.android"
+      sha256_cert_fingerprints = var.android_signing_cert_fingerprints
+    }
+  }])
+}
+
 # Runtime configuration for Node Lambdas
 resource "aws_s3_object" "node_config" {
   bucket       = var.bucket

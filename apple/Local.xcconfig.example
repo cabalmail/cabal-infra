@@ -4,3 +4,12 @@
 // https://developer.apple.com/account under Membership details.
 
 DEVELOPMENT_TEAM = YOUR_TEAM_ID_HERE
+
+// Optional: the deployment's control domain (the same value as the GitHub
+// variable TF_VAR_CONTROL_DOMAIN). It is baked into the app entitlements as
+// the `webcredentials:admin.<domain>` associated domain so password managers
+// can offer the web app's saved login, including its one-time code, on the
+// native sign-in form. Leave it out to keep the non-resolving default from
+// Base.xcconfig. See docs/password-autofill.md.
+
+// CABALMAIL_CONTROL_DOMAIN = example.net

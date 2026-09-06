@@ -21,7 +21,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -92,7 +95,15 @@ fun SignInScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         singleLine = true,
                         enabled = !state.busy,
-                        modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .widthIn(max = 400.dp)
+                                .fillMaxWidth()
+                                // The autofill hint password managers key on
+                                // to offer the saved login's one-time code.
+                                // SmsOtpCode is the only OTP content type the
+                                // framework defines; it covers TOTP too.
+                                .semantics { contentType = ContentType.SmsOtpCode },
                     )
                     Button(
                         onClick = { onSubmitMfaCode(mfaCode) },
@@ -129,7 +140,11 @@ fun SignInScreen(
                         label = { Text(stringResource(R.string.username_label)) },
                         singleLine = true,
                         enabled = !state.busy,
-                        modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .widthIn(max = 400.dp)
+                                .fillMaxWidth()
+                                .semantics { contentType = ContentType.Username },
                     )
                     OutlinedTextField(
                         value = password,
@@ -139,7 +154,11 @@ fun SignInScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         singleLine = true,
                         enabled = !state.busy,
-                        modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .widthIn(max = 400.dp)
+                                .fillMaxWidth()
+                                .semantics { contentType = ContentType.Password },
                     )
                     Button(
                         onClick = { onSignIn(controlDomain, username, password) },
