@@ -233,6 +233,9 @@ module "admin" {
   relay_ips            = module.vpc.relay_ips
   dev_mode             = var.prod ? false : true
 
+  apple_team_id                     = var.apple_team_id
+  android_signing_cert_fingerprints = var.android_signing_cert_fingerprints
+
   address_changed_topic_arn = module.ecs.sns_topic_arn
   user_rules_topic_arn      = module.ecs.user_rules_topic_arn
   push_queue_arn            = module.ecs.push_queue_arn
