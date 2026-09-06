@@ -236,8 +236,16 @@ jobs:
         # The -P values are read by app/build.gradle.kts; empty (unset var)
         # is identical to the local-build default, so this is safe on a tree
         # that predates the properties too.
+        #
+        # Wrapped rather than bare (#1442): a single transient 503 from
+        # androidpublisher.googleapis.com failed this job after the bundle
+        # had been built and signed, and gradle-play-publisher 4.1.1 has no
+        # retry setting to turn on. The wrapper retries only a transient
+        # refusal that provably left the Play edit uncommitted — re-running
+        # a publish that committed would publish the bundle twice — and
+        # passes every argument through untouched.
         run: |
-          ./gradlew publishBundle \
+          python3 ../.github/scripts/publish-play-bundle.py \
             "-Pcabalmail.fcmProjectId=$FCM_PROJECT_ID" \
             "-Pcabalmail.fcmApplicationId=$FCM_APPLICATION_ID" \
             "-Pcabalmail.fcmApiKey=$FCM_API_KEY" \

@@ -33,6 +33,15 @@ API_BASE = "https://api.appstoreconnect.apple.com"
 # `idempotent` in api_request), so we never have to know whether a 5xx
 # arrived before or after a mutation took effect.
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+# A request that never reached a status code is transient on the same
+# grounds (#1441): a connect timeout, a read timeout, a DNS failure or a
+# reset connection all say nothing about whether the call would succeed a
+# moment later. urllib raises these as URLError (whose subclass HTTPError
+# must therefore be caught first) or, for a socket-level read timeout,
+# as a bare TimeoutError. The `retryable` gate is the same one the status
+# retry uses, so a mutation the caller has not vouched for still fails
+# fast even though we cannot tell whether it reached the server.
+RETRY_TRANSPORT_ERRORS = (urllib.error.URLError, TimeoutError, ConnectionError)
 RETRY_ATTEMPTS = 4
 RETRY_BACKOFF_SECONDS = 2.0
 # Also the ceiling on a server-supplied Retry-After: ASC has no documented
@@ -119,13 +128,14 @@ def api_request(method, path, token_factory, body=None, idempotent=False):
     is called per request so each call carries a fresh JWT — including on a
     retry, whose backoff can otherwise outlive the 20-minute token.
 
-    A transient refusal (RETRY_STATUSES) is retried up to RETRY_ATTEMPTS
-    times with exponential backoff, honouring Retry-After when the server
-    sends one. GET and HEAD are retried because they change nothing; any
-    other method is retried only when the caller passes `idempotent=True`
-    to say that re-sending it cannot double the effect. Everything else —
-    4xx other than 429, an unparseable body, a transport error — raises as
-    before.
+    A transient refusal (RETRY_STATUSES) or a transport failure
+    (RETRY_TRANSPORT_ERRORS — a connect or read timeout, a DNS failure, a
+    reset connection) is retried up to RETRY_ATTEMPTS times with
+    exponential backoff, honouring Retry-After when the server sends one.
+    GET and HEAD are retried because they change nothing; any other method
+    is retried only when the caller passes `idempotent=True` to say that
+    re-sending it cannot double the effect. Everything else — 4xx other
+    than 429, an unparseable body — raises as before.
     """
     url = path if path.startswith("http") else f"{API_BASE}{path}"
     data = json.dumps(body).encode() if body is not None else None
@@ -155,6 +165,17 @@ def api_request(method, path, token_factory, body=None, idempotent=False):
             warn(
                 f"App Store Connect returned HTTP {err.code} for "
                 f"{method} {path}; retrying in {delay:.0f}s "
+                f"(attempt {attempt} of {RETRY_ATTEMPTS})."
+            )
+            time.sleep(delay)
+        except RETRY_TRANSPORT_ERRORS as err:
+            if not retryable or attempt >= RETRY_ATTEMPTS:
+                raise
+            # No response, so no Retry-After to honour.
+            delay = retry_delay(attempt, None)
+            warn(
+                f"App Store Connect request {method} {path} failed to "
+                f"complete ({err}); retrying in {delay:.0f}s "
                 f"(attempt {attempt} of {RETRY_ATTEMPTS})."
             )
             time.sleep(delay)
