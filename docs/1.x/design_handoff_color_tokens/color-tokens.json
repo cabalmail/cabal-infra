@@ -1,0 +1,1292 @@
+{
+  "$comment": "Proposed cross-platform colour tokens (docs/1.x/color-tokens-plan.md). Values marked candidate are placeholders for Claude Design to replace; scripts/check-color-tokens.py verifies any replacement.",
+  "status": "candidate",
+  "surfaces": {
+    "apple-row": {
+      "light": [
+        255,
+        255,
+        255
+      ],
+      "dark": [
+        28,
+        28,
+        30
+      ],
+      "note": "plain list row / reader header (iOS list, macOS window)"
+    },
+    "apple-form": {
+      "light": [
+        255,
+        255,
+        255
+      ],
+      "dark": [
+        44,
+        44,
+        46
+      ],
+      "note": "inset-grouped form row; the compose form"
+    },
+    "apple-grouped": {
+      "light": [
+        242,
+        242,
+        247
+      ],
+      "dark": [
+        28,
+        28,
+        30
+      ],
+      "note": "grouped-form section background (caption text sits here)"
+    },
+    "apple-sidebar": {
+      "light": [
+        228,
+        234,
+        240
+      ],
+      "dark": [
+        58,
+        58,
+        60
+      ],
+      "note": "iPad/macOS sidebar material (#1297 light; #1318 dark filled row)"
+    },
+    "watch": {
+      "light": [
+        0,
+        0,
+        0
+      ],
+      "dark": [
+        0,
+        0,
+        0
+      ],
+      "note": "watchOS draws on black in both schemes",
+      "schemes": [
+        "dark"
+      ]
+    },
+    "android-surface": {
+      "light": "#FFFBFE",
+      "dark": "#1C1B1F",
+      "note": "Material 3 default surface; wallpaper-tinted under dynamic colour"
+    },
+    "android-variant": {
+      "light": "#E7E0EC",
+      "dark": "#49454F",
+      "note": "Material 3 default surfaceVariant (chips, cards); not a default target: nothing chromatic is drawn over it once chips become washes on surface"
+    },
+    "react-bg": {
+      "light": "oklch(0.975 0.008 85)",
+      "dark": "oklch(0.17 0.006 60)",
+      "note": "--bg: body, folder rail, address rail"
+    },
+    "react-pane": {
+      "light": "oklch(0.99 0.004 85)",
+      "dark": "oklch(0.19 0.008 60)",
+      "note": "--pane-bg: message list, reader header"
+    },
+    "react-hover": {
+      "light": "oklch(0.955 0.008 85)",
+      "dark": "oklch(0.26 0.009 60)",
+      "note": "--surface-hover: hovered rows, compose header/footer"
+    }
+  },
+  "tokens": {
+    "brand.forest": {
+      "role": "text-fg",
+      "light": "#2E5235",
+      "dark": "#8DC899",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "The Forest Green. Logo tint today; proposed as the single Forest every green either equals or stays clear of.",
+      "status": "current"
+    },
+    "accent.forest.fg": {
+      "role": "text-fg",
+      "light": "#2E5235",
+      "dark": "#8DC899",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as text/glyph: unread names and dots, links, folder icons, checkmarks",
+      "status": "current"
+    },
+    "accent.forest.fill": {
+      "role": "fill",
+      "light": "#2E5235",
+      "dark": "#8DC899",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as a filled control: primary button, info toast (React), selected filter",
+      "status": "current"
+    },
+    "accent.forest.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "accent.forest.fill"
+      ],
+      "note": "text over the accent fill (React --accent-fg)",
+      "status": "current"
+    },
+    "accent.forest.wash": {
+      "role": "wash",
+      "light": "#2E5235",
+      "dark": "#8DC899",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "selection / toggle-on wash. Today: 0.10, 0.15, 0.18, 0.20 at different sites; one opacity proposed",
+      "status": "current"
+    },
+    "accent.ink.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.25 0.03 250)",
+      "dark": "oklch(0.78 0.04 250)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as text/glyph: unread names and dots, links, folder icons, checkmarks",
+      "status": "current"
+    },
+    "accent.ink.fill": {
+      "role": "fill",
+      "light": "oklch(0.25 0.03 250)",
+      "dark": "oklch(0.78 0.04 250)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as a filled control: primary button, info toast (React), selected filter",
+      "status": "current"
+    },
+    "accent.ink.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "accent.ink.fill"
+      ],
+      "note": "text over the accent fill (React --accent-fg)",
+      "status": "current"
+    },
+    "accent.ink.wash": {
+      "role": "wash",
+      "light": "oklch(0.25 0.03 250)",
+      "dark": "oklch(0.78 0.04 250)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "selection / toggle-on wash. Today: 0.10, 0.15, 0.18, 0.20 at different sites; one opacity proposed",
+      "status": "current"
+    },
+    "accent.oxblood.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.42 0.12 25)",
+      "dark": "oklch(0.75 0.13 25)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as text/glyph: unread names and dots, links, folder icons, checkmarks. Current dark value oklch(0.72 0.13 25) measures 4.33:1 on the dark sidebar; candidate lightened",
+      "status": "candidate"
+    },
+    "accent.oxblood.fill": {
+      "role": "fill",
+      "light": "oklch(0.42 0.12 25)",
+      "dark": "oklch(0.75 0.13 25)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as a filled control: primary button, info toast (React), selected filter. Current dark value oklch(0.72 0.13 25) measures 4.33:1 on the dark sidebar; candidate lightened",
+      "status": "candidate"
+    },
+    "accent.oxblood.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "accent.oxblood.fill"
+      ],
+      "note": "text over the accent fill (React --accent-fg)",
+      "status": "current"
+    },
+    "accent.oxblood.wash": {
+      "role": "wash",
+      "light": "oklch(0.42 0.12 25)",
+      "dark": "oklch(0.75 0.13 25)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "selection / toggle-on wash. Today: 0.10, 0.15, 0.18, 0.20 at different sites; one opacity proposed. Current dark value oklch(0.72 0.13 25) measures 4.33:1 on the dark sidebar; candidate lightened",
+      "status": "candidate"
+    },
+    "accent.azure.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.52 0.12 250)",
+      "dark": "oklch(0.78 0.12 250)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as text/glyph: unread names and dots, links, folder icons, checkmarks",
+      "status": "current"
+    },
+    "accent.azure.fill": {
+      "role": "fill",
+      "light": "oklch(0.52 0.12 250)",
+      "dark": "oklch(0.78 0.12 250)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as a filled control: primary button, info toast (React), selected filter",
+      "status": "current"
+    },
+    "accent.azure.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "accent.azure.fill"
+      ],
+      "note": "text over the accent fill (React --accent-fg)",
+      "status": "current"
+    },
+    "accent.azure.wash": {
+      "role": "wash",
+      "light": "oklch(0.52 0.12 250)",
+      "dark": "oklch(0.78 0.12 250)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "selection / toggle-on wash. Today: 0.10, 0.15, 0.18, 0.20 at different sites; one opacity proposed",
+      "status": "current"
+    },
+    "accent.amber.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.50 0.13 70)",
+      "dark": "oklch(0.82 0.13 70)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as text/glyph: unread names and dots, links, folder icons, checkmarks. Current light value oklch(0.55 0.13 70) measures 4.37:1 on a hovered web row and 4.10:1 on the Apple sidebar; candidate darkened",
+      "status": "candidate"
+    },
+    "accent.amber.fill": {
+      "role": "fill",
+      "light": "oklch(0.50 0.13 70)",
+      "dark": "oklch(0.82 0.13 70)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as a filled control: primary button, info toast (React), selected filter. Current light value oklch(0.55 0.13 70) measures 4.37:1 on a hovered web row and 4.10:1 on the Apple sidebar; candidate darkened",
+      "status": "candidate"
+    },
+    "accent.amber.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "accent.amber.fill"
+      ],
+      "note": "text over the accent fill (React --accent-fg)",
+      "status": "current"
+    },
+    "accent.amber.wash": {
+      "role": "wash",
+      "light": "oklch(0.50 0.13 70)",
+      "dark": "oklch(0.82 0.13 70)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "selection / toggle-on wash. Today: 0.10, 0.15, 0.18, 0.20 at different sites; one opacity proposed. Current light value oklch(0.55 0.13 70) measures 4.37:1 on a hovered web row and 4.10:1 on the Apple sidebar; candidate darkened",
+      "status": "candidate"
+    },
+    "accent.plum.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.45 0.12 330)",
+      "dark": "oklch(0.78 0.12 330)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as text/glyph: unread names and dots, links, folder icons, checkmarks",
+      "status": "current"
+    },
+    "accent.plum.fill": {
+      "role": "fill",
+      "light": "oklch(0.45 0.12 330)",
+      "dark": "oklch(0.78 0.12 330)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "accent as a filled control: primary button, info toast (React), selected filter",
+      "status": "current"
+    },
+    "accent.plum.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "accent.plum.fill"
+      ],
+      "note": "text over the accent fill (React --accent-fg)",
+      "status": "current"
+    },
+    "accent.plum.wash": {
+      "role": "wash",
+      "light": "oklch(0.45 0.12 330)",
+      "dark": "oklch(0.78 0.12 330)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "selection / toggle-on wash. Today: 0.10, 0.15, 0.18, 0.20 at different sites; one opacity proposed",
+      "status": "current"
+    },
+    "success.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.46 0.13 145)",
+      "dark": "oklch(0.80 0.15 145)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch",
+        "success.wash"
+      ],
+      "note": "auth pass chip, rules saved, Created (watch), success toast. Must read as distinct from brand.forest.",
+      "status": "candidate"
+    },
+    "success.fill": {
+      "role": "fill",
+      "light": "oklch(0.46 0.13 145)",
+      "dark": "oklch(0.80 0.15 145)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "success as a filled control (swipe action, banner, toast fill)",
+      "status": "candidate"
+    },
+    "success.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "success.fill"
+      ],
+      "note": "text/glyph over the fill",
+      "status": "candidate"
+    },
+    "success.wash": {
+      "role": "wash",
+      "light": "oklch(0.46 0.13 145)",
+      "dark": "oklch(0.80 0.15 145)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "chip / banner wash; the fg token is measured over it",
+      "status": "candidate"
+    },
+    "warning.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.47 0.12 55)",
+      "dark": "oklch(0.80 0.14 60)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch",
+        "warning.wash"
+      ],
+      "note": "attachment size, offline, suspended address, unsubscribe swipe, log warn, warning toast, auth-bad (proposed)",
+      "status": "candidate"
+    },
+    "warning.fill": {
+      "role": "fill",
+      "light": "oklch(0.47 0.12 55)",
+      "dark": "oklch(0.80 0.14 60)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "warning as a filled control (swipe action, banner, toast fill)",
+      "status": "candidate"
+    },
+    "warning.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "warning.fill"
+      ],
+      "note": "text/glyph over the fill",
+      "status": "candidate"
+    },
+    "warning.wash": {
+      "role": "wash",
+      "light": "oklch(0.47 0.12 55)",
+      "dark": "oklch(0.80 0.14 60)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "chip / banner wash; the fg token is measured over it",
+      "status": "candidate"
+    },
+    "danger.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.47 0.16 25)",
+      "dark": "oklch(0.78 0.14 25)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch",
+        "danger.wash"
+      ],
+      "note": "error text, destructive controls, important marker, cancelled event, log error, error toast",
+      "status": "candidate"
+    },
+    "danger.fill": {
+      "role": "fill",
+      "light": "oklch(0.47 0.16 25)",
+      "dark": "oklch(0.78 0.14 25)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "danger as a filled control (swipe action, banner, toast fill)",
+      "status": "candidate"
+    },
+    "danger.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "danger.fill"
+      ],
+      "note": "text/glyph over the fill",
+      "status": "candidate"
+    },
+    "danger.wash": {
+      "role": "wash",
+      "light": "oklch(0.47 0.16 25)",
+      "dark": "oklch(0.78 0.14 25)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "chip / banner wash; the fg token is measured over it",
+      "status": "candidate"
+    },
+    "info.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.47 0.13 255)",
+      "dark": "oklch(0.80 0.12 250)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch",
+        "info.wash"
+      ],
+      "note": "info toast, log info, Restore / Read swipe, search banner",
+      "status": "candidate"
+    },
+    "info.fill": {
+      "role": "fill",
+      "light": "oklch(0.47 0.13 255)",
+      "dark": "oklch(0.80 0.12 250)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "info as a filled control (swipe action, banner, toast fill)",
+      "status": "candidate"
+    },
+    "info.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "info.fill"
+      ],
+      "note": "text/glyph over the fill",
+      "status": "candidate"
+    },
+    "info.wash": {
+      "role": "wash",
+      "light": "oklch(0.47 0.13 255)",
+      "dark": "oklch(0.80 0.12 250)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "chip / banner wash; the fg token is measured over it",
+      "status": "candidate"
+    },
+    "flagged.fg": {
+      "role": "text-fg",
+      "light": "oklch(0.50 0.13 80)",
+      "dark": "oklch(0.85 0.15 85)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch",
+        "flagged.wash"
+      ],
+      "note": "\\Flagged indicator and favourite star (address favourite). Gold, not the warning orange.",
+      "status": "candidate"
+    },
+    "flagged.fill": {
+      "role": "fill",
+      "light": "oklch(0.50 0.13 80)",
+      "dark": "oklch(0.85 0.15 85)",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "note": "flagged as a filled control (swipe action, banner, toast fill)",
+      "status": "candidate"
+    },
+    "flagged.on-fill": {
+      "role": "on-fill",
+      "light": "oklch(0.99 0.003 60)",
+      "dark": "oklch(0.15 0.008 60)",
+      "on": [
+        "flagged.fill"
+      ],
+      "note": "text/glyph over the fill",
+      "status": "candidate"
+    },
+    "flagged.wash": {
+      "role": "wash",
+      "light": "oklch(0.50 0.13 80)",
+      "dark": "oklch(0.85 0.15 85)",
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row",
+        "apple-form",
+        "android-surface",
+        "react-pane",
+        "watch"
+      ],
+      "note": "chip / banner wash; the fg token is measured over it",
+      "status": "candidate"
+    },
+    "flag.red": {
+      "role": "fill",
+      "light": "#C62828",
+      "dark": "#EF9A9A",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.orange": {
+      "role": "fill",
+      "light": "#C05600",
+      "dark": "#FFB74D",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.yellow": {
+      "role": "fill",
+      "light": "#9A6B00",
+      "dark": "#FFD54F",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.green": {
+      "role": "fill",
+      "light": "#2E7D32",
+      "dark": "#81C784",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.teal": {
+      "role": "fill",
+      "light": "#00695C",
+      "dark": "#4DB6AC",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.blue": {
+      "role": "fill",
+      "light": "#1565C0",
+      "dark": "#64B5F6",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.indigo": {
+      "role": "fill",
+      "light": "#3949AB",
+      "dark": "#B3BCE8",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.purple": {
+      "role": "fill",
+      "light": "#7B1FA2",
+      "dark": "#D9A6E3",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.pink": {
+      "role": "fill",
+      "light": "#AD1457",
+      "dark": "#F48FB1",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "flag.gray": {
+      "role": "fill",
+      "light": "#616161",
+      "dark": "#BDBDBD",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 3.0,
+      "note": "user flag colour: dots and swatches (non-text, 3:1). Name is user data and never changes.",
+      "status": "candidate"
+    },
+    "swatch.rose": {
+      "role": "fill",
+      "light": [
+        219,
+        184,
+        179
+      ],
+      "dark": [
+        219,
+        184,
+        179
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.sage": {
+      "role": "fill",
+      "light": [
+        186,
+        207,
+        176
+      ],
+      "dark": [
+        186,
+        207,
+        176
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.sand": {
+      "role": "fill",
+      "light": [
+        227,
+        212,
+        168
+      ],
+      "dark": [
+        227,
+        212,
+        168
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.sky": {
+      "role": "fill",
+      "light": [
+        181,
+        204,
+        217
+      ],
+      "dark": [
+        181,
+        204,
+        217
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.terracotta": {
+      "role": "fill",
+      "light": [
+        217,
+        179,
+        148
+      ],
+      "dark": [
+        217,
+        179,
+        148
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.lavender": {
+      "role": "fill",
+      "light": [
+        201,
+        189,
+        217
+      ],
+      "dark": [
+        201,
+        189,
+        217
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.teal": {
+      "role": "fill",
+      "light": [
+        171,
+        204,
+        199
+      ],
+      "dark": [
+        171,
+        204,
+        199
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.peach": {
+      "role": "fill",
+      "light": [
+        230,
+        199,
+        168
+      ],
+      "dark": [
+        230,
+        199,
+        168
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.moss": {
+      "role": "fill",
+      "light": [
+        191,
+        194,
+        156
+      ],
+      "dark": [
+        191,
+        194,
+        156
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.taupe": {
+      "role": "fill",
+      "light": [
+        204,
+        194,
+        181
+      ],
+      "dark": [
+        204,
+        194,
+        181
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "android-surface",
+        "android-variant",
+        "react-bg",
+        "react-pane",
+        "react-hover",
+        "watch"
+      ],
+      "floor": 1.0,
+      "note": "sender/address identity swatch (Apple avatar pastel today); decorative, measured through swatch.ink",
+      "status": "current-apple"
+    },
+    "swatch.ink": {
+      "role": "on-fill",
+      "light": [
+        51,
+        48,
+        43
+      ],
+      "dark": [
+        51,
+        48,
+        43
+      ],
+      "on": [
+        "swatch.rose",
+        "swatch.sage",
+        "swatch.sand",
+        "swatch.sky",
+        "swatch.terracotta",
+        "swatch.lavender",
+        "swatch.teal",
+        "swatch.peach",
+        "swatch.moss",
+        "swatch.taupe"
+      ],
+      "note": "initials over a swatch",
+      "status": "current-apple"
+    }
+  }
+}

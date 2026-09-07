@@ -30,6 +30,7 @@ on:
       - '.github/scripts/assign-testflight-group.py'
       - '.github/scripts/set-testflight-notes.py'
       - 'changelog.d/**'
+      - 'docs/1.x/design_handoff_color_tokens/color-tokens.json'
       - '.github/workflows/scripts-tests.yml'
   push:
     branches:
@@ -44,6 +45,7 @@ on:
       - '.github/scripts/assign-testflight-group.py'
       - '.github/scripts/set-testflight-notes.py'
       - 'changelog.d/**'
+      - 'docs/1.x/design_handoff_color_tokens/color-tokens.json'
       - '.github/workflows/scripts-tests.yml'
 
 permissions:
