@@ -127,6 +127,8 @@ surfaces; the Apple form row is the hardest dark one.
 
 - `color-tokens.json` — the token set, surfaces, floors, and candidate values.
   Replace values; keep names, roles, `on` lists, and floors.
+- `colors/*.html` — one preview card per family, generated from the JSON;
+  light and dark side by side with the worst ratio for each token.
 - `../color-audit.md` — the audit that produced this brief, with the
   per-client census and baseline measurements.
 - `../../scripts/check-color-tokens.py` — the checker.
@@ -134,8 +136,8 @@ surfaces; the Apple form row is the hardest dark one.
 ## Return path
 
 Return the edited JSON. The audit session runs the checker, compares the
-result against the current baseline, and folds the values into the
-implementation plan at `../color-tokens-plan.md`. The Claude Design project
-sync (`/design-sync`) is set up once from an interactive session with
-`/design-login`; after that, this folder is pushed as a design-system project
-so the palette cards live beside the mail-rules handoff.
+result against the current baseline, re-renders the cards under `colors/`
+with `scripts/render-color-tokens.py`, and folds the values into the
+implementation plan at `../color-tokens-plan.md`. This folder is synced to
+the "Design System" project in Claude Design; the cards there show the same
+ratios the checker applies.

@@ -10,7 +10,7 @@ are complete; palette values are with Claude Design.
 |---|---|---|---|
 | 1 | Audit and census | Claude Code | done 2026-09-07 |
 | 2 | Token schema, checker, candidate values | Claude Code | done 2026-09-07 |
-| 3 | Palette values | Claude Design | pending |
+| 3 | Palette values | Claude Design | in progress; handoff pushed to the "Design System" project 2026-09-07 |
 | 4 | Correctness check and fold-in | Claude Code | pending 3 |
 | 5 | Token source of truth and generators | Claude Code | pending 4 |
 | 6 | Apple adoption | Claude Code | pending 5 |
@@ -48,10 +48,11 @@ values clear every floor; they are placeholders for Design.
 
 ### 3. Palette values
 
-**Status:** pending. Claude Design replaces every candidate value in the JSON
-per the brief. Setup: run `/design-login` once from an interactive Claude
-Code session on this machine so `/design-sync` can push the handoff folder as
-a design-system project; until then the folder is the handoff.
+**Status:** in progress. The handoff folder (brief, token JSON, and the
+preview cards rendered by `scripts/render-color-tokens.py`) was pushed to the
+"Design System" project in Claude Design on 2026-09-07. Claude Design
+replaces every candidate value in the JSON per the brief and returns it; a
+re-render of the cards shows the ratios for the returned values.
 
 ### 4. Correctness check and fold-in
 
