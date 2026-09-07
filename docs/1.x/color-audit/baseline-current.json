@@ -1,0 +1,414 @@
+{
+  "surfaces": {
+    "apple-row": {
+      "light": [
+        255,
+        255,
+        255
+      ],
+      "dark": [
+        28,
+        28,
+        30
+      ],
+      "note": "plain list row / reader header (iOS list, macOS window)"
+    },
+    "apple-form": {
+      "light": [
+        255,
+        255,
+        255
+      ],
+      "dark": [
+        44,
+        44,
+        46
+      ],
+      "note": "inset-grouped form row; the compose form"
+    },
+    "apple-grouped": {
+      "light": [
+        242,
+        242,
+        247
+      ],
+      "dark": [
+        28,
+        28,
+        30
+      ],
+      "note": "grouped-form section background (caption text sits here)"
+    },
+    "apple-sidebar": {
+      "light": [
+        228,
+        234,
+        240
+      ],
+      "dark": [
+        58,
+        58,
+        60
+      ],
+      "note": "iPad/macOS sidebar material (#1297 light; #1318 dark filled row)"
+    },
+    "watch": {
+      "light": [
+        0,
+        0,
+        0
+      ],
+      "dark": [
+        0,
+        0,
+        0
+      ],
+      "note": "watchOS draws on black in both schemes",
+      "schemes": [
+        "dark"
+      ]
+    },
+    "android-surface": {
+      "light": "#FFFBFE",
+      "dark": "#1C1B1F",
+      "note": "Material 3 default surface; wallpaper-tinted under dynamic colour"
+    },
+    "android-variant": {
+      "light": "#E7E0EC",
+      "dark": "#49454F",
+      "note": "Material 3 default surfaceVariant (chips, cards); not a default target: nothing chromatic is drawn over it once chips become washes on surface"
+    },
+    "react-bg": {
+      "light": "oklch(0.975 0.008 85)",
+      "dark": "oklch(0.17 0.006 60)",
+      "note": "--bg: body, folder rail, address rail"
+    },
+    "react-pane": {
+      "light": "oklch(0.99 0.004 85)",
+      "dark": "oklch(0.19 0.008 60)",
+      "note": "--pane-bg: message list, reader header"
+    },
+    "react-hover": {
+      "light": "oklch(0.955 0.008 85)",
+      "dark": "oklch(0.26 0.009 60)",
+      "note": "--surface-hover: hovered rows, compose header/footer"
+    }
+  },
+  "tokens": {
+    "apple.systemRed (.red)": {
+      "role": "text-fg",
+      "light": [
+        255,
+        59,
+        48
+      ],
+      "dark": [
+        255,
+        69,
+        58
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch"
+      ]
+    },
+    "apple.systemOrange (.orange)": {
+      "role": "text-fg",
+      "light": [
+        255,
+        141,
+        40
+      ],
+      "dark": [
+        255,
+        146,
+        48
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch",
+        "apple.systemOrange chip (0.12 wash)"
+      ]
+    },
+    "apple.systemYellow (.yellow)": {
+      "role": "text-fg",
+      "light": [
+        255,
+        204,
+        0
+      ],
+      "dark": [
+        255,
+        214,
+        10
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch"
+      ]
+    },
+    "apple.systemGreen (.green)": {
+      "role": "text-fg",
+      "light": [
+        52,
+        199,
+        89
+      ],
+      "dark": [
+        48,
+        209,
+        88
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch"
+      ]
+    },
+    "apple.systemBlue (.blue)": {
+      "role": "text-fg",
+      "light": [
+        0,
+        122,
+        255
+      ],
+      "dark": [
+        10,
+        132,
+        255
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch"
+      ]
+    },
+    "apple.WarningTint-0.65 (#1457)": {
+      "role": "text-fg",
+      "light": [
+        166,
+        92,
+        26
+      ],
+      "dark": [
+        255,
+        146,
+        48
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch"
+      ]
+    },
+    "apple.WarningTint-0.55 (#1461)": {
+      "role": "text-fg",
+      "light": [
+        140,
+        78,
+        22
+      ],
+      "dark": [
+        255,
+        146,
+        48
+      ],
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch"
+      ]
+    },
+    "apple.AccentColor": {
+      "role": "text-fg",
+      "light": "#2B633A",
+      "dark": "#79C289",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch"
+      ]
+    },
+    "apple.LogoTint": {
+      "role": "text-fg",
+      "light": "#2E5235",
+      "dark": "#8DC899",
+      "on": [
+        "apple-row",
+        "apple-form",
+        "apple-grouped",
+        "apple-sidebar",
+        "watch"
+      ]
+    },
+    "apple.systemOrange chip (0.12 wash)": {
+      "role": "wash",
+      "light": [
+        255,
+        141,
+        40
+      ],
+      "dark": [
+        255,
+        146,
+        48
+      ],
+      "wash_opacity": 0.12,
+      "on": [
+        "apple-row"
+      ]
+    },
+    "react.--ink-danger": {
+      "role": "text-fg",
+      "light": "oklch(0.5 0.15 25)",
+      "dark": "oklch(0.75 0.14 25)",
+      "on": [
+        "react-bg",
+        "react-pane",
+        "react-hover"
+      ]
+    },
+    "react.--auth-ok (forest)": {
+      "role": "text-fg",
+      "light": "oklch(0.45 0.09 150)",
+      "dark": "oklch(0.75 0.11 150)",
+      "on": [
+        "react-bg",
+        "react-pane",
+        "react-hover"
+      ]
+    },
+    "react.accent.amber": {
+      "role": "text-fg",
+      "light": "oklch(0.55 0.13 70)",
+      "dark": "oklch(0.82 0.13 70)",
+      "on": [
+        "react-bg",
+        "react-pane",
+        "react-hover"
+      ]
+    },
+    "react.accent.azure": {
+      "role": "text-fg",
+      "light": "oklch(0.52 0.12 250)",
+      "dark": "oklch(0.78 0.12 250)",
+      "on": [
+        "react-bg",
+        "react-pane",
+        "react-hover"
+      ]
+    },
+    "react.dmarc pass #2e7d32": {
+      "role": "text-fg",
+      "light": "#2e7d32",
+      "dark": "#2e7d32",
+      "on": [
+        "react-bg",
+        "react-pane",
+        "react-hover"
+      ]
+    },
+    "react.dmarc fail #c62828": {
+      "role": "text-fg",
+      "light": "#c62828",
+      "dark": "#c62828",
+      "on": [
+        "react-bg",
+        "react-pane",
+        "react-hover"
+      ]
+    },
+    "react.warning strip ink on #fff8e1": {
+      "role": "on-fill",
+      "light": "oklch(0.22 0.015 60)",
+      "dark": "oklch(0.94 0.005 80)",
+      "on": [
+        "react.warning-strip"
+      ]
+    },
+    "react.warning-strip": {
+      "role": "fill",
+      "light": "#fff8e1",
+      "dark": "#fff8e1",
+      "on": [
+        "react-pane"
+      ],
+      "floor": 1.0
+    },
+    "android.M3 error": {
+      "role": "text-fg",
+      "light": "#B3261E",
+      "dark": "#FFB4AB",
+      "on": [
+        "android-surface"
+      ]
+    },
+    "android.FOREST primary": {
+      "role": "text-fg",
+      "light": "#1F5B3A",
+      "dark": "#84A593",
+      "on": [
+        "android-surface"
+      ]
+    },
+    "android.FOREST tertiary (flag star)": {
+      "role": "text-fg",
+      "light": "#164029",
+      "dark": "#9AB5A6",
+      "on": [
+        "android-surface"
+      ]
+    },
+    "android.AMBER primary": {
+      "role": "text-fg",
+      "light": "#B0651B",
+      "dark": "#D4AA82",
+      "on": [
+        "android-surface"
+      ]
+    },
+    "android.flag yellow #F9A825": {
+      "role": "text-fg",
+      "light": "#F9A825",
+      "dark": "#F9A825",
+      "on": [
+        "android-surface"
+      ]
+    },
+    "android.flag orange #F57C00": {
+      "role": "text-fg",
+      "light": "#F57C00",
+      "dark": "#F57C00",
+      "on": [
+        "android-surface"
+      ]
+    },
+    "android.flag green #388E3C": {
+      "role": "text-fg",
+      "light": "#388E3C",
+      "dark": "#388E3C",
+      "on": [
+        "android-surface"
+      ]
+    }
+  }
+}
