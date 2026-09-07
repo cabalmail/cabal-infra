@@ -41,7 +41,7 @@ extension ComposeView {
     /// total crosses the model's warning threshold. Shared by the
     /// grouped-Form path (iOS et al.) and the macOS bottom strip.
     ///
-    /// `AttachmentWarningTint` owns the colour and records why a plain
+    /// `WarningTint` owns the colour and records why a plain
     /// `.orange` didn't clear the contrast floors in the light appearance
     /// (#1453).
     @ViewBuilder
@@ -54,7 +54,7 @@ extension ComposeView {
             + "messages over 25 MB; delivery may fail."
         Label(warning, systemImage: "exclamationmark.triangle")
             .font(.caption)
-            .foregroundStyle(AttachmentWarningTint.tint(for: colorScheme).color)
+            .foregroundStyle(WarningTint.tint(for: colorScheme).color)
     }
 
     func ingestFileImport(_ result: Result<[URL], Error>) async {
