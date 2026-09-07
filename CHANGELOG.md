@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.2] - 2026-09-07
+
+### Added
+- Android: **Autofill hints on the sign-in form.** The username, password,
+  and verification-code fields now carry autofill content types, so a
+  password manager offers the saved login and its one-time code instead
+  of guessing. The admin origin also publishes `assetlinks.json` when
+  `TF_VAR_ANDROID_SIGNING_CERT_FINGERPRINTS` is set, which links the app
+  to the web login without the manager asking first. See
+  `docs/password-autofill.md`.
+- Apple: **Password managers can fill the one-time code.** The iOS and
+  macOS apps now declare `admin.<control-domain>` as an associated
+  domain, baked from `TF_VAR_CONTROL_DOMAIN` at build time, and the admin
+  origin publishes the matching `apple-app-site-association` file once
+  `TF_VAR_APPLE_TEAM_ID` is set. Password AutoFill and third-party
+  managers such as 1Password can then match the native sign-in form to
+  the login saved for the web app, including its verification code on
+  the MFA step. Needs the Associated Domains capability on both App IDs;
+  see `docs/password-autofill.md`.
+
+### Fixed
+- Apple: **Revoking an address from the Addresses list now confirms
+  itself.** The row vanished and nothing else happened, while revoking the
+  same address from a message's per-address menu showed a "Revoked …"
+  banner and creating one from that very screen showed a "Created …" one.
+  The list now raises the same confirmation — and only when the revoke
+  actually landed; a failure still surfaces as the list's error banner.
+- Apple: **The compose attachment-size warning is readable in the Light
+  theme.** The row that warns you a message may be too large to deliver
+  drew in the system orange, which measured 2.31:1 against the compose
+  form's light background — below the contrast floor for text and below
+  even the floor for icons and other non-text. It now darkens that orange
+  in the Light theme, where it measures 5.04:1, and keeps the system colour
+  in the Dark theme, where it was already comfortable.
+
 ## [1.11.1] - 2026-09-05
 
 ### Fixed
