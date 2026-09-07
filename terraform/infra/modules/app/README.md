@@ -18,6 +18,8 @@ Stands up the following resources to implement a web application that allows use
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_android_signing_cert_fingerprints"></a> [android\_signing\_cert\_fingerprints](#input\_android\_signing\_cert\_fingerprints) | SHA-256 fingerprints of the Android client's signing certificates. Non-empty publishes /.well-known/assetlinks.json for credential sharing; empty publishes nothing. | `list(string)` | `[]` | no |
+| <a name="input_apple_team_id"></a> [apple\_team\_id](#input\_apple\_team\_id) | Apple Developer team ID that signs the Apple clients. Non-empty publishes /.well-known/apple-app-site-association for Password AutoFill; empty publishes nothing. | `string` | `""` | no |
 | <a name="input_bucket"></a> [bucket](#input\_bucket) | Name of s3 bucket | `string` | n/a | yes |
 | <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | ARN for the AWS Certificate Manager certificate for the control domain. | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The control domain. | `string` | n/a | yes |

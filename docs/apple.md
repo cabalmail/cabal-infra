@@ -128,6 +128,12 @@ xcodegen generate
 
 After that, plain `xcodebuild ... build` and `xcodebuild ... archive` both sign cleanly.
 
+`Local.xcconfig` is also where a local build sets `CABALMAIL_CONTROL_DOMAIN`,
+the control domain baked into the associated-domains entitlement so
+password managers can match the app to the web app's saved login; CI
+passes it on the archive command line. See
+[password-autofill.md](password-autofill.md).
+
 ## Simulator testing and automation
 
 Tooling for driving the full app in an iOS simulator — scripted
@@ -310,10 +316,10 @@ are expanded in the sections further down.
 
    | App ID | Description | Capabilities |
    |---|---|---|
-   | `com.cabalmail.Cabalmail` | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`) |
+   | `com.cabalmail.Cabalmail` | `Cabalmail` | **Push Notifications**; **App Groups** (configure → tick `group.com.cabalmail.Cabalmail`); **Associated Domains** (Password AutoFill, see [password-autofill.md](password-autofill.md)) |
    | `com.cabalmail.Cabalmail.NotificationService` | `Cabalmail Notification Service` | **App Groups** (same group). Not Push Notifications — the extension never registers for push itself; it only reads the shared containers |
    | `com.cabalmail.Cabalmail.watchkitapp` | `Cabalmail Watch` | none |
-   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | **Push Notifications**; **App Groups** (same group) |
+   | `com.cabalmail.CabalmailMac` | `Cabalmail Mac` | **Push Notifications**; **App Groups** (same group); **Associated Domains** |
    | `com.cabalmail.CabalmailMac.NotificationService` | `Cabalmail Mac Notification Service` | **App Groups** (same group), same rationale as the iOS extension |
 
    Keychain sharing (the app and the extension share a keychain access
@@ -546,13 +552,14 @@ distribution cert you just exported. Recreate them whenever the cert rolls
    step 4 of [Signing prerequisites](#signing-prerequisites):
    - App Group `group.com.cabalmail.Cabalmail`
    - `com.cabalmail.Cabalmail` (App IDs → iOS, tvOS, watchOS, visionOS)
-     — Push Notifications + App Groups
+     — Push Notifications + App Groups + Associated Domains
    - `com.cabalmail.Cabalmail.NotificationService` (App IDs → iOS, tvOS,
      watchOS, visionOS) — App Groups only; the push Notification Service
      Extension embedded in the iOS archive
    - `com.cabalmail.Cabalmail.watchkitapp` (App IDs → iOS, tvOS, watchOS,
      visionOS) — the embedded watch companion app
-   - `com.cabalmail.CabalmailMac` — Push Notifications + App Groups
+   - `com.cabalmail.CabalmailMac` — Push Notifications + App Groups +
+     Associated Domains
    - `com.cabalmail.CabalmailMac.NotificationService` — App Groups
      only; the push Notification Service Extension embedded in the
      macOS archive

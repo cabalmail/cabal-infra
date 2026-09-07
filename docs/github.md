@@ -78,6 +78,15 @@ Note that quotation marks must be escaped with a single backslash. (If you're re
 | --- | --- | --- |
 | `TF_VAR_DNSSEC_ENABLED` | `false` | Optional. When `true`, each stack creates a us-east-1 ECC_NIST_P256 KMS key (about $1/month per stack), a per-zone key-signing key, and turns on signing; the DS record each registrar needs is surfaced as a Terraform output. Default `false`. Signing is safe on its own -- the chain of trust forms only when you publish the DS record at the registrar afterwards (sign first, DS second). |
 
+### Native-client Password AutoFill
+
+Both optional. Each publishes a `/.well-known` document on the admin origin that lets password managers match the native apps to the login saved for the web app, including its one-time code. See [password-autofill.md](./password-autofill.md) for the app-side half of the handshake and the verification commands.
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `TF_VAR_APPLE_TEAM_ID` | `ABCDE12345` | The 10-character team ID that signs the Apple clients (the same value as the `APPLE_TEAM_ID` secret, but the AASA document is public, so it is a variable). Publishes `apple-app-site-association`. Unset publishes nothing. |
+| `TF_VAR_ANDROID_SIGNING_CERT_FINGERPRINTS` | `[\\"AA:BB:...\\"]` | HCL list of the SHA-256 fingerprints the Android client is signed with (Play's app signing key, not the upload key). Publishes `assetlinks.json`. Quotes must be escaped. Unset publishes nothing. |
+
 ### IMAP connection pooling
 
 `TF_VAR_IMAP_POOL_ENABLED` opts an environment into reuse of authenticated IMAP sessions across warm invocations of the API Lambdas, instead of a fresh login per request. It is off by default and opt-in per environment. See [IMAP connection pooling in the API Lambdas](./operations.md#imap-connection-pooling-in-the-api-lambdas) for what it does, the safety posture, and rollback.

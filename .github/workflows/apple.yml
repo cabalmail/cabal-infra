@@ -941,6 +941,11 @@ jobs:
         working-directory: apple
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Baked into the app entitlements as the webcredentials associated
+          # domain (docs/password-autofill.md). Empty on a fork that has not
+          # set the variable; the archive step then keeps the non-resolving
+          # default from Base.xcconfig rather than failing.
+          CABALMAIL_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
         run: |
           set -o pipefail
           # Manual signing — the provisioning profile was installed above and
@@ -986,6 +991,10 @@ jobs:
           # watch app embeds in the iOS archive; the visionOS archive
           # filters the watch target out entirely, so the empty value is
           # never consulted there).
+          if [ -z "${CABALMAIL_CONTROL_DOMAIN:-}" ]; then
+            echo "::warning::TF_VAR_CONTROL_DOMAIN is unset; the associated-domains entitlement keeps its placeholder and password managers will not match this build to the web app."
+            CABALMAIL_CONTROL_DOMAIN=cabalmail.invalid
+          fi
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme Cabalmail \
@@ -997,6 +1006,7 @@ jobs:
             WATCHOS_APP_STORE_PROFILE_UUID="${WATCHOS_APP_STORE_PROFILE_UUID:-}" \
             IOS_NSE_APP_STORE_PROFILE_UUID="${IOS_NSE_APP_STORE_PROFILE_UUID:-}" \
             IOS_WEBEXT_APP_STORE_PROFILE_UUID="${IOS_WEBEXT_APP_STORE_PROFILE_UUID:-}" \
+            CABALMAIL_CONTROL_DOMAIN="$CABALMAIL_CONTROL_DOMAIN" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-archive.log" \
@@ -1355,6 +1365,11 @@ jobs:
         working-directory: apple
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Baked into the app entitlements as the webcredentials associated
+          # domain (docs/password-autofill.md). Empty on a fork that has not
+          # set the variable; the archive step then keeps the non-resolving
+          # default from Base.xcconfig rather than failing.
+          CABALMAIL_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
         run: |
           set -o pipefail
           # Manual signing — see the same block in the iOS job for rationale.
@@ -1375,6 +1390,10 @@ jobs:
           # MAC_APP_STORE_PROFILE_UUID below is injected as a user-defined
           # setting and resolved only by the app target's
           # `PROVISIONING_PROFILE_SPECIFIER = $(MAC_APP_STORE_PROFILE_UUID)`.
+          if [ -z "${CABALMAIL_CONTROL_DOMAIN:-}" ]; then
+            echo "::warning::TF_VAR_CONTROL_DOMAIN is unset; the associated-domains entitlement keeps its placeholder and password managers will not match this build to the web app."
+            CABALMAIL_CONTROL_DOMAIN=cabalmail.invalid
+          fi
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme CabalmailMac \
@@ -1385,6 +1404,7 @@ jobs:
             MAC_APP_STORE_PROFILE_UUID="$MAC_APP_STORE_PROFILE_UUID" \
             MAC_NSE_APP_STORE_PROFILE_UUID="${MAC_NSE_APP_STORE_PROFILE_UUID:-}" \
             MAC_WEBEXT_APP_STORE_PROFILE_UUID="${MAC_WEBEXT_APP_STORE_PROFILE_UUID:-}" \
+            CABALMAIL_CONTROL_DOMAIN="$CABALMAIL_CONTROL_DOMAIN" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-archive.log" \
