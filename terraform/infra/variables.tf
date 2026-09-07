@@ -219,3 +219,15 @@ variable "extension_redirect_uris" {
   description = "OAuth callback URLs for the browser extension's Cognito app client (e.g. https://<extension-id>.chromiumapp.org/ for Chrome). The store-assigned extension IDs only exist after first store upload, so this defaults empty and the client carries a loopback placeholder until then. Wire per environment once the IDs exist; see docs/1.x/browser-extension-plan.md."
   default     = []
 }
+
+variable "apple_team_id" {
+  type        = string
+  description = "Apple Developer team ID (10 characters) of the account that signs the Apple clients. When set, the admin origin publishes /.well-known/apple-app-site-association naming the iOS and macOS apps, which lets Password AutoFill and third-party password managers match the native sign-in form to the login saved for the web app. Empty (default) publishes nothing. Pair with the webcredentials entitlement the Apple build bakes from TF_VAR_CONTROL_DOMAIN; see docs/password-autofill.md."
+  default     = ""
+}
+
+variable "android_signing_cert_fingerprints" {
+  type        = list(string)
+  description = "SHA-256 fingerprints (colon-separated hex, as Play Console's App signing page prints them) of the certificates the Android client is signed with. When non-empty, the admin origin publishes /.well-known/assetlinks.json granting the app the get_login_creds relation so password managers link it to the web app's saved login without asking. Empty (default) publishes nothing. See docs/password-autofill.md."
+  default     = []
+}

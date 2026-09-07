@@ -38,7 +38,15 @@ final class AddressesViewModel {
     /// Revoke the given address via the API and prune it from the list. The
     /// local prune happens only after the call succeeds — a failed revoke
     /// (network, 4xx) leaves the list intact and surfaces an error banner.
-    func revoke(_ address: Address) async {
+    ///
+    /// Returns whether the revoke landed, so the caller can confirm it. The
+    /// list's own revoke used to raise nothing at all, which made the same
+    /// destructive action silent from the address list and confirmed from
+    /// the reader's per-address menu (#1454). The failure path stays with
+    /// `errorMessage`, so a caller that only wants the success confirmation
+    /// can ignore the banner and read this.
+    @discardableResult
+    func revoke(_ address: Address) async -> Bool {
         do {
             try await client.revokeAddress(
                 address: address.address,
@@ -48,8 +56,10 @@ final class AddressesViewModel {
             )
             addresses.removeAll { $0.id == address.id }
             errorMessage = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 

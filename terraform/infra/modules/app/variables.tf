@@ -37,6 +37,18 @@ variable "control_domain" {
   description = "The control domain."
 }
 
+variable "apple_team_id" {
+  type        = string
+  description = "Apple Developer team ID that signs the Apple clients. Non-empty publishes /.well-known/apple-app-site-association for Password AutoFill; empty publishes nothing."
+  default     = ""
+}
+
+variable "android_signing_cert_fingerprints" {
+  type        = list(string)
+  description = "SHA-256 fingerprints of the Android client's signing certificates. Non-empty publishes /.well-known/assetlinks.json for credential sharing; empty publishes nothing."
+  default     = []
+}
+
 variable "relay_ips" {
   type        = list(string)
   description = "Egress IP addresses."
