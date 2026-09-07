@@ -10,6 +10,8 @@ import CabalmailKit
 /// Compiled into both the iOS and macOS targets (this directory is shared
 /// per `project.yml`); the bucketing itself lives in CabalmailKit.
 struct AuthResultsLine: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let results: AuthResults?
 
     var body: some View {
@@ -26,7 +28,7 @@ struct AuthResultsLine: View {
                     // checks.
                     Label(Self.warningCopy, systemImage: "exclamationmark.shield.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(WarningTint.tint(for: colorScheme).color)
                 }
             }
         } else {
@@ -55,7 +57,7 @@ struct AuthResultsLine: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .foregroundStyle(color(for: token))
-        .background(color(for: token).opacity(0.12), in: Capsule())
+        .background(color(for: token).opacity(WarningTint.chipWashOpacity), in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(method) \(token ?? "not checked")")
     }
@@ -63,7 +65,7 @@ struct AuthResultsLine: View {
     private func color(for token: String?) -> Color {
         switch AuthMethodSeverity(token: token) {
         case .ok: return .green
-        case .bad: return .orange
+        case .bad: return WarningTint.tint(for: colorScheme).color
         case .neutral: return .secondary
         }
     }

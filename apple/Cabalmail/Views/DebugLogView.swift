@@ -10,6 +10,7 @@ import CabalmailKit
 /// there's no developer-level log viewer inside the device, and asking
 /// users to attach a Mac for every "doesn't work" report isn't reasonable.
 struct DebugLogView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var entries: [DebugLogStore.Entry] = []
     @State private var streamTask: Task<Void, Never>?
     @State private var selectedLevels: Set<DebugLogStore.Level> = Set(DebugLogStore.Level.allCases)
@@ -103,7 +104,7 @@ struct DebugLogView: View {
         switch level {
         case .debug: return .gray
         case .info:  return .blue
-        case .warn:  return .orange
+        case .warn:  return WarningTint.tint(for: colorScheme).color
         case .error: return .red
         }
     }
@@ -135,6 +136,8 @@ struct DebugLogView: View {
 }
 
 private struct LogRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let entry: DebugLogStore.Entry
 
     var body: some View {
@@ -165,7 +168,7 @@ private struct LogRow: View {
         switch entry.level {
         case .debug: return .gray
         case .info:  return .blue
-        case .warn:  return .orange
+        case .warn:  return WarningTint.tint(for: colorScheme).color
         case .error: return .red
         }
     }

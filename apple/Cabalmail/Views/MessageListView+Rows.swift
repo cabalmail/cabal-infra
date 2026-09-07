@@ -386,6 +386,7 @@ private struct MessageRow: View {
     let palette: [FlagPaletteEntry]
 
     @Environment(AppState.self) private var appState
+    @Environment(\.colorScheme) private var colorScheme
     @State private var contactName: String?
 
     /// The row's tagged slots, capped so the fixed-height indicator run
@@ -439,7 +440,7 @@ private struct MessageRow: View {
                     if envelope.authVerification == .warning {
                         Image(systemName: "exclamationmark.shield.fill")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(WarningTint.tint(for: colorScheme).color)
                             .accessibilityLabel(AuthResultsLine.warningCopy)
                     }
                     // `\Answered` — the same left-turn arrow Mail uses, so
@@ -464,7 +465,7 @@ private struct MessageRow: View {
                     if envelope.flags.contains(.flagged) {
                         Image(systemName: "flag.fill")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(WarningTint.tint(for: colorScheme).color)
                     }
                     // Custom-flag dots (Phase 4): one color dot per tagged
                     // palette slot, capped so the indicator run can never

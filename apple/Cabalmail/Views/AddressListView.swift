@@ -10,6 +10,7 @@ import CabalmailKit
 /// message-list filter.
 struct AddressListView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.colorScheme) private var colorScheme
     @State private var model: AddressesViewModel?
     @State private var filterQuery: String = ""
     @State private var isRefreshing = false
@@ -363,7 +364,7 @@ extension AddressListView {
                 if address.suspended {
                     Text("Suspended")
                         .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(WarningTint.tint(for: colorScheme).color)
                 }
                 if let comment = address.comment, !comment.isEmpty {
                     Text(comment)
