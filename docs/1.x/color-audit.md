@@ -177,6 +177,12 @@ The candidate values clear every floor on every surface in both schemes; the
 checker's report is `color-audit/candidate-report.txt`. Design owns the final
 values and the checker owns the verdict.
 
+> **Update (2026-09-07):** Claude Design returned final values the same
+> day; they pass the checker with zero failing pairs, including the
+> high-contrast variants (`color-audit/final-report.txt`). Findings from the
+> acceptance pass are recorded under item 4 of
+> [color-tokens-plan.md](color-tokens-plan.md).
+
 ## Baseline
 
 Selected rows from `color-audit/baseline-report.txt`, light appearance on

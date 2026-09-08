@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check a colour-token file against a surface table for WCAG contrast.
 
-usage: check-color-tokens.py <tokens.json> [--scheme light|dark] [--fail-under]
+usage: check-color-tokens.py <tokens.json> [--scheme light|dark] [--hc] [--fail-under]
 
 The token file is the cross-platform source of truth proposed by the colour
 audit (docs/1.x/color-tokens-plan.md). Shape:
@@ -36,6 +36,8 @@ produces.
 import json
 import math
 import sys
+
+HIGH_CONTRAST = False  # --hc: prefer light-hc / dark-hc values where a token has them
 
 FLOOR_BY_ROLE = {
     "text-fg": 4.5,
@@ -114,7 +116,8 @@ def resolve(doc, scheme):
     # Two passes: plain tokens first, then washes that depend on surfaces.
     for name, tok in tokens.items():
         if tok.get("role") != "wash":
-            colours[name] = parse_colour(tok[scheme])
+            key = f"{scheme}-hc" if HIGH_CONTRAST and f"{scheme}-hc" in tok else scheme
+            colours[name] = parse_colour(tok[key])
     for name, tok in tokens.items():
         if tok.get("role") == "wash":
             base = parse_colour(tok[scheme])
@@ -154,6 +157,8 @@ def main(argv):
         print(__doc__)
         return 2
     path = argv[1]
+    global HIGH_CONTRAST
+    HIGH_CONTRAST = "--hc" in argv
     schemes = ["light", "dark"]
     if "--scheme" in argv:
         schemes = [argv[argv.index("--scheme") + 1]]
