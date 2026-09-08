@@ -4,9 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +29,7 @@ import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -66,6 +71,13 @@ fun SignInScreen(
                 Modifier
                     .padding(innerPadding)
                     .fillMaxSize()
+                    // The IME can be taller than the form on a landscape
+                    // tablet, so give back the space it takes and let what
+                    // is left scroll. `verticalScroll` keeps the incoming
+                    // minimum height, so a form that still fits stays
+                    // centred exactly as before.
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -88,11 +100,19 @@ fun SignInScreen(
                             ),
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    val canSubmitCode = canSubmitMfaCode(state.busy, mfaCode)
                     OutlinedTextField(
                         value = mfaCode,
                         onValueChange = { mfaCode = it },
                         label = { Text(stringResource(R.string.mfa_code_label)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.NumberPassword,
+                                imeAction = ImeAction.Done,
+                            ),
+                        // The keyboard's own action key submits, on the same
+                        // condition as the button it stands in for.
+                        keyboardActions = KeyboardActions(onDone = { if (canSubmitCode) onSubmitMfaCode(mfaCode) }),
                         singleLine = true,
                         enabled = !state.busy,
                         modifier =
@@ -107,7 +127,7 @@ fun SignInScreen(
                     )
                     Button(
                         onClick = { onSubmitMfaCode(mfaCode) },
-                        enabled = !state.busy && mfaCode.isNotBlank(),
+                        enabled = canSubmitCode,
                     ) {
                         Text(stringResource(R.string.mfa_submit))
                     }
@@ -129,6 +149,7 @@ fun SignInScreen(
                                 keyboardType = KeyboardType.Uri,
                                 capitalization = KeyboardCapitalization.None,
                                 autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next,
                             ),
                         singleLine = true,
                         enabled = !state.busy,
@@ -138,6 +159,7 @@ fun SignInScreen(
                         value = username,
                         onValueChange = { username = it },
                         label = { Text(stringResource(R.string.username_label)) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         singleLine = true,
                         enabled = !state.busy,
                         modifier =
@@ -146,12 +168,21 @@ fun SignInScreen(
                                 .fillMaxWidth()
                                 .semantics { contentType = ContentType.Username },
                     )
+                    val canSignIn = canSubmitSignIn(state.busy, controlDomain, username, password)
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
                         label = { Text(stringResource(R.string.password_label)) },
                         visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(
+                                onDone = { if (canSignIn) onSignIn(controlDomain, username, password) },
+                            ),
                         singleLine = true,
                         enabled = !state.busy,
                         modifier =
@@ -162,11 +193,7 @@ fun SignInScreen(
                     )
                     Button(
                         onClick = { onSignIn(controlDomain, username, password) },
-                        enabled =
-                            !state.busy &&
-                                controlDomain.isNotBlank() &&
-                                username.isNotBlank() &&
-                                password.isNotBlank(),
+                        enabled = canSignIn,
                     ) {
                         Text(stringResource(R.string.sign_in))
                     }
@@ -186,3 +213,21 @@ fun SignInScreen(
         }
     }
 }
+
+/**
+ * Whether the sign-in form can be submitted. The `Sign In` button and the
+ * keyboard's own action key both ask this, so the IME can never submit a
+ * form the button is refusing (#1477).
+ */
+internal fun canSubmitSignIn(
+    busy: Boolean,
+    controlDomain: String,
+    username: String,
+    password: String,
+): Boolean = !busy && controlDomain.isNotBlank() && username.isNotBlank() && password.isNotBlank()
+
+/** The same rule for the MFA challenge's `Verify` button and action key. */
+internal fun canSubmitMfaCode(
+    busy: Boolean,
+    code: String,
+): Boolean = !busy && code.isNotBlank()
