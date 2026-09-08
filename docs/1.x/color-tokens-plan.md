@@ -1,8 +1,9 @@
 # Colour tokens: implementation plan
 
-**Status:** planning. The audit ([color-audit.md](color-audit.md)) and the
-Design brief ([design_handoff_color_tokens/](design_handoff_color_tokens/README.md))
-are complete; palette values are with Claude Design.
+**Status:** values accepted 2026-09-07; implementation not started. The audit
+([color-audit.md](color-audit.md)) and the Design brief
+([design_handoff_color_tokens/](design_handoff_color_tokens/README.md)) are
+complete and Claude Design's palette passed the acceptance check.
 
 ## Progress
 
@@ -10,9 +11,9 @@ are complete; palette values are with Claude Design.
 |---|---|---|---|
 | 1 | Audit and census | Claude Code | done 2026-09-07 |
 | 2 | Token schema, checker, candidate values | Claude Code | done 2026-09-07 |
-| 3 | Palette values | Claude Design | in progress; handoff pushed to the "Design System" project 2026-09-07 |
-| 4 | Correctness check and fold-in | Claude Code | pending 3 |
-| 5 | Token source of truth and generators | Claude Code | pending 4 |
+| 3 | Palette values | Claude Design | done 2026-09-07 |
+| 4 | Correctness check and fold-in | Claude Code | done 2026-09-07; see findings under item 4 |
+| 5 | Token source of truth and generators | Claude Code | next |
 | 6 | Apple adoption | Claude Code | pending 5 |
 | 7 | Android adoption | Claude Code | pending 5 |
 | 8 | React adoption | Claude Code | pending 5 |
@@ -48,29 +49,53 @@ values clear every floor; they are placeholders for Design.
 
 ### 3. Palette values
 
-**Status:** in progress. The handoff folder (brief, token JSON, and the
-preview cards rendered by `scripts/render-color-tokens.py`) was pushed to the
-"Design System" project in Claude Design on 2026-09-07. Claude Design
-replaces every candidate value in the JSON per the brief and returns it; a
-re-render of the cards shows the ratios for the returned values.
+**Status:** done. The handoff folder was pushed to the "Design System"
+project in Claude Design on 2026-09-07 and Claude Design returned
+`color-tokens.json` with every value marked `final`, in OKLCH, including
+`light-hc`/`dark-hc` high-contrast variants for every `.fg` token and for
+`brand.forest`. It also generated its own design system around it
+(component previews, per-platform UI kits, guideline pages); those are
+Design's artefacts and stay in the project. The JSON is the contract and is
+now the file in `design_handoff_color_tokens/`.
 
 ### 4. Correctness check and fold-in
 
-**Status:** pending item 3. Run the checker on the returned JSON; zero
-failing pairs is the acceptance test. Then:
+**Status:** done. The checker reports zero failing pairs on the returned
+JSON in both schemes, and zero with `--hc` (the high-contrast variants
+checked against the same surfaces). `color-audit/final-report.txt` is the
+run. `brand.forest` and `accent.forest.*` are the logo values to the byte.
 
-- Confirm `brand.forest` and `accent.forest.*` are still the logo values.
-- Confirm no `.fg` token is within a just-noticeable difference of another
-  family's `.fg` in the same scheme (a quick ΔE in OKLab, add to the checker
-  if it is not obvious by eye).
-- Record the accepted values in this document's item 5 and move the JSON to
-  its permanent home.
+Findings recorded for the implementer:
+
+- **Dark values sit on the floor.** Every family's dark `.fg` measures
+  4.50 to 4.53:1 on its hardest dark surface, the sidebar at (58,58,60); on
+  the row and form surfaces they have 6:1 or more. That is within the
+  contract, but a rounding difference at export could flip one (the #1457
+  review found 0.02 of ratio in a rounding mode). The generator in item 5
+  must round OKLCH to sRGB the same way the checker does and the drift test
+  must re-run the checker on the *exported* sRGB values, not the OKLCH
+  source. If any exported dark value lands under 4.5 the fix is to raise
+  that token's dark lightness by 0.01 to 0.02, not to relax the floor.
+- **Expected near-collisions, all accepted by the brief.** In OKLab, Amber
+  accent versus `warning.fg` (ΔE 0.04 in both schemes), Amber versus
+  `flagged.fg` (0.05), Oxblood dark versus `danger.fg` dark (0.03), and
+  Azure versus `flag.blue` (0.02, a dot beside a name). Amber and Oxblood are
+  selectable accents on the web and Android only; Apple's accent is Forest.
+  Every affected site carries a glyph or a word, which the adoption items
+  must preserve.
+- **Flag fills sit next to their semantic siblings.** `flag.green` is near
+  `success.fg`, `flag.red` near `danger.fg`, `flag.yellow` near
+  `flagged.fg`. Flags are dots and swatches beside a name, never text, so
+  this is fine; it is noted so nobody reads it as a defect later.
+- **Success is distinct from Forest.** ΔE 0.10 light, 0.14 dark, with higher
+  chroma and a yellower hue; it reads as "go".
 
 ### 5. Token source of truth and generators
 
 **Status:** pending item 4.
 
-- Move the JSON to `design/color-tokens.json` at the repository root.
+- Move the JSON to `design/color-tokens.json` at the repository root; the
+  handoff copy stays as the record of what Design returned.
 - `scripts/generate-color-tokens.py` writes:
   - `apple/Cabalmail/Assets.xcassets/Colors/<token>.colorset/Contents.json`
     for iOS, macOS, and visionOS, with light and dark, and High Contrast

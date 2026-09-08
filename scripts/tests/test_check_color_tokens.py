@@ -86,6 +86,15 @@ class HandoffTests(unittest.TestCase):
                    for row in self.c.check(self.doc, scheme) if row[-1] != "pass"]
         self.assertEqual(failing, [], "\n".join(str(r) for r in failing))
 
+    def test_high_contrast_variants_clear_the_floors_too(self):
+        self.c.HIGH_CONTRAST = True
+        try:
+            failing = [row for scheme in ("light", "dark")
+                       for row in self.c.check(self.doc, scheme) if row[-1] != "pass"]
+        finally:
+            self.c.HIGH_CONTRAST = False
+        self.assertEqual(failing, [], "\n".join(str(r) for r in failing))
+
     def test_forest_is_the_logo_green(self):
         tokens = self.doc["tokens"]
         for name in ("brand.forest", "accent.forest.fg", "accent.forest.fill"):
