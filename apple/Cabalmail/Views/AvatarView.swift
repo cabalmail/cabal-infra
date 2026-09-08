@@ -116,20 +116,20 @@ struct AvatarView: View {
     /// and so would pick a different color on every app launch.
     private var backgroundColor: Color {
         let key = (sender?.host ?? "").lowercased()
-        // Muted pastels and earth tones — low saturation keeps a wall of
-        // avatars calm. Initials render in `initialsForeground`, a dark
-        // ink chosen to stay legible on every swatch below.
+        // The `swatch.*` tokens: muted pastels and earth tones, so a wall
+        // of avatars stays calm. Initials render in `swatch.ink`, which the
+        // token file holds at 4.5:1 over every swatch.
         let palette: [Color] = [
-            Color(red: 0.86, green: 0.72, blue: 0.70), // dusty rose
-            Color(red: 0.73, green: 0.81, blue: 0.69), // sage
-            Color(red: 0.89, green: 0.83, blue: 0.66), // sand
-            Color(red: 0.71, green: 0.80, blue: 0.85), // dusty sky
-            Color(red: 0.85, green: 0.70, blue: 0.58), // terracotta
-            Color(red: 0.79, green: 0.74, blue: 0.85), // lavender
-            Color(red: 0.67, green: 0.80, blue: 0.78), // muted teal
-            Color(red: 0.90, green: 0.78, blue: 0.66), // pale peach
-            Color(red: 0.75, green: 0.76, blue: 0.61), // moss
-            Color(red: 0.80, green: 0.76, blue: 0.71)  // taupe
+            ColorTokens.swatchRose,
+            ColorTokens.swatchSage,
+            ColorTokens.swatchSand,
+            ColorTokens.swatchSky,
+            ColorTokens.swatchTerracotta,
+            ColorTokens.swatchLavender,
+            ColorTokens.swatchTeal,
+            ColorTokens.swatchPeach,
+            ColorTokens.swatchMoss,
+            ColorTokens.swatchTaupe,
         ]
         // FNV-1a (64-bit): deterministic across launches and platforms.
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
@@ -144,7 +144,7 @@ struct AvatarView: View {
     /// Dark, warm-neutral ink for the initials. Legible on every pastel /
     /// earth-tone swatch in `backgroundColor`, where white would wash out.
     private var initialsForeground: Color {
-        Color(red: 0.20, green: 0.19, blue: 0.17)
+        ColorTokens.swatchInk
     }
 
     private var initials: String {

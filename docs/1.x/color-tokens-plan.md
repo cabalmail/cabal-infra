@@ -1,7 +1,6 @@
 # Colour tokens: implementation plan
 
-**Status:** source of truth and generators in place 2026-09-07; adoption
-not started. The audit
+**Status:** Apple adoption in review 2026-09-07; Android and React next. The audit
 ([color-audit.md](color-audit.md)) and the Design brief
 ([design_handoff_color_tokens/](design_handoff_color_tokens/README.md)) are
 complete and Claude Design's palette passed the acceptance check.
@@ -15,8 +14,8 @@ complete and Claude Design's palette passed the acceptance check.
 | 3 | Palette values | Claude Design | done 2026-09-07 |
 | 4 | Correctness check and fold-in | Claude Code | done 2026-09-07; see findings under item 4 |
 | 5 | Token source of truth and generators | Claude Code | done 2026-09-07 |
-| 6 | Apple adoption | Claude Code | next |
-| 7 | Android adoption | Claude Code | pending 5 |
+| 6 | Apple adoption | Claude Code | in review 2026-09-07 |
+| 7 | Android adoption | Claude Code | next |
 | 8 | React adoption | Claude Code | pending 5 |
 | 9 | Tester re-measure | tester | pending 6, 7, 8 |
 
@@ -131,7 +130,30 @@ from the sketch above, each for a reason found on the way:
 
 ### 6. Apple adoption
 
-**Status:** pending item 5. Ordered by the measured failures.
+**Status:** in review. Every site in the census now reads a token; the
+list below is what was done, kept as the record. Two departures from the
+sketch: the `AccentColor` and `LogoTint` colorsets in the app targets are
+now *generated* from `accent.forest` / `brand.forest` rather than replaced
+by hand, so `.tint` and `Color.accentColor` stay Forest without drift; and
+the source scan that replaced `WarningTintSourceScanTests` forbids every
+platform colour name (red, orange, yellow, green, blue, teal, indigo,
+purple, pink) and `Color("AccentColor")` across all three app targets,
+with an empty allowlist. `.gray` stays permitted as the neutral for the
+debug log level and the un-favourite swipe.
+
+Live check, iPad Pro 11" (M5) simulator, iOS 26.5, Light theme, INBOX with
+the one flagged message, measured with the tester's instrument on the same
+pixel box the #1461 verification used:
+
+| site | pixel | predicted | contrast |
+|---|---|---|---|
+| flag glyph, `flagged.fg` | (124, 89, 0) | `#7C5900` | 6.39:1 on white |
+| unread dot, `accent.forest.fg` | (46, 82, 53) | `#2E5235` | 8.84:1 on white |
+| resume toast glyph, `info.fg` | (0, 105, 125) | `#00697D` | 5.17:1 on the capsule |
+
+Every pixel landed on the exported value to the byte. Pre-change the flag
+glyph measured 2.31:1 at the same box (#1456). The other converted sites
+are code reads; the tester's re-measure (item 9) covers them.
 
 - Replace every `.red`, `.orange`, `.yellow`, `.green`, `.blue` in the
   census with the token: `danger.fg` for error labels and the important

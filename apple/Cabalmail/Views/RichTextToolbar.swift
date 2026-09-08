@@ -153,7 +153,7 @@ struct RichTextToolbar: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .frame(minWidth: 24, minHeight: 24)
-                .background(isOn ? Color.accentColor.opacity(0.2) : .clear)
+                .background(isOn ? ColorTokens.accentForestWash : .clear)
                 .cornerRadius(4)
         }
         .buttonStyle(.borderless)
@@ -172,7 +172,7 @@ struct RichTextToolbar: View {
             Text(label)
                 .font(.system(size: 12, weight: .semibold))
                 .frame(minWidth: 26, minHeight: 24)
-                .background(isOn ? Color.accentColor.opacity(0.2) : .clear)
+                .background(isOn ? ColorTokens.accentForestWash : .clear)
                 .cornerRadius(4)
         }
         .buttonStyle(.borderless)

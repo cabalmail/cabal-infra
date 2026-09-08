@@ -22,12 +22,12 @@ struct AddressDetailView: View {
                 if address.favorite {
                     Label("Favorite", systemImage: "star.fill")
                         .font(.caption2)
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(ColorTokens.flaggedFg)
                 }
                 if address.suspended {
                     Label("Suspended", systemImage: "pause.circle")
                         .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(ColorTokens.warningFg)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

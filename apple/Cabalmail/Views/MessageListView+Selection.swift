@@ -43,7 +43,7 @@ extension MessageListView {
                     LazyVStack(spacing: 0) {
                         if let errorMessage = model.errorMessage {
                             Label(errorMessage, systemImage: "exclamationmark.triangle")
-                                .foregroundStyle(.red)
+                                .foregroundStyle(ColorTokens.dangerFg)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding()
                         }
@@ -273,7 +273,7 @@ extension MessageListView {
         visible: [Envelope]
     ) -> some View {
         let selected = rowIsSelected(envelope, model: model)
-        let background = selected ? Color.accentColor.opacity(0.15) : Color.clear
+        let background = selected ? ColorTokens.accentForestWash : Color.clear
         Group {
             if model.bulkMode {
                 row(for: envelope, model: model, orderedVisible: visible)

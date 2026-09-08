@@ -138,7 +138,7 @@ struct NewAddressSheet: View {
             }
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(ColorTokens.dangerFg)
             }
             HStack {
                 Button("Random", action: randomize)
@@ -168,7 +168,7 @@ struct NewAddressSheet: View {
             if let errorMessage {
                 Section {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
             }
             Section {

@@ -126,7 +126,7 @@ extension FolderListView {
         case .inherited:
             return AnyShapeStyle(.primary)
         case .accent:
-            return AnyShapeStyle(Color("AccentColor"))
+            return AnyShapeStyle(ColorTokens.accentForestFg)
         }
     }
 
@@ -141,7 +141,7 @@ extension FolderListView {
         case .inherited:
             return AnyShapeStyle(.primary)
         case .unread:
-            return AnyShapeStyle(Color("AccentColor"))
+            return AnyShapeStyle(ColorTokens.accentForestFg)
         case .caughtUp:
             return AnyShapeStyle(Color.primary.opacity(FolderNameTint.dimmedOpacity))
         }
@@ -256,7 +256,7 @@ extension FolderListView {
                 systemImage: folder.isSubscribed ? "bell.slash" : "bell"
             )
         }
-        .tint(folder.isSubscribed ? .orange : .accentColor)
+        .tint(folder.isSubscribed ? ColorTokens.warningFill : ColorTokens.accentForestFill)
         .accessibilityIdentifier("folder.swipe.subscribe")
     }
 

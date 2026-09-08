@@ -138,7 +138,7 @@ struct SignedInRootView: View {
                 BannerView(
                     icon: "wifi.slash",
                     text: "Offline — some actions will retry automatically.",
-                    tint: .orange
+                    tint: ColorTokens.warningFg
                 )
             }
             if let toast = appState.toast {

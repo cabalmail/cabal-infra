@@ -78,22 +78,12 @@ struct FlagPaletteRowLabel: View {
     }
 }
 
-/// Maps the wire color vocabulary onto SwiftUI colors. Unknown names (a
-/// newer server's addition) render gray but round-trip unchanged.
+/// Maps the wire color vocabulary onto the `flag.<name>` tokens. Unknown
+/// names (a newer server's addition) render gray but round-trip unchanged;
+/// the name is user data and never changes, only the value it draws in.
 enum FlagPaletteColor {
     static func color(for name: String) -> Color {
-        switch name {
-        case "red": .red
-        case "orange": .orange
-        case "yellow": .yellow
-        case "green": .green
-        case "teal": .teal
-        case "blue": .blue
-        case "indigo": .indigo
-        case "purple": .purple
-        case "pink": .pink
-        default: .gray
-        }
+        ColorTokens.flag(named: name)
     }
 }
 

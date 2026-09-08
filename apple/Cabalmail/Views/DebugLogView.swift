@@ -76,7 +76,7 @@ struct DebugLogView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(
-                    enabled ? tint(for: level).opacity(0.2) : Color.gray.opacity(0.15),
+                    enabled ? wash(for: level) : Color.gray.opacity(0.15),
                     in: Capsule()
                 )
                 .foregroundStyle(enabled ? tint(for: level) : .secondary)
@@ -103,9 +103,20 @@ struct DebugLogView: View {
     private func tint(for level: DebugLogStore.Level) -> Color {
         switch level {
         case .debug: return .gray
-        case .info:  return .blue
-        case .warn:  return WarningTint.tint(for: colorScheme).color
-        case .error: return .red
+        case .info:  return ColorTokens.infoFg
+        case .warn:  return ColorTokens.warningFg
+        case .error: return ColorTokens.dangerFg
+        }
+    }
+
+    /// The filter chip's capsule when its level is on: the level's wash
+    /// token, which carries its own opacity.
+    private func wash(for level: DebugLogStore.Level) -> Color {
+        switch level {
+        case .debug: return Color.gray.opacity(0.2)
+        case .info:  return ColorTokens.infoWash
+        case .warn:  return ColorTokens.warningWash
+        case .error: return ColorTokens.dangerWash
         }
     }
 
@@ -167,9 +178,9 @@ private struct LogRow: View {
     private var tint: Color {
         switch entry.level {
         case .debug: return .gray
-        case .info:  return .blue
-        case .warn:  return WarningTint.tint(for: colorScheme).color
-        case .error: return .red
+        case .info:  return ColorTokens.infoFg
+        case .warn:  return ColorTokens.warningFg
+        case .error: return ColorTokens.dangerFg
         }
     }
 
