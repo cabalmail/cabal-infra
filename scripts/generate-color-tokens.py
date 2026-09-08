@@ -7,7 +7,9 @@ usage: generate-color-tokens.py            # write the outputs in place
 Outputs (all carry a GENERATED banner; never edit them by hand):
 
   apple/CabalmailKit/Sources/CabalmailKit/Design/ColorTokens.xcassets/   one colorset per token
-  apple/CabalmailKit/Sources/CabalmailKit/Design/ColorTokens.swift       `ColorTokens.<name>` accessors
+  apple/CabalmailKit/Sources/CabalmailKit/Design/ColorTokens.swift       `ColorTokens.<name>` accessors + `ColorTokens.Hex`
+  apple/{Cabalmail,CabalmailMac}/Assets.xcassets/{AccentColor,LogoTint}.colorset  the app targets' accent and logo tint
+  apple/CabalmailWatch/Assets.xcassets/AccentColor.colorset              the watch accent (dark value only)
   android/app/src/main/res/values/color_tokens.xml                       `token_<name>_light` / `_dark`
   android/app/src/main/kotlin/com/cabalmail/android/ui/theme/ColorTokens.kt  `ColorTokens.<name>()` accessors
   react/admin/src/tokens.css                                             `--<name>` custom properties
@@ -174,9 +176,44 @@ def apple_outputs(doc, res):
     for a in accents:
         if a != "forest":
             lines += accent_case(f'case "{a}"', a)
-    lines += accent_case("default", "forest") + ["        }", "    }", "}", ""]
+    lines += accent_case("default", "forest") + ["        }", "    }", "",
+              "    /// A token's light and dark values as CSS hex, for the one place the",
+              "    /// app writes colour into a stylesheet (the reader's link colour).",
+              "    public struct TokenHex {",
+              "        public let light: String", "        public let dark: String", "    }", "",
+              "    public enum Hex {"]
+    for name in doc["tokens"]:
+        lines.append(f'        public static let {camel(name)} = TokenHex(light: "{hexs(res[name]["light"])}", dark: "{hexs(res[name]["dark"])}")')
+    lines += ["    }", "}", ""]
     files[APPLE_SWIFT] = "\n".join(lines)
+
+    # The app targets' own AccentColor (what `.tint` / `Color.accentColor`
+    # resolve to) and LogoTint colorsets, so they cannot drift from
+    # accent.forest / brand.forest. The watch has no light appearance and
+    # gets the dark value as its only one.
+    forest = res["accent.forest.fg"]
+    brand = res["brand.forest"]
+    for target in ("Cabalmail", "CabalmailMac"):
+        files[pathlib.Path(f"apple/{target}/Assets.xcassets/AccentColor.colorset/Contents.json")] = json.dumps(app_colorset(forest), indent=2) + "\n"
+        files[pathlib.Path(f"apple/{target}/Assets.xcassets/LogoTint.colorset/Contents.json")] = json.dumps(app_colorset(brand), indent=2) + "\n"
+    files[pathlib.Path("apple/CabalmailWatch/Assets.xcassets/AccentColor.colorset/Contents.json")] = json.dumps(app_colorset(forest, watch=True), indent=2) + "\n"
     return files
+
+
+def app_colorset(rgb_by_key, watch=False):
+    """A plain two-appearance colorset (light + dark) for an app target's
+    catalog, or a single universal entry holding the dark value for the watch."""
+    def comp(rgb):
+        return {"alpha": "1.000", "blue": "0x%02X" % rgb[2], "green": "0x%02X" % rgb[1], "red": "0x%02X" % rgb[0]}
+    if watch:
+        colors = [{"color": {"color-space": "srgb", "components": comp(rgb_by_key["dark"])}, "idiom": "universal"}]
+    else:
+        colors = [
+            {"color": {"color-space": "srgb", "components": comp(rgb_by_key["light"])}, "idiom": "universal"},
+            {"appearances": [{"appearance": "luminosity", "value": "dark"}],
+             "color": {"color-space": "srgb", "components": comp(rgb_by_key["dark"])}, "idiom": "universal"},
+        ]
+    return {"colors": colors, "info": {"author": "generate-color-tokens", "version": 1}}
 
 
 # --- Android ----------------------------------------------------------------------

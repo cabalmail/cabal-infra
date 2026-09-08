@@ -304,7 +304,7 @@ extension MessageListView {
             return SwipeActionSpec(
                 systemImage: "trash.slash",
                 title: "Delete Forever",
-                tint: .red,
+                tint: ColorTokens.dangerFill,
                 role: .destructive,
                 identifier: "message.swipe.dispose"
             ) {
@@ -317,7 +317,7 @@ extension MessageListView {
             return SwipeActionSpec(
                 systemImage: restoreSymbol,
                 title: "Restore",
-                tint: .blue,
+                tint: ColorTokens.infoFill,
                 identifier: "message.swipe.dispose"
             ) {
                 Task { await model.moveTo(envelope, destination: FolderTree.inboxPath) }
@@ -326,7 +326,7 @@ extension MessageListView {
             return SwipeActionSpec(
                 systemImage: action == .archive ? "archivebox" : "trash",
                 title: action == .archive ? "Archive" : "Trash",
-                tint: .red,
+                tint: ColorTokens.dangerFill,
                 role: .destructive,
                 identifier: "message.swipe.dispose"
             ) {
@@ -342,7 +342,7 @@ extension MessageListView {
         return SwipeActionSpec(
             systemImage: isSeen ? "envelope.badge" : "envelope.open",
             title: isSeen ? "Unread" : "Read",
-            tint: .blue,
+            tint: ColorTokens.infoFill,
             identifier: "message.swipe.toggleRead"
         ) {
             Task { await model.toggleSeen(envelope) }
@@ -386,7 +386,6 @@ private struct MessageRow: View {
     let palette: [FlagPaletteEntry]
 
     @Environment(AppState.self) private var appState
-    @Environment(\.colorScheme) private var colorScheme
     @State private var contactName: String?
 
     /// The row's tagged slots, capped so the fixed-height indicator run
@@ -440,7 +439,7 @@ private struct MessageRow: View {
                     if envelope.authVerification == .warning {
                         Image(systemName: "exclamationmark.shield.fill")
                             .font(.caption)
-                            .foregroundStyle(WarningTint.tint(for: colorScheme).color)
+                            .foregroundStyle(ColorTokens.warningFg)
                             .accessibilityLabel(AuthResultsLine.warningCopy)
                     }
                     // `\Answered` — the same left-turn arrow Mail uses, so
@@ -459,13 +458,13 @@ private struct MessageRow: View {
                     if envelope.isImportant {
                         Image(systemName: "exclamationmark.circle.fill")
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(ColorTokens.dangerFg)
                             .accessibilityLabel("High importance")
                     }
                     if envelope.flags.contains(.flagged) {
                         Image(systemName: "flag.fill")
                             .font(.caption)
-                            .foregroundStyle(WarningTint.tint(for: colorScheme).color)
+                            .foregroundStyle(ColorTokens.flaggedFg)
                     }
                     // Custom-flag dots (Phase 4): one color dot per tagged
                     // palette slot, capped so the indicator run can never
@@ -501,7 +500,7 @@ private struct MessageRow: View {
     // user's system accent whenever that isn't "multicolor" (same reasoning
     // as `iconForeground` in FolderListView+Helpers.swift).
     private var unreadDotColor: Color {
-        envelope.flags.contains(.seen) ? .clear : Color("AccentColor")
+        envelope.flags.contains(.seen) ? .clear : ColorTokens.accentForestFg
     }
 
     /// The row's first line: `source -> destination`. The destination is the

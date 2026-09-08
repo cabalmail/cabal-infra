@@ -1,4 +1,5 @@
 import SwiftUI
+import CabalmailKit
 
 /// The loading / error / loaded scaffold shared by the screens that fetch
 /// their contents in a `.task` and own the three states themselves.
@@ -35,7 +36,7 @@ struct AsyncContentView<Content: View>: View {
         } else if let errorMessage {
             VStack(spacing: 12) {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(ColorTokens.dangerFg)
                 Button("Retry", action: retry)
                     .buttonStyle(.bordered)
             }
