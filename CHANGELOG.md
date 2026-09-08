@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.1] - 2026-09-08
+
+### Fixed
+- Android: **Sign-in form clears the keyboard.** On a landscape tablet the software keyboard covered `Sign In` and `Verify`, and the form neither scrolled nor let the keyboard's own action key submit — the only way through was to dismiss the keyboard first. The auth form now gives back the space the keyboard takes and scrolls what is left, and the last field of each form submits from the keyboard.
+- Android: **Expired session returns you to sign-in.** When a session had been idle long enough for the refresh token itself to expire, the app stayed in the mail shell with an error banner and no way out — the only recovery was knowing to go to Settings ▸ Account ▸ Sign Out. An expired session now drops to the sign-in screen with the reason attached, the way it always did when the server rejected a token mid-session.
+- Apple: **Compose window follows the Theme setting.** On iPadOS, macOS, and visionOS the standalone compose window is its own scene, and only the main window and the macOS Settings window pinned the Theme preference — so a composer opened while the app was set to Dark (or Light) drew in whatever appearance the system was in instead. Every scene now asks one shared rule for the appearance it draws in.
+- **Escape closes the composer, not the message behind it.** With a message open in the reader, opening a compose window and pressing Escape closed the reader underneath while leaving the composer exactly where it was — so the keypress looked like it had done nothing and quietly threw away your place in the message. Escape now always dismisses the topmost layer: the composer first, then the reader.
+- **Unread indicator survives select mode.** Entering select mode in the web view put the checkbox in the unread dot's place and hid the dot, which made batch-marking messages read hard to aim — the rows you wanted were no longer marked. The leading rail now widens to hold both, so the dot stays where it was, and its tooltip keeps naming the read state alongside the selection hint.
+
 ## [1.12.0] - 2026-09-08
 
 ### Added
