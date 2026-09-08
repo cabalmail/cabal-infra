@@ -27,7 +27,7 @@ extension MessageDetailView {
         } else if let errorMessage = model.errorMessage {
             VStack(spacing: 12) {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(ColorTokens.dangerFg)
                 Button {
                     Task { await model.load() }
                 } label: {

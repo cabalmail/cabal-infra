@@ -158,7 +158,7 @@ struct ContentView: View {
                 systemImage: address.suspended ? "play.circle" : "pause.circle"
             )
         }
-        .tint(.orange)
+        .tint(ColorTokens.warningFill)
     }
 
     private var revokeDialogBinding: Binding<Bool> {
@@ -186,12 +186,12 @@ struct ContentView: View {
                     if address.favorite {
                         Image(systemName: "star.fill")
                             .font(.caption2)
-                            .foregroundStyle(.yellow)
+                            .foregroundStyle(ColorTokens.flaggedFg)
                     }
                     if address.suspended {
                         Image(systemName: "pause.circle")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(ColorTokens.warningFg)
                     }
                     Text(address.address)
                         .font(.footnote)

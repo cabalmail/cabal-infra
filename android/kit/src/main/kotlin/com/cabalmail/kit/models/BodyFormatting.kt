@@ -1,5 +1,7 @@
 package com.cabalmail.kit.models
 
+import com.cabalmail.kit.design.ColorTokenHex
+
 // HTML body transforms for the reader. Pure string functions so the app
 // layer's WebView wrapper stays dumb and this logic stays unit-tested.
 
@@ -53,7 +55,7 @@ fun readerModeHtml(
             .replace(AUTHOR_STYLESHEET_LINK, "")
     val foreground = if (darkMode) "#e4e2dd" else "#1a1c1a"
     val background = if (darkMode) "#121412" else "#fdfcf8"
-    val link = if (darkMode) "#9ccc9c" else "#2e6b30"
+    val link = if (darkMode) ColorTokenHex.ACCENT_FOREST_FG_DARK else ColorTokenHex.ACCENT_FOREST_FG_LIGHT
     return """
         <meta name="viewport" content="width=device-width, initial-scale=1">
         $stripped

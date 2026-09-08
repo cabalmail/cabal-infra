@@ -42,7 +42,6 @@ struct ComposeView: View {
     @Environment(\.dismiss) private var dismiss
     /// Read by `attachmentSizeWarning` in `ComposeView+Subviews`, which is
     /// why this one isn't `private` — Swift's `private` is file-scoped.
-    @Environment(\.colorScheme) var colorScheme
 
     @FocusState private var focusedField: Field?
     @State private var showNewAddressSheet = false
@@ -508,7 +507,7 @@ extension ComposeView {
         if let errorMessage = model.errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle")
                 .font(.callout)
-                .foregroundStyle(.red)
+                .foregroundStyle(ColorTokens.dangerFg)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
                 .padding(.vertical, 10)
@@ -615,7 +614,7 @@ extension ComposeView {
             if let errorMessage = model.errorMessage {
                 Divider()
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(ColorTokens.dangerFg)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
             }

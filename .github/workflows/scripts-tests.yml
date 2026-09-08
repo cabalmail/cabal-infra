@@ -30,6 +30,7 @@ on:
       - '.github/scripts/assign-testflight-group.py'
       - '.github/scripts/set-testflight-notes.py'
       - 'changelog.d/**'
+      - 'design/**'
       - '.github/workflows/scripts-tests.yml'
   push:
     branches:
@@ -44,6 +45,7 @@ on:
       - '.github/scripts/assign-testflight-group.py'
       - '.github/scripts/set-testflight-notes.py'
       - 'changelog.d/**'
+      - 'design/**'
       - '.github/workflows/scripts-tests.yml'
 
 permissions:

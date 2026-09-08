@@ -26,7 +26,7 @@ struct AuthResultsLine: View {
                     // checks.
                     Label(Self.warningCopy, systemImage: "exclamationmark.shield.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(ColorTokens.warningFg)
                 }
             }
         } else {
@@ -55,16 +55,31 @@ struct AuthResultsLine: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .foregroundStyle(color(for: token))
-        .background(color(for: token).opacity(0.12), in: Capsule())
+        .background(wash(for: token), in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(method) \(token ?? "not checked")")
     }
 
+    /// The chip's label, by verdict. A pass is the success green, a failure
+    /// the warning orange (advisory about the message, not an app error),
+    /// and a method that was not evaluated stays neutral.
     private func color(for token: String?) -> Color {
         switch AuthMethodSeverity(token: token) {
-        case .ok: return .green
-        case .bad: return .orange
+        case .ok: return ColorTokens.successFg
+        case .bad: return ColorTokens.warningFg
         case .neutral: return .secondary
+        }
+    }
+
+    /// The capsule under the label: the same meaning's wash token, which
+    /// carries its own opacity, rather than the label colour at an alpha.
+    /// #1461 measured why that mattered: a wash derived from the label
+    /// lightens as the label darkens and gives part of the contrast back.
+    private func wash(for token: String?) -> Color {
+        switch AuthMethodSeverity(token: token) {
+        case .ok: return ColorTokens.successWash
+        case .bad: return ColorTokens.warningWash
+        case .neutral: return Color.secondary.opacity(0.12)
         }
     }
 }

@@ -41,7 +41,7 @@ private struct RestoringSplash: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 132, height: 132)
-                .foregroundStyle(Color("LogoTint"))
+                .foregroundStyle(ColorTokens.brandForest)
                 .accessibilityHidden(true)
             Text("Cabalmail")
                 .font(.title)

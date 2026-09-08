@@ -1,4 +1,5 @@
 import Foundation
+import CabalmailKit
 
 /// Walks the HTML and rewrites `cid:` URLs (case-insensitive) to the
 /// `data:` URIs pulled from the inline-image map. Purely string-level so
@@ -77,13 +78,12 @@ private func insertingHeadDefaults(into html: String) -> String {
 
 /// Link color in reader mode: the brand forest green rather than the
 /// platform link blue, so the reader reads as part of the app instead of a
-/// generic web view. These are the light and dark components of the
-/// `AccentColor` colorset, restated as hex because the stylesheet is CSS —
-/// WebKit resolves the light/dark split from `prefers-color-scheme`, not
-/// from the asset catalog. Keep them in step with
-/// `Assets.xcassets/AccentColor.colorset` in both app targets.
-private let brandLinkColorLight = "#2b633a"
-private let brandLinkColorDark = "#79c289"
+/// generic web view. These are the Forest accent's light and dark values as
+/// hex, because the stylesheet is CSS — WebKit resolves the light/dark split
+/// from `prefers-color-scheme`, not from the asset catalog. They come from
+/// the generated token table, so they cannot drift from the catalog.
+private let brandLinkColorLight = ColorTokens.Hex.accentForestFg.light
+private let brandLinkColorDark = ColorTokens.Hex.accentForestFg.dark
 
 /// Prepended in reader mode. Every rule uses `!important` because most
 /// author mail CSS ships as inline `style=` attributes, and we need to win

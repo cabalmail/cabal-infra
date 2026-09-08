@@ -10,6 +10,7 @@ import CabalmailKit
 /// there's no developer-level log viewer inside the device, and asking
 /// users to attach a Mac for every "doesn't work" report isn't reasonable.
 struct DebugLogView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var entries: [DebugLogStore.Entry] = []
     @State private var streamTask: Task<Void, Never>?
     @State private var selectedLevels: Set<DebugLogStore.Level> = Set(DebugLogStore.Level.allCases)
@@ -75,7 +76,7 @@ struct DebugLogView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(
-                    enabled ? tint(for: level).opacity(0.2) : Color.gray.opacity(0.15),
+                    enabled ? wash(for: level) : Color.gray.opacity(0.15),
                     in: Capsule()
                 )
                 .foregroundStyle(enabled ? tint(for: level) : .secondary)
@@ -102,9 +103,20 @@ struct DebugLogView: View {
     private func tint(for level: DebugLogStore.Level) -> Color {
         switch level {
         case .debug: return .gray
-        case .info:  return .blue
-        case .warn:  return .orange
-        case .error: return .red
+        case .info:  return ColorTokens.infoFg
+        case .warn:  return ColorTokens.warningFg
+        case .error: return ColorTokens.dangerFg
+        }
+    }
+
+    /// The filter chip's capsule when its level is on: the level's wash
+    /// token, which carries its own opacity.
+    private func wash(for level: DebugLogStore.Level) -> Color {
+        switch level {
+        case .debug: return Color.gray.opacity(0.2)
+        case .info:  return ColorTokens.infoWash
+        case .warn:  return ColorTokens.warningWash
+        case .error: return ColorTokens.dangerWash
         }
     }
 
@@ -135,6 +147,8 @@ struct DebugLogView: View {
 }
 
 private struct LogRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let entry: DebugLogStore.Entry
 
     var body: some View {
@@ -164,9 +178,9 @@ private struct LogRow: View {
     private var tint: Color {
         switch entry.level {
         case .debug: return .gray
-        case .info:  return .blue
-        case .warn:  return .orange
-        case .error: return .red
+        case .info:  return ColorTokens.infoFg
+        case .warn:  return ColorTokens.warningFg
+        case .error: return ColorTokens.dangerFg
         }
     }
 

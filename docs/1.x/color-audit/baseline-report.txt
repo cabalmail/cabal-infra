@@ -1,0 +1,140 @@
+token                              over                                     scheme   ratio floor  verdict
+apple.systemRed (.red)             apple-row                                light     3.55   4.5  FAIL
+apple.systemRed (.red)             apple-form                               light     3.55   4.5  FAIL
+apple.systemRed (.red)             apple-grouped                            light     3.18   4.5  FAIL
+apple.systemRed (.red)             apple-sidebar                            light     2.93   4.5  FAIL
+apple.systemOrange (.orange)       apple-row                                light     2.31   4.5  FAIL
+apple.systemOrange (.orange)       apple-form                               light     2.31   4.5  FAIL
+apple.systemOrange (.orange)       apple-grouped                            light     2.07   4.5  FAIL
+apple.systemOrange (.orange)       apple-sidebar                            light     1.91   4.5  FAIL
+apple.systemOrange (.orange)       apple.systemOrange chip (0.12 wash)@apple-row light     2.09   4.5  FAIL
+apple.systemYellow (.yellow)       apple-row                                light     1.51   4.5  FAIL
+apple.systemYellow (.yellow)       apple-form                               light     1.51   4.5  FAIL
+apple.systemYellow (.yellow)       apple-grouped                            light     1.35   4.5  FAIL
+apple.systemYellow (.yellow)       apple-sidebar                            light     1.25   4.5  FAIL
+apple.systemGreen (.green)         apple-row                                light     2.22   4.5  FAIL
+apple.systemGreen (.green)         apple-form                               light     2.22   4.5  FAIL
+apple.systemGreen (.green)         apple-grouped                            light     1.99   4.5  FAIL
+apple.systemGreen (.green)         apple-sidebar                            light     1.83   4.5  FAIL
+apple.systemBlue (.blue)           apple-row                                light     4.02   4.5  FAIL
+apple.systemBlue (.blue)           apple-form                               light     4.02   4.5  FAIL
+apple.systemBlue (.blue)           apple-grouped                            light     3.60   4.5  FAIL
+apple.systemBlue (.blue)           apple-sidebar                            light     3.31   4.5  FAIL
+apple.WarningTint-0.65 (#1457)     apple-row                                light     5.04   4.5  pass
+apple.WarningTint-0.65 (#1457)     apple-form                               light     5.04   4.5  pass
+apple.WarningTint-0.65 (#1457)     apple-grouped                            light     4.52   4.5  pass
+apple.WarningTint-0.65 (#1457)     apple-sidebar                            light     4.16   4.5  FAIL
+apple.WarningTint-0.55 (#1461)     apple-row                                light     6.53   4.5  pass
+apple.WarningTint-0.55 (#1461)     apple-form                               light     6.53   4.5  pass
+apple.WarningTint-0.55 (#1461)     apple-grouped                            light     5.85   4.5  pass
+apple.WarningTint-0.55 (#1461)     apple-sidebar                            light     5.39   4.5  pass
+apple.AccentColor                  apple-row                                light     7.12   4.5  pass
+apple.AccentColor                  apple-form                               light     7.12   4.5  pass
+apple.AccentColor                  apple-grouped                            light     6.38   4.5  pass
+apple.AccentColor                  apple-sidebar                            light     5.88   4.5  pass
+apple.LogoTint                     apple-row                                light     8.84   4.5  pass
+apple.LogoTint                     apple-form                               light     8.84   4.5  pass
+apple.LogoTint                     apple-grouped                            light     7.93   4.5  pass
+apple.LogoTint                     apple-sidebar                            light     7.30   4.5  pass
+react.--ink-danger                 react-bg                                 light     6.01   4.5  pass
+react.--ink-danger                 react-pane                               light     6.31   4.5  pass
+react.--ink-danger                 react-hover                              light     5.69   4.5  pass
+react.--auth-ok (forest)           react-bg                                 light     6.61   4.5  pass
+react.--auth-ok (forest)           react-pane                               light     6.95   4.5  pass
+react.--auth-ok (forest)           react-hover                              light     6.27   4.5  pass
+react.accent.amber                 react-bg                                 light     4.61   4.5  pass
+react.accent.amber                 react-pane                               light     4.84   4.5  pass
+react.accent.amber                 react-hover                              light     4.37   4.5  FAIL
+react.accent.azure                 react-bg                                 light     5.10   4.5  pass
+react.accent.azure                 react-pane                               light     5.35   4.5  pass
+react.accent.azure                 react-hover                              light     4.83   4.5  pass
+react.dmarc pass #2e7d32           react-bg                                 light     4.76   4.5  pass
+react.dmarc pass #2e7d32           react-pane                               light     5.00   4.5  pass
+react.dmarc pass #2e7d32           react-hover                              light     4.51   4.5  pass
+react.dmarc fail #c62828           react-bg                                 light     5.22   4.5  pass
+react.dmarc fail #c62828           react-pane                               light     5.48   4.5  pass
+react.dmarc fail #c62828           react-hover                              light     4.94   4.5  pass
+react.warning strip ink on #fff8e1 react.warning-strip                      light    16.33   4.5  pass
+react.warning-strip                react-pane                               light     1.04   1.0  pass
+android.M3 error                   android-surface                          light     6.38   4.5  pass
+android.FOREST primary             android-surface                          light     7.83   4.5  pass
+android.FOREST tertiary (flag star) android-surface                          light    11.38   4.5  pass
+android.AMBER primary              android-surface                          light     4.34   4.5  FAIL
+android.flag yellow #F9A825        android-surface                          light     1.92   4.5  FAIL
+android.flag orange #F57C00        android-surface                          light     2.64   4.5  FAIL
+android.flag green #388E3C         android-surface                          light     4.01   4.5  FAIL
+apple.systemRed (.red)             apple-row                                dark      4.99   4.5  pass
+apple.systemRed (.red)             apple-form                               dark      4.09   4.5  FAIL
+apple.systemRed (.red)             apple-grouped                            dark      4.99   4.5  pass
+apple.systemRed (.red)             apple-sidebar                            dark      3.33   4.5  FAIL
+apple.systemRed (.red)             watch                                    dark      6.16   4.5  pass
+apple.systemOrange (.orange)       apple-row                                dark      7.62   4.5  pass
+apple.systemOrange (.orange)       apple-form                               dark      6.24   4.5  pass
+apple.systemOrange (.orange)       apple-grouped                            dark      7.62   4.5  pass
+apple.systemOrange (.orange)       apple-sidebar                            dark      5.08   4.5  pass
+apple.systemOrange (.orange)       watch                                    dark      9.41   4.5  pass
+apple.systemOrange (.orange)       apple.systemOrange chip (0.12 wash)@apple-row dark      6.21   4.5  pass
+apple.systemYellow (.yellow)       apple-row                                dark     12.05   4.5  pass
+apple.systemYellow (.yellow)       apple-form                               dark      9.87   4.5  pass
+apple.systemYellow (.yellow)       apple-grouped                            dark     12.05   4.5  pass
+apple.systemYellow (.yellow)       apple-sidebar                            dark      8.04   4.5  pass
+apple.systemYellow (.yellow)       watch                                    dark     14.88   4.5  pass
+apple.systemGreen (.green)         apple-row                                dark      8.42   4.5  pass
+apple.systemGreen (.green)         apple-form                               dark      6.89   4.5  pass
+apple.systemGreen (.green)         apple-grouped                            dark      8.42   4.5  pass
+apple.systemGreen (.green)         apple-sidebar                            dark      5.61   4.5  pass
+apple.systemGreen (.green)         watch                                    dark     10.39   4.5  pass
+apple.systemBlue (.blue)           apple-row                                dark      4.66   4.5  pass
+apple.systemBlue (.blue)           apple-form                               dark      3.82   4.5  FAIL
+apple.systemBlue (.blue)           apple-grouped                            dark      4.66   4.5  pass
+apple.systemBlue (.blue)           apple-sidebar                            dark      3.11   4.5  FAIL
+apple.systemBlue (.blue)           watch                                    dark      5.76   4.5  pass
+apple.WarningTint-0.65 (#1457)     apple-row                                dark      7.62   4.5  pass
+apple.WarningTint-0.65 (#1457)     apple-form                               dark      6.24   4.5  pass
+apple.WarningTint-0.65 (#1457)     apple-grouped                            dark      7.62   4.5  pass
+apple.WarningTint-0.65 (#1457)     apple-sidebar                            dark      5.08   4.5  pass
+apple.WarningTint-0.65 (#1457)     watch                                    dark      9.41   4.5  pass
+apple.WarningTint-0.55 (#1461)     apple-row                                dark      7.62   4.5  pass
+apple.WarningTint-0.55 (#1461)     apple-form                               dark      6.24   4.5  pass
+apple.WarningTint-0.55 (#1461)     apple-grouped                            dark      7.62   4.5  pass
+apple.WarningTint-0.55 (#1461)     apple-sidebar                            dark      5.08   4.5  pass
+apple.WarningTint-0.55 (#1461)     watch                                    dark      9.41   4.5  pass
+apple.AccentColor                  apple-row                                dark      8.01   4.5  pass
+apple.AccentColor                  apple-form                               dark      6.56   4.5  pass
+apple.AccentColor                  apple-grouped                            dark      8.01   4.5  pass
+apple.AccentColor                  apple-sidebar                            dark      5.35   4.5  pass
+apple.AccentColor                  watch                                    dark      9.89   4.5  pass
+apple.LogoTint                     apple-row                                dark      8.79   4.5  pass
+apple.LogoTint                     apple-form                               dark      7.20   4.5  pass
+apple.LogoTint                     apple-grouped                            dark      8.79   4.5  pass
+apple.LogoTint                     apple-sidebar                            dark      5.87   4.5  pass
+apple.LogoTint                     watch                                    dark     10.85   4.5  pass
+react.--ink-danger                 react-bg                                 dark      8.10   4.5  pass
+react.--ink-danger                 react-pane                               dark      7.83   4.5  pass
+react.--ink-danger                 react-hover                              dark      6.60   4.5  pass
+react.--auth-ok (forest)           react-bg                                 dark      9.01   4.5  pass
+react.--auth-ok (forest)           react-pane                               dark      8.70   4.5  pass
+react.--auth-ok (forest)           react-hover                              dark      7.34   4.5  pass
+react.accent.amber                 react-bg                                 dark     10.71   4.5  pass
+react.accent.amber                 react-pane                               dark     10.34   4.5  pass
+react.accent.amber                 react-hover                              dark      8.73   4.5  pass
+react.accent.azure                 react-bg                                 dark      9.61   4.5  pass
+react.accent.azure                 react-pane                               dark      9.28   4.5  pass
+react.accent.azure                 react-hover                              dark      7.83   4.5  pass
+react.dmarc pass #2e7d32           react-bg                                 dark      3.73   4.5  FAIL
+react.dmarc pass #2e7d32           react-pane                               dark      3.60   4.5  FAIL
+react.dmarc pass #2e7d32           react-hover                              dark      3.04   4.5  FAIL
+react.dmarc fail #c62828           react-bg                                 dark      3.40   4.5  FAIL
+react.dmarc fail #c62828           react-pane                               dark      3.29   4.5  FAIL
+react.dmarc fail #c62828           react-hover                              dark      2.77   4.5  FAIL
+react.warning strip ink on #fff8e1 react.warning-strip                      dark      1.12   4.5  FAIL
+react.warning-strip                react-pane                               dark     17.38   1.0  pass
+android.M3 error                   android-surface                          dark     10.09   4.5  pass
+android.FOREST primary             android-surface                          dark      6.35   4.5  pass
+android.FOREST tertiary (flag star) android-surface                          dark      7.78   4.5  pass
+android.AMBER primary              android-surface                          dark      8.05   4.5  pass
+android.flag yellow #F9A825        android-surface                          dark      8.69   4.5  pass
+android.flag orange #F57C00        android-surface                          dark      6.33   4.5  pass
+android.flag green #388E3C         android-surface                          dark      4.16   4.5  FAIL
+
+39 failing pairs
