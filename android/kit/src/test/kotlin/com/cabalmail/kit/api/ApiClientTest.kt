@@ -27,6 +27,9 @@ class ApiClientTest {
     private class FakeAuth : AuthService {
         var refreshCount = 0
 
+        /** When set, minting a token throws instead — a dead refresh token. */
+        var mintFailure: CabalmailException? = null
+
         override suspend fun signIn(
             username: String,
             password: String,
@@ -58,9 +61,13 @@ class ApiClientTest {
 
         override suspend fun signOut() = Unit
 
-        override suspend fun currentIdToken(): String = "token-1"
+        override suspend fun currentIdToken(): String {
+            mintFailure?.let { throw it }
+            return "token-1"
+        }
 
         override suspend fun forceRefreshedIdToken(): String {
+            mintFailure?.let { throw it }
             refreshCount += 1
             return "token-2"
         }
@@ -76,6 +83,9 @@ class ApiClientTest {
         val requests = mutableListOf<HttpRequestData>()
         private val queue = responses.toMutableList()
         val auth = FakeAuth()
+
+        /** How many times the client reported the session gone. */
+        var expiredSignals = 0
 
         val api =
             ApiClient(
@@ -94,6 +104,7 @@ class ApiClientTest {
                             )
                         },
                     ),
+                onAuthExpired = { expiredSignals += 1 },
             )
 
         fun body(index: Int): String = (requests[index].body as TextContent).text
@@ -150,6 +161,57 @@ class ApiClientTest {
             val exception = runCatching { server.api.listAddresses() }.exceptionOrNull()
 
             assertTrue(exception is CabalmailException.AuthExpired)
+            assertEquals(1, server.expiredSignals)
+        }
+
+    @Test
+    fun `a refresh token Cognito refuses signals expiry before any request is sent`() =
+        runTest {
+            // The ordinary expiry: minting the token fails, so the client never
+            // reaches the server and never sees a 401 to react to.
+            val server = Server()
+            server.auth.mintFailure = CabalmailException.AuthExpired()
+
+            val exception = runCatching { server.api.listAddresses() }.exceptionOrNull()
+
+            assertTrue(exception is CabalmailException.AuthExpired)
+            assertEquals(1, server.expiredSignals)
+            assertTrue(server.requests.isEmpty())
+        }
+
+    @Test
+    fun `an ordinary call signals nothing`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"Items": []}""")
+
+            server.api.listAddresses()
+
+            assertEquals(0, server.expiredSignals)
+        }
+
+    @Test
+    fun `a server error is not an expired session`() =
+        runTest {
+            val server = Server(HttpStatusCode.InternalServerError to """{"message": "boom"}""")
+
+            val exception = runCatching { server.api.listAddresses() }.exceptionOrNull()
+
+            assertTrue(exception is CabalmailException.ApiError)
+            assertEquals(0, server.expiredSignals)
+        }
+
+    @Test
+    fun `having no stored session at all is not an expiry`() =
+        runTest {
+            // Nothing to expire — the app is already signed out, and reporting
+            // an expiry here would put a stale reason on the sign-in screen.
+            val server = Server()
+            server.auth.mintFailure = CabalmailException.NotSignedIn()
+
+            val exception = runCatching { server.api.listAddresses() }.exceptionOrNull()
+
+            assertTrue(exception is CabalmailException.NotSignedIn)
+            assertEquals(0, server.expiredSignals)
         }
 
     @Test
