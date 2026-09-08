@@ -36,7 +36,7 @@ struct CabalmailMacApp: App {
             ContentView()
                 .environment(appState)
                 .environment(preferences)
-                .preferredColorScheme(colorScheme(for: preferences.theme))
+                .themedAppearance(preferences.theme)
                 .task {
                     // Hand the app-root Preferences to AppState before any
                     // restore so the session's PreferencesSyncCoordinator can
@@ -105,7 +105,7 @@ struct CabalmailMacApp: App {
             SettingsTabsView()
                 .environment(appState)
                 .environment(preferences)
-                .preferredColorScheme(colorScheme(for: preferences.theme))
+                .themedAppearance(preferences.theme)
                 // Wide enough for the category sidebar plus a detail form
                 // (the rules list needs ~560pt of detail width).
                 .frame(minWidth: 760, minHeight: 640)
@@ -126,13 +126,5 @@ struct CabalmailMacApp: App {
                 .environment(appState)
         }
         .menuBarExtraStyle(.menu)
-    }
-
-    private func colorScheme(for theme: AppTheme) -> ColorScheme? {
-        switch theme {
-        case .system: return nil
-        case .light:  return .light
-        case .dark:   return .dark
-        }
     }
 }

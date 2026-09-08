@@ -31,7 +31,7 @@ struct CabalmailApp: App {
                 .recordsMainSceneSession()
                 .environment(appState)
                 .environment(preferences)
-                .preferredColorScheme(colorScheme(for: preferences.theme))
+                .themedAppearance(preferences.theme)
                 .task {
                     // Hand the app-root Preferences to AppState before any
                     // restore so the session's PreferencesSyncCoordinator can
@@ -109,16 +109,5 @@ struct CabalmailApp: App {
         // build keeps the scene available the moment a user moves to a
         // multi-scene device (Stage Manager, iPad).
         ComposeWindowScene(appState: appState, preferences: preferences)
-    }
-
-    /// Maps the theme preference onto SwiftUI's optional `ColorScheme`.
-    /// `nil` means "follow the system appearance" — i.e. the `.system`
-    /// preference lets the OS switch light/dark with its own controls.
-    private func colorScheme(for theme: AppTheme) -> ColorScheme? {
-        switch theme {
-        case .system: return nil
-        case .light:  return .light
-        case .dark:   return .dark
-        }
     }
 }
