@@ -104,6 +104,29 @@ describe('Envelopes', () => {
     expect(mockGetEnvelopes).toHaveBeenCalledWith('INBOX', ids);
   });
 
+  it('keeps the unread dot and the read state in the leading cell in bulk mode', async () => {
+    const ids = [1, 2];
+    const envelopes = {
+      '1': makeEnvelope(1),                          // unread: no \\Seen flag
+      '2': makeEnvelope(2, { flags: ['\\Seen'] }),   // read: the control
+    };
+    mockGetEnvelopes.mockResolvedValue({ data: { envelopes } });
+
+    const { container } = render(<Harness message_ids={ids} bulkMode />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    const leading = Array.from(container.querySelectorAll('.envelope-leading'));
+    expect(leading).toHaveLength(2);
+    // The dot is still in the tree beside the checkbox, not swapped out.
+    leading.forEach((cell) => {
+      expect(cell.querySelector('.envelope-dot')).not.toBeNull();
+      expect(cell.querySelector('.envelope-checkbox')).not.toBeNull();
+    });
+    expect(leading.map((cell) => cell.getAttribute('title')))
+      .toEqual(['Select message (Unread)', 'Select message (Read)']);
+    expect(container.querySelectorAll('.envelope-row.unread')).toHaveLength(1);
+  });
+
   it('handles concurrent page fetches without race conditions', async () => {
     const ids = Array.from({ length: 60 }, (_, i) => i + 1);
 
