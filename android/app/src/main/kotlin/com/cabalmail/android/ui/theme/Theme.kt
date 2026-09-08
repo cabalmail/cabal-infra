@@ -37,6 +37,13 @@ val LocalRowPadding = staticCompositionLocalOf { 10.dp }
 val LocalDisposeToTrash = staticCompositionLocalOf { false }
 
 /**
+ * Whether the theme resolved to dark, after the theme preference has had its
+ * say. [ColorTokens] reads this so a token follows the app's appearance, not
+ * the system qualifier, the same way [LocalLogoTint] does.
+ */
+val LocalDarkTheme = staticCompositionLocalOf { false }
+
+/**
  * Tint for the in-app brand mark (drawable/cabalmail_mark): logo_forest in
  * light, logo_mint in dark, mirroring the Apple clients' LogoTint colorset.
  * Deliberately a fixed brand ink, not the scheme's primary — the mark keeps
@@ -158,6 +165,7 @@ fun CabalmailTheme(
         LocalRowPadding provides preferences.density.rowPadding(),
         LocalDisposeToTrash provides (preferences.disposeAction == DisposeAction.TRASH),
         LocalLogoTint provides colorResource(if (darkTheme) R.color.logo_mint else R.color.logo_forest),
+        LocalDarkTheme provides darkTheme,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

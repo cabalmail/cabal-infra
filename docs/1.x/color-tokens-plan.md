@@ -1,6 +1,7 @@
 # Colour tokens: implementation plan
 
-**Status:** values accepted 2026-09-07; implementation not started. The audit
+**Status:** source of truth and generators in place 2026-09-07; adoption
+not started. The audit
 ([color-audit.md](color-audit.md)) and the Design brief
 ([design_handoff_color_tokens/](design_handoff_color_tokens/README.md)) are
 complete and Claude Design's palette passed the acceptance check.
@@ -13,8 +14,8 @@ complete and Claude Design's palette passed the acceptance check.
 | 2 | Token schema, checker, candidate values | Claude Code | done 2026-09-07 |
 | 3 | Palette values | Claude Design | done 2026-09-07 |
 | 4 | Correctness check and fold-in | Claude Code | done 2026-09-07; see findings under item 4 |
-| 5 | Token source of truth and generators | Claude Code | next |
-| 6 | Apple adoption | Claude Code | pending 5 |
+| 5 | Token source of truth and generators | Claude Code | done 2026-09-07 |
+| 6 | Apple adoption | Claude Code | next |
 | 7 | Android adoption | Claude Code | pending 5 |
 | 8 | React adoption | Claude Code | pending 5 |
 | 9 | Tester re-measure | tester | pending 6, 7, 8 |
@@ -92,24 +93,41 @@ Findings recorded for the implementer:
 
 ### 5. Token source of truth and generators
 
-**Status:** pending item 4.
+**Status:** done. `design/color-tokens.json` is the source of truth (the
+handoff copy stays as the record of what Design returned) and
+`scripts/generate-color-tokens.py` exports it. Two things landed differently
+from the sketch above, each for a reason found on the way:
 
-- Move the JSON to `design/color-tokens.json` at the repository root; the
-  handoff copy stays as the record of what Design returned.
-- `scripts/generate-color-tokens.py` writes:
-  - `apple/Cabalmail/Assets.xcassets/Colors/<token>.colorset/Contents.json`
-    for iOS, macOS, and visionOS, with light and dark, and High Contrast
-    variants where the JSON supplies `light-hc`/`dark-hc`. The watch target
-    gets the dark values as its universal value.
-  - `android/app/src/main/res/values/color_tokens.xml` and
-    `values-night/color_tokens.xml`, plus a generated Kotlin object exposing
-    them as `Color` for Compose.
-  - `react/admin/src/tokens.css` defining `--<token>` for light and dark.
-- Each client gains a drift test that regenerates into a temp dir and diffs,
-  in the style of the Linux client's `CABALMAIL_UPDATE_DOCS` check:
-  `CabalmailTests`, `:app:test`, and Vitest respectively.
-- A `scripts-tests.yml` job runs the checker on `design/**` changes with
-  `--fail-under`, so a value edit that breaks a floor fails the PR.
+- **One Apple catalog in CabalmailKit, not per app target.** All four app
+  targets depend on the Kit, so
+  `apple/CabalmailKit/Sources/CabalmailKit/Design/ColorTokens.xcassets` (one
+  colorset per token, `.process`ed by the package) serves iOS, iPadOS,
+  macOS, visionOS and watchOS at once. Each colorset carries the light and
+  dark values, their Increase Contrast variants under the `contrast: high`
+  appearance, and a `watch` idiom entry holding the dark values, since
+  watchOS has no light appearance. Wash tokens carry their 12% alpha. The
+  generated `ColorTokens.swift` beside it exposes `ColorTokens.dangerFg`,
+  `ColorTokens.flag(named:)`, and `ColorTokens.accent(named:)`.
+- **Android exports light/dark pairs, not `values-night`.** The Android
+  theme resolves dark from the app's own preference (System/Light/Dark),
+  so a `values-night` qualifier would follow the system and disagree with
+  the chrome. `res/values/color_tokens.xml` holds `token_<name>_light` and
+  `_dark`, and the generated `ui/theme/ColorTokens.kt` picks one via a new
+  `LocalDarkTheme` composition local that `CabalmailTheme` now provides,
+  the same rule the logo tint already follows.
+- `react/admin/src/tokens.css` defines `--<name>` under the `stately`
+  direction root, dark under the OS media query like `AppDark.css`, and the
+  Increase Contrast variants under `prefers-contrast: more`. Wash tokens are
+  `color-mix` at 12%. `App.jsx` imports it beside the theme files.
+- **The generator checks its own exports.** Before writing, it runs the
+  checker over the 8-bit sRGB values Apple and Android will draw, normal
+  and high-contrast, and refuses to write if any pair dips under its floor.
+  That is the answer to the item-4 finding about dark values on the floor.
+- **Drift tests** run the generator in `--check` mode (regenerate, diff):
+  `ColorTokensDriftTests` in the Kit suite (which also asserts the catalog
+  compiled into the resource bundle), `ColorTokensDriftTest` in `:app:test`,
+  and `src/tokens.test.js` in Vitest. `scripts-tests.yml` runs the checker
+  and the same drift check on any `design/**` change.
 
 ### 6. Apple adoption
 
@@ -130,8 +148,9 @@ Findings recorded for the implementer:
   colour names in the two app targets, with the allowlist reduced to the
   flag-palette swatch mapping (which itself moves to `flag.<name>`).
 - `AccentColor` in all three asset catalogs becomes `accent.forest` (the logo
-  values). `HTMLRewrite` link colours and `SidebarBranding` swatches are
-  generated from the tokens.
+  values); the generator can emit those colorsets too, or the sites can read
+  `ColorTokens.accentForestFg`. `HTMLRewrite` link colours and
+  `SidebarBranding` swatches read the tokens.
 - Selection washes (`0.15`, `0.18`, `0.20`) collapse to `accent.forest.wash`.
 - `FlagPaletteColor.color(for:)` maps names to `flag.<name>`.
 - `AvatarView` pastels become `swatch.*` and `swatch.ink`.
