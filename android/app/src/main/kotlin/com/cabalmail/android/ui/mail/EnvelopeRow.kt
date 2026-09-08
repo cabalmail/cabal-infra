@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.settings.flagColor
+import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.android.ui.theme.LocalRowPadding
 import com.cabalmail.android.ui.theme.disposeIconPainter
 import com.cabalmail.android.ui.theme.disposeLabelRes
@@ -164,7 +165,7 @@ fun EnvelopeRow(
                     Icon(
                         Icons.Default.Warning,
                         contentDescription = stringResource(R.string.auth_warning),
-                        tint = MaterialTheme.colorScheme.error,
+                        tint = ColorTokens.warningFg(),
                         modifier = Modifier.size(16.dp),
                     )
                     Spacer(Modifier.width(4.dp))
@@ -173,7 +174,7 @@ fun EnvelopeRow(
                     Icon(
                         Icons.Default.Star,
                         contentDescription = stringResource(R.string.flagged),
-                        tint = MaterialTheme.colorScheme.tertiary,
+                        tint = ColorTokens.flaggedFg(),
                         modifier = Modifier.size(16.dp),
                     )
                     Spacer(Modifier.width(4.dp))
@@ -246,7 +247,23 @@ fun SenderAvatar(
             ?.firstOrNull { it.isLetterOrDigit() }
             ?.uppercaseChar()
             ?.toString() ?: "?"
-    val hue = ((address ?: "?").hashCode().mod(360)).toFloat()
+    // One of the ten shared `swatch.*` tokens, keyed by the address so the
+    // same correspondent always gets the same swatch; `swatch.ink` is held
+    // at 4.5:1 over every one of them.
+    val swatches =
+        listOf(
+            ColorTokens.swatchRose(),
+            ColorTokens.swatchSage(),
+            ColorTokens.swatchSand(),
+            ColorTokens.swatchSky(),
+            ColorTokens.swatchTerracotta(),
+            ColorTokens.swatchLavender(),
+            ColorTokens.swatchTeal(),
+            ColorTokens.swatchPeach(),
+            ColorTokens.swatchMoss(),
+            ColorTokens.swatchTaupe(),
+        )
+    val swatch = swatches[(address ?: "?").hashCode().mod(swatches.size)]
     val logoUrl by
         produceState<String?>(initialValue = null, domain, bimiLookup) {
             value =
@@ -262,12 +279,12 @@ fun SenderAvatar(
             modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.hsv(hue, 0.35f, 0.55f)),
+                .background(swatch),
     ) {
         Text(
             text = initial,
             style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
+            color = ColorTokens.swatchInk(),
         )
         logoUrl?.let { url ->
             AsyncImage(

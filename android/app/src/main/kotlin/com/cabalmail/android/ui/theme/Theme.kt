@@ -11,6 +11,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
@@ -78,19 +79,27 @@ fun Density.rowPadding(): Dp =
     }
 
 /**
- * Seed colours for the shared accent palette (web + Apple). Used when the
- * "Dynamic color" preference is off; Material You wins otherwise.
+ * Seed colour for the shared accent palette: the accent's `fg` token in the
+ * light appearance, the same value the web and Apple clients draw, so Forest
+ * is the logo's Forest here too. Used when the "Dynamic color" preference is
+ * off; Material You wins otherwise.
  */
+@Composable
+@ReadOnlyComposable
 private fun Accent.seed(): Color =
-    when (this) {
-        Accent.INK -> Color(0xFF1F2A44)
-        Accent.OXBLOOD -> Color(0xFF6B1F2A)
-        Accent.FOREST -> Color(0xFF1F5B3A)
-        Accent.AZURE -> Color(0xFF1B5E9E)
-        Accent.AMBER -> Color(0xFFB0651B)
-        Accent.PLUM -> Color(0xFF5B2A6B)
-    }
+    colorResource(
+        when (this) {
+            Accent.INK -> R.color.token_accent_ink_fg_light
+            Accent.OXBLOOD -> R.color.token_accent_oxblood_fg_light
+            Accent.FOREST -> R.color.token_accent_forest_fg_light
+            Accent.AZURE -> R.color.token_accent_azure_fg_light
+            Accent.AMBER -> R.color.token_accent_amber_fg_light
+            Accent.PLUM -> R.color.token_accent_plum_fg_light
+        },
+    )
 
+@Composable
+@ReadOnlyComposable
 private fun accentScheme(
     accent: Accent,
     dark: Boolean,
