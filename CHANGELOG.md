@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-09-08
+
+### Added
+- **Colour-token contrast checker.** `scripts/check-color-tokens.py`
+  measures a cross-platform colour-token file against the surfaces each
+  token is drawn on, using the same WCAG maths as the tester's screenshot
+  instrument, and reports every pair under its floor. It backs the colour
+  audit and the Claude Design palette handoff in `docs/1.x/`.
+- **Colour tokens: one source of truth for every client.**
+  `design/color-tokens.json` holds the palette Claude Design produced for the
+  colour audit, and `scripts/generate-color-tokens.py` exports it to an asset
+  catalog in CabalmailKit (light, dark, Increase Contrast, and watch
+  variants), Android colour resources with Compose accessors, and React
+  custom properties. The generator re-checks the exported sRGB values
+  against the WCAG floors before writing, and each client's test suite
+  fails if the generated files drift from the token file. No call site
+  changes yet; adoption follows per client.
+
+### Fixed
+- Android: **Shared warning, success and flag colours.** Warnings (the
+  attachment-size notice, the offline strip) no longer borrow Material's
+  error red; a passing authentication check is the shared success green
+  and a failing one the shared warning orange rather than accent-derived
+  and error containers; the flag and favourite star are one gold instead of
+  the accent's tertiary tone, so they survive Material You; the custom flag
+  palette uses the same values as the Apple clients; sender avatars use the
+  shared swatch set with a dark ink; and the six accent seeds, Forest among
+  them, are the same values the web and Apple clients draw. All from the
+  shared colour tokens, each held to its contrast floor.
+- Apple: **Readable warning, error, success and flag colours.** Every
+  coloured label, glyph, chip and swipe action now draws from the shared
+  colour tokens instead of the platform's default red, orange, yellow, green
+  and blue, which failed the WCAG text-contrast floor on light rows (red at
+  3.55:1 across twenty sites, orange at 2.31:1, green at 2.22:1, yellow at
+  1.51:1). Warnings are one orange, flags and favourites one gold, errors
+  and destructive actions one red, and a passing authentication check a
+  green that no longer matches the brand accent. Authentication chips and
+  the debug log's filter pills use proper wash backgrounds. The accent is
+  now the logo's Forest Green everywhere, selection washes share one
+  opacity, sender avatars use the shared swatch set, and Increase Contrast
+  gets its own variants of every colour.
+- **Web client draws from the shared colour tokens.** The accent palette,
+  the danger red, the compose attachment-size warning (previously a fixed
+  pale yellow that was unreadable in the dark theme), the reader's
+  authentication chips, the message-list flag and authentication-warning
+  indicators, the DMARC page's verdicts and DNS-check banners, the toasts,
+  and the destructive confirm button all read the same tokens the Apple and
+  Android clients draw, each held to its contrast floor in both themes.
+  Increase Contrast users get the high-contrast variants through
+  `prefers-contrast: more`.
+- Apple: **Warning orange readable in the light theme everywhere it is drawn.** The message list's flag and authentication indicators, the reader's authentication warning and its SPF/DKIM/DMARC chips, the `Suspended` caption under an address and the Diagnostics log's warning lines all drew in the platform orange, which measures 2.31:1 over a light row — under the WCAG AA floor. They now share the scheme-aware tint the compose attachment warning already used, which is darkened a little further so it also clears the chips' own tinted background (#1456).
+
 ## [1.11.2] - 2026-09-07
 
 ### Added
