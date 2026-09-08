@@ -32,16 +32,16 @@
 
 /* Red variant — error toast matching design tokens. */
 .error {
-  background-color: var(--ink-danger, oklch(0.48 0.17 25));
-  color: oklch(0.99 0.003 60);
-  border: 1px solid color-mix(in oklch, var(--ink-danger, oklch(0.48 0.17 25)) 70%, black);
+  background-color: var(--danger-fill);
+  color: var(--danger-on-fill);
+  border: 1px solid color-mix(in oklch, var(--danger-fill) 70%, black);
   border-bottom: 0;
 }
 
 .info {
-  background-color: var(--accent);
-  color: var(--accent-fg);
-  border: 1px solid color-mix(in oklch, var(--accent) 70%, black);
+  background-color: var(--info-fill);
+  color: var(--info-on-fill);
+  border: 1px solid color-mix(in oklch, var(--info-fill) 70%, black);
   border-bottom: 0;
 }
 

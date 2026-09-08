@@ -1,6 +1,6 @@
 # Colour tokens: implementation plan
 
-**Status:** Apple adoption shipped to stage 2026-09-07; Android adoption in review; React next. The audit
+**Status:** Apple and Android adoption shipped to stage; React adoption in review 2026-09-08; only the tester re-measure remains. The audit
 ([color-audit.md](color-audit.md)) and the Design brief
 ([design_handoff_color_tokens/](design_handoff_color_tokens/README.md)) are
 complete and Claude Design's palette passed the acceptance check.
@@ -15,9 +15,9 @@ complete and Claude Design's palette passed the acceptance check.
 | 4 | Correctness check and fold-in | Claude Code | done 2026-09-07; see findings under item 4 |
 | 5 | Token source of truth and generators | Claude Code | done 2026-09-07 |
 | 6 | Apple adoption | Claude Code | done 2026-09-07 (#1471) |
-| 7 | Android adoption | Claude Code | in review 2026-09-07 |
-| 8 | React adoption | Claude Code | next |
-| 9 | Tester re-measure | tester | pending 6, 7, 8 |
+| 7 | Android adoption | Claude Code | done 2026-09-07 (#1473) |
+| 8 | React adoption | Claude Code | in review 2026-09-08 |
+| 9 | Tester re-measure | tester | next |
 
 ## Principles
 
@@ -182,7 +182,7 @@ are code reads; the tester's re-measure (item 9) covers them.
 
 ### 7. Android adoption
 
-**Status:** in review. As sketched, with these specifics:
+**Status:** done (#1473). As sketched, with these specifics:
 
 - Warning sites (attachment size, offline strip) read `warning.*`; the
   auth chips read `success.wash`/`success.fg` and `warning.wash`/
@@ -219,23 +219,56 @@ Material's error red and the star the accent's tertiary tone.
 
 ### 8. React adoption
 
-**Status:** pending item 5. React is second-class, but it owns the accent
+**Status:** in review. React is second-class, but it owns the accent
 definitions and the only existing semantic tokens, so it must not drift.
 
-- `AppLight.css`/`AppDark.css` import the generated `tokens.css`. `--accent`
-  per `data-accent` is defined from `accent.<name>.fg`; `--accent-soft` from
-  the wash; `--accent-fg` from on-fill. `--ink-danger` becomes an alias of
-  `danger.fg`.
-- Define `--success`, `--warning`, `--info`, `--flagged` and their fills and
-  washes. The compose warning strip uses `warning.wash` with `warning.fg`
-  text; the undefined `--accent-softer` and `--danger` references are removed.
-- `--auth-ok` becomes `success.fg`; the DMARC page's fixed greens and reds
-  become `success.*` and `danger.*`.
-- The info toast uses `info.fill` and `info.on-fill`; add success and warning
-  toast variants while there.
-- `addressSwatch.js` maps to `swatch.*` with theme-aware values.
-- The accent picker swatches in `Nav.css` read the tokens instead of
-  duplicating twelve literals.
+- `App.jsx` imports the generated `tokens.css` beside the theme files (since
+  #1470). Each `data-accent` rule now aliases `--accent`, `--accent-fg` and
+  `--accent-soft` to its token's fg, on-fill and wash, which carry their own
+  light and dark values, so `AppDark.css` no longer holds an accent block.
+  `--ink-danger` is an alias of `--danger-fg` in both themes.
+- The token names are used directly at sites (`--warning-fg`, `--success-wash`
+  and so on) rather than through a second set of aliases. The compose
+  warning strip is `warning.wash` with `warning.fg` text and a 40% `fg`
+  border; the undefined `--accent-softer` and `--danger` references are gone.
+- `--auth-ok` is `success.fg`; a failing chip and the list's auth-warning
+  indicator are `warning.fg` (the audit's auth-bad decision, matching Apple
+  and Android). The DMARC page's verdicts are `success.fg` / `warning.fg`
+  and its DNS-check banners the wash/fg pairs, with the dark overrides
+  removed. The flag indicator is `flagged.fg`.
+- The error toast and the destructive confirm button are `danger.fill` /
+  `danger.on-fill`; the info toast is `info.fill` / `info.on-fill`. Success
+  and warning toast variants are not added: the toast API has only an
+  `error` flag today and nothing would call them.
+- `addressSwatch.js` keeps four accents but as the theme-aware token vars.
+  The `swatch.*` avatar pastels were tried on paper and rejected for this
+  site: a 10px identity dot in a pastel would sit near 1.3:1 on the pane,
+  while the accent fg tokens hold 4.5:1 or better.
+- The accent picker swatches in `Nav.css` read the tokens; the twelve
+  literals and their dark block are gone.
+- Left alone, as the audit recorded: the attachment-family badges (they reuse
+  accent light values as fixed fills with their own contrast story) and the
+  legacy `prefers-color-scheme` rules marked "do not extend".
+
+Rendered check, headless Chrome on a probe page that loads the real
+stylesheets (`tokens.css`, both theme files, and the compose, reader,
+envelope, DMARC and nav sheets) with `data-accent="forest"`, light scheme,
+measured with the tester's instrument:
+
+| element | pixel | predicted | contrast |
+|---|---|---|---|
+| compose warning strip text on its wash | (149, 63, 0) | `#953F00` | 5.82:1 |
+| auth pass chip text on its wash | (0, 112, 33) | `#007021` | 5.25:1 |
+| auth fail chip text on its wash | (149, 63, 0) | `#953F00` | 5.82:1 |
+| flag indicator on white | (124, 89, 0) | `#7C5900` | 6.39:1 |
+| DNS-check ok banner text on its wash | (0, 112, 33) | `#007021` | 5.25:1 |
+| error toast, on-fill over fill | (253, 251, 250) on (170, 24, 22) | `#AA1816` fill | 7.14:1 |
+| Amber picker swatch | (145, 79, 0) | `#914F00` | fill |
+| Forest accent | (46, 82, 53) | `#2E5235` | fill |
+
+Chrome's OKLCH conversion lands on the checker's sRGB to the byte, and the
+`var()` and `color-mix()` chains resolve; the pre-change warning strip was
+1.12:1 in the dark theme and the pass chip was the accent green.
 
 ### 9. Tester re-measure
 
