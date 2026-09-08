@@ -23,7 +23,14 @@ final class ColorTokensDriftTests: XCTestCase {
             .deletingLastPathComponent()
     }()
 
+    /// Runs the generator in check mode. `Process` exists only on macOS, and
+    /// the Kit suite also runs on the iOS and visionOS simulators in CI; the
+    /// macOS leg and `scripts/tests/test_check_color_tokens.py` carry this
+    /// check, so the other legs skip rather than lose the test.
     func testGeneratedCatalogMatchesTokenFile() throws {
+        #if !os(macOS)
+        throw XCTSkip("the generator is run from the macOS leg; Process is unavailable here")
+        #else
         let generator = Self.repoRoot.appendingPathComponent("scripts/generate-color-tokens.py")
         XCTAssertTrue(FileManager.default.fileExists(atPath: generator.path), "generator missing at \(generator.path)")
 
@@ -38,6 +45,7 @@ final class ColorTokensDriftTests: XCTestCase {
         process.waitUntilExit()
         let text = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         XCTAssertEqual(process.terminationStatus, 0, "generated colour tokens are out of date:\n\(text)")
+        #endif
     }
 
     func testCatalogIsPackagedInResourceBundle() {
