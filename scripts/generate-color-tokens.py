@@ -12,6 +12,7 @@ Outputs (all carry a GENERATED banner; never edit them by hand):
   apple/CabalmailWatch/Assets.xcassets/AccentColor.colorset              the watch accent (dark value only)
   android/app/src/main/res/values/color_tokens.xml                       `token_<name>_light` / `_dark`
   android/app/src/main/kotlin/com/cabalmail/android/ui/theme/ColorTokens.kt  `ColorTokens.<name>()` accessors
+  android/kit/src/main/kotlin/com/cabalmail/kit/design/ColorTokenHex.kt    hex constants for the UI-free kit
   react/admin/src/tokens.css                                             `--<name>` custom properties
 
 Every export is checked before it is written: the sRGB values that Apple and
@@ -41,6 +42,7 @@ APPLE_CATALOG = APPLE_DIR / "ColorTokens.xcassets"
 APPLE_SWIFT = APPLE_DIR / "ColorTokens.swift"
 ANDROID_XML = pathlib.Path("android/app/src/main/res/values/color_tokens.xml")
 ANDROID_KT = pathlib.Path("android/app/src/main/kotlin/com/cabalmail/android/ui/theme/ColorTokens.kt")
+ANDROID_KIT_HEX = pathlib.Path("android/kit/src/main/kotlin/com/cabalmail/kit/design/ColorTokenHex.kt")
 REACT_CSS = pathlib.Path("react/admin/src/tokens.css")
 
 _spec = importlib.util.spec_from_file_location("checker", ROOT / "scripts" / "check-color-tokens.py")
@@ -270,6 +272,24 @@ def android_outputs(doc, res):
             kt.append(f'            "{short}" -> {camel(n)}()')
     kt += ["            else -> flagGray()", "        }", "}", ""]
     files[ANDROID_KT] = "\n".join(kt)
+
+    # The UI-free kit module gets the values as plain hex strings, for the one
+    # place it writes colour into a stylesheet (the reader's link colour).
+    hx = [f"// {BANNER}", "",
+          "package com.cabalmail.kit.design", "",
+          "/**",
+          " * Every colour token's light and dark value as CSS hex. The kit has no",
+          " * Compose or resources, so this is how it reads the palette; the app's",
+          " * `ColorTokens` is the themed accessor. Names, roles and floors are in",
+          " * docs/1.x/color-tokens-plan.md.",
+          " */",
+          "object ColorTokenHex {"]
+    for name in doc["tokens"]:
+        up = snake(name).upper()
+        hx.append(f'    const val {up}_LIGHT = "{hexs(res[name]["light"])}"')
+        hx.append(f'    const val {up}_DARK = "{hexs(res[name]["dark"])}"')
+    hx += ["}", ""]
+    files[ANDROID_KIT_HEX] = "\n".join(hx)
     return files
 
 

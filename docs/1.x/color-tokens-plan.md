@@ -1,6 +1,6 @@
 # Colour tokens: implementation plan
 
-**Status:** Apple adoption in review 2026-09-07; Android and React next. The audit
+**Status:** Apple adoption shipped to stage 2026-09-07; Android adoption in review; React next. The audit
 ([color-audit.md](color-audit.md)) and the Design brief
 ([design_handoff_color_tokens/](design_handoff_color_tokens/README.md)) are
 complete and Claude Design's palette passed the acceptance check.
@@ -14,9 +14,9 @@ complete and Claude Design's palette passed the acceptance check.
 | 3 | Palette values | Claude Design | done 2026-09-07 |
 | 4 | Correctness check and fold-in | Claude Code | done 2026-09-07; see findings under item 4 |
 | 5 | Token source of truth and generators | Claude Code | done 2026-09-07 |
-| 6 | Apple adoption | Claude Code | in review 2026-09-07 |
-| 7 | Android adoption | Claude Code | next |
-| 8 | React adoption | Claude Code | pending 5 |
+| 6 | Apple adoption | Claude Code | done 2026-09-07 (#1471) |
+| 7 | Android adoption | Claude Code | in review 2026-09-07 |
+| 8 | React adoption | Claude Code | next |
 | 9 | Tester re-measure | tester | pending 6, 7, 8 |
 
 ## Principles
@@ -130,7 +130,7 @@ from the sketch above, each for a reason found on the way:
 
 ### 6. Apple adoption
 
-**Status:** in review. Every site in the census now reads a token; the
+**Status:** done (#1471). Every site in the census now reads a token; the
 list below is what was done, kept as the record. Two departures from the
 sketch: the `AccentColor` and `LogoTint` colorsets in the app targets are
 now *generated* from `accent.forest` / `brand.forest` rather than replaced
@@ -182,20 +182,40 @@ are code reads; the tester's re-measure (item 9) covers them.
 
 ### 7. Android adoption
 
-**Status:** pending item 5.
+**Status:** in review. As sketched, with these specifics:
 
-- Introduce `warning`, `success`, `info`, `flagged` as Compose colours from
-  the generated resources, independent of the ColorScheme so they survive
-  Material You. `error` sites that mean warning (attachment size, offline
-  banner) move to `warning.*`; `secondaryContainer` for the auth-pass chip
-  moves to `success.wash`; `tertiary` for flagged and favourite moves to
-  `flagged.fg`.
-- The Forest seed becomes the logo value. Amber is adjusted per Design.
-- `flagColor(...)` maps to `flag.<name>` from resources, theme-qualified.
-- The reader CSS link colour is generated from `accent.forest.fg`.
-- The sender avatar HSV hash moves to `swatch.*` with `swatch.ink`.
-- Changelog fragment with the `Android:` prefix; headline under 40 chars.
-  Run `ktlintCheck lint` and `:app:testDebugUnitTest`.
+- Warning sites (attachment size, offline strip) read `warning.*`; the
+  auth chips read `success.wash`/`success.fg` and `warning.wash`/
+  `warning.fg`; the flag star, the favourite star, and the compose From
+  picker's ★ read `flagged.fg`. All are token accessors, independent of the
+  `ColorScheme`, so they hold under Material You.
+- The six accent seeds are the `accent.<name>.fg` light tokens, read from
+  the generated resources, so Forest is the logo's Forest and Amber is
+  Design's adjusted value. The derived scheme (lighten/darken) is unchanged.
+- `flagColor(...)` is a composable that delegates to `ColorTokens.flag`.
+- The kit module is UI-free, so the generator also writes
+  `com.cabalmail.kit.design.ColorTokenHex` (plain hex constants); the
+  reader stylesheet takes its link colour from it.
+- Sender avatars pick one of the ten `swatch.*` tokens by address hash and
+  draw the initial in `swatch.ink`, replacing the HSV hash and white text.
+- Material's `error` role stays for errors and destructive actions
+  (`Delete`, `Revoke`, `Purge`, the dispose swipe): it is contrast-managed
+  by Material in both schemes and under dynamic colour, and the audit
+  scoped Android's move to the sites that meant something other than
+  error. A later pass may align it with `danger.*` for cross-client
+  uniformity; it is not a contrast defect today.
+
+Live check, Pixel 8 emulator (API 35), Material You on, light theme, INBOX,
+measured with the tester's instrument:
+
+| site | pixel | predicted | contrast |
+|---|---|---|---|
+| auth-failure triangle, `warning.fg` | (149, 63, 0) | `#953F00` | 6.67:1 on the surface |
+| flag star (Flagged filter), `flagged.fg` | (124, 89, 0) | `#7C5900` | 6.07:1 on the surface |
+
+Both landed on the exported value to the byte, and the star is the same
+gold the iPad drew for its flag glyph. Pre-change the triangle was
+Material's error red and the star the accent's tertiary tone.
 
 ### 8. React adoption
 
