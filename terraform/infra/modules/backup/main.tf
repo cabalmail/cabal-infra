@@ -107,8 +107,8 @@ resource "aws_backup_selection" "backup" {
   name         = "cabal-backup"
   plan_id      = aws_backup_plan.backup.id
 
-  resources = [
-    var.table,
-    var.efs,
-  ]
+  resources = concat(
+    [var.table, var.efs],
+    var.extra_tables,
+  )
 }
