@@ -1,0 +1,8 @@
+# Same tree as rss_fetch: feedparser for the subscribe-time probe of the
+# document, publicsuffixlist for the canonical-URL normalizer.
+feedparser==6.0.14 \
+    --hash=sha256:e35e3f760151b0c3b22cac9684155cae186a233e16c49bcbc6c49e91e3131137
+feedparser-sgmllib==2.1.0 \
+    --hash=sha256:2cab2d43b95a954f920f18aebce7a4dbbb3f539780b127e2aa114f579821e01d
+publicsuffixlist==1.0.2.20260909 \
+    --hash=sha256:4aecb24df2690fe2b3f6b94102f342d5ae2c2d0c97500d76b0be31680868ca6d
