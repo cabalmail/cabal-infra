@@ -18,8 +18,8 @@ phase are updated in the same PR as the work, per the docs convention.
 
 | Phase | Work item                                         | Status      |
 | ----- | ------------------------------------------------- | ----------- |
-| 1     | DynamoDB tables + supporting infra                | In review (2026-09-09) |
-| 2     | Scheduler + fetcher Lambdas                       | Not started |
+| 1     | DynamoDB tables + supporting infra                | On stage (2026-09-09) |
+| 2     | Scheduler + fetcher Lambdas                       | In review (2026-09-09) |
 | 3     | Subscription + reader API                         | Not started |
 | 4     | OPML import/export (API)                          | Not started |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Not started |
@@ -823,10 +823,9 @@ the constraint on this project.
 
 ### Phase 1: DynamoDB tables + supporting infra
 
-**Status:** In review (2026-09-09). Tables, stream, fetch queue, bucket,
-and backup selection are written and pass the IaC gates locally. The
-per-function IAM grants and the quiesce hook moved to phase 2, where
-their consumers exist (see the notes in the work list).
+**Status:** On stage (2026-09-09, PR #1488). The per-function IAM grants
+and the quiesce hook moved to phase 2, where their consumers exist (see
+the notes in the work list).
 
 **Goal.** All DynamoDB tables, the item-table stream, the fetch queue
 and its DLQ, and the `rss-cache` S3 bucket in place in all three
@@ -883,7 +882,19 @@ The one-shot table-verification Lambda in the May plan is dropped:
 
 ### Phase 2: Scheduler + fetcher Lambdas
 
-**Status:** Not started.
+**Status:** In review (2026-09-09). `rss_schedule` and `rss_fetch` under
+`lambda/api/`, the shared `rss_url` / `rss_http` / `rss_parse` /
+`rss_cadence` modules with unit tests, `modules/app/rss_fetcher.tf`
+(roles, log groups, SSM cadence bounds, the five-minute schedule gated
+on `var.quiesced`, the queue event source mapping), the
+`front-door/feedbot.html` bot page, and the `docs/quiesce.md` row. As
+built, two details differ from the text below: the User-Agent is the
+constant `Cabalmail-Feedbot/1 (+https://www.<control-domain>/feedbot.html)`
+rather than carrying the release version (the fetcher zip is built
+without knowledge of the release), and a permanent redirect whose target
+already belongs to another feed row is **recorded** (`redirect_conflict_url`)
+rather than merged, because merging needs to re-point every subscriber
+and that is API-side work for phase 3.
 
 **Goal.** Public feeds are fetched on their cadence, RSS/Atom/JSON
 parsed, items upserted, health tracked. Validate by seeding a few
@@ -920,17 +931,18 @@ parsed, items upserted, health tracked. Validate by seeding a few
     row already exists for it, re-point the subscriptions and retire
     the old row; 410 Gone dead-letters immediately; 429 backs off.
 - User-Agent set to
-  `Cabalmail/<release> (+https://<control-domain>/feedbot)`, with the
-  release version injected at build time. The control
-  domain serves a small static page explaining the bot, which
-  addresses it comes from (the NAT EIPs), and how to reach the
-  operator.
+  `Cabalmail-Feedbot/1 (+https://www.<control-domain>/feedbot.html)`. The
+  front-door site (`front-door/`) serves the page, which explains the
+  bot, which addresses it comes from (the NAT EIPs), and how to reach
+  the operator.
 - Adaptive cadence: EWMA on `observed_items_per_day` with a
   conservative initial cadence (60 minutes), recomputed on every
   fetch. Bounds are SSM parameters
   `/cabal/rss/cadence_min_minutes` (default 15) and
-  `/cabal/rss/cadence_max_minutes` (default 1440). User-invisible
-  per D17.
+  `/cabal/rss/cadence_max_minutes` (default 1440), SecureString like
+  the other `/cabal/` parameters, re-read every five minutes.
+  User-invisible per D17. A feed with no history seeds its rate from
+  the spread of its items' dates, falling back to a 60-minute cadence.
 - Canonical URL normalizer per D1 sub-decision (https only, www-vs-
   apex collapse, trailing-slash rules, alphabetized query params,
   `<guid>` exempt). Lives in `lambda/api/_shared/rss_url.py` with unit

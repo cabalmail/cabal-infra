@@ -192,3 +192,9 @@ variable "smtp_internal_host" {
   type        = string
   description = "Cloud Map DNS name of the smtp-out task (modules/ecs service discovery). The send Lambda dials it on 465 instead of the public submission listener, falling back to the public path if the name does not resolve."
 }
+
+variable "quiesced" {
+  type        = bool
+  default     = false
+  description = "Mirror of the root quiesced flag (docs/quiesce.md). Pauses the EventBridge Scheduler schedules this module owns that would otherwise do work a quiesced environment cannot complete (the RSS fetch tick)."
+}
