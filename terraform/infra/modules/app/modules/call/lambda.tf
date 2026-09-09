@@ -12,21 +12,39 @@ locals {
   ])
 
   # RSS reader grants (phase 3), rendered into the heredoc below only for the
-  # rss_* endpoints. Tables plus their indexes: the endpoints Query the
+  # rss_* endpoints, as their own statement: the RSS endpoints need
+  # BatchWriteItem (unsubscribe purges items and state in batches), which
+  # the uniform statement above deliberately does not grant to the mail
+  # endpoints. Tables plus their indexes: the endpoints Query the
   # by_canonical, by_fetched, and favorite_by_feed indexes. The index glob
   # (table/<name>/index/*) covers the named table's own indexes only.
   # iam-wildcard-ok: per-table index glob - the table name is fixed, only its index names vary
   rss_tables = ["cabal-rss-feed", "cabal-rss-item", "cabal-rss-subscription",
   "cabal-rss-folder", "cabal-rss-user-item-state"]
   # iam-wildcard-ok: per-table index glob, see above
-  rss_table_resources = var.rss_access ? join("", [
+  rss_table_resources = join(",\n", [
     for table in local.rss_tables :
-    ",\n                \"arn:aws:dynamodb:${var.region}:${var.account}:table/${table}\",\n                \"arn:aws:dynamodb:${var.region}:${var.account}:table/${table}/index/${local.wildcard}\""
-  ]) : ""
+    "                \"arn:aws:dynamodb:${var.region}:${var.account}:table/${table}\",\n                \"arn:aws:dynamodb:${var.region}:${var.account}:table/${table}/index/${local.wildcard}\""
+  ])
   # Spilled item bodies are keyed items/<feed_id>/<item_id> - runtime
   # values with no enumerable ARN, same as the message-cache object keys.
   # iam-wildcard-ok: runtime-only S3 object keys under the items/ prefix
   rss_statements_body = <<RSS
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:BatchGetItem",
+                "dynamodb:BatchWriteItem",
+                "dynamodb:DeleteItem",
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:Query",
+                "dynamodb:UpdateItem"
+            ],
+            "Resource": [
+${local.rss_table_resources}
+            ]
+        },
         {
             "Effect": "Allow",
             "Action": [
@@ -177,7 +195,7 @@ ${local.cache_object_actions}
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-rate-limits",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-push-tokens",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules",
-                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules-audit"${local.rss_table_resources}
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules-audit"
             ]
         },
 ${local.rss_statements}

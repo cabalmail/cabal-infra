@@ -30,7 +30,7 @@ from rss_api import (ApiError, ROOT_FOLDER, SHARED_OWNER, body_of, feeds,  # pyl
 from rss_discover import discover_feed_links, looks_like_html  # pylint: disable=import-error
 from rss_http import FetchError, fetch  # pylint: disable=import-error
 from rss_parse import ParseError, parse_feed  # pylint: disable=import-error
-from rss_url import FeedUrlError, normalize_feed_url  # pylint: disable=import-error
+from rss_url import FeedUrlError, equivalent_urls, normalize_feed_url  # pylint: disable=import-error
 
 CONTROL_DOMAIN = os.environ.get('CONTROL_DOMAIN', '')
 USER_AGENT = f'Cabalmail-Feedbot/1 (+https://www.{CONTROL_DOMAIN}/feedbot.html)'
@@ -70,14 +70,15 @@ def canonicalize(url):
 
 
 def find_shared_feed(canonical):
-    '''The shared feed row for a canonical URL, if any.'''
-    rows = feeds.query(IndexName='by_canonical',
-                       KeyConditionExpression=Key('canonical_url').eq(canonical)
-                       & Key('owner_key').eq(SHARED_OWNER),
-                       Limit=1).get('Items', [])
-    if not rows:
-        return None
-    return feeds.get_item(Key={'feed_id': rows[0]['feed_id']}).get('Item')
+    '''The shared feed row for a canonical URL or its trailing-slash twin.'''
+    for candidate in equivalent_urls(canonical):
+        rows = feeds.query(IndexName='by_canonical',
+                           KeyConditionExpression=Key('canonical_url').eq(candidate)
+                           & Key('owner_key').eq(SHARED_OWNER),
+                           Limit=1).get('Items', [])
+        if rows:
+            return feeds.get_item(Key={'feed_id': rows[0]['feed_id']}).get('Item')
+    return None
 
 
 def create_feed(canonical, original_url):

@@ -19,8 +19,11 @@ requirements and the decisions behind them in
 - **Feeds are deduplicated by canonical URL.** `http://` is upgraded to
   https (a feed that is not served over https is refused), the host is
   lower-cased and a leading `www.` is dropped when the rest is a
-  registrable apex (Public Suffix List), directory-like paths gain a
-  trailing slash, query parameters are sorted, fragments are dropped.
+  registrable apex (Public Suffix List), query parameters are sorted,
+  fragments are dropped. A trailing slash is kept exactly as given, since
+  adding or removing one can turn a working feed URL into a 404; the two
+  forms are reconciled at subscribe time instead, so `/feed` and `/feed/`
+  resolve to one shared feed.
 - **Items are kept while a feed has subscribers.** When the last
   subscriber leaves, the feed, its items, and any spilled bodies are
   deleted; subscribing again starts it fresh.
