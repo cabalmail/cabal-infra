@@ -353,6 +353,99 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    # RSS reader API (docs/1.x/rss-implementation-plan.md, phase 3). Flat
+    # endpoints like the rest of the gateway; reads are GET with query
+    # strings, writes carry a JSON body. rss_subscribe probes the feed
+    # document (network + feedparser) and rss_list_items merges pages across
+    # feeds, so both get more memory than the DynamoDB-only endpoints.
+    rss_subscribe = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 256
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_unsubscribe = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_update_subscription = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_list_subscriptions = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_new_folder = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_update_folder = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_delete_folder = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_list_items = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 256
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_get_item = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_set_item_state = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_mark_all_read = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     get_rules = {
       runtime = "python3.13"
 

@@ -20,7 +20,7 @@ phase are updated in the same PR as the work, per the docs convention.
 | ----- | ------------------------------------------------- | ----------- |
 | 1     | DynamoDB tables + supporting infra                | Shipped 1.12.2 (2026-09-09) |
 | 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
-| 3     | Subscription + reader API                         | Not started |
+| 3     | Subscription + reader API                         | In review (2026-09-09) |
 | 4     | OPML import/export (API)                          | Not started |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Not started |
 | 6     | Android client (offline + FTS + profile scoping)  | Not started |
@@ -970,7 +970,18 @@ destructive change.
 
 ### Phase 3: Subscription + reader API
 
-**Status:** Not started.
+**Status:** In review (2026-09-09). Eleven `rss_*` endpoints under
+`lambda/api/` with `_shared/rss_api.py` (envelope, keys, computed read
+state, serialization) and `_shared/rss_discover.py` (autodiscovery);
+reference in `docs/rss.md`. As built, versus the text below: health
+rides on each subscription's `feed` summary in `/rss_list_subscriptions`
+instead of a separate health endpoint; folders and subscriptions come
+back from that one call; item state is set in batches through
+`/rss_set_item_state`; the first fetch of a new feed is not done inline
+but by handing the feed to the worker queue immediately (one ingest code
+path, items within seconds); the day-grouped orderings are applied
+client-side; unread counts are not served (clients count from their
+cache); and the shared-feed owner sentinel is `~shared`.
 
 **Goal.** Authenticated clients can subscribe to a feed, organize
 feeds into folders, list items with filtering, mark items read/

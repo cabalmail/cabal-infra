@@ -1,0 +1,1 @@
+# Stdlib + boto3 (provided by the Lambda runtime) only.

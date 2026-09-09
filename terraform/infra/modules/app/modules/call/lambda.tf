@@ -10,6 +10,38 @@ locals {
       var.deletes_cache_objects ? ["s3:DeleteObject"] : []
     ) : "              \"${action}\""
   ])
+
+  # RSS reader grants (phase 3), rendered into the heredoc below only for the
+  # rss_* endpoints. Tables plus their indexes: the endpoints Query the
+  # by_canonical, by_fetched, and favorite_by_feed indexes. The index glob
+  # (table/<name>/index/*) covers the named table's own indexes only.
+  # iam-wildcard-ok: per-table index glob - the table name is fixed, only its index names vary
+  rss_tables = ["cabal-rss-feed", "cabal-rss-item", "cabal-rss-subscription",
+  "cabal-rss-folder", "cabal-rss-user-item-state"]
+  # iam-wildcard-ok: per-table index glob, see above
+  rss_table_resources = var.rss_access ? join("", [
+    for table in local.rss_tables :
+    ",\n                \"arn:aws:dynamodb:${var.region}:${var.account}:table/${table}\",\n                \"arn:aws:dynamodb:${var.region}:${var.account}:table/${table}/index/${local.wildcard}\""
+  ]) : ""
+  # Spilled item bodies are keyed items/<feed_id>/<item_id> - runtime
+  # values with no enumerable ARN, same as the message-cache object keys.
+  # iam-wildcard-ok: runtime-only S3 object keys under the items/ prefix
+  rss_statements_body = <<RSS
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": "arn:aws:s3:::${var.rss_cache_bucket}/items/${local.wildcard}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "sqs:SendMessage",
+            "Resource": "${var.rss_fetch_queue_arn}"
+        },
+RSS
+  rss_statements      = var.rss_access ? local.rss_statements_body : ""
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -61,7 +93,9 @@ resource "aws_iam_role_policy" "lambda" {
   # with no resource-level scoping on Describe* at all (the statement
   # mirrors the AWSLambdaVPCAccessExecutionRole managed policy). Every
   # other statement names specific resources.
-  # iam-wildcard-ok: runtime-only ARNs (cache object keys, log streams, Lambda-managed ENIs) - see above
+  # The RSS index wildcard (table/<name>/index/*) covers the named table's
+  # own indexes only; per-index ARNs would restate the schema here.
+  # iam-wildcard-ok: runtime-only ARNs (cache object keys, log streams, Lambda-managed ENIs, RSS spill keys) and per-table index globs - see above
   policy = <<RUNPOLICY
 {
     "Version": "2012-10-17",
@@ -143,9 +177,10 @@ ${local.cache_object_actions}
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-rate-limits",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-push-tokens",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules",
-                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules-audit"
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules-audit"${local.rss_table_resources}
             ]
         },
+${local.rss_statements}
         {
             "Effect": "Allow",
             "Action": "sns:Publish",
@@ -257,6 +292,8 @@ resource "aws_lambda_function" "api_call" {
       IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
       IMAP_INTERNAL_HOST          = var.imap_internal_host
       SMTP_INTERNAL_HOST          = var.smtp_internal_host
+      RSS_FETCH_QUEUE_URL         = var.rss_access ? var.rss_fetch_queue_url : ""
+      RSS_CACHE_BUCKET            = var.rss_access ? var.rss_cache_bucket : ""
     }
   }
   depends_on = [
