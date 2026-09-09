@@ -20,10 +20,11 @@ requirements and the decisions behind them in
   https (a feed that is not served over https is refused), the host is
   lower-cased and a leading `www.` is dropped when the rest is a
   registrable apex (Public Suffix List), query parameters are sorted,
-  fragments are dropped. A trailing slash is kept exactly as given, since
-  adding or removing one can turn a working feed URL into a 404; the two
-  forms are reconciled at subscribe time instead, so `/feed` and `/feed/`
-  resolve to one shared feed.
+  fragments are dropped. `/` is canonical only right after the host; the
+  rest of the path is kept exactly as given, since only the server knows
+  whether `/dir` and `/dir/` are one object. A publisher that treats them
+  as one redirects, and the subscribe probe follows the permanent
+  redirect before looking the feed up, so both forms still share a row.
 - **Items are kept while a feed has subscribers.** When the last
   subscriber leaves, the feed, its items, and any spilled bodies are
   deleted; subscribing again starts it fresh.
@@ -119,6 +120,8 @@ them except as documented under `/rss_list_items`.
 | `/rss_get_item` | GET | `feed_id`, `sort_key` | `{item}` with the body inlined. Codes: `not_subscribed`, `unknown_item`. |
 | `/rss_set_item_state` | POST | `{items: [{feed_id, sort_key, is_read?, is_favorite?}]}` (≤100) | `{updated}`. An explicit `is_read` overrides the watermark in either direction. |
 | `/rss_mark_all_read` | POST | `{subscription_id}` \| `{folder_id}` \| `{}` | `{subscriptions, flipped, read_watermark}`. Writes the watermark and flips items explicitly marked unread. |
+| `/rss_opml_import` | POST | `{opml: "<xml>", folder_id?}` | `{created, existing, folders_created, failed: [{url, code, Error}]}`. Additive: folders from the outline tree (reusing same-named folders under the same parent, rooted at `folder_id` when given); unknown feeds are created from the OPML's title without a probe and handed to the fetcher, so bad entries surface as feed health. Codes: `invalid_opml`, `unknown_folder` (404). 2 MB, 1000 feeds. |
+| `/rss_opml_export` | GET | | `{opml, filename}`: OPML 2.0 with the folder tree as nested outlines and one `type="rss"` outline per subscription, titled with the custom title when set. |
 
 The two day-grouped ordering modes are applied client-side from the
 `published_at` values; the server orders strictly by sort key. Unread
