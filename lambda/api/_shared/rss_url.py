@@ -12,9 +12,13 @@ lookup. The rules, in the order they are applied:
              (www.example.com -> example.com, www.example.co.uk ->
              example.co.uk) - other subdomains are distinct feeds. The apex
              form is canonical (operator decision 2026-09-09).
-  path       empty -> "/"; a directory-like final segment (no ".") gains a
-             trailing slash, so /feed and /feed/ collapse. A file-like segment
-             (feed.xml, rss.php) is left alone - appending "/" would break it.
+  path       empty -> "/". Otherwise kept EXACTLY as given: a trailing
+             slash is neither added nor removed, because either edit can
+             turn a working feed URL into a 404 (verified on stage against
+             a publisher whose /feeds/json 404s as /feeds/json/). The
+             requirement that /dir and /dir/ be the same feed is met at
+             lookup time instead: equivalent_urls() yields both forms and
+             the subscribe path checks each against existing feeds.
   query      parameters sorted by (name, value); different parameters are
              different feeds. Blank values are kept.
   fragment   dropped.
@@ -88,14 +92,18 @@ def _collapse_www(host, is_registrable):
 
 
 def _normalize_path(path):
-    if not path:
-        return '/'
-    if path.endswith('/'):
-        return path
-    last = path.rsplit('/', 1)[-1]
-    if '.' in last:
-        return path
-    return path + '/'
+    return path or '/'
+
+
+def equivalent_urls(canonical):
+    '''The canonical URL plus its trailing-slash twin (for non-root paths),
+    the forms that must resolve to one shared feed.'''
+    parts = urlsplit(canonical)
+    if parts.path in ('', '/'):
+        return [canonical]
+    twin_path = parts.path[:-1] if parts.path.endswith('/') else parts.path + '/'
+    twin = urlunsplit((parts.scheme, parts.netloc, twin_path, parts.query, ''))
+    return [canonical, twin]
 
 
 def _normalize_query(query):

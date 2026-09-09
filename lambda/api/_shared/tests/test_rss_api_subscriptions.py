@@ -34,7 +34,7 @@ class Subscribe(unittest.TestCase):
         fx.SQS.sent.clear()
         self.mod = fx.load_handler('rss_subscribe')
         self.mod.FETCH_QUEUE_URL = 'https://sqs/queue'
-        self.mod.normalize_feed_url = lambda url: url.replace('http://', 'https://').rstrip('/') + '/'
+        self.mod.normalize_feed_url = lambda url: url.replace('http://', 'https://')
         self.fetches = []
 
         def fake_fetch(url, **_kw):
@@ -57,13 +57,14 @@ class Subscribe(unittest.TestCase):
         self.assertTrue(sub['data_store_uuid'])
         feed = list(self.tables['cabal-rss-feed'].rows.values())[0]
         self.assertEqual((feed['canonical_url'], feed['owner_key'], feed['due_shard'], feed['subscriber_count']),
-                         ('https://example.com/feed/', '~shared', 'active', 1))
+                         ('https://example.com/feed', '~shared', 'active', 1))
         self.assertEqual(json.loads(fx.SQS.sent[0]['MessageBody'])['feed_id'], feed['feed_id'])
 
     def test_existing_shared_feed_is_reused_without_fetch(self):
         self.tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'canonical_url': 'https://example.com/feed/',
                                                         'owner_key': '~shared', 'due_shard': 'active',
                                                         'subscriber_count': 1, 'title': 'Shared'}
+        # The stored form has the slash; the user types it without. Same feed.
         status, body = call(self.mod, body={'url': 'https://example.com/feed'})
         self.assertEqual((status, body['subscription']['feed_id']), (200, 'f1'))
         self.assertEqual(self.fetches, [])
@@ -92,7 +93,8 @@ class Subscribe(unittest.TestCase):
             if body == HTML else ParsedFeed(feed_type='rss', title='Found')
         status, body = call(self.mod, body={'url': 'https://example.com'})
         self.assertEqual(status, 200)
-        self.assertEqual(self.fetches, ['https://example.com/', 'https://example.com/feed.xml/'])
+        # (the test's stand-in normalizer leaves the root path alone)
+        self.assertEqual(self.fetches, ['https://example.com', 'https://example.com/feed.xml'])
         self.assertEqual(body['subscription']['feed']['title'], 'Found')
 
     def test_error_mapping(self):
