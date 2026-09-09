@@ -101,10 +101,26 @@ class Exchange(unittest.TestCase):
         self.assertEqual(result.body, b'')
         headers = log[0][2]
         self.assertEqual(headers['If-None-Match'], '"v1"')
-        self.assertEqual(headers['If-Modified-Since'], 'Mon, 01 Jan 2024 00:00:00 GMT')
+        # With an ETag in hand the date is withheld: origins that stamp
+        # Last-Modified per request would otherwise fail the conditional.
+        self.assertNotIn('If-Modified-Since', headers)
         self.assertEqual(headers['Host'], 'example.com')
         self.assertIn('Feedbot', headers['User-Agent'])
         self.assertTrue(conns[0].closed)
+
+    def test_weak_etag_sent_strong(self):
+        call, log, _ = make_fetch([FakeResponse(304)])
+        call('https://example.com/feed', etag='W/"abc"')
+        self.assertEqual(log[0][2]['If-None-Match'], '"abc"')
+        self.assertEqual(rss_http.strong_etag(' W/"x" '), '"x"')
+        self.assertEqual(rss_http.strong_etag('"x"'), '"x"')
+        self.assertEqual(rss_http.strong_etag(''), '')
+
+    def test_last_modified_used_only_without_etag(self):
+        call, log, _ = make_fetch([FakeResponse(304)])
+        call('https://example.com/feed', last_modified='Mon, 01 Jan 2024 00:00:00 GMT')
+        self.assertEqual(log[0][2]['If-Modified-Since'], 'Mon, 01 Jan 2024 00:00:00 GMT')
+        self.assertNotIn('If-None-Match', log[0][2])
 
     def test_body_and_hints(self):
         call, _, _ = make_fetch([FakeResponse(200, {
