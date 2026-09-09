@@ -434,6 +434,10 @@ module "backup" {
   count  = var.backup ? 1 : 0
   table  = module.table.table_arn
   efs    = module.efs.efs_arn
+  # RSS reader tables (docs/1.x/rss-implementation-plan.md): user data
+  # (subscriptions, folders, read state) and fetched items that publishers
+  # may since have removed upstream, so not regenerable.
+  extra_tables = module.table.rss_table_arns
 
   providers = {
     aws           = aws
