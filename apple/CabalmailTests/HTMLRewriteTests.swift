@@ -9,7 +9,7 @@ final class HTMLRewriteTests: XCTestCase {
     /// Injected alongside the viewport meta by `insertingHeadDefaults`; kept
     /// in step with `defaultLinkStyle` / `brandLinkColorLight` in
     /// `HTMLRewrite.swift`.
-    private let linkStyle = "<style>a { color: #2b633a; }</style>"
+    private let linkStyle = "<style>a { color: #2E5235; }</style>"
     private var headDefaults: String { viewport + linkStyle }
 
     // MARK: - Viewport injection

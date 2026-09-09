@@ -8,6 +8,7 @@ import Folders from '../Folders';
 import AddressesRail from '../Addresses/Rail';
 import useMediaQuery from '../hooks/useMediaQuery';
 import useSplit from './useSplit';
+import topmostDismissal from '../utils/escapeDismiss';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppMessage } from '../contexts/AppMessageContext';
 
@@ -246,8 +247,10 @@ function Email({
       onCompose:    () => newEmail(),
       onGoToFolder: (f) => selectFolder(f),
       onEscape:     () => {
-        if (overlayVisible) { hideOverlay(); return; }
-        if (composeWindows.length > 0) { closeCompose(composeWindows[composeWindows.length - 1].id); }
+        const target = topmostDismissal({ overlayVisible, composeWindows });
+        if (!target) return;
+        if (target.kind === 'compose') { closeCompose(target.id); return; }
+        hideOverlay();
       },
     };
     return () => {

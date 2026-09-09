@@ -98,12 +98,12 @@ struct RuleExtrasSection: View {
                     .font(.caption)
                     .foregroundStyle(
                         rule.replyBody.unicodeScalars.count > RulesValidator.maxReplyBodyLength
-                            ? .red : .secondary
+                            ? ColorTokens.dangerFg : .secondary
                     )
                 if rule.replyBody.isEmpty {
                     Text("A reply needs some text.")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
             }
         }
@@ -126,7 +126,7 @@ private struct ForwardAddressList: View {
                     addresses.removeAll { $0 == address }
                 } label: {
                     Image(systemName: "minus.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Remove \(address)")

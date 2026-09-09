@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.kit.models.Address
 import com.cabalmail.kit.models.DraftAttachment
 
@@ -399,7 +400,7 @@ private fun FromPicker(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (address.favorite) {
-                                    Text("★ ", color = MaterialTheme.colorScheme.tertiary)
+                                    Text("★ ", color = ColorTokens.flaggedFg())
                                 }
                                 Text(address.address)
                             }
@@ -513,13 +514,13 @@ private fun AttachmentSizeWarningRow(totalBytes: Long) {
             // The text beside it says the same thing; a second announcement
             // would only make TalkBack read the warning twice.
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
+            tint = ColorTokens.warningFg(),
             modifier = Modifier.size(16.dp),
         )
         Text(
             text = stringResource(R.string.compose_attachment_size_warning, formatSize(totalBytes)),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            color = ColorTokens.warningFg(),
         )
     }
 }

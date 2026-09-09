@@ -231,7 +231,7 @@ extension MessageListView {
         .buttonStyle(.plain)
         // `.plain` drops the automatic destructive tinting, so red is
         // applied explicitly for destructive roles.
-        .foregroundStyle(role == .destructive ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
+        .foregroundStyle(role == .destructive ? AnyShapeStyle(ColorTokens.dangerFg) : AnyShapeStyle(.tint))
         .accessibilityLabel(accessibilityLabel ?? label)
         .accessibilityIdentifier(identifier ?? "")
     }

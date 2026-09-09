@@ -91,7 +91,7 @@ struct FolderListView: View {
                 }
                 if let errorMessage = model.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
                 // Each section is a tree over its own folder list — Subscribed
                 // is a subset of All folders, and the filter narrows both — so

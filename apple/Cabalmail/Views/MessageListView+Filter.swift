@@ -99,7 +99,7 @@ extension MessageListView {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(filter == model.filterTab
-                          ? Color.accentColor.opacity(0.18)
+                          ? ColorTokens.accentForestWash
                           : Color.clear)
             )
         }

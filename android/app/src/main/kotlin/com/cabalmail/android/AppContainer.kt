@@ -130,7 +130,7 @@ class AppContainer(
      */
     var launchDestinationDone: Boolean = false
 
-    /** Fires when the API rejects a refreshed token: the session is gone. */
+    /** Fires when an API call dies of an expired session: it is gone. */
     val authExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     /** The outbox: queued sends retried on reconnect and at launch (plan §7.4). */

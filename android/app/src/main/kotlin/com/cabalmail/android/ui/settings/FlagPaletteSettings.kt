@@ -24,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +39,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
@@ -262,20 +264,10 @@ private fun List<FlagPaletteEntry>.moved(
 }
 
 /**
- * Maps the wire color vocabulary onto fixed render colors (the palette is
- * cross-client, so these are not themed). Unknown names — a newer server's
- * vocabulary — render gray but round-trip unchanged.
+ * Maps the wire color vocabulary onto the `flag.<name>` tokens, which every
+ * client shares. Unknown names — a newer server's vocabulary — render gray
+ * but round-trip unchanged; the name is user data and never changes.
  */
-internal fun flagColor(name: String): Color =
-    when (name) {
-        "red" -> Color(0xFFD32F2F)
-        "orange" -> Color(0xFFF57C00)
-        "yellow" -> Color(0xFFF9A825)
-        "green" -> Color(0xFF388E3C)
-        "teal" -> Color(0xFF00897B)
-        "blue" -> Color(0xFF1976D2)
-        "indigo" -> Color(0xFF3949AB)
-        "purple" -> Color(0xFF8E24AA)
-        "pink" -> Color(0xFFD81B60)
-        else -> Color(0xFF757575)
-    }
+@Composable
+@ReadOnlyComposable
+internal fun flagColor(name: String): Color = ColorTokens.flag(name)

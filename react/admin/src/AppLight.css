@@ -14,7 +14,7 @@
   --ink:           oklch(0.22  0.015 60);
   --ink-soft:      oklch(0.36  0.012 60);
   --ink-quiet:     oklch(0.55  0.01  60);
-  --ink-danger:    oklch(0.5   0.15  25);
+  --ink-danger:    var(--danger-fg);
   --accent-fg:     oklch(0.99  0.003 60);
   --accent-ink:    var(--ink);
   --accent-soft:   color-mix(in oklch, var(--accent) 10%, transparent);
@@ -30,13 +30,15 @@
     0 2px 8px         oklch(0.2 0.02 60 / 0.15);
 }
 
-/* Accent palette — light */
-:root[data-direction="stately"][data-accent="ink"]     { --accent: oklch(0.25 0.03 250); }
-:root[data-direction="stately"][data-accent="oxblood"] { --accent: oklch(0.42 0.12 25);  }
-:root[data-direction="stately"][data-accent="forest"]  { --accent: oklch(0.45 0.09 150); }
-:root[data-direction="stately"][data-accent="azure"]   { --accent: oklch(0.52 0.12 250); }
-:root[data-direction="stately"][data-accent="amber"]   { --accent: oklch(0.55 0.13 70);  }
-:root[data-direction="stately"][data-accent="plum"]    { --accent: oklch(0.45 0.12 330); }
+/* Accent palette: each accent aliases its token's fg / on-fill / wash, which
+   carry their own light and dark values (tokens.css), so there is no dark
+   block for these in AppDark.css. */
+:root[data-direction="stately"][data-accent="ink"]     { --accent: var(--accent-ink-fg); --accent-fg: var(--accent-ink-on-fill); --accent-soft: var(--accent-ink-wash); }
+:root[data-direction="stately"][data-accent="oxblood"] { --accent: var(--accent-oxblood-fg); --accent-fg: var(--accent-oxblood-on-fill); --accent-soft: var(--accent-oxblood-wash); }
+:root[data-direction="stately"][data-accent="forest"]  { --accent: var(--accent-forest-fg); --accent-fg: var(--accent-forest-on-fill); --accent-soft: var(--accent-forest-wash); }
+:root[data-direction="stately"][data-accent="azure"]   { --accent: var(--accent-azure-fg); --accent-fg: var(--accent-azure-on-fill); --accent-soft: var(--accent-azure-wash); }
+:root[data-direction="stately"][data-accent="amber"]   { --accent: var(--accent-amber-fg); --accent-fg: var(--accent-amber-on-fill); --accent-soft: var(--accent-amber-wash); }
+:root[data-direction="stately"][data-accent="plum"]    { --accent: var(--accent-plum-fg); --accent-fg: var(--accent-plum-on-fill); --accent-soft: var(--accent-plum-wash); }
 
 /* Legacy prefers-color-scheme styling — preserved until each surface is
    rebuilt in a later phase. Do not extend. */

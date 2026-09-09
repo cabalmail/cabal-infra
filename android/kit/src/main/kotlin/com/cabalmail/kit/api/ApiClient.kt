@@ -68,7 +68,13 @@ class ApiClient(
     private val host: String,
     private val authService: AuthService,
     private val httpClient: HttpClient,
-    /** Invoked when a request fails 401 even after a forced refresh. */
+    /**
+     * Invoked when a request cannot be made because the session is over —
+     * whichever half of the round trip found out. The server rejecting a
+     * freshly refreshed token is one way; Cognito refusing the refresh in
+     * the first place is the other, and is what an ordinary expiry looks
+     * like, so both have to reach the UI (#1476).
+     */
     private val onAuthExpired: (() -> Unit)? = null,
 ) {
     private val baseUrl = baseUrl.trimEnd('/')
@@ -91,6 +97,22 @@ class ApiClient(
         path: String,
         query: Map<String, String> = emptyMap(),
         body: JsonObject? = null,
+    ): String =
+        // One signal for the whole call, so every way a request can die of an
+        // expired session reaches the UI — including the common one, where
+        // minting the token throws before a request is ever sent.
+        try {
+            attempt(method, path, query, body)
+        } catch (expired: CabalmailException.AuthExpired) {
+            onAuthExpired?.invoke()
+            throw expired
+        }
+
+    private suspend fun attempt(
+        method: HttpMethod,
+        path: String,
+        query: Map<String, String>,
+        body: JsonObject?,
     ): String {
         var token = authService.currentIdToken()
         var response = execute(method, path, query, body, token)
@@ -100,7 +122,6 @@ class ApiClient(
             token = authService.forceRefreshedIdToken()
             response = execute(method, path, query, body, token)
             if (response.status == HttpStatusCode.Unauthorized) {
-                onAuthExpired?.invoke()
                 throw CabalmailException.AuthExpired()
             }
         }

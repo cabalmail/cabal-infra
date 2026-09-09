@@ -115,7 +115,7 @@ struct SignInView: View {
                 if case .error(let message) = appState.status {
                     Section {
                         Label(message, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(ColorTokens.dangerFg)
                     }
                 }
                 Section {
@@ -196,7 +196,7 @@ struct SignInView: View {
             if let mfaError = appState.mfaError {
                 Section {
                     Label(mfaError, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
             }
             Section { mfaActions }
@@ -299,7 +299,7 @@ private struct MacSignInChrome<FormContent: View>: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 96, height: 96)
-                .foregroundStyle(Color("LogoTint"))
+                .foregroundStyle(ColorTokens.brandForest)
                 .accessibilityHidden(true)
             Text("Cabalmail")
                 .font(.title2.weight(.semibold))

@@ -6,15 +6,20 @@
    derives the swatch index from the address itself so a new address always
    lands on the same colour. djb2 over the lowercased address keeps the
    distribution even and deterministic across reloads.
+
+   The four are the azure, amber, forest and plum accent tokens (tokens.css),
+   which carry their own light and dark values; they are used as a small
+   identity dot, where the pastel `swatch.*` avatar tokens would vanish
+   against the surface.
    ========================================================================= */
 
 export const ADDRESS_SWATCH_COUNT = 4;
 
 export const ADDRESS_SWATCHES = [
-  'oklch(0.52 0.12 250)', // --accent-1 — azure
-  'oklch(0.55 0.13 70)',  // --accent-2 — amber
-  'oklch(0.45 0.09 150)', // --accent-3 — forest
-  'oklch(0.45 0.12 330)', // --accent-4 — plum
+  'var(--accent-azure-fg)',  // --accent-1
+  'var(--accent-amber-fg)',  // --accent-2
+  'var(--accent-forest-fg)', // --accent-3
+  'var(--accent-plum-fg)',   // --accent-4
 ];
 
 export function swatchIndexFor(address) {

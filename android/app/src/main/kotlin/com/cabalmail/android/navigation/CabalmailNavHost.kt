@@ -81,6 +81,7 @@ import com.cabalmail.android.ui.rules.RulesScreen
 import com.cabalmail.android.ui.rules.RulesViewModel
 import com.cabalmail.android.ui.settings.SettingsScreen
 import com.cabalmail.android.ui.settings.SettingsViewModel
+import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.kit.models.NavState
 import kotlinx.coroutines.launch
 
@@ -337,8 +338,8 @@ fun CabalmailNavHost(
 @Composable
 private fun OfflineBanner() {
     Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        color = ColorTokens.warningWash(),
+        contentColor = ColorTokens.warningFg(),
         modifier = Modifier.fillMaxWidth().statusBarsPadding(),
     ) {
         Text(
