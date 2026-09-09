@@ -18,7 +18,7 @@ phase are updated in the same PR as the work, per the docs convention.
 
 | Phase | Work item                                         | Status      |
 | ----- | ------------------------------------------------- | ----------- |
-| 1     | DynamoDB tables + supporting infra                | Not started |
+| 1     | DynamoDB tables + supporting infra                | In review (2026-09-09) |
 | 2     | Scheduler + fetcher Lambdas                       | Not started |
 | 3     | Subscription + reader API                         | Not started |
 | 4     | OPML import/export (API)                          | Not started |
@@ -474,7 +474,7 @@ A few notes on the model:
 - **Oversized bodies spill to S3.** DynamoDB caps an item at 400 KB and
   some feeds deliver full-article `content_html` (occasionally with
   inline base64 images) well past that. Bodies over ~300 KB are written
-  to the image-cache bucket's sibling prefix `items/<feed_id>/<item_id>`
+  to the `rss-cache` bucket's `items/<feed_id>/<item_id>` prefix
   and the row carries `content_s3_key` instead of `content_html`; the
   read endpoint inlines it. Same pattern as the mail message cache.
 - **`is_shared` + `owner_user`** disambiguates shared from per-user
@@ -752,11 +752,12 @@ Consequences worth naming:
 - **RSS joins the NAT failure blast radius.** Mail delivery, `/send`,
   and log shipping already do; RSS adds nothing new in kind. The
   `docs/nat.md` diagnosis applies unchanged.
-- **Quiesce must also pause the schedule.** `quiesce.yml` removes the
+- **Quiesce must also pause the schedule.** Quiesce removes the
   private subnets' default route, so a still-scheduled `rss_schedule`
   in a quiesced environment would enqueue feeds that `rss_fetch` then
-  fails on until the DLQ fills. Disabling the Scheduler schedule
-  becomes part of the quiesce and restore steps.
+  fails on until the DLQ fills. The schedule resource reads
+  `var.quiesced` and sets its own state to `DISABLED`, the same
+  variable that scales the rest of the compute to zero.
 - **Cold starts** are not a reason to stay outside the VPC; Lambda has
   pre-provisioned VPC networking (Hyperplane) since 2019 and the
   existing API Lambdas already pay whatever residual cost exists.
@@ -822,29 +823,55 @@ the constraint on this project.
 
 ### Phase 1: DynamoDB tables + supporting infra
 
-**Status:** Not started.
+**Status:** In review (2026-09-09). Tables, stream, fetch queue, bucket,
+and backup selection are written and pass the IaC gates locally. The
+per-function IAM grants and the quiesce hook moved to phase 2, where
+their consumers exist (see the notes in the work list).
 
 **Goal.** All DynamoDB tables, the item-table stream, the fetch queue
-and its DLQ, the image-cache S3 bucket, and the SSM credential path
-policy in place in all three environments. No application code.
+and its DLQ, and the `rss-cache` S3 bucket in place in all three
+environments. No application code. (The SSM credential hierarchy needs
+no Terraform until phase 9 writes to it; parameters are created at
+runtime.)
 
 **Work.**
 
 - Five tables in `terraform/infra/modules/table/main.tf`, following
   the sibling tables' shape (on-demand, AWS-owned SSE with the
   standing `tfsec` ignore, PITR, deletion protection), indexes per the
-  data model, `stream_enabled` + `NEW_IMAGE` on `cabal-rss-item`.
-- `cabal-rss-fetch-queue` + DLQ next to `cabal-push-queue`.
-- `cabal-rss-image-cache-<env>` bucket with a 7-day lifecycle rule on
-  the `img/` prefix (the `items/` spill prefix has no expiry), owned by
-  the `s3` module alongside the existing cache bucket.
-- IAM policy template additions in `modules/app/modules/call` scoped to
-  the specific tables and indexes each `rss_*` function needs (the
-  `call` module today grants every API Lambda a uniform surface; RSS
-  is the moment to add a per-function table list rather than widen the
-  uniform grant to five more tables).
-- `docs/quiesce.md` and `quiesce.yml` gain the schedule pause/restore
-  step now, so it exists before the schedule does.
+  data model, `stream_enabled` + `NEW_IMAGE` on `cabal-rss-item`. The
+  tables join the AWS Backup selection through a new `extra_tables`
+  input on the backup module.
+- `cabal-rss-fetch-queue` + `cabal-rss-fetch-dlq` in a new
+  `modules/app/rss.tf` (both producer and consumer are app-module
+  Lambdas; the push queue sits in the ecs module only because its
+  producer is a container).
+- `rss-cache.<control-domain>` bucket in the same file, next to the
+  message-cache bucket's conventions (private, access-logged): versioned,
+  a 7-day expiry on the `img/` prefix, no expiry on the `items/` spill
+  prefix, and a bucket-wide 7-day retirement of noncurrent versions and
+  abandoned multipart parts. Two inline, justified Checkov skips
+  (cross-region replication, event notifications) match the other
+  buckets' baseline entries.
+- Concrete attribute names, where the schema above uses descriptions:
+  feed `owner_key`, `due_shard`, `next_fetch_at`; item `sort_key`
+  (`published_at_iso#item_id`), `fetched_key`
+  (`fetched_at_iso#item_id`); subscription `folder_key`
+  (`folder_id#subscription_id`), `notify_feed_id` (sparse);
+  user-item-state `user_feed` (`user#feed_id`), `sort_key`,
+  `favorite_key` (sparse). Every GSI projects `KEYS_ONLY` except
+  `by_user_folder` (`ALL`; subscription rows are small).
+- The `rss_table_arns` and `rss_item_stream_arn` outputs on the table
+  module. The per-function IAM grants land with the first consumer in
+  phase 2: the `call` module's uniform DynamoDB grant is **not** widened
+  to the RSS tables; RSS functions get a per-function table list
+  instead. (Plumbing an unused variable through the app module now
+  would trip tflint's unused-declaration rule.)
+- Quiesce is Terraform-variable driven (`var.quiesced`), so the pause
+  hook is a property of the schedule resource itself —
+  `state = var.quiesced ? "DISABLED" : "ENABLED"` on the EventBridge
+  Scheduler schedule — and lands with the schedule in phase 2, together
+  with the `docs/quiesce.md` row.
 - CHANGELOG fragment: tables, queue, bucket, and SSM hierarchy for the
   RSS feature set; no application traffic yet.
 
@@ -1279,12 +1306,14 @@ quiesce path:
 ### Backup
 
 DynamoDB PITR (35-day retention by default; we use 14 days non-prod,
-35 prod) covers all RSS tables. The image-cache S3 bucket has no
-backup — regenerable on demand; the `items/` spill prefix is
-authoritative for oversized bodies and joins the existing S3 backup
-selection. SSM credential parameters are KMS-encrypted; the existing
-`terraform/infra/modules/backup/` module is extended to cover the new
-tables.
+35 prod) covers all RSS tables, and the tables are in the AWS Backup
+selection where backups are enabled. The `rss-cache` bucket is not in
+AWS Backup: `img/` is regenerable on demand, and the `items/` spill
+prefix, while authoritative for oversized bodies, is small and
+write-once; bucket versioning with a 7-day noncurrent retention is its
+recovery story for now. (AWS Backup for S3 needs its own service-role
+policy and continuous-backup configuration; revisit if the spill prefix
+grows.) SSM credential parameters are KMS-encrypted.
 
 The device-side caches (Apple `ItemCache`, Android Room) are not
 backed up by Cabalmail — they are derived caches, rebuilt from the
