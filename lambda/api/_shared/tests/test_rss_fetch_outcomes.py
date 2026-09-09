@@ -5,18 +5,19 @@ so the suite runs on a bare interpreter with no AWS or network access.
 
     python3 lambda/api/_shared/tests/test_rss_fetch_outcomes.py
 '''
+import importlib.util
 import os
 import sys
 import types
 import unittest
 from datetime import datetime, timezone
 
+os.environ.setdefault('AWS_REGION', 'us-east-1')
 os.environ.setdefault('CONTROL_DOMAIN', 'test.example.com')
 
 _SHARED = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_FUNC = os.path.join(os.path.dirname(_SHARED), 'rss_fetch')
+_FUNC = os.path.join(os.path.dirname(_SHARED), 'rss_fetch', 'function.py')
 sys.path.insert(0, _SHARED)
-sys.path.insert(0, _FUNC)
 
 # --- fake boto3 ---------------------------------------------------------------
 
@@ -41,9 +42,13 @@ class _Key:
 
 
 class _ClientError(Exception):
-    def __init__(self, code='Boom'):
-        super().__init__(code)
-        self.response = {'Error': {'Code': code}}
+    '''Same constructor shape as botocore's, so the other suites that share
+    this process (they fake botocore too, in whichever order discover
+    imports them) can raise it the real way.'''
+
+    def __init__(self, error_response=None, operation_name=''):
+        super().__init__(str(error_response), operation_name)
+        self.response = error_response or {'Error': {'Code': 'Boom'}}
 
 
 class FakeTable:
@@ -81,10 +86,25 @@ class _Resource:
         return TABLES.setdefault(name, FakeTable())
 
 
+class _SSMExceptions:
+    class ParameterNotFound(Exception):
+        pass
+
+
 class _SSM:
+    '''get_parameters for the worker's cadence bounds; get_parameter and
+    `exceptions` so a helper.py imported later in the same process (by
+    another suite) still loads against this fake.'''
+    exceptions = _SSMExceptions
+
     def get_parameters(self, **_kw):
         return {'Parameters': [{'Name': '/cabal/rss/cadence_min_minutes', 'Value': '15'},
                                {'Name': '/cabal/rss/cadence_max_minutes', 'Value': '1440'}]}
+
+    def get_parameter(self, Name=None, **_kw):  # pylint: disable=invalid-name
+        if Name == '/cabal/maintenance/imap':
+            raise _SSMExceptions.ParameterNotFound()
+        return {'Parameter': {'Value': 'fake-master-password'}}
 
 
 class _S3:
@@ -98,7 +118,8 @@ class _S3:
 _s3 = _S3()
 _boto3 = types.ModuleType('boto3')
 _boto3.resource = lambda _n, **_k: _Resource()
-_boto3.client = lambda name, **_k: _SSM() if name == 'ssm' else _s3
+_boto3.client = lambda name, **_k: {'ssm': _SSM(), 's3': _s3}.get(name, types.SimpleNamespace())
+_boto3.session = types.SimpleNamespace(Config=lambda **_kw: None)
 _dyn = types.ModuleType('boto3.dynamodb')
 _conds = types.ModuleType('boto3.dynamodb.conditions')
 _conds.Key = _Key
@@ -111,7 +132,10 @@ _exc.ClientError = _ClientError
 sys.modules['botocore'] = _botocore
 sys.modules['botocore.exceptions'] = _exc
 
-import function  # noqa: E402  pylint: disable=wrong-import-position,import-error
+_SPEC = importlib.util.spec_from_file_location('rss_fetch_function', _FUNC)
+function = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(function)
+
 from rss_http import FetchError, FetchResult  # noqa: E402  pylint: disable=wrong-import-position
 from rss_parse import ParsedFeed, ParsedItem  # noqa: E402  pylint: disable=wrong-import-position
 
@@ -275,7 +299,9 @@ class Success(unittest.TestCase):
         row = items.puts[0]
         self.assertNotIn('content_html', row)
         self.assertEqual(row['content_s3_key'], f'items/{FEED_ID}/{row["item_id"]}')
-        self.assertIn(('rss-cache.test.example.com', row['content_s3_key']), _s3.objects)
+        # Bucket name follows whatever CONTROL_DOMAIN an earlier suite left in
+        # the environment; the module derived it the same way.
+        self.assertIn((function.CACHE_BUCKET, row['content_s3_key']), _s3.objects)
 
 
 class Redirects(unittest.TestCase):
