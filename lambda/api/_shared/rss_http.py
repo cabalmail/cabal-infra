@@ -18,6 +18,14 @@ redirect, is checked before a socket opens:
 
 Conditional GET is the politeness floor (D9): the caller passes the prior
 ETag / Last-Modified and a 304 comes back as a FetchResult with no body.
+Two concessions to how publishers actually behave (verified against a
+Cloudflare-fronted feed on stage, 2026-09-09): a weak validator (W/"x",
+which Cloudflare substitutes for the origin's strong "x" on compressed
+responses) is sent back in its strong form, because origins compare the
+string literally and never match the weak one; and when an ETag is known,
+If-Modified-Since is NOT sent alongside it, because some origins stamp
+Last-Modified with the request time and then fail the whole conditional
+on the stale date even though RFC 7232 says the ETag should decide.
 Cache-Control max-age and Retry-After are surfaced so the cadence logic
 can honour them as floors.
 
@@ -79,6 +87,14 @@ def is_public_address(address):
     if addr.version == 6 and addr.ipv4_mapped is not None:
         addr = addr.ipv4_mapped
     return addr.is_global and not addr.is_multicast
+
+
+def strong_etag(etag):
+    '''`etag` without a weak-validator prefix. If-None-Match already uses
+    weak comparison, so the strong form can only match where the weak one
+    should have; it is what literal-comparing origins expect.'''
+    etag = (etag or '').strip()
+    return etag[2:] if etag.startswith('W/') else etag
 
 
 def default_resolve(host, port):
@@ -193,8 +209,8 @@ def _exchange(connect, address, host, port, target, url, etag, last_modified,  #
         'Accept-Encoding': 'gzip',
     }
     if etag:
-        headers['If-None-Match'] = etag
-    if last_modified:
+        headers['If-None-Match'] = strong_etag(etag)
+    elif last_modified:
         headers['If-Modified-Since'] = last_modified
     try:
         conn = connect(address, host, port, timeout)

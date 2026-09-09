@@ -18,8 +18,8 @@ phase are updated in the same PR as the work, per the docs convention.
 
 | Phase | Work item                                         | Status      |
 | ----- | ------------------------------------------------- | ----------- |
-| 1     | DynamoDB tables + supporting infra                | On stage (2026-09-09) |
-| 2     | Scheduler + fetcher Lambdas                       | In review (2026-09-09) |
+| 1     | DynamoDB tables + supporting infra                | Shipped 1.12.2 (2026-09-09) |
+| 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
 | 3     | Subscription + reader API                         | Not started |
 | 4     | OPML import/export (API)                          | Not started |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Not started |
@@ -823,7 +823,7 @@ the constraint on this project.
 
 ### Phase 1: DynamoDB tables + supporting infra
 
-**Status:** On stage (2026-09-09, PR #1488). The per-function IAM grants
+**Status:** Shipped in 1.12.2 (2026-09-09, PR #1488). The per-function IAM grants
 and the quiesce hook moved to phase 2, where their consumers exist (see
 the notes in the work list).
 
@@ -882,7 +882,13 @@ The one-shot table-verification Lambda in the May plan is dropped:
 
 ### Phase 2: Scheduler + fetcher Lambdas
 
-**Status:** In review (2026-09-09). `rss_schedule` and `rss_fetch` under
+**Status:** On stage (2026-09-09, PR #1489), validated with three seeded
+public feeds (Atom, RSS, JSON Feed): first fetch stored 78 items, the
+forced second cycle returned 304 where the publisher honours validators.
+That soak found one publisher (Cloudflare-fronted) that never 304s when
+sent the weak ETag Cloudflare substitutes on compressed responses, or any
+stale `If-Modified-Since`; the client now sends the strong form of the
+ETag alone, and the date only when no ETag is known. `rss_schedule` and `rss_fetch` under
 `lambda/api/`, the shared `rss_url` / `rss_http` / `rss_parse` /
 `rss_cadence` modules with unit tests, `modules/app/rss_fetcher.tf`
 (roles, log groups, SSM cadence bounds, the five-minute schedule gated
