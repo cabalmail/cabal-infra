@@ -10,7 +10,6 @@ import CabalmailKit
 /// message-list filter.
 struct AddressListView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.colorScheme) private var colorScheme
     @State private var model: AddressesViewModel?
     @State private var filterQuery: String = ""
     @State private var isRefreshing = false
@@ -62,7 +61,7 @@ struct AddressListView: View {
                 }
                 if let errorMessage = model.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
                 let favorites = filteredAddresses(model.favorites)
                 let all = filteredAddresses(model.addresses)
@@ -291,7 +290,7 @@ extension AddressListView {
             // reinstate), not revoke. First button listed = full-swipe action.
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 suspendToggleButton(address, model: model)
-                    .tint(.orange)
+                    .tint(ColorTokens.warningFill)
                 Button(role: .destructive) {
                     pendingRevoke = address
                 } label: {
@@ -308,7 +307,7 @@ extension AddressListView {
                         systemImage: address.favorite ? "star.slash" : "star"
                     )
                 }
-                .tint(address.favorite ? .gray : .yellow)
+                .tint(address.favorite ? Color.gray : ColorTokens.flaggedFill)
                 .accessibilityIdentifier("address.favorite")
             }
             // `.contain` keeps the revealed swipe buttons individually
@@ -357,14 +356,14 @@ extension AddressListView {
                 // (see `iconForeground` in FolderListView+Helpers.swift):
                 // `Color.accentColor` follows the macOS system accent when
                 // that isn't "multicolor", leaving the icons off-brand.
-                .foregroundStyle(address.favorite ? Color.yellow : Color("AccentColor"))
+                .foregroundStyle(address.favorite ? ColorTokens.flaggedFg : ColorTokens.accentForestFg)
             VStack(alignment: .leading, spacing: 2) {
                 Text(address.address)
                     .foregroundStyle(address.suspended ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                 if address.suspended {
                     Text("Suspended")
                         .font(.caption2)
-                        .foregroundStyle(WarningTint.tint(for: colorScheme).color)
+                        .foregroundStyle(ColorTokens.warningFg)
                 }
                 if let comment = address.comment, !comment.isEmpty {
                     Text(comment)

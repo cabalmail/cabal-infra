@@ -120,7 +120,7 @@ private struct RuleConditionsSection: View {
                         rule.conditions.removeAll { $0.id == condition.id }
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(ColorTokens.dangerFg)
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Remove condition")
@@ -188,7 +188,7 @@ private struct RuleDestinationSection: View {
                     + "forwarding, or replying."
                 )
                 .font(.caption)
-                .foregroundStyle(.red)
+                .foregroundStyle(ColorTokens.dangerFg)
             }
         } header: {
             Text("Destination")
@@ -264,7 +264,7 @@ private struct RuleDestinationSection: View {
                 if archiveCreateFailed {
                     Text("Couldn't create the folder. Try again.")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
             }
         case .archive, .delete, .none:

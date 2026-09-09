@@ -603,18 +603,15 @@
    Rendered in all three states so the header footprint stays stable:
    per-method chips when smtp-in stamped verdicts, a muted "Not verified"
    otherwise. The whole line opens the original headers in the view-source
-   modal. The ok hue mirrors the "forest" accent tokens (light/dark). */
+   modal. A pass is the success token; a failure the warning token, since
+   it is advisory about the message rather than an app error. */
 
 .reader-auth {
   grid-area: auth;
-  --auth-ok: oklch(0.45 0.09 150);
+  --auth-ok: var(--success-fg);
   min-height: 20px;
   display: flex;
   align-items: center;
-}
-
-@media (prefers-color-scheme: dark) {
-  .reader-auth { --auth-ok: oklch(0.75 0.11 150); }
 }
 
 .reader-auth-line {
@@ -645,7 +642,7 @@
   white-space: nowrap;
 }
 .reader-auth-chip--ok { --auth-chip: var(--auth-ok); }
-.reader-auth-chip--bad { --auth-chip: var(--ink-danger); }
+.reader-auth-chip--bad { --auth-chip: var(--warning-fg); }
 
 .reader-auth-chip-label {
   font-weight: 600;

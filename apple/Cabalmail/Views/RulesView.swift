@@ -220,10 +220,10 @@ private struct RulesSaveStatusBar: View {
                     ProgressView().controlSize(.small)
                     statusText("Saving…")
                 case .saved:
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(ColorTokens.successFg)
                     statusText("Saved")
                 case .error(let message):
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(ColorTokens.dangerFg)
                     statusText(message)
                     Button("Retry") { model.retrySave() }
                         .buttonStyle(.bordered)

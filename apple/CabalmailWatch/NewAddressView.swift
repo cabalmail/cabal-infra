@@ -90,7 +90,7 @@ struct NewAddressView: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.caption2)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
 
                 Button {
@@ -121,7 +121,7 @@ struct NewAddressView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Created", systemImage: "checkmark.circle.fill")
                     .font(.caption2)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(ColorTokens.successFg)
                 // Same treatment as the tap-a-row detail view: this screen
                 // is shown across the same counters.
                 LargeTypeAddress(address: address)

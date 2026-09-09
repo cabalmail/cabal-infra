@@ -3,9 +3,10 @@
 Two things are pinned here. First, the instrument: the checker must reproduce
 the ratios the tester measured off real screenshots in #1453 and #1456, so a
 change to the maths that drifts from the screen is caught. Second, the
-handoff: the token file under docs/1.x/design_handoff_color_tokens/ must have
-no failing pairs, so a palette edit that breaks a floor fails the PR rather
-than the next tester sweep.
+source of truth: design/color-tokens.json must have no failing pairs, and
+the files scripts/generate-color-tokens.py derives from it must be current,
+so a palette edit that breaks a floor or forgets to regenerate fails the PR
+rather than the next tester sweep.
 
 Run from the repository root:
 
@@ -14,11 +15,14 @@ Run from the repository root:
 import importlib.util
 import json
 import pathlib
+import subprocess
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "check-color-tokens.py"
-HANDOFF = ROOT / "docs" / "1.x" / "design_handoff_color_tokens" / "color-tokens.json"
+HANDOFF = ROOT / "design" / "color-tokens.json"
+GENERATOR = ROOT / "scripts" / "generate-color-tokens.py"
 
 
 def load_checker():
@@ -86,6 +90,15 @@ class HandoffTests(unittest.TestCase):
                    for row in self.c.check(self.doc, scheme) if row[-1] != "pass"]
         self.assertEqual(failing, [], "\n".join(str(r) for r in failing))
 
+    def test_high_contrast_variants_clear_the_floors_too(self):
+        self.c.HIGH_CONTRAST = True
+        try:
+            failing = [row for scheme in ("light", "dark")
+                       for row in self.c.check(self.doc, scheme) if row[-1] != "pass"]
+        finally:
+            self.c.HIGH_CONTRAST = False
+        self.assertEqual(failing, [], "\n".join(str(r) for r in failing))
+
     def test_forest_is_the_logo_green(self):
         tokens = self.doc["tokens"]
         for name in ("brand.forest", "accent.forest.fg", "accent.forest.fill"):
@@ -101,6 +114,15 @@ class HandoffTests(unittest.TestCase):
         for name in ("ink", "oxblood", "forest", "azure", "amber", "plum"):
             for role in ("fg", "fill", "on-fill", "wash"):
                 self.assertIn(f"accent.{name}.{role}", tokens)
+
+
+class GeneratorTests(unittest.TestCase):
+    """The generated client files match the token file."""
+
+    def test_generated_outputs_are_current(self):
+        run = subprocess.run([sys.executable, str(GENERATOR), "--check"],
+                             capture_output=True, text=True, cwd=ROOT, check=False)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
 
 if __name__ == "__main__":

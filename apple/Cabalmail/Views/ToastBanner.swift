@@ -1,4 +1,5 @@
 import SwiftUI
+import CabalmailKit
 
 /// The capsule banner primitive shared by the root status overlay
 /// (`SignedInRootView`) and the local `toastOverlay` hosts. Dumb on purpose:
@@ -135,10 +136,10 @@ struct ToastBanner: View {
 
     private var tint: Color {
         switch toast.kind {
-        case .success: return .green
-        case .info:    return .blue
-        case .warning: return .orange
-        case .error:   return .red
+        case .success: return ColorTokens.successFg
+        case .info:    return ColorTokens.infoFg
+        case .warning: return ColorTokens.warningFg
+        case .error:   return ColorTokens.dangerFg
         }
     }
 }

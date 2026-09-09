@@ -82,7 +82,7 @@ extension MessageDetailView {
         #if os(macOS)
         return nil
         #else
-        return intent.isDestructive ? .red : nil
+        return intent.isDestructive ? ColorTokens.dangerFill : nil
         #endif
     }
 

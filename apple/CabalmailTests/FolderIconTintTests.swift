@@ -84,8 +84,10 @@ final class FolderIconTintTests: XCTestCase {
     /// emphasized case is the one worth writing down.
     func testPinningTheAccentOnlyLosesOnTheEmphasizedFill() {
         let accent = Self.brandAccentLight
-        XCTAssertEqual(RGB(209, 209, 214).contrast(with: accent), 4.68, accuracy: 0.01)
-        XCTAssertEqual(RGB.white.contrast(with: accent), 7.12, accuracy: 0.01)
+        // #1318 measured the previous accent at 4.68 and 7.12 here; the logo
+        // Forest the colour audit adopted is darker and measures higher.
+        XCTAssertEqual(RGB(209, 209, 214).contrast(with: accent), 5.81, accuracy: 0.01)
+        XCTAssertEqual(RGB.white.contrast(with: accent), 8.84, accuracy: 0.01)
         XCTAssertLessThan(RGB(0, 122, 255).contrast(with: accent), Self.nonTextFloor)
     }
 
@@ -126,8 +128,10 @@ final class FolderIconTintTests: XCTestCase {
         }
     }
 
-    /// The forest green the folder icons are tinted with, light appearance.
-    private static let brandAccentLight = RGB(43, 99, 58)
+    /// The forest green the folder icons are tinted with, light appearance:
+    /// `accent.forest.fg`, which the colour audit made the logo's own Forest
+    /// (`#2E5235`), generated into the catalog from `design/color-tokens.json`.
+    private static let brandAccentLight = RGB(46, 82, 53)
 
     /// `apple/`, two levels up from this file — the same trick the app's
     /// source-scanning invariants use, since a unit test bundle has no

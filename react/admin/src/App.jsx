@@ -55,6 +55,7 @@ import useResendThrottle from './hooks/useResendThrottle';
 // media-gated dark rules win by source order at equal specificity.
 import './AppLight.css';
 import './AppDark.css';
+import './tokens.css';
 import { DATE, DESC } from './constants';
 import { clearListCaches } from './utils/listCache';
 import { viewWhenLoggedOut } from './authViews';

@@ -62,7 +62,7 @@ struct CalendarEventSheet: View {
                 if isCancelled(indexed.event) {
                     Label("This event was cancelled", systemImage: "xmark.circle")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.dangerFg)
                 }
                 detailRows(indexed.event)
             }

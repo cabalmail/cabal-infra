@@ -72,8 +72,9 @@ class SignInViewModel(
                 mutableState.update { it.copy(phase = AuthPhase.SignedOut) }
             }
         }
-        // A refreshed token the API still rejects means the session is
-        // over: drop to the sign-in screen with a reason (plan §7.5).
+        // An API call that dies of an expired session — the server refusing
+        // a refreshed token, or Cognito refusing the refresh — means the
+        // session is over: drop to the sign-in screen with a reason (§7.5).
         viewModelScope.launch {
             container.authExpired.collect {
                 runCatching { container.requireAuth().signOut() }

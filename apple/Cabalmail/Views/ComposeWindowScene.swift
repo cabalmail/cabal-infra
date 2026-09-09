@@ -54,6 +54,13 @@ struct ComposeWindowScene: Scene {
             ComposeWindowContent(slot: slot ?? ComposeSlot(index: 0))
                 .environment(appState)
                 .environment(preferences)
+                // A scene is its own appearance root — the main window's
+                // `preferredColorScheme` does not reach across to this one,
+                // so a compose window drew in whatever appearance the OS was
+                // in while the rest of the app followed the Theme preference
+                // (#1460). Every scene pins it for itself; see
+                // AppearancePolicy.
+                .themedAppearance(preferences.theme)
                 .onOpenURL { url in
                     // On macOS the main window group declines external
                     // events (`handlesExternalEvents(matching: [])`, see

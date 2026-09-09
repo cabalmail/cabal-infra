@@ -46,6 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.compose.NewAddressSheet
+import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.kit.models.Address
 
 /**
@@ -234,7 +235,7 @@ private fun AddressRow(
                             contentDescription = stringResource(favoriteLabel(address.favorite)),
                             tint =
                                 if (address.favorite) {
-                                    MaterialTheme.colorScheme.tertiary
+                                    ColorTokens.flaggedFg()
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },

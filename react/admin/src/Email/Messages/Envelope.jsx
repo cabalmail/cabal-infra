@@ -10,6 +10,7 @@ import Icon from './icons';
 import BimiAvatar from './BimiAvatar';
 import { authState, AUTH_WARNING, AUTH_WARNING_COPY } from '../../utils/authResults';
 import formatDate, { extractName } from '../../utils/formatDate';
+import leadingTitle from '../../utils/leadingTitle';
 
 function Envelope({
   handleClick: handleClickProp,
@@ -117,7 +118,7 @@ function Envelope({
         <span
           className={`envelope-leading ${bulkMode ? 'as-checkbox' : ''}`}
           onClick={handleLeadingClick}
-          title={bulkMode ? 'Select message' : unread ? 'Unread' : 'Read'}
+          title={leadingTitle(bulkMode, unread)}
         >
           <span className="envelope-dot" aria-hidden="true" />
           <span

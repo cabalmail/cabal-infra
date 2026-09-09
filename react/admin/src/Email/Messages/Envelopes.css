@@ -1,7 +1,8 @@
 /* =========================================================================
-   Envelope row — §4c. 56px tall at compact density. 8px leading rail with
-   a 6px unread dot that swaps to a checkbox in bulk mode. Two lines of
-   content (from/date, then subject) with trailing meta icons.
+   Envelope row — §4c. 56px tall at compact density. Leading rail with a
+   6px unread dot; bulk mode widens the rail and adds a checkbox beside
+   the dot rather than in place of it. Two lines of content (from/date,
+   then subject) with trailing meta icons.
    ========================================================================= */
 
 .envelope-list {
@@ -105,8 +106,21 @@
 }
 .envelope-checkbox.checked svg { stroke-width: 3; }
 
-.envelope-list.bulk-mode .envelope-dot { opacity: 0; }
-.envelope-list.bulk-mode .envelope-checkbox { opacity: 1; transform: scale(1); }
+/* Bulk mode widens the leading cell rather than swapping one control for
+   the other: the checkbox takes its own column and the unread dot keeps
+   its own, so read state stays visible while selecting (#1427). */
+.envelope-list.bulk-mode .envelope-content { grid-template-columns: 30px 24px 1fr auto; }
+.envelope-list.bulk-mode .envelope-leading {
+  width: 30px;
+  grid-template-columns: 6px 15px;
+  gap: 6px;
+}
+.envelope-list.bulk-mode .envelope-dot { grid-area: 1 / 1; }
+.envelope-list.bulk-mode .envelope-checkbox {
+  grid-area: 1 / 2;
+  opacity: 1;
+  transform: scale(1);
+}
 .envelope-leading:hover .envelope-checkbox { border-color: var(--ink-soft); }
 
 /* ---- Sender avatar: BIMI logo, else an initials plate ---- */
@@ -213,11 +227,11 @@
   flex: 0 0 auto;
 }
 .envelope-indicators .icon { opacity: 0.75; }
-.envelope-row.flagged .indicator-flagged { color: var(--accent); opacity: 1; }
+.envelope-row.flagged .indicator-flagged { color: var(--flagged-fg); opacity: 1; }
 .envelope-row.important .indicator-important { color: var(--ink-danger); opacity: 1; }
 /* Authentication warning (DMARC failure): the message could not be
    authenticated as coming from its claimed sender. */
-.envelope-indicators .indicator-auth { color: var(--ink-danger); opacity: 1; }
+.envelope-indicators .indicator-auth { color: var(--warning-fg); opacity: 1; }
 
 /* ---- Important rail (priority) ---- */
 .envelope-row.important .envelope-content::after {

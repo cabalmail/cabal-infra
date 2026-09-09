@@ -34,7 +34,7 @@
 }
 
 .security__btn--danger {
-  color: var(--danger, #b00020);
+  color: var(--danger-fg);
 }
 
 .security__btn--quiet {

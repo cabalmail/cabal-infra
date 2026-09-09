@@ -66,6 +66,7 @@ import androidx.core.content.FileProvider
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
 import com.cabalmail.android.ui.settings.flagColor
+import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.AuthResults
@@ -226,7 +227,7 @@ fun MessageDetailScreen(
                             contentDescription = stringResource(R.string.flagged),
                             tint =
                                 if (state.envelope?.isFlagged == true) {
-                                    MaterialTheme.colorScheme.tertiary
+                                    ColorTokens.flaggedFg()
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },
@@ -602,14 +603,12 @@ private fun HeaderChips(envelope: Envelope) {
         modifier = Modifier.padding(top = 6.dp),
     ) {
         chips.forEach { (label, ok) ->
+            // A pass is the success wash; a failure the warning wash, since
+            // it is advisory about the message rather than an app error.
             Surface(
                 shape = MaterialTheme.shapes.small,
-                color =
-                    if (ok) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.errorContainer
-                    },
+                color = if (ok) ColorTokens.successWash() else ColorTokens.warningWash(),
+                contentColor = if (ok) ColorTokens.successFg() else ColorTokens.warningFg(),
             ) {
                 Text(
                     text = label,
