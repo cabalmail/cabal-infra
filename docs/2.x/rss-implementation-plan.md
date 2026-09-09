@@ -2,49 +2,133 @@
 
 ## Context
 
-This plan implements the RSS reader for Cabalmail 2.0 based on the
+This plan implements the RSS reader for Cabalmail 2.x based on the
 decisions recorded in [`rss-requirements.md`](./rss-requirements.md).
 It is the companion build plan to that requirements pass; whenever this
 document says "per Dx," it refers to a decision in that file. The
 reader is the only substantive feature in 2.0; the version cut is
-`2.0.x` with each phase below shipping under a separate patch tag.
+`2.x` (this directory) with each phase below shipping under its own
+release.
+
+## Progress
+
+The plan is still at the **Planning** stage on the roadmap wiki. No
+phase has started. This table and the `**Status:**` line under each
+phase are updated in the same PR as the work, per the docs convention.
+
+| Phase | Work item                                         | Status      |
+| ----- | ------------------------------------------------- | ----------- |
+| 1     | DynamoDB tables + supporting infra                | Not started |
+| 2     | Scheduler + fetcher Lambdas                       | Not started |
+| 3     | Subscription + reader API                         | Not started |
+| 4     | OPML import/export (API)                          | Not started |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | Not started |
+| 6     | Android client (offline + FTS + profile scoping)  | Not started |
+| 7     | Image proxy + cache                               | Not started |
+| 8     | Push notification integration                     | Not started |
+| 9     | Credentialed feeds                                | Not started |
+| 10    | Adaptive cadence + health surface polish          | Not started |
+
+## Revisions (2026-09-09)
+
+The plan was first written in May 2026 and revised in place on
+2026-09-09 to reflect what shipped in the 0.11.x and 1.x releases and
+to fix design defects found on re-read. This is an in-flight plan, so
+the corrections are folded into the text rather than recorded as
+errata; this section is the summary of what moved and why.
+
+- **Public IMAP is closed and the API Lambdas are inside the VPC.**
+  The prerequisite the original "Lambda networking policy" section
+  waited on shipped in 0.11.x ([`private-imap-smtp-plan.md`](../1.x/private-imap-smtp-plan.md)).
+  Every API Lambda is VPC-attached through
+  `terraform/infra/modules/app/modules/call`, and the VPC has free
+  gateway endpoints for S3 and DynamoDB. The plan's argument for
+  running RSS Lambdas *outside* the VPC is withdrawn: it conflicted
+  with D9's egress-IP-stability requirement (a non-VPC Lambda egresses
+  from a shared, rotating AWS pool; the NAT Elastic IPs are the stack's
+  only stable outbound identity) and it would have made RSS the one
+  Lambda family with a different network posture. RSS Lambdas follow
+  the existing pattern. See "Networking".
+- **The React admin app receives no new features.** Every 1.x plan
+  since mail rules records the React app as second-class; RSS has no
+  React UI at all. The "React client v1" phase, the React
+  known-limitations banner, and the React half of the per-feed
+  cookie-scoping analysis are gone. The first reader UI is Apple, the
+  second is Android.
+- **Android is a first-class native client.** The May plan treated
+  Android as "later" on the 1.1.x roadmap. It shipped: a UI-free `kit`
+  module mirroring `CabalmailKit`, a Room-backed cache, FCM push with
+  `/push_envelope` enrichment, and full coverage by the tester/fixer
+  lifecycle. Android gets its own phase with offline reading, per-feed
+  FTS, and per-feed web-view profile scoping, at parity with Apple.
+- **The push pipeline's real shape is now known.** `push_dispatch`
+  consumes content-free wake signals from `cabal-push-queue`
+  (`batch_size = 1`), filters tokens by per-folder opt-in, sends silent
+  background pushes to the macOS bundle ids, and the Apple Notification
+  Service Extension deliberately does **not** link `CabalmailKit`. Each
+  of those changes something in the notification and Apple-sync design;
+  see "Notification path" and "Apple-side item cache".
+- **Preferences sync exists.** `cabal-user-preferences` carries an
+  `app` map validated against `APP_ALLOWED` in `set_preferences`, and
+  the native clients already sync it. The separate
+  `cabal-rss-user-settings` table is dropped in favour of `rss_*` keys
+  in that map.
+- **Conventions the plan had wrong.** Tables use AWS-owned encryption
+  keys (with the standing `tfsec` ignore), not a customer KMS key;
+  Cognito **username**, not `sub`, keys every per-user row; scheduled
+  Lambdas use EventBridge Scheduler and live under `lambda/api/`; the
+  API Gateway is flat (one Lambda per `path_part`, no path parameters);
+  Lambda dependencies are hash-pinned; the runtime is Python 3.13. The
+  plan now follows all of these.
+- **Design defects fixed.** The sparse `unread_by_feed` index could
+  never have worked with lazily-created state rows (a never-touched
+  item has no row and so is absent from the index). The since-cursor
+  keyed on `published_at` would miss backdated items. The
+  `pending_notification` table plus a 60-second cron is replaced by a
+  DynamoDB Stream on the item table. The single fetcher loop is split
+  into a scheduler and a queue-fed per-feed worker so the 15-minute
+  Lambda ceiling and per-feed retries stop being a concern. DynamoDB's
+  400 KB item limit needs an S3 spill for oversized bodies. Details
+  under "Data model" and "Data flow".
+- **Requirements worth revisiting** are collected in "Requirements
+  challenges (for discussion)" near the end. The requirements doc
+  itself is unchanged pending that discussion.
 
 Three decisions shape the architecture more than the rest:
 
 - **D6 = C: no server-side article extraction.** The server fetches
   feed XML/JSON, parses it, stores items as the feed delivered them,
   and serves them. When the user opens "the article," the client loads
-  the publisher's page in an embedded `WKWebView` (Apple) or sandboxed
-  iframe (React) and relies on the embedded engine's reader mode for
-  styling. The server is never in the article-rendering business. This
-  removes a whole subsystem and a whole class of operational risk
-  (publisher anti-bot defenses, MIME oddities), at the cost of pushing
-  some complexity into the Apple clients (cookie scoping for paywalled
-  content; see below).
+  the publisher's page in an embedded web view (`WKWebView` on Apple,
+  `WebView` on Android) and provides reader-mode styling on top. The
+  server is never in the article-rendering business. This removes a
+  whole subsystem and a whole class of operational risk (publisher
+  anti-bot defenses, MIME oddities), at the cost of pushing some
+  complexity into the clients (cookie scoping for paywalled content;
+  see below).
 - **D11: per-feed scoping of cookies and web-view local storage.**
   Each subscription gets its own credential and storage partition; a
   user with three Substack feeds authenticates each separately and
   keeps three Substack sessions side by side. On Apple this lands on
-  `WKWebsiteDataStore(forIdentifier:)` (iOS 17+/macOS 14+; we target
-  iOS 18/macOS 15, so it's available unconditionally). In a browser
-  the equivalent doesn't exist cleanly and the React client gets a
-  documented limitation.
+  `WKWebsiteDataStore(forIdentifier:)` (iOS 17+/macOS 14+; the Kit
+  floor is iOS 18/macOS 15, so it is available unconditionally). On
+  Android it lands on the `androidx.webkit` multi-profile API
+  (`ProfileStore`), which is feature-gated at runtime on the installed
+  WebView; see "Per-feed cookie scoping".
 - **Revised D14 / Q2: DynamoDB primary store; per-feed FTS and offline
-  reading on Apple clients via SQLite/FTS5.** The data layer is
-  DynamoDB end-to-end — no relational store, no joins, no `tsvector`.
-  The per-feed view that JOINs would have produced is materialized at
-  write time in the `user-item-state` table with sparse GSIs (the
-  "personal inbox" pattern). Full-text search is per-feed only, lives
-  client-side on Apple via a local item cache backed by SQLite FTS5,
-  and is absent from the React client. The same local cache supports
-  offline reading on Apple (**Decision 18**), which is a first-class
-  requirement.
+  reading on the native clients via a local SQLite cache.** The data
+  layer is DynamoDB end-to-end — no relational store, no joins, no
+  `tsvector`. Full-text search is per-feed only and lives client-side:
+  SQLite FTS5 on Apple, Room FTS on Android. The same local cache
+  supports offline reading (**Decision 18**), which is a first-class
+  requirement on both native platforms.
 
-Per open Q3 the **fetcher is a scheduled Lambda**, not an ECS service.
-Per open Q5, user-level customization (display preferences, ordering)
-is **stored** server-side and **applied** client-side, so the shared
-canonical-feed records hold no per-user data and the multi-tenancy
-boundary is enforced by storage layout, not by access logic.
+Per open Q3 the **fetcher is Lambda-based**, not an ECS service (as a
+scheduler plus a queue-fed worker; see "Data flow"). Per open Q5,
+user-level customization (display preferences, ordering) is **stored**
+server-side and **applied** client-side, so the shared canonical-feed
+records hold no per-user data and the multi-tenancy boundary is
+enforced by storage layout, not by access logic.
 
 The plan is structured as ten independently-shippable phases. Each
 phase ends in a state that can be deployed to prod without the next
@@ -52,9 +136,9 @@ phase being present.
 
 ## Goals
 
-- A Cabalmail user can subscribe to RSS, Atom, and JSON feeds from any
-  Cabalmail client; read state and per-feed display preferences sync
-  across devices.
+- A Cabalmail user can subscribe to RSS, Atom, and JSON feeds from the
+  Apple and Android clients; read state and per-feed display
+  preferences sync across devices.
 - Public feeds are fetched once per cadence regardless of how many
   users subscribe; credentialed feeds are fetched per-user.
 - The fetcher adapts its cadence per feed within operator-set bounds,
@@ -64,47 +148,54 @@ phase being present.
   7 days, per D13).
 - New items in subscribed feeds with notifications enabled produce
   APNs and FCM push within ~6 minutes of publication, reusing the
-  0.11.0 push path.
-- A user can import an OPML file at signup and export one at any time.
-- Paywalled feeds with per-feed cookie scoping work on Apple clients;
-  the React client renders public feeds and reports the limitation for
-  credentialed ones.
-- **Apple clients support offline reading** of cached items (D18) —
-  in-feed content (summary + any `content_html`) is fully available
-  without network. Mark-read and favorite mutations performed offline
-  queue locally and dispatch on reconnect.
-- **Apple clients support per-feed full-text search** over the local
-  cache using SQLite FTS5.
+  0.11.x push path.
+- A user can import an OPML file and export one at any time.
+- Paywalled feeds with per-feed cookie scoping work on both native
+  clients.
+- **Both native clients support offline reading** of cached items
+  (D18) — in-feed content (summary + any `content_html`) is fully
+  available without network. Mark-read and favorite mutations
+  performed offline queue locally and dispatch on reconnect.
+- **Both native clients support per-feed full-text search** over the
+  local cache.
 
 ## Non-goals (v1, all per the requirements doc)
 
 - Server-side full-text article extraction (D6).
 - **Server-side full-text search of any kind** (revised D14). No
   Postgres `tsvector`, no OpenSearch, no Lambda-scanning of items.
-- **Cross-feed search**, on Apple or anywhere (revised D14; operator
+- **Cross-feed search**, on any client (revised D14; operator
   confirmed no real-world use case).
-- **FTS, offline reading, or per-feed cookie/storage partitioning in
-  the React client.** React renders the current network state with
-  the browser's default cookie behavior; full-feature offline,
-  search, and per-feed credential scoping live on Apple. Mitigations
-  for the cookie-partitioning gap were considered and deferred past
-  v1; see "Per-feed cookie scoping > Mitigations considered".
+- **Any RSS surface in the React admin app.** The React app is
+  second-class and receives no new features; the RSS API is
+  client-neutral and nothing prevents a later React port, but none is
+  planned.
+- **RSS in the Linux client or the browser extension.** The Linux
+  client is mid-build on its own plan and the extension is an
+  address-management tool. A "subscribe to this page's feed"
+  affordance in the extension (it already scans pages for
+  `<link rel="alternate">`-style hooks) is a natural 2.x follow-on,
+  not v1.
 - Third-party API compatibility — no Fever, no Google Reader (D3).
 - Email-to-feed (D7, deferred).
 - Feed-to-email digests (D8, declined).
 - Tagging, save-for-later, snooze, keep-unread pin, auto-mark-read on
   scroll, cross-feed dedup (D14, D15 — declined or deferred).
 - OAuth-flow credentialed feeds (D11, deferred).
-- Reader UI in the Android client (Android is on the 1.1.x roadmap;
-  the RSS API will be Android-ready but no Android UI ships in 2.0).
 - Proactive notification of feed-health problems (D10 — visibility
   only in v1).
 - A user-exposed fetch-cadence control (D17).
 - Per-feed keyword muting (D14, declined).
-- Aggressive pre-caching of image bytes onto Apple devices for
-  offline image rendering. The embedded `URLCache` captures what it
-  captures from prior online viewing; explicit image pre-fetch is a
-  v1.x candidate.
+- WebSub (PubSubHubbub) subscriptions. Feeds that advertise a hub
+  could push to us instead of being polled; that needs a public,
+  unauthenticated callback endpoint and its own verification story.
+  Polling is fine at hobby scale; revisit if a high-velocity feed
+  ever makes the min cadence feel slow.
+- Aggressive pre-caching of image bytes onto devices for offline image
+  rendering. The embedded web view's cache captures what it captures
+  from prior online viewing; explicit image pre-fetch is a v1.x
+  candidate.
+- RSS on Apple Watch. The watch app is address-management only.
 
 ## Architecture overview
 
@@ -114,133 +205,136 @@ phase being present.
                           +----------------------------+
                           |  DynamoDB tables           |
                           |    cabal-rss-feed          |
-                          |    cabal-rss-item          |
-                          |    cabal-rss-subscription  |
-                          |    cabal-rss-folder        |
-                          |    cabal-rss-user-item-    |
-                          |      state                 |
-                          |    cabal-rss-credentials   |
-                          |    cabal-rss-user-settings |
-                          |    cabal-rss-pending-      |
-                          |      notification          |
-                          +-------------+--------------+
-                                        ^
-                                        |
-   +-----------+    EventBridge    +----+-----+    HTTPS+CGET     +--------+
-   |   cron    |  every 5 minutes  | fetcher  | ----------------> | feeds  |
-   +-----------+ ----------------> | Lambda   | <---------------- |  (any) |
-                                   +----+-----+                   +--------+
-                                        |
-                                        | (writes pending_notification
-                                        |  rows in TransactWriteItems
-                                        |  alongside item upsert)
-                                        v
-                                   +----+-----+  cabal-push-    +-----------+
-                                   |  rss-    |     queue       |  push_    |
-                                   |  notify  | --------------> |  dispatch |
-                                   |  Lambda  |      (SQS)      |  Lambda   |
-                                   +----------+                 | (0.11.0)  |
-                                                                +-----+-----+
+                          |    cabal-rss-item  --------+--- stream (INSERT) --+
+                          |    cabal-rss-subscription  |                      |
+                          |    cabal-rss-folder        |                      |
+                          |    cabal-rss-user-item-    |                      |
+                          |      state                 |                      |
+                          +-------------+--------------+                      |
+                                        ^                                     v
+   +-----------+   Scheduler   +--------+-------+   SQS    +----------+  +----+-----+
+   | EventBridge| every 5 min  | rss_schedule   | -------> | rss_fetch|  | rss_     |
+   | Scheduler  | -----------> | (claims due    | feed ids | (one feed|  | notify   |
+   +-----------+               |  feeds)        |          |  per msg)|  | (fan-out |
+                               +----------------+          +----+-----+  |  to      |
+                                                                |        |  users)  |
+                                                 HTTPS + CGET   |        +----+-----+
+                                                 via NAT EIPs   v             |
+                                                           +---------+        | cabal-push-
+                                                           |  feeds  |        | queue (SQS)
+                                                           |  (any)  |        v
+                                                           +---------+  +-----------+
+                                                                        |  push_    |
+                                                                        |  dispatch |
+                                                                        | (0.11.x)  |
+                                                                        +-----+-----+
+                                                                              |
+                                                                          APNs / FCM
+                                                                              v
+                    +-----------------+                  +-----------------+
+                    |  iOS / macOS    |                  |  Android        |
+                    |  (CabalmailKit) |                  |  (kit)          |
+                    |  reader UI      |                  |  reader UI      |
+                    |  WKWebView per  |                  |  WebView profile|
+                    |  feed (WKWDS    |                  |  per feed       |
+                    |  per identifier)|                  |                 |
+                    |  +-----------+  |                  |  +-----------+  |
+                    |  | ItemCache |  |                  |  | Room +    |  |
+                    |  | SQLite    |  |                  |  | FTS       |  |
+                    |  | + FTS5    |  |                  |  | offline + |  |
+                    |  | offline + |  |                  |  | per-feed  |  |
+                    |  | per-feed  |  |                  |  | search    |  |
+                    |  | search    |  |                  |  +-----------+  |
+                    |  +-----------+  |                  +--------+--------+
+                    +--------+--------+                           |
+                             +--------------+---------------------+
+                                            |
+                                            v
+                              +-------------+---------+     +-------------------+
+                              |  API Gateway          | --> |  rss_* Lambdas    |
+                              |  (Cognito auth, flat  |     |  (lambda/api/,    |
+                              |   path_part per fn)   |     |   VPC-attached)   |
+                              +-----------------------+     +---------+---------+
                                                                       |
-                                                                  APNs / FCM
                                                                       v
-   +----------------+         +-----------------+         +-----------+
-   |  React client  |         |  iOS / macOS    |         |  Android  |
-   |                |         |  (CabalmailKit) |         |  (later)  |
-   |  reader UI     |         |  reader UI      |         |           |
-   |  iframe for    |         |  WKWebView per  |         |           |
-   |  articles      |         |  feed (WKWDS    |         |           |
-   |                |         |  per identifier)|         |           |
-   |  online-only   |         |                 |         |           |
-   |  no search     |         |  +-----------+  |         |           |
-   |                |         |  | ItemCache |  |         |           |
-   |                |         |  | + FTS5    |  |         |           |
-   |                |         |  | (SQLite,  |  |         |           |
-   |                |         |  |  GRDB)    |  |         |           |
-   |                |         |  | offline + |  |         |           |
-   |                |         |  | per-feed  |  |         |           |
-   |                |         |  | search    |  |         |           |
-   |                |         |  +-----------+  |         |           |
-   +--------+-------+         +--------+--------+         +-----+-----+
-            |                          |                        |
-            +--------+-----------------+------------------------+
-                     |
-                     v
-            +--------+--------+        +-----------------+
-            |  API Gateway    | -----> |  rss-api        |
-            |  (Cognito auth) |        |  Lambdas        |
-            +-----------------+        | (read/write,    |
-                                       |  since-cursor   |
-                                       |  sync endpoint) |
-                                       +--------+--------+
-                                                |
-                                                v
-                                       +--------+--------+
-                                       |  image-proxy    |
-                                       |  Lambda + S3    |
-                                       |  cache (7d TTL) |
-                                       +-----------------+
+                                                            +---------+---------+
+                                                            |  rss_image Lambda |
+                                                            |  + S3 cache (7d)  |
+                                                            |  -> presigned URL |
+                                                            +-------------------+
 ```
 
 ### Data flow
 
-**Fetch path.** EventBridge fires the fetcher every 5 minutes. The
-fetcher queries `cabal-rss-feed`'s `by_due` GSI (`PK = "active"`,
-`SK <= now`) for due feeds, processes each (with a conditional update
-to claim it for this run), issues a conditional GET against the
-publisher with the prior `ETag`/`Last-Modified`, parses the response,
-upserts items via `cabal-rss-item` `by_guid` GSI lookup + `PutItem`,
-updates the feed's health fields and `observed_items_per_day`, and
-sets a new `next_fetch_at` from the adaptive-cadence formula. New
-items (i.e. items whose GUID wasn't previously seen in that feed) are
-written together with a `pending_notification` row in a single
-`TransactWriteItems` call so notification work is not lost if the
-Lambda dies mid-feed.
+**Fetch path.** EventBridge Scheduler fires `rss_schedule` every 5
+minutes. It queries `cabal-rss-feed`'s `by_due` GSI (`PK = "active"`,
+`SK <= now`), claims each due feed with a conditional update that
+advances `next_fetch_at` (so a slow or duplicated tick cannot fetch the
+same feed twice), and enqueues one message per feed id on a new
+`cabal-rss-fetch-queue` SQS queue (with a dead-letter queue, like
+`cabal-push-queue`). `rss_fetch` consumes that queue one feed per
+invocation with a small reserved concurrency (start at 5) so outbound
+traffic stays polite and bounded. For each feed it issues a
+conditional GET against the publisher with the prior
+`ETag`/`Last-Modified`, parses the response, upserts items via the
+`by_guid` GSI lookup + `PutItem`, updates the feed's health fields and
+`observed_items_per_day`, and sets a new `next_fetch_at` from the
+adaptive-cadence formula. A worker failure lands the message back on
+the queue (visibility timeout) and eventually in the DLQ, which is the
+operator's signal that a feed is misbehaving in a way the health
+fields did not capture.
 
-Credentialed feeds run on the same Lambda but in a per-user track:
-the `cabal-rss-feed` row has `is_shared = false` and `owner_user`
-set to the subscriber. The fetcher pulls credentials from SSM via
-the `credentials` table reference.
+The split replaces the single "loop over every due feed" Lambda of the
+original plan. It removes the 15-minute Lambda ceiling as a failure
+mode, gives per-feed retries for free, mirrors the `push_dispatch`
+queue-consumer pattern the project already runs, and costs nothing
+extra at hobby scale.
 
-**Read path.** Clients call API Gateway endpoints (`/rss/folders`,
-`/rss/subscriptions`, `/rss/items`, `/rss/item/{id}`, `/rss/feed/{id}/
-health`). Lambdas execute DynamoDB Query/BatchGet calls directly
-(no Data API, no RDS, no VPC attachment — RSS Lambdas run outside
-the VPC per the Lambda networking policy below; this differs from
-the `lambda/api/` functions, which by the time RSS implementation
-starts are VPC-attached for internal Dovecot access). The endpoint
-that returns an item body rewrites `<img src="...">` to the image-
-proxy URL with a Cognito-derived signed token.
+Credentialed feeds run on the same worker in a per-user track: the
+`cabal-rss-feed` row has `is_shared = false` and `owner_user` set to
+the subscriber. The worker pulls credentials from SSM at
+`/cabal/rss/credentials/<user>/<feed_id>`.
+
+**Notification path.** `cabal-rss-item` has a DynamoDB Stream
+(`NEW_IMAGE`); `rss_notify` is its Lambda trigger, filtered to
+`INSERT` events so item updates (re-publishes) never notify. For each
+new item it queries the sparse GSI `subscription.by_feed_notify` for
+subscribers with notifications on and enqueues one wake signal per
+(user, item) onto the existing `cabal-push-queue` with `kind = "rss"`.
+This replaces the original `pending_notification` table, the
+`TransactWriteItems` coupling in the fetcher, the 60-second cron, and
+its TTL sweep: the stream *is* the durable pending queue, Lambda
+stream triggers have no read charge, and retries come from the stream
+retry policy. `push_dispatch` gains a `kind = "rss"` branch (the
+existing mail signal is `{user, folder, uid, msg_id}` with no `kind`;
+absence of the field means mail). See "Push notification integration"
+for what changes inside `push_dispatch` and the clients.
+
+**Read path.** Clients call API Gateway endpoints. Following the
+existing gateway shape — one Lambda per flat `path_part`, JSON bodies,
+no path parameters — the endpoints are `rss_*` functions under
+`lambda/api/` (e.g. `/rss_subscribe`, `/rss_list_items`,
+`/rss_set_item_state`), not a REST-style `/rss/items/{id}` tree. This
+keeps them on the existing build (`build-api-one.sh`), lint, CI filter
+(`lambda/api/**`), and Terraform (`modules/app/modules/call`) paths
+with no new plumbing. Lambdas execute DynamoDB Query/BatchGet calls
+directly. The endpoint that returns an item body rewrites
+`<img src="...">` to image-proxy URLs (phase 7).
 
 For folder-spanning item lists, the API runs N parallel Queries
-against `user-item-state`'s sparse GSIs (one per feed in the folder),
-merge-sorts the streams by `published_at` in the Lambda, and
-`BatchGet`s the actual item bodies for the page. See "Data model"
-below for the sparse-GSI design that makes filtered queries cheap.
+against the item table (one per feed in the folder), merge-sorts the
+streams by `published_at` in the Lambda, and overlays per-user state
+from `user-item-state`. See "Data model" for how unread and favorite
+filtering work.
 
-**Notification path.** A scheduled Lambda (`rss-notify`) fires every
-60 seconds, scans `pending_notification` (small table, drains quickly),
-queries the sparse GSI `subscription.by_feed_notify` for each
-pending item to find subscribers with notifications-on, and enqueues
-one message per (user, item) onto the existing `cabal-push-queue` SQS
-queue with a `type=rss` marker in the body. The shipped push path
-(0.11.0) is SQS-only — procmail-spooled mail wake signals land on that
-same queue and are consumed by `push_dispatch` — so there is no SNS
-topic or message-attribute filtering to reuse; RSS fan-in targets the
-queue directly and `push_dispatch` branches on the marker. (Adding SNS
-in front of the queue purely to get attribute filtering is a
-deliberate non-goal: one consumer, one branch.) `push_dispatch`
-handles APNs/FCM delivery; on-device NSE enriches the notification by
-calling `/rss/items/{id}`.
-
-**Apple sync path.** When online, the Apple client polls
-`GET /rss/items?subscription_id=X&since=<cursor>` (or one call per
-folder member) to pull new items into its local `ItemCache`. The
-APNs NSE extension also writes incoming items into the cache as it
-enriches notifications, so notification-on feeds stay current
-without explicit sync. Background refresh (iOS `BGTaskScheduler`)
-handles the rest. See "Apple-side item cache, FTS, and offline
-reading" below for the full design.
+**Native sync path.** When online, a client polls
+`/rss_list_items` with `since=<fetched_at cursor>` per subscribed feed
+to pull new items into its local cache. The cursor is the server's
+`fetched_at` (ingest time), **not** `published_at`: publishers backdate
+and re-date items, and a cursor over `published_at` silently misses
+them. Foreground sync and background refresh handle the rest; the push
+path assists on Apple through an App Group handoff (not by the NSE
+writing the cache directly — see "Apple-side item cache").
 
 ### Shared vs. per-user data
 
@@ -252,8 +346,10 @@ reading" below for the full design.
 | `subscription`       | Per-user (links user to feed_id)                 |
 | `folder`             | Per-user                                         |
 | `user-item-state`    | Per-user (read, favorite, read_at)               |
-| `credentials`        | Per-user; credentialed feeds bypass sharing      |
-| `user-settings`      | Per-user (auto_mark_read, reading_time_visible)  |
+| Credentials          | Per-user SSM parameters; credentialed feeds      |
+|                      | bypass sharing                                   |
+| User settings        | Per-user `rss_*` keys in the existing            |
+|                      | `cabal-user-preferences` `app` map               |
 | Display preferences  | Per-user attrs on `subscription`, applied        |
 |                      | client-side (per open Q5)                        |
 
@@ -264,9 +360,15 @@ lands content into a row that another user can read.
 
 ## Data model (DynamoDB)
 
-All tables use **on-demand** capacity (no provisioned read/write
-units), **KMS encryption at rest** with the project-standard key,
-and **point-in-time recovery** enabled. The schema:
+All tables follow `terraform/infra/modules/table/main.tf`:
+**on-demand** capacity, **server-side encryption with the AWS-owned
+key** (the standing `#tfsec:ignore:aws-dynamodb-table-customer-key`
+directive; there is no project KMS key for tables and the plan no
+longer introduces one), **point-in-time recovery** enabled, and
+**deletion protection** on every table that holds user data. The
+per-user key is the Cognito **username** (the `cognito:username`
+claim, as extracted by `_shared/helper.py` and used by every other
+per-user table), named `user` below. The schema:
 
 ```
 cabal-rss-feed
@@ -276,118 +378,154 @@ cabal-rss-feed
          site_url, next_fetch_at_iso, last_fetched_at_iso,
          last_etag, last_modified, last_status_code, last_error,
          consecutive_failure_count, cadence_minutes,
-         observed_items_per_day, created_at
+         observed_items_per_day, item_count, subscriber_count,
+         created_at
   GSI by_canonical:  PK = canonical_url
                      SK = owner_user_or_NULL_SENTINEL
                      (dedup on subscribe; sentinel string for nulls
                       since DynamoDB GSIs reject null SK)
-  GSI by_due (sparse): PK = "active" (constant)
+  GSI by_due (sparse): PK = due_shard ("active" while fetchable;
+                            attribute removed when dead-lettered or
+                            when subscriber_count reaches 0)
                        SK = next_fetch_at_iso
-                       (row removed from index when
-                        consecutive_failure_count >= 20)
 
 cabal-rss-item
   PK: feed_id
-  SK: published_at_iso#item_id  (sortable + unique)
+  SK: published_at_iso#item_id  (sortable + unique; published_at is
+                                 fixed at first sight — a re-publish
+                                 updates attrs, never the SK)
   attrs: item_id (UUID), guid, title, author, url,
-         summary_html, content_html, published_at, updated_at,
-         fetched_at
-  GSI by_guid: PK = feed_id, SK = guid
-               (upsert dedup lookup on fetch)
+         summary_html, content_html | content_s3_key,
+         published_at, updated_at, fetched_at
+  GSI by_guid:    PK = feed_id, SK = guid
+                  (upsert dedup lookup on fetch; guid falls back to
+                   the item link, then to a hash of title+content,
+                   when the feed omits one)
+  GSI by_fetched: PK = feed_id, SK = fetched_at_iso#item_id
+                  (the since-cursor for client sync)
+  Stream: NEW_IMAGE (drives rss_notify)
 
 cabal-rss-subscription
-  PK: user_sub
+  PK: user
   SK: subscription_id (UUID)
   attrs: feed_id, folder_id, custom_title, ordering_mode,
          default_open_mode, default_styling,
-         notifications_enabled, credentials_ref,
-         per_user_last_etag, per_user_last_modified,
-         per_user_next_fetch_at_iso, created_at
-  GSI by_user_folder: PK = user_sub
+         notifications_enabled, credentials_scheme (null | 'basic' |
+         'url_key' | 'cookie'), read_watermark_iso,
+         data_store_uuid, created_at
+  GSI by_user_folder: PK = user
                       SK = folder_id#subscription_id
                       (list subscriptions in folder)
   GSI by_feed_notify (sparse): PK = feed_id
-                               SK = user_sub
+                               SK = user
                                (present only when
                                 notifications_enabled = true)
 
 cabal-rss-folder
-  PK: user_sub
+  PK: user
   SK: folder_id (UUID)
   attrs: parent_folder_id (null = root), name, display_order
 
 cabal-rss-user-item-state
-  PK: user_sub#feed_id
+  PK: user#feed_id
   SK: published_at_iso#item_id    (matches item SK shape)
-  attrs: item_id, is_read, is_favorite, read_at
-  GSI unread_by_feed (sparse):  PK = user_sub#feed_id
-                                SK = published_at_iso#item_id
-                                (present when is_read = false)
-  GSI favorite_by_feed (sparse): PK = user_sub#feed_id
+  attrs: item_id, is_read, is_favorite, read_at, updated_at
+  GSI favorite_by_feed (sparse): PK = user#feed_id
                                  SK = published_at_iso#item_id
                                  (present when is_favorite = true)
-
-cabal-rss-credentials
-  PK: user_sub
-  SK: feed_id
-  attrs: scheme ('basic'|'url_key'|'cookie'),
-         ssm_parameter_path, created_at
-
-cabal-rss-user-settings
-  PK: user_sub
-  attrs: auto_mark_read, reading_time_visible,
-         last_ordering_mode, updated_at
-
-cabal-rss-pending-notification
-  PK: item_id
-  attrs: feed_id, created_at, ttl
 ```
+
+Five tables, down from eight. What went, and why:
+
+- **`cabal-rss-pending-notification`** — replaced by the item
+  table's stream (see "Notification path").
+- **`cabal-rss-user-settings`** — replaced by `rss_*` keys in the
+  `app` map of `cabal-user-preferences`, validated in `APP_ALLOWED`
+  like the mail keys (`rss_reading_time_visible`,
+  `rss_last_ordering_mode`, and the auto-mark-read setting — see the
+  D15 challenge below for whether that should be the existing
+  `mark_as_read` key or a parallel one). The map is `{string: string}`
+  by contract with the shipped clients, which enum values satisfy. The
+  Linux `xtask` drift test asserts client keys against `APP_ALLOWED`;
+  new keys land in both.
+- **`cabal-rss-credentials`** — the SSM path is derivable from
+  `(user, feed_id)`, so the table only ever held the scheme, which now
+  sits on the subscription row.
 
 A few notes on the model:
 
 - **No tombstones.** Per D4, items live forever; tombstones were only
-  needed if items could be dropped. Image-cache rows can age out (D4
-  "linked content"); item rows cannot.
+  needed if items could be dropped. Image-cache objects age out (D4
+  "linked content"); item rows do not.
+- **Oversized bodies spill to S3.** DynamoDB caps an item at 400 KB and
+  some feeds deliver full-article `content_html` (occasionally with
+  inline base64 images) well past that. Bodies over ~300 KB are written
+  to the image-cache bucket's sibling prefix `items/<feed_id>/<item_id>`
+  and the row carries `content_s3_key` instead of `content_html`; the
+  read endpoint inlines it. Same pattern as the mail message cache.
 - **`is_shared` + `owner_user`** disambiguates shared from per-user
   canonical-feed records. The `by_canonical` GSI uses an owner sentinel
   for shared rows so the (canonical_url, owner_user) lookup works
   uniformly.
-- **The "personal inbox" pattern** is the load-bearing piece. The
-  `user-item-state` table holds one row per user per item the user has
-  interacted with, sortable by `published_at` via the SK shape, with
-  sparse GSIs `unread_by_feed` and `favorite_by_feed` that contain
-  rows only when the corresponding flag is set. Filtered queries then
-  Query the sparse GSI directly rather than scanning items and
-  filtering — and the indexes are small because they only carry items
-  in the relevant state.
 - **Missing user-item-state rows mean default state** (unread, not
   favorite). This avoids writing a row for every (user, item) pair at
-  fetch time. The first time a user views an item it stays in the
-  default; the first time the user marks-read or favorites it, a row
-  is created.
-- **`pending_notification`** is a small queue table written in the
-  same `TransactWriteItems` call as a new item insert, so notifications
-  can't be lost if the fetcher dies between the two writes. A TTL
-  attribute (e.g. 24 hours) catches anything `rss-notify` fails to
-  drain.
-- **The four ordering modes** (D17): modes 1 and 2 (oldest/newest
-  first) fall out of the SK shape. Modes 3 and 4 (day-grouped) don't
-  encode naturally in a DynamoDB SK; the API fetches a chunk in
-  `published_at` order and re-sorts in the Lambda. Pagination uses a
-  fixed over-fetch multiplier (e.g. 2x page size) to handle the
-  reorder correctly.
+  fetch time on shared feeds. A row is created the first time the user
+  marks-read or favorites an item.
+- **Unread is computed, not indexed.** The original plan's sparse
+  `unread_by_feed` GSI is gone: with lazy rows, an item nobody has
+  touched has no row and so would never appear in an "unread" index.
+  Unread for a feed is *items minus read rows*: Query the item table
+  (SK order gives the ordering), BatchGet the matching state rows, and
+  drop the ones with `is_read = true`. Per-feed item counts are in the
+  hundreds to low thousands, so this is a page or two of reads.
+- **Mark-all-as-read is a watermark.** `read_watermark_iso` on the
+  subscription means "everything published at or before this instant
+  is read." Mark-all-read (per feed, per folder, global — D15) writes
+  one attribute per subscription instead of one row per item; the
+  unread computation treats items at or below the watermark as read
+  unless a state row explicitly says `is_read = false` (the user
+  re-marked one unread afterwards). Unread counts follow the same
+  rule: count items above the watermark, subtract read rows above it.
+- **Favorites keep a sparse GSI.** Favorite is opt-in and explicit, so
+  the sparse-index pattern works for it: `favorite_by_feed` contains
+  exactly the rows with `is_favorite = true`.
+- **Feeds with no subscribers stop fetching.** When the last
+  subscription to a shared feed is deleted, `subscriber_count` reaches
+  0 and the `due_shard` attribute is removed, so the feed leaves the
+  `by_due` index; its items stay (D4). Re-subscribing restores the
+  attribute with `next_fetch_at = now`. Without this, D4's "forever"
+  plus D1's sharing would have the fetcher polling every feed anyone
+  ever tried, indefinitely.
+- **The four ordering modes** (D17 confirmed scope): modes 1 and 2
+  (oldest/newest first) fall out of the SK shape. Modes 3 and 4
+  (day-grouped) don't encode naturally in a DynamoDB SK; the API
+  fetches a chunk in `published_at` order and re-sorts in the Lambda.
+  Pagination uses a fixed over-fetch multiplier (e.g. 2x page size) to
+  handle the reorder correctly. Since the native clients read from a
+  local cache, the day-grouped modes can equally be applied
+  client-side; the server implementation exists so the first page a
+  fresh install sees is already in the right order.
 
 ## Apple-side item cache, FTS, and offline reading
 
-This is the new architectural addition relative to the original plan.
-It lives entirely in `CabalmailKit` and the iOS/macOS apps; no
-server-side change beyond the `since=<cursor>` parameter on
-`GET /rss/items` (added in phase 3).
+This lives entirely in `CabalmailKit` and the iOS/macOS apps; no
+server-side change beyond the `since` cursor on `/rss_list_items`
+(phase 3).
 
 ### Storage
 
-GRDB.swift wrapping SQLite, with FTS5 enabled (Apple's bundled SQLite
-ships with FTS5). The cache schema:
+SQLite with FTS5 (Apple's bundled SQLite ships with FTS5). **Library
+choice is a phase-5 decision to make deliberately:** `CabalmailKit`
+currently has *no* third-party Swift package dependencies (its
+`Package.swift` declares none; the only vendored code is the
+marked/turndown JS, materialized by `scripts/sync-vendored.sh` and
+pinned via `react/admin/package.json`). GRDB.swift is the obvious
+choice and would be the Kit's first SPM dependency, with the
+supply-chain and pinning obligations that implies under the
+supply-chain hardening work. The alternative is a thin actor over the
+system `sqlite3` C API — a few hundred lines for the handful of
+statements this cache needs. Either is fine; the point is to choose,
+not to drift into a dependency. The cache schema:
 
 ```sql
 CREATE TABLE items_cache (
@@ -401,6 +539,7 @@ CREATE TABLE items_cache (
   summary_html        TEXT,
   content_html        TEXT,
   published_at        INTEGER,             -- unix epoch
+  fetched_at          INTEGER,             -- server ingest time (sync cursor)
   is_read             INTEGER DEFAULT 0,   -- mirrors server state
   is_favorite         INTEGER DEFAULT 0,
   fetched_locally_at  INTEGER,
@@ -421,8 +560,9 @@ CREATE VIRTUAL TABLE items_fts USING fts5(
 CREATE TABLE feed_sync_state (
   feed_id                          TEXT PRIMARY KEY,
   last_synced_at                   INTEGER,
+  since_cursor                     TEXT,     -- server fetched_at#item_id
   oldest_cached_published_at       INTEGER,
-  most_recent_cached_published_at  INTEGER
+  read_watermark                   INTEGER
 );
 
 CREATE TABLE pending_mutations (
@@ -431,6 +571,7 @@ CREATE TABLE pending_mutations (
   feed_id      TEXT NOT NULL,
   mutation     TEXT NOT NULL,    -- 'mark_read' | 'mark_unread'
                                  -- | 'favorite' | 'unfavorite'
+                                 -- | 'mark_all_read'
   created_at   INTEGER NOT NULL
 );
 ```
@@ -439,7 +580,8 @@ CREATE TABLE pending_mutations (
 `content_html` for indexing. HTML stripping uses Apple's
 `NSAttributedString(data:options:documentAttributes:)` with
 `.html` document type — adequate for plaintext extraction, ships
-with the OS, no third-party dependency.
+with the OS, no third-party dependency. (The Kit's MIME layer already
+has HTML-to-text plumbing for mail snippets; reuse it if it fits.)
 
 `pending_mutations` is the offline-write queue. When the user marks
 an item read or favorites it while offline, the cache is updated
@@ -451,15 +593,23 @@ server with last-write-wins semantics.
 
 Three sync paths cooperate:
 
-- **APNs-assisted (notification-on feeds).** The notification service
-  extension that enriches push payloads (already in CabalmailKit as
-  shipped in 0.11.0) gets an `RssEnrichment` branch that, in addition
-  to enriching the notification body, writes the fetched item into
-  the local cache and updates `feed_sync_state`.
+- **Push-assisted (notification-on feeds).** The original plan had the
+  Notification Service Extension write the enriched item straight into
+  the local cache. It cannot: the NSE deliberately does **not** link
+  `CabalmailKit` (it stays tiny and reads the API URL and a mirrored
+  Cognito token from the App Group via `PushEnrichmentStore`), so it
+  has no access to the cache code, and a second process writing the
+  SQLite file would need its own locking story anyway. Instead the NSE
+  writes the enriched item JSON it already fetched into an App Group
+  **handoff directory**; the main app drains that directory into
+  `ItemCache` on next launch or foreground. Same shared-container
+  contract as today, in the other direction. On macOS the app itself
+  receives the (silent) push while running and can write the cache
+  directly.
 - **Background refresh (notification-off feeds).** Registered iOS
   `BGTaskScheduler` task runs at the system's discretion (typically
   once per hour at the system's whim); pulls new items for all
-  subscribed notification-off feeds via the `since=<cursor>` endpoint.
+  subscribed notification-off feeds via the `since` cursor.
 - **Foreground sync.** When the user opens a feed or folder, the
   client fires a sync for the visible feeds immediately and shows
   newly-arrived items inline.
@@ -486,14 +636,20 @@ items/year × ~5 KB/item ≈ 90 MB. Comfortable on any current device.
 
 The client's reader UI reads exclusively from the local cache.
 "Online vs. offline" is transparent to the user — what's cached is
-what's shown. Articles opened via the WKWebView still require network
+what's shown. Articles opened via the web view still require network
 (per D6); the UI signals this distinction with a small "article
 requires connection" indicator when offline.
 
-Images inside cached in-feed content rely on whatever
-`WKWebView`/`URLCache` happened to fetch on previous online viewing.
-Explicit pre-cache of image bytes is deferred (could be a v1.x
-addition).
+Images inside cached in-feed content rely on whatever the web view's
+`URLCache` happened to fetch on previous online viewing. Explicit
+pre-cache of image bytes is deferred (could be a v1.x addition).
+
+In-feed content renders through the **existing message-body
+renderer** on each platform, including its reader-mode toggle. The two
+platforms currently implement reader mode differently (Android strips
+author CSS; Apple overrides it) as a deliberate side-by-side
+comparison the operator is still running; RSS inherits whichever
+approach each client has and does not pick a winner.
 
 ### Per-feed FTS
 
@@ -515,254 +671,215 @@ the query.
 
 ### Cross-device inconsistency
 
-Different Apple devices (iPhone, iPad, Mac) maintain independent
-caches; search results scale with each cache. This is acceptable for
-per-feed search (you search where you are) and is consistent with how
-every other multi-device RSS reader behaves.
+Different devices maintain independent caches; search results scale
+with each cache. This is acceptable for per-feed search (you search
+where you are) and is consistent with how every other multi-device
+RSS reader behaves.
 
-## Infrastructure additions
+## Android-side item cache, FTS, and offline reading
 
-A new Terraform module `terraform/infra/modules/rss/` owns the new
-resources. Compared to the original Aurora-based plan, this is much
-smaller:
+The Android `kit` module already has a Room database
+(`RoomEnvelopeCache`, storing envelopes as wire JSON keyed by folder
+and uid, exercised on-device rather than under Robolectric). The RSS
+cache is a sibling in the same module:
 
-- **DynamoDB tables** (8 of them; see "Data model"), all on-demand,
-  PITR enabled, KMS-encrypted with the project-standard key.
-- **An S3 bucket** `cabal-rss-image-cache-<env>` with a 7-day
-  lifecycle rule (TTL per D13). Bucket policy allows the
-  `image-proxy` Lambda only.
-- **SSM SecureString hierarchy** `/cabal/rss/credentials/<user>/<feed>`
-  for per-(user, feed) credentials, encrypted with the same KMS key.
-- **EventBridge schedules:**
-  - `rss-fetcher` every 5 minutes
-  - `rss-notify` every 60 seconds
-- **Lambda functions** (zip-deployed, alongside `lambda/api/`):
-  - `lambda/rss/fetcher/` (Python 3.12; libraries: `feedparser`,
-    `requests`, `boto3`)
-  - `lambda/rss/notify/` (Python; `boto3` only)
-  - `lambda/rss/image_proxy/` (Python; `boto3`, `requests`,
-    response streaming)
-  - `lambda/rss/api/*` (per-endpoint directory, same pattern as
-    `lambda/api/`; `boto3` only)
-- **API Gateway routes** under `/rss/*`, Cognito-authorized identically
-  to the existing email API.
-- **No new push infrastructure.** The shipped 0.11.0 pipeline is
-  `cabal-push-queue` (SQS + DLQ) consumed by `push_dispatch`; `rss-notify`
-  writes to that queue and `push_dispatch` gains a `type=rss` branch. The
-  only additions are the IAM grant letting `rss-notify` send to the queue
-  and the RSS read grants `push_dispatch` needs for enrichment.
+- **Tables** mirror the Apple schema: `rss_items`, `rss_feed_sync`,
+  `rss_pending_mutations`. Unlike the envelope cache, items are
+  exploded into columns, because search needs real text columns.
+- **FTS** uses Room's `@Fts4` entity (Room has first-class FTS3/FTS4
+  support; FTS5 is not annotated and would need raw SQL plus a check
+  that the platform SQLite on API 31+ devices enables it). FTS4 with
+  the `unicode61` tokenizer is adequate for per-feed search; BM25
+  ranking is not built in, so ranking is by recency, which for
+  per-feed search over a few hundred items is what users expect
+  anyway.
+- **Sync, retention, and the offline mutation queue** follow the Apple
+  design exactly; the `kit` contract tests cover the in-memory
+  implementation and the Room DAO is exercised on-device, matching the
+  envelope cache's existing test posture.
+- **Push-assisted sync** is simpler than on Apple: the
+  `FirebaseMessagingService` runs inside the app process, already
+  calls the API for enrichment, and can write the cache directly.
 
-What this does **not** add:
+## Networking
 
-- No RDS, no Aurora, no Postgres.
-- No Data API, no RDS Proxy, no connection-pooling layer.
-- No VPC attachment on any RSS Lambda. See "Lambda networking policy"
-  below for the rule. DynamoDB, S3, SSM, SNS are all reachable over
-  public AWS endpoints with IAM auth; the fetcher's outbound
-  feed-fetching is intentionally public-internet.
-- No new ECS service. The fetcher and notify components are Lambdas.
-- No new Cognito user pool, no auth changes.
+Every API Lambda has been VPC-attached since the private-IMAP replumb
+(0.11.x): `modules/app/modules/call` sets `vpc_config` for all of
+them, the VPC has free **gateway endpoints for S3 and DynamoDB**, and
+the remaining AWS-service calls (SSM, SQS, Cognito, Logs) ride the NAT
+path by deliberate choice (interface endpoints cost per AZ-hour and
+those flows are thin). The RSS Lambdas follow the same pattern, for
+three reasons:
 
-## Lambda networking policy
+- **D9 requires stable egress IPs**, and the NAT Elastic IPs are the
+  stack's only stable outbound identity (`docs/nat.md`; they already
+  carry `smtp.<control-domain>` forward DNS and validated reverse DNS,
+  and survive quiesce and NAT-mode switches). A Lambda outside the VPC
+  egresses from AWS's shared regional pool: publishers that
+  rate-limit or block by IP would see Cabalmail's fetches arriving
+  from addresses shared with every other tenant, and there would be
+  nothing to put on a feedbot info page.
+- **Uniformity.** One network posture for every Lambda in the account
+  is easier to reason about, secure, and quiesce than a special case.
+- **Reuse.** The `call` module, its security group, and its IAM
+  template already exist. The DynamoDB and S3 flows use the gateway
+  endpoints; the fetcher's feed traffic and the thin SSM/SQS calls use
+  NAT like everything else.
 
-Cabalmail follows a written rule for Lambda VPC attachment:
+Consequences worth naming:
 
-> A Lambda joins the VPC if and only if it needs to reach
-> internal-only resources. Otherwise it runs outside the VPC.
+- **Fetcher traffic shares the NAT.** At hobby scale (a few hundred
+  conditional GETs per hour, mostly 304s) this is noise next to mail
+  and log traffic. In NAT Gateway mode it is metered per GB; the
+  budget below allows for it.
+- **RSS joins the NAT failure blast radius.** Mail delivery, `/send`,
+  and log shipping already do; RSS adds nothing new in kind. The
+  `docs/nat.md` diagnosis applies unchanged.
+- **Quiesce must also pause the schedule.** `quiesce.yml` removes the
+  private subnets' default route, so a still-scheduled `rss_schedule`
+  in a quiesced environment would enqueue feeds that `rss_fetch` then
+  fails on until the DLQ fills. Disabling the Scheduler schedule
+  becomes part of the quiesce and restore steps.
+- **Cold starts** are not a reason to stay outside the VPC; Lambda has
+  pre-provisioned VPC networking (Hyperplane) since 2019 and the
+  existing API Lambdas already pay whatever residual cost exists.
 
-The rule was settled during the design of this feature in
-conjunction with a separate VPC-migration project for the existing
-`lambda/api/` functions, which is a prerequisite to the longer-term
-plan of closing public IMAP access (gated on first-party client
-parity). **The API-Lambda VPC migration completes before RSS
-implementation begins**, so by the time the phases below execute,
-the `lambda/api/` pattern is already VPC-attached; the migration
-plan itself is tracked separately and is out of scope here.
-
-Under the rule:
-
-- **The existing `lambda/api/` functions** need internal access to
-  Dovecot (initially through the public IMAP NLB, then through an
-  internal endpoint after their migration; eventually with the
-  public NLB retired entirely once IMAP closure ships). By the
-  time RSS lands they are inside the VPC.
-- **RSS Lambdas** (`lambda/rss/fetcher/`, `lambda/rss/notify/`,
-  `lambda/rss/image_proxy/`, `lambda/rss/api/*`) do not need
-  internal access. DynamoDB, S3, SSM, SNS, and SQS are reachable
-  over public AWS endpoints with IAM auth; the fetcher's
-  feed-fetching is intentionally outbound to the public internet.
-  None of these Lambdas has any reason to be in the VPC.
-
-So the RSS Lambdas run outside the VPC — **not as a deferral, but
-as the policy outcome.** If a future RSS-adjacent Lambda needs to
-reach an internal-only resource (a hypothetical per-user Postgres,
-say, if the data-layer cost shape ever changes), the rule applies
-to it specifically: that Lambda joins the VPC; its peers do not.
-
-Concrete benefits of keeping RSS Lambdas out:
-
-- The fetcher's external traffic does not traverse NAT, so it does
-  not load the NAT instances or expose RSS to a NAT-instance-
-  failure blast radius. This matters more for RSS than for any of
-  the existing Lambdas because the fetcher is the only chatty
-  external-bound workload in the stack.
-- No VPC endpoint configuration for AWS-service access from the
-  RSS Lambdas. Interface endpoints for SNS/SQS/SSM cost ~$7/AZ/
-  month each, and the RSS Lambdas would need them; the policy
-  avoids that cost and the related deployment complexity.
-- Slightly faster cold starts on the RSS API Lambdas (no
-  Hyperplane ENI initialisation), which matters for the first
-  user-facing read after an idle window.
-
-The policy is also forward-protective: future RSS-related Lambdas
-inherit "out of VPC" by default. If a maintainer later argues a
-Lambda should be in-VPC, the rule forces them to identify the
-specific internal-only resource it needs to reach.
+The May plan's "Lambda networking policy" (in the VPC only if the
+function needs an internal-only resource) is superseded: the working
+rule is that Lambdas in this account are VPC-attached, and a function
+that wants to be outside must argue for it.
 
 ## Per-feed cookie scoping
 
 ### Apple clients
 
 `WKWebView` supports per-instance website data stores since
-iOS 17/macOS 14 via `WKWebsiteDataStore(forIdentifier: UUID)`. We
-target iOS 18/macOS 15, so this is available unconditionally. The
-client maps each `subscription.id` to a stable `UUID` stored in
-Keychain. When the user opens an article in a web view, the view's
-configuration uses the per-feed data store; cookies and `localStorage`
-set on the publisher's site survive across launches and stay isolated
-from other feeds' data stores.
+iOS 17/macOS 14 via `WKWebsiteDataStore(forIdentifier: UUID)`. The Kit
+floor is iOS 18/macOS 15, so this is available unconditionally. The
+identifier is the subscription's `data_store_uuid`, generated
+server-side on subscribe and returned with the subscription, so every
+Apple device of the same user shares one identifier per subscription
+(the stores themselves are still per-device). When the user opens an
+article in a web view, the view's configuration uses the per-feed data
+store; cookies and `localStorage` set on the publisher's site survive
+across launches and stay isolated from other feeds' data stores.
 
 Removal: when the user unsubscribes from a feed, the client calls
 `WKWebsiteDataStore.remove(forIdentifier:)` to delete all stored
 cookies and `localStorage` for that feed.
 
-### React client
+### Android client
 
-Browsers don't expose per-iframe cookie partitioning to web apps. The
-React client renders article views with a sandboxed iframe pointed at
-the publisher's URL; the browser uses its single cookie jar per
-origin. The implications:
+The `androidx.webkit` multi-profile API (`ProfileStore` /
+`Profile`, applied with `WebViewCompat.setProfile`) gives each
+`WebView` its own cookie jar, storage, and cache, keyed by a profile
+name — the direct analog of `WKWebsiteDataStore(forIdentifier:)`. It
+is gated on the installed WebView build via
+`WebViewFeature.isFeatureSupported(MULTI_PROFILE)`; on API 31+ devices
+with a current system WebView it is present. Where it is not, the
+client falls back to the default profile and surfaces the same
+"sessions are shared across feeds on this device" notice the React
+analysis once described. Profile name is the subscription's
+`data_store_uuid`; unsubscribing deletes the profile.
 
-- A user logged into Substack feed A in one tab gets the same Substack
-  session when they open Substack feed B in another. This defeats the
-  per-feed scoping intent for users who maintain multiple identities
-  per publisher.
-- We can't fix this without proxying article rendering server-side,
-  which contradicts D6.
+### What the React analysis established
 
-Documented as a known limitation: the React client is the right tool
-for public feeds and for credentialed feeds where the user uses one
-identity per publisher; users who want full per-feed scoping should
-use the Apple client.
-
-### Mitigations considered (deferred past v1)
-
-A short menu was reviewed during planning. None ships in v1; the
-React limitation is documented and the cost of fixing it is recorded
-here for future reference. If hobbyist usage proves the limitation
-is a real friction point, revisit and pick from below.
-
-**Non-options** (ruled out as architecturally impossible from a web
-app):
-
-- **CHIPS / partitioned cookies** partition by top-level site, not by
-  app-controlled identity. Both Substack iframes inside `cabalmail.com`
-  share the same partition.
-- **Service workers** can intercept requests but can't read or modify
-  `Cookie` / `Set-Cookie` headers; those live in the browser's network
-  stack outside the SW boundary.
-- **`<iframe sandbox>`** restricts capabilities but has no
-  isolated-cookies flag.
-- **Storage Access API** governs cross-origin storage *permission*,
-  not per-app partitioning.
-
-**Viable options when the time comes:**
-
-- **A. Open articles in a new browser tab instead of an iframe.**
-  Effort: trivial (single-line UI change). Doesn't fix scoping but
-  reframes it — user gets browser-default behavior identical to
-  visiting the publisher directly and can apply any browser-level
-  mitigations they already use (separate profiles, container tabs).
-  Loses the embedded-reader feel; for paywalled sites that may
-  actually be preferable since the publisher's full UI loads.
-- **B. Hide credentialed-feed subscription in the React UI entirely.**
-  Effort: trivial. React handles public feeds; the credentials form
-  is Apple-only. Sidesteps the problem by removing the surface area
-  where it bites. Already partially aligned with the v1 documented-
-  limitation banner.
-- **C. Document Firefox Multi-Account Containers** for users who want
-  per-domain scoping in the browser. Effort: documentation only.
-  Firefox-only; manual per-domain setup; not turnkey but free
-  guidance.
-- **D. Server-side cookie-rewriting proxy.** Effort: high —
-  approximately a quarter-long project. A Lambda or container
-  intercepts article requests, strips and stores `Set-Cookie` headers
-  per (user, subscription), rewrites all URLs in the HTML to route
-  back through itself, injects the right cookie on outbound requests,
-  and handles JavaScript-built URL construction in publisher SPAs
-  (this last is the hardest part and the most likely failure mode).
-  Works on static publisher pages; breaks on most modern sites with
-  OAuth flows, complex SPA navigation, or heavy client-side
-  rendering. Ongoing maintenance burden whenever publishers redesign.
-  Not recommended unless usage data justifies it.
-
-If the limitation ever needs fixing, the likely sequence is **B + A
-+ C** in a single small release (cheap, honest, helpful for Firefox
-users); **D** stays on the shelf unless real demand emerges.
+The May plan spent a section on why a browser cannot partition cookies
+per app-controlled identity (CHIPS partitions by top-level site;
+service workers cannot touch `Cookie` headers; `<iframe sandbox>` has
+no cookie flag). With no React RSS UI that analysis is moot for v1; it
+remains correct if a browser client is ever revisited, and the
+remedies it listed (open in a new tab; hide credentialed feeds; a
+server-side cookie-rewriting proxy, not recommended) are still the
+menu.
 
 ## Phased implementation
 
 Each phase is independently shippable. Phase 1 is foundational; from
-phase 3 onward, work can parallelize across React, OPML, image proxy,
-push, and Apple tracks.
+phase 3 onward, work can parallelize across the OPML, Apple, Android,
+image-proxy, and push tracks. Phases are cut along **verification**
+boundaries — what can be exercised end to end on stage (by script,
+by the daily client tester, or by the operator dogfooding) before the
+next phase lands — rather than by authoring effort, which is no longer
+the constraint on this project.
 
 ### Phase 1: DynamoDB tables + supporting infra
 
-**Goal.** All DynamoDB tables, the image-cache S3 bucket, the SSM
-hierarchy, and the KMS key in place in all three environments. No
-application code.
+**Status:** Not started.
+
+**Goal.** All DynamoDB tables, the item-table stream, the fetch queue
+and its DLQ, the image-cache S3 bucket, and the SSM credential path
+policy in place in all three environments. No application code.
 
 **Work.**
 
-- New module `terraform/infra/modules/rss/` with:
-  - `dynamodb.tf` — 8 tables, on-demand, PITR enabled, KMS-encrypted,
-    indexes per the data model.
-  - `s3.tf` — `cabal-rss-image-cache-<env>` with 7-day lifecycle.
-  - `kms.tf` — `cabal-rss` KMS key.
-  - `ssm.tf` — credential parameter hierarchy (no values, just the
-    path structure and IAM policy template).
-- IAM policies for the (not-yet-existing) Lambda functions, scoped to
-  the specific tables and indexes they'll need.
-- A small one-shot Lambda + GHA step that verifies all tables exist
-  and respond to a smoke-test `DescribeTable` call after apply.
-- CHANGELOG: "Added DynamoDB tables, S3 image-cache bucket, KMS key,
-  and SSM hierarchy for the RSS feature set. No application traffic
-  yet."
+- Five tables in `terraform/infra/modules/table/main.tf`, following
+  the sibling tables' shape (on-demand, AWS-owned SSE with the
+  standing `tfsec` ignore, PITR, deletion protection), indexes per the
+  data model, `stream_enabled` + `NEW_IMAGE` on `cabal-rss-item`.
+- `cabal-rss-fetch-queue` + DLQ next to `cabal-push-queue`.
+- `cabal-rss-image-cache-<env>` bucket with a 7-day lifecycle rule on
+  the `img/` prefix (the `items/` spill prefix has no expiry), owned by
+  the `s3` module alongside the existing cache bucket.
+- IAM policy template additions in `modules/app/modules/call` scoped to
+  the specific tables and indexes each `rss_*` function needs (the
+  `call` module today grants every API Lambda a uniform surface; RSS
+  is the moment to add a per-function table list rather than widen the
+  uniform grant to five more tables).
+- `docs/quiesce.md` and `quiesce.yml` gain the schedule pause/restore
+  step now, so it exists before the schedule does.
+- CHANGELOG fragment: tables, queue, bucket, and SSM hierarchy for the
+  RSS feature set; no application traffic yet.
 
-**Rollback.** Destroy the module. Nothing references it.
+The one-shot table-verification Lambda in the May plan is dropped:
+`terraform apply` failing is the verification, and the IaC gates
+(Checkov, tflint, tfsec) already run on every plan.
 
-### Phase 2: Fetcher Lambda
+**Rollback.** Destroy the resources. Nothing references them.
 
-**Goal.** The fetcher fetches public feeds on its cadence, parses
-RSS/Atom/JSON, upserts items, tracks health. Validate by seeding a
-few `cabal-rss-feed` rows and inspecting `cabal-rss-item` after a
-tick.
+### Phase 2: Scheduler + fetcher Lambdas
+
+**Status:** Not started.
+
+**Goal.** Public feeds are fetched on their cadence, RSS/Atom/JSON
+parsed, items upserted, health tracked. Validate by seeding a few
+`cabal-rss-feed` rows and inspecting `cabal-rss-item` after a tick.
 
 **Work.**
 
-- `lambda/rss/fetcher/function.py`:
-  - Query `by_due` GSI for due feeds.
-  - Conditional GET via `feedparser` with the prior `ETag`/`Last-
-    Modified` from the feed row.
-  - Parse, normalize, upsert items via `by_guid` GSI lookup +
-    `PutItem` (or `UpdateItem` for re-publishes).
-  - `TransactWriteItems` to write a new item + matching
-    `pending_notification` row atomically.
-  - Update `cabal-rss-feed` health fields and `next_fetch_at` via the
-    adaptive-cadence formula.
+- `lambda/api/rss_schedule/function.py` (EventBridge Scheduler, every
+  5 minutes, following `reap_pending_addresses.tf`): Query `by_due`,
+  claim each due feed with a conditional `UpdateItem`, enqueue feed
+  ids.
+- `lambda/api/rss_fetch/function.py` (SQS event source mapping,
+  `batch_size = 1`, reserved concurrency 5):
+  - Conditional GET with the prior `ETag`/`Last-Modified`. Use the
+    stdlib `urllib` with a hard timeout, a response-size cap (5 MB),
+    gzip, and a redirect limit — the same shape as `fetch_bimi`'s
+    logo fetch — rather than adding `requests` and its four transitive
+    packages to the hash-pinned tree. Parse the bytes with
+    `feedparser` (hash-pinned with `sgmllib3k`; its built-in HTML
+    sanitizer stays on). Verify `feedparser`'s JSON Feed handling for
+    the pinned version; if it is absent, JSON Feed is small enough to
+    parse with `json` directly.
+  - **SSRF guard**: https only (D1), resolve the host and refuse
+    loopback, link-local, RFC 1918, and other non-global addresses
+    before connecting, re-check on every redirect hop. The fetcher
+    sits inside the VPC, so this is not optional.
+  - Upsert via `by_guid` + `PutItem`/`UpdateItem` (re-publishes update
+    attrs; the SK never changes). Bodies over ~300 KB spill to S3.
+  - Update health fields, `observed_items_per_day`, `next_fetch_at`.
+  - **Politeness signals beyond conditional GET**: honour
+    `Cache-Control: max-age` and `Retry-After` as cadence floors; treat
+    RSS `<ttl>` and `<sy:updatePeriod>` the same way; on a permanent
+    redirect (301/308) re-normalize the target, and if a shared feed
+    row already exists for it, re-point the subscriptions and retire
+    the old row; 410 Gone dead-letters immediately; 429 backs off.
 - User-Agent set to
   `Cabalmail/2.0 (+https://<control-domain>/feedbot)`. The control
-  domain serves a small static page explaining the bot.
+  domain serves a small static page explaining the bot, which
+  addresses it comes from (the NAT EIPs), and how to reach the
+  operator.
 - Adaptive cadence: EWMA on `observed_items_per_day` with a
   conservative initial cadence (60 minutes), recomputed on every
   fetch. Bounds are SSM parameters
@@ -771,117 +888,185 @@ tick.
   per D17.
 - Canonical URL normalizer per D1 sub-decision (https only, www-vs-
   apex collapse, trailing-slash rules, alphabetized query params,
-  `<guid>` exempt). Lives in `lambda/rss/_shared/url.py` with unit
-  tests covering every example in the requirements doc.
-- Per-feed dead-letter after 20 consecutive failures: when the
-  threshold is crossed, the fetcher does an `UpdateItem` that removes
-  the row from the `by_due` GSI (by setting its index PK to a
-  non-"active" value). Manual reset reverts it.
-- `pending_notification` rows accumulate but are not yet drained —
-  phase 7 picks that up.
+  `<guid>` exempt). Lives in `lambda/api/_shared/rss_url.py` with unit
+  tests covering every example in the requirements doc. The www/apex
+  rule needs the **Public Suffix List** to tell an apex from a
+  subdomain (`example.co.uk` is an apex; `web.example.com` is not);
+  bundle `publicsuffix2` or ship a vendored snapshot of the list. See
+  the D1 challenge below for the canonical-form inconsistency the
+  examples contain.
+- Per-feed dead-letter after 20 consecutive failures: remove the
+  `due_shard` attribute so the row leaves `by_due`. Manual reset
+  restores it.
 
-**Rollback.** Disable the EventBridge schedule; data is append-only,
-no destructive change.
+**Rollback.** Disable the Scheduler schedule; data is append-only, no
+destructive change.
 
 ### Phase 3: Subscription + reader API
 
+**Status:** Not started.
+
 **Goal.** Authenticated clients can subscribe to a feed, organize
 feeds into folders, list items with filtering, mark items read/
-favorite, and pull incremental updates via the `since=<cursor>`
-parameter that the Apple cache will rely on. No image proxy yet
-(image `<img>` tags pass through verbatim).
+favorite, and pull incremental updates via the `since` cursor that the
+native caches rely on. No image proxy yet (image `<img>` tags pass
+through verbatim).
 
 **Work.**
 
-- API Gateway routes under `/rss/*`:
-  - `POST /rss/subscriptions` (autodiscovery: if the body URL is a
-    webpage, scrape `<link rel="alternate">` tags for the feed URL)
-  - `DELETE /rss/subscriptions/{id}`
-  - `PATCH /rss/subscriptions/{id}` (display preferences,
-    notifications toggle, folder move)
-  - `GET /rss/subscriptions` (the user's list)
-  - `GET|POST|PATCH|DELETE /rss/folders[/{id}]`
-  - `GET /rss/items?subscription_id|folder_id&filter=read|favorite|
-    all&since=<iso>&order=...&limit=...`
-  - `GET /rss/items/{id}` (returns item + per-user state)
-  - `POST /rss/items/{id}/read` / `/unread` / `/favorite` /
-    `/unfavorite`
-  - `GET /rss/feed/{id}/health` (per D10)
-- The single-feed list endpoint Queries `cabal-rss-item` directly
-  (PK = feed_id) with the SK shape giving order; filter via
-  `BatchGet` on `user-item-state`. The filtered single-feed list
-  endpoint Queries `user-item-state`'s sparse GSI (`unread_by_feed`
-  or `favorite_by_feed`) and `BatchGet`s the items.
-- The folder list endpoint follows the multi-Query + merge-sort +
-  `BatchGet` pattern described in "Data flow." Pagination cursor is
-  a JSON blob carrying per-feed `LastEvaluatedKey` plus a global
-  merge position.
-- API Lambdas share a `lambda/rss/_shared/auth.py` to extract the user
-  sub from the Cognito authorizer claims, the same pattern as
-  `lambda/api/_shared/helper.py`.
-- When a user subscribes to a public feed for the first time
-  Cabalmail-wide, the API creates the `cabal-rss-feed` row with
-  `next_fetch_at = NOW()` so the fetcher picks it up on its next
-  tick (worst-case 5-minute lag to first content).
-- `user-settings` defaults are created on first read.
+- `rss_*` functions under `lambda/api/`, one per endpoint, wired with
+  the `call` module like every other API function:
+  - `/rss_subscribe` (autodiscovery: if the body URL is a webpage,
+    scrape `<link rel="alternate">` tags for the feed URL; same SSRF
+    guard as the fetcher; returns the subscription including its
+    `data_store_uuid`)
+  - `/rss_unsubscribe`
+  - `/rss_update_subscription` (display preferences, notifications
+    toggle, folder move)
+  - `/rss_list_subscriptions`
+  - `/rss_list_folders`, `/rss_new_folder`, `/rss_update_folder`,
+    `/rss_delete_folder`
+  - `/rss_list_items` (`subscription_id` or `folder_id`;
+    `filter = read|unread|favorite|all`; `since`; `order`; `limit`)
+  - `/rss_get_item` (item + per-user state; inlines an S3-spilled body)
+  - `/rss_set_item_state` (read/unread/favorite/unfavorite, batched)
+  - `/rss_mark_all_read` (per subscription, folder, or all — writes
+    watermarks)
+  - `/rss_feed_health` (per D10)
+- The unread and favorite filters follow the "Data model" notes:
+  favorite via the sparse GSI; unread via items-minus-read-rows above
+  the watermark.
+- The folder list endpoint follows the multi-Query + merge-sort
+  pattern described in "Data flow." Pagination cursor is an opaque
+  base64 JSON blob carrying per-feed `LastEvaluatedKey` plus a merge
+  position; clients treat it as opaque.
+- `/rss_subscribe` on a public feed nobody else has creates the
+  `cabal-rss-feed` row with `next_fetch_at = now` so the scheduler
+  picks it up on its next tick (worst-case 5-minute lag to first
+  content). On the first subscribe, do a synchronous fetch inline so
+  the user sees items immediately, then let the scheduler own it.
+- `set_preferences` / `get_preferences` gain the `rss_*` keys in
+  `APP_ALLOWED`.
+- **Compatibility.** These endpoints join the stable HTTP API surface
+  under `docs/compatibility.md` the moment they ship in a release, so
+  request and response shapes should be reviewed for the
+  ignore-unknown-fields / additive-only discipline before the first
+  client depends on them.
 
 **Rollback.** Remove the API routes. Data rows are inert without the
 fetcher (still running) and the routes (removed).
 
-### Phase 4: React client v1
+### Phase 4: OPML import/export (API)
 
-**Goal.** The React admin app has an "RSS" section with subscription
-management, folder hierarchy, item list (with filtering), and an
-article viewer. Public feeds only. **No FTS, no offline.** Iframe-
-based article view.
-
-**Work.**
-
-- New top-level route in `react/admin/src/`, sibling to Email and
-  Addresses.
-- Components: `FeedList`, `FolderTree` (drag-and-drop folder ops),
-  `ItemList` (virtualized), `ItemDetail` (renders summary HTML with
-  DOMPurify, "open article" button switches to an iframe view of
-  `item.url`).
-- Per-feed settings UI (ordering, default open mode, default styling,
-  notifications) — these write to the `subscription` row but apply
-  client-side (per open Q5).
-- Filter UI for read/favorite/all.
-- Reuse existing `AuthContext`/`AppMessageContext` patterns.
-- Known-limitations banner on the RSS section landing screen that
-  enumerates the React client's reduced feature set vs. the Apple
-  clients: **no per-feed cookie/storage partitioning** (multiple
-  identities at the same publisher share a session — see "Per-feed
-  cookie scoping" above), no full-text search, no offline reading.
-  Each item links to documentation pointing users to the Apple
-  clients if the missing feature is important to them. The cookie-
-  partitioning bullet is the most important one to call out
-  prominently — it's the one where a user could inadvertently
-  cross-contaminate accounts without realising it.
-
-**Rollback.** Remove the route. The API endpoints continue to function
-for other clients.
-
-### Phase 5: OPML import/export
+**Status:** Not started.
 
 **Goal.** A user can upload an OPML file and have its feeds and
 folders imported; a user can download an OPML file of their current
-state.
+state. This phase ships the API; the native UIs land with their
+client phases. It comes before any client phase so the operator's own
+feed list can be loaded on stage and dogfooded through the API before
+a UI exists.
 
 **Work.**
 
-- `POST /rss/opml/import` (multipart upload, Lambda parses with
-  `defusedxml`, additive merge per D5 sub-decision, returns a summary
-  of created/skipped/failed items).
-- `GET /rss/opml/export` (Lambda emits OPML 2.0).
-- React UI under the RSS section's settings.
-- Apple-side equivalents arrive in phase 8 (share-sheet integration).
+- `/rss_opml_import` (body carries the OPML text; Lambda parses with
+  `defusedxml`, additive merge per D5 sub-decision, subscribes each
+  feed through the same path as `/rss_subscribe`, returns a summary of
+  created/skipped/failed items).
+- `/rss_opml_export` (Lambda emits OPML 2.0 with the folder hierarchy
+  as nested outlines).
 - Test: round-trip a Feedly export, a NetNewsWire export, and a
-  Reeder export.
+  Reeder export, checked into the Lambda's tests as fixtures (with any
+  personal feed lists replaced by public ones).
 
 **Rollback.** Remove the routes. Existing imported data stays.
 
-### Phase 6: Image proxy + cache
+### Phase 5: Apple clients (with offline + FTS)
+
+**Status:** Not started.
+
+**Goal.** The iOS, iPadOS, visionOS, and macOS clients have a reader
+UI with per-feed `WKWebsiteDataStore` isolation, offline reading, and
+per-feed FTS. This is the first user-facing surface.
+
+**Work.**
+
+- `CabalmailKit` gains:
+  - `RssClient` protocol and `ApiBackedRssClient` wrapping the `rss_*`
+    endpoints. The pattern mirrors `ApiBackedImapClient` from #371.
+  - `ItemCache` actor backed by SQLite (FTS5). Schema, sync logic,
+    mutation queue per "Apple-side item cache". Library decision
+    (GRDB vs. thin `sqlite3` wrapper) made and recorded here.
+  - `RssSync` actor coordinating the three sync paths.
+  - The App Group handoff directory the NSE will write into (phase 8
+    fills it).
+- Reader views on each platform: folder tree, item list (read from
+  ItemCache, not the API), item detail through the existing body
+  renderer with its reader-mode toggle. Design tokens come from the
+  shared colour-token catalog.
+- `WKWebView` for articles uses `WKWebsiteDataStore(forIdentifier:
+  subscription.data_store_uuid)`.
+- Reader-vs-native styling for the publisher's page: Safari's Reader
+  is not exposed to `WKWebView`, so the reader path injects a
+  Readability-style extractor (Mozilla's Readability.js) into the
+  loaded page and renders the extracted content with the client's own
+  styling. Vendor it the way marked/turndown are vendored: pinned in
+  `react/admin/package.json` (still the pin source of truth even
+  though the React app itself is frozen), materialized by
+  `sync-vendored.sh`, credited in `Acknowledgements.swift`. Native
+  styling = the publisher's page rendered as-is.
+- Per-feed search UI: a search field in the feed view, results from
+  `ItemCache.search(query:, feedId:)`. "Search older items" affordance
+  pulls more from the server and re-indexes.
+- Offline indicators: small badge on the article-view button when the
+  network is unavailable; "queued" indicator on items with pending
+  mutations.
+- OPML import via the document picker / share sheet; export via the
+  share sheet.
+- Background refresh registered with `BGTaskScheduler` (iOS) or a
+  scheduled timer (macOS).
+- Remote-content policy: in-feed images honour the existing
+  `load_remote_content` preference (`off | ask | always`) until phase
+  7's proxy exists, after which "load via Cabalmail" becomes the
+  privacy-preserving middle setting.
+- Spotlight indexing of items is a possible follow-on (the Kit already
+  indexes messages); not in this phase.
+- Changelog fragment carries the `Apple:` prefix.
+
+**Rollback.** Hide the RSS tab behind a build flag. ItemCache schema
+migrations are forward-only; downgrade strategy is "delete and re-
+populate from server."
+
+### Phase 6: Android client (with offline + FTS)
+
+**Status:** Not started.
+
+**Goal.** The Android client reaches parity with phase 5: reader UI,
+offline reading, per-feed FTS, per-feed WebView profile scoping.
+
+**Work.**
+
+- `kit` gains the `RssClient` interface and API-backed implementation
+  (mirroring `ApiClient`'s existing shape), the Room RSS cache with
+  `@Fts4` search, sync, and the offline mutation queue, per
+  "Android-side item cache".
+- Compose reader screens: folder tree, item list from the cache, item
+  detail through the existing `MessageDetailScreen` body renderer and
+  its reader-mode behaviour.
+- Article `WebView` uses the `androidx.webkit` multi-profile API keyed
+  on `data_store_uuid`, with the runtime feature check and fallback
+  notice described under "Per-feed cookie scoping". Readability.js
+  injection for reader styling, vendored from the same pin.
+- OPML import via the system file picker; export via the share sheet.
+- `WorkManager` periodic refresh for notification-off feeds.
+- Changelog fragment carries the `Android:` prefix with a ~40-character
+  headline, per the Play release-notes budget.
+
+**Rollback.** Feature flag hides the RSS destination.
+
+### Phase 7: Image proxy + cache
+
+**Status:** Not started.
 
 **Goal.** All `<img>` references in served item content are rewritten
 to the image-proxy URL, which fetches the publisher's image on first
@@ -889,134 +1074,106 @@ request and caches in S3 for 7 days.
 
 **Work.**
 
-- `lambda/rss/image_proxy/function.py`: on `GET /rss/img/{hash}`,
-  looks up the S3 object by hash (SHA-256 of source URL), serves it
-  if present, otherwise fetches from the publisher, stores in S3,
-  serves bytes.
-- API Gateway proxy integration with binary support enabled.
-- Image-URL rewriting in `GET /rss/items/{id}`: parse `summary_html`
-  and `content_html` with `lxml`, replace `src` and `srcset`
-  attributes, hand back the rewritten body.
+- `lambda/api/rss_image/function.py`: given a signed image reference,
+  looks up the S3 object by hash (SHA-256 of source URL); if absent,
+  fetches from the publisher (same SSRF guard, https only,
+  `Content-Type` must be `image/*`, size cap) and stores it. Returns a
+  **presigned S3 URL** (the pattern `helper.py` already uses for
+  attachments) rather than streaming bytes. This avoids enabling
+  binary media types on the REST API, which is a gateway-wide setting
+  that changes how existing JSON endpoints negotiate payloads, and it
+  keeps large responses off the Lambda-through-API-Gateway path.
+- Image-URL rewriting in `/rss_get_item` and `/rss_list_items`: parse
+  `summary_html` and `content_html`, replace `src` and `srcset`, hand
+  back the rewritten body. `lxml` is a large binary wheel; the stdlib
+  `html.parser` is enough for attribute rewriting and keeps the
+  hash-pinned tree small.
 - Image-cache TTL is the S3 bucket lifecycle rule (7 days, operator
   override in SSM).
-- IAM: the image-proxy Lambda is the only writer to the bucket; API
-  Lambdas don't touch it.
-- Authentication: image-proxy validates a short-lived signed token
-  derived from the user's Cognito JWT (so cached images aren't a
-  world-readable surface).
+- Authentication: the rewritten reference carries a short-lived
+  signature derived from the user's request, so cached images are not
+  a world-readable surface.
 
-**Rollback.** Stop rewriting `<img>` tags in the read endpoints; let-
-through behavior resumes. The bucket can stay or be destroyed
+**Rollback.** Stop rewriting `<img>` tags in the read endpoints;
+pass-through resumes. The bucket can stay or be destroyed
 independently.
 
-### Phase 7: Push notification integration
+### Phase 8: Push notification integration
+
+**Status:** Not started.
 
 **Goal.** New items in subscribed feeds with notifications enabled
-produce APNs and FCM notifications via the existing 0.11.0 push
-path.
+produce APNs and FCM notifications via the existing 0.11.x push path.
 
 **Work.**
 
-- `lambda/rss/notify/function.py`: EventBridge-triggered every 60
-  seconds. Scans `pending_notification` (small table), for each item:
-  Query `subscription.by_feed_notify` for subscribers with
-  notifications-on, enqueue one message per (user, item) onto the
-  existing `cabal-push-queue` with a `type=rss` marker. Delete the
-  pending row on success.
-- Extend `push_dispatch` (from 0.11.0) to handle `type=rss`
-  payloads: lookup device tokens for the user, build an APNs payload
-  with `feed_id` and `item_id` (no content — NSE enriches on device),
-  send.
-- iOS/macOS NSE in CabalmailKit gets a `type=rss` enrichment branch
-  that calls `GET /rss/items/{id}` and populates the notification
-  body with feed name + item title. **Two-step ship to handle the
-  phase-8 dependency:** the v1 of this branch (lands with phase 7)
-  enriches the notification only; the v2 of this branch (lands with
-  or after phase 8) additionally writes the fetched item into the
-  local `ItemCache`. Phase 7 is therefore independently shippable;
-  the cache-write integration follows once the cache exists.
+- `lambda/api/rss_notify/function.py`: DynamoDB Stream trigger on
+  `cabal-rss-item`, `INSERT` events only. For each new item: Query
+  `subscription.by_feed_notify`, enqueue one wake signal per (user,
+  item) onto `cabal-push-queue`:
+  `{"kind": "rss", "user": ..., "feed_id": ..., "item_id": ...}`.
+- Extend `push_dispatch` to branch on `kind`:
+  - **Opt-in filter.** The mail path filters token rows by per-folder
+    opt-in (`_wants_folder`). RSS opt-in is per subscription and lives
+    on the subscription row, so `rss_notify` has already applied it;
+    `push_dispatch` must not run the folder filter on RSS signals.
+    Whether a token row needs a separate "RSS notifications on this
+    device" switch is a UI question for phase 5/6; the plan assumes
+    subscription-level opt-in is enough for v1.
+  - **APNs payload.** Content-free like mail (`"New item"`,
+    `mutable-content`, a distinct `category` such as `RSS_ITEM`, and
+    an `itemRef` with `feed_id`/`item_id`); collapse id derived from
+    `item_id`. The macOS bundle ids keep receiving **silent**
+    background pushes, so, exactly as for mail, a quit Mac app gets no
+    RSS notification — documented, not fixed.
+  - **FCM data map.** String-valued `kind`, `feed_id`, `item_id`.
+- Apple NSE gets an `RSS_ITEM` branch that calls `/rss_get_item`,
+  rewrites the alert with feed name + item title, and drops the item
+  JSON into the App Group handoff directory for the app to ingest.
+- Android `FirebaseMessagingService` gets a `kind == "rss"` branch that
+  enriches via `/rss_get_item`, posts the local notification, and
+  writes the cache directly.
 - Notification tap-throughs open the item in the reader UI.
 - v1 is per-subscription notifications-on, default false (per D12).
   Folder-level toggle (D12 option B) is wired up but the UI exposes
-  per-feed only; folder default lands in 2.1.
+  per-feed only; folder default lands in a later 2.x.
 
-**Rollback.** Stop the notify Lambda's schedule; pending rows stay in
-the table (TTL eventually drains them) and resume on re-enable.
-
-### Phase 8: Apple clients (with offline + FTS)
-
-**Goal.** The iOS, iPadOS, visionOS, and macOS clients have RSS in
-parity with the React app, plus per-feed `WKWebsiteDataStore`
-isolation, offline reading, and per-feed FTS.
-
-**Work.**
-
-- `CabalmailKit` gains:
-  - `RssClient` protocol with the same shape as `ImapClient`, and
-    `ApiBackedRssClient` wrapping the `/rss/*` Lambda endpoints. The
-    pattern mirrors `ApiBackedImapClient` from #371.
-  - `ItemCache` actor backed by GRDB + SQLite (FTS5). Schema, sync
-    logic, mutation queue per the "Apple-side item cache, FTS, and
-    offline reading" section above.
-  - `RssSync` actor coordinating the three sync paths (APNs-assisted,
-    background-refresh, foreground).
-- Reader views on each platform: folder tree, item list (read from
-  ItemCache, not the API), item detail.
-- `WKWebView` configuration uses `WKWebsiteDataStore(forIdentifier:
-  subscription_uuid)`. The UUID lives in Keychain, generated on
-  first article view per subscription.
-- Reader-vs-native styling: Safari's reader mode is not directly
-  toggleable on `WKWebView` from app code, so the reader path is
-  implemented by injecting a Readability-style content extractor
-  (Mozilla's Readability.js port, or `swift-readability`) into the
-  loaded page and rendering the extracted content with simple
-  styling. Native styling = the publisher's page rendered as-is.
-  Exact mechanism is a phase-8 open question; the requirement
-  is that the user-facing toggle works, not which library backs it.
-- Per-feed search UI: a search field in the feed view, results from
-  `ItemCache.search(query:, feedId:)`. "Search older items" affordance
-  pulls more from the server and re-indexes.
-- Offline indicators: small badge on the article-view button when the
-  network is unavailable; "queued" indicator on items with pending
-  mutations.
-- OPML import/export via the share sheet.
-- Background refresh registered with `BGTaskScheduler` (iOS) or
-  scheduled timer (macOS).
-- Push handling already in place from 0.11.0; the `type=rss` NSE
-  branch from phase 7 makes RSS notifications work and feeds the
-  ItemCache.
-
-**Rollback.** Hide the RSS tab behind a build flag. ItemCache schema
-migrations are forward-only; downgrade strategy is "delete and re-
-populate from server."
+**Rollback.** Disable the stream event source mapping; the stream
+retains 24 hours of records, so re-enabling within a day replays
+missed notifications (or trims them, if that is preferable after an
+outage).
 
 ### Phase 9: Credentialed feeds
+
+**Status:** Not started.
 
 **Goal.** Users can subscribe to private feeds using HTTP Basic,
 URL-key, or cookie auth. Credentials stored per-user, per-feed.
 
 **Work.**
 
-- `POST /rss/subscriptions` accepts a `credentials` block:
+- `/rss_subscribe` accepts a `credentials` block:
   - `{"scheme": "basic", "username": "...", "password": "..."}`
   - `{"scheme": "url_key", "url": "...?key=..."}` — no separate
-    credential storage; the URL is the secret and lives in
-    `cabal-rss-feed.canonical_url`.
-  - `{"scheme": "cookie", "cookie_header": "..."}` (rarely used
-    directly; usually the Apple client copies the cookie out of its
-    `WKWebsiteDataStore` after user login)
-- Credentials write to `cabal-rss-credentials` table + SSM
-  SecureString parameter. SSM path is the source of truth for the
-  secret value; DynamoDB only holds the path.
+    credential storage; the URL is the secret and lives in the
+    per-user `cabal-rss-feed.canonical_url`.
+  - `{"scheme": "cookie", "cookie_header": "..."}` (the client copies
+    the cookie out of its per-feed web-view store after user login)
+- Secrets write to SSM SecureString at
+  `/cabal/rss/credentials/<user>/<feed_id>`; the subscription row holds
+  only `credentials_scheme`. Consistent with the project's standing
+  rule that runtime secrets live in SSM and never in Terraform state.
 - The fetcher's per-user track activates: subscriptions with a
-  `credentials_ref` get their own `cabal-rss-feed` row
-  (`is_shared = false`, `owner_user = subscriber`).
-- Apple client UI for "feed requires login": opens a `WKWebView` to
-  the feed/site URL using the subscription's `WKWebsiteDataStore`;
-  after the user authenticates, the client extracts cookies from
-  the data store and posts them to the API.
-- React client UI for Basic + URL-key only; cookie auth is Apple-
-  only in v1 because of the React cookie-scoping limitation.
+  scheme get their own `cabal-rss-feed` row (`is_shared = false`,
+  `owner_user = subscriber`).
+- Native client UI for "feed requires login": opens the article web
+  view with the subscription's data store / profile to the feed's site
+  URL; after the user authenticates, the client extracts cookies from
+  the store and posts them to the API. Both platforms expose the
+  cookie store for their scoped web views (`WKHTTPCookieStore` and
+  `CookieManager` per profile).
+- A feed that 401s while shared surfaces as a credential prompt (D1
+  sub-decision) rather than being quarantined.
 
 **Rollback.** Drop the credential endpoints; existing credentialed
 subscriptions sit dormant (fetcher returns 401, marks feed
@@ -1024,22 +1181,28 @@ unhealthy).
 
 ### Phase 10: Adaptive cadence + health surface polish
 
+**Status:** Not started.
+
 **Goal.** Tune the adaptive cadence formula based on observed
 production behavior, and surface feed health visibly enough that
 operator and users can spot problems.
 
 **Work.**
 
-- Per-feed `/rss/feed/{id}/health` returns the last N fetches'
-  history.
-- React + Apple UI surfaces a small health badge on feeds with 3+
-  consecutive failures (yellow) or 20+ consecutive / 410 Gone (red).
+- `/rss_feed_health` returns the last N fetches' history (kept as a
+  bounded list attribute on the feed row).
+- Native UI surfaces a small health badge on feeds with 3+ consecutive
+  failures (yellow) or 20+ consecutive / 410 Gone (red).
 - Adaptive-cadence formula gets a feedback loop: if
-  `observed_items_per_day` is high but the polling tier keeps us
-  catching the same items repeatedly, slow down. Lives in
-  `lambda/rss/_shared/cadence.py` with unit tests on simulated feeds.
-- Operator runbook entry in `docs/operations/` for "RSS feed is
-  stuck": health endpoint, cadence reset, dead-letter revival.
+  `observed_items_per_day` is high but the polling tier keeps
+  returning 304s, slow down. Lives in `lambda/api/_shared/rss_cadence.py`
+  with unit tests on simulated feeds.
+- Operator visibility uses CloudWatch, not the (disabled) monitoring
+  stack: `rss_fetch` emits metrics the way `push_dispatch` does
+  (fetches, 304s, failures, dead-letters), and the fetch DLQ depth
+  gets an alarm alongside the push DLQ's.
+- Runbook in `docs/operations/runbooks/` for "RSS feed is stuck":
+  health endpoint, cadence reset, dead-letter revival, DLQ redrive.
 
 **Rollback.** Revert the formula change; the health UI can stay or
 go independently.
@@ -1054,20 +1217,19 @@ month):
 
 | Item                              | Cost (USD/month)              |
 | --------------------------------- | ----------------------------- |
-| DynamoDB on-demand (8 tables)     | ~$0.50 (read+write+storage)   |
+| DynamoDB on-demand (5 tables)     | ~$0.50 (read+write+storage)   |
 | GSI storage (sparse, small)       | negligible                    |
-| Image cache S3 (with 7d TTL)      | <$2                           |
-| Fetcher Lambda invocations        | <$1 (288 invocations/day)     |
-| Notify Lambda invocations         | <$1 (1440 invocations/day)    |
+| DynamoDB Stream → Lambda          | free (trigger reads)          |
+| Image cache + spill S3 (7d TTL)   | <$2                           |
+| Scheduler + fetch invocations     | <$1 (288 ticks + fetches/day) |
 | API Lambda invocations            | scales with reader use, <$1   |
-| EventBridge schedules             | negligible                    |
-| SQS                               | negligible (reuses 0.11.0)    |
-| KMS                               | <$1                           |
-| **Total per environment**         | **~$5/month**                 |
+| SQS (fetch queue; push reused)    | negligible                    |
+| NAT egress for feed traffic       | $0 (instances) / <$0.50 (GW)  |
+| **Total per environment**         | **~$4/month**                 |
 
 Dev is quiesced by default per the project's standing practice and
-incurs negligible cost when off. Stage + prod together: **~$10/month**
-data-layer cost, down from ~$90/month under the original Aurora plan.
+incurs negligible cost when off. Stage + prod together: **under
+$10/month**, down from ~$90/month under the original Aurora plan.
 
 DynamoDB scales smoothly upward: at substantially higher use the
 per-million-request fees start to add up, but the data layer would
@@ -1077,11 +1239,12 @@ typical reader activity.
 ### Quiesce
 
 `docs/quiesce.md` covers ECS + NAT + ASG. The RSS additions to the
-quiesce path are minimal:
+quiesce path:
 
-- Disable the `rss-fetcher` and `rss-notify` EventBridge schedules.
-- Optionally disable the `/rss/*` API Gateway routes (they're free
-  while idle, so this is more about preventing accidental writes).
+- Disable the `rss_schedule` Scheduler schedule (mandatory: with the
+  NAT route gone, a running schedule only fills the fetch DLQ).
+- Leave the stream trigger alone; with no fetches there are no
+  inserts.
 - DynamoDB tables on-demand have no cost while idle and need no
   scale-down step.
 
@@ -1089,101 +1252,202 @@ quiesce path are minimal:
 
 DynamoDB PITR (35-day retention by default; we use 14 days non-prod,
 35 prod) covers all RSS tables. The image-cache S3 bucket has no
-backup — regenerable on demand. SSM credential parameters are
-KMS-encrypted; the existing `terraform/infra/modules/backup/` module
-is extended to cover the new resources where appropriate (mainly the
-KMS key for emergency restore).
+backup — regenerable on demand; the `items/` spill prefix is
+authoritative for oversized bodies and joins the existing S3 backup
+selection. SSM credential parameters are KMS-encrypted; the existing
+`terraform/infra/modules/backup/` module is extended to cover the new
+tables.
 
-The Apple-side `ItemCache` lives on each device and is not backed up
-by Cabalmail — it's a derived cache, rebuilt from the server on
-demand. iOS device backups include it as a side-effect via NSURL-
-ProtectionCompleteUnlessOpen attributes on the SQLite file.
+The device-side caches (Apple `ItemCache`, Android Room) are not
+backed up by Cabalmail — they are derived caches, rebuilt from the
+server on demand.
 
 ### Multi-environment story
 
 Branches/environments per the project's existing model: development /
-stage / main. The new module follows the same pattern; nothing RSS-
-specific routes around the existing per-environment AWS account
-boundary.
+stage / main. Nothing RSS-specific routes around the existing
+per-environment AWS account boundary. New infrastructure variables, if
+any, go in both the plan and apply tfvars steps of `infra.yml`.
 
 ### Rollback per phase
 
 Every phase has its own rollback note above. The dependency chain is
-1 -> 2 -> 3 -> {4, 5, 6, 7} -> 8 -> 9 -> 10. Phase 7's notification
-flow is fully independent of phase 8 (the v1 NSE branch enriches the
-notification body and nothing more); the cache-writing v2 of the NSE
-branch ships with or after phase 8 and is the only piece that crosses
-the phase-7-to-8 boundary.
+1 -> 2 -> 3 -> {4, 5, 6, 7, 8} -> 9 -> 10. Phase 8's notification
+flow depends on phase 5/6 only for the on-device enrichment branches;
+the server side ships independently.
+
+## Requirements challenges (for discussion)
+
+These are places where the requirements doc, read against what has
+shipped since May, either contradicts itself, rests on an assumption
+that no longer holds, or would benefit from a decision the operator
+has not yet been asked for. None of them is changed in
+`rss-requirements.md`; the plan above proceeds on the stated
+assumption until the operator decides otherwise.
+
+1. **D1 normalizer examples disagree on which host form is
+   canonical.** "`https://example.com/` and `https://www.example.com/`
+   are the same. The latter is canonical" (www wins), but
+   "`https://example.co.uk/` and `https://www.example.co.uk/` are the
+   same. The former is canonical" (apex wins). One rule is needed.
+   *Plan assumes:* the **apex** form is canonical everywhere (the
+   fewer-characters, PSL-derived form), since the `.co.uk` example
+   reads as the more deliberate of the two. Either way the rule needs
+   the Public Suffix List to identify the apex.
+2. **D1 "http is not supported."** A meaningful tail of feeds is still
+   served over plain http, and many more are entered by users as
+   `http://` and redirect to https. *Plan assumes:* accept an `http://`
+   input, attempt the `https://` equivalent first, and reject only if
+   https fails; never fetch over plain http. If the operator prefers a
+   hard reject on `http://` input, that is a one-line change.
+3. **D3's parenthetical about exposing IMAP externally is resolved.**
+   Public IMAP and submission closed in 0.11.x. The decision itself
+   (own API only) stands; the aside is history. No plan change.
+4. **D6 = C relies on "the embedded engine's reader mode."** Neither
+   `WKWebView` nor Android `WebView` exposes the browser's reader mode
+   to apps. The plan delivers "reader view" by injecting
+   Readability.js into the publisher's page and restyling the result,
+   which is what Reeder and NetNewsWire do too. Worth confirming that
+   this satisfies the requirement, since it is not Safari's Reader and
+   will occasionally extract differently.
+5. **D15 reading-time estimate "from extracted text."** Under D6 = C
+   there is no extracted text; the only text the server has is what
+   the feed delivered. For summary-only feeds an estimate would be
+   wildly wrong. *Plan assumes:* compute it client-side from cached
+   `content_html` only, and hide it when the item has only a summary.
+   The operator may prefer to drop it from v1 entirely.
+6. **D15 auto-mark-read setting: reuse the mail key or add one?** The
+   `app` preferences map already has `mark_as_read: manual | on_open`
+   for mail. Sharing it means one switch governs both mail and feeds;
+   a parallel `rss_mark_as_read` key means two. *Plan assumes:* a
+   separate `rss_mark_as_read` key, since the operator's mail and feed
+   habits may differ.
+7. **D9 egress stability vs. Q3 "scheduled Lambda."** These were in
+   tension in the May plan (a non-VPC Lambda has no stable IP). The
+   plan resolves it by running the fetcher in the VPC behind the NAT
+   EIPs; this costs nothing new but does put feed traffic on the NAT.
+   Flagged so the choice is explicit rather than incidental.
+8. **D10 health visibility with monitoring off.** The requirements
+   assume an operator can see feed health; the plan uses CloudWatch
+   metrics and a DLQ alarm because `TF_VAR_MONITORING` is false in
+   every environment. If monitoring is ever re-enabled, the same
+   metrics can feed it.
+9. **D4 "forever" and feeds nobody subscribes to.** D4 speaks to
+   items, not to fetching. *Plan assumes:* a shared feed with zero
+   subscribers stops being fetched (items retained). Otherwise the
+   fetcher polls every feed anyone ever tried, forever.
+10. **Version label vs. semver.** `docs/compatibility.md` makes the
+    HTTP API a stable surface from 1.0.0 and classifies new endpoints
+    as minor changes. RSS as planned is purely additive, so under the
+    project's own rules it is a 1.x minor release; "2.0" is roadmap
+    branding. That is fine if intended, but if a real breaking change
+    is wanted to justify the major bump (retiring the frozen React
+    app's API-only endpoints, say), it should be named, and if not,
+    the roadmap could equally call this 1.12. Operator's call.
+11. **Client cut (Q6).** The answer "phased rollout is fine" was given
+    when the React app was the assumed first client. With React frozen
+    and Android first-class, the plan makes Apple the first UI and
+    Android the second, each in its own phase; confirm that ordering
+    is still the operator's preference (it follows the operator's own
+    devices, which is why it is the default).
 
 ## Open questions and risks
 
-The decisions in `rss-requirements.md` (with the post-design-
-exploration revisions) settled v1 scope. Open implementation-time
-items, scoped per phase:
+Open implementation-time items, scoped per phase:
 
-1. **Pagination cursor format for folder-spanning Queries.** A JSON
-   blob carrying per-feed `LastEvaluatedKey` plus a merge position
-   is workable but ugly. Worth designing the cursor format
-   deliberately in phase 3 so it's a stable contract clients can
-   rely on.
+1. **Pagination cursor format for folder-spanning Queries.** An opaque
+   base64 JSON blob carrying per-feed `LastEvaluatedKey` plus a merge
+   position is workable. Design it deliberately in phase 3 so it is a
+   stable contract clients can rely on under `docs/compatibility.md`.
 2. **GSI hot-partition risk on `by_due`.** The fixed `PK = "active"`
    sends all due-feed reads to a single partition. At hobby scale
-   this is fine (a few hundred items in the index, queried twice an
-   hour). If the feed count grows materially, shard by
+   this is fine (a few hundred items in the index, queried twelve
+   times an hour). If the feed count grows materially, shard by
    `hash(feed_id) % N` and Query in parallel across N constant PK
-   values.
-3. **Sync strategy tuning on Apple.** The lazy/eager/APNs-assisted
-   mix is a hypothesis; real-world battery and bandwidth behavior
-   determines whether to bias more toward eager prefetch or lean
-   harder on background-refresh. Tune in phase 8.
-4. **Cache retention defaults.** 365 days + favorites-exempt is a
-   guess. Watch device storage usage in phase 8 beta and adjust the
-   default before GA.
-5. **HTML stripping for FTS.** `NSAttributedString`'s HTML parser is
-   adequate for plaintext extraction but slow on large bodies
-   (it spins up a full WebKit parser internally). If indexing
-   throughput becomes an issue, swap to a lightweight Swift HTML
-   tokenizer like `SwiftSoup`.
-6. **Adaptive cadence pathologies.** A feed that posts in bursts
+   values — which is why the attribute is named `due_shard` from the
+   start.
+3. **Unread computation cost.** Items-minus-read-rows above a
+   watermark is cheap per feed and fine for folder views at hobby
+   scale, but "global unread count" touches every subscription. Cache
+   it client-side and refresh on sync rather than asking the server on
+   every badge redraw; if it ever matters server-side, a per-
+   subscription counter maintained by `rss_notify`'s stream handler is
+   the upgrade path.
+4. **Sync strategy tuning on the native clients.** The
+   lazy/eager/push-assisted mix is a hypothesis; real-world battery
+   and bandwidth behavior determines whether to bias more toward eager
+   prefetch or lean harder on background-refresh. Tune in phases 5–6.
+5. **Cache retention defaults.** 365 days + favorites-exempt is a
+   guess. Watch device storage usage in the phase 5/6 beta and adjust
+   the default before GA.
+6. **HTML stripping for FTS on Apple.** `NSAttributedString`'s HTML
+   parser is adequate for plaintext extraction but slow on large
+   bodies (it spins up a full WebKit parser internally). If indexing
+   throughput becomes an issue, swap to a lightweight tokenizer.
+7. **Adaptive cadence pathologies.** A feed that posts in bursts
    (weekday-only, say) will look slow on weekends and cadence will
    widen, then Monday's burst is delayed by up to max_cadence. Time-
    of-day-aware cadence is out of scope for v1; phase 10 monitors
    whether it matters.
-7. **OPML import edge cases.** Real-world OPML files from Feedly,
+8. **OPML import edge cases.** Real-world OPML files from Feedly,
    NetNewsWire, and Reeder encode folder hierarchy slightly
-   differently. Phase 5 test plan should pin down all three
-   explicitly.
-8. **Pending-mutation conflict resolution on Apple.** Last-write-
-   wins is the v1 strategy but breaks down if the user marks an
-   item favorite on iPhone offline, then unfavorites on Mac online,
-   then the iPhone reconnects. Acceptable in v1 (the iPhone wins
-   because its mutation timestamp is later); revisit if it bites.
+   differently. Phase 4's fixtures pin down all three explicitly.
+9. **Pending-mutation conflict resolution.** Last-write-wins is the
+   v1 strategy but breaks down if the user marks an item favorite on
+   iPhone offline, then unfavorites on Mac online, then the iPhone
+   reconnects. Acceptable in v1 (the iPhone wins because its mutation
+   timestamp is later); revisit if it bites.
+10. **Android multi-profile WebView availability.** The
+    `androidx.webkit` multi-profile feature depends on the installed
+    system WebView, not the OS version. Measure how often the fallback
+    path is taken on the tester devices before deciding whether the
+    fallback notice is enough.
+11. **Feed-content trust.** `feedparser` sanitizes item HTML, and both
+    clients render bodies through the same sandboxed renderer they use
+    for mail, so a hostile feed has the same (small) surface as a
+    hostile email. Confirm in phase 5/6 that the RSS body view does not
+    grant anything the mail body view withholds (scripts, remote
+    content policy, link handling).
+12. **Agent access.** The tentative
+    [`agent-mail-access-plan.md`](../tentative/agent-mail-access-plan.md)
+    proposes scoped, token-based MCP access to a user's mailbox. Feeds
+    are an obvious second scope for the same grant model ("read my
+    feeds, never mark them read"). Nothing in this plan should make
+    that harder: keep read endpoints free of side effects and keep the
+    per-user state writes in explicitly named endpoints.
 
 ## Documentation
 
 When the RSS feature ships, operator-facing documentation lives at
 `docs/rss.md` (top-level, per the docs convention) covering:
 
-- What RSS in Cabalmail does (link to user-facing UI tour).
-- The fetcher's politeness policy (User-Agent, conditional GET, rate
-  limits) — what publishers should expect.
+- What RSS in Cabalmail does (link to user-facing UI tour in
+  `docs/user_manual.md`).
+- The fetcher's politeness policy (User-Agent, egress addresses,
+  conditional GET, cadence bounds, rate limits) — what publishers
+  should expect — and the `/feedbot` page that points at it.
 - The image-proxy's behavior — privacy implications, cache TTL.
 - The credential storage model — what's in SSM, what's in DynamoDB,
   how rotation works.
-- The Apple client's offline-reading semantics and FTS scope, plus
-  the React client's known limitations.
-- Operator runbook for stuck feeds, OPML imports, ItemCache rebuilds.
+- The native clients' offline-reading semantics and FTS scope, and
+  the per-feed session-scoping behaviour (including the Android
+  fallback).
+- Operator runbook for stuck feeds, DLQ redrive, OPML imports, cache
+  rebuilds.
 
-The `docs/2.0.x/` directory keeps this plan and the requirements doc
+The `docs/2.x/` directory keeps this plan and the requirements doc
 as the historical planning record.
 
 ## Next steps
 
-1. Operator review of this revised plan — particularly the DynamoDB
-   schema, the Apple-cache design, and the per-phase sequencing.
-2. If approved, phase 1 is the first PR: Terraform-only, the new
-   `rss` module with DynamoDB tables, S3 bucket, KMS key, and SSM
-   hierarchy. CI deploys it to stage; the smoke-test step verifies
-   table existence and KMS encryption.
-3. Each subsequent phase opens its own PR against `stage`, with the
-   `claude` label per the project's automation conventions.
+1. Operator review of this revised plan — particularly the
+   "Requirements challenges" section, the reduced data model, the
+   in-VPC fetcher, and the Apple/Android phase ordering.
+2. If approved, phase 1 is the first PR: Terraform-only — tables,
+   stream, fetch queue, bucket, IAM, and the quiesce hook. CI deploys
+   it to stage.
+3. Each subsequent phase is a worktree branch merged to `stage` by PR
+   and promoted to `main` with `make promote`, with a changelog
+   fragment per change (`Apple:` / `Android:` prefixed where the
+   client sources change) and this document's Progress table updated
+   in the same PR.
