@@ -252,6 +252,7 @@ module "admin" {
   extension_client_id = module.pool.extension_client_id
   user_pool_domain    = module.pool.user_pool_domain
   imap_pool_enabled   = var.imap_pool_enabled
+  quiesced            = var.quiesced
   access_logs_bucket  = module.s3_access_logs.bucket
 
   # Private-IMAP replumb: the API Lambdas attach to the VPC and dial the imap
