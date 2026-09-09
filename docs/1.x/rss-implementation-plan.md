@@ -2,13 +2,14 @@
 
 ## Context
 
-This plan implements the RSS reader for Cabalmail 2.x based on the
+This plan implements the RSS reader for Cabalmail 1.x based on the
 decisions recorded in [`rss-requirements.md`](./rss-requirements.md).
 It is the companion build plan to that requirements pass; whenever this
-document says "per Dx," it refers to a decision in that file. The
-reader is the only substantive feature in 2.0; the version cut is
-`2.x` (this directory) with each phase below shipping under its own
-release.
+document says "per Dx," it refers to a decision in that file. The RSS
+API is purely additive, which `docs/compatibility.md` classifies as a
+minor release, so the work ships as 1.x minor releases (this
+directory), each phase under its own release. The roadmap wiki still
+lists RSS under 2.x and needs its row updated.
 
 ## Progress
 
@@ -90,9 +91,15 @@ errata; this section is the summary of what moved and why.
   Lambda ceiling and per-feed retries stop being a concern. DynamoDB's
   400 KB item limit needs an S3 spill for oversized bodies. Details
   under "Data model" and "Data flow".
-- **Requirements worth revisiting** are collected in "Requirements
-  challenges (for discussion)" near the end. The requirements doc
-  itself is unchanged pending that discussion.
+- **Requirements challenges were raised and ruled on the same day.**
+  The operator's decisions (apex form canonical; `http://` upgraded to
+  https or refused; Readability.js satisfies "reader view"; mark-as-read
+  is manual or immediate-on-open under its own `rss_mark_as_read` key;
+  a feed's content is deleted when its last subscriber leaves; the
+  release is 1.x and the docs moved from `docs/2.x/` to `docs/1.x/`)
+  are recorded as **Revised decision (2026-09-09)** annotations in the
+  requirements doc and applied throughout this plan. See "Requirements
+  challenges" near the end for the two items still open.
 
 Three decisions shape the architecture more than the rest:
 
@@ -174,7 +181,7 @@ phase being present.
   client is mid-build on its own plan and the extension is an
   address-management tool. A "subscribe to this page's feed"
   affordance in the extension (it already scans pages for
-  `<link rel="alternate">`-style hooks) is a natural 2.x follow-on,
+  `<link rel="alternate">`-style hooks) is a natural follow-on,
   not v1.
 - Third-party API compatibility — no Fever, no Google Reader (D3).
 - Email-to-feed (D7, deferred).
@@ -385,8 +392,9 @@ cabal-rss-feed
                      (dedup on subscribe; sentinel string for nulls
                       since DynamoDB GSIs reject null SK)
   GSI by_due (sparse): PK = due_shard ("active" while fetchable;
-                            attribute removed when dead-lettered or
-                            when subscriber_count reaches 0)
+                            attribute removed when dead-lettered; the
+                            whole row is deleted when subscriber_count
+                            reaches 0)
                        SK = next_fetch_at_iso
 
 cabal-rss-item
@@ -441,10 +449,10 @@ Five tables, down from eight. What went, and why:
   table's stream (see "Notification path").
 - **`cabal-rss-user-settings`** — replaced by `rss_*` keys in the
   `app` map of `cabal-user-preferences`, validated in `APP_ALLOWED`
-  like the mail keys (`rss_reading_time_visible`,
-  `rss_last_ordering_mode`, and the auto-mark-read setting — see the
-  D15 challenge below for whether that should be the existing
-  `mark_as_read` key or a parallel one). The map is `{string: string}`
+  like the mail keys: `rss_mark_as_read` (`manual | on_open`, the same
+  two modes the mail clients offer, under its own key so mail and feed
+  habits can differ), `rss_reading_time_visible`, and
+  `rss_last_ordering_mode`. The map is `{string: string}`
   by contract with the shipped clients, which enum values satisfy. The
   Linux `xtask` drift test asserts client keys against `APP_ALLOWED`;
   new keys land in both.
@@ -489,13 +497,16 @@ A few notes on the model:
 - **Favorites keep a sparse GSI.** Favorite is opt-in and explicit, so
   the sparse-index pattern works for it: `favorite_by_feed` contains
   exactly the rows with `is_favorite = true`.
-- **Feeds with no subscribers stop fetching.** When the last
-  subscription to a shared feed is deleted, `subscriber_count` reaches
-  0 and the `due_shard` attribute is removed, so the feed leaves the
-  `by_due` index; its items stay (D4). Re-subscribing restores the
-  attribute with `next_fetch_at = now`. Without this, D4's "forever"
-  plus D1's sharing would have the fetcher polling every feed anyone
-  ever tried, indefinitely.
+- **A feed with no subscribers is deleted** (D4, revised
+  2026-09-09). When the last subscription to a shared feed is removed,
+  `/rss_unsubscribe` deletes the feed row, its items, any spilled
+  bodies under `items/<feed_id>/`, and the departing user's state rows
+  for it. Unsubscribing while other subscribers remain deletes only the
+  user's own state rows; a per-user credentialed feed is deleted with
+  its single subscription. Re-subscribing starts the feed fresh. D4's
+  "kept forever" therefore applies while at least one subscription
+  exists; a cold-storage tier for departed feeds is a possible later
+  release, and the S3 spill prefix is where it would live.
 - **The four ordering modes** (D17 confirmed scope): modes 1 and 2
   (oldest/newest first) fall out of the SK shape. Modes 3 and 4
   (day-grouped) don't encode naturally in a DynamoDB SK; the API
@@ -876,7 +887,8 @@ parsed, items upserted, health tracked. Validate by seeding a few
     row already exists for it, re-point the subscriptions and retire
     the old row; 410 Gone dead-letters immediately; 429 backs off.
 - User-Agent set to
-  `Cabalmail/2.0 (+https://<control-domain>/feedbot)`. The control
+  `Cabalmail/<release> (+https://<control-domain>/feedbot)`, with the
+  release version injected at build time. The control
   domain serves a small static page explaining the bot, which
   addresses it comes from (the NAT EIPs), and how to reach the
   operator.
@@ -892,9 +904,12 @@ parsed, items upserted, health tracked. Validate by seeding a few
   tests covering every example in the requirements doc. The www/apex
   rule needs the **Public Suffix List** to tell an apex from a
   subdomain (`example.co.uk` is an apex; `web.example.com` is not);
-  bundle `publicsuffix2` or ship a vendored snapshot of the list. See
-  the D1 challenge below for the canonical-form inconsistency the
-  examples contain.
+  bundle `publicsuffix2` or ship a vendored snapshot of the list. The
+  **apex form is canonical** in every case (operator decision
+  2026-09-09, superseding the requirements doc's `www.example.com`
+  example): `https://www.example.com/` normalizes to
+  `https://example.com/`. An `http://` input is upgraded to `https://`
+  before normalization; plain http is never fetched.
 - Per-feed dead-letter after 20 consecutive failures: remove the
   `due_shard` attribute so the row leaves `by_due`. Manual reset
   restores it.
@@ -918,9 +933,13 @@ through verbatim).
   the `call` module like every other API function:
   - `/rss_subscribe` (autodiscovery: if the body URL is a webpage,
     scrape `<link rel="alternate">` tags for the feed URL; same SSRF
-    guard as the fetcher; returns the subscription including its
-    `data_store_uuid`)
-  - `/rss_unsubscribe`
+    guard as the fetcher; an `http://` URL is tried as `https://` and,
+    if the feed is not served over https, the call fails with a
+    user-facing message and nothing is stored; returns the subscription
+    including its `data_store_uuid`)
+  - `/rss_unsubscribe` (deletes the user's state rows for the feed and,
+    when `subscriber_count` reaches 0, the feed, its items, and any
+    spilled bodies — see "Data model")
   - `/rss_update_subscription` (display preferences, notifications
     toggle, folder move)
   - `/rss_list_subscriptions`
@@ -1021,6 +1040,9 @@ per-feed FTS. This is the first user-facing surface.
 - Offline indicators: small badge on the article-view button when the
   network is unavailable; "queued" indicator on items with pending
   mutations.
+- Mark-as-read follows `rss_mark_as_read`: manual, or immediately on
+  opening an item — the same two modes as the mail client, no delayed
+  variant.
 - OPML import via the document picker / share sheet; export via the
   share sheet.
 - Background refresh registered with `BGTaskScheduler` (iOS) or a
@@ -1136,7 +1158,7 @@ produce APNs and FCM notifications via the existing 0.11.x push path.
 - Notification tap-throughs open the item in the reader UI.
 - v1 is per-subscription notifications-on, default false (per D12).
   Folder-level toggle (D12 option B) is wired up but the UI exposes
-  per-feed only; folder default lands in a later 2.x.
+  per-feed only; folder default lands in a later minor release.
 
 **Rollback.** Disable the stream event source mapping; the stream
 retains 24 hours of records, so re-enabling within a day replays
@@ -1276,80 +1298,58 @@ Every phase has its own rollback note above. The dependency chain is
 flow depends on phase 5/6 only for the on-device enrichment branches;
 the server side ships independently.
 
-## Requirements challenges (for discussion)
+## Requirements challenges (raised and decided 2026-09-09)
 
-These are places where the requirements doc, read against what has
-shipped since May, either contradicts itself, rests on an assumption
-that no longer holds, or would benefit from a decision the operator
-has not yet been asked for. None of them is changed in
-`rss-requirements.md`; the plan above proceeds on the stated
-assumption until the operator decides otherwise.
+These are places where the requirements doc, read against what had
+shipped since May, contradicted itself, rested on an assumption that no
+longer held, or needed a decision the operator had not been asked for.
+The operator ruled on them on 2026-09-09; each ruling is recorded as a
+**Revised decision (2026-09-09)** annotation in `rss-requirements.md`
+and applied above. Two items remain open and are marked as such.
 
-1. **D1 normalizer examples disagree on which host form is
-   canonical.** "`https://example.com/` and `https://www.example.com/`
-   are the same. The latter is canonical" (www wins), but
-   "`https://example.co.uk/` and `https://www.example.co.uk/` are the
-   same. The former is canonical" (apex wins). One rule is needed.
-   *Plan assumes:* the **apex** form is canonical everywhere (the
-   fewer-characters, PSL-derived form), since the `.co.uk` example
-   reads as the more deliberate of the two. Either way the rule needs
-   the Public Suffix List to identify the apex.
-2. **D1 "http is not supported."** A meaningful tail of feeds is still
-   served over plain http, and many more are entered by users as
-   `http://` and redirect to https. *Plan assumes:* accept an `http://`
-   input, attempt the `https://` equivalent first, and reject only if
-   https fails; never fetch over plain http. If the operator prefers a
-   hard reject on `http://` input, that is a one-line change.
-3. **D3's parenthetical about exposing IMAP externally is resolved.**
-   Public IMAP and submission closed in 0.11.x. The decision itself
-   (own API only) stands; the aside is history. No plan change.
-4. **D6 = C relies on "the embedded engine's reader mode."** Neither
-   `WKWebView` nor Android `WebView` exposes the browser's reader mode
-   to apps. The plan delivers "reader view" by injecting
-   Readability.js into the publisher's page and restyling the result,
-   which is what Reeder and NetNewsWire do too. Worth confirming that
-   this satisfies the requirement, since it is not Safari's Reader and
-   will occasionally extract differently.
-5. **D15 reading-time estimate "from extracted text."** Under D6 = C
-   there is no extracted text; the only text the server has is what
-   the feed delivered. For summary-only feeds an estimate would be
-   wildly wrong. *Plan assumes:* compute it client-side from cached
-   `content_html` only, and hide it when the item has only a summary.
-   The operator may prefer to drop it from v1 entirely.
-6. **D15 auto-mark-read setting: reuse the mail key or add one?** The
-   `app` preferences map already has `mark_as_read: manual | on_open`
-   for mail. Sharing it means one switch governs both mail and feeds;
-   a parallel `rss_mark_as_read` key means two. *Plan assumes:* a
-   separate `rss_mark_as_read` key, since the operator's mail and feed
-   habits may differ.
-7. **D9 egress stability vs. Q3 "scheduled Lambda."** These were in
-   tension in the May plan (a non-VPC Lambda has no stable IP). The
-   plan resolves it by running the fetcher in the VPC behind the NAT
-   EIPs; this costs nothing new but does put feed traffic on the NAT.
-   Flagged so the choice is explicit rather than incidental.
-8. **D10 health visibility with monitoring off.** The requirements
-   assume an operator can see feed health; the plan uses CloudWatch
-   metrics and a DLQ alarm because `TF_VAR_MONITORING` is false in
-   every environment. If monitoring is ever re-enabled, the same
-   metrics can feed it.
-9. **D4 "forever" and feeds nobody subscribes to.** D4 speaks to
-   items, not to fetching. *Plan assumes:* a shared feed with zero
-   subscribers stops being fetched (items retained). Otherwise the
-   fetcher polls every feed anyone ever tried, forever.
-10. **Version label vs. semver.** `docs/compatibility.md` makes the
-    HTTP API a stable surface from 1.0.0 and classifies new endpoints
-    as minor changes. RSS as planned is purely additive, so under the
-    project's own rules it is a 1.x minor release; "2.0" is roadmap
-    branding. That is fine if intended, but if a real breaking change
-    is wanted to justify the major bump (retiring the frozen React
-    app's API-only endpoints, say), it should be named, and if not,
-    the roadmap could equally call this 1.12. Operator's call.
-11. **Client cut (Q6).** The answer "phased rollout is fine" was given
-    when the React app was the assumed first client. With React frozen
-    and Android first-class, the plan makes Apple the first UI and
-    Android the second, each in its own phase; confirm that ordering
-    is still the operator's preference (it follows the operator's own
-    devices, which is why it is the default).
+1. **D1 normalizer: which host form is canonical.** The examples
+   disagreed (`www.example.com` canonical in one, `example.co.uk` apex
+   canonical in another). **Decided: the apex form is canonical.** The
+   rule needs the Public Suffix List to identify the apex.
+2. **D1 "http is not supported."** **Decided:** an `http://` input is
+   silently upgraded to `https://`; if the feed is not available over
+   https, the user is told and nothing is fetched or stored.
+3. **D3's parenthetical about exposing IMAP externally** is history:
+   public IMAP and submission closed in 0.11.x. The decision (own API
+   only) stands. No plan change.
+4. **D6 "the embedded engine's reader mode."** Neither `WKWebView` nor
+   Android `WebView` exposes the browser's reader mode to apps.
+   **Confirmed:** a Readability.js-based reader view satisfies the
+   requirement; the operator reserves the right to request tweaks
+   after it ships.
+5. **D15 reading-time estimate "from extracted text."** *Still open.*
+   Under D6 = C there is no extracted text; for summary-only feeds an
+   estimate would be wildly wrong. The plan computes it client-side
+   from cached `content_html` only and hides it when the item has only
+   a summary; the operator may prefer to drop it from v1.
+6. **D15 auto-mark-read.** **Decided:** the mail clients no longer
+   offer a time-delayed mark-as-read, only manual or
+   immediate-on-open, and feeds offer the same two options under a
+   separate `rss_mark_as_read` preference rather than the mail
+   `mark_as_read` key.
+7. **D9 egress stability vs. Q3 "scheduled Lambda."** Resolved in the
+   plan by running the fetcher in the VPC behind the NAT EIPs; noted
+   so the choice is explicit. No requirement change.
+8. **D10 health visibility with monitoring off.** The plan uses
+   CloudWatch metrics and a DLQ alarm because `TF_VAR_MONITORING` is
+   false everywhere. No requirement change.
+9. **D4 "forever" and feeds nobody subscribes to.** **Decided:** when
+   the last user unsubscribes from a feed, its content is deleted; a
+   cold-storage option may be considered in a future release.
+10. **Version label vs. semver.** **Decided:** RSS is additive and ships
+    as 1.x minor releases under `docs/compatibility.md`; the RSS docs
+    moved from `docs/2.x/` to `docs/1.x/`. The roadmap wiki row still
+    says 2.x and should be updated.
+11. **Client cut (Q6).** *Still open, low stakes.* The plan makes Apple
+    the first UI and Android the second, following the operator's own
+    devices; the original "phased rollout is fine" answer predates
+    Android shipping. Proceeding on that ordering unless told
+    otherwise.
 
 ## Open questions and risks
 
@@ -1435,7 +1435,7 @@ When the RSS feature ships, operator-facing documentation lives at
 - Operator runbook for stuck feeds, DLQ redrive, OPML imports, cache
   rebuilds.
 
-The `docs/2.x/` directory keeps this plan and the requirements doc
+The `docs/1.x/` directory keeps this plan and the requirements doc
 as the historical planning record.
 
 ## Next steps

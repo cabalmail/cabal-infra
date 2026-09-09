@@ -25,6 +25,14 @@ This directory is `2.0.x` per the operator's answer to Open Q1; the
 release version is 2.0. The plan splits the work across multiple patch
 versions (2.0.0, 2.0.1, ...).
 
+**Revised (2026-09-09):** the release is **1.x**, not 2.0. The RSS API
+is purely additive, which [`compatibility.md`](../compatibility.md)
+classifies as a minor release; both RSS docs moved from `docs/2.x/` to
+`docs/1.x/`. Each implementation phase ships as its own 1.x minor
+release. Further same-day rulings on the plan's challenges appear as
+**Revised decision (2026-09-09)** annotations under D1, D4, D6, and
+D15 below.
+
 ## Revisions after design exploration
 
 After the operator's inline decisions were recorded, a phase-1 design
@@ -158,6 +166,13 @@ cache layer ends up doing most of B's work without B's clarity.
 	  - https://example.com/?foo=bar&bin=baz and https://example.com/?bin=baz&foo=bar are the same. The latter is canonical (alphabetically normalized).
 	Exception: links used as a `<guid>` should not be normalized.
 
+  **Revised decision (2026-09-09):** the **apex** form is canonical in
+  every case; the `www.example.com` example above is superseded
+  (`https://www.example.com/` normalizes to `https://example.com/`,
+  matching the `example.co.uk` example). An `http://` input is silently
+  upgraded to `https://`; if the feed is not available over https, the
+  user is told and nothing is fetched.
+
 ### Decision 2: Folder model — Dovecot or native
 
 **Question.** The initial brainstorm proposed implementing the folder
@@ -254,6 +269,11 @@ annoying bugs.
 
 **Decision: tombstone.**
 
+**Revised decision (2026-09-09):** "kept forever" applies while a feed
+has at least one subscriber. When the last user unsubscribes from a
+feed, its content can be deleted. A cold-storage option for departed
+feeds may be considered in a future release.
+
 ## Scope cuts (in v1 or defer?)
 
 ### Decision 5: OPML import/export
@@ -315,6 +335,12 @@ for "show article by default" in the original scope, so this decision lands
 on a coherent UX rather than a contradictory mix.
 
 **Clarification:** "show article by default" means, when a user selects a feed item from a channel, the client opens the linked article in an embedded web view. I prefer this approach not only due to the way it sidesteps rendering and fetching issues, but also because it assures that at the moment I open it, I'm getting the latest version with any corrections that might have occurred since initial publication.
+
+**Confirmed (2026-09-09):** neither `WKWebView` nor Android `WebView`
+exposes the browser's reader mode to apps, so "reader view" is
+delivered by injecting Readability.js into the loaded page and
+restyling the result. The operator confirmed this satisfies the
+requirement and reserves the right to request tweaks after it ships.
 
 **Implementation cost.** Trafilatura, Mercury Parser, or Readability.js
 via Node all work. Lambda-friendly with a modest cold-start budget.
@@ -545,6 +571,12 @@ keyword mute" and "tagging" decisions above are unchanged.
 | Cross-feed dedup         | Same article syndicated in N feeds appears once | Defer to v1.1                    | **Out**                                                                                                                  |
 | Reading-time estimate    | Per article, from extracted text                | **In** — trivial                 | **In** — make it optional and off unless user opts in (want to avoid distracting UI elements)                            |
 
+**Revised decision (2026-09-09):** the mail clients no longer support
+time-delayed mark-as-read; the choice is manual or
+automatic-and-immediate (on open). Feeds offer the same two options,
+under their own `rss_mark_as_read` preference rather than the mail
+`mark_as_read` key.
+
 ### Decision 16: JSON Feed support
 
 Trivial to add alongside RSS/Atom; the parser library choice usually covers
@@ -617,6 +649,9 @@ implementation plan does not include either.)*
    is 2.0; the basic reader UI plus all of the in-scope items above is
    plenty for a single release.
    **Decision**: 2.0.
+   **Revised decision (2026-09-09):** 1.x. The API is additive and
+   `compatibility.md` classifies that as a minor release; the docs moved
+   from `docs/2.x/` to `docs/1.x/`.
 2. **Storage engine for feed items.** Extend DynamoDB usage (no joins,
    limited search), introduce Postgres (joins, full-text via tsvector,
    familiar to the operator?), or something else? Largely determined
