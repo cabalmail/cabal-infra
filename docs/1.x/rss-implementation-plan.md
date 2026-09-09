@@ -8,8 +8,7 @@ It is the companion build plan to that requirements pass; whenever this
 document says "per Dx," it refers to a decision in that file. The RSS
 API is purely additive, which `docs/compatibility.md` classifies as a
 minor release, so the work ships as 1.x minor releases (this
-directory), each phase under its own release. The roadmap wiki still
-lists RSS under 2.x and needs its row updated.
+directory), each phase under its own release.
 
 ## Progress
 
@@ -98,8 +97,10 @@ errata; this section is the summary of what moved and why.
   a feed's content is deleted when its last subscriber leaves; the
   release is 1.x and the docs moved from `docs/2.x/` to `docs/1.x/`)
   are recorded as **Revised decision (2026-09-09)** annotations in the
-  requirements doc and applied throughout this plan. See "Requirements
-  challenges" near the end for the two items still open.
+  requirements doc and applied throughout this plan. Two follow-up
+  rulings the same day dropped the reading-time estimate from v1
+  (kept as future work) and confirmed the client order: Apple first,
+  Android second, Linux once its mail client has caught up.
 
 Three decisions shape the architecture more than the rest:
 
@@ -178,7 +179,8 @@ phase being present.
   client-neutral and nothing prevents a later React port, but none is
   planned.
 - **RSS in the Linux client or the browser extension.** The Linux
-  client is mid-build on its own plan and the extension is an
+  client waits until its mail client has caught up with Apple and
+  Android (operator decision 2026-09-09); the extension is an
   address-management tool. A "subscribe to this page's feed"
   affordance in the extension (it already scans pages for
   `<link rel="alternate">`-style hooks) is a natural follow-on,
@@ -188,6 +190,10 @@ phase being present.
 - Feed-to-email digests (D8, declined).
 - Tagging, save-for-later, snooze, keep-unread pin, auto-mark-read on
   scroll, cross-feed dedup (D14, D15 — declined or deferred).
+- Reading-time estimate (D15, revised 2026-09-09). Dropped from v1
+  because D6 = C leaves no extracted text to estimate from; kept as
+  future work, computed client-side from cached `content_html` and
+  hidden for summary-only items, if it returns.
 - OAuth-flow credentialed feeds (D11, deferred).
 - Proactive notification of feed-health problems (D10 — visibility
   only in v1).
@@ -451,8 +457,8 @@ Five tables, down from eight. What went, and why:
   `app` map of `cabal-user-preferences`, validated in `APP_ALLOWED`
   like the mail keys: `rss_mark_as_read` (`manual | on_open`, the same
   two modes the mail clients offer, under its own key so mail and feed
-  habits can differ), `rss_reading_time_visible`, and
-  `rss_last_ordering_mode`. The map is `{string: string}`
+  habits can differ) and `rss_last_ordering_mode`. The map is
+  `{string: string}`
   by contract with the shipped clients, which enum values satisfy. The
   Linux `xtask` drift test asserts client keys against `APP_ALLOWED`;
   new keys land in both.
@@ -1305,7 +1311,7 @@ shipped since May, contradicted itself, rested on an assumption that no
 longer held, or needed a decision the operator had not been asked for.
 The operator ruled on them on 2026-09-09; each ruling is recorded as a
 **Revised decision (2026-09-09)** annotation in `rss-requirements.md`
-and applied above. Two items remain open and are marked as such.
+and applied above; two follow-up rulings closed the remaining items.
 
 1. **D1 normalizer: which host form is canonical.** The examples
    disagreed (`www.example.com` canonical in one, `example.co.uk` apex
@@ -1322,11 +1328,11 @@ and applied above. Two items remain open and are marked as such.
    **Confirmed:** a Readability.js-based reader view satisfies the
    requirement; the operator reserves the right to request tweaks
    after it ships.
-5. **D15 reading-time estimate "from extracted text."** *Still open.*
-   Under D6 = C there is no extracted text; for summary-only feeds an
-   estimate would be wildly wrong. The plan computes it client-side
-   from cached `content_html` only and hides it when the item has only
-   a summary; the operator may prefer to drop it from v1.
+5. **D15 reading-time estimate "from extracted text."** Under D6 = C
+   there is no extracted text; for summary-only feeds an estimate would
+   be wildly wrong. **Decided: dropped from v1, kept as future work**
+   (client-side from cached `content_html`, hidden for summary-only
+   items, if it returns).
 6. **D15 auto-mark-read.** **Decided:** the mail clients no longer
    offer a time-delayed mark-as-read, only manual or
    immediate-on-open, and feeds offer the same two options under a
@@ -1343,13 +1349,11 @@ and applied above. Two items remain open and are marked as such.
    cold-storage option may be considered in a future release.
 10. **Version label vs. semver.** **Decided:** RSS is additive and ships
     as 1.x minor releases under `docs/compatibility.md`; the RSS docs
-    moved from `docs/2.x/` to `docs/1.x/`. The roadmap wiki row still
-    says 2.x and should be updated.
-11. **Client cut (Q6).** *Still open, low stakes.* The plan makes Apple
-    the first UI and Android the second, following the operator's own
-    devices; the original "phased rollout is fine" answer predates
-    Android shipping. Proceeding on that ordering unless told
-    otherwise.
+    moved from `docs/2.x/` to `docs/1.x/`; the roadmap wiki row was
+    updated to match.
+11. **Client cut (Q6).** The original "phased rollout is fine" answer
+    predates Android shipping. **Decided: Apple first, Android second;
+    Linux waits until its mail client has caught up.**
 
 ## Open questions and risks
 

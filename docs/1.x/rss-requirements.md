@@ -577,6 +577,11 @@ automatic-and-immediate (on open). Feeds offer the same two options,
 under their own `rss_mark_as_read` preference rather than the mail
 `mark_as_read` key.
 
+**Revised decision (2026-09-09), reading-time estimate:** dropped from
+v1 and kept as future work. With D6 = C there is no extracted text to
+estimate from, so a v1 estimate would be wrong for every summary-only
+feed.
+
 ### Decision 16: JSON Feed support
 
 Trivial to add alongside RSS/Atom; the parser library choice usually covers
@@ -685,6 +690,9 @@ implementation plan does not include either.)*
    independent of both. Android will likely lag (still in 1.1.x
    roadmap).
    **Decision:** Phased rollout is fine. 2.0.x has plenty of unused values for x.
+   **Revised decision (2026-09-09):** Apple first, Android second; Linux
+   waits until its mail client has caught up. There is no React RSS
+   client (the React app receives no new features).
 
 ## Next step
 
