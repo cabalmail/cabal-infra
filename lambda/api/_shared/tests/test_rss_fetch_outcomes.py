@@ -138,8 +138,17 @@ _SPEC.loader.exec_module(function)
 
 from rss_http import FetchError, FetchResult  # noqa: E402  pylint: disable=wrong-import-position
 from rss_parse import ParsedFeed, ParsedItem  # noqa: E402  pylint: disable=wrong-import-position
+import rss_url  # noqa: E402  pylint: disable=wrong-import-position
 
 FEED_ID = 'feed-1'
+
+# No Public Suffix List on a bare interpreter: an apex is one label before a
+# one-label suffix, which is what these rows use. Module-level so a test's
+# own stub (the Redirects suite) is not reset by install().
+function.www_variant = lambda url: rss_url.www_variant(
+    url, is_registrable=lambda h: h.count('.') == 1)
+function.redirect_target = lambda source, location: rss_url.redirect_target(
+    source, location, is_registrable=lambda h: h.count('.') == 1)
 
 
 def feed_row(**over):
@@ -167,6 +176,30 @@ def install(feed=None, result=None, error=None, parsed=None):
     if parsed is not None:
         function.parse_feed = lambda *_a, **_k: parsed
     return function.feeds, function.items
+
+
+def install_by_url(feed, responses, parsers):
+    '''Like install(), but fetch and parse answer per URL: `responses` maps a
+    URL to a FetchResult or an exception, `parsers` maps a URL to a
+    ParsedFeed or a ParseError to raise. Returns (feeds, items, fetched).'''
+    feeds, items = install(feed)
+    fetched = []
+
+    def fake_fetch(url, **_k):
+        fetched.append(url)
+        answer = responses[url]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    function.fetch = fake_fetch
+
+    def fake_parse(body, _ctype):
+        answer = parsers[body.decode()]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    function.parse_feed = fake_parse
+    return feeds, items, fetched
 
 
 def values(update):
@@ -310,11 +343,11 @@ class Redirects(unittest.TestCase):
         feeds, _ = install(feed_row(), FetchResult(status=200, url='u',
                                                    permanent_redirect_to='https://www.example.com/feed'),
                            parsed=ParsedFeed(feed_type='rss'))
-        function.normalize_feed_url = lambda url: 'https://example.com/feed/'
+        function.redirect_target = lambda source, location: 'https://example.com/feed/'
         function.process_feed(FEED_ID)
         moves = [u for u in feeds.updates if 'canonical_url = :url' in u['UpdateExpression']]
         self.assertEqual(len(moves), 0)   # same canonical URL as before: nothing to do
-        function.normalize_feed_url = lambda url: 'https://example.com/new/'
+        function.redirect_target = lambda source, location: 'https://example.com/new/'
         install(feed_row(), FetchResult(status=200, url='u', permanent_redirect_to='https://example.com/new'),
                 parsed=ParsedFeed(feed_type='rss'))
         function.process_feed(FEED_ID)
@@ -325,11 +358,82 @@ class Redirects(unittest.TestCase):
         feeds, _ = install(feed_row(), FetchResult(status=200, url='u', permanent_redirect_to='https://example.com/new'),
                            parsed=ParsedFeed(feed_type='rss'))
         feeds.rows[('feed-2',)] = feed_row(feed_id='feed-2', canonical_url='https://example.com/new/')
-        function.normalize_feed_url = lambda url: 'https://example.com/new/'
+        function.redirect_target = lambda source, location: 'https://example.com/new/'
         function.process_feed(FEED_ID)
         conflict = [u for u in feeds.updates if 'redirect_conflict_url = :url' in u['UpdateExpression']]
         self.assertEqual(len(conflict), 1)
         self.assertFalse([u for u in feeds.updates if 'SET canonical_url' in u['UpdateExpression']])
+
+
+APEX = 'https://example.com/feed/'
+WWW = 'https://www.example.com/feed/'
+
+
+class WwwFallback(unittest.TestCase):
+    '''A publisher that serves the feed only on www (the Friendly Atheist,
+    GitHub Status on stage's first OPML imports): the apex 404s or redirects
+    every path to the front page. The fetcher tries www once and, when it
+    parses, makes it the canonical URL.'''
+
+    def parsed(self):
+        return ParsedFeed(feed_type='rss', title='Www', items=[
+            ParsedItem(guid='a', title='A', url='https://www.example.com/a')])
+
+    def test_404_on_apex_moves_to_www_and_ingests(self):
+        feeds, items, fetched = install_by_url(
+            feed_row(),
+            {APEX: FetchResult(status=404, url=APEX),
+             WWW: FetchResult(status=200, url=WWW, body=b'www', content_type='application/rss+xml')},
+            {'www': self.parsed()})
+        outcome = function.process_feed(FEED_ID)
+        self.assertEqual(outcome['outcome'], 'fetched')
+        self.assertEqual(fetched, [APEX, WWW])
+        moves = [u for u in feeds.updates if 'canonical_url = :url' in u['UpdateExpression']]
+        self.assertEqual(values(moves[0])[':url'], WWW)
+        self.assertEqual(len(items.puts), 1)
+
+    def test_front_page_on_apex_moves_to_www(self):
+        feeds, _, fetched = install_by_url(
+            feed_row(),
+            {APEX: FetchResult(status=200, url='https://www.example.com/', body=b'html', content_type='text/html',
+                               permanent_redirect_to='https://www.example.com/'),
+             WWW: FetchResult(status=200, url=WWW, body=b'www', content_type='application/rss+xml')},
+            {'html': function.ParseError('not a feed'), 'www': self.parsed()})
+        outcome = function.process_feed(FEED_ID)
+        self.assertEqual(outcome['outcome'], 'fetched')
+        self.assertEqual(fetched, [APEX, WWW])
+        # The bogus apex -> front-page redirect was not followed either.
+        moves = [values(u)[':url'] for u in feeds.updates if 'canonical_url = :url' in u['UpdateExpression']]
+        self.assertEqual(moves, [WWW])
+
+    def test_www_failing_too_records_the_original_failure(self):
+        feeds, _, fetched = install_by_url(
+            feed_row(),
+            {APEX: FetchResult(status=404, url=APEX), WWW: FetchResult(status=404, url=WWW)}, {})
+        outcome = function.process_feed(FEED_ID)
+        self.assertEqual((outcome['outcome'], outcome['status']), ('failed', 404))
+        self.assertEqual(fetched, [APEX, WWW])
+        self.assertFalse([u for u in feeds.updates if 'canonical_url = :url' in u['UpdateExpression']])
+
+    def test_www_owned_elsewhere_is_a_conflict_not_a_move(self):
+        feeds, _, _ = install_by_url(
+            feed_row(),
+            {APEX: FetchResult(status=404, url=APEX),
+             WWW: FetchResult(status=200, url=WWW, body=b'www', content_type='application/rss+xml')},
+            {'www': self.parsed()})
+        feeds.rows[('other',)] = feed_row(feed_id='other', canonical_url=WWW)
+        outcome = function.process_feed(FEED_ID)
+        self.assertEqual(outcome['outcome'], 'failed')
+        conflict = [u for u in feeds.updates if 'redirect_conflict_url = :url' in u['UpdateExpression']]
+        self.assertEqual(values(conflict[0])[':url'], WWW)
+        self.assertFalse([u for u in feeds.updates if 'SET canonical_url' in u['UpdateExpression']])
+
+    def test_subdomain_has_no_fallback(self):
+        sub = 'https://blog.example.com/feed/'
+        _, _, fetched = install_by_url(feed_row(canonical_url=sub), {sub: FetchResult(status=404, url=sub)}, {})
+        outcome = function.process_feed(FEED_ID)
+        self.assertEqual(outcome['outcome'], 'failed')
+        self.assertEqual(fetched, [sub])
 
 
 if __name__ == '__main__':
