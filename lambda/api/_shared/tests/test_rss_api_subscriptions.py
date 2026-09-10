@@ -147,6 +147,22 @@ class Subscribe(unittest.TestCase):
                          (200, body['subscription']['feed_id']))
         self.assertEqual(len(self.tables['cabal-rss-feed'].rows), 1)
 
+    def test_apex_front_page_redirect_falls_back_to_www(self):
+        # GitHub Status: the apex redirects every path to the www front page
+        # (HTML); the www form of the path asked for serves the feed. The
+        # retry must use that path, not the redirect target.
+        self.responses = [FetchResult(status=200, url='https://www.example.com/', body=HTML, content_type='text/html',
+                                      permanent_redirect_to='https://www.example.com/'),
+                          FetchResult(status=200, url='https://www.example.com/feed', body=b'<rss/>',
+                                      content_type='application/rss+xml')]
+        core.parse_feed = lambda body, ctype: (_ for _ in ()).throw(ParseError('html')) \
+            if body == HTML else ParsedFeed(feed_type='rss', title='Status')
+        status, _ = call(self.mod, body={'url': 'https://example.com/feed'})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.fetches, ['https://example.com/feed', 'https://www.example.com/feed'])
+        row = next(iter(self.tables['cabal-rss-feed'].rows.values()))
+        self.assertEqual(row['canonical_url'], 'https://www.example.com/feed')
+
     def test_apex_redirecting_to_www_keeps_www(self):
         self.responses = [FetchResult(status=200, url='https://www.example.com/feed', body=b'<rss/>',
                                       content_type='application/rss+xml',
