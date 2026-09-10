@@ -28,8 +28,12 @@ final class FeedSidebarViewModel {
 
     private let client: CabalmailClient
 
-    init(client: CabalmailClient) {
+    init(client: CabalmailClient, bus: FeedStateBus = .shared) {
         self.client = client
+        // Any read / favorite change or refetch elsewhere moves the badges.
+        bus.subscribe(self) { [weak self] _ in
+            Task { await self?.reloadCounts() }
+        }
     }
 
     var hasSubscriptions: Bool { !subscriptions.isEmpty }

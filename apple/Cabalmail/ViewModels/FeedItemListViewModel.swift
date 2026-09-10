@@ -31,6 +31,7 @@ final class FeedItemListViewModel {
 
     private let client: CabalmailClient
     private let preferences: Preferences
+    private let bus: FeedStateBus
     private let pageSize = 100
     private var loaded = 0
 
@@ -38,12 +39,27 @@ final class FeedItemListViewModel {
     /// search, load-older, and the ordering preference only make sense then.
     let subscription: RssSubscription?
 
-    init(scope: RssItemScope, subscription: RssSubscription?, client: CabalmailClient, preferences: Preferences) {
+    init(scope: RssItemScope, subscription: RssSubscription?, client: CabalmailClient, preferences: Preferences,
+         bus: FeedStateBus = .shared) {
         self.scope = scope
         self.subscription = subscription
         self.client = client
         self.preferences = preferences
+        self.bus = bus
         self.ordering = subscription?.orderingMode ?? .newestFirst
+        bus.subscribe(self) { [weak self] change in self?.apply(change) }
+    }
+
+    /// A state change made elsewhere (the reader's toolbar, another list):
+    /// patch the row in place so the dot and star agree without a reload.
+    /// Rows stay put even when they no longer match the filter; the next
+    /// reload settles that, the same as the list's own swipe actions.
+    func apply(_ change: RssItem?) {
+        guard let change else { return }
+        replace(change) {
+            $0.isRead = change.isRead
+            $0.isFavorite = change.isFavorite
+        }
     }
 
     var canSearch: Bool { subscription != nil }
@@ -99,6 +115,7 @@ final class FeedItemListViewModel {
             errorMessage = FeedErrorText.describe(error)
         }
         await reload()
+        bus.post()
     }
 
     /// Older history for a single feed, then a reload.
@@ -113,21 +130,28 @@ final class FeedItemListViewModel {
             errorMessage = FeedErrorText.describe(error)
         }
         await reload()
+        bus.post()
     }
 
     // MARK: - Mutations (optimistic; the engine queues and pushes)
 
     func setRead(_ item: RssItem, _ isRead: Bool) async {
         guard let engine = client.rssSync else { return }
+        var changed = item
+        changed.isRead = isRead
         replace(item) { $0.isRead = isRead }
         try? await engine.setRead(item, isRead)
+        bus.post(changed)
         await refreshPendingMarks()
     }
 
     func setFavorite(_ item: RssItem, _ isFavorite: Bool) async {
         guard let engine = client.rssSync else { return }
+        var changed = item
+        changed.isFavorite = isFavorite
         replace(item) { $0.isFavorite = isFavorite }
         try? await engine.setFavorite(item, isFavorite)
+        bus.post(changed)
         await refreshPendingMarks()
     }
 
@@ -145,6 +169,7 @@ final class FeedItemListViewModel {
             try? await engine.markAllRead(subscriptionId: sub.subscriptionId)
         }
         await reload()
+        bus.post()
     }
 
     private func replace(_ item: RssItem, _ change: (inout RssItem) -> Void) {

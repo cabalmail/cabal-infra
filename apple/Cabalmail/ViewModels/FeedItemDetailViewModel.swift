@@ -21,15 +21,27 @@ final class FeedItemDetailViewModel {
     var remoteContentAllowed: Bool
 
     private let engine: RssSyncEngine?
+    private let bus: FeedStateBus
 
-    init(item: RssItem, subscription: RssSubscription?, engine: RssSyncEngine?, preferences: Preferences) {
+    init(item: RssItem, subscription: RssSubscription?, engine: RssSyncEngine?, preferences: Preferences,
+         bus: FeedStateBus = .shared) {
         self.item = item
         self.subscription = subscription
         self.engine = engine
+        self.bus = bus
         let policy = FeedDetailPolicy.initial(for: subscription, hasArticleURL: URL(string: item.url) != nil)
         self.showingArticle = policy.showsArticle
         self.readerMode = policy.readerMode
         self.remoteContentAllowed = preferences.loadRemoteContent == .always
+        bus.subscribe(self) { [weak self] change in self?.apply(change) }
+    }
+
+    /// The list's swipe or context menu changed this item: keep the toolbar
+    /// truthful.
+    func apply(_ change: RssItem?) {
+        guard let change, change.id == item.id else { return }
+        item.isRead = change.isRead
+        item.isFavorite = change.isFavorite
     }
 
     var articleURL: URL? {
@@ -51,11 +63,13 @@ final class FeedItemDetailViewModel {
     func setRead(_ isRead: Bool) async {
         item.isRead = isRead
         try? await engine?.setRead(item, isRead)
+        bus.post(item)
     }
 
     func setFavorite(_ isFavorite: Bool) async {
         item.isFavorite = isFavorite
         try? await engine?.setFavorite(item, isFavorite)
+        bus.post(item)
     }
 }
 
