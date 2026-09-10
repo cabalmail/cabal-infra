@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-09-10
+
+### Added
+- Android: **Folder menu behind the list title.** The folder name in the
+  message list's top bar is now a tappable affordance with a drop-down
+  arrow: a tap lists the subscribed folders, with the unsubscribed ones one
+  tap further under "Other folders", and the folder in view carries the
+  check mark. With nothing subscribed every folder is listed at the top
+  level, as in the folder list. A pick swaps the list in place, exactly as
+  a folder-pane tap does on a wide window.
+- Apple: **Folder menu behind the list title.** The folder name at the top
+  of the message list is now a tappable affordance: on iPhone, iPad and
+  Apple Vision Pro the title opens a menu, and on the Mac the bold folder
+  name in the toolbar is the menu, with a chevron beside it. The menu lists
+  subscribed folders, with the unsubscribed ones one tap further under
+  "Other folders", the folder in view carrying the check mark wherever it
+  sits. With nothing subscribed every folder is listed at the top level, as
+  in the sidebar. A pick applies exactly as a sidebar tap does.
+- Apple: **Feed management (phase 5c of the RSS plan).** Subscribe to a
+  feed from the sidebar's `+` menu, a folder's context menu, or the new
+  Feeds menu (⌥⌘N); paste a site address and the server finds its feed.
+  Each feed has a settings sheet for its title, folder, item order, what
+  opens first (feed content or the article) and in which styling, the
+  fetcher's view of its health, and Unsubscribe. Feed folders can be
+  created, renamed, moved, and deleted (contents move up a level). OPML
+  import and export from the `+` menu, the Feeds menu, and Settings ›
+  Feeds, which also holds the reader's own mark-as-read setting.
+
+### Changed
+- Apple: **Feed reader polish (phase 5d of the RSS plan).** Rows in All
+  Feeds and folder views name the feed instead of the article's host, and
+  the reader header does the same. Feeds refresh every fifteen minutes while
+  the app is open, not only at launch and on foreground, and the sidebar
+  badges follow. The "Open article" button says when it needs a connection,
+  and an article that cannot load shows a plain notice with a retry instead
+  of a browser error page. A feed search with no local matches offers to
+  fetch older items and search again. On the Mac, an empty feed reading pane
+  reserves the feed toolbar's own six slots rather than the mail reader's
+  eleven, and New Message stays in the toolbar while a feed is selected.
+
 ## [1.14.0] - 2026-09-10
 
 ### Added
