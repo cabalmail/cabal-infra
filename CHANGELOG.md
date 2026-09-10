@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-09-10
+
+### Added
+- **OPML import and export (phase 4 of the RSS plan).** `/rss_opml_import`
+  adds every feed in an OPML document, additively: the outline tree becomes
+  folders (reusing same-named ones), feeds already followed are reported
+  rather than duplicated, and unknown feeds are created from the document's
+  own titles and handed to the fetcher so a large export fits one request.
+  `/rss_opml_export` returns the caller's folders and subscriptions as
+  OPML 2.0 that round-trips into Feedly, NetNewsWire, and Reeder. Also:
+  the canonical-URL rule no longer touches trailing slashes anywhere but
+  the root (a publisher's redirect decides), and unsubscribe deletes
+  per-item state before the subscription row.
+- Apple: **Feeds.** A first-class RSS reader beside mail (phase 5b of the
+  RSS plan). On the Mac and a regular-width iPad the sidebar gains a Feeds
+  section: your folders with feeds as leaves, unread badges, and an "All
+  Feeds" view; iPhone and Vision Pro get a Feeds tab. Items list with
+  All / Unread / Favorites, the four ordering modes, swipe to mark read or
+  favorite, per-feed search over what's cached, and "Load older items".
+  The reader shows the feed's own content through the same sandboxed
+  renderer as mail, with reader or original styling per feed, and opens the
+  publisher's article in a web view whose cookies and storage belong to
+  that one feed, with a Readability-based reader toggle. Everything reads
+  from a local store, so the list and items work offline and read/favorite
+  changes made offline are pushed when a connection returns. Subscribing,
+  folder management, per-feed settings, and OPML arrive in the next phase.
+
+### Fixed
+- Android: **Address changes now confirm themselves.** Creating or revoking
+  an address raises a snackbar naming it, the way the web and Apple clients
+  already do; a successful create or revoke used to say nothing at all, so
+  the only feedback for a revoke was the row disappearing.
+- Apple: **New Folder sheet keeps its content inside the sheet on macOS.**
+  The parent-folder label sat on the sheet's left border and the name field
+  ran flush to the right one, because macOS lays a form's titles out in an
+  external label column with no content margins. The sheet now uses the
+  same hand-built macOS layout as Create Address, so the two read alike.
+- **RSS root-level subscriptions report an empty `folder_id`.** The API
+  passed its internal root sentinel through, so subscriptions outside any
+  folder carried `folder_id: "~root"` and the OPML export left them out.
+
+## [1.13.0] - 2026-09-10
+
+### Added
+- **RSS reader API (phase 3 of the RSS plan).** Eleven Cognito-authorized
+  endpoints under the existing gateway: subscribe (with canonical-URL
+  dedup against shared feeds, feed autodiscovery from a web page, and an
+  immediate first fetch), unsubscribe (purging a feed when its last
+  subscriber leaves), per-subscription settings, folder create/update/
+  delete with reparenting, item listing with computed unread state and a
+  per-subscription read watermark, favorites via the sparse index, an
+  incremental `since` cursor keyed on ingest time for client caches, item
+  fetch with spilled bodies inlined, batched read/favorite state, and
+  mark-all-read. Reference in `docs/rss.md`. No client uses it yet; the
+  Apple client follows in phase 5.
+
+### Security
+- **Tiptap ReDoS fix.** Bumped `@tiptap/*` packages to 3.30.5+, resolving a
+  quadratic regular-expression denial-of-service in block and inline
+  Markdown attribute parsing (`@tiptap/core` advisory, fixed upstream in
+  3.30.5).
+
+## [1.12.3] - 2026-09-09
+
+### Added
+- **RSS feed fetcher (phase 2 of the RSS plan).** A five-minute EventBridge
+  Scheduler tick (`rss_schedule`) claims due feeds from the `by_due` index
+  and queues them; a bounded-concurrency worker (`rss_fetch`) does a
+  conditional GET through an SSRF-guarded https-only client, parses
+  RSS/Atom (feedparser) and JSON Feed (natively), upserts items, and
+  records health and an adaptive per-feed cadence within operator bounds
+  held in SSM (`/cabal/rss/cadence_{min,max}_minutes`). Publisher hints
+  (`Cache-Control`, `Retry-After`, `<ttl>`, `sy:updatePeriod`) are honoured
+  as floors; failures back off and dead-letter after twenty in a row;
+  `410 Gone` dead-letters at once. The bot identifies itself as
+  `Cabalmail-Feedbot/1` with a link to a new `feedbot.html` page on the
+  front-door site. Quiesce now also pauses the tick. Nothing subscribes
+  yet; the API follows in phase 3.
+
 ## [1.12.2] - 2026-09-09
 
 ### Added

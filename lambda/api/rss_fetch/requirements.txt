@@ -1,0 +1,12 @@
+# RSS/Atom parsing. feedparser's only runtime dependency is feedparser-sgmllib
+# (pinned and hashed so pip --require-hashes can resolve the full tree).
+# JSON Feed is parsed natively in _shared/rss_parse.py.
+feedparser==6.0.14 \
+    --hash=sha256:e35e3f760151b0c3b22cac9684155cae186a233e16c49bcbc6c49e91e3131137
+feedparser-sgmllib==2.1.0 \
+    --hash=sha256:2cab2d43b95a954f920f18aebce7a4dbbb3f539780b127e2aa114f579821e01d
+# Public Suffix List for the canonical-URL normalizer's apex test
+# (_shared/rss_url.py). The list is bundled in the wheel; the date-stamped
+# version is the list snapshot, bumped by dependabot like any other pin.
+publicsuffixlist==1.0.2.20260909 \
+    --hash=sha256:4aecb24df2690fe2b3f6b94102f342d5ae2c2d0c97500d76b0be31680868ca6d

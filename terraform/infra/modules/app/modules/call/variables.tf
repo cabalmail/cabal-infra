@@ -109,3 +109,27 @@ variable "deletes_cache_objects" {
   default     = false
   description = "Grant s3:DeleteObject on the raw-message cache bucket. Set for the endpoints that retire a cached body once its message is gone: send (discarding a superseded draft), save_draft, purge_messages and empty_trash."
 }
+
+variable "rss_access" {
+  type        = bool
+  default     = false
+  description = "Grant this endpoint the RSS reader's tables and indexes, the rss-cache bucket's items/ prefix, and SendMessage on the fetch queue (docs/1.x/rss-implementation-plan.md, phase 3). Set for the rss_* endpoints only."
+}
+
+variable "rss_fetch_queue_arn" {
+  type        = string
+  default     = ""
+  description = "ARN of cabal-rss-fetch-queue; used only when rss_access is set."
+}
+
+variable "rss_fetch_queue_url" {
+  type        = string
+  default     = ""
+  description = "URL of cabal-rss-fetch-queue, exported to the function as RSS_FETCH_QUEUE_URL when rss_access is set."
+}
+
+variable "rss_cache_bucket" {
+  type        = string
+  default     = ""
+  description = "Name of the rss-cache bucket; used only when rss_access is set."
+}

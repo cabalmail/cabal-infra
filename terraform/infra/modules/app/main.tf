@@ -71,6 +71,13 @@ module "cabal_method" {
   # fetch_bimi bundles a static resvg binary that ships only for linux-x86_64,
   # so it runs x86_64 while the rest of the API fleet stays arm64.
   architecture = each.key == "fetch_bimi" ? "x86_64" : "arm64"
+
+  # RSS endpoints get the RSS tables, the rss-cache bucket, and the fetch
+  # queue - and only they do (docs/1.x/rss-implementation-plan.md, phase 3).
+  rss_access          = startswith(each.key, "rss_")
+  rss_fetch_queue_arn = aws_sqs_queue.rss_fetch.arn
+  rss_fetch_queue_url = aws_sqs_queue.rss_fetch.url
+  rss_cache_bucket    = aws_s3_bucket.rss_cache.bucket
 }
 
 resource "aws_api_gateway_deployment" "deployment" {

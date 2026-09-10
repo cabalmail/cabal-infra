@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cabalmail Feedbot | Cabalmail</title>
+<meta name="description" content="What the Cabalmail feed fetcher is, how it behaves toward publishers, where its requests come from, and how to reach the operator.">
+<meta name="robots" content="index,follow">
+<link rel="icon" type="image/svg+xml" href="/assets/cabalmail-mark.svg" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+
+<link rel="stylesheet" href="/css/home.css" />
+</head>
+<body>
+	<div class="page">
+<h1>Cabalmail Feedbot</h1>
+<p class="meta">User-Agent: <code>Cabalmail-Feedbot/1 (+https://www.{{CONTROL_DOMAIN}}/feedbot.html)</code></p>
+
+<p>If you found this page from your server logs, a user of this Cabalmail instance has subscribed to one of your RSS, Atom, or JSON feeds. Cabalmail is a self-hosted email system with a built-in feed reader; the fetcher runs on the operator's own infrastructure and downloads each subscribed feed on behalf of everyone here who follows it, so you see one reader, not one request per user.</p>
+
+<h2>How it behaves</h2>
+<ul>
+  <li><strong>One fetch per feed, however many subscribers.</strong> Public feeds are fetched once and shared.</li>
+  <li><strong>Conditional requests, always.</strong> Every fetch sends <code>If-None-Match</code> and <code>If-Modified-Since</code> from your previous response; a <code>304 Not Modified</code> costs you almost nothing.</li>
+  <li><strong>Adaptive cadence.</strong> The interval between fetches follows how often your feed actually publishes, within bounds the operator sets (by default no more often than every 15 minutes and at least once a day). Your <code>Cache-Control: max-age</code>, <code>Retry-After</code>, RSS <code>&lt;ttl&gt;</code>, and Syndication <code>updatePeriod</code> hints are honoured as minimum intervals.</li>
+  <li><strong>Backs off on trouble.</strong> Errors widen the interval exponentially; a <code>410 Gone</code> stops fetching permanently.</li>
+  <li><strong>Follows permanent redirects.</strong> A <code>301</code> or <code>308</code> updates the stored feed address, so you can move a feed once and stop seeing requests at the old one.</li>
+  <li><strong>Feeds only.</strong> The fetcher reads the feed documents you publish; it does not crawl your site, fetch article pages, or follow links inside items. Readers open articles in their own browsers.</li>
+  <li><strong>https only.</strong> It never fetches over plain http.</li>
+  <li><strong>Small and bounded.</strong> Responses over 5 MB are discarded, and only a handful of fetches run at once across all feeds.</li>
+</ul>
+
+<h2>Where requests come from</h2>
+<p>Requests leave from a small fixed set of IP addresses belonging to this instance; the same addresses that deliver its outbound mail and are published as <code>smtp.{{CONTROL_DOMAIN}}</code>. If you allow-list or rate-limit by address, those are the ones to use.</p>
+
+<h2>Blocking it</h2>
+<p>To stop this fetcher, return <code>410 Gone</code> for the feed URL and it will not ask again. Blocking the User-Agent or the addresses above also works. Because feed URLs are the publisher's invitation to be fetched, the fetcher does not consult <code>robots.txt</code> for them.</p>
+
+<h2>Contact</h2>
+<p>This instance is operated independently by the entity named in the <a href="/terms.html">Terms of Service</a>, where you will also find a contact address. Cabalmail itself is open source; the fetcher's behaviour is documented in its repository.</p>
+
+<hr>
+
+<p class="back"><a href="/">Back to Cabalmail</a></p>
+	</div>
+</body>
+</html>

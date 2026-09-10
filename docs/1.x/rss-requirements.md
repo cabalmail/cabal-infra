@@ -173,6 +173,14 @@ cache layer ends up doing most of B's work without B's clarity.
   upgraded to `https://`; if the feed is not available over https, the
   user is told and nothing is fetched.
 
+  **Revised decision (2026-09-09), trailing slashes:** `/` is canonical
+  only immediately after the host (and port, if present). Elsewhere it is
+  up to the server whether a slash belongs: Cabalmail cannot know whether
+  `dir` is a directory or some other object, so the path is stored and
+  fetched exactly as given, and the `/dir` vs `/dir/` examples above are
+  superseded. A publisher that treats the two as one object redirects,
+  and the subscribe path canonicalizes the permanent-redirect target.
+
 ### Decision 2: Folder model — Dovecot or native
 
 **Question.** The initial brainstorm proposed implementing the folder

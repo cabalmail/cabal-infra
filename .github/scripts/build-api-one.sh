@@ -81,6 +81,13 @@ if grep -qE '^[[:space:]]*(from|import)[[:space:]]+imap_session' function.py 2>/
   cp ../_shared/imap_session.py ./build/imap_session.py
   cp ../_shared/imap_pool.py ./build/imap_pool.py
 fi
+# The RSS fetcher and (from phase 3) the RSS API share the rss_* modules:
+# URL normalizer, guarded HTTP fetch, feed parser, cadence math. They import
+# only each other, the stdlib, and the third-party pins in the consuming
+# function's requirements.txt; ship the whole set whenever any is imported.
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+rss_' function.py 2>/dev/null; then
+  cp ../_shared/rss_*.py ./build/
+fi
 # send imports smtp_session (private-submission dial); stdlib-only module.
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+smtp_session' function.py 2>/dev/null; then
   cp ../_shared/smtp_session.py ./build/smtp_session.py
