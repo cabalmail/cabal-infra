@@ -210,9 +210,15 @@ class Folders(unittest.TestCase):
         tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'title': 'T', 'due_shard': 'active'}
         tables['cabal-rss-subscription'].rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1',
                                                                 'folder_id': child_id, 'folder_key': f'{child_id}#s1'}
+        tables['cabal-rss-subscription'].rows[(USER, 's2')] = {'user': USER, 'subscription_id': 's2', 'feed_id': 'f1',
+                                                                'folder_id': '~root', 'folder_key': '~root#s2'}
         _, listing = call(lst)
         self.assertEqual(len(listing['folders']), 2)
         self.assertEqual(listing['subscriptions'][0]['feed']['title'], 'T')
+        # A root subscription is stored with the sentinel but is '' on the wire.
+        self.assertEqual({s['subscription_id']: s['folder_id'] for s in listing['subscriptions']},
+                         {'s1': child_id, 's2': ''})
+        del tables['cabal-rss-subscription'].rows[(USER, 's2')]
         self.assertFalse(listing['subscriptions'][0]['feed']['dead_lettered'])
         _, deleted = call(dele, body={'folder_id': child_id})
         self.assertEqual((deleted['moved_subscriptions'], deleted['parent_folder_id']), (1, top_id))
