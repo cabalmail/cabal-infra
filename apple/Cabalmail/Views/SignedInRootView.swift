@@ -110,6 +110,10 @@ struct SignedInRootView: View {
                 MailRootView()
                     .tabBarTrayShield()
             }
+            Tab("Feeds", systemImage: "dot.radiowaves.up.forward") {
+                FeedRootView()
+                    .tabBarTrayShield()
+            }
             Tab("Addresses", systemImage: "at") {
                 AddressManagementTab()
                     .tabBarTrayShield()

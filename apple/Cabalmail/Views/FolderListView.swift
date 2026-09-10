@@ -27,6 +27,25 @@ struct FolderListView: View {
     /// The filter text actually in effect: the parent's when injected, else the
     /// view's own `.searchable` query.
     var activeFilterText: String { externalFilter?.wrappedValue ?? filterQuery }
+    /// The Feeds section's selection (RSS plan, phase 5). Non-nil only on the
+    /// layouts where feeds share this sidebar (macOS, iPad-regular); the
+    /// compact and visionOS Feeds tabs have their own `FeedSidebarList`.
+    /// Rows are buttons rather than list selection because the folder rows
+    /// already own this list's selection type.
+    var feedSelection: Binding<RssItemScope?>?
+    @State var feedModel: FeedSidebarViewModel?
+    @State var feedFilter = ""
+    @AppStorage("cabalmail.folder.section.feeds.expanded")
+    private var feedsExpanded: Bool = true
+    @AppStorage("cabalmail.feeds.collapsedFolders")
+    private var feedsCollapsedRaw = ""
+    /// Accessors for the `+Helpers` extension (the storage properties are
+    /// file-private, like the mail sections').
+    var feedsExpandedBinding: Binding<Bool> { $feedsExpanded }
+    var feedsCollapsedRawAccessor: String {
+        get { feedsCollapsedRaw }
+        nonmutating set { feedsCollapsedRaw = newValue }
+    }
     /// Called exactly once, the first time the folder list successfully
     /// loads. `MailRootView` uses it to complete the launch INBOX landing:
     /// the fetched INBOX replaces the provisional `Folder(path: "INBOX")`
@@ -147,7 +166,11 @@ struct FolderListView: View {
                     }
                 }
             }
+            if let feedSelection {
+                feedsSection(selection: feedSelection)
+            }
         }
+        .task { await loadFeedModelIfNeeded() }
         // "Folders" (not "Mailboxes" — the mailbox is the per-user singleton;
         // this list is its folders). In the Mail sidebar the visible text is
         // suppressed and the Cabalmail mark stands in (see `MailRootView`);

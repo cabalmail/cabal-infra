@@ -22,7 +22,7 @@ phase are updated in the same PR as the work, per the docs convention.
 | 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
 | 3     | Subscription + reader API                         | On stage (2026-09-09) |
 | 4     | OPML import/export (API)                          | On stage (2026-09-10) |
-| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a in review (2026-09-10) |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a on stage; 5b in review (2026-09-10) |
 | 6     | Android client (offline + FTS + profile scoping)  | Not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
@@ -1251,7 +1251,21 @@ thin `sqlite3` actor's backing type), `RssStore` with FTS5,
 as-built notes: the FTS index uses the plain `unicode61` tokenizer, not
 porter, because stemming stored tokens breaks the typed-prefix matching a
 search field needs; and sign-out's `clearLocalData()` now clears the RSS
-store too. 5b (read path) is next.
+store too. **5b (read path) in review (2026-09-10):** `FeedSidebarViewModel`
+/ `FeedItemListViewModel` / `FeedItemDetailViewModel`, the Feeds section
+in the mail sidebar (macOS, iPad-regular) driving the split view's content
+and detail columns, a Feeds tab with its own collapsing split on iPhone
+and visionOS, `FeedItemListView` (filters, orderings, swipes, per-feed
+FTS search, load older), `FeedItemDetailView` on the existing
+`HTMLBodyView`, and `ArticleWebView` on the subscription's
+`WKWebsiteDataStore(forIdentifier:)` with the vendored Readability.js
+reader toggle (`@mozilla/readability` pinned in `react/admin/package.json`,
+materialized by `sync-vendored.sh` into `RSS/ReaderAssets`, credited in
+Acknowledgements). Session start and foreground trigger `syncAll`. Not in
+5b: subscribe / folder / settings UI, OPML, the Settings category, macOS
+menu commands (5c), and the list virtualization and offline indicators
+(5d). Rows in multi-feed lists show the item URL's host as the feed label
+until 5d resolves titles.
 
 **Goal.** The iOS, iPadOS, visionOS, and macOS clients have a reader
 UI with per-feed `WKWebsiteDataStore` isolation, offline reading, and
