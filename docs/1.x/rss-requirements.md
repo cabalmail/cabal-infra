@@ -181,6 +181,19 @@ cache layer ends up doing most of B's work without B's clarity.
   superseded. A publisher that treats the two as one object redirects,
   and the subscribe path canonicalizes the permanent-redirect target.
 
+  **Revised decision (2026-09-10), the host decides:** the rulings above
+  were stated too strongly. The publisher's host decides what is
+  canonical; Cabalmail's own preferences (`www` or no `www`, trailing `/`
+  or none) apply only when the host serves both forms. Where it serves one
+  form, that form is canonical, whatever the user typed. Found on the
+  first OPML imports: two publishers serve their feed only on `www` and
+  answer the apex path with a 404 or a redirect to the front page, so the
+  apex-first normalizer sent the fetcher to a host that had nothing. As
+  built: the apex form is tried first; when it does not yield a feed, the
+  `www` form is tried once and, if it parses, becomes the canonical URL,
+  and a permanent redirect from the apex form to the `www` form of the
+  same URL keeps `www` rather than normalizing back to the apex.
+
 ### Decision 2: Folder model — Dovecot or native
 
 **Question.** The initial brainstorm proposed implementing the folder
