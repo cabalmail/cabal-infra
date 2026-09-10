@@ -22,7 +22,7 @@ phase are updated in the same PR as the work, per the docs convention.
 | 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
 | 3     | Subscription + reader API                         | On stage (2026-09-09) |
 | 4     | OPML import/export (API)                          | On stage (2026-09-10) |
-| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a, 5b, 5d on stage; 5c in review (2026-09-10) |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | Complete on stage (2026-09-10); promoting as 1.15.0 |
 | 6     | Android client (offline + FTS + profile scoping)  | Not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
@@ -1295,7 +1295,7 @@ mail list's index-addressed virtualization. The feed list reads pages of
 lazy per row; the mail pattern exists because envelopes arrive from the
 server by index window, which the local store makes unnecessary. Revisit
 only if a feed with thousands of cached items scrolls badly.
-**5c (management) in review (2026-09-10):** `FeedManagementViewModel`
+**5c (management) on stage (2026-09-10):** `FeedManagementViewModel`
 over the Kit's `RssClient` + `RssStore` (server first, then the store,
 then `FeedStateBus`, which gained a catalog channel the sidebar re-reads
 on); `SubscribeFeedSheet`, `FeedFolderSheet` (create / rename / move),
@@ -1317,6 +1317,17 @@ and clears it through the instance `removeData` API instead (reproduced
 standalone, so it is WebKit's, not ours). Not done: drag-to-reorder into
 folders (the settings sheet and "Rename or Move" cover moves) and the
 notifications toggle (waits for phase 8's push).
+**Post-5c fix (2026-09-10):** the first real OPML imports showed two feeds
+with no items because the apex host does not serve them: one 404s the apex
+path, the other redirects every apex path to its front page, and only
+`www.` works. D1's "apex is canonical" is kept as the preference, verified:
+`rss_url.www_variant` names the `www.` form of an apex canonical, the
+fetcher's `www_fallback` and the probe's `fetch_probe` try it once when the
+apex does not yield a feed and adopt it as canonical (conflict-aware via
+the same path permanent redirects use), `redirect_target` keeps `www.` when
+a redirect points from the apex form to the `www.` form of the same URL,
+and the subscribe lookup also checks the `www.` row so a second subscriber
+typing the apex form lands on the existing feed.
 
 **Goal.** The iOS, iPadOS, visionOS, and macOS clients have a reader
 UI with per-feed `WKWebsiteDataStore` isolation, offline reading, and

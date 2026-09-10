@@ -19,7 +19,12 @@ requirements and the decisions behind them in
 - **Feeds are deduplicated by canonical URL.** `http://` is upgraded to
   https (a feed that is not served over https is refused), the host is
   lower-cased and a leading `www.` is dropped when the rest is a
-  registrable apex (Public Suffix List), query parameters are sorted,
+  registrable apex (Public Suffix List) - unless the apex turns out not to
+  serve the feed: when the fetcher or the subscribe probe gets a 404, a
+  non-feed body, or a redirect to the front page from an apex host, it
+  tries the `www.` form once and, if that parses as a feed, makes it the
+  canonical URL (`rss_url.www_variant`, `rss_fetch.www_fallback`,
+  `rss_subscribe_core.fetch_probe`); query parameters are sorted,
   fragments are dropped. `/` is canonical only right after the host; the
   rest of the path is kept exactly as given, since only the server knows
   whether `/dir` and `/dir/` are one object. A publisher that treats them

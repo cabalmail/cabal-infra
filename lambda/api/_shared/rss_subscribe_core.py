@@ -25,7 +25,8 @@ from rss_api import (ApiError, ROOT_FOLDER, SHARED_OWNER, feeds, folder_key,  # 
 from rss_discover import discover_feed_links, looks_like_html  # pylint: disable=import-error
 from rss_http import FetchError, fetch  # pylint: disable=import-error
 from rss_parse import ParseError, ParsedFeed, parse_feed  # pylint: disable=import-error
-from rss_url import FeedUrlError, normalize_feed_url  # pylint: disable=import-error
+from rss_url import FeedUrlError, normalize_feed_url, redirect_target, www_variant  # pylint: disable=import-error
+from rss_www import try_www  # pylint: disable=import-error
 
 CONTROL_DOMAIN = os.environ.get('CONTROL_DOMAIN', '')
 USER_AGENT = f'Cabalmail-Feedbot/1 (+https://www.{CONTROL_DOMAIN}/feedbot.html)'
@@ -60,7 +61,7 @@ def find_shared_feed(canonical):
 def resolve_feed(url, probe=True, title=''):
     '''The shared feed row for `url`, created if needed (see module doc).'''
     canonical = canonicalize(url)
-    feed = find_shared_feed(canonical)
+    feed = find_shared_feed(canonical) or find_www_feed(canonical)
     if feed:
         return feed
     if probe:
@@ -99,30 +100,75 @@ def create_feed(canonical, parsed):
     return row
 
 
+def find_www_feed(canonical):
+    '''The shared row for the `www.` form of an apex canonical, if a
+    verified probe or fetch settled on that form (see `www_variant`).'''
+    alt = www_variant(canonical)
+    return find_shared_feed(alt) if alt else None
+
+
 def probe_feed(canonical, original_url):
     '''(canonical_url, ParsedFeed) for the URL, its permanent-redirect
     target, or the feed its web page advertises.'''
-    result = guarded_fetch(canonical, original_url)
-    if result.permanent_redirect_to:
-        canonical = canonicalize(result.permanent_redirect_to)
-    try:
-        return canonical, parse_feed(result.body, result.content_type)
-    except ParseError as err:
-        if not looks_like_html(result.body, result.content_type):
-            raise ApiError(400, 'not_a_feed',
-                           'That address did not return an RSS, Atom, or JSON feed.') from err
+    canonical, result, parsed = fetch_probe(canonical, original_url)
+    if parsed:
+        return canonical, parsed
+    if not looks_like_html(result.body, result.content_type):
+        raise ApiError(400, 'not_a_feed', 'That address did not return an RSS, Atom, or JSON feed.')
     links = discover_feed_links(result.body, result.url)
     if not links:
         raise ApiError(400, 'not_a_feed', 'That page does not advertise a feed.')
-    discovered = canonicalize(links[0][0])
-    result = guarded_fetch(discovered, None)
-    if result.permanent_redirect_to:
-        discovered = canonicalize(result.permanent_redirect_to)
+    discovered, _, parsed = fetch_probe(canonicalize(links[0][0]), None)
+    if not parsed:
+        raise ApiError(400, 'not_a_feed', 'The feed that page advertises could not be read.')
+    return discovered, parsed
+
+
+def fetch_probe(canonical, original_url):
+    '''(canonical, result, parsed-or-None) for one candidate URL.
+
+    Fetches the canonical form and follows a permanent redirect. D1 keeps
+    the apex host canonical, but a publisher that serves the feed only on
+    `www.` 404s the apex path or redirects it to the front page; when the
+    apex does not yield a feed, the `www.` form is tried once and, if it
+    parses, becomes the canonical (see `rss_url.www_variant`). `parsed` is
+    None when the body is not a feed (the caller may autodiscover).'''
     try:
-        return discovered, parse_feed(result.body, result.content_type)
-    except ParseError as err:
-        raise ApiError(400, 'not_a_feed',
-                       'The feed that page advertises could not be read.') from err
+        result = guarded_fetch(canonical, original_url)
+    except ApiError:
+        fallback = www_probe(canonical)
+        if fallback is None:
+            raise
+        return fallback
+    try:
+        parsed = parse_feed(result.body, result.content_type)
+    except ParseError:
+        # The www attempt uses the candidate as asked, not a redirect
+        # target: an apex that redirects every path to its front page
+        # would otherwise send the retry to www's front page too.
+        fallback = www_probe(canonical)
+        if fallback is not None:
+            return fallback
+        if result.permanent_redirect_to:
+            canonical = canonical_redirect(canonical, result.permanent_redirect_to)
+        return canonical, result, None
+    if result.permanent_redirect_to:
+        canonical = canonical_redirect(canonical, result.permanent_redirect_to)
+    return canonical, result, parsed
+
+
+def www_probe(canonical):
+    '''(www_canonical, result, parsed) when the `www.` form serves a feed;
+    None when there is no such form or it does not.'''
+    return try_www(canonical, USER_AGENT, fetch, parse_feed, variant_fn=www_variant)
+
+
+def canonical_redirect(source, location):
+    '''rss_url.redirect_target mapped to the API error.'''
+    try:
+        return redirect_target(source, location)
+    except FeedUrlError as err:
+        raise ApiError(400, 'invalid_url', str(err)) from err
 
 
 def guarded_fetch(url, original_url):

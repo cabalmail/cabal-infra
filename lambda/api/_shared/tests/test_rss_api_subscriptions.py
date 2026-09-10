@@ -19,6 +19,7 @@ import rss_subscribe_core as core  # noqa: E402  pylint: disable=wrong-import-po
 from rss_api import ApiError  # noqa: E402  pylint: disable=wrong-import-position
 from rss_http import FetchError, FetchResult  # noqa: E402  pylint: disable=wrong-import-position
 from rss_parse import ParseError, ParsedFeed  # noqa: E402  pylint: disable=wrong-import-position
+import rss_url  # noqa: E402  pylint: disable=wrong-import-position
 
 USER = 'alice'
 HTML = b'<!doctype html><html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head><body></body></html>'
@@ -41,11 +42,20 @@ class Subscribe(unittest.TestCase):
 
         def fake_fetch(url, **_kw):
             self.fetches.append(url)
+            if not self.responses:
+                # The probe's www fallback fetches once more than the
+                # scripted scenario; an unscripted www attempt fails.
+                return FetchResult(status=404, url=url)
             response = self.responses.pop(0)
             if isinstance(response, Exception):
                 raise response
             return response
         core.fetch = fake_fetch
+        # No Public Suffix List on a bare interpreter: one label before a
+        # one-label suffix is an apex.
+        core.www_variant = lambda url: rss_url.www_variant(url, is_registrable=lambda h: h.count('.') == 1)
+        core.redirect_target = lambda source, location: rss_url.redirect_target(
+            source, location, is_registrable=lambda h: h.count('.') == 1)
         self.responses = []
         core.parse_feed = lambda body, ctype: self.parses.pop(0)
         self.parses = []
@@ -105,15 +115,63 @@ class Subscribe(unittest.TestCase):
         self.assertEqual(len(fx.SQS.sent), 1)
 
     def test_autodiscovery_from_html(self):
+        # The front page is HTML, so the probe tries the www form before
+        # autodiscovering; here www 404s and the advertised feed wins.
         self.responses = [FetchResult(status=200, url='https://example.com/', body=HTML, content_type='text/html'),
+                          FetchResult(status=404, url='https://www.example.com'),
                           FetchResult(status=200, url='u', body=b'<rss/>', content_type='application/rss+xml')]
         core.parse_feed = lambda body, ctype: (_ for _ in ()).throw(ParseError('html')) \
             if body == HTML else ParsedFeed(feed_type='rss', title='Found')
         status, body = call(self.mod, body={'url': 'https://example.com'})
         self.assertEqual(status, 200)
         # (the test's stand-in normalizer leaves the root path alone)
-        self.assertEqual(self.fetches, ['https://example.com', 'https://example.com/feed.xml'])
+        self.assertEqual(self.fetches, ['https://example.com', 'https://www.example.com',
+                                        'https://example.com/feed.xml'])
         self.assertEqual(body['subscription']['feed']['title'], 'Found')
+
+    def test_www_only_publisher_becomes_canonical_on_www(self):
+        # The Friendly Atheist: the apex path 404s, www serves the feed.
+        self.responses = [FetchResult(status=404, url='https://example.com/feed'),
+                          FetchResult(status=200, url='https://www.example.com/feed', body=b'<rss/>',
+                                      content_type='application/rss+xml')]
+        self.parses = [ParsedFeed(feed_type='rss', title='Www Only')]
+        status, body = call(self.mod, body={'url': 'https://example.com/feed'})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.fetches, ['https://example.com/feed', 'https://www.example.com/feed'])
+        row = next(iter(self.tables['cabal-rss-feed'].rows.values()))
+        self.assertEqual(row['canonical_url'], 'https://www.example.com/feed')
+        # A second subscriber typing the apex form lands on the same row.
+        response = self.mod.handler(fx.event('other', body={'url': 'https://example.com/feed'}), None)
+        body2 = json.loads(response['body'])
+        self.assertEqual((response['statusCode'], body2['subscription']['feed_id']),
+                         (200, body['subscription']['feed_id']))
+        self.assertEqual(len(self.tables['cabal-rss-feed'].rows), 1)
+
+    def test_apex_front_page_redirect_falls_back_to_www(self):
+        # GitHub Status: the apex redirects every path to the www front page
+        # (HTML); the www form of the path asked for serves the feed. The
+        # retry must use that path, not the redirect target.
+        self.responses = [FetchResult(status=200, url='https://www.example.com/', body=HTML, content_type='text/html',
+                                      permanent_redirect_to='https://www.example.com/'),
+                          FetchResult(status=200, url='https://www.example.com/feed', body=b'<rss/>',
+                                      content_type='application/rss+xml')]
+        core.parse_feed = lambda body, ctype: (_ for _ in ()).throw(ParseError('html')) \
+            if body == HTML else ParsedFeed(feed_type='rss', title='Status')
+        status, _ = call(self.mod, body={'url': 'https://example.com/feed'})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.fetches, ['https://example.com/feed', 'https://www.example.com/feed'])
+        row = next(iter(self.tables['cabal-rss-feed'].rows.values()))
+        self.assertEqual(row['canonical_url'], 'https://www.example.com/feed')
+
+    def test_apex_redirecting_to_www_keeps_www(self):
+        self.responses = [FetchResult(status=200, url='https://www.example.com/feed', body=b'<rss/>',
+                                      content_type='application/rss+xml',
+                                      permanent_redirect_to='https://www.example.com/feed')]
+        self.parses = [ParsedFeed(feed_type='rss', title='Moved')]
+        status, _ = call(self.mod, body={'url': 'https://example.com/feed'})
+        self.assertEqual(status, 200)
+        row = next(iter(self.tables['cabal-rss-feed'].rows.values()))
+        self.assertEqual(row['canonical_url'], 'https://www.example.com/feed')
 
     def test_error_mapping(self):
         cases = [

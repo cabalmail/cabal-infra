@@ -42,7 +42,8 @@ from rss_cadence import (backoff_minutes, next_cadence_minutes,  # pylint: disab
                          publisher_floor_minutes, update_items_per_day)
 from rss_http import FetchError, fetch  # pylint: disable=import-error
 from rss_parse import ParseError, parse_feed  # pylint: disable=import-error
-from rss_url import FeedUrlError, normalize_feed_url  # pylint: disable=import-error
+from rss_url import FeedUrlError, redirect_target, www_variant  # pylint: disable=import-error
+from rss_www import try_www  # pylint: disable=import-error
 
 FEED_TABLE = 'cabal-rss-feed'
 ITEM_TABLE = 'cabal-rss-item'
@@ -94,8 +95,10 @@ def process_feed(feed_id):
         result = fetch(feed['canonical_url'], etag=feed.get('last_etag', ''),
                        last_modified=feed.get('last_modified', ''), user_agent=USER_AGENT)
     except FetchError as err:
-        return record_failure(feed, bounds, err.reason, str(err))
+        return www_fallback(feed, bounds) or record_failure(feed, bounds, err.reason, str(err))
     if result.status != 200:
+        if result.status not in (304, 410):
+            return www_fallback(feed, bounds) or record_non_200(feed, bounds, result)
         return record_non_200(feed, bounds, result)
     return ingest(feed, bounds, result)
 
@@ -116,10 +119,34 @@ def ingest(feed, bounds, result):
     try:
         parsed = parse_feed(result.body, result.content_type)
     except ParseError as err:
-        return record_failure(feed, bounds, 'parse', str(err), status=200)
+        return (www_fallback(feed, bounds)
+                or record_failure(feed, bounds, 'parse', str(err), status=200))
     now = datetime.now(timezone.utc)
     counts = upsert_items(feed['feed_id'], parsed.items, now)
     follow_permanent_redirect(feed, result)
+    return record_success(feed, bounds, result, parsed, counts, now)
+
+
+def www_fallback(feed, bounds):
+    '''D1 keeps the apex host canonical, but some publishers serve the feed
+    only on `www.` and either 404 the apex path or redirect every apex path
+    to their front page (seen on stage's first OPML imports, 2026-09-10).
+    When the canonical fetch does not yield a feed, try the `www.` form
+    once; a feed there becomes the canonical URL, unless another row already
+    owns it. None when there is no `www.` form to try or it did not help,
+    so the caller records the original failure.'''
+    found = try_www(feed['canonical_url'], USER_AGENT, fetch, parse_feed, variant_fn=www_variant)
+    if found is None:
+        return None
+    alt, result, parsed = found
+    if not move_canonical(feed, alt):
+        return None
+    feed['canonical_url'] = alt
+    print(f'[rss-fetch] {feed["feed_id"]} apex did not serve the feed; www form does')
+    now = datetime.now(timezone.utc)
+    counts = upsert_items(feed['feed_id'], parsed.items, now)
+    # The www result's own permanent redirect is deliberately not followed
+    # here: a www -> apex redirect would just ping-pong.
     return record_success(feed, bounds, result, parsed, counts, now)
 
 
@@ -222,27 +249,36 @@ def follow_permanent_redirect(feed, result):
     if not result.permanent_redirect_to:
         return
     try:
-        target = normalize_feed_url(result.permanent_redirect_to)
+        target = redirect_target(feed['canonical_url'], result.permanent_redirect_to)
     except FeedUrlError as err:
         print(f'[rss-fetch] {feed["feed_id"]} ignoring redirect target: {err}')
         return
     if target == feed['canonical_url']:
         return
+    if move_canonical(feed, target):
+        feed['canonical_url'] = target
+
+
+def move_canonical(feed, target):
+    '''Points the row at `target` unless another shared row already owns
+    it, in which case the conflict is recorded for the operator and False
+    returned (the row keeps its URL and its failure).'''
     owner = feeds.query(IndexName='by_canonical',
                         KeyConditionExpression=Key('canonical_url').eq(target)
-                        & Key('owner_key').eq(feed['owner_key']),
+                        & Key('owner_key').eq(feed.get('owner_key', '~shared')),
                         Limit=1).get('Items', [])
     if owner and owner[0]['feed_id'] != feed['feed_id']:
         feeds.update_item(Key={'feed_id': feed['feed_id']},
                           UpdateExpression='SET redirect_conflict_url = :url',
                           ExpressionAttributeValues={':url': target})
         print(f'[rss-fetch] {feed["feed_id"]} redirects to {target}, owned by '
-              f'{owner[0]["feed_id"]}; recorded for merge')
-        return
+              f'{owner[0]["feed_id"]}; recorded, not followed')
+        return False
     feeds.update_item(Key={'feed_id': feed['feed_id']},
                       UpdateExpression='SET canonical_url = :url REMOVE redirect_conflict_url',
                       ExpressionAttributeValues={':url': target})
     print(f'[rss-fetch] {feed["feed_id"]} canonical_url -> {target}')
+    return True
 
 
 # -- Items -------------------------------------------------------------------
