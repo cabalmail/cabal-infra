@@ -43,6 +43,7 @@ struct CabalmailCommands: Commands {
             .keyboardShortcut("n", modifiers: .command)
         }
         MessageMenuCommands(appState: appState)
+        FeedsMenuCommands(appState: appState)
         CommandMenu("Mailbox") {
             // No keyboard shortcut. Cmd+R is the Reply chord in the
             // Message menu above (Cmd+Shift+R reaches Reply All);

@@ -83,44 +83,77 @@ extension FolderListView {
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
                 if feedModel.hasLoaded, !feedModel.hasSubscriptions {
-                    Text("No feeds yet")
+                    Button("Subscribe to a feed…") { feedActions.subscribe() }
+                        .buttonStyle(.plain)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(ColorTokens.accentForestFg)
+                        .disabled(feedManagement == nil)
+                        .accessibilityIdentifier("feeds.subscribe.empty")
                 } else {
-                    Button {
-                        selection.wrappedValue = .all
-                    } label: {
-                        FeedSidebarRowLabel(
-                            row: FeedSidebarRow(kind: .folder(RssFolder(folderId: "", name: "All Feeds")),
-                                                depth: 0, hasChildren: false,
-                                                unread: FeedSidebarRows.totalUnread(feedModel.unreadCounts)),
-                            isSelected: selection.wrappedValue == .all,
-                            isCollapsed: { _ in true }, toggleCollapse: { _ in }
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .listRowBackground(
-                        selection.wrappedValue == .all
-                            ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.18)) : nil
-                    )
-                    .accessibilityIdentifier("feed.row.all")
+                    allFeedsRow(selection: selection, unread: FeedSidebarRows.totalUnread(feedModel.unreadCounts))
                     FeedSidebarRowsView(
                         rows: feedModel.rows(collapsed: feedsCollapsed, filter: activeFilterText),
                         selection: selection,
                         toggleCollapse: toggleFeedCollapse,
-                        isCollapsed: { feedsCollapsed.contains($0) }
+                        isCollapsed: { feedsCollapsed.contains($0) },
+                        contextMenu: { row in
+                            FeedSidebarContextMenu(scope: row.scope, row: row, actions: feedActions,
+                                                   management: feedManagement)
+                        }
                     )
                 }
             }
         } header: {
-            sectionHeader("Feeds", key: "feeds", isExpanded: feedsExpandedBinding)
+            HStack(spacing: 4) {
+                sectionHeader("Feeds", key: "feeds", isExpanded: feedsExpandedBinding)
+                FeedAddMenu(actions: feedActions, management: feedManagement)
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+            }
         }
+    }
+
+    /// The "All Feeds" row at the top of the section: every subscription's
+    /// items in one list, with the total unread as its badge.
+    private func allFeedsRow(selection: Binding<RssItemScope?>, unread: Int) -> some View {
+        Button {
+            selection.wrappedValue = .all
+        } label: {
+            FeedSidebarRowLabel(
+                row: FeedSidebarRow(kind: .folder(RssFolder(folderId: "", name: "All Feeds")),
+                                    depth: 0, hasChildren: false, unread: unread),
+                isSelected: selection.wrappedValue == .all,
+                isCollapsed: { _ in true }, toggleCollapse: { _ in }
+            )
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(
+            selection.wrappedValue == .all
+                ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.18)) : nil
+        )
+        .contextMenu {
+            FeedSidebarContextMenu(scope: .all, row: nil, actions: feedActions, management: feedManagement)
+        }
+        .accessibilityIdentifier("feed.row.all")
+    }
+
+    /// Wraps the sidebar list with the feed management sheets, dialogs, and
+    /// menu-command routing; a no-op host when the sidebar has no Feeds
+    /// section (compact layouts, where the Feeds tab hosts them instead).
+    func feedManagementHost<Content: View>(_ content: Content) -> some View {
+        content.feedManagementSheets(
+            feedActions, management: feedManagement, folders: feedModel?.folders ?? [],
+            subscriptions: feedModel?.subscriptions ?? [], selection: feedSelection ?? .constant(nil),
+            handlesCommands: feedSelection != nil, onRefresh: { Task { await feedModel?.refresh() } }
+        )
     }
 
     /// Creates the Feeds section's model on first appearance (wide layouts
     /// only) and runs its initial load + refresh.
     func loadFeedModelIfNeeded() async {
         guard feedSelection != nil, feedModel == nil, let client = appState.client else { return }
+        feedManagement = FeedManagementViewModel(client: client)
         let feedModel = FeedSidebarViewModel(client: client)
         self.feedModel = feedModel
         await feedModel.load()
