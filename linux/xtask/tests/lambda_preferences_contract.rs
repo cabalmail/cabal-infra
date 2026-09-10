@@ -36,11 +36,17 @@ use cabalmail_kit::config::{Key, Kind, Scope, Wire};
 /// yet, and the schema's `Kind` has no structured variant to model it with.
 /// The Lambda merges per key, so Apple/Android palettes survive a Linux
 /// push untouched.
+///
+/// `rss_mark_as_read` belongs to the RSS reader
+/// (docs/1.x/rss-implementation-plan.md, phase 5), which this client does
+/// not have yet: the Linux client waits until its mail client has caught
+/// up with Apple and Android (operator decision 2026-09-09).
 const DELIBERATELY_UNSUPPORTED: &[&str] = &[
     "crash_reporting_enabled",
     "dispose_advance",
     "flag_palette",
     "mark_read_advance",
+    "rss_mark_as_read",
 ];
 
 /// What the Lambda accepts, read out of its source.
