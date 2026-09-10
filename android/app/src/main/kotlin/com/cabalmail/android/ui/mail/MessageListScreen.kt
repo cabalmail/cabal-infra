@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Create
@@ -64,6 +66,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
@@ -95,6 +98,12 @@ fun MessageListScreen(
     highlightedUid: Long? = null,
     /** False beside a visible folder pane, where there is no hub to go back to. */
     showBack: Boolean = true,
+    /**
+     * The folder-switch menu behind the title (null until the folder list
+     * has loaded); picking a row calls [onSwitchFolder] with the path.
+     */
+    folderMenu: FolderSwitchMenu? = null,
+    onSwitchFolder: (String) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     // The custom-flag palette (Phase 4), for the row dots and the
@@ -235,6 +244,8 @@ fun MessageListScreen(
                     onOpenSearch = onOpenSearch,
                     onBack = onBack,
                     showBack = showBack,
+                    folderMenu = folderMenu,
+                    onSwitchFolder = onSwitchFolder,
                 )
             }
         },
@@ -381,10 +392,12 @@ private fun DefaultTopBar(
     onOpenSearch: () -> Unit,
     onBack: () -> Unit,
     showBack: Boolean,
+    folderMenu: FolderSwitchMenu?,
+    onSwitchFolder: (String) -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     TopAppBar(
-        title = { Text(folder) },
+        title = { FolderTitle(folder = folder, menu = folderMenu, onSwitchFolder = onSwitchFolder) },
         navigationIcon = {
             if (showBack) {
                 IconButton(onClick = onBack) {
@@ -508,6 +521,80 @@ private fun SelectionTopBar(
             }
         },
     )
+}
+
+/**
+ * The folder name as a tappable affordance: a tap opens the folder-switch
+ * menu — subscribed folders, then an "Other folders" row that opens the
+ * unsubscribed ones in a second menu anchored at the same title. The
+ * current folder carries the check mark wherever it sits. Until the folder
+ * list loads the menu offers only the current folder, so the affordance
+ * never reads as empty.
+ */
+@Composable
+private fun FolderTitle(
+    folder: String,
+    menu: FolderSwitchMenu?,
+    onSwitchFolder: (String) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    var otherOpen by remember { mutableStateOf(false) }
+    val pick: (String) -> Unit = { target ->
+        open = false
+        otherOpen = false
+        if (target != folder) {
+            onSwitchFolder(target)
+        }
+    }
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable(onClickLabel = stringResource(R.string.switch_folder)) { open = true }
+                    .padding(horizontal = 4.dp),
+        ) {
+            Text(
+                folder,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            (menu?.primary ?: listOf(folder)).forEach { target ->
+                DropdownMenuItem(
+                    text = { Text(target) },
+                    trailingIcon = { if (target == folder) ActiveMark() },
+                    onClick = { pick(target) },
+                )
+            }
+            if (!menu?.other.isNullOrEmpty()) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.other_folders)) },
+                    trailingIcon = {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                    },
+                    onClick = {
+                        open = false
+                        otherOpen = true
+                    },
+                )
+            }
+        }
+        DropdownMenu(expanded = otherOpen, onDismissRequest = { otherOpen = false }) {
+            menu?.other.orEmpty().forEach { target ->
+                DropdownMenuItem(
+                    text = { Text(target) },
+                    trailingIcon = { if (target == folder) ActiveMark() },
+                    onClick = { pick(target) },
+                )
+            }
+        }
+    }
 }
 
 @Composable

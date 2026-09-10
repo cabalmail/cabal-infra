@@ -33,7 +33,7 @@ Every address lives on its own subdomain (`foo@bar.example.com`) and delivers to
 
 <img src="./app_screens/ios_inbox.png" alt="Inbox on iPhone: filter pills, sender avatars, sort and select controls" width="300" />
 
-- **Folders.** Create, delete, and subscribe to folders; favorites sort to the top of pickers. Subscribed folders are refreshed proactively; unsubscribed folders load only when you open them.
+- **Folders.** Create, delete, and subscribe to folders; favorites sort to the top of pickers. Subscribed folders are refreshed proactively; unsubscribed folders load only when you open them. The folder name at the top of the message list is a menu: tap it to jump to another subscribed folder, or to any other folder under "Other folders".
 
   <img src="./app_screens/ios_folders.png" alt="Folder list on iPhone: Subscribed and All folders sections" width="300" />
 - **Reading.** Remote images are blocked by default (load them per message; loading can let a sender track you). A sender-authentication line shows the SPF/DKIM/DMARC verdicts stamped by your own relay, or "not verified" when there are none. Sender avatars come from your Contacts, the sender's published BIMI logo, or initials.
