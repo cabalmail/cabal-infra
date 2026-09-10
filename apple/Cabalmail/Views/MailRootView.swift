@@ -16,8 +16,14 @@ import UIKit
 /// or envelope prop and its one-shot `.task` never re-fires — which is the
 /// bug that made "select a second folder" do nothing on the split layout.
 struct MailRootView: View {
-    @State private var selectedFolder: Folder?
-    @State private var selectedEnvelope: Envelope?
+    @State var selectedFolder: Folder?
+    @State var selectedEnvelope: Envelope?
+    /// Feeds section selection (RSS plan, phase 5). Mutually exclusive with
+    /// `selectedFolder`: picking a feed clears the mail folder and the
+    /// columns show the item list and reader; picking a folder clears this.
+    @State var selectedFeedScope: RssItemScope?
+    @State var selectedFeedItem: RssItem?
+    @State var selectedFeedSubscription: RssSubscription?
     /// Whether the launch `.task` has already landed on the provisional
     /// INBOX (see there). Never reset — a later re-appearance with a
     /// deliberately cleared selection must not yank the user back to INBOX.
@@ -33,12 +39,12 @@ struct MailRootView: View {
     /// move operations target the message's true mailbox rather than the
     /// sidebar's current selection. Nil for same-folder rows and folder-
     /// mode lists, so `detailFolder` falls back to `selectedFolder`.
-    @State private var crossFolderDetail: Folder?
+    @State var crossFolderDetail: Folder?
     /// How many messages the list currently has selected, reported by
     /// `MessageListView` on wide/keyboard layouts. Drives the "N messages
     /// selected" reading-pane placeholder when a multi-selection is active;
     /// stays 0 on compact iPhone (single-selection there).
-    @State private var listSelectionCount = 0
+    @State var listSelectionCount = 0
     /// Which column the collapsed (iPhone-compact) navigation shows. The
     /// virtualized message list is a `ScrollView`, not a `List(selection:)`,
     /// so NavigationSplitView no longer auto-pushes the reader when a row is
@@ -46,7 +52,7 @@ struct MailRootView: View {
     /// are visible). Driving this binding restores the push: a selected
     /// message shows `.detail`, a selected folder `.content`, and navigating
     /// back drops the selection. Ignored on regular-width layouts.
-    @State private var compactColumn: NavigationSplitViewColumn = .sidebar
+    @State var compactColumn: NavigationSplitViewColumn = .sidebar
     /// Wide-layout sidebar visibility. iOS pins this COLLAPSED (`.doubleColumn`,
     /// via the constant `splitVisibility` binding): on regular-width iPad the
     /// folder sidebar never tiles into the split — revealing folders floats
@@ -75,7 +81,7 @@ struct MailRootView: View {
     /// The panel replaces the split view's own sidebar reveal — see
     /// `folderPanelOverlay`. Starts hidden every launch, like the collapsed
     /// sidebar it replaced.
-    @State private var folderPanelPresented = false
+    @State var folderPanelPresented = false
     #endif
     /// Whether the right-hand addresses inspector is showing. Hidden by default
     /// (on every launch) — it's an occasional reference/management panel reached
@@ -111,11 +117,11 @@ struct MailRootView: View {
     /// and result set. The compact-width analogue is `SearchView` (the iPhone
     /// `Tab(role: .search)`); there's no bottom tab bar here, so search is
     /// reached from the message-list column's toolbar instead.
-    @State private var searchModel: MessageListViewModel?
+    @State var searchModel: MessageListViewModel?
     /// Focus on the global search field. Drives the content-column swap: while
     /// the field is focused (or holds a query / active search) the content
     /// column shows results instead of the selected folder.
-    @FocusState private var searchFieldFocused: Bool
+    @FocusState var searchFieldFocused: Bool
     /// Per-context list-filter text for the wide sidebar. On macOS / iPad-regular
     /// this view renders the "Filter folders" / "Filter addresses" field itself
     /// (below the section tabs) so it sits under the global search rather than
@@ -150,14 +156,14 @@ struct MailRootView: View {
 
     /// Folder that drives `MessageDetailView`. Cross-folder search results
     /// override the sidebar selection; everything else uses it directly.
-    private var detailFolder: Folder? {
+    var detailFolder: Folder? {
         crossFolderDetail ?? selectedFolder
     }
 
     /// Whether the content column should show search results rather than the
     /// selected folder: the search field is focused, holds a query, or a
     /// search is currently active.
-    private var isSearching: Bool {
+    var isSearching: Bool {
         guard let searchModel else { return false }
         return searchFieldFocused || !searchModel.searchQuery.isEmpty || searchModel.isSearchActive
     }
@@ -191,39 +197,20 @@ struct MailRootView: View {
                 // Same reason the dismissal is here: re-picking the selected
                 // folder leaves the panel up otherwise, which is the half of
                 // #1217 where the tap produced no feedback at all.
-                if picked != nil { dismissFolderPanel() }
+                if picked != nil {
+                    dismissFolderPanel()
+                    selectedFeedScope = nil
+                }
                 selectedFolder = picked
             }
         )
-    }
-
-    /// Slide the iPad-regular folder panel away after a pick, so the message
-    /// list is fully interactive again. One routine, two callers: the sidebar
-    /// binding (a user pick) and the folder-change handler (a programmatic
-    /// one). No-op on compact — the panel is never presented there — and on
-    /// launches, where INBOX auto-selects with the panel already closed.
-    private func dismissFolderPanel() {
-        #if os(iOS)
-        withAnimation(folderPanelAnimation) { folderPanelPresented = false }
-        #endif
-    }
-
-    /// End the global search exactly the way the search field's own × does
-    /// (`GlobalSearchField`): zero the query and drop focus, and let the
-    /// mounted search list's `onChange(of: searchQuery)` call `clearSearch()`
-    /// from there. One routine rather than a second copy of the rule — the ×
-    /// path already lands the user back on a folder, which is what the folder
-    /// pick wanted all along.
-    private func endGlobalSearch() {
-        searchModel?.searchQuery = ""
-        searchFieldFocused = false
     }
 
     /// Content column: global search results while the search field is
     /// engaged, otherwise the selected folder's message list (or an empty-state
     /// prompt). Extracted so `body` can hang the Settings gear on its toolbar.
     @ViewBuilder
-    private var contentColumn: some View {
+    var mailContentColumn: some View {
         // The precedence itself lives in `ContentColumnPolicy` so the rule a
         // folder pick has to satisfy (#1217) is stated in the same place as
         // the rule it has to satisfy it against.
@@ -256,7 +243,11 @@ struct MailRootView: View {
                     onSearchResultSelected: { sourceFolderPath in
                         crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
                     },
-                    onSelectionCountChanged: { listSelectionCount = $0 }
+                    onSelectionCountChanged: { listSelectionCount = $0 },
+                    // A pick from the list's folder-switch menu goes through
+                    // the same binding as a sidebar tap, so it ends a global
+                    // search and dismisses the iPad folder panel the same way.
+                    onSwitchFolder: { sidebarSelection.wrappedValue = $0 }
                 )
                 .id(selectedFolder.path)
             }
@@ -382,6 +373,8 @@ struct MailRootView: View {
         .onChange(of: compactColumn) { _, column in
             if column != .detail, selectedEnvelope != nil { selectedEnvelope = nil }
         }
+        // Feed reader navigation (RSS plan, phase 5); see MailRootView+Feeds.
+        .modifier(feedNavigation())
         // Catch-all drop target behind the whole split view: a message
         // released anywhere that isn't a folder row (the message list, the
         // reading pane, sidebar chrome) ends the drag so the sidebar flips
@@ -552,46 +545,6 @@ extension MailRootView {
     /// column, and the reader needs its whole toolbar section for the eleven
     /// action buttons.
     @ViewBuilder
-    private var detailColumn: some View {
-        Group {
-            if listSelectionCount >= 2 {
-                // Multi-selection: no single message to read, so mirror Mail's
-                // "N Messages Selected" pane. Bulk actions live in the action
-                // bar beneath the message list.
-                ContentUnavailableView(
-                    "\(listSelectionCount) Messages Selected",
-                    systemImage: "envelope.badge",
-                    description: Text("Use the action bar below the list to act on them together.")
-                )
-                #if os(macOS)
-                .toolbar { EmptyDetailToolbar() }
-                #endif
-            } else if let folder = detailFolder, let selectedEnvelope {
-                MessageDetailView(
-                    folder: folder,
-                    envelope: selectedEnvelope
-                )
-                .id("\(folder.path)#\(selectedEnvelope.uid)")
-            } else {
-                ContentUnavailableView(
-                    "No message selected",
-                    systemImage: "envelope",
-                    description: Text("Pick a message from the list to read it.")
-                )
-                #if os(macOS)
-                // Reserve the detail column's toolbar slots with disabled
-                // stand-ins so the message-list toolbar (compose, reload)
-                // stays anchored above the list pane. Without these,
-                // NavigationSplitView's unified toolbar packs the list
-                // items at the trailing edge — visually above the empty
-                // detail pane — until a message is picked and the real
-                // detail toolbar shoves them back into place.
-                .toolbar { EmptyDetailToolbar() }
-                #endif
-            }
-        }
-    }
-
     /// The search control itself, wired to the shared query and focus state
     /// (`GlobalSearchField`); its two hosts below add their own outer layout.
     private var searchFieldCore: GlobalSearchField {
@@ -659,6 +612,7 @@ extension MailRootView {
             FolderListView(
                 selection: sidebarSelection,
                 externalFilter: isWideSidebar ? $folderListFilter : nil,
+                feedSelection: isWideSidebar ? feedSidebarSelection : nil,
                 onFoldersLoaded: { folders in
                     // First load: swap the fetched INBOX into the launch
                     // task's provisional landing and, if a saved position is

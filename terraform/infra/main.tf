@@ -252,6 +252,7 @@ module "admin" {
   extension_client_id = module.pool.extension_client_id
   user_pool_domain    = module.pool.user_pool_domain
   imap_pool_enabled   = var.imap_pool_enabled
+  quiesced            = var.quiesced
   access_logs_bucket  = module.s3_access_logs.bucket
 
   # Private-IMAP replumb: the API Lambdas attach to the VPC and dial the imap
@@ -434,6 +435,10 @@ module "backup" {
   count  = var.backup ? 1 : 0
   table  = module.table.table_arn
   efs    = module.efs.efs_arn
+  # RSS reader tables (docs/1.x/rss-implementation-plan.md): user data
+  # (subscriptions, folders, read state) and fetched items that publishers
+  # may since have removed upstream, so not regenerable.
+  extra_tables = module.table.rss_table_arns
 
   providers = {
     aws           = aws

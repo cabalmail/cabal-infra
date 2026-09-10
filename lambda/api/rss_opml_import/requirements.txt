@@ -1,0 +1,9 @@
+# OPML is untrusted XML: defusedxml refuses entity expansion and external
+# references that the stdlib parser would honour.
+defusedxml==0.7.1 \
+    --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
+# Public Suffix List for the canonical-URL normalizer (rss_subscribe_core
+# canonicalizes every imported URL). feedparser is NOT needed: the import
+# path creates feeds without the interactive probe.
+publicsuffixlist==1.0.2.20260909 \
+    --hash=sha256:4aecb24df2690fe2b3f6b94102f342d5ae2c2d0c97500d76b0be31680868ca6d

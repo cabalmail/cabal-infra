@@ -14,6 +14,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * A completed address mutation worth confirming, so the screen can say so
+ * the way React and the Apple clients do (#1485). The wording is the
+ * screen's — the model names the event, `strings.xml` spells it.
+ *
+ * Favoriting is deliberately absent: the star flips under the user's
+ * finger, so it confirms itself.
+ */
+sealed interface AddressesMessage {
+    val address: String
+
+    data class Created(
+        override val address: String,
+    ) : AddressesMessage
+
+    data class Revoked(
+        override val address: String,
+    ) : AddressesMessage
+}
+
 data class AddressesUiState(
     /** Favorites first, then alphabetical (the repository's order); null until loaded. */
     val addresses: List<Address>? = null,
@@ -25,7 +45,84 @@ data class AddressesUiState(
     val mintableDomains: List<String>? = null,
     val creating: Boolean = false,
     val createError: String? = null,
+    /** One-shot confirmation of a completed mutation; cleared once shown. */
+    val message: AddressesMessage? = null,
 )
+
+/**
+ * What the Addresses screen needs from the app graph. Narrow so the view
+ * model is drivable from a unit test — the same seam [com.cabalmail.android.ui.rules.RulesBackend]
+ * uses, and the reason this one exists: the success confirmations added for
+ * #1485 had no way to be tested while the model held a concrete
+ * [AppContainer].
+ */
+interface AddressesBackend {
+    /**
+     * The shared address list every observer converges on. Suspending
+     * because the repository is only built once config and auth have
+     * loaded.
+     */
+    suspend fun addresses(): StateFlow<List<Address>?>
+
+    suspend fun refresh()
+
+    /** Returns the derived full address. */
+    suspend fun create(
+        username: String,
+        subdomain: String,
+        tld: String,
+        comment: String,
+    ): String
+
+    suspend fun revoke(address: String)
+
+    suspend fun setFavorite(
+        address: String,
+        favorite: Boolean,
+    )
+
+    /** Mail apexes this user may mint on. */
+    suspend fun mintableDomains(): List<String>
+}
+
+private class LiveAddressesBackend(
+    private val container: AppContainer,
+) : AddressesBackend {
+    override suspend fun addresses(): StateFlow<List<Address>?> = container.requireAddressRepository().addresses
+
+    override suspend fun refresh() {
+        container.requireAddressRepository().refresh()
+    }
+
+    override suspend fun create(
+        username: String,
+        subdomain: String,
+        tld: String,
+        comment: String,
+    ): String = container.requireAddressRepository().create(username, subdomain, tld, comment)
+
+    override suspend fun revoke(address: String) {
+        container.requireAddressRepository().revoke(address)
+    }
+
+    override suspend fun setFavorite(
+        address: String,
+        favorite: Boolean,
+    ) {
+        container.requireAddressRepository().setFavorite(address, favorite)
+    }
+
+    override suspend fun mintableDomains(): List<String> {
+        val all =
+            container.configService.config.value
+                ?.mailDomains
+                .orEmpty()
+        return runCatching { container.requireApi().listMyDomains() }
+            .getOrNull()
+            ?.let { permitted -> all.filter { it in permitted } }
+            ?: all
+    }
+}
 
 /**
  * The Addresses screen (plan §6.1) over [com.cabalmail.kit.cache.AddressRepository],
@@ -33,15 +130,14 @@ data class AddressesUiState(
  * is reflected there without a refetch.
  */
 class AddressesViewModel(
-    private val container: AppContainer,
+    private val backend: AddressesBackend,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(AddressesUiState())
     val state: StateFlow<AddressesUiState> = mutableState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            val repository = runCatching { container.requireAddressRepository() }.getOrNull()
-            repository?.addresses?.collect { addresses ->
+            runCatching { backend.addresses() }.getOrNull()?.collect { addresses ->
                 mutableState.update { it.copy(addresses = addresses) }
             }
         }
@@ -52,7 +148,7 @@ class AddressesViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(refreshing = true, error = null) }
             try {
-                container.requireAddressRepository().refresh()
+                backend.refresh()
                 mutableState.update { it.copy(refreshing = false) }
             } catch (exception: Exception) {
                 mutableState.update {
@@ -66,21 +162,28 @@ class AddressesViewModel(
         address: Address,
         favorite: Boolean,
     ) {
-        mutate(address.address, "Could not update favorite") { repository ->
-            repository.setFavorite(address.address, favorite)
+        mutate(address.address, "Could not update favorite") {
+            backend.setFavorite(address.address, favorite)
+            null
         }
     }
 
     fun revoke(address: Address) {
-        mutate(address.address, "Could not revoke address") { repository ->
-            repository.revoke(address.address)
+        mutate(address.address, "Could not revoke address") {
+            backend.revoke(address.address)
+            AddressesMessage.Revoked(address.address)
         }
     }
 
+    /**
+     * Runs a per-row mutation, clearing the row's busy flag either way. The
+     * block returns the confirmation to raise, or null for a mutation that
+     * speaks for itself.
+     */
     private fun mutate(
         address: String,
         failure: String,
-        block: suspend (com.cabalmail.kit.cache.AddressRepository) -> Unit,
+        block: suspend () -> AddressesMessage?,
     ) {
         if (address in mutableState.value.busy) {
             return
@@ -88,8 +191,8 @@ class AddressesViewModel(
         mutableState.update { it.copy(busy = it.busy + address, error = null) }
         viewModelScope.launch {
             try {
-                block(container.requireAddressRepository())
-                mutableState.update { it.copy(busy = it.busy - address) }
+                val message = block()
+                mutableState.update { it.copy(busy = it.busy - address, message = message ?: it.message) }
             } catch (exception: Exception) {
                 mutableState.update { it.copy(busy = it.busy - address, error = userMessage(exception, failure)) }
             }
@@ -102,15 +205,7 @@ class AddressesViewModel(
             return
         }
         viewModelScope.launch {
-            val all =
-                container.configService.config.value
-                    ?.mailDomains
-                    .orEmpty()
-            val allowed =
-                runCatching { container.requireApi().listMyDomains() }
-                    .getOrNull()
-                    ?.let { permitted -> all.filter { it in permitted } }
-                    ?: all
+            val allowed = runCatching { backend.mintableDomains() }.getOrNull().orEmpty()
             mutableState.update { it.copy(mintableDomains = allowed) }
         }
     }
@@ -125,8 +220,8 @@ class AddressesViewModel(
         mutableState.update { it.copy(creating = true, createError = null) }
         viewModelScope.launch {
             try {
-                container.requireAddressRepository().create(username, subdomain, tld, comment)
-                mutableState.update { it.copy(creating = false) }
+                val created = backend.create(username, subdomain, tld, comment)
+                mutableState.update { it.copy(creating = false, message = AddressesMessage.Created(created)) }
                 onCreated()
             } catch (exception: Exception) {
                 mutableState.update {
@@ -140,10 +235,14 @@ class AddressesViewModel(
         mutableState.update { it.copy(error = null) }
     }
 
+    fun clearMessage() {
+        mutableState.update { it.copy(message = null) }
+    }
+
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { AddressesViewModel(container) }
+                initializer { AddressesViewModel(LiveAddressesBackend(container)) }
             }
     }
 }

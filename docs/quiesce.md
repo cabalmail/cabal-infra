@@ -14,6 +14,7 @@ The `quiesce` workflow scales a development or stage environment's running compu
 | ECS capacity provider `managed_termination_protection` | Disabled, so the capacity provider stops fighting the ASG drain |
 | NAT (instances or gateways, per the environment's mode - see [nat.md](./nat.md)) | `count = 0`. The Elastic IPs are kept, so SMTP allow-lists do not need to be re-issued on resume. |
 | Private subnet default route | Removed. The NAT target it pointed to is gone, and nothing runs in private subnets while quiesced. |
+| EventBridge Scheduler schedule `cabal-rss-schedule` (the RSS fetch tick) | `state = DISABLED`. The fetch worker is VPC-attached and needs the NAT route; a running tick would only enqueue feeds it cannot reach until the dead-letter queue filled. |
 
 The DAEMON `node-exporter` ECS service is not gated explicitly. It places one task per EC2 instance in the cluster; with the ASG at zero, it has no instances to schedule on and naturally goes to zero with the rest of the compute.
 
@@ -27,7 +28,7 @@ The DAEMON `node-exporter` ECS service is not gated explicitly. It places one ta
 - ACM certificate
 - The Network Load Balancer and its target groups
 - The CloudFront distribution
-- All Lambda functions (API, certbot-renewal, DMARC ingest, alert sink), their event sources, and SSM-stored config
+- All Lambda functions (API, certbot-renewal, DMARC ingest, alert sink, RSS scheduler and fetcher), their event sources, and SSM-stored config. The RSS schedule itself is paused (above), not deleted.
 
 A quiesced environment will fail TCP health checks on IMAP/SMTP and serve no monitoring UI. DNS still resolves; clients see connection timeouts rather than NXDOMAIN.
 

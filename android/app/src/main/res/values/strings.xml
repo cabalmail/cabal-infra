@@ -91,6 +91,8 @@
     <string name="folder_section_all">All folders</string>
     <string name="folder_section_expand">Expand %1$s</string>
     <string name="folder_section_collapse">Collapse %1$s</string>
+    <string name="switch_folder">Switch folder</string>
+    <string name="other_folders">Other folders</string>
 
     <!-- Resume cursor -->
     <string name="resume_prompt">Pick up where you left off?</string>
@@ -193,6 +195,8 @@
     <string name="addresses_revoke_confirm_title">Revoke this address?</string>
     <string name="addresses_revoke_confirm_body">%1$s stops receiving mail immediately. This cannot be undone.</string>
     <string name="addresses_suspended">Suspended</string>
+    <string name="addresses_created">Created %1$s</string>
+    <string name="addresses_revoked">Revoked %1$s</string>
 
     <!-- Folders admin -->
     <string name="folders_admin_title">Manage folders</string>

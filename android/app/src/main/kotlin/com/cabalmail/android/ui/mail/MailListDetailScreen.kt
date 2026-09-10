@@ -75,6 +75,9 @@ fun MailListDetailScreen(
     initialUid: Long? = null,
     /** The folder pane, composed leading when the window fits three panes. */
     folderPane: (@Composable () -> Unit)? = null,
+    /** The list title's folder-switch menu and what a pick does. */
+    folderMenu: FolderSwitchMenu? = null,
+    onSwitchFolder: (String) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val config by container.configService.config.collectAsState()
@@ -136,6 +139,8 @@ fun MailListDetailScreen(
                             // Beside a visible folder pane there is no hub to
                             // go back to.
                             showBack = !threePane,
+                            folderMenu = folderMenu,
+                            onSwitchFolder = onSwitchFolder,
                         )
                     }
                 },

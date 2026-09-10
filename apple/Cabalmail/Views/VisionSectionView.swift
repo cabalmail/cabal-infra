@@ -36,7 +36,7 @@ struct VisionSectionView: View {
     /// selection out from under the user later.
     @State private var didLand = false
 
-    enum Section: Hashable { case mail, folders, addresses, settings, search }
+    enum Section: Hashable { case mail, folders, feeds, addresses, settings, search }
 
     var body: some View {
         TabView(selection: $selection) {
@@ -45,6 +45,9 @@ struct VisionSectionView: View {
             }
             Tab("Folders", systemImage: "folder", value: Section.folders) {
                 foldersTab
+            }
+            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: Section.feeds) {
+                FeedRootView()
             }
             Tab("Addresses", systemImage: "at", value: Section.addresses) {
                 AddressManagementTab()
@@ -211,7 +214,12 @@ private struct VisionMailPane: View {
                 scope: .folder(selectedFolder),
                 selection: $selectedEnvelope,
                 onSearchResultSelected: { _ in },
-                onSelectionCountChanged: { listSelectionCount = $0 }
+                onSelectionCountChanged: { listSelectionCount = $0 },
+                // The list's folder-switch menu writes the cross-tab
+                // selection exactly as a Folders-tab pick does. `self.`
+                // because the enclosing `if let` shadows the binding with
+                // the unwrapped constant.
+                onSwitchFolder: { self.selectedFolder = $0 }
             )
             .id(selectedFolder.path)
         } else {

@@ -46,6 +46,10 @@ By default the Terraform state bucket uses SSE-S3, so any principal with `s3:Get
 
 Envelope payloads from `/list_envelopes` and `/search_envelopes` carry the RFC 5322 threading identity (`message_id` / `in_reply_to` / `references`), and the `/save_draft` Lambda gives drafts a server-side lifecycle (save returns UIDPLUS coordinates, save can atomically replace a prior copy, discard removes one — all Drafts-scoped and UIDVALIDITY-guarded). The Apple clients sync compose drafts across devices through that path. See [Draft sync and threading headers](./draft-sync-and-threading.md) for the wire contract, the safety posture, and the client sync loop.
 
+# RSS reader
+
+The feed fetcher, its politeness policy, the data layer, and the `rss_*` API are documented in [RSS reader](./rss.md), with operator notes for seeding, forcing, and unsticking a feed.
+
 # Push notifications
 
 The Apple clients get new-mail notifications through APNs without Apple's infrastructure ever seeing message content: procmail enqueues a content-free wake signal per delivery, the `push_dispatch` Lambda fans it out to the user's registered devices, and each device enriches the alert locally via `/push_envelope` before display. Push is inert until an APNs auth key is provisioned per environment. See [Push notifications](./push-notifications.md) for the architecture, the key provisioning and rotation runbooks, and the operational notes (DLQ, metrics, token hygiene).
