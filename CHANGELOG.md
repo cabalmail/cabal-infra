@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-09-10
+
+### Added
+- **OPML import and export (phase 4 of the RSS plan).** `/rss_opml_import`
+  adds every feed in an OPML document, additively: the outline tree becomes
+  folders (reusing same-named ones), feeds already followed are reported
+  rather than duplicated, and unknown feeds are created from the document's
+  own titles and handed to the fetcher so a large export fits one request.
+  `/rss_opml_export` returns the caller's folders and subscriptions as
+  OPML 2.0 that round-trips into Feedly, NetNewsWire, and Reeder. Also:
+  the canonical-URL rule no longer touches trailing slashes anywhere but
+  the root (a publisher's redirect decides), and unsubscribe deletes
+  per-item state before the subscription row.
+- Apple: **Feeds.** A first-class RSS reader beside mail (phase 5b of the
+  RSS plan). On the Mac and a regular-width iPad the sidebar gains a Feeds
+  section: your folders with feeds as leaves, unread badges, and an "All
+  Feeds" view; iPhone and Vision Pro get a Feeds tab. Items list with
+  All / Unread / Favorites, the four ordering modes, swipe to mark read or
+  favorite, per-feed search over what's cached, and "Load older items".
+  The reader shows the feed's own content through the same sandboxed
+  renderer as mail, with reader or original styling per feed, and opens the
+  publisher's article in a web view whose cookies and storage belong to
+  that one feed, with a Readability-based reader toggle. Everything reads
+  from a local store, so the list and items work offline and read/favorite
+  changes made offline are pushed when a connection returns. Subscribing,
+  folder management, per-feed settings, and OPML arrive in the next phase.
+
+### Fixed
+- Android: **Address changes now confirm themselves.** Creating or revoking
+  an address raises a snackbar naming it, the way the web and Apple clients
+  already do; a successful create or revoke used to say nothing at all, so
+  the only feedback for a revoke was the row disappearing.
+- Apple: **New Folder sheet keeps its content inside the sheet on macOS.**
+  The parent-folder label sat on the sheet's left border and the name field
+  ran flush to the right one, because macOS lays a form's titles out in an
+  external label column with no content margins. The sheet now uses the
+  same hand-built macOS layout as Create Address, so the two read alike.
+- **RSS root-level subscriptions report an empty `folder_id`.** The API
+  passed its internal root sentinel through, so subscriptions outside any
+  folder carried `folder_id: "~root"` and the OPML export left them out.
+
 ## [1.13.0] - 2026-09-10
 
 ### Added
