@@ -65,15 +65,6 @@ extension MessageListView {
             ? AnyLayout(HStackLayout(spacing: 6))
             : AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
         HStack(spacing: 6) {
-            #if os(macOS)
-            // The folder name with its switch menu leads the bar on macOS,
-            // which has no column title to hang the menu on (`+FolderSwitch`).
-            // Folder scope only: the search surface has no folder.
-            if !isSearchScope {
-                folderSwitchMenu
-                    .padding(.trailing, 6)
-            }
-            #endif
             pillLayout {
                 ForEach(MessageFilter.allCases) { filter in
                     filterPill(filter, model: model)
