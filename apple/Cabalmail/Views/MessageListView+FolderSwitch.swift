@@ -6,12 +6,18 @@ import CabalmailKit
 // sibling extension so the primary MessageListView body stays under
 // SwiftLint's `type_body_length` cap.
 //
-// Where it hangs differs by platform. iOS, iPadOS and visionOS already show
-// the folder name as the inline navigation title, so the menu is the
-// system's own title menu (`toolbarTitleMenu`): the title gains a chevron
-// and a tap opens the menu. macOS shows no column title — the window title
-// is the open message's subject — so the list's action bar gains a folder
-// menu at its leading edge (`folderSwitchMenu`, drawn by `+Filter`).
+// The folder name is already the list's navigation title everywhere. On
+// iOS, iPadOS and visionOS the menu is the system's own title menu
+// (`toolbarTitleMenu`): the inline title gains the platform chevron and a
+// tap opens the menu. macOS draws that title as bold text at the leading
+// edge of the content column's toolbar section but never materializes a
+// title menu for it (probed on macOS 26: neither the column's nor the
+// window's `toolbarTitleMenu` adds a chevron or opens on click), so the Mac
+// removes the toolbar's title text and puts a `Menu` in the same slot — a
+// `.navigation` toolbar item with the bold name and a chevron. The window
+// keeps its title for the Window menu and Mission Control. Nothing is drawn
+// in the list's own action bar: a second copy of the folder name a row
+// below the title read as a redundancy on the Mac.
 //
 // The rows are `Toggle`s rather than buttons drawing a checkmark glyph, so
 // the folder in effect carries the native mark an assistive client reads
@@ -24,43 +30,38 @@ extension MessageListView {
         FolderSwitchMenuPolicy.groups(folders: switchFolders, current: folder)
     }
 
-    /// Hangs the title menu on `content` on the platforms that show the
-    /// folder name as a navigation title. The search surface's title is
-    /// "Search", not a folder, so it gets no menu.
+    /// Hangs the folder menu on `content`'s title. The search surface's
+    /// title is "Search", not a folder, so it keeps the plain title.
     @ViewBuilder
     func folderSwitchTitle<Content: View>(_ content: Content) -> some View {
-        #if os(iOS) || os(visionOS)
         if isSearchScope {
             content
         } else {
+            #if os(macOS)
+            content
+                .toolbar(removing: .title)
+                .toolbar {
+                    ToolbarItem(placement: .navigation) { folderSwitchMenu }
+                }
+            #else
             content.toolbarTitleMenu { folderSwitchMenuItems }
+            #endif
         }
-        #else
-        content
-        #endif
     }
 
-    /// macOS: the folder name with a disclosure chevron, opening the menu.
-    /// Sits at the leading edge of the list's action bar.
+    #if os(macOS)
+    /// macOS: the folder name, bold like the toolbar title it stands in
+    /// for, as a menu with the system's pull-down chevron.
     @ViewBuilder
     var folderSwitchMenu: some View {
         let groups = folderSwitchGroups
         Menu {
             folderSwitchMenuItems
         } label: {
-            HStack(spacing: 4) {
-                Text(folder.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .fixedSize(horizontal: true, vertical: false)
+            Text(folder.name)
+                .font(.headline)
+                .lineLimit(1)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
         .accessibilityLabel("Folder, \(folder.name)")
         .accessibilityHint("Switch folder")
         .accessibilityIdentifier("list.folderSwitch")
@@ -69,10 +70,10 @@ extension MessageListView {
         // carries what the rows draw (#1337, same mechanism as #1329).
         .id(FolderSwitchMenuPolicy.identity(groups))
     }
+    #endif
 
-    /// The menu body shared by the title menu and the macOS action-bar
-    /// menu: subscribed folders, then an "Other folders" submenu for the
-    /// rest when there are any.
+    /// The menu body: subscribed folders, then an "Other folders" submenu
+    /// for the rest when there are any.
     @ViewBuilder
     var folderSwitchMenuItems: some View {
         let groups = folderSwitchGroups
