@@ -164,16 +164,32 @@ struct FeedItemListView: View {
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("feed.search")
             }
-            if let errorMessage = model.errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .font(.footnote)
-                    .foregroundStyle(ColorTokens.dangerFg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            statusLines(model)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.bar)
+    }
+
+    /// The sync error, then the fetcher's health for a single feed in its
+    /// own words, so an empty or stale list is explained where the user is
+    /// looking.
+    @ViewBuilder
+    private func statusLines(_ model: FeedItemListViewModel) -> some View {
+        if let errorMessage = model.errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(ColorTokens.dangerFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        if let subscription = model.subscription, let headline = FeedHealth.headline(for: subscription.feed) {
+            let stopped = FeedHealth.level(for: subscription.feed) == .stopped
+            Label(headline, systemImage: stopped ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
+                .font(.footnote)
+                .foregroundStyle(stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("feed.health.headline")
+        }
     }
 
     private func filterLabel(_ filter: RssItemFilter) -> String {

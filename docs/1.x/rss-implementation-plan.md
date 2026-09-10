@@ -19,15 +19,15 @@ phase are updated in the same PR as the work, per the docs convention.
 | Phase | Work item                                         | Status      |
 | ----- | ------------------------------------------------- | ----------- |
 | 1     | DynamoDB tables + supporting infra                | Shipped 1.12.2 (2026-09-09) |
-| 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
-| 3     | Subscription + reader API                         | On stage (2026-09-09) |
-| 4     | OPML import/export (API)                          | On stage (2026-09-10) |
-| 5     | Apple clients (offline + FTS + cookie scoping)    | Complete on stage (2026-09-10); promoting as 1.15.0 |
-| 6     | Android client (offline + FTS + profile scoping)  | Not started |
+| 2     | Scheduler + fetcher Lambdas                       | Shipped 1.13.0 (2026-09-10) |
+| 3     | Subscription + reader API                         | Shipped 1.13.0 (2026-09-10) |
+| 4     | OPML import/export (API)                          | Shipped 1.14.0 (2026-09-10) |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | Shipped 1.15.0 (2026-09-10); www fallback 1.15.1 |
+| 6     | Android client (offline + FTS + profile scoping)  | Deferred: Apple refinement first (2026-09-10) |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
 | 9     | Credentialed feeds                                | Not started |
-| 10    | Adaptive cadence + health surface polish          | Not started |
+| 10    | Adaptive cadence + health surface polish          | Health badge in review (2026-09-10); rest not started |
 
 ## Revisions (2026-09-09)
 
@@ -1386,7 +1386,11 @@ populate from server."
 
 ### Phase 6: Android client (with offline + FTS)
 
-**Status:** Not started.
+**Status:** Deferred (2026-09-10). With phase 5 shipped, the operator
+chose to pause and refine the Apple implementation on real use before
+porting it: each week of dogfooding has been surfacing issues (the
+`www`-only publishers, the health badge below) that are cheaper to fix in
+one client than two. Android starts when the Apple reader has settled.
 
 **Goal.** The Android client reaches parity with phase 5: reader UI,
 offline reading, per-feed FTS, per-feed WebView profile scoping.
@@ -1528,7 +1532,14 @@ unhealthy).
 
 ### Phase 10: Adaptive cadence + health surface polish
 
-**Status:** Not started.
+**Status:** Health badge pulled forward, in review (2026-09-10): the first
+OPML import left two feeds silently empty, and a badge would have said
+why. `FeedHealth` (app layer) maps the fetcher's summary to healthy /
+failing (3+ consecutive failures, warning tint) / stopped (20+ or
+dead-lettered, danger tint); the sidebar row shows the mark with the
+fetcher's words as tooltip and accessibility label, and a single feed's
+item list carries the same words as a header line. The rest of the phase
+is not started.
 
 **Goal.** Tune the adaptive cadence formula based on observed
 production behavior, and surface feed health visibly enough that
