@@ -147,9 +147,20 @@ struct FeedItemListView: View {
         }
         .listStyle(.plain)
         .refreshable { await model.sync() }
-        .onChange(of: selection) { _, item in
-            guard let item else { return }
+        .onChange(of: selection) { previous, item in
+            // A new item opening, not the same item refreshed below: a
+            // reader-side "mark as unread" must not be undone on the spot.
+            guard let item, item.id != previous?.id else { return }
             Task { await model.didOpen(item) }
+        }
+        // Rows are tagged by value, so a row patched in place (read, favorite)
+        // stops matching the selected value and drops its highlight. Follow
+        // the patch: same id, fresh state.
+        .onChange(of: model.items) { _, items in
+            guard let current = selection,
+                  let fresh = items.first(where: { $0.id == current.id }),
+                  fresh != current else { return }
+            selection = fresh
         }
     }
 
@@ -177,7 +188,7 @@ struct FeedItemListView: View {
                             Label(item.isFavorite ? "Unfavorite" : "Favorite",
                                   systemImage: item.isFavorite ? "star.slash" : "star")
                         }
-                        .tint(.yellow)
+                        .tint(ColorTokens.flaggedFill)
                     }
                     .contextMenu {
                         Button(item.isRead ? "Mark as unread" : "Mark as read") {
@@ -273,7 +284,7 @@ struct FeedItemRow: View {
             Spacer(minLength: 0)
             if item.isFavorite {
                 Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
+                    .foregroundStyle(ColorTokens.flaggedFg)
                     .accessibilityLabel("Favorite")
             }
         }

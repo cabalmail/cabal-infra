@@ -22,7 +22,7 @@ phase are updated in the same PR as the work, per the docs convention.
 | 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
 | 3     | Subscription + reader API                         | On stage (2026-09-09) |
 | 4     | OPML import/export (API)                          | On stage (2026-09-10) |
-| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a on stage; 5b in review (2026-09-10) |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a and 5b on stage (2026-09-10)        |
 | 6     | Android client (offline + FTS + profile scoping)  | Not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
@@ -1251,7 +1251,7 @@ thin `sqlite3` actor's backing type), `RssStore` with FTS5,
 as-built notes: the FTS index uses the plain `unicode61` tokenizer, not
 porter, because stemming stored tokens breaks the typed-prefix matching a
 search field needs; and sign-out's `clearLocalData()` now clears the RSS
-store too. **5b (read path) in review (2026-09-10):** `FeedSidebarViewModel`
+store too. **5b (read path) on stage (2026-09-10):** `FeedSidebarViewModel`
 / `FeedItemListViewModel` / `FeedItemDetailViewModel`, the Feeds section
 in the mail sidebar (macOS, iPad-regular) driving the split view's content
 and detail columns, a Feeds tab with its own collapsing split on iPhone
@@ -1265,7 +1265,18 @@ Acknowledgements). Session start and foreground trigger `syncAll`. Not in
 5b: subscribe / folder / settings UI, OPML, the Settings category, macOS
 menu commands (5c), and the list virtualization and offline indicators
 (5d). Rows in multi-feed lists show the item URL's host as the feed label
-until 5d resolves titles.
+until 5d resolves titles. Driven end to end on stage (macOS, 2026-09-10,
+XCUITest under guidrive): sidebar tree and rolled-up badges, All Feeds and
+single-feed scopes, filters, per-feed search, the reader's styling toggle,
+the article web view and its Readability pass, favorite from the reader.
+Two follow-ups shipped from that run: the item list, reader, and sidebar
+now share a `FeedStateBus` (main-actor, weak subscribers) so a read or
+favorite change in one patches the others without a reload, and the swipe
+tint and favorite star read `ColorTokens.flagged*` (the colour-audit test
+had failed on stage, which also skipped the TestFlight uploads). Noted for
+5d: the disabled mail toolbar items still show while a feed is selected
+with no item open, compose leaves the toolbar in feed scope, and item rows
+want accessibility identifiers for the tester.
 
 **Goal.** The iOS, iPadOS, visionOS, and macOS clients have a reader
 UI with per-feed `WKWebsiteDataStore` isolation, offline reading, and
