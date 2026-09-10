@@ -313,7 +313,9 @@ def serialize_subscription(row, feed_row=None):
     return {
         'subscription_id': row['subscription_id'],
         'feed_id': row['feed_id'],
-        'folder_id': row.get('folder_id') or '',
+        # Stored as the ROOT_FOLDER sentinel (folder_key needs a non-empty
+        # prefix); on the wire, root is the empty string (docs/rss.md).
+        'folder_id': wire_folder_id(row.get('folder_id')),
         'custom_title': row.get('custom_title', ''),
         'ordering_mode': row.get('ordering_mode', ORDERING_MODES[0]),
         'default_open_mode': row.get('default_open_mode', OPEN_MODES[0]),
@@ -325,6 +327,11 @@ def serialize_subscription(row, feed_row=None):
         'created_at': row.get('created_at', ''),
         'feed': feed_summary(feed_row),
     }
+
+
+def wire_folder_id(stored):
+    '''The API form of a stored folder id: '' for the root sentinel.'''
+    return '' if stored in (None, '', ROOT_FOLDER) else stored
 
 
 def serialize_folder(row):

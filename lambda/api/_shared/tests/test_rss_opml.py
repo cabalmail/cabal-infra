@@ -162,8 +162,15 @@ class ExportEndpoint(unittest.TestCase):
         tables['cabal-rss-folder'].rows[(USER, 'c')] = {'user': USER, 'folder_id': 'c', 'name': 'Comics'}
         tables['cabal-rss-subscription'].rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1',
                                                                 'folder_id': 'c', 'folder_key': 'c#s1'}
+        # A root-level subscription is stored with the '~root' sentinel; the
+        # export must still list it (it went missing on stage, 2026-09-10).
+        tables['cabal-rss-subscription'].rows[(USER, 's2')] = {'user': USER, 'subscription_id': 's2', 'feed_id': 'f1',
+                                                                'folder_id': '~root', 'folder_key': '~root#s2',
+                                                                'custom_title': 'Root copy'}
         status, body = call(mod)
         self.assertEqual(status, 200)
+        self.assertEqual(body['opml'].count('type="rss"'), 2)
+        self.assertIn('text="Root copy"', body['opml'])
         self.assertTrue(body['filename'].startswith('cabalmail-feeds-') and body['filename'].endswith('.opml'))
         self.assertIn('<outline text="Comics" title="Comics">', body['opml'])
         self.assertIn('xmlUrl="https://xkcd.com/atom.xml" htmlUrl="https://xkcd.com/"/>', body['opml'])
