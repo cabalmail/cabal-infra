@@ -20,8 +20,8 @@ phase are updated in the same PR as the work, per the docs convention.
 | ----- | ------------------------------------------------- | ----------- |
 | 1     | DynamoDB tables + supporting infra                | Shipped 1.12.2 (2026-09-09) |
 | 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
-| 3     | Subscription + reader API                         | In review (2026-09-09) |
-| 4     | OPML import/export (API)                          | Not started |
+| 3     | Subscription + reader API                         | On stage (2026-09-09) |
+| 4     | OPML import/export (API)                          | In review (2026-09-09) |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Not started |
 | 6     | Android client (offline + FTS + profile scoping)  | Not started |
 | 7     | Image proxy + cache                               | Not started |
@@ -988,13 +988,17 @@ cache); and the shared-feed owner sentinel is `~shared`. Stage validation
 endpoints lacked `dynamodb:BatchWriteItem` (unsubscribe's purge), so they
 now carry their own IAM statement instead of riding the mail endpoints'
 uniform one; and the normalizer's trailing-slash rule turned a real feed
-URL (`/feeds/json`) into a 404 (`/feeds/json/`). **The normalizer no
-longer adds or removes trailing slashes.** D1's requirement that `/dir`
-and `/dir/` be the same feed is met at subscribe time instead: the lookup
-tries both forms against existing feeds. This deviates from the
-requirement's wording that the slash form is canonical; what is preserved
-is the equivalence, and what is gained is never fetching a path the
-publisher did not publish.
+URL (`/feeds/json`) into a 404 (`/feeds/json/`). The operator then ruled
+that `/` is canonical only right after the host, and elsewhere the
+server decides (D1, revised): **the normalizer neither adds nor removes
+trailing slashes, and the feed lookup matches the canonical URL
+exactly.** A publisher that treats `/feed` and `/feed/` as one object
+says so with a 301, which the subscribe probe follows and canonicalizes
+before looking up, so both forms still land on one shared row without
+Cabalmail guessing. The subscribe path itself moved into
+`_shared/rss_subscribe_core.py` so phase 4's OPML import shares it, and
+unsubscribe now deletes state before the subscription row (a failure
+between the two had stranded state that resurfaced on re-subscribe).
 
 **Goal.** Authenticated clients can subscribe to a feed, organize
 feeds into folders, list items with filtering, mark items read/
@@ -1052,7 +1056,17 @@ fetcher (still running) and the routes (removed).
 
 ### Phase 4: OPML import/export (API)
 
-**Status:** Not started.
+**Status:** In review (2026-09-09). `/rss_opml_import` and
+`/rss_opml_export` with `_shared/rss_opml.py`. As built: the body carries
+the OPML text in JSON (`{"opml": ...}`) rather than a multipart upload,
+matching every other endpoint; import creates unknown feeds **without**
+the interactive probe (from the OPML's own title) and hands them to the
+worker, so a large export fits one request and a dead entry surfaces as
+feed health rather than an import error; folders are reused by name under
+the same parent and an optional `folder_id` roots the import; the
+fixtures are Feedly-, NetNewsWire-, and Reeder-shaped documents (with
+lower-case attribute variants) in the unit tests rather than real
+exports, which would carry the operator's feed list.
 
 **Goal.** A user can upload an OPML file and have its feeds and
 folders imported; a user can download an OPML file of their current

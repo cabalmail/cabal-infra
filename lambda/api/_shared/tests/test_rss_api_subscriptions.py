@@ -15,8 +15,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rss_api_fakes as fx  # noqa: E402  pylint: disable=wrong-import-position
 
+import rss_subscribe_core as core  # noqa: E402  pylint: disable=wrong-import-position
+from rss_api import ApiError  # noqa: E402  pylint: disable=wrong-import-position
 from rss_http import FetchError, FetchResult  # noqa: E402  pylint: disable=wrong-import-position
-from rss_parse import ParsedFeed  # noqa: E402  pylint: disable=wrong-import-position
+from rss_parse import ParseError, ParsedFeed  # noqa: E402  pylint: disable=wrong-import-position
 
 USER = 'alice'
 HTML = b'<!doctype html><html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head><body></body></html>'
@@ -33,16 +35,19 @@ class Subscribe(unittest.TestCase):
         self.tables = fx.reset_tables()
         fx.SQS.sent.clear()
         self.mod = fx.load_handler('rss_subscribe')
-        self.mod.FETCH_QUEUE_URL = 'https://sqs/queue'
-        self.mod.normalize_feed_url = lambda url: url.replace('http://', 'https://')
+        core.FETCH_QUEUE_URL = 'https://sqs/queue'
+        core.normalize_feed_url = lambda url: url.replace('http://', 'https://')
         self.fetches = []
 
         def fake_fetch(url, **_kw):
             self.fetches.append(url)
-            return self.responses.pop(0)
-        self.mod.fetch = fake_fetch
+            response = self.responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
+        core.fetch = fake_fetch
         self.responses = []
-        self.mod.parse_feed = lambda body, ctype: self.parses.pop(0)
+        core.parse_feed = lambda body, ctype: self.parses.pop(0)
         self.parses = []
 
     def test_new_feed_creates_row_enqueues_and_subscribes(self):
@@ -64,21 +69,35 @@ class Subscribe(unittest.TestCase):
         self.tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'canonical_url': 'https://example.com/feed/',
                                                         'owner_key': '~shared', 'due_shard': 'active',
                                                         'subscriber_count': 1, 'title': 'Shared'}
-        # The stored form has the slash; the user types it without. Same feed.
-        status, body = call(self.mod, body={'url': 'https://example.com/feed'})
+        status, body = call(self.mod, body={'url': 'https://example.com/feed/'})
         self.assertEqual((status, body['subscription']['feed_id']), (200, 'f1'))
         self.assertEqual(self.fetches, [])
         self.assertEqual(self.tables['cabal-rss-feed'].rows[('f1',)]['subscriber_count'], 2)
         # Second subscribe by the same user is idempotent.
-        status, body = call(self.mod, body={'url': 'https://example.com/feed'})
+        status, body = call(self.mod, body={'url': 'https://example.com/feed/'})
         self.assertTrue(body['existing'])
         self.assertEqual(len(self.tables['cabal-rss-subscription'].rows), 1)
+
+    def test_permanent_redirect_lands_on_the_existing_feed(self):
+        # The user types /feed; the publisher 301s to /feed/, which another
+        # subscriber already has. Only the server knows the two are one
+        # object, and it just said so.
+        self.tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'canonical_url': 'https://example.com/feed/',
+                                                        'owner_key': '~shared', 'due_shard': 'active',
+                                                        'subscriber_count': 1, 'title': 'Shared'}
+        self.responses = [FetchResult(status=200, url='https://example.com/feed/', body=b'<rss/>',
+                                      permanent_redirect_to='https://example.com/feed/')]
+        self.parses = [ParsedFeed(feed_type='rss', title='ignored')]
+        status, body = call(self.mod, body={'url': 'https://example.com/feed'})
+        self.assertEqual((status, body['subscription']['feed_id']), (200, 'f1'))
+        self.assertEqual(self.fetches, ['https://example.com/feed'])
+        self.assertEqual(len(self.tables['cabal-rss-feed'].rows), 1)
 
     def test_dead_lettered_feed_is_revived(self):
         self.tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'canonical_url': 'https://example.com/feed/',
                                                         'owner_key': '~shared', 'subscriber_count': 0,
                                                         'consecutive_failure_count': 20, 'dead_lettered_at': 'x'}
-        call(self.mod, body={'url': 'https://example.com/feed'})
+        call(self.mod, body={'url': 'https://example.com/feed/'})
         feed = self.tables['cabal-rss-feed'].rows[('f1',)]
         self.assertEqual((feed['due_shard'], feed['consecutive_failure_count'], feed['subscriber_count']),
                          ('active', 0, 1))
@@ -88,8 +107,7 @@ class Subscribe(unittest.TestCase):
     def test_autodiscovery_from_html(self):
         self.responses = [FetchResult(status=200, url='https://example.com/', body=HTML, content_type='text/html'),
                           FetchResult(status=200, url='u', body=b'<rss/>', content_type='application/rss+xml')]
-        self.parses = [ParsedFeed(feed_type='rss', title='Found')]
-        self.mod.parse_feed = lambda body, ctype: (_ for _ in ()).throw(self.mod.ParseError('html')) \
+        core.parse_feed = lambda body, ctype: (_ for _ in ()).throw(ParseError('html')) \
             if body == HTML else ParsedFeed(feed_type='rss', title='Found')
         status, body = call(self.mod, body={'url': 'https://example.com'})
         self.assertEqual(status, 200)
@@ -107,23 +125,14 @@ class Subscribe(unittest.TestCase):
         ]
         for responses, url, code in cases:
             self.responses = list(responses)
-            fetch = self.mod.fetch
-
-            def raising(_url, **_kw):
-                r = self.responses.pop(0)
-                if isinstance(r, Exception):
-                    raise r
-                return r
-            self.mod.fetch = raising
             status, body = call(self.mod, body={'url': url})
-            self.mod.fetch = fetch
             self.assertEqual((status, body['code']), (400, code), code)
-        self.mod.normalize_feed_url = lambda url: (_ for _ in ()).throw(self.mod.FeedUrlError('bad'))
+        core.normalize_feed_url = lambda url: (_ for _ in ()).throw(core.FeedUrlError('bad'))
         self.assertEqual(call(self.mod, body={'url': 'ftp://x'})[1]['code'], 'invalid_url')
 
     def test_not_a_feed(self):
         self.responses = [FetchResult(status=200, url='u', body=b'<html><body>hi</body></html>', content_type='text/html')]
-        self.mod.parse_feed = lambda body, ctype: (_ for _ in ()).throw(self.mod.ParseError('no'))
+        core.parse_feed = lambda body, ctype: (_ for _ in ()).throw(ParseError('no'))
         self.assertEqual(call(self.mod, body={'url': 'https://example.com/x'})[1]['code'], 'not_a_feed')
 
     def test_unknown_folder(self):
