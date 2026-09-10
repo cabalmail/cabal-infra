@@ -70,6 +70,20 @@ fun AddressesScreen(
         snackbarHostState.showSnackbar(message)
         viewModel.clearError()
     }
+    // Success confirmations, the way React and the Apple clients give them
+    // (#1485). The model names the event and the wording lives here, so the
+    // strings stay in `strings.xml` and the model stays unit-testable.
+    val confirmation =
+        when (val message = state.message) {
+            null -> null
+            is AddressesMessage.Created -> stringResource(R.string.addresses_created, message.address)
+            is AddressesMessage.Revoked -> stringResource(R.string.addresses_revoked, message.address)
+        }
+    LaunchedEffect(confirmation) {
+        val text = confirmation ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(text)
+        viewModel.clearMessage()
+    }
     var showCreate by remember { mutableStateOf(false) }
     var confirmingRevoke by remember { mutableStateOf<Address?>(null) }
     var menuFor by remember { mutableStateOf<String?>(null) }
