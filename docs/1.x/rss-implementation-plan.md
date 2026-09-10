@@ -21,8 +21,8 @@ phase are updated in the same PR as the work, per the docs convention.
 | 1     | DynamoDB tables + supporting infra                | Shipped 1.12.2 (2026-09-09) |
 | 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
 | 3     | Subscription + reader API                         | On stage (2026-09-09) |
-| 4     | OPML import/export (API)                          | In review (2026-09-09) |
-| 5     | Apple clients (offline + FTS + cookie scoping)    | Not started |
+| 4     | OPML import/export (API)                          | On stage (2026-09-10) |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a in review (2026-09-10) |
 | 6     | Android client (offline + FTS + profile scoping)  | Not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
@@ -555,8 +555,9 @@ items          (feed_id, sort_key, item_id, guid, title, author, url,
                 published_at, fetched_key, summary_html, content_html,
                 is_read, is_favorite, state_is_explicit,   -- server state
                 cached_at,  PRIMARY KEY (feed_id, sort_key))
-items_fts      fts5(title, body_text, content='items', content_rowid=rowid,
-                    tokenize='porter unicode61')  -- kept by triggers
+items_fts      fts5(title, body_text, content='items', content_rowid=id,
+                    tokenize='unicode61')  -- kept by triggers; no stemmer,
+                                           -- so typed prefixes match
 feed_sync      (feed_id PK, since_cursor, oldest_sort_key, last_synced_at)
 pending        (id PK, kind, feed_id, sort_key, value, created_at)
                -- kind: read | favorite | mark_all_read(subscription)
@@ -1241,7 +1242,16 @@ a UI exists.
 
 ### Phase 5: Apple clients (with offline + FTS)
 
-**Status:** Not started.
+**Status:** 5a (Kit) in review (2026-09-10): `RssClient` + the
+`URLSessionApiClient` conformance, wire models, `SQLiteDatabase` (the
+thin `sqlite3` actor's backing type), `RssStore` with FTS5,
+`RssSyncEngine`, the `rssMarkAsRead` preference (gated like
+`flag_palette`), `CabalmailClient` wiring, 25 Kit tests, the
+`APP_ALLOWED` key server-side, and the Linux drift test's exemption. Two
+as-built notes: the FTS index uses the plain `unicode61` tokenizer, not
+porter, because stemming stored tokens breaks the typed-prefix matching a
+search field needs; and sign-out's `clearLocalData()` now clears the RSS
+store too. 5b (read path) is next.
 
 **Goal.** The iOS, iPadOS, visionOS, and macOS clients have a reader
 UI with per-feed `WKWebsiteDataStore` isolation, offline reading, and

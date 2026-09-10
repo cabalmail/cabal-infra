@@ -42,6 +42,10 @@ APP_ALLOWED = {
     'default_body_render_mode': {'original', 'reader'},
     'folder_count_display':     {'unread', 'total', 'both'},
     'crash_reporting_enabled':  {'0', '1'},
+    # RSS reader (docs/1.x/rss-implementation-plan.md, phase 5): its own
+    # mark-as-read key rather than the mail one, so mail and feed habits can
+    # differ. Same two modes as mail (operator decision 2026-09-09).
+    'rss_mark_as_read':         {'manual', 'on_open'},
 }
 
 # The signature lands in the outgoing message body (not a header), so newlines

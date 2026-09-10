@@ -24,6 +24,14 @@ public actor CabalmailClient {
     public nonisolated let draftStore: DraftStore
     public nonisolated let outbox: Outbox
 
+    /// RSS reader (docs/1.x/rss-implementation-plan.md, phase 5). Wired by
+    /// `make(...)`; nil under the memberwise initializer so existing tests
+    /// keep constructing bare clients. `rss` is the API surface, `rssStore`
+    /// the on-device catalog + items, `rssSync` the loop between them.
+    public nonisolated let rss: RssClient?
+    public nonisolated let rssStore: RssStore?
+    public nonisolated let rssSync: RssSyncEngine?
+
     /// On-device Core Spotlight mirror of subscribed folders. Wired by
     /// `make(...)` on platforms with CoreSpotlight; nil under the memberwise
     /// initializer (tests) and on watchOS, and every consumer no-ops through
@@ -74,6 +82,9 @@ public actor CabalmailClient {
         self.draftStore = draftStore
         self.outbox = outbox
         self.spotlightIndexer = nil
+        self.rss = nil
+        self.rssStore = nil
+        self.rssSync = nil
         self.metricKitCollector = .shared
         #if canImport(Network)
         self.pathMonitor = nil
@@ -123,6 +134,7 @@ public actor CabalmailClient {
         )
         let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
         let outbox = try Outbox(directory: cacheDirectory.appendingPathComponent("outbox"))
+        let rssStore = try RssStore(directory: cacheDirectory.appendingPathComponent("rss"))
         #if canImport(CoreSpotlight)
         let spotlight: SpotlightIndexer? = SpotlightIndexer(index: LiveSearchableIndex())
         #else
@@ -140,6 +152,8 @@ public actor CabalmailClient {
             draftStore: drafts,
             outbox: outbox,
             spotlightIndexer: spotlight,
+            rssStore: rssStore,
+            rssSync: RssSyncEngine(client: api, store: rssStore),
             monitorNetworkPath: true
         )
     }
@@ -160,6 +174,8 @@ public actor CabalmailClient {
         draftStore: DraftStore,
         outbox: Outbox,
         spotlightIndexer: SpotlightIndexer?,
+        rssStore: RssStore?,
+        rssSync: RssSyncEngine?,
         monitorNetworkPath: Bool
     ) {
         self.configuration = configuration
@@ -173,6 +189,9 @@ public actor CabalmailClient {
         self.draftStore = draftStore
         self.outbox = outbox
         self.spotlightIndexer = spotlightIndexer
+        self.rss = apiClient as? RssClient
+        self.rssStore = rssStore
+        self.rssSync = rssSync
         self.metricKitCollector = .shared
         if let spotlightIndexer {
             // Feed the indexer from the envelope cache's change stream for
@@ -346,51 +365,10 @@ public actor CabalmailClient {
             uidValidity: ref.uidValidity
         )
     }
-
-    /// Removes every piece of locally cached user data: the on-disk envelope
-    /// snapshots and message bodies, the local draft buffers, the outbox
-    /// queue, and the in-memory address list. Called on sign-out.
-    ///
-    /// The caches live in a shared, non-user-scoped application-support
-    /// directory, so without this a second account signing in on the same
-    /// device would read the previous user's mail straight from disk (and the
-    /// outbox drain would even resubmit the previous user's queued messages
-    /// under the new session). Best-effort: a failure to clear one cache
-    /// doesn't stop the rest.
-    public func clearLocalData() async {
-        await addressCache.invalidate()
-        try? await envelopeCache.clearAll()
-        try? await bodyCache.clearAll()
-        try? await draftStore.removeAll()
-        try? await outbox.removeAll()
-        // Explicit rather than relying on the cache change stream's
-        // `.cleared` event: sign-out must not race a fire-and-forget task
-        // with the next account's sign-in.
-        await spotlightIndexer?.removeAll()
-    }
-
-    /// Kicks the Spotlight sweep for the current session — refreshes the
-    /// subscribed-folder set and indexes each subscribed folder's top page.
-    /// Called (fire-and-forget) by `wireSession` on sign-in / restore.
-    public func refreshSpotlightIndex() async {
-        guard let spotlightIndexer else { return }
-        await spotlightIndexer.sweep(imap: imapClient, envelopeCache: envelopeCache)
-    }
-
-    /// Activate or deactivate MetricKit diagnostic collection. The Settings
-    /// toggle bridges its `Preferences.crashReportingEnabled` value into
-    /// this method so a user opt-in immediately starts receiving crash and
-    /// hang payloads (the next reports arrive at *the following* launch,
-    /// per MetricKit's delivery semantics).
-    public nonisolated func setCrashReportingEnabled(_ enabled: Bool) {
-        if enabled {
-            metricKitCollector.start()
-        } else {
-            metricKitCollector.stop()
-        }
-    }
 }
 
 // `submit(...)` + `shouldQueue(...)` + `SendOutcome` live in
-// `CabalmailClient+Send.swift` to keep this file under the lint
-// `file_length` ceiling.
+// `CabalmailClient+Send.swift`, and `clearLocalData()` /
+// `refreshSpotlightIndex()` / `setCrashReportingEnabled(_:)` in
+// `CabalmailClient+Maintenance.swift`, to keep this file under the lint
+// `file_length` and `type_body_length` ceilings.
