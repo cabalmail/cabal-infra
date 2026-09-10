@@ -239,6 +239,8 @@ targets:
       # Safari extension (compiled into the appex too).
       - path: Cabalmail/ExtensionControlDomainStore.swift
       - path: Cabalmail/AppStateSessionPersistence.swift
+      # Feed reader session flows (RSS plan, phase 5d): the periodic refresh.
+      - path: Cabalmail/AppState+Feeds.swift
       # Push notifications (phase 6, macOS parity): one implementation for
       # both platforms — each file carries an `#if os(iOS)` / `#else`
       # (AppKit) branch around the small platform seams.
