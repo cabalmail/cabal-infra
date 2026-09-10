@@ -27,9 +27,11 @@ final class FeedSidebarViewModel {
 
     init(client: CabalmailClient, bus: FeedStateBus = .shared) {
         self.client = client
-        // Any read / favorite change or refetch elsewhere moves the badges.
-        bus.subscribe(self) { [weak self] _ in
-            Task { await self?.reloadCounts() }
+        // Any read / favorite change or refetch elsewhere moves the unread
+        // badges; a refetch also refreshes each feed's health, so the whole
+        // catalog is re-read from the store (cheap: one SQLite pass).
+        bus.subscribe(self) { [weak self] change in
+            Task { if change == nil { await self?.load() } else { await self?.reloadCounts() } }
         }
         // A subscribe, unsubscribe, or folder edit (the management sheets,
         // an OPML import) changes the tree itself.

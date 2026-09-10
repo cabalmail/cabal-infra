@@ -71,6 +71,7 @@ struct FeedSidebarRowLabel: View {
                 .foregroundStyle(row.unread > 0 || isSelected ? AnyShapeStyle(.primary)
                                  : AnyShapeStyle(Color.primary.opacity(0.7)))
             Spacer(minLength: 4)
+            healthBadge
             if row.unread > 0 {
                 Text("\(row.unread)")
                     .font(.caption.monospacedDigit())
@@ -82,6 +83,24 @@ struct FeedSidebarRowLabel: View {
         }
         .padding(.leading, CGFloat(row.depth) * 14)
         .contentShape(Rectangle())
+    }
+
+    /// The fetcher's health for a subscription row: a warning mark from
+    /// three consecutive failures, a stop mark once it has given up. Silent
+    /// otherwise, and never on folders (their feeds carry their own).
+    @ViewBuilder
+    private var healthBadge: some View {
+        if case .subscription(let sub) = row.kind {
+            let level = FeedHealth.level(for: sub.feed)
+            if let symbol = level.symbol, let summary = level.summary {
+                Image(systemName: symbol)
+                    .font(.caption)
+                    .foregroundStyle(level == .stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
+                    .help(summary)
+                    .accessibilityLabel(summary)
+                    .accessibilityIdentifier("feed.health.\(sub.subscriptionId)")
+            }
+        }
     }
 }
 
