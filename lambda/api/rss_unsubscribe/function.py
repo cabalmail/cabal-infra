@@ -26,8 +26,11 @@ def handler(event, _context):
     user = username(event)
     body = body_of(event)
     sub = get_subscription(user, body.get('subscription_id'))
-    subscriptions.delete_item(Key={'user': user, 'subscription_id': sub['subscription_id']})
+    # State first: if that fails the subscription still exists and a retry
+    # finishes the job, whereas the reverse order strands state rows that
+    # would resurface on a later re-subscribe (seen on stage 2026-09-09).
     delete_state(user, sub['feed_id'])
+    subscriptions.delete_item(Key={'user': user, 'subscription_id': sub['subscription_id']})
     remaining = detach_subscriber(sub['feed_id'])
     purged = False
     if remaining is not None and remaining <= 0:

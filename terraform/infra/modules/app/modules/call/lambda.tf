@@ -314,8 +314,15 @@ resource "aws_lambda_function" "api_call" {
       RSS_CACHE_BUCKET            = var.rss_access ? var.rss_cache_bucket : ""
     }
   }
+  # The role policy as well as the log group: CreateFunction validates that
+  # the execution role can manage ENIs (vpc_config) at creation time, and
+  # the function only depends on the ROLE implicitly, so Terraform was free
+  # to create the function before its inline policy. Prod lost that race on
+  # the eleven RSS endpoints (1.13.0); stage happened to win it. Ordering
+  # the policy first leaves only IAM propagation, which the provider retries.
   depends_on = [
     aws_cloudwatch_log_group.lambda_log,
+    aws_iam_role_policy.lambda,
   ]
   # Phase 2 of docs/0.9.x/build-deploy-simplification-plan.md.
   # Out-of-band Lambda deploys will mutate code via aws lambda

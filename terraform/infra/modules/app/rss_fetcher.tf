@@ -161,7 +161,9 @@ resource "aws_lambda_function" "rss_schedule" {
     }
   }
 
-  depends_on = [aws_cloudwatch_log_group.rss_schedule]
+  # Policy before function: see the call module's note on CreateFunction's
+  # ENI-permission check.
+  depends_on = [aws_cloudwatch_log_group.rss_schedule, aws_iam_role_policy.rss_schedule]
 
   # Out-of-band Lambda deploys mutate code via aws lambda update-function-code;
   # ignore these so a topology-only Terraform apply does not roll the update
@@ -330,7 +332,7 @@ resource "aws_lambda_function" "rss_fetch" {
     }
   }
 
-  depends_on = [aws_cloudwatch_log_group.rss_fetch]
+  depends_on = [aws_cloudwatch_log_group.rss_fetch, aws_iam_role_policy.rss_fetch]
 
   lifecycle {
     ignore_changes = [s3_key, s3_object_version, source_code_hash]

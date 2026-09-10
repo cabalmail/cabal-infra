@@ -203,6 +203,7 @@ public final class Preferences {
         case defaultBodyRenderMode = "cabalmail.prefs.default_body_render_mode"
         case folderCountDisplay = "cabalmail.prefs.folder_count_display"
         case flagPalette = "cabalmail.prefs.flag_palette"
+        case rssMarkAsRead = "cabalmail.prefs.rss_mark_as_read"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -255,6 +256,18 @@ public final class Preferences {
     }
     /// The user's custom-flag palette (rules-composition plan, Phase 3), in
     /// display order. Stored and synced as the wire JSON string.
+    /// How the feed reader marks an item read when it opens - the RSS twin
+    /// of `markAsRead`, deliberately its own key (operator decision
+    /// 2026-09-09) so mail and feed habits can differ. Same two modes as
+    /// mail: manual, or immediately on open.
+    public var rssMarkAsRead: MarkAsReadBehavior {
+        didSet {
+            persist(.rssMarkAsRead, rssMarkAsRead.rawValue)
+            // A genuine user edit makes the key ride; a reload or a server
+            // apply must not (the latter sets the flag itself, in applyRemote).
+            if !isReloading && !isApplyingRemote { rssMarkAsReadSyncable = true }
+        }
+    }
     public var flagPalette: [FlagPaletteEntry] {
         didSet {
             // A palette that has existed must keep syncing even once
@@ -275,6 +288,10 @@ public final class Preferences {
     /// map on any unknown key, so an eager send against a not-yet-upgraded
     /// server would break every preference push from this build.
     private var flagPaletteSyncable = false
+    /// Same gate for `rss_mark_as_read`: a server predating the key 400s the
+    /// whole map, so the key rides only once the server has shown it knows
+    /// it (a fetched map carried it) or the user has actually set it.
+    private var rssMarkAsReadSyncable = false
 
     /// Scope hash of the account whose settings are currently loaded, or
     /// `nil` before the first `activate` (fresh install, first launch
@@ -307,6 +324,7 @@ public final class Preferences {
         self.defaultBodyRenderMode = .original
         self.folderCountDisplay = .unread
         self.flagPalette = []
+        self.rssMarkAsRead = .manual
         store.startObserving { [weak self] in
             self?.reload()
         }
@@ -386,6 +404,7 @@ public final class Preferences {
         defaultBodyRenderMode = readEnum(.defaultBodyRenderMode, default: .original)
         folderCountDisplay = readEnum(.folderCountDisplay, default: .unread)
         flagPalette = readString(.flagPalette).flatMap(FlagPalette.decode) ?? []
+        rssMarkAsRead = readEnum(.rssMarkAsRead, default: .manual)
     }
 
     private func persist(_ key: Key, _ value: String?) {
@@ -452,6 +471,7 @@ public final class Preferences {
         static let defaultBodyRenderMode = "default_body_render_mode"
         static let folderCountDisplay = "folder_count_display"
         static let flagPalette = "flag_palette"
+        static let rssMarkAsRead = "rss_mark_as_read"
     }
 
     /// The complete set of synced preferences as the `app` map the server
@@ -479,6 +499,11 @@ public final class Preferences {
         // break every preference push from this build.
         if !flagPalette.isEmpty || flagPaletteSyncable {
             payload[AppWireKey.flagPalette] = FlagPalette.encode(flagPalette)
+        }
+        // Same exception for the feed reader's mark-as-read (phase 5 of the
+        // RSS plan): only once the server has shown it accepts the key.
+        if rssMarkAsRead != .manual || rssMarkAsReadSyncable {
+            payload[AppWireKey.rssMarkAsRead] = rssMarkAsRead.rawValue
         }
         return payload
     }
@@ -508,6 +533,10 @@ public final class Preferences {
         }
         applyEnum(remote[AppWireKey.defaultBodyRenderMode], to: \.defaultBodyRenderMode)
         applyEnum(remote[AppWireKey.folderCountDisplay], to: \.folderCountDisplay)
+        if remote[AppWireKey.rssMarkAsRead] != nil {
+            rssMarkAsReadSyncable = true
+            applyEnum(remote[AppWireKey.rssMarkAsRead], to: \.rssMarkAsRead)
+        }
         if let raw = remote[AppWireKey.flagPalette] {
             flagPaletteSyncable = true
             // An unparseable value leaves the current palette untouched,

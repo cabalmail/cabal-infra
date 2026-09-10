@@ -54,16 +54,12 @@ class RequirementsExamples(unittest.TestCase):
     def test_www_of_a_subdomain_is_not_collapsed(self):
         self.assertEqual(norm('https://www.web.example.com/'), 'https://www.web.example.com/')
 
-    def test_trailing_slash_kept_as_given_but_equivalent(self):
-        # Neither added nor removed (either can 404 a real feed); the two
-        # forms are reconciled at lookup time through equivalent_urls().
+    def test_trailing_slash_kept_as_given(self):
+        # Only the server knows whether /dir and /dir/ are one object
+        # (ruling 2026-09-09); a redirect, not a rewrite, unifies them.
         self.assertEqual(norm('https://example.com/dir'), 'https://example.com/dir')
         self.assertEqual(norm('https://example.com/dir/'), 'https://example.com/dir/')
-        self.assertEqual(rss_url.equivalent_urls('https://example.com/dir'),
-                         ['https://example.com/dir', 'https://example.com/dir/'])
-        self.assertEqual(rss_url.equivalent_urls('https://example.com/dir/?a=1'),
-                         ['https://example.com/dir/?a=1', 'https://example.com/dir?a=1'])
-        self.assertEqual(rss_url.equivalent_urls('https://example.com/'), ['https://example.com/'])
+        self.assertNotEqual(norm('https://example.com/dir'), norm('https://example.com/dir/'))
 
     def test_file_like_path_untouched(self):
         self.assertEqual(norm('https://example.com/feed.xml'), 'https://example.com/feed.xml')

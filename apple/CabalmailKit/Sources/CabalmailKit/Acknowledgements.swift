@@ -8,8 +8,9 @@ import Foundation
 /// the server-side Docker/Lambda artifacts, which are built and run only on
 /// our own infrastructure and convey no copies to third parties.
 /// `CabalmailKit` has no third-party Swift dependencies; the only bundled
-/// third-party code is the pair of JavaScript libraries vendored into the
-/// rich-text composer's `WKWebView` (see `apple/scripts/sync-vendored.sh`).
+/// third-party code is the JavaScript vendored into `WKWebView`s - the
+/// composer's marked + turndown and the feed reader's Readability.js (see
+/// `apple/scripts/sync-vendored.sh`).
 public struct ThirdPartyComponent: Identifiable, Sendable {
     public var id: String { name }
 
@@ -54,6 +55,15 @@ public enum Acknowledgements {
                 url: "https://github.com/mixmark-io/turndown",
                 licenseText: licenseText(resource: "turndown-LICENSE", extension: nil)
             ),
+            ThirdPartyComponent(
+                name: "Readability",
+                summary: "Article extractor behind the feed reader's reader view.",
+                license: "Apache-2.0",
+                url: "https://github.com/mozilla/readability",
+                licenseText: licenseText(
+                    resource: "readability-LICENSE", extension: "md", subdirectory: "ReaderAssets"
+                )
+            ),
         ]
     }
 
@@ -61,12 +71,14 @@ public enum Acknowledgements {
     /// land under the `WebAssets` subdirectory via `.copy("Compose/WebAssets")`
     /// in `Package.swift` — the same location `RichTextEditorController`
     /// loads `editor.html` from.
-    private static func licenseText(resource: String, extension ext: String?) -> String {
+    private static func licenseText(
+        resource: String, extension ext: String?, subdirectory: String = "WebAssets"
+    ) -> String {
         guard
             let url = Bundle.module.url(
                 forResource: resource,
                 withExtension: ext,
-                subdirectory: "WebAssets"
+                subdirectory: subdirectory
             ),
             let text = try? String(contentsOf: url, encoding: .utf8)
         else {

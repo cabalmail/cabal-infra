@@ -446,6 +446,22 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    rss_opml_import = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 256
+      cache     = false
+      cache_ttl = 0
+    },
+    rss_opml_export = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     get_rules = {
       runtime = "python3.13"
 

@@ -68,6 +68,8 @@ struct CabalmailApp: App {
                     // one was backgrounded (server wins, unless a local edit
                     // is still pending its push).
                     Task { await appState.prefsCoordinator?.reconcile() }
+                    // Feeds: fresh items and the offline mutation queue.
+                    Task { await appState.refreshFeedsOnForeground() }
                 }
                 .onOpenURL { url in
                     // Cold-launch mailto: arrives here before any view

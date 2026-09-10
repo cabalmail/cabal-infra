@@ -42,6 +42,12 @@ MARKED_SRC="$REACT_DIR/node_modules/marked/lib/marked.umd.js"
 TURNDOWN_SRC="$REACT_DIR/node_modules/turndown/dist/turndown.js"
 MARKED_LICENSE="$REACT_DIR/node_modules/marked/LICENSE.md"
 TURNDOWN_LICENSE="$REACT_DIR/node_modules/turndown/LICENSE"
+# Readability.js for the feed reader's article view (phase 5 of the RSS
+# plan). Different destination: its own bundle folder, so it does not
+# collide with the composer's WebAssets directory.
+READABILITY_SRC="$REACT_DIR/node_modules/@mozilla/readability/Readability.js"
+READABILITY_LICENSE="$REACT_DIR/node_modules/@mozilla/readability/LICENSE.md"
+READER_DEST_DIR="$REPO_ROOT/apple/CabalmailKit/Sources/CabalmailKit/RSS/ReaderAssets"
 
 # Skip `npm ci` when every source file is already present — local
 # `swift test` rebuild loops shouldn't pay the install cost on every
@@ -49,7 +55,8 @@ TURNDOWN_LICENSE="$REACT_DIR/node_modules/turndown/LICENSE"
 # turndown in react/admin/package.json, delete the destination dir or
 # `cd react/admin && npm ci` yourself before re-running this script.
 NEED_INSTALL=0
-for src in "$MARKED_SRC" "$TURNDOWN_SRC" "$MARKED_LICENSE" "$TURNDOWN_LICENSE"; do
+for src in "$MARKED_SRC" "$TURNDOWN_SRC" "$MARKED_LICENSE" "$TURNDOWN_LICENSE" \
+           "$READABILITY_SRC" "$READABILITY_LICENSE"; do
     if [ ! -f "$src" ]; then
         NEED_INSTALL=1
         break
@@ -72,6 +79,11 @@ cp "$MARKED_LICENSE"  "$DEST_DIR/marked-LICENSE.md"
 cp "$TURNDOWN_LICENSE" "$DEST_DIR/turndown-LICENSE"
 
 echo "[sync-vendored] Synced marked + turndown into $DEST_DIR"
+
+mkdir -p "$READER_DEST_DIR"
+cp "$READABILITY_SRC"     "$READER_DEST_DIR/Readability.js"
+cp "$READABILITY_LICENSE" "$READER_DEST_DIR/readability-LICENSE.md"
+echo "[sync-vendored] Synced Readability.js into $READER_DEST_DIR"
 
 # ---------------------------------------------------------------------------
 # Safari web-extension bundle for the embedded appex (CabalmailMacWebExtension
