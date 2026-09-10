@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.1] - 2026-09-10
+
+### Fixed
+- **Feeds served only on `www`.** The canonical feed URL keeps the apex
+  host (Decision 1), but some publishers answer the apex path with a 404
+  or redirect every apex path to their front page, and only `www.` serves
+  the feed. The fetcher and the subscribe probe now try the `www.` form
+  once when the apex does not yield a feed, and a feed found there becomes
+  the canonical URL. A permanent redirect from the apex form to the `www.`
+  form of the same URL keeps `www.` instead of normalizing straight back.
+  Found on the first OPML imports (2026-09-10).
+
 ## [1.15.0] - 2026-09-10
 
 ### Added
