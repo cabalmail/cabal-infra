@@ -523,7 +523,157 @@ A few notes on the model:
   client-side; the server implementation exists so the first page a
   fresh install sees is already in the right order.
 
-## Apple-side item cache, FTS, and offline reading
+## Apple-side design (phase 5, as decided 2026-09-10)
+
+This section is the phase 5 design note: what `CabalmailKit` and the two
+app targets gain, in the order the PRs land. It supersedes the May
+sketch below it in spirit; the May schema is kept as the record of where
+the design started. The one server-side change phase 5 needs is the
+`rss_mark_as_read` key in `set_preferences`'s `APP_ALLOWED` (and the
+Linux `xtask` drift test's mirror of it).
+
+### Storage: a thin actor over the system SQLite
+
+`CabalmailKit` has no third-party Swift dependencies and keeps it that
+way (operator decision 2026-09-10): `RssStore` is an actor over the
+`SQLite3` module that ships with every Apple OS, a few hundred lines
+wrapping `sqlite3_prepare_v2` / bind / step for the dozen statements this
+cache needs. WAL mode, one file per account scope
+(`Application Support/<scope>/rss.sqlite`, the same account hashing
+`Preferences.scopeIdentifier` uses), forward-only migrations by
+`PRAGMA user_version`; downgrade is delete-and-repopulate from the
+server. The store mirrors the *whole* RSS catalog, not just items, so
+the sidebar renders offline:
+
+```sql
+folders        (folder_id PK, parent_folder_id, name, display_order)
+subscriptions  (subscription_id PK, feed_id, folder_id, custom_title,
+                ordering_mode, default_open_mode, default_styling,
+                notifications_enabled, read_watermark, data_store_uuid,
+                feed_title, feed_site_url, feed_type, feed_health_json)
+items          (feed_id, sort_key, item_id, guid, title, author, url,
+                published_at, fetched_key, summary_html, content_html,
+                is_read, is_favorite, state_is_explicit,   -- server state
+                cached_at,  PRIMARY KEY (feed_id, sort_key))
+items_fts      fts5(title, body_text, content='items', content_rowid=rowid,
+                    tokenize='porter unicode61')  -- kept by triggers
+feed_sync      (feed_id PK, since_cursor, oldest_sort_key, last_synced_at)
+pending        (id PK, kind, feed_id, sort_key, value, created_at)
+               -- kind: read | favorite | mark_all_read(subscription)
+```
+
+`body_text` for the FTS table is the stripped HTML of summary +
+content; stripping reuses the Kit's existing `HTMLText` plain-text path
+(the mail snippet code), not `NSAttributedString`'s WebKit-backed parser.
+Read state is computed locally by the same rule the server uses (an
+explicit row wins, else `published_at <= read_watermark`), so the list,
+the unread counts (`SELECT COUNT` per subscription/folder), and the
+filters never need a network round trip.
+
+### Kit API surface
+
+- `RssClient` protocol with `ApiBackedRssClient` as the only production
+  implementation (there is no direct-protocol alternative to keep alive,
+  unlike IMAP), wire types in `Models/Rss.swift` mirroring `docs/rss.md`
+  field for field, and `URLSessionApiClient+Rss.swift` for the thirteen
+  endpoints. Tested with `RecordingHTTPTransport` like the other
+  endpoint groups.
+- `RssStore` (above) and `RssSyncEngine`, an actor that owns the sync
+  loop and is the only writer to the store besides the UI's optimistic
+  local mutations.
+- `CabalmailClient` gains `rss: RssClient`, `rssStore`, `rssSync`, wired
+  in `make(...)`; nil-safe under the memberwise initializer for tests.
+
+### Sync loop
+
+1. **Catalog refresh** (`/rss_list_subscriptions`) on sign-in, on
+   foreground, on pull-to-refresh, and after every management mutation:
+   folders and subscriptions upserted, departed ones deleted along with
+   their items and their `WKWebsiteDataStore`.
+2. **Per-feed item sync** via `/rss_list_items?since=` from the stored
+   cursor, pages of 100 until `has_more` is false (bounded per run).
+   A **new** subscription is populated instead from
+   `/rss_list_items?order=newest&limit=100` and its cursor set to the
+   largest `fetched_key` seen; "Load older" pages the same call with its
+   cursor and appends. Subscribed feeds sync with the same concurrency
+   cap the mail sidebar uses for folder counts (4).
+3. **Mutation queue**: mark read/unread, favorite, and mark-all-read
+   apply to the store immediately and enqueue; the engine drains the
+   queue in `/rss_set_item_state` batches (≤100) and
+   `/rss_mark_all_read` calls whenever online, on reconnect
+   (`Reachability`), and before each item sync. Last write wins; a
+   server row that disagrees after a drain is taken as truth.
+4. **Triggers**: selecting a feed or folder syncs the visible feeds;
+   foreground syncs everything subscribed; iOS `BGAppRefreshTask`
+   (system-scheduled, at least hourly requested) and a 15-minute timer
+   on macOS while the app runs; the push-assisted path arrives with
+   phase 8 through the App Group handoff described there.
+
+### Screens
+
+- **Sidebar.** On macOS and regular-width iPad the existing mail
+  sidebar gains a collapsible **Feeds** section under the folder
+  sections: the RSS folder tree with feeds as leaves, unread counts in
+  the style of `folderCountDisplay`, drag-to-reorder into folders, a
+  `+` for subscribe and a context menu (rename, move, settings, mark all
+  read, unsubscribe). Selecting a feed or folder swaps the content
+  column to the item list and the detail column to the item reader;
+  selecting a mail folder swaps back. One sidebar, two content types,
+  the way Reeder and Mail-plus-NetNewsWire users already think.
+- **iPhone (compact)** gets a **Feeds** tab beside Mail, hosting its own
+  `NavigationSplitView` that collapses to a stack (folders/feeds → items
+  → reader), mirroring `MailRootView`. **visionOS** gets a Feeds tab in
+  its ornament bar.
+- **Item list.** Filter pills all / unread / favorite, the four ordering
+  modes applied locally (two by SQL order, two day-grouped in Swift),
+  swipe read/unread and favorite, per-feed search field backed by FTS5
+  with a "Search older items" affordance that pulls another page first,
+  and the mail list's index-addressed virtualization pattern for long
+  feeds.
+- **Reader.** Header (feed, title, author, date), then the in-feed body
+  through the existing `HTMLBodyView` with the subscription's
+  `default_styling` choosing reader or original styling (the mail
+  reader's stylesheet approach, per the standing A/B posture), remote
+  content gated by the existing `loadRemoteContent` preference until
+  phase 7's proxy exists, and an **Open article** action. A subscription
+  whose `default_open_mode` is `article` opens the article view
+  directly.
+- **Article view.** `WKWebView` with
+  `WKWebsiteDataStore(forIdentifier: data_store_uuid)`, JavaScript on
+  (publisher pages need it), back/forward, Share, Open in Safari, and a
+  reader toggle that injects Mozilla's Readability.js and restyles the
+  result with the reader stylesheet. Readability is vendored like
+  marked/turndown: pinned in `react/admin/package.json`, materialized by
+  `sync-vendored.sh`, credited in `Acknowledgements` (Apache-2.0).
+  Unsubscribing removes the data store.
+- **Management.** Subscribe sheet (URL, folder picker, the API's error
+  codes rendered as sentences), subscription settings sheet (title,
+  folder, ordering, open mode, styling, notifications toggle — stored
+  now, effective with phase 8), folder create/rename/move/delete, OPML
+  import through `fileImporter` and export through the share sheet /
+  `fileExporter`.
+- **Settings.** A **Feeds** category: mark-as-read (manual / on open,
+  the `rss_mark_as_read` synced key, mirroring the mail picker) and the
+  OPML actions. macOS adds menu commands and shortcuts for mark read,
+  favorite, mark all read, next/previous unread, and open article,
+  window-scoped like the mail commands.
+- **Offline.** The existing offline banner covers status; items carry a
+  small "queued" mark while a mutation is pending, and the article
+  action shows "needs a connection" when unreachable.
+
+### Delivery order
+
+Four PRs, each green and shippable on its own: **5a** Kit (models,
+client, store, sync engine, tests) plus the `APP_ALLOWED` key; **5b**
+the read path on iOS and macOS (sidebar section and tab, list, reader,
+article view); **5c** management (subscribe, settings, folders, OPML,
+the Settings category, macOS commands); **5d** search, offline
+indicators, and polish from dogfooding. The Feeds section and tab
+appear with 5b.
+
+## Apple-side item cache, FTS, and offline reading (May 2026 sketch)
+
+*Kept as the planning record; the design above is the one being built.*
 
 This lives entirely in `CabalmailKit` and the iOS/macOS apps; no
 server-side change beyond the `since` cursor on `/rss_list_items`
