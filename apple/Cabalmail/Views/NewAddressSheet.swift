@@ -104,6 +104,7 @@ struct NewAddressSheet: View {
     // drops the in-field placeholders — so macOS gets a hand-built layout
     // that reproduces the iOS look: in-field placeholders, an `@`/`.`
     // email-shaped row, headline section captions, and real content margins.
+    // That layout is shared with `NewFolderSheet` as `MacSheetForm` (#1484).
 
     @ViewBuilder
     private var content: some View {
@@ -116,10 +117,8 @@ struct NewAddressSheet: View {
 
     #if os(macOS)
     private var macContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("New address")
-                    .font(.headline)
+        MacSheetForm {
+            MacSheetSection(caption: "New address") {
                 addressRow
                     .textFieldStyle(.roundedBorder)
                 if let preview = composedAddress {
@@ -129,9 +128,7 @@ struct NewAddressSheet: View {
                         .textSelection(.enabled)
                 }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Comment")
-                    .font(.headline)
+            MacSheetSection(caption: "Comment") {
                 TextField("optional reminder", text: $comment)
                     .autocorrectionDisabled()
                     .textFieldStyle(.roundedBorder)
@@ -146,8 +143,6 @@ struct NewAddressSheet: View {
                 Spacer()
             }
         }
-        .padding(24)
-        .frame(width: 460, alignment: .leading)
     }
     #else
     private var formContent: some View {
