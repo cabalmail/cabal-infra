@@ -124,7 +124,7 @@ extension MailRootView {
                 description: Text("Pick an item from the list to read it.")
             )
             #if os(macOS)
-            .toolbar { EmptyDetailToolbar() }
+            .toolbar { EmptyFeedDetailToolbar() }
             #endif
         }
     }

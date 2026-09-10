@@ -22,7 +22,7 @@ phase are updated in the same PR as the work, per the docs convention.
 | 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
 | 3     | Subscription + reader API                         | On stage (2026-09-09) |
 | 4     | OPML import/export (API)                          | On stage (2026-09-10) |
-| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a and 5b on stage (2026-09-10)        |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a, 5b, 5d on stage; 5c in review (2026-09-10) |
 | 6     | Android client (offline + FTS + profile scoping)  | Not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
@@ -1277,6 +1277,46 @@ had failed on stage, which also skipped the TestFlight uploads). Noted for
 5d: the disabled mail toolbar items still show while a feed is selected
 with no item open, compose leaves the toolbar in feed scope, and item rows
 want accessibility identifiers for the tester.
+**5d (polish) on stage (2026-09-10), taken before 5c because the read path
+is what is being dogfooded:** rows in multi-feed scopes and the reader
+header name the feed (subscription title, host as fallback); a
+fifteen-minute foreground refresh in `AppState+Feeds.swift` mirrors the
+inbox badge poller and posts to `FeedStateBus` so badges and first-page
+lists follow (iOS background fetch waits for phase 8); the article button
+reads "needs a connection" while unreachable and `ArticleWebView` replaces
+WebKit's error page with a notice and Retry; "Search older items" appears
+when a feed search finds nothing cached; the macOS empty feed pane
+reserves the feed toolbar's six slots (`EmptyFeedDetailToolbar`, order
+shared with the live toolbar through `FeedReaderAction`) instead of the
+mail reader's eleven; New Message stays in the toolbar in feed scope;
+item rows carry `feed.item.<id>` identifiers. Deliberately not done: the
+mail list's index-addressed virtualization. The feed list reads pages of
+100 from SQLite and appends on demand, and SwiftUI's `List` is already
+lazy per row; the mail pattern exists because envelopes arrive from the
+server by index window, which the local store makes unnecessary. Revisit
+only if a feed with thousands of cached items scrolls badly.
+**5c (management) in review (2026-09-10):** `FeedManagementViewModel`
+over the Kit's `RssClient` + `RssStore` (server first, then the store,
+then `FeedStateBus`, which gained a catalog channel the sidebar re-reads
+on); `SubscribeFeedSheet`, `FeedFolderSheet` (create / rename / move),
+`FeedSubscriptionSettingsSheet` (title, folder, ordering, open mode,
+styling, fetcher health, Unsubscribe); the sidebar's `+` menu and row
+context menus (`FeedAddMenu`, `FeedSidebarContextMenu`), hosted by
+`FeedManagementActions` + the `.feedManagementSheets` modifier so the
+mail sidebar, the Feeds tab, and the item list's settings button share
+one presenter; OPML import / export through the system open and save
+panels (`FeedOpml.swift`); the Feeds menu (`FeedsMenuCommands`, ⌥⌘N
+subscribe) dispatching through `AppState.requestFeedCommand`; Settings ›
+Feeds with the `rss_mark_as_read` picker and the OPML actions. Forms are
+owned by the presenter, not the sheet (#889). Found while driving it: on
+macOS 26 `WKWebsiteDataStore.remove(forIdentifier:)` (and
+`allDataStoreIdentifiers`) segfaults in a process that has not yet stood
+up a web view, which is the state after unsubscribing a feed whose article
+was never opened; `FeedWebStorage` now opens the store for the identifier
+and clears it through the instance `removeData` API instead (reproduced
+standalone, so it is WebKit's, not ours). Not done: drag-to-reorder into
+folders (the settings sheet and "Rename or Move" cover moves) and the
+notifications toggle (waits for phase 8's push).
 
 **Goal.** The iOS, iPadOS, visionOS, and macOS clients have a reader
 UI with per-feed `WKWebsiteDataStore` isolation, offline reading, and

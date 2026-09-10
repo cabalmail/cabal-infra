@@ -94,6 +94,7 @@ struct CabalmailApp: App {
         // the Mac; iPhone carries them inertly.
         .commands {
             MessageMenuCommands(appState: appState)
+            FeedsMenuCommands(appState: appState)
             // Settings sheet shortcut. iOS has no Settings scene (macOS owns
             // Cmd+, through its `Settings {}` scene), so we claim the standard
             // app-settings slot and route it to the same tick the sidebar gear

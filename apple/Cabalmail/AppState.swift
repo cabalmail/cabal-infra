@@ -118,6 +118,11 @@ final class AppState {
     /// app command; `SignedInRootView` observes it and presents the sheet.
     /// macOS ignores it - settings there is the dedicated ⌘, scene.
     var settingsRequestTick = 0
+    /// Feeds menu intents (RSS plan, phase 5c): the menu names the command
+    /// and bumps the tick; the mounted feed sidebar answers through
+    /// `FeedManagementSheets`. See `requestFeedCommand` in `AppState+Feeds`.
+    var feedCommandTick = 0
+    var pendingFeedCommand: FeedCommand?
 
     /// A Spotlight result tapped before sign-in / restore completed; routed
     /// once the session is wired, mirroring `PushRegistrar.pendingOpen`.
@@ -202,6 +207,9 @@ final class AppState {
     var folderTotalCounts: [String: Int] = [:]
     private var inboxBadgeTask: Task<Void, Never>?
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
+    // Feed reader poller; the methods live in `AppState+Feeds.swift`.
+    var feedRefreshTask: Task<Void, Never>?
+    let feedRefreshInterval: UInt64 = 15 * 60 * 1_000_000_000
 
     // `requestCompose(seed:)` and `consumePendingComposeSeed()` live in the
     // "Compose routing + onboarding" extension below, alongside the
@@ -613,6 +621,7 @@ extension AppState {
 extension AppState {
     func signOut() async {
         stopInboxBadgePolling()
+        stopFeedRefreshPolling()
         guard let client else { status = .signedOut; return }
         #if os(iOS) || os(macOS)
         // Deregister the APNs token while the Cognito session still works —
@@ -682,19 +691,11 @@ extension AppState {
         // arrived before the session was wired (cold launch from search).
         Task { await newClient.refreshSpotlightIndex() }
         routePendingSpotlightOpen()
-        // Feed reader (RSS plan, phase 5): pull the catalog and every
-        // subscription's new items so the Feeds section is current before
-        // the user opens it. Fire-and-forget like the Spotlight sweep.
-        Task { await newClient.rssSync?.syncAll() }
+        // Feed reader (RSS plan, phase 5): the first pass pulls the catalog
+        // and every subscription's new items so the Feeds section is current
+        // before the user opens it; then every fifteen minutes.
+        startFeedRefreshPolling()
         await pushSessionToWatch(client: newClient, username: username)
-    }
-
-    /// Foreground refresh for the feed reader: new items and the pending
-    /// mutation queue. Called from the scene-phase handlers alongside the
-    /// preferences reconcile; a no-op when signed out.
-    func refreshFeedsOnForeground() async {
-        guard let engine = client?.rssSync else { return }
-        await engine.syncAll()
     }
 }
 

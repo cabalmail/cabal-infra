@@ -26,7 +26,17 @@ final class FeedStateBus {
         let handler: Handler
     }
 
+    /// The catalog itself changed (a subscription or folder was added,
+    /// edited, or removed): the sidebar re-reads folders and subscriptions.
+    typealias CatalogHandler = @MainActor () -> Void
+
+    private struct CatalogSubscriber {
+        weak var owner: AnyObject?
+        let handler: CatalogHandler
+    }
+
     private var subscribers: [Subscriber] = []
+    private var catalogSubscribers: [CatalogSubscriber] = []
 
     init() {}
 
@@ -34,9 +44,18 @@ final class FeedStateBus {
         subscribers.append(Subscriber(owner: owner, handler: handler))
     }
 
+    func subscribeCatalog(_ owner: AnyObject, _ handler: @escaping CatalogHandler) {
+        catalogSubscribers.append(CatalogSubscriber(owner: owner, handler: handler))
+    }
+
     func post(_ item: RssItem? = nil) {
         subscribers.removeAll { $0.owner == nil }
         for subscriber in subscribers { subscriber.handler(item) }
+    }
+
+    func postCatalogChanged() {
+        catalogSubscribers.removeAll { $0.owner == nil }
+        for subscriber in catalogSubscribers { subscriber.handler() }
     }
 
     /// Subscribers whose owner is still alive, for tests.

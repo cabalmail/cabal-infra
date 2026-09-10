@@ -214,7 +214,12 @@ private struct VisionMailPane: View {
                 scope: .folder(selectedFolder),
                 selection: $selectedEnvelope,
                 onSearchResultSelected: { _ in },
-                onSelectionCountChanged: { listSelectionCount = $0 }
+                onSelectionCountChanged: { listSelectionCount = $0 },
+                // The list's folder-switch menu writes the cross-tab
+                // selection exactly as a Folders-tab pick does. `self.`
+                // because the enclosing `if let` shadows the binding with
+                // the unwrapped constant.
+                onSwitchFolder: { self.selectedFolder = $0 }
             )
             .id(selectedFolder.path)
         } else {

@@ -68,4 +68,31 @@ class FolderSectionsTest {
         assertFalse(FolderSections.hasUnread(null))
         assertFalse(FolderSections.hasUnread(FolderStatus(messages = 40)))
     }
+
+    @Test
+    fun `switch menu lists subscribed folders first and the rest in the submenu`() {
+        assertEquals(
+            FolderSwitchMenu(
+                primary = listOf("INBOX", "Sent", "Trash"),
+                other = listOf("Archive", "Drafts", "receipts"),
+            ),
+            FolderSections.switchMenu(folders, subscribed),
+        )
+    }
+
+    @Test
+    fun `switch menu with nothing subscribed lists everything at the top level`() {
+        assertEquals(
+            FolderSwitchMenu(primary = folders, other = emptyList()),
+            FolderSections.switchMenu(folders, emptySet()),
+        )
+    }
+
+    @Test
+    fun `switch menu has no submenu when everything is subscribed`() {
+        assertEquals(
+            FolderSwitchMenu(primary = folders, other = emptyList()),
+            FolderSections.switchMenu(folders, folders.toSet()),
+        )
+    }
 }

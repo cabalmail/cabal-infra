@@ -243,7 +243,11 @@ struct MailRootView: View {
                     onSearchResultSelected: { sourceFolderPath in
                         crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
                     },
-                    onSelectionCountChanged: { listSelectionCount = $0 }
+                    onSelectionCountChanged: { listSelectionCount = $0 },
+                    // A pick from the list's folder-switch menu goes through
+                    // the same binding as a sidebar tap, so it ends a global
+                    // search and dismisses the iPad folder panel the same way.
+                    onSwitchFolder: { sidebarSelection.wrappedValue = $0 }
                 )
                 .id(selectedFolder.path)
             }

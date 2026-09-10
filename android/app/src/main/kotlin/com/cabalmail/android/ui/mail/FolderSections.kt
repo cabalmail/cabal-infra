@@ -6,6 +6,16 @@ import com.cabalmail.kit.models.FolderStatus
 enum class FolderSection { SUBSCRIBED, ALL }
 
 /**
+ * The folder-switch menu's two groups (see [FolderSections.switchMenu]):
+ * [primary] is drawn at the top level, [other] under a submenu when it is
+ * not empty.
+ */
+data class FolderSwitchMenu(
+    val primary: List<String>,
+    val other: List<String>,
+)
+
+/**
  * The folder list's sectioning rules (parity with the Apple clients'
  * `FolderSectionDisclosure`): Subscribed expanded by default, All folders —
  * the full list, subscribed included — collapsed by default. Pure so the
@@ -49,6 +59,27 @@ object FolderSections {
         folders: List<String>,
         subscribed: Set<String>,
     ): List<String> = if (subscribed.isEmpty()) folders else folders.filter { it in subscribed }
+
+    /**
+     * The folder-switch menu behind the message list's title: subscribed
+     * folders at the top level, the rest one tap further under an "Other
+     * folders" submenu — the same split as the two sections here, with the
+     * same fallback: with nothing subscribed everything is top-level. Server
+     * order throughout, INBOX pinned first. Parity with the Apple clients'
+     * `FolderSwitchMenuPolicy`.
+     */
+    fun switchMenu(
+        folders: List<String>,
+        subscribed: Set<String>,
+    ): FolderSwitchMenu =
+        if (subscribed.isEmpty()) {
+            FolderSwitchMenu(primary = folders, other = emptyList())
+        } else {
+            FolderSwitchMenu(
+                primary = folders.filter { it in subscribed },
+                other = folders.filterNot { it in subscribed },
+            )
+        }
 
     /**
      * Whether the row's name renders in the highlight color. Keyed off the
