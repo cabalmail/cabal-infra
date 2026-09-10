@@ -51,7 +51,7 @@ def _default_is_registrable(host):
     return _psl.privatesuffix(host) == host
 
 
-def normalize_feed_url(url, is_registrable=None):
+def normalize_feed_url(url, is_registrable=None, collapse_www=True):
     '''Returns the canonical https form of `url` or raises FeedUrlError.
 
     `is_registrable(host) -> bool` may be injected (tests); the default
@@ -77,11 +77,46 @@ def normalize_feed_url(url, is_registrable=None):
         port = parts.port
     except ValueError as err:
         raise FeedUrlError('Feed URL has an invalid port.') from err
-    host = _collapse_www(host, is_registrable or _default_is_registrable)
+    if collapse_www:
+        host = _collapse_www(host, is_registrable or _default_is_registrable)
     netloc = host if port in (None, 443) else f'{host}:{port}'
     path = _normalize_path(parts.path)
     query = _normalize_query(parts.query)
     return urlunsplit(('https', netloc, path, query, ''))
+
+
+def www_variant(canonical, is_registrable=None):
+    '''The `www.` form of an apex-host canonical URL, or '' when the host is
+    not a bare registrable apex (a subdomain, or already `www.`).
+
+    D1 makes the apex form canonical, but some publishers serve the feed
+    only on `www.` and either 404 the apex path or redirect every apex path
+    to their front page. The fetcher and the subscribe probe try this form
+    once when the apex does not yield a feed; if it does, it becomes the
+    canonical URL - "apex when the apex serves it".'''
+    parts = urlsplit(canonical)
+    host = (parts.hostname or '').rstrip('.')
+    if not host or host.startswith('www.'):
+        return ''
+    if not (is_registrable or _default_is_registrable)(host):
+        return ''
+    netloc = f'www.{host}' if parts.port in (None, 443) else f'www.{host}:{parts.port}'
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, ''))
+
+
+def redirect_target(source, location, is_registrable=None):
+    '''The canonical form of a permanent-redirect target.
+
+    Normally `normalize_feed_url(location)`. The exception: a redirect from
+    the apex form to the `www.` form of the same URL would normalize straight
+    back to the apex we were just redirected away from, so that one keeps
+    `www.` - the publisher has just said the apex does not serve it.'''
+    target = normalize_feed_url(location, is_registrable)
+    if target == source:
+        kept = normalize_feed_url(location, is_registrable, collapse_www=False)
+        if kept != source:
+            return kept
+    return target
 
 
 def _collapse_www(host, is_registrable):

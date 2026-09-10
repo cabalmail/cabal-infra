@@ -31,6 +31,52 @@ def norm(url):
     return rss_url.normalize_feed_url(url, is_registrable=_fake_registrable)
 
 
+class WwwFallbackRules(unittest.TestCase):
+    '''The www form the fetcher and probe try when the apex does not serve
+    the feed, and the redirect rule that keeps it.'''
+
+    def variant(self, url):
+        '''www_variant under the injected suffix oracle.'''
+        return rss_url.www_variant(url, is_registrable=_fake_registrable)
+
+    def test_apex_has_a_www_form(self):
+        '''A bare apex, with a two-dot suffix or a port, gets a www form.'''
+        self.assertEqual(self.variant('https://example.com/feed'), 'https://www.example.com/feed')
+        self.assertEqual(self.variant('https://example.co.uk/a?b=1'),
+                         'https://www.example.co.uk/a?b=1')
+        self.assertEqual(self.variant('https://example.com:8443/feed'),
+                         'https://www.example.com:8443/feed')
+
+    def test_subdomains_and_www_have_none(self):
+        '''Only apex hosts have a fallback; www and other subdomains do not.'''
+        self.assertEqual(self.variant('https://blog.example.com/feed'), '')
+        self.assertEqual(self.variant('https://www.example.com/feed'), '')
+
+    def test_redirect_to_www_of_the_same_url_keeps_www(self):
+        '''apex/feed -> www/feed must not normalize back to apex/feed.'''
+        target = rss_url.redirect_target('https://example.com/feed',
+                                         'https://www.example.com/feed',
+                                         is_registrable=_fake_registrable)
+        self.assertEqual(target, 'https://www.example.com/feed')
+
+    def test_other_redirects_normalize_as_before(self):
+        '''Any other target takes the ordinary canonical form.'''
+        target = rss_url.redirect_target('https://example.com/feed',
+                                         'https://www.example.com/feed/',
+                                         is_registrable=_fake_registrable)
+        self.assertEqual(target, 'https://example.com/feed/')
+        target = rss_url.redirect_target('https://example.com/feed',
+                                         'http://other.example.com/f',
+                                         is_registrable=_fake_registrable)
+        self.assertEqual(target, 'https://other.example.com/f')
+
+    def test_collapse_can_be_switched_off(self):
+        '''collapse_www=False keeps the host as given.'''
+        kept = rss_url.normalize_feed_url('https://www.example.com/feed',
+                                          is_registrable=_fake_registrable, collapse_www=False)
+        self.assertEqual(kept, 'https://www.example.com/feed')
+
+
 class RequirementsExamples(unittest.TestCase):
     '''Every example in the requirements doc, under the apex-canonical ruling.'''
 
