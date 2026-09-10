@@ -1,6 +1,11 @@
 import Foundation
 import CabalmailKit
 
+/// What the Feeds menu can ask the feed sidebar to do.
+enum FeedCommand: Equatable {
+    case subscribe, newFolder, importOpml, exportOpml, refresh
+}
+
 // Feed reader (RSS plan, phase 5) session flows: the periodic refresh that
 // keeps the Feeds section current while the app is open, and the foreground
 // refresh the scene-phase handlers call. Lives beside the inbox badge poller
@@ -23,6 +28,12 @@ extension AppState {
                 try? await Task.sleep(nanoseconds: interval)
             }
         }
+    }
+
+    /// Names the command and bumps the tick the feed sidebar observes.
+    func requestFeedCommand(_ command: FeedCommand) {
+        pendingFeedCommand = command
+        feedCommandTick += 1
     }
 
     /// Tear down the feed poller. Called on sign-out; safe if it never ran.

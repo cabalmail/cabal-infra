@@ -13,6 +13,12 @@ struct FeedItemListView: View {
     @Environment(Preferences.self) private var preferences
     @State private var model: FeedItemListViewModel?
     @State private var title = "Feeds"
+    // Feed Settings (RSS plan, phase 5c) for a single-feed list: the most
+    // discoverable path to a feed's settings on iPhone, where the sidebar
+    // row's context menu is a long-press away.
+    @State private var management: FeedManagementViewModel?
+    @State private var actions = FeedManagementActions()
+    @State private var folders: [RssFolder] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,8 +55,21 @@ struct FeedItemListView: View {
                     .disabled(model.items.allSatisfy(\.isRead))
                     .accessibilityIdentifier("feed.markAllRead")
                 }
+                if let subscription = model.subscription {
+                    ToolbarItem {
+                        Button {
+                            actions.settings(for: subscription)
+                        } label: {
+                            Label("Feed settings", systemImage: "gearshape")
+                        }
+                        .disabled(management == nil)
+                        .accessibilityIdentifier("feed.settings")
+                    }
+                }
             }
         }
+        .feedManagementSheets(actions, management: management, folders: folders, selection: .constant(nil),
+                              onSaved: { updated in title = updated.displayTitle })
         .task(id: scope) { await start() }
     }
 
@@ -82,6 +101,10 @@ struct FeedItemListView: View {
             subscription = try? await client.rssStore?.subscription(id: id)
         }
         title = await scopeTitle(client: client, subscription: subscription)
+        if subscription != nil {
+            management = FeedManagementViewModel(client: client)
+            folders = (try? await client.rssStore?.folders()) ?? []
+        }
         let model = FeedItemListViewModel(scope: scope, subscription: subscription, client: client,
                                           preferences: preferences)
         self.model = model

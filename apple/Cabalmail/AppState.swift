@@ -118,6 +118,11 @@ final class AppState {
     /// app command; `SignedInRootView` observes it and presents the sheet.
     /// macOS ignores it - settings there is the dedicated ⌘, scene.
     var settingsRequestTick = 0
+    /// Feeds menu intents (RSS plan, phase 5c): the menu names the command
+    /// and bumps the tick; the mounted feed sidebar answers through
+    /// `FeedManagementSheets`. See `requestFeedCommand` in `AppState+Feeds`.
+    var feedCommandTick = 0
+    var pendingFeedCommand: FeedCommand?
 
     /// A Spotlight result tapped before sign-in / restore completed; routed
     /// once the session is wired, mirroring `PushRegistrar.pendingOpen`.

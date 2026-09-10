@@ -73,7 +73,7 @@ struct SettingsView: View {
 
 /// The selectable settings categories, in presentation order.
 enum SettingsCategory: CaseIterable, Identifiable, Hashable {
-    case account, reading, composing, rules, flags, actions, notifications
+    case account, reading, feeds, composing, rules, flags, actions, notifications
     case appearance, diagnostics, about
 
     var id: Self { self }
@@ -94,6 +94,7 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         switch self {
         case .account: "Account"
         case .reading: "Reading"
+        case .feeds: "Feeds"
         case .composing: "Composing"
         case .rules: "Rules"
         case .flags: "Flags"
@@ -109,6 +110,7 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         switch self {
         case .account: "person.crop.circle"
         case .reading: "envelope.open"
+        case .feeds: "dot.radiowaves.up.forward"
         case .composing: "square.and.pencil"
         case .rules: "list.bullet.rectangle"
         case .flags: "flag"
@@ -132,6 +134,7 @@ private struct SettingsCategoryDetail: View {
         switch category {
         case .account: AccountSettingsView()
         case .reading: ReadingSettingsView()
+        case .feeds: FeedsSettingsView()
         case .composing: ComposingSettingsView()
         case .rules: RulesView()
         case .flags: FlagPaletteSettingsView()

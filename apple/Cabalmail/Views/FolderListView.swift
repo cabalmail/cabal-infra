@@ -34,6 +34,11 @@ struct FolderListView: View {
     /// already own this list's selection type.
     var feedSelection: Binding<RssItemScope?>?
     @State var feedModel: FeedSidebarViewModel?
+    // Feed management (RSS plan, phase 5c): the sheets and confirmations
+    // behind the Feeds section's `+` menu and row context menus, and the
+    // Feeds menu commands. Non-private for the `+Helpers` extension.
+    @State var feedManagement: FeedManagementViewModel?
+    @State var feedActions = FeedManagementActions()
     @State var feedFilter = ""
     @AppStorage("cabalmail.folder.section.feeds.expanded")
     private var feedsExpanded: Bool = true
@@ -97,7 +102,7 @@ struct FolderListView: View {
             if let externalFilter {
                 wideSidebarHeader(filter: externalFilter)
             }
-            folderList
+            feedManagementHost(folderList)
         }
     }
 
