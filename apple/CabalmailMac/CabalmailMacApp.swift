@@ -68,6 +68,8 @@ struct CabalmailMacApp: App {
                     // local edit is still pending its push).
                     guard phase == .active else { return }
                     Task { await appState.prefsCoordinator?.reconcile() }
+                    // Feeds: fresh items and the offline mutation queue.
+                    Task { await appState.refreshFeedsOnForeground() }
                 }
                 .onOpenURL { url in
                     // mailto: clicks from Safari / Mail.app / other

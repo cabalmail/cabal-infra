@@ -70,6 +70,73 @@ extension FolderListView {
         .accessibilityIdentifier("folder.section.disclose.\(key)")
     }
 
+    /// The Feeds section (RSS plan, phase 5): "All Feeds", then the RSS
+    /// folder tree with subscriptions as leaves. Shares the mail sections'
+    /// header chrome; rows come from `FeedSidebarRows`.
+    @ViewBuilder
+    func feedsSection(selection: Binding<RssItemScope?>) -> some View {
+        Section {
+            if feedsExpandedBinding.wrappedValue, let feedModel {
+                if let error = feedModel.errorMessage {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.footnote)
+                        .foregroundStyle(ColorTokens.dangerFg)
+                }
+                if feedModel.hasLoaded, !feedModel.hasSubscriptions {
+                    Text("No feeds yet")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        selection.wrappedValue = .all
+                    } label: {
+                        FeedSidebarRowLabel(
+                            row: FeedSidebarRow(kind: .folder(RssFolder(folderId: "", name: "All Feeds")),
+                                                depth: 0, hasChildren: false,
+                                                unread: FeedSidebarRows.totalUnread(feedModel.unreadCounts)),
+                            isSelected: selection.wrappedValue == .all,
+                            isCollapsed: { _ in true }, toggleCollapse: { _ in }
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(
+                        selection.wrappedValue == .all
+                            ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.18)) : nil
+                    )
+                    .accessibilityIdentifier("feed.row.all")
+                    FeedSidebarRowsView(
+                        rows: feedModel.rows(collapsed: feedsCollapsed, filter: activeFilterText),
+                        selection: selection,
+                        toggleCollapse: toggleFeedCollapse,
+                        isCollapsed: { feedsCollapsed.contains($0) }
+                    )
+                }
+            }
+        } header: {
+            sectionHeader("Feeds", key: "feeds", isExpanded: feedsExpandedBinding)
+        }
+    }
+
+    /// Creates the Feeds section's model on first appearance (wide layouts
+    /// only) and runs its initial load + refresh.
+    func loadFeedModelIfNeeded() async {
+        guard feedSelection != nil, feedModel == nil, let client = appState.client else { return }
+        let feedModel = FeedSidebarViewModel(client: client)
+        self.feedModel = feedModel
+        await feedModel.load()
+        await feedModel.refresh()
+    }
+
+    var feedsCollapsed: Set<String> {
+        Set(feedsCollapsedRawAccessor.split(separator: "\n").map(String.init))
+    }
+
+    func toggleFeedCollapse(_ folderId: String) {
+        var set = feedsCollapsed
+        if set.contains(folderId) { set.remove(folderId) } else { set.insert(folderId) }
+        feedsCollapsedRawAccessor = set.sorted().joined(separator: "\n")
+    }
+
     /// Raises the "New folder" sheet from an empty form. The form outlives
     /// the sheet (see `newFolderForm`), so it is cleared on the way in rather
     /// than by the sheet's own state going away.

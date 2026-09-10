@@ -36,7 +36,7 @@ struct VisionSectionView: View {
     /// selection out from under the user later.
     @State private var didLand = false
 
-    enum Section: Hashable { case mail, folders, addresses, settings, search }
+    enum Section: Hashable { case mail, folders, feeds, addresses, settings, search }
 
     var body: some View {
         TabView(selection: $selection) {
@@ -45,6 +45,9 @@ struct VisionSectionView: View {
             }
             Tab("Folders", systemImage: "folder", value: Section.folders) {
                 foldersTab
+            }
+            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: Section.feeds) {
+                FeedRootView()
             }
             Tab("Addresses", systemImage: "at", value: Section.addresses) {
                 AddressManagementTab()

@@ -160,7 +160,7 @@ public actor RssStore {
     }
 
     /// The feed ids a scope covers, honouring folder nesting.
-    func feedIds(in scope: RssItemScope) throws -> [String] {
+    public func feedIds(in scope: RssItemScope) throws -> [String] {
         let subs = try subscriptions()
         switch scope {
         case .all:

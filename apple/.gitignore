@@ -27,4 +27,7 @@ CabalmailKit/Sources/CabalmailKit/Compose/WebAssets/marked.umd.js
 CabalmailKit/Sources/CabalmailKit/Compose/WebAssets/turndown.js
 CabalmailKit/Sources/CabalmailKit/Compose/WebAssets/marked-LICENSE.md
 CabalmailKit/Sources/CabalmailKit/Compose/WebAssets/turndown-LICENSE
+# Vendored Readability.js for the feed reader's article view, same flow.
+CabalmailKit/Sources/CabalmailKit/RSS/ReaderAssets/Readability.js
+CabalmailKit/Sources/CabalmailKit/RSS/ReaderAssets/readability-LICENSE.md
 .derivedData/

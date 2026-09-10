@@ -2,26 +2,36 @@ import XCTest
 @testable import CabalmailKit
 
 final class AcknowledgementsTests: XCTestCase {
-    func testBundlesMarkedAndTurndown() {
+    func testBundlesMarkedTurndownAndReadability() {
         let names = Set(Acknowledgements.bundledComponents().map(\.name))
         XCTAssertTrue(names.contains("marked"))
         XCTAssertTrue(names.contains("turndown"))
+        XCTAssertTrue(names.contains("Readability"))
     }
 
     func testEveryComponentCarriesItsBundledLicenseText() {
         for component in Acknowledgements.bundledComponents() {
-            XCTAssertEqual(component.license, "MIT", "\(component.name) license id")
             XCTAssertFalse(
                 component.licenseText.isEmpty,
                 "\(component.name) is missing its bundled license text — did sync-vendored.sh run?"
             )
-            // The MIT grant clause is present in both vendored license files
-            // (marked's also carries the original Markdown BSD notice, which
-            // rides along in the same reproduced text).
-            XCTAssertTrue(
-                component.licenseText.contains("Permission is hereby granted"),
-                "\(component.name) license text does not look like the MIT license"
-            )
+            // Each license id must match the text that ships with it: the MIT
+            // grant clause for marked and turndown (marked's also carries the
+            // original Markdown BSD notice), the Apache heading for Readability.
+            switch component.license {
+            case "MIT":
+                XCTAssertTrue(
+                    component.licenseText.contains("Permission is hereby granted"),
+                    "\(component.name) license text does not look like the MIT license"
+                )
+            case "Apache-2.0":
+                XCTAssertTrue(
+                    component.licenseText.localizedCaseInsensitiveContains("Apache License"),
+                    "\(component.name) license text does not look like the Apache License"
+                )
+            default:
+                XCTFail("\(component.name) has an unexpected license id \(component.license)")
+            }
         }
     }
 }

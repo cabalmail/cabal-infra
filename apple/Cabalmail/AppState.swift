@@ -682,7 +682,19 @@ extension AppState {
         // arrived before the session was wired (cold launch from search).
         Task { await newClient.refreshSpotlightIndex() }
         routePendingSpotlightOpen()
+        // Feed reader (RSS plan, phase 5): pull the catalog and every
+        // subscription's new items so the Feeds section is current before
+        // the user opens it. Fire-and-forget like the Spotlight sweep.
+        Task { await newClient.rssSync?.syncAll() }
         await pushSessionToWatch(client: newClient, username: username)
+    }
+
+    /// Foreground refresh for the feed reader: new items and the pending
+    /// mutation queue. Called from the scene-phase handlers alongside the
+    /// preferences reconcile; a no-op when signed out.
+    func refreshFeedsOnForeground() async {
+        guard let engine = client?.rssSync else { return }
+        await engine.syncAll()
     }
 }
 
