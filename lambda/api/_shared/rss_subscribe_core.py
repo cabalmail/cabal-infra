@@ -140,12 +140,21 @@ def fetch_probe(canonical, original_url):
         if fallback is None:
             raise
         return fallback
+    try:
+        parsed = parse_feed(result.body, result.content_type)
+    except ParseError:
+        # The www attempt uses the candidate as asked, not a redirect
+        # target: an apex that redirects every path to its front page
+        # would otherwise send the retry to www's front page too.
+        fallback = www_probe(canonical)
+        if fallback is not None:
+            return fallback
+        if result.permanent_redirect_to:
+            canonical = canonical_redirect(canonical, result.permanent_redirect_to)
+        return canonical, result, None
     if result.permanent_redirect_to:
         canonical = canonical_redirect(canonical, result.permanent_redirect_to)
-    try:
-        return canonical, result, parse_feed(result.body, result.content_type)
-    except ParseError:
-        return www_probe(canonical) or (canonical, result, None)
+    return canonical, result, parsed
 
 
 def www_probe(canonical):
