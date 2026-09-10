@@ -20,7 +20,7 @@ phase are updated in the same PR as the work, per the docs convention.
 | ----- | ------------------------------------------------- | ----------- |
 | 1     | DynamoDB tables + supporting infra                | Shipped 1.12.2 (2026-09-09) |
 | 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
-| 3     | Subscription + reader API                         | Not started |
+| 3     | Subscription + reader API                         | In review (2026-09-09) |
 | 4     | OPML import/export (API)                          | Not started |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Not started |
 | 6     | Android client (offline + FTS + profile scoping)  | Not started |
@@ -952,7 +952,9 @@ parsed, items upserted, health tracked. Validate by seeding a few
 - Canonical URL normalizer per D1 sub-decision (https only, www-vs-
   apex collapse, trailing-slash rules, alphabetized query params,
   `<guid>` exempt). Lives in `lambda/api/_shared/rss_url.py` with unit
-  tests covering every example in the requirements doc. The www/apex
+  tests covering every example in the requirements doc (the trailing-slash
+  examples are satisfied by lookup-time equivalence, not by rewriting —
+  see the phase 3 status note). The www/apex
   rule needs the **Public Suffix List** to tell an apex from a
   subdomain (`example.co.uk` is an apex; `web.example.com` is not);
   bundle `publicsuffix2` or ship a vendored snapshot of the list. The
@@ -970,7 +972,29 @@ destructive change.
 
 ### Phase 3: Subscription + reader API
 
-**Status:** Not started.
+**Status:** In review (2026-09-09). Eleven `rss_*` endpoints under
+`lambda/api/` with `_shared/rss_api.py` (envelope, keys, computed read
+state, serialization) and `_shared/rss_discover.py` (autodiscovery);
+reference in `docs/rss.md`. As built, versus the text below: health
+rides on each subscription's `feed` summary in `/rss_list_subscriptions`
+instead of a separate health endpoint; folders and subscriptions come
+back from that one call; item state is set in batches through
+`/rss_set_item_state`; the first fetch of a new feed is not done inline
+but by handing the feed to the worker queue immediately (one ingest code
+path, items within seconds); the day-grouped orderings are applied
+client-side; unread counts are not served (clients count from their
+cache); and the shared-feed owner sentinel is `~shared`. Stage validation
+(2026-09-09) found two defects, both fixed in a follow-up: the RSS
+endpoints lacked `dynamodb:BatchWriteItem` (unsubscribe's purge), so they
+now carry their own IAM statement instead of riding the mail endpoints'
+uniform one; and the normalizer's trailing-slash rule turned a real feed
+URL (`/feeds/json`) into a 404 (`/feeds/json/`). **The normalizer no
+longer adds or removes trailing slashes.** D1's requirement that `/dir`
+and `/dir/` be the same feed is met at subscribe time instead: the lookup
+tries both forms against existing feeds. This deviates from the
+requirement's wording that the slash form is canonical; what is preserved
+is the equivalence, and what is gained is never fetching a path the
+publisher did not publish.
 
 **Goal.** Authenticated clients can subscribe to a feed, organize
 feeds into folders, list items with filtering, mark items read/
