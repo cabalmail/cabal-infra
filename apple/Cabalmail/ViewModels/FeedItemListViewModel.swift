@@ -28,12 +28,18 @@ final class FeedItemListViewModel {
     var errorMessage: String?
     /// Items with a queued (not yet pushed) state change, for the row mark.
     var pendingIds: Set<String> = []
+    /// Subscription id → display title, for the feed label on rows in
+    /// multi-feed scopes. Read with the page; empty in single-feed scope.
+    var subscriptionTitles: [String: String] = [:]
 
     private let client: CabalmailClient
     private let preferences: Preferences
     private let bus: FeedStateBus
     private let pageSize = 100
     private var loaded = 0
+    /// True while this model's own broad post is being delivered, so the
+    /// handler below doesn't reload a list that was just reloaded.
+    private var postingSelf = false
 
     /// The single subscription this list shows, when it shows exactly one;
     /// search, load-older, and the ordering preference only make sense then.
@@ -55,11 +61,29 @@ final class FeedItemListViewModel {
     /// Rows stay put even when they no longer match the filter; the next
     /// reload settles that, the same as the list's own swipe actions.
     func apply(_ change: RssItem?) {
-        guard let change else { return }
+        guard let change else {
+            // A refetch elsewhere (the periodic sync, another scope's
+            // load-older): re-read while still on the first page, so new
+            // items appear; a list the user has paged through keeps its
+            // place and picks them up on its next reload.
+            if !postingSelf, items.count <= pageSize { Task { await reload() } }
+            return
+        }
         replace(change) {
             $0.isRead = change.isRead
             $0.isFavorite = change.isFavorite
         }
+    }
+
+    /// The feed label for a row: the subscription's title, else the URL host.
+    func feedName(for item: RssItem) -> String {
+        FeedItemLabels.feedName(for: item, titles: subscriptionTitles)
+    }
+
+    private func postBroad() {
+        postingSelf = true
+        bus.post()
+        postingSelf = false
     }
 
     var canSearch: Bool { subscription != nil }
@@ -69,6 +93,11 @@ final class FeedItemListViewModel {
     func reload() async {
         guard let store = client.rssStore else { return }
         do {
+            if subscription == nil {
+                let subs = try await store.subscriptions()
+                subscriptionTitles = Dictionary(subs.map { ($0.subscriptionId, $0.displayTitle) },
+                                                uniquingKeysWith: { first, _ in first })
+            }
             if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty, let subscription {
                 items = try await store.search(feedId: subscription.feedId, query: searchQuery)
                 hasMoreLocal = false
@@ -115,7 +144,7 @@ final class FeedItemListViewModel {
             errorMessage = FeedErrorText.describe(error)
         }
         await reload()
-        bus.post()
+        postBroad()
     }
 
     /// Older history for a single feed, then a reload.
@@ -130,7 +159,7 @@ final class FeedItemListViewModel {
             errorMessage = FeedErrorText.describe(error)
         }
         await reload()
-        bus.post()
+        postBroad()
     }
 
     // MARK: - Mutations (optimistic; the engine queues and pushes)
@@ -169,7 +198,7 @@ final class FeedItemListViewModel {
             try? await engine.markAllRead(subscriptionId: sub.subscriptionId)
         }
         await reload()
-        bus.post()
+        postBroad()
     }
 
     private func replace(_ item: RssItem, _ change: (inout RssItem) -> Void) {
@@ -184,5 +213,16 @@ final class FeedItemListViewModel {
             pending.insert(item.id)
         }
         pendingIds = pending
+    }
+}
+
+/// Pure helpers for row text, kept out of the model so they can be tested
+/// without a client.
+enum FeedItemLabels {
+    /// The subscription's title when known, else the article URL's host,
+    /// else nothing (the row then shows only the date).
+    static func feedName(for item: RssItem, titles: [String: String]) -> String {
+        if let title = titles[item.subscriptionId], !title.isEmpty { return title }
+        return URL(string: item.url)?.host() ?? ""
     }
 }

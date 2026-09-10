@@ -13,6 +13,7 @@ struct FeedItemDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     @State private var model: FeedItemDetailViewModel?
+    @State private var isOffline = false
 
     var body: some View {
         Group {
@@ -31,12 +32,26 @@ struct FeedItemDetailView: View {
             model = FeedItemDetailViewModel(item: item, subscription: subscription,
                                             engine: appState.client?.rssSync, preferences: preferences)
         }
+        .task { await observeReachability() }
+    }
+
+    /// Mirrors reachability into the toolbar (the article button says when
+    /// it needs a connection) and the article view (its offline notice).
+    private func observeReachability() async {
+        #if canImport(Network)
+        guard let reachability = appState.client?.reachability else { return }
+        isOffline = !reachability.isReachable
+        for await reachable in reachability.changes() {
+            isOffline = !reachable
+        }
+        #endif
     }
 
     @ViewBuilder
     private func content(_ model: FeedItemDetailViewModel) -> some View {
         if model.showingArticle, let url = model.articleURL {
-            ArticleWebView(url: url, dataStoreID: model.dataStoreID, readerMode: model.readerMode)
+            ArticleWebView(url: url, dataStoreID: model.dataStoreID, readerMode: model.readerMode,
+                           isOffline: isOffline)
                 .id(url)
         } else {
             VStack(alignment: .leading, spacing: 0) {
@@ -68,6 +83,10 @@ struct FeedItemDetailView: View {
                 .font(.title3.weight(.semibold))
                 .textSelection(.enabled)
             HStack(spacing: 8) {
+                if let feed = subscription?.displayTitle, !feed.isEmpty {
+                    Text(feed)
+                        .lineLimit(1)
+                }
                 if !model.item.author.isEmpty {
                     Text(model.item.author)
                 }
@@ -133,8 +152,7 @@ struct FeedItemDetailView: View {
                 Button {
                     model.toggleArticle()
                 } label: {
-                    Label(model.showingArticle ? "Show feed content" : "Open article",
-                          systemImage: model.showingArticle ? "doc.plaintext" : "safari")
+                    Label(articleTitle(model), systemImage: articleSymbol(model))
                 }
                 .accessibilityIdentifier("feed.reader.article")
             }
@@ -152,4 +170,17 @@ struct FeedItemDetailView: View {
             }
         }
     }
+
+    /// "Open article" gains a "needs a connection" note while unreachable;
+    /// the button stays enabled because the page may already be cached.
+    private func articleTitle(_ model: FeedItemDetailViewModel) -> String {
+        if model.showingArticle { return "Show feed content" }
+        return isOffline ? "Open article (needs a connection)" : "Open article"
+    }
+
+    private func articleSymbol(_ model: FeedItemDetailViewModel) -> String {
+        if model.showingArticle { return "doc.plaintext" }
+        return isOffline ? "wifi.slash" : "safari"
+    }
+
 }

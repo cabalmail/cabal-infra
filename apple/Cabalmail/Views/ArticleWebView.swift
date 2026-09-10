@@ -15,9 +15,39 @@ struct ArticleWebView: View {
     let url: URL
     let dataStoreID: UUID?
     let readerMode: Bool
+    let isOffline: Bool
+
+    /// The last top-level load error, cleared when a load finishes.
+    @State private var failure: String?
+    /// Bumped by Retry to rebuild the web view and load again.
+    @State private var attempt = 0
 
     var body: some View {
-        ArticleWebViewRepresentable(url: url, dataStoreID: dataStoreID, readerMode: readerMode)
+        ArticleWebViewRepresentable(url: url, dataStoreID: dataStoreID, readerMode: readerMode,
+                                    onFailure: { failure = $0 })
+            .id(attempt)
+            .overlay {
+                if failure != nil { failureNotice }
+            }
+    }
+
+    /// A plain notice in place of WebKit's error page: the offline case says
+    /// so; anything else shows the error text. Retry reloads.
+    private var failureNotice: some View {
+        ContentUnavailableView {
+            Label(isOffline ? "Needs a connection" : "Couldn't load the article",
+                  systemImage: isOffline ? "wifi.slash" : "exclamationmark.triangle")
+        } description: {
+            Text(isOffline ? "The article will load when you're back online." : (failure ?? ""))
+        } actions: {
+            Button("Retry") {
+                failure = nil
+                attempt += 1
+            }
+            .accessibilityIdentifier("feed.article.retry")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
     }
 }
 
@@ -26,8 +56,9 @@ private struct ArticleWebViewRepresentable: NSViewRepresentable {
     let url: URL
     let dataStoreID: UUID?
     let readerMode: Bool
+    let onFailure: @MainActor (String?) -> Void
 
-    func makeCoordinator() -> ArticleWebCoordinator { ArticleWebCoordinator() }
+    func makeCoordinator() -> ArticleWebCoordinator { ArticleWebCoordinator(onFailure: onFailure) }
 
     func makeNSView(context: Context) -> WKWebView {
         context.coordinator.makeWebView(url: url, dataStoreID: dataStoreID)
@@ -42,8 +73,9 @@ private struct ArticleWebViewRepresentable: UIViewRepresentable {
     let url: URL
     let dataStoreID: UUID?
     let readerMode: Bool
+    let onFailure: @MainActor (String?) -> Void
 
-    func makeCoordinator() -> ArticleWebCoordinator { ArticleWebCoordinator() }
+    func makeCoordinator() -> ArticleWebCoordinator { ArticleWebCoordinator(onFailure: onFailure) }
 
     func makeUIView(context: Context) -> WKWebView {
         context.coordinator.makeWebView(url: url, dataStoreID: dataStoreID)
@@ -66,6 +98,13 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     private var pageLoaded = false
     private var extracting = false
     private var readerDocument: String?
+    /// Reports a top-level load failure (or nil once a load finishes) to the
+    /// SwiftUI layer, which draws the notice.
+    private let onFailure: @MainActor (String?) -> Void
+
+    init(onFailure: @escaping @MainActor (String?) -> Void) {
+        self.onFailure = onFailure
+    }
 
     func makeWebView(url: URL, dataStoreID: UUID?) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -136,6 +175,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         pageLoaded = true
+        onFailure(nil)
         // A new top-level page (the user followed a link) invalidates the
         // extraction cached for the previous one.
         if !showingReader, webView.url != pageURL, let current = webView.url,
@@ -144,6 +184,24 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
             readerDocument = nil
         }
         reconcile(on: webView)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        report(error)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        report(error)
+    }
+
+    /// A cancelled load (a new request superseding this one, WebKit's
+    /// "frame load interrupted" on a download or a redirect) is not a failure.
+    private func report(_ error: Error) {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled { return }
+        if nsError.domain == "WebKitErrorDomain", nsError.code == 102 { return }
+        pageLoaded = false
+        onFailure(nsError.localizedDescription)
     }
 
     func webView(

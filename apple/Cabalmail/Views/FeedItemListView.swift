@@ -26,17 +26,20 @@ struct FeedItemListView: View {
         }
         .navigationTitle(title)
         .toolbar {
+            // New Message stays in the toolbar in feed scope, in the same
+            // slot the mail list gives it, so switching between mail and
+            // feeds never moves the primary action (macOS groups it with
+            // Refresh for the same reason the mail list does).
+            #if os(macOS)
+            ToolbarItemGroup(placement: .primaryAction) {
+                composeButton
+                if let model { refreshButton(model) }
+            }
+            #else
+            ToolbarItem { composeButton }
+            if let model { ToolbarItem { refreshButton(model) } }
+            #endif
             if let model {
-                ToolbarItem {
-                    Button {
-                        Task { await model.sync() }
-                    } label: {
-                        RefreshActivityIcon(isLoading: model.isSyncing)
-                            .accessibilityLabel("Refresh feed")
-                    }
-                    .disabled(model.isSyncing)
-                    .accessibilityIdentifier("feed.refresh")
-                }
                 ToolbarItem {
                     Button {
                         Task { await model.markAllRead() }
@@ -49,6 +52,27 @@ struct FeedItemListView: View {
             }
         }
         .task(id: scope) { await start() }
+    }
+
+    private var composeButton: some View {
+        Button {
+            appState.requestCompose(seed: ReplyBuilder.newDraft())
+        } label: {
+            Image(systemName: "square.and.pencil")
+                .accessibilityLabel("New Message")
+        }
+        .keyboardShortcut("n", modifiers: .command)
+    }
+
+    private func refreshButton(_ model: FeedItemListViewModel) -> some View {
+        Button {
+            Task { await model.sync() }
+        } label: {
+            RefreshActivityIcon(isLoading: model.isSyncing)
+                .accessibilityLabel("Refresh feed")
+        }
+        .disabled(model.isSyncing)
+        .accessibilityIdentifier("feed.refresh")
     }
 
     private func start() async {
@@ -166,9 +190,11 @@ struct FeedItemListView: View {
 
     @ViewBuilder
     private func itemRow(_ item: RssItem, model: FeedItemListViewModel) -> some View {
-        FeedItemRow(item: item, showsFeedName: model.subscription == nil,
+        FeedItemRow(item: item,
+                    feedName: model.subscription == nil ? model.feedName(for: item) : nil,
                     isPending: model.pendingIds.contains(item.id))
                     .tag(item)
+                    .accessibilityIdentifier("feed.item.\(item.id)")
                     .onAppear {
                         if item.id == model.items.last?.id { Task { await model.loadMore() } }
                     }
@@ -202,50 +228,6 @@ struct FeedItemListView: View {
                         }
                     }
     }
-
-    @ViewBuilder
-    private func listFooter(_ model: FeedItemListViewModel) -> some View {
-            if model.items.isEmpty {
-                ContentUnavailableView(
-                    emptyTitle(model),
-                    systemImage: "dot.radiowaves.up.forward",
-                    description: Text(emptyDescription(model))
-                )
-                .listRowSeparator(.hidden)
-            }
-            if model.canLoadOlder && model.searchQuery.isEmpty {
-                Button {
-                    Task { await model.loadOlder() }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if model.isLoadingOlder { ProgressView() } else { Text("Load older items") }
-                        Spacer()
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(ColorTokens.accentForestFg)
-                .accessibilityIdentifier("feed.loadOlder")
-            }
-    }
-
-    private func emptyTitle(_ model: FeedItemListViewModel) -> String {
-        if !model.searchQuery.isEmpty { return "No matches" }
-        switch model.filter {
-        case .all: return model.isSyncing ? "Fetching…" : "No items yet"
-        case .unread: return "All caught up"
-        case .favorite: return "No favorites"
-        }
-    }
-
-    private func emptyDescription(_ model: FeedItemListViewModel) -> String {
-        if !model.searchQuery.isEmpty { return "Nothing cached for this feed matches. Try “Load older items” first." }
-        switch model.filter {
-        case .all: return "New items appear here as the feed is fetched."
-        case .unread: return "Every item here has been read."
-        case .favorite: return "Swipe an item or use its menu to favorite it."
-        }
-    }
 }
 
 /// One item row: unread dot, title, feed name (in multi-feed scopes),
@@ -253,7 +235,8 @@ struct FeedItemListView: View {
 /// waits for the network.
 struct FeedItemRow: View {
     let item: RssItem
-    let showsFeedName: Bool
+    /// The feed's name, in multi-feed scopes; nil in a single feed's list.
+    let feedName: String?
     let isPending: Bool
 
     var body: some View {
@@ -268,8 +251,8 @@ struct FeedItemRow: View {
                     .font(.body.weight(item.isRead ? .regular : .semibold))
                     .lineLimit(2)
                 HStack(spacing: 6) {
-                    if showsFeedName, !item.subscriptionId.isEmpty {
-                        Text(FeedItemDate.feedLabel(for: item))
+                    if let feedName, !feedName.isEmpty {
+                        Text(feedName)
                             .lineLimit(1)
                     }
                     Text(FeedItemDate.relative(item.publishedAt))
@@ -324,7 +307,4 @@ enum FeedItemDate {
     /// The feed's name for a multi-feed list. The item itself only carries
     /// ids; the row shows the host of the item URL as the cheap, always-
     /// available stand-in until the list model resolves titles (5d).
-    static func feedLabel(for item: RssItem) -> String {
-        URL(string: item.url)?.host() ?? ""
-    }
 }

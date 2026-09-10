@@ -33,8 +33,5 @@ final class FeedDetailPolicyTests: XCTestCase {
         XCTAssertNotNil(FeedItemDate.date("2026-09-09T20:25:06+00:00"))
         XCTAssertNotNil(FeedItemDate.date("2026-09-09T20:25:06.634236+00:00"))
         XCTAssertEqual(FeedItemDate.relative("not a date"), "")
-        XCTAssertEqual(FeedItemDate.feedLabel(for: RssItem(feedId: "f", itemId: "i", sortKey: "k",
-                                                            url: "https://blog.rust-lang.org/x")),
-                       "blog.rust-lang.org")
     }
 }
