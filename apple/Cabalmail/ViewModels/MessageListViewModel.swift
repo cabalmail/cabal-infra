@@ -115,6 +115,12 @@ final class MessageListViewModel {
     /// Structured filter form state — mirrors the React filter panel.
     var searchFilters = MessageSearchFilters()
 
+    /// The folder the global search surface's "This folder only" narrows to:
+    /// the wide layout's sidebar selection, fed in through
+    /// `setSearchAnchor(_:)`. Unused in folder scope, which narrows to
+    /// `folder`; see `searchFolder`.
+    var searchAnchor: Folder?
+
     /// The trimmed term the most recent submitted search ran with. Distinct
     /// from `searchQuery`, which tracks the field as the user types: search is
     /// submit-driven, so the two diverge for every keystroke between typing
@@ -623,11 +629,6 @@ final class MessageListViewModel {
         }
     }
 
-    /// The currently-configured dispose action, exposed so the view can
-    /// render the right swipe-action label and icon without reaching into
-    /// the preferences environment itself.
-    var disposeAction: DisposeAction { preferences.disposeAction }
-
 }
 
 // MARK: - Internals
@@ -636,9 +637,14 @@ final class MessageListViewModel {
 // 250-line cap. Same-file extension — all helpers remain file-private to
 // the view model.
 extension MessageListViewModel {
+    /// The currently-configured dispose action, exposed so the view can
+    /// render the right swipe-action label and icon without reaching into
+    /// the preferences environment itself.
+    var disposeAction: DisposeAction { preferences.disposeAction }
+
     /// The user's custom-flag palette, exposed for the row chips and the
     /// Flags picker menu (same narrow-accessor rationale as
-    /// `disposeAction`; here rather than beside it for the type-body cap).
+    /// `disposeAction`).
     var flagPalette: [FlagPaletteEntry] { preferences.flagPalette }
 
     /// True when this is the global search surface (no anchor folder).
