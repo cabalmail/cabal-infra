@@ -1,7 +1,8 @@
 import XCTest
 @testable import Cabalmail
 
-// Regression coverage for issue #1484 (and the other half of #1063).
+// Regression coverage for issues #1484 and #1501 (and the other half of
+// #1063).
 //
 // macOS `Form` promotes a control's title into an external leading label
 // column and gives its rows no horizontal content margins. Inside a sheet
@@ -14,33 +15,29 @@ import XCTest
 // with the reason in a comment. `NewFolderSheet` had not, so the rule
 // existed in one place and was missing in the other — the shape that keeps
 // producing this defect. The layout is now `MacSheetForm`, and this suite
-// proves the create sheets ask it rather than keeping private copies.
+// proves the form sheets ask it rather than keeping private copies.
 //
-// Deleting the `#if os(macOS)` branch from either sheet fails
-// `testCreateSheetsAskTheSharedChrome` by name.
+// `SearchFiltersSheet` was the one sheet left drawing a bare `Form` on
+// macOS (#1501): its "Subject" label sat 0 pt from the left border and all
+// three text fields ran to the right one. It now asks the same chrome.
+//
+// Deleting the `#if os(macOS)` branch from any of them fails
+// `testFormSheetsAskTheSharedChrome` by name.
 final class MacSheetChromeSourceScanTests: XCTestCase {
 
-    /// The two "create X" sheets the shared chrome exists for.
-    private static let createSheets = [
+    /// The sheets the shared chrome exists for: the two "create X" sheets
+    /// (#1484) and the search Filters sheet (#1501).
+    private static let formSheets = [
         "Cabalmail/Views/NewAddressSheet.swift",
         "Cabalmail/Views/NewFolderSheet.swift",
+        "Cabalmail/Views/SearchFiltersSheet.swift",
     ]
 
-    /// Sheets that still put a bare `Form` on the macOS path, with the issue
-    /// that tracks each.
-    ///
-    /// `SearchFiltersSheet` shares the defect — its "From"/"To"/"Subject"
-    /// titles are promoted the same way — but it is a filter form of
-    /// toggles, date pickers and a scope section rather than a create sheet,
-    /// so converting it is its own change. Filed as #1501; shrink this list
-    /// when it lands, do not grow it.
-    private static let knownBareFormSheets = ["Cabalmail/Views/SearchFiltersSheet.swift"]
-
-    /// Each create sheet routes its macOS layout through `MacSheetForm`, and
-    /// neither leaves a `Form` on that path.
-    func testCreateSheetsAskTheSharedChrome() throws {
+    /// Each form sheet routes its macOS layout through `MacSheetForm`, and
+    /// none leaves a `Form` on that path.
+    func testFormSheetsAskTheSharedChrome() throws {
         let sheets = try Self.sheetSources()
-        for path in Self.createSheets {
+        for path in Self.formSheets {
             let body = try XCTUnwrap(sheets[path], "\(path) is missing from the corpus")
             let mac = Self.macReachable(body)
             XCTAssertTrue(
@@ -56,10 +53,10 @@ final class MacSheetChromeSourceScanTests: XCTestCase {
 
     /// The numbers live in `MacSheetForm`, not in the sheets that use it —
     /// a second copy is what let the two create sheets disagree.
-    func testCreateSheetsDoNotRestateTheChromesNumbers() throws {
+    func testFormSheetsDoNotRestateTheChromesNumbers() throws {
         let sheets = try Self.sheetSources()
         var offenders: [String] = []
-        for path in Self.createSheets {
+        for path in Self.formSheets {
             let mac = Self.macReachable(try XCTUnwrap(sheets[path]))
             if mac.contains(".padding(24)") || mac.contains("frame(width: 460") {
                 offenders.append(path)
@@ -68,14 +65,16 @@ final class MacSheetChromeSourceScanTests: XCTestCase {
         XCTAssertEqual(offenders, [], "ask MacSheetForm for the margins (#1484)")
     }
 
-    /// Inventory: which sheets still draw a macOS-reachable `Form`.
-    func testOnlyTheKnownSheetsStillDrawAMacForm() throws {
+    /// Inventory: no sheet draws a macOS-reachable `Form`. The last known
+    /// one was `SearchFiltersSheet` (#1501); a new offender fails here by
+    /// path.
+    func testNoSheetStillDrawsAMacForm() throws {
         let sheets = try Self.sheetSources()
         XCTAssertGreaterThan(
             sheets.count, 5,
             "floor: an empty or mis-rooted scan would pass everything vacuously"
         )
-        for probe in Self.createSheets {
+        for probe in Self.formSheets {
             XCTAssertNotNil(sheets[probe], "\(probe) is missing from the corpus")
         }
         var offenders: [String] = []
@@ -84,8 +83,8 @@ final class MacSheetChromeSourceScanTests: XCTestCase {
         }
         offenders.sort()
         XCTAssertEqual(
-            offenders, Self.knownBareFormSheets,
-            "a new sheet put a Form on the macOS path — give it MacSheetForm (#1484)"
+            offenders, [],
+            "a sheet put a Form on the macOS path — give it MacSheetForm (#1484, #1501)"
         )
     }
 
@@ -107,7 +106,7 @@ final class MacSheetChromeSourceScanTests: XCTestCase {
         XCTAssertFalse(Self.macReachable("#if !os(macOS)\nForm {\n#endif").contains("Form {"))
         XCTAssertTrue(Self.macReachable("#if os(macOS)\nForm {\n#endif").contains("Form {"))
         // The `#else` of a non-macOS branch is the macOS branch, and the
-        // `#else` of a macOS branch is not — the shape both sheets use.
+        // `#else` of a macOS branch is not — the shape the sheets use.
         XCTAssertTrue(Self.macReachable("#if os(iOS)\nA()\n#else\nForm {\n#endif").contains("Form {"))
         XCTAssertFalse(
             Self.macReachable("#if os(macOS)\nA()\n#else\nForm {\n#endif").contains("Form {")

@@ -1,13 +1,14 @@
 #if os(macOS)
 import SwiftUI
 
-/// Shared chrome for the app's small "create X" sheets on macOS.
+/// Shared chrome for the app's small form sheets on macOS — the "create X"
+/// sheets and the search Filters sheet.
 ///
 /// macOS `Form` promotes every control's title into an external leading
 /// label column and gives its rows no horizontal content margins, so a
 /// `Form` inside a sheet draws that column hard against the sheet's left
-/// border and stretches its fields flush to the right one (#1063, #1484).
-/// The create sheets therefore hand-build their macOS layout instead:
+/// border and stretches its fields flush to the right one (#1063, #1484,
+/// #1501). These sheets therefore hand-build their macOS layout instead:
 /// headline captions in place of section headers, in-field placeholders,
 /// and real content margins. The numbers live here rather than in each
 /// sheet so the two cannot drift apart.
