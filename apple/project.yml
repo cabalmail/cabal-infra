@@ -227,6 +227,10 @@ targets:
       - path: Cabalmail/AppState.swift
       - path: Cabalmail/AppStateSignals.swift
       - path: Cabalmail/NavStateCoordinator.swift
+      # The local resume-session layer of the coordinator (per-install
+      # session record + reading positions; docs/1.x/resume-session-plan.md).
+      - path: Cabalmail/NavStateCoordinator+Session.swift
+      - path: Cabalmail/NavStateCoordinator+ServerCursor.swift
       # Spotlight tap routing (shared AppState extension; both app entries
       # attach the .onContinueUserActivity handler that calls into it).
       - path: Cabalmail/SpotlightRouting.swift

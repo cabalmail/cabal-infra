@@ -30,8 +30,11 @@ struct VisionSectionView: View {
     /// tabs.
     @State private var selectedFolder: Folder?
     /// The visible tab. Bound so a Folders pick, the ⌘, command, and a resume
-    /// tap can switch tabs programmatically.
-    @State private var selection: Section = .mail
+    /// tap can switch tabs programmatically. Seeded from the stored resume
+    /// session so a launch that ended in the feed reader opens on Feeds (a
+    /// `@State` default can't reach the environment, hence the direct store
+    /// read).
+    @State private var selection: Section = ResumeSessionStore.storedSection() == .feeds ? .feeds : .mail
     /// True once the launch INBOX landing has run, so nothing re-seeds the
     /// selection out from under the user later.
     @State private var didLand = false
@@ -76,6 +79,15 @@ struct VisionSectionView: View {
         .onChange(of: appState.settingsRequestTick) { _, _ in
             selection = .settings
         }
+        // The resume session remembers which section the user was in; Mail
+        // and Feeds each keep their own position, so only the section moves.
+        .onChange(of: selection) { _, tab in
+            switch tab {
+            case .mail, .folders: appState.navCoordinator?.noteSection(.mail)
+            case .feeds: appState.navCoordinator?.noteSection(.feeds)
+            case .addresses, .settings, .search: break
+            }
+        }
         // Foreground reconcile: if another client moved the cursor on, offer the
         // jump. Mirrors `MailRootView`'s handler; `hasLoadedInitial` gates out
         // the cold-launch path (which offers its own resume toast from
@@ -116,47 +128,61 @@ struct VisionSectionView: View {
         }
     }
 
-    /// Lands on INBOX at launch, offering a resume toast if the saved cursor
-    /// is still reachable. Mirrors `MailRootView`'s provisional landing: a
-    /// synthetic `Folder(path: "INBOX")` is selected immediately so the Mail
-    /// tab's message list starts loading without waiting on `/list_folders`
-    /// (the message machinery only needs the path; seeded as subscribed so
-    /// the list doesn't flash the unsubscribed-folder banner). The fetched
-    /// INBOX is swapped in once the list arrives — sourced from its own
-    /// `FolderListViewModel` because there's no always-mounted sidebar to
-    /// hand one over.
+    /// Lands the Mail tab at launch on the resume session's folder (INBOX
+    /// when there is none), reselecting its open message, and offers the
+    /// cross-device toast if another install's cursor is reachable. Mirrors
+    /// `MailRootView`'s provisional landing: a synthetic `Folder(path:)` is
+    /// selected immediately so the message list starts loading without
+    /// waiting on `/list_folders` (the message machinery only needs the
+    /// path; seeded as subscribed so the list doesn't flash the
+    /// unsubscribed-folder banner). The fetched folder is swapped in once the
+    /// list arrives — sourced from its own `FolderListViewModel` because
+    /// there's no always-mounted sidebar to hand one over — or INBOX if the
+    /// folder no longer exists. The Feeds tab restores its own position
+    /// (`FeedRootView`).
     private func landOnInboxIfNeeded() async {
         guard !didLand, selectedFolder == nil, let client = appState.client else { return }
         didLand = true
-        appState.navCoordinator?.armProvisionalLanding()
-        selectedFolder = Folder(path: "INBOX", isSubscribed: true)
+        let coordinator = appState.navCoordinator
+        let target = coordinator?.mailLaunchTarget()
+            ?? NavStateCoordinator.MailLaunchTarget(folderPath: "INBOX", messageRestore: nil)
+        coordinator?.armProvisionalLanding()
+        if let restore = target.messageRestore {
+            coordinator?.scheduleRestore(for: restore)
+        }
+        selectedFolder = Folder(path: target.folderPath, isSubscribed: true)
         let model = FolderListViewModel(client: client, appState: appState)
         await model.loadFolderList()
         let folders = model.folders
         guard !folders.isEmpty else { return }
         let inbox = folders.first { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame } ?? folders.first
-        // Swap the fetched INBOX into the provisional selection so the Folders
-        // tab's row highlight matches (`Folder` equality spans attributes /
-        // subscription). Same path — the mounted message list survives, and
-        // `VisionMailPane`'s same-path guard keeps the swap from clearing the
-        // open message. Skipped if the user already navigated elsewhere.
-        if let current = selectedFolder,
-           current.path.caseInsensitiveCompare("INBOX") == .orderedSame,
-           let inbox {
-            selectedFolder = inbox
+        // Swap the fetched folder into the provisional selection so the
+        // Folders tab's row highlight matches (`Folder` equality spans
+        // attributes / subscription). Same path — the mounted message list
+        // survives, and `VisionMailPane`'s same-path guard keeps the swap
+        // from clearing the open message. Skipped if the user already
+        // navigated elsewhere; a folder that no longer exists falls back to
+        // INBOX and drops the message restore aimed at it.
+        if let current = selectedFolder, current.path == target.folderPath {
+            if let fetched = folders.first(where: { $0.path == current.path }) {
+                selectedFolder = fetched
+            } else if let inbox {
+                coordinator?.clearPendingRestore()
+                selectedFolder = inbox
+            }
         }
-        let candidate = await appState.navCoordinator?.launchResumeCandidate(folders: folders)
-        // If the user already navigated off INBOX while the probe ran, leave
+        let landedPath = selectedFolder?.path
+        let candidate = await coordinator?.launchResumeCandidate(folders: folders)
+        // If the user already navigated elsewhere while the probe ran, leave
         // them be rather than surfacing a now-stale prompt.
-        guard let inbox, selectedFolder?.path == inbox.path else { return }
+        guard let landedPath, selectedFolder?.path == landedPath else { return }
         if let candidate {
             appState.showToast(
                 .resumeNavigation(folderName: Folder(path: candidate.folder).name, cursor: candidate),
                 duration: 10
             )
         } else {
-            // Nothing to resume: materialize the INBOX landing we suppressed.
-            appState.navCoordinator?.recordFolder(inbox.path)
+            coordinator?.materializeLanding()
         }
     }
 }

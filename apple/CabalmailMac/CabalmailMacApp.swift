@@ -63,6 +63,10 @@ struct CabalmailMacApp: App {
                     }
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    // Leaving the foreground: write the local resume session
+                    // now, so a debounce in flight isn't lost if the process
+                    // is terminated while backgrounded.
+                    if phase != .active { appState.navCoordinator?.flushSession() }
                     // Pick up settings changed on another device while this
                     // window was in the background (server wins, unless a
                     // local edit is still pending its push).
