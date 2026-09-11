@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-09-11
+
+### Added
+- **"Mint + copy address" in the browser extension's toolbar popup.** When a
+  sign-up form's email field escapes the detector (a bare `type="text"`
+  input with an opaque ASP.NET name, say), the popup now offers the same
+  address the in-page popover would have: one click creates a fresh
+  address on the chosen apex domain, labelled with the current tab's
+  hostname by default, and puts it on the clipboard ready to paste. The
+  address is created confirmed rather than pending, since there is no form
+  submission for the extension to watch for. The clipboard write is
+  authorized inside the click and filled in once the server answers, so it
+  survives the async gap on Safari; a Copy button beside the result covers
+  the case where the browser refuses the automatic copy anyway.
+- **Per-item feed state sync in `/rss_list_items`.** A `state_since`
+  cursor (single subscription) returns the caller's read/favorite rows
+  changed since the cursor, from a new `by_updated` index on
+  `cabal-rss-user-item-state` (every state write now sets `updated_key`).
+  An empty cursor pulls the feed's whole state partition first, which is
+  how an existing device's cache repairs itself. Items and state rows also
+  carry `is_read_explicit`, so clients can tell a hand-made mark from the
+  watermark rule.
+
+### Changed
+- Apple: **Resume where you left off, in mail or feeds.** A cold launch now
+  reopens what this device last had on screen instead of always landing on
+  INBOX: the feed list, a feed's item list, or the item itself, and the same
+  for a mail folder and message. Half-read messages and feed items reopen at
+  the same scroll position, whether you come back to them after a relaunch
+  or after reading something else in between. The "pick up where you left
+  off" prompt is now reserved for a position recorded on another device,
+  and an ignored prompt is not repeated on the next launch. The restore is
+  per device; nothing about it is synced.
+
+### Fixed
+- Apple: **Per-feed reader settings that stick.** The feed reader's toolbar
+  toggles are now remembered per feed: choosing the article view, reader or
+  original styling, or showing or hiding remote content on one item makes
+  the next item in that feed open the same way, and the feed's settings sheet
+  shows the same choice. The sheet's existing Open and Styling settings had
+  no effect because the reader built its state before the feed's settings
+  had loaded; they now apply. A new per-feed "Remote content" setting (App
+  setting / Show / Hide) backs the remote-content toggle, with a matching
+  `default_remote_content` field on the subscription API.
+- Apple: **Feed read state now agrees across devices.** An item marked
+  read, unread, or favorite on one device reaches the others: the feed
+  sync pulls the server's per-item state changes alongside new items,
+  where before only new items and mark-all-read travelled, so a mark made
+  elsewhere never arrived. A mark-unread on an item older than the
+  feed's mark-all-read point also stays unread when the item is listed
+  again, instead of the local watermark flipping it back to read. Offline
+  changes now replay in the order they were made, so "mark all read, then
+  mark one item unread" no longer ends with the server marking that item
+  read again.
+- Apple: **"This folder only" in the search Filters sheet.** On macOS and iPad
+  the Filters sheet now offers the toggle, narrowing a search to the folder
+  selected in the sidebar, and the results banner reads "Searched Archive
+  only". Previously the toggle was hidden on the only surface that presents
+  the sheet, so single-folder search could not be reached. The iPhone and
+  Apple Vision Pro Search tab has no selected folder and still searches
+  across folders.
+- Apple: **Unsubscribed-folder banner under subscribed folders.** Arriving
+  at a folder by the resume-position toast, a push-notification tap,
+  Spotlight, or Siri selected a stand-in folder value whose subscription
+  flag was a default rather than a fact, and only INBOX was ever
+  reconciled against the fetched list, so the message list put its "this
+  unsubscribed folder is not kept up-to-date" banner under a folder that
+  was subscribed. The banner now reads subscription from the sidebar's
+  published folder list, keyed by path, and follows a subscribe or
+  unsubscribe of the folder on screen without a re-select.
+
 ## [1.16.1] - 2026-09-11
 
 ### Fixed
