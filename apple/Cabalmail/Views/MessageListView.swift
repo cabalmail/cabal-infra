@@ -253,7 +253,10 @@ struct MessageListView: View {
             VStack(spacing: 0) {
                 // The unsubscribed-folder banner is a folder-view concern; the
                 // global search surface has no single folder to subscribe to.
-                if !isSearchScope, !folder.isSubscribed {
+                if !isSearchScope,
+                   UnsubscribedBannerPolicy.shouldShow(
+                       folder: folder, subscribedPaths: appState.subscribedFolderPaths
+                   ) {
                     unsubscribedFolderBanner(model: model)
                 }
                 if showsBulkActionBar(model: model) { bulkActionBar(model: model) }

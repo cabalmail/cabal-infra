@@ -241,6 +241,9 @@ targets:
       - path: Cabalmail/AppStateSessionPersistence.swift
       # Feed reader session flows (RSS plan, phase 5d): the periodic refresh.
       - path: Cabalmail/AppState+Feeds.swift
+      # Folder-subscription set mutators, read by the message list's
+      # unsubscribed-folder banner gate.
+      - path: Cabalmail/AppState+Subscriptions.swift
       # Push notifications (phase 6, macOS parity): one implementation for
       # both platforms — each file carries an `#if os(iOS)` / `#else`
       # (AppKit) branch around the small platform seams.

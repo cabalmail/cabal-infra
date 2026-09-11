@@ -65,6 +65,12 @@ final class FolderListViewModel {
             let all = try await client.imapClient.listFolders()
             folders = sortForSidebar(all)
             errorMessage = nil
+            // Publish the LSUB set by path so the message list's
+            // unsubscribed-folder banner reads subscription from here rather
+            // than from whatever `Folder` value the selection happens to hold
+            // — a navigate request selects a stand-in `Folder(path:)` whose
+            // flag is a default, not a fact.
+            appState.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
             // Keep the Spotlight indexer's subscription gate current — it
             // also purges the index domains of folders unsubscribed or
             // deleted from another client since the last list.
@@ -116,6 +122,10 @@ final class FolderListViewModel {
             attributes: previous.attributes,
             isSubscribed: subscribed
         )
+        // The selection binding still holds the pre-toggle `Folder` value;
+        // the published set is what lets the open list's banner follow the
+        // toggle without a re-select.
+        appState.setSubscription(folderPath: path, isSubscribed: subscribed)
     }
 
     // MARK: - Create / delete
