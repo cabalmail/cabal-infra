@@ -26,6 +26,8 @@ final class FeedManagementActions {
     var sheet: Sheet?
     var pendingFolderDelete: RssFolder?
     var pendingUnsubscribe: RssSubscription?
+    /// A scope whose "Mark All as Read" awaits confirmation, with its name.
+    var pendingMarkAllRead: (scope: RssItemScope, title: String)?
 
     let subscribeForm = SubscribeFeedForm()
     let folderForm = FeedFolderForm()
@@ -99,6 +101,11 @@ struct FeedManagementSheets: ViewModifier {
             } message: {
                 Text("Its items and your read and favorite marks for it are removed from this account.")
             }
+            .confirmationDialog(markAllReadTitle, isPresented: markAllReadBinding, titleVisibility: .visible) {
+                Button("Mark All as Read") { markAllReadPending() }
+            } message: {
+                Text("Items you have not opened will be marked read too.")
+            }
             .feedOpmlFlows(actions.opml, management: management)
             .onChange(of: appState.feedCommandTick) { _, _ in
                 guard handlesCommands, let command = appState.pendingFeedCommand else { return }
@@ -142,6 +149,25 @@ struct FeedManagementSheets: ViewModifier {
 
     private var unsubscribeTitle: String {
         "Unsubscribe from \(actions.pendingUnsubscribe?.displayTitle ?? "this feed")?"
+    }
+
+    private var markAllReadTitle: String {
+        "Mark all items in \(actions.pendingMarkAllRead?.title ?? "these feeds") as read?"
+    }
+
+    private var markAllReadBinding: Binding<Bool> {
+        Binding(get: { actions.pendingMarkAllRead != nil },
+                set: { if !$0 { actions.pendingMarkAllRead = nil } })
+    }
+
+    private func markAllReadPending() {
+        guard let pending = actions.pendingMarkAllRead, let management else { return }
+        actions.pendingMarkAllRead = nil
+        Task {
+            do { try await management.markAllRead(scope: pending.scope) } catch {
+                actions.opml.resultMessage = FeedErrorText.describe(error)
+            }
+        }
     }
 
     private var deleteBinding: Binding<Bool> {

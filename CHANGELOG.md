@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-09-11
+
+### Added
+- Apple: **Feed health badges.** A feed the fetcher has failed to read
+  three times in a row shows a warning mark beside its name in the sidebar,
+  and one the fetcher has given up on shows a stop mark; the mark's tooltip
+  and the top of the feed's item list say what went wrong, in the fetcher's
+  own words. Until now such a feed simply looked empty.
+
+### Changed
+- **CodeQL runs only the analyses a pull request can affect.** Code
+  scanning moved from GitHub's default setup, which analysed every
+  language on every pull request, to a checked-in `codeql.yml` that
+  gates each language on its own path filter, the way `lint.yml` gates
+  its linters. A Lambda-only PR no longer waits four to six minutes for
+  the Linux client's Rust analysis. Pushes to `stage` and `main`, and a
+  weekly scheduled run, still analyse everything so the per-branch alert
+  lists stay current, and a `codeql-gate` job gives branch protection one
+  stable check name to require.
+
+### Fixed
+- Apple: **Images addressed over plain `http` now load.** A message or
+  feed item whose pictures still use `http://` addresses (Electoral Vote's
+  do) showed broken boxes even with remote content allowed, because the
+  reader refuses insecure loads. The reader now asks for every such
+  picture over `https` instead, which is what those publishers serve.
+- **Feed images attached as enclosures.** A feed that carries an item's
+  picture as an `enclosure` or `media:content` and only prose in the body
+  (NASA's Image of the Day) now shows the picture at the top of the item;
+  before, the item looked like text only.
+- Apple: **Feed reader fixes from the first day of use.** "Mark all as
+  read" now asks first, in the item list and in the sidebar menus; a stray
+  tap beside Refresh used to read a whole feed. "Load older items" appears
+  only when the server has older items to give. The published article is
+  one tap from the headline on every platform, and on iPhone the reader's
+  view controls (reader styling, remote content, the in-app article view,
+  open in browser, share) share one menu instead of falling off the end of
+  the navigation bar.
+
 ## [1.15.1] - 2026-09-10
 
 ### Fixed

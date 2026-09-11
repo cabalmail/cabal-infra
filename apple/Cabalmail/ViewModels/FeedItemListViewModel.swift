@@ -93,6 +93,12 @@ final class FeedItemListViewModel {
     func reload() async {
         guard let store = client.rssStore else { return }
         do {
+            if let subscription {
+                // The engine learns on the first sync whether the server has
+                // history beyond the first page; without this the button
+                // showed for every feed and did nothing for most.
+                olderExhausted = try await store.syncState(feedId: subscription.feedId).olderExhausted
+            }
             if subscription == nil {
                 let subs = try await store.subscriptions()
                 subscriptionTitles = Dictionary(subs.map { ($0.subscriptionId, $0.displayTitle) },

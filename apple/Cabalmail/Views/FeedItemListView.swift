@@ -19,6 +19,7 @@ struct FeedItemListView: View {
     @State private var management: FeedManagementViewModel?
     @State private var actions = FeedManagementActions()
     @State private var folders: [RssFolder] = []
+    @State private var confirmMarkAllRead = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,8 +48,10 @@ struct FeedItemListView: View {
             #endif
             if let model {
                 ToolbarItem {
+                    // Confirmed first: it sat beside Refresh with no way back,
+                    // and a stray tap read a whole feed (2026-09-10).
                     Button {
-                        Task { await model.markAllRead() }
+                        confirmMarkAllRead = true
                     } label: {
                         Label("Mark all as read", systemImage: "envelope.open")
                     }
@@ -70,6 +73,12 @@ struct FeedItemListView: View {
         }
         .feedManagementSheets(actions, management: management, folders: folders, selection: .constant(nil),
                               onSaved: { updated in title = updated.displayTitle })
+        .confirmationDialog("Mark all items in \(title) as read?", isPresented: $confirmMarkAllRead,
+                            titleVisibility: .visible) {
+            Button("Mark All as Read") { Task { await model?.markAllRead() } }
+        } message: {
+            Text("Items you have not opened will be marked read too.")
+        }
         .task(id: scope) { await start() }
     }
 
@@ -164,16 +173,32 @@ struct FeedItemListView: View {
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("feed.search")
             }
-            if let errorMessage = model.errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .font(.footnote)
-                    .foregroundStyle(ColorTokens.dangerFg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            statusLines(model)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.bar)
+    }
+
+    /// The sync error, then the fetcher's health for a single feed in its
+    /// own words, so an empty or stale list is explained where the user is
+    /// looking.
+    @ViewBuilder
+    private func statusLines(_ model: FeedItemListViewModel) -> some View {
+        if let errorMessage = model.errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(ColorTokens.dangerFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        if let subscription = model.subscription, let headline = FeedHealth.headline(for: subscription.feed) {
+            let stopped = FeedHealth.level(for: subscription.feed) == .stopped
+            Label(headline, systemImage: stopped ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
+                .font(.footnote)
+                .foregroundStyle(stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("feed.health.headline")
+        }
     }
 
     private func filterLabel(_ filter: RssItemFilter) -> String {
