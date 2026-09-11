@@ -82,6 +82,16 @@ struct FeedItemDetailView: View {
             Text(model.item.title.isEmpty ? "Untitled" : model.item.title)
                 .font(.title3.weight(.semibold))
                 .textSelection(.enabled)
+            if let url = model.articleURL {
+                // The published article, in the browser, one tap from the
+                // headline on every platform; the toolbar's in-app article
+                // view is a separate thing and can be off screen on iPhone.
+                Link(destination: url) {
+                    Label("Open on \(url.host() ?? "the web")", systemImage: "arrow.up.right.square")
+                        .font(.caption)
+                }
+                .accessibilityIdentifier("feed.reader.openInBrowser")
+            }
             HStack(spacing: 8) {
                 if let feed = subscription?.displayTitle, !feed.isEmpty {
                     Text(feed)
@@ -121,16 +131,59 @@ struct FeedItemDetailView: View {
             }
             .accessibilityIdentifier("feed.reader.favorite")
         }
+        #if os(iOS)
+        // An iPhone navigation bar shows about three trailing items and
+        // silently drops the rest, which is where "Open article" went. The
+        // view controls share one menu there; macOS and visionOS have room.
         ToolbarItem {
-            Button {
-                model.toggleReaderMode()
+            Menu {
+                readerModeButton(model)
+                articleMenuItems(model)
             } label: {
-                Label(model.readerMode ? "Show original formatting" : "Show reader view",
-                      systemImage: model.readerMode ? "text.alignleft" : "doc.richtext")
+                Label("View", systemImage: "ellipsis.circle")
             }
-            .accessibilityIdentifier("feed.reader.readerMode")
+            .accessibilityIdentifier("feed.reader.more")
         }
+        #else
+        ToolbarItem { readerModeButton(model) }
         articleToolbarItems(model)
+        #endif
+    }
+
+    private func readerModeButton(_ model: FeedItemDetailViewModel) -> some View {
+        Button {
+            model.toggleReaderMode()
+        } label: {
+            Label(model.readerMode ? "Show original formatting" : "Show reader view",
+                  systemImage: model.readerMode ? "text.alignleft" : "doc.richtext")
+        }
+        .accessibilityIdentifier("feed.reader.readerMode")
+    }
+
+    /// The article controls as menu rows (iOS), same actions as the toolbar
+    /// items on the wide platforms.
+    @ViewBuilder
+    private func articleMenuItems(_ model: FeedItemDetailViewModel) -> some View {
+        if !model.showingArticle {
+            Button {
+                model.toggleRemoteContent()
+            } label: {
+                Label(model.remoteContentAllowed ? "Hide remote content" : "Show remote content",
+                      systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash")
+            }
+            .disabled(model.item.bodyHtml.isEmpty)
+        }
+        if let url = model.articleURL {
+            Divider()
+            Button {
+                model.toggleArticle()
+            } label: {
+                Label(articleTitle(model), systemImage: articleSymbol(model))
+            }
+            Link(destination: url) { Label("Open in browser", systemImage: "safari") }
+            ShareLink(item: url) { Label("Share link", systemImage: "square.and.arrow.up") }
+            Button("Copy link") { copyToPasteboard(url.absoluteString) }
+        }
     }
 
     @ToolbarContentBuilder

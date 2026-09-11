@@ -71,8 +71,7 @@ struct FeedSidebarContextMenu: View {
 
     private var markAllRead: some View {
         Button {
-            guard let management else { return }
-            Task { try? await management.markAllRead(scope: scope) }
+            actions.pendingMarkAllRead = (scope, row?.title ?? "All Feeds")
         } label: {
             Label("Mark All as Read", systemImage: "envelope.open")
         }
