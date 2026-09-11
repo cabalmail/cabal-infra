@@ -39,6 +39,9 @@ ORDERING_MODES = ('newest_first', 'oldest_first',
                   'newest_day_oldest_within', 'oldest_day_newest_within')
 OPEN_MODES = ('summary', 'article')
 STYLING_MODES = ('reader', 'native')
+# Per-feed remote-content default: 'inherit' defers to the client's global
+# remote-content preference; 'show' / 'hide' override it for this feed.
+REMOTE_CONTENT_MODES = ('inherit', 'show', 'hide')
 MAX_TITLE_LENGTH = 256
 MAX_PAGE = 100
 DEFAULT_PAGE = 50
@@ -352,6 +355,7 @@ def serialize_subscription(row, feed_row=None):
         'ordering_mode': row.get('ordering_mode', ORDERING_MODES[0]),
         'default_open_mode': row.get('default_open_mode', OPEN_MODES[0]),
         'default_styling': row.get('default_styling', STYLING_MODES[0]),
+        'default_remote_content': row.get('default_remote_content', REMOTE_CONTENT_MODES[0]),
         'notifications_enabled': bool(row.get('notifications_enabled', False)),
         'credentials_scheme': row.get('credentials_scheme') or '',
         'read_watermark': row.get('read_watermark', ''),

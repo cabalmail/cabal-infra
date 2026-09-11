@@ -155,7 +155,39 @@ final class ApiClientRssTests: XCTestCase {
         XCTAssertEqual(sent["folder_id"] as? String, "")
         XCTAssertEqual(sent["notifications_enabled"] as? Bool, true)
         XCTAssertNil(sent["custom_title"])
+        XCTAssertNil(sent["default_remote_content"])
         XCTAssertEqual(requests[0].httpMethod, "PUT")
+    }
+
+    func testUpdateSubscriptionSendsRemoteContentDefaultAndDecodesIt() async throws {
+        let json = #"{"subscription": {"subscription_id": "s", "feed_id": "f", "default_remote_content": "show"}}"#
+        let (client, http) = makeClient([(json, 200)])
+        let updated = try await client.updateSubscription("s", RssSubscriptionUpdate(defaultRemoteContent: .hide))
+        let sent = body(await http.requests[0])
+        XCTAssertEqual(sent["default_remote_content"] as? String, "hide")
+        XCTAssertEqual(updated.defaultRemoteContent, .show)
+    }
+
+    /// A row from before the field existed, or one carrying a value from a
+    /// newer server, reads as `inherit` rather than failing the decode.
+    func testSubscriptionRemoteContentDecodesLeniently() throws {
+        let absent = try JSONDecoder().decode(
+            RssSubscription.self, from: Data(#"{"subscription_id": "s", "feed_id": "f"}"#.utf8))
+        XCTAssertEqual(absent.defaultRemoteContent, .inherit)
+        let unknown = try JSONDecoder().decode(
+            RssSubscription.self,
+            from: Data(#"{"subscription_id": "s", "feed_id": "f", "default_remote_content": "sometimes"}"#.utf8))
+        XCTAssertEqual(unknown.defaultRemoteContent, .inherit)
+    }
+
+    func testSubscriptionApplyingUpdate() {
+        let sub = RssSubscription(subscriptionId: "s", feedId: "f")
+        let applied = sub.applying(RssSubscriptionUpdate(defaultOpenMode: .article, defaultRemoteContent: .show))
+        XCTAssertEqual(applied.defaultOpenMode, .article)
+        XCTAssertEqual(applied.defaultRemoteContent, .show)
+        XCTAssertEqual(applied.defaultStyling, .reader, "untouched fields carry over")
+        XCTAssertTrue(RssSubscriptionUpdate().isEmpty)
+        XCTAssertFalse(RssSubscriptionUpdate(defaultRemoteContent: .inherit).isEmpty)
     }
 
     func testOpmlRoundTrip() async throws {

@@ -234,6 +234,22 @@ public actor RssSyncEngine {
         await pushSoon()
     }
 
+    /// Changes a subscription's per-feed settings. The store takes the
+    /// change first, so the next item opened in the feed honours it even
+    /// while the round trip is in flight or offline; the server's copy
+    /// replaces it on success. A failure leaves the optimistic row for the
+    /// session — the next catalog refresh reconciles it — and rethrows so a
+    /// caller that cares can say so.
+    @discardableResult
+    public func updateSubscription(_ subscription: RssSubscription, _ update: RssSubscriptionUpdate) async throws
+        -> RssSubscription {
+        guard !update.isEmpty else { return subscription }
+        try await store.upsertSubscription(subscription.applying(update))
+        let updated = try await client.updateSubscription(subscription.subscriptionId, update)
+        try await store.upsertSubscription(updated)
+        return updated
+    }
+
     /// One drain attempt; a failure (offline, say) is expected and leaves
     /// the queue for the next trigger.
     private func pushSoon() async {

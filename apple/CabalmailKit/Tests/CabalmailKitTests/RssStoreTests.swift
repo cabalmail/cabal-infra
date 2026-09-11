@@ -52,6 +52,44 @@ final class RssStoreTests: XCTestCase {
         XCTAssertEqual(observed2, 0)
     }
 
+    /// The per-feed defaults round-trip through the row, including the
+    /// remote-content column added in schema version 3.
+    func testSubscriptionDefaultsRoundTrip() async throws {
+        var one = sub("s1", feed: "f1")
+        one.defaultOpenMode = .article
+        one.defaultStyling = .native
+        one.defaultRemoteContent = .show
+        try await store.upsertSubscription(one)
+        let loaded = try await store.subscription(id: "s1")
+        XCTAssertEqual(loaded?.defaultOpenMode, .article)
+        XCTAssertEqual(loaded?.defaultStyling, .native)
+        XCTAssertEqual(loaded?.defaultRemoteContent, .show)
+        one.defaultRemoteContent = .hide
+        try await store.upsertSubscription(one)
+        let updated = try await store.subscription(id: "s1")
+        XCTAssertEqual(updated?.defaultRemoteContent, .hide)
+    }
+
+    /// A version-2 store (no remote-content column) migrates in place and
+    /// its existing rows read as `inherit`.
+    func testMigrationFromVersionTwoAddsRemoteContentColumn() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cabalmail-rss-store-v2-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let database = try SQLiteDatabase(path: dir.appendingPathComponent("rss.sqlite").path)
+        try database.exec(Schema.version1)
+        try database.exec(Schema.version2)
+        try database.run("""
+            INSERT INTO subscriptions (subscription_id, feed_id, default_open_mode) VALUES ('s1', 'f1', 'article')
+            """, [])
+        database.userVersion = 2
+        let migrated = try RssStore(directory: dir)
+        let loaded = try await migrated.subscription(id: "s1")
+        XCTAssertEqual(loaded?.defaultOpenMode, .article)
+        XCTAssertEqual(loaded?.defaultRemoteContent, .inherit)
+    }
+
     func testReadStateRuleWatermarkAndExplicit() async throws {
         _ = try await store.replaceCatalog(RssCatalog(folders: [],
             subscriptions: [sub("s1", feed: "f1", watermark: "2026-01-03T00:00:00+00:00")]))

@@ -89,7 +89,9 @@ fields may appear and clients must ignore unknown ones.
 root), `custom_title`, `ordering_mode` (`newest_first` | `oldest_first` |
 `newest_day_oldest_within` | `oldest_day_newest_within`),
 `default_open_mode` (`summary` | `article`), `default_styling` (`reader`
-| `native`), `notifications_enabled`, `credentials_scheme`,
+| `native`), `default_remote_content` (`inherit` | `show` | `hide`; `inherit`
+defers to the client's global remote-content preference, the others
+override it for this feed), `notifications_enabled`, `credentials_scheme`,
 `read_watermark`, `data_store_uuid` (the per-subscription identifier the
 clients key their isolated web-view storage on), `created_at`, and
 `feed`.
@@ -124,7 +126,7 @@ them except as documented under `/rss_list_items`.
 |---|---|---|---|
 | `/rss_subscribe` | POST | `{url, folder_id?}` | `{subscription, existing}`. Reuses the shared feed for a known canonical URL; otherwise fetches the document once (autodiscovering the feed a web page advertises), creates the feed, and hands it to the fetcher immediately. Idempotent per user and feed. Codes: `invalid_url`, `not_https`, `unreachable`, `not_a_feed`, `needs_credentials`, `feed_gone`, `publisher_error`, `unknown_folder` (404). |
 | `/rss_unsubscribe` | POST | `{subscription_id}` | `{subscription_id, feed_id, feed_purged}`. Deletes the caller's state for the feed; purges the feed when no subscribers remain. |
-| `/rss_update_subscription` | PUT | `{subscription_id, custom_title?, folder_id?, ordering_mode?, default_open_mode?, default_styling?, notifications_enabled?}` | `{subscription}`. Codes: `invalid_<field>`, `unknown_folder`, `nothing_to_update`. |
+| `/rss_update_subscription` | PUT | `{subscription_id, custom_title?, folder_id?, ordering_mode?, default_open_mode?, default_styling?, default_remote_content?, notifications_enabled?}` | `{subscription}`. Codes: `invalid_<field>`, `unknown_folder`, `nothing_to_update`. |
 | `/rss_list_subscriptions` | GET | | `{folders, subscriptions}`, each subscription with its `feed` summary. |
 | `/rss_new_folder` | POST | `{name, parent_folder_id?, display_order?}` | `{folder}` |
 | `/rss_update_folder` | PUT | `{folder_id, name?, parent_folder_id? ("" = root), display_order?}` | `{folder}`. Code `cyclic_folder` when moved under itself. |

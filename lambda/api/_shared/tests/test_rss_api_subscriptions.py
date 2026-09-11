@@ -249,6 +249,15 @@ class UpdateSubscription(unittest.TestCase):
         self.assertEqual(call(mod, body={'subscription_id': 's1', 'default_styling': 'fancy'})[1]['code'],
                          'invalid_default_styling')
         self.assertEqual(call(mod, body={'subscription_id': 's1'})[1]['code'], 'nothing_to_update')
+        # Per-feed remote-content default: absent rows read as 'inherit'; the
+        # three modes round-trip; anything else is rejected.
+        _, listed = call(mod, body={'subscription_id': 's1', 'custom_title': 'Again'})
+        self.assertEqual(listed['subscription']['default_remote_content'], 'inherit')
+        status, body = call(mod, body={'subscription_id': 's1', 'default_remote_content': 'show'})
+        self.assertEqual((status, body['subscription']['default_remote_content']), (200, 'show'))
+        self.assertEqual(tables['cabal-rss-subscription'].rows[(USER, 's1')]['default_remote_content'], 'show')
+        self.assertEqual(call(mod, body={'subscription_id': 's1', 'default_remote_content': 'always'})[1]['code'],
+                         'invalid_default_remote_content')
 
 
 class Folders(unittest.TestCase):

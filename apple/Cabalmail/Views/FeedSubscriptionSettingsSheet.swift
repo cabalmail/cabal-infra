@@ -57,6 +57,7 @@ struct FeedSubscriptionSettingsSheet: View {
                     orderingPicker
                     openModePicker
                     stylingPicker
+                    remoteContentPicker
                 }
                 MacSheetSection(caption: "Feed") { healthRows }
                 errorLabel
@@ -71,6 +72,7 @@ struct FeedSubscriptionSettingsSheet: View {
                 orderingPicker
                 openModePicker
                 stylingPicker
+                remoteContentPicker
             }
             Section("Feed") { healthRows }
             errorLabel
@@ -109,6 +111,17 @@ struct FeedSubscriptionSettingsSheet: View {
         Picker("Styling", selection: $form.defaultStyling) {
             Text("Reader").tag(RssStyling.reader)
             Text("Original").tag(RssStyling.native)
+        }
+    }
+
+    /// Per-feed remote-content default. "App setting" defers to the global
+    /// Load Remote Content preference; the other two override it for this
+    /// feed. The reader's own toggle writes the same field (sticky per feed).
+    private var remoteContentPicker: some View {
+        Picker("Remote content", selection: $form.defaultRemoteContent) {
+            Text("App setting").tag(RssRemoteContentMode.inherit)
+            Text("Show").tag(RssRemoteContentMode.show)
+            Text("Hide").tag(RssRemoteContentMode.hide)
         }
     }
 

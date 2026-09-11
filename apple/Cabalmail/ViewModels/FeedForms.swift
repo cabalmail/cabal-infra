@@ -69,6 +69,7 @@ final class FeedSubscriptionSettingsForm {
     var orderingMode: RssOrderingMode = .newestFirst
     var defaultOpenMode: RssOpenMode = .summary
     var defaultStyling: RssStyling = .reader
+    var defaultRemoteContent: RssRemoteContentMode = .inherit
 
     func load(from subscription: RssSubscription) {
         customTitle = subscription.customTitle
@@ -76,6 +77,7 @@ final class FeedSubscriptionSettingsForm {
         orderingMode = subscription.orderingMode
         defaultOpenMode = subscription.defaultOpenMode
         defaultStyling = subscription.defaultStyling
+        defaultRemoteContent = subscription.defaultRemoteContent
     }
 
     /// Only the fields that differ from the subscription; nil when none do,
@@ -90,6 +92,10 @@ final class FeedSubscriptionSettingsForm {
         if orderingMode != subscription.orderingMode { update.orderingMode = orderingMode; changed = true }
         if defaultOpenMode != subscription.defaultOpenMode { update.defaultOpenMode = defaultOpenMode; changed = true }
         if defaultStyling != subscription.defaultStyling { update.defaultStyling = defaultStyling; changed = true }
+        if defaultRemoteContent != subscription.defaultRemoteContent {
+            update.defaultRemoteContent = defaultRemoteContent
+            changed = true
+        }
         return changed ? update : nil
     }
 }
