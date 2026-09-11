@@ -19,9 +19,10 @@ struct SearchFiltersSheet: View {
     /// Display name for the "This folder only" toggle's helper text so
     /// the user sees which folder they're scoping to.
     let currentFolderName: String
-    /// Whether to offer the "This folder only" toggle. The folder list scopes
-    /// to its folder; the global search surface has no anchor folder, so it
-    /// hides the toggle and always searches cross-folder.
+    /// Whether to offer the "This folder only" toggle. Only when the caller
+    /// has a folder to scope to: the wide layout's search surface scopes to
+    /// the sidebar selection, while the iPhone / visionOS search tab has no
+    /// anchor, so it hides the toggle and always searches cross-folder.
     let allowFolderScope: Bool
     /// Fires when the user taps Apply. The sheet hands the modified
     /// snapshot back to the caller, which assigns to the view-model's

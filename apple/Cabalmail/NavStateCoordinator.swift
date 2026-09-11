@@ -2,28 +2,25 @@ import Foundation
 import Observation
 import CabalmailKit
 
-/// Owns the cross-client navigation cursor for one signed-in session: it
-/// records where the user is (debounced, server-side), restores that position
-/// on launch, and — on foreground — detects a cursor written by *another*
-/// client so the UI can offer to follow it.
+/// Owns "where the user is" for one signed-in session, in two layers
+/// (`docs/1.x/resume-session-plan.md`):
+///
+/// - **The local resume session** (`ResumeSession`, per install, never leaves
+///   the device): the section (mail or feeds), list scope, open item, and —
+///   in `ReadingPositionCache` — where the reader was in each item's body. A
+///   cold launch restores it silently; reopening a half-read item lands at
+///   the same place. Persisted through `ResumeSessionStore`.
+/// - **The server cursor** (`NavState`, `/set_nav_state`): the cross-device
+///   signal. Recorded debounced as the user moves through mail; read on
+///   launch and foreground, and offered as a "pick up where you left off"
+///   toast *only* when written by another install and newer than anything
+///   this install has already been shown. A device is never offered its own
+///   position — the local layer has already restored it.
 ///
 /// Created by `AppState` when a client is wired (sign-in or restore) and torn
 /// down on sign-out. `@MainActor` because it's driven entirely from SwiftUI
-/// `.onChange` handlers and read by views.
-///
-/// Cursor lifecycle:
-/// - **Launch** (`launchResumeCandidate`): fetch once and land on INBOX
-///   regardless — never restore silently. If the saved folder still exists and
-///   the recorded message is still in that folder's initial window, return the
-///   cursor so `MailRootView` can offer a "pick up where you left off" toast.
-///   Until the user taps it they stay in INBOX, and the default landing is held
-///   back from overwriting the saved cursor (`armProvisionalLanding`).
-/// - **Foreground** (`foreignCursorOnForeground`): fetch again; if the cursor
-///   now carries a different `clientID` and a newer `updatedAt` than we last
-///   saw, surface it for the same toast. Our own writes never trip this (same
-///   `clientID`).
-/// - **Recording** (`recordFolder`/`recordMessage`): update the working cursor
-///   and debounce a save, so only the active client writes, and only on change.
+/// `.onChange` handlers and read by views. The session-layer surface lives in
+/// `NavStateCoordinator+Session.swift`.
 @Observable
 @MainActor
 final class NavStateCoordinator {
@@ -63,125 +60,88 @@ final class NavStateCoordinator {
     /// position; consumed by the reader after the message loads.
     private(set) var pendingScrollRestore: PendingScrollRestore?
 
+    /// A feed item to select once its scope is on screen (the launch restore
+    /// of the feed reader). Consumed by the feed navigation's
+    /// `onChange(of: selectedScope)` — see `consumeFeedItemRestore`.
+    struct PendingFeedRestore: Equatable, Sendable {
+        let scope: RssItemScope
+        let item: RssItem
+    }
+
+    var pendingFeedRestore: PendingFeedRestore?
+
     /// Set by the resume toast's action; observed by `MailRootView`, which
     /// selects the folder and schedules the message restore, then clears it.
     var navigateRequest: NavState?
 
     /// True once the launch-time cursor fetch has run. `MailRootView` uses it
-    /// to tell a cold launch (silent restore) from a later foreground (offer
-    /// the cross-client jump).
-    private(set) var hasLoadedInitial = false
+    /// to tell the cold-launch path from a later foreground (both may offer
+    /// the cross-device toast, through different entry points).
+    var hasLoadedInitial = false
 
     let clientID: String
-    private let client: CabalmailClient
+    let client: CabalmailClient
 
-    // Working cursor — what a save would persist.
-    private var folder: String?
-    private var messageID: String?
-    private var uid: UInt32?
-    private var uidValidity: UInt32?
-    private var listScroll: Int?
-    private var messageScroll: Int?
-    private var messageAnchor: String?
+    // Working server cursor — what a save would persist.
+    var folder: String?
+    var messageID: String?
+    var uid: UInt32?
+    var uidValidity: UInt32?
+    var listScroll: Int?
+    var messageScroll: Int?
+    var messageAnchor: String?
+
+    // Local resume layer (see the `+Session` extension).
+    let store: ResumeSessionStore
+    /// The session as it was when this coordinator was created — the record
+    /// every launch-restore path reads. Frozen here because `session` starts
+    /// changing the moment the landing records itself.
+    let launchSession: ResumeSession?
+    /// The live session record; mutated by every recording call.
+    var session: ResumeSession
+    var positions: ReadingPositionCache
+    var sessionSaveTask: Task<Void, Never>?
+    var positionsDirty = false
+    /// One-shot guard for the feed reader's launch restore
+    /// (`consumeFeedsLaunchTarget`), so the Feeds tab re-appearing later in
+    /// the process doesn't yank its selection back.
+    var didConsumeFeedsLaunch = false
+    /// Debounce for local session writes — short, since it's a local
+    /// `UserDefaults` write, and `flushSession` covers the scene going away.
+    let sessionSaveDebounce: Duration = .milliseconds(300)
 
     private var saveTask: Task<Void, Never>?
     /// The last body actually written, to skip redundant network writes.
     private var lastSavedBody: NSDictionary?
-    /// Newest `updatedAt` we've already accounted for, so a foreign cursor the
-    /// user dismissed isn't re-offered on every foreground.
-    private var lastSeenUpdatedAt: Int64 = 0
+    /// Newest foreign `updatedAt` already offered to the user, so an ignored
+    /// cross-device toast isn't re-offered on every foreground — or, since it
+    /// is persisted, on the next launch.
+    var lastSeenUpdatedAt: Int64 {
+        didSet { store.offeredForeignUpdatedAt = lastSeenUpdatedAt }
+    }
     private var restoreTick = 0
-    /// Set by `armProvisionalLanding`: swallow the next `recordFolder` (the
-    /// launch INBOX landing) without persisting, so a still-valid saved cursor
-    /// isn't overwritten before the user acts on the resume toast.
+    /// Set by `armProvisionalLanding`: swallow the next `recordFolder`'s server
+    /// write (the launch landing) so the cursor probe reads what another
+    /// client left, not what this launch just wrote. Released by
+    /// `materializeLanding` once the probe has run.
     private var suppressNextFolderRecord = false
     /// Debounce window for cursor saves. Long enough that a quick folder→
     /// message→scroll sequence collapses to one write.
     private let saveDebounce: Duration = .seconds(1)
 
-    init(client: CabalmailClient, clientID: String = InstallIdentity.clientID()) {
+    init(
+        client: CabalmailClient,
+        clientID: String = InstallIdentity.clientID(),
+        store: ResumeSessionStore = ResumeSessionStore()
+    ) {
         self.client = client
         self.clientID = clientID
-    }
-
-    // MARK: Launch restore
-
-    /// Envelopes the message list loads on first open
-    /// (`MessageListViewModel.pageSize`). Launch reachability is checked against
-    /// this same window, so a cursor we vouch for always resolves to a
-    /// selectable row when the user taps Resume.
-    private static let initialWindow: UInt32 = 50
-
-    /// Fetches the saved cursor once and returns it *only* if it's still a
-    /// usable resume target: the folder still exists and, when a message was
-    /// recorded, that message is still in the folder's initial window. Returns
-    /// nil otherwise (no cursor, folder deleted, message moved/expunged) so
-    /// `MailRootView` simply stays in INBOX with no prompt. Never restores — the
-    /// caller offers a toast. Records the cursor's recency so the same position
-    /// isn't later re-offered by the foreground cross-client path.
-    func launchResumeCandidate(folders: [Folder]) async -> NavState? {
-        guard !hasLoadedInitial else { return nil }
-        hasLoadedInitial = true
-        guard let cursor = try? await client.navState() else { return nil }
-        lastSeenUpdatedAt = max(lastSeenUpdatedAt, cursor.updatedAt ?? 0)
-        // The folder must still exist (another client may have deleted it).
-        guard folders.contains(where: { $0.path == cursor.folder }) else { return nil }
-        // A folder-only cursor pointing at INBOX is where launch already lands
-        // the user, so there's nothing to resume — don't offer the prompt.
-        if cursor.messageID == nil, cursor.uid == nil,
-           cursor.folder.caseInsensitiveCompare("INBOX") == .orderedSame {
-            return nil
-        }
-        // A folder-only cursor has no message to verify; a message cursor must
-        // still be reachable in that folder.
-        if cursor.messageID != nil || cursor.uid != nil {
-            let reachable = await messageIsReachable(cursor)
-            if !reachable { return nil }
-        }
-        return cursor
-    }
-
-    /// Whether `cursor`'s recorded message is present in its folder's initial
-    /// window — the same page (`status` + `topEnvelopes`) the list loads on
-    /// open — matched by Message-ID first then UID, exactly as the list's
-    /// restore does. Any probe failure returns false: we never offer a resume
-    /// we can't stand behind.
-    private func messageIsReachable(_ cursor: NavState) async -> Bool {
-        do {
-            try await client.imapClient.connectAndAuthenticate()
-            let status = try await client.imapClient.status(path: cursor.folder)
-            let total = UInt32(max(0, status.messages ?? 0))
-            guard total > 0 else { return false }
-            let window = try await client.imapClient.topEnvelopes(
-                folder: cursor.folder,
-                limit: Self.initialWindow,
-                totalMessages: total
-            )
-            if let messageID = cursor.messageID,
-               window.contains(where: { $0.messageId == messageID }) {
-                return true
-            }
-            if let uid = cursor.uid, window.contains(where: { $0.uid == uid }) {
-                return true
-            }
-            return false
-        } catch {
-            return false
-        }
-    }
-
-    // MARK: Foreground reconcile
-
-    /// On foreground, returns a cursor written by another client that is newer
-    /// than anything we've seen — the candidate for the resume toast — or nil.
-    func foreignCursorOnForeground() async -> NavState? {
-        guard let cursor = try? await client.navState(),
-              cursor.isForeign(to: clientID),
-              let updatedAt = cursor.updatedAt,
-              updatedAt > lastSeenUpdatedAt
-        else { return nil }
-        lastSeenUpdatedAt = updatedAt
-        return cursor
+        self.store = store
+        let loaded = store.loadSession()
+        self.launchSession = loaded
+        self.session = loaded ?? ResumeSession(section: .mail)
+        self.positions = store.loadPositions()
+        self.lastSeenUpdatedAt = store.offeredForeignUpdatedAt
     }
 
     // MARK: Restore application
@@ -220,6 +180,13 @@ final class NavStateCoordinator {
         }
     }
 
+    /// Drops a scheduled message restore whose folder turned out not to exist
+    /// (the launch landing fell back to INBOX).
+    func clearPendingRestore() {
+        pendingRestore = nil
+        pendingScrollRestore = nil
+    }
+
     /// Returns and clears the pending restore for `folderPath`, if it targets
     /// that folder. The list calls this after its initial load.
     func consumePendingRestore(for folderPath: String) -> PendingRestore? {
@@ -247,21 +214,31 @@ final class NavStateCoordinator {
         return restore
     }
 
-    // MARK: Recording
+    // MARK: Recording (mail)
 
-    /// Arms suppression of the next folder record. `MailRootView` calls this
-    /// before it default-selects INBOX at launch while a resume may be pending,
-    /// so that landing doesn't clobber the saved cursor. Cleared by the first
-    /// `recordFolder` (the landing), or explicitly recorded once the probe
-    /// confirms there's nothing to resume.
+    /// Arms suppression of the next folder record's server write. The launch
+    /// landing calls this before selecting its folder, so the cursor probe
+    /// that follows reads another client's cursor rather than this launch's
+    /// own landing. Released by `materializeLanding` (or consumed by the next
+    /// `recordFolder`, which still updates the working cursor and the local
+    /// session).
     func armProvisionalLanding() {
         suppressNextFolderRecord = true
     }
 
+    /// The launch probe has run: persist whatever the working cursor holds
+    /// now. Deliberately not a `recordFolder` — by the time the probe returns
+    /// the list may already have restored a message, and re-recording the bare
+    /// folder would wipe it.
+    func materializeLanding() {
+        suppressNextFolderRecord = false
+        scheduleSave()
+    }
+
     /// Records that the user is now in `folderPath` (no message yet). Folder is
     /// the highest-priority cursor field, so this normally schedules a save —
-    /// except for the launch INBOX landing, which updates the working cursor
-    /// but must not persist over a still-valid saved position.
+    /// except for the launch landing, whose server write is held back until
+    /// the probe has run (`armProvisionalLanding`).
     func recordFolder(_ folderPath: String) {
         folder = folderPath
         messageID = nil
@@ -270,6 +247,10 @@ final class NavStateCoordinator {
         listScroll = nil
         messageScroll = nil
         messageAnchor = nil
+        session.section = .mail
+        session.folder = folderPath
+        session.clearMessage()
+        scheduleSessionSave()
         if suppressNextFolderRecord {
             suppressNextFolderRecord = false
             return
@@ -278,26 +259,46 @@ final class NavStateCoordinator {
     }
 
     /// Records that the user opened a message in `folderPath`. A freshly-opened
-    /// message starts at the top, so any prior in-message scroll is cleared —
-    /// `recordMessageScroll` re-populates it as the user reads.
+    /// message starts at the top as far as the *server* cursor knows — the
+    /// reader consults the local position cache for where it really was.
     func recordMessage(folderPath: String, uid: UInt32, messageID: String?) {
         folder = folderPath
         self.uid = uid
         self.messageID = messageID
         messageScroll = nil
         messageAnchor = nil
+        session.section = .mail
+        session.folder = folderPath
+        session.uid = uid
+        session.messageID = messageID
+        scheduleSessionSave()
         scheduleSave()
     }
 
     /// Records the current in-message scroll position for the open message —
     /// an exact `offset` for a plain-text body, a structural `anchor` for an
-    /// HTML body. Ignored unless the working cursor is still on that message,
-    /// so a late capture from a message the user already left can't mis-attach.
-    func recordMessageScroll(folderPath: String, uid: UInt32, offset: Int?, anchor: String?) {
+    /// HTML body (`position` carries one or the other) — on the server cursor
+    /// and in the local position cache. A position at the top (`atTop`)
+    /// clears both rather than storing a trivial value. Ignored unless the
+    /// working cursor is still on that message, so a late capture from a
+    /// message the user already left can't mis-attach.
+    func recordMessageScroll(
+        folderPath: String,
+        uid: UInt32,
+        messageID: String?,
+        position: ReadingPosition,
+        atTop: Bool
+    ) {
         guard folder == folderPath, self.uid == uid else { return }
-        messageScroll = offset
-        messageAnchor = anchor
+        messageScroll = atTop ? nil : position.offset
+        messageAnchor = atTop ? nil : position.anchor
         scheduleSave()
+        savePosition(
+            key: ReadingPositionKey.mail(messageID: messageID, folder: folderPath, uid: uid),
+            anchor: position.anchor,
+            offset: position.offset,
+            atTop: atTop
+        )
     }
 
     /// Records that the message selection in `folderPath` cleared (back to the
@@ -309,6 +310,8 @@ final class NavStateCoordinator {
         messageID = nil
         messageScroll = nil
         messageAnchor = nil
+        session.clearMessage()
+        scheduleSessionSave()
         scheduleSave()
     }
 

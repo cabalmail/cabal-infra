@@ -56,3 +56,31 @@ export function isBackgroundRequest(value: unknown): value is BackgroundRequest 
     typeof (value as { kind: unknown }).kind === 'string'
   );
 }
+
+/**
+ * Popup -> content-script messages, sent with `tabs.sendMessage` to the
+ * active tab. The content script already runs on every https page, so it can
+ * answer for the page without the popup holding any tab permission of its
+ * own; a tab it is not injected into (browser-internal pages, tabs opened
+ * before install) simply does not answer, and the popup carries on without.
+ */
+export type PageRequest = { kind: 'get-page-hostname' };
+
+export type PageResponse = { kind: 'page-hostname'; hostname: string };
+
+export function isPageRequest(value: unknown): value is PageRequest {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { kind: unknown }).kind === 'get-page-hostname'
+  );
+}
+
+export function isPageResponse(value: unknown): value is PageResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { kind: unknown }).kind === 'page-hostname' &&
+    typeof (value as { hostname: unknown }).hostname === 'string'
+  );
+}

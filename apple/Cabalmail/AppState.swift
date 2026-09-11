@@ -205,6 +205,15 @@ final class AppState {
     // maps live in the "Per-folder unread + total counts" extension below.
     var folderUnreadCounts: [String: Int] = [:]
     var folderTotalCounts: [String: Int] = [:]
+    /// Paths of the folders the server's LSUB reports, published by
+    /// `FolderListViewModel` on every folder-list load and subscription
+    /// toggle. `nil` until the first list lands. Keyed by path, like the
+    /// counts above, so a view holding a stand-in `Folder(path:)` (the
+    /// resume-position toast, a push-notification tap, Spotlight, Siri —
+    /// all of which construct one with `isSubscribed` defaulted to `false`)
+    /// can still answer "is this folder subscribed?" truthfully. The
+    /// mutators live in `AppState+Subscriptions.swift`.
+    var subscribedFolderPaths: Set<String>?
     private var inboxBadgeTask: Task<Void, Never>?
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
     // Feed reader poller; the methods live in `AppState+Feeds.swift`.
@@ -641,6 +650,9 @@ extension AppState {
         try? await client.authService.signOut()
         // Tell the watch to drop its copy of the credentials too.
         WatchSessionBridge.shared.pushSignedOut()
+        // Forget this install's resume session and reading positions too, so
+        // the next account on the device doesn't inherit them.
+        self.navCoordinator?.clearLocalState()
         self.client = nil
         self.navCoordinator = nil
         self.prefsCoordinator?.stop()

@@ -36,6 +36,7 @@ extension URLSessionApiClient: RssClient {
         if let value = update.orderingMode { body["ordering_mode"] = value.rawValue }
         if let value = update.defaultOpenMode { body["default_open_mode"] = value.rawValue }
         if let value = update.defaultStyling { body["default_styling"] = value.rawValue }
+        if let value = update.defaultRemoteContent { body["default_remote_content"] = value.rawValue }
         if let value = update.notificationsEnabled { body["notifications_enabled"] = value }
         let request = try await put("/rss_update_subscription", json: body)
         struct Payload: Decodable { let subscription: RssSubscription }
@@ -86,6 +87,15 @@ extension URLSessionApiClient: RssClient {
             URLQueryItem(name: "limit", value: String(limit)),
         ])
         return try await decodeRss(RssSyncPage.self, from: request)
+    }
+
+    public func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage {
+        let request = try await get("/rss_list_items", query: [
+            URLQueryItem(name: "subscription_id", value: subscriptionId),
+            URLQueryItem(name: "state_since", value: since),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ])
+        return try await decodeRss(RssStateSyncPage.self, from: request)
     }
 
     public func getItem(feedId: String, sortKey: String) async throws -> RssItem {

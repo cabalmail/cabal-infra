@@ -58,6 +58,10 @@ struct CabalmailApp: App {
                     }
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    // Leaving the foreground: write the local resume session
+                    // now, so a debounce in flight isn't lost if the process
+                    // is terminated while backgrounded.
+                    if phase != .active { appState.navCoordinator?.flushSession() }
                     // Re-offer the session to the watch on every return to
                     // the foreground — see AppState.refreshWatchSession()
                     // for why the launch-time push alone strands a watch

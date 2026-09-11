@@ -34,6 +34,16 @@ public enum RssStyling: String, Codable, Sendable, CaseIterable, Identifiable {
     public var id: String { rawValue }
 }
 
+/// Per-feed remote-content default. `inherit` defers to the client's global
+/// remote-content preference; `show` / `hide` override it for this feed.
+public enum RssRemoteContentMode: String, Codable, Sendable, CaseIterable, Identifiable {
+    case inherit
+    case show
+    case hide
+
+    public var id: String { rawValue }
+}
+
 /// `filter=` on `/rss_list_items`.
 public enum RssItemFilter: String, Sendable, CaseIterable {
     case all
@@ -52,6 +62,56 @@ public enum RssItemScope: Sendable, Hashable {
     case subscription(String)
     case folder(String)
     case all
+}
+
+extension RssItemScope {
+    /// A compact string form for persistence (the local resume session, and
+    /// later the server cursor): `all`, `sub:<subscriptionId>`,
+    /// `folder:<folderId>`. Ids are opaque server strings that never contain
+    /// a colon, but the parser splits on the first one regardless.
+    public var token: String {
+        switch self {
+        case .all: return "all"
+        case .subscription(let id): return "sub:\(id)"
+        case .folder(let id): return "folder:\(id)"
+        }
+    }
+
+    /// Inverse of `token`; nil for anything malformed (an unknown prefix, an
+    /// empty id) so a stale or hand-edited value reads as "no scope".
+    public init?(token: String) {
+        if token == "all" {
+            self = .all
+            return
+        }
+        guard let colon = token.firstIndex(of: ":") else { return nil }
+        let prefix = token[..<colon]
+        let id = String(token[token.index(after: colon)...])
+        guard !id.isEmpty else { return nil }
+        switch prefix {
+        case "sub": self = .subscription(id)
+        case "folder": self = .folder(id)
+        default: return nil
+        }
+    }
+}
+
+extension RssItemScope: Codable {
+    public init(from decoder: Decoder) throws {
+        let token = try decoder.singleValueContainer().decode(String.self)
+        guard let scope = RssItemScope(token: token) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Unrecognised RssItemScope token: \(token)"
+            ))
+        }
+        self = scope
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(token)
+    }
 }
 
 // MARK: - Catalog
@@ -137,6 +197,7 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
     public var orderingMode: RssOrderingMode
     public var defaultOpenMode: RssOpenMode
     public var defaultStyling: RssStyling
+    public var defaultRemoteContent: RssRemoteContentMode
     public var notificationsEnabled: Bool
     public var credentialsScheme: String
     public var readWatermark: String
@@ -156,7 +217,8 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
     public init(
         subscriptionId: String, feedId: String, folderId: String = "", customTitle: String = "",
         orderingMode: RssOrderingMode = .newestFirst, defaultOpenMode: RssOpenMode = .summary,
-        defaultStyling: RssStyling = .reader, notificationsEnabled: Bool = false,
+        defaultStyling: RssStyling = .reader, defaultRemoteContent: RssRemoteContentMode = .inherit,
+        notificationsEnabled: Bool = false,
         credentialsScheme: String = "", readWatermark: String = "", dataStoreUuid: String = "",
         createdAt: String = "", feed: RssFeedSummary? = nil
     ) {
@@ -167,6 +229,7 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
         self.orderingMode = orderingMode
         self.defaultOpenMode = defaultOpenMode
         self.defaultStyling = defaultStyling
+        self.defaultRemoteContent = defaultRemoteContent
         self.notificationsEnabled = notificationsEnabled
         self.credentialsScheme = credentialsScheme
         self.readWatermark = readWatermark
@@ -179,6 +242,7 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
         case subscriptionId = "subscription_id", feedId = "feed_id", folderId = "folder_id"
         case customTitle = "custom_title", orderingMode = "ordering_mode"
         case defaultOpenMode = "default_open_mode", defaultStyling = "default_styling"
+        case defaultRemoteContent = "default_remote_content"
         case notificationsEnabled = "notifications_enabled", credentialsScheme = "credentials_scheme"
         case readWatermark = "read_watermark", dataStoreUuid = "data_store_uuid"
         case createdAt = "created_at", feed
@@ -198,6 +262,8 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
         defaultOpenMode = RssOpenMode(rawValue: openRaw) ?? .summary
         let stylingRaw = try container.decodeIfPresent(String.self, forKey: .defaultStyling) ?? ""
         defaultStyling = RssStyling(rawValue: stylingRaw) ?? .reader
+        let remoteRaw = try container.decodeIfPresent(String.self, forKey: .defaultRemoteContent) ?? ""
+        defaultRemoteContent = RssRemoteContentMode(rawValue: remoteRaw) ?? .inherit
         notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? false
         credentialsScheme = try container.decodeIfPresent(String.self, forKey: .credentialsScheme) ?? ""
         readWatermark = try container.decodeIfPresent(String.self, forKey: .readWatermark) ?? ""
@@ -268,6 +334,11 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
     public var summaryHtml: String
     public var contentHtml: String
     public var isRead: Bool
+    /// Whether `isRead` is the user's own mark (server state row) rather
+    /// than the subscription's read watermark. An explicit mark is exempt
+    /// from the local watermark rule, so a mark-unread on an old item
+    /// survives a later listing.
+    public var isReadExplicit: Bool
     public var isFavorite: Bool
 
     /// Stable across feeds: two feeds could carry the same sort key.
@@ -281,7 +352,8 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
         feedId: String, subscriptionId: String = "", itemId: String, sortKey: String, guid: String = "",
         title: String = "", author: String = "", url: String = "", publishedAt: String = "",
         updatedAt: String = "", fetchedAt: String = "", fetchedKey: String = "",
-        summaryHtml: String = "", contentHtml: String = "", isRead: Bool = false, isFavorite: Bool = false
+        summaryHtml: String = "", contentHtml: String = "", isRead: Bool = false, isReadExplicit: Bool = false,
+        isFavorite: Bool = false
     ) {
         self.feedId = feedId
         self.subscriptionId = subscriptionId
@@ -298,6 +370,7 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
         self.summaryHtml = summaryHtml
         self.contentHtml = contentHtml
         self.isRead = isRead
+        self.isReadExplicit = isReadExplicit
         self.isFavorite = isFavorite
     }
 
@@ -306,7 +379,7 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
         case sortKey = "sort_key", guid, title, author, url
         case publishedAt = "published_at", updatedAt = "updated_at", fetchedAt = "fetched_at"
         case fetchedKey = "fetched_key", summaryHtml = "summary_html", contentHtml = "content_html"
-        case isRead = "is_read", isFavorite = "is_favorite"
+        case isRead = "is_read", isReadExplicit = "is_read_explicit", isFavorite = "is_favorite"
     }
 
     public init(from decoder: Decoder) throws {
@@ -326,7 +399,70 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
         summaryHtml = try container.decodeIfPresent(String.self, forKey: .summaryHtml) ?? ""
         contentHtml = try container.decodeIfPresent(String.self, forKey: .contentHtml) ?? ""
         isRead = try container.decodeIfPresent(Bool.self, forKey: .isRead) ?? false
+        isReadExplicit = try container.decodeIfPresent(Bool.self, forKey: .isReadExplicit) ?? false
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+    }
+}
+
+/// One row of the caller's per-item state, from the state-sync form of
+/// `/rss_list_items`: the flags an item carries, keyed so they can be
+/// applied to the cached copy.
+public struct RssItemState: Sendable, Codable, Hashable {
+    public var feedId: String
+    public var sortKey: String
+    public var isRead: Bool
+    public var isReadExplicit: Bool
+    public var isFavorite: Bool
+    public var updatedAt: String
+
+    public init(feedId: String, sortKey: String, isRead: Bool = false, isReadExplicit: Bool = false,
+                isFavorite: Bool = false, updatedAt: String = "") {
+        self.feedId = feedId
+        self.sortKey = sortKey
+        self.isRead = isRead
+        self.isReadExplicit = isReadExplicit
+        self.isFavorite = isFavorite
+        self.updatedAt = updatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case feedId = "feed_id", sortKey = "sort_key", isRead = "is_read"
+        case isReadExplicit = "is_read_explicit", isFavorite = "is_favorite", updatedAt = "updated_at"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        feedId = try container.decode(String.self, forKey: .feedId)
+        sortKey = try container.decode(String.self, forKey: .sortKey)
+        isRead = try container.decodeIfPresent(Bool.self, forKey: .isRead) ?? false
+        isReadExplicit = try container.decodeIfPresent(Bool.self, forKey: .isReadExplicit) ?? false
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
+    }
+}
+
+/// A page of the state-sync form of `/rss_list_items`. `nextSince` is
+/// opaque: pass it back unchanged.
+public struct RssStateSyncPage: Sendable, Codable, Hashable {
+    public var states: [RssItemState]
+    public var nextSince: String
+    public var hasMore: Bool
+
+    public init(states: [RssItemState], nextSince: String, hasMore: Bool) {
+        self.states = states
+        self.nextSince = nextSince
+        self.hasMore = hasMore
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case states, nextSince = "next_state_since", hasMore = "has_more"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        states = try container.decodeIfPresent([RssItemState].self, forKey: .states) ?? []
+        nextSince = try container.decodeIfPresent(String.self, forKey: .nextSince) ?? ""
+        hasMore = try container.decodeIfPresent(Bool.self, forKey: .hasMore) ?? false
     }
 }
 
@@ -367,139 +503,4 @@ public struct RssSyncPage: Sendable, Codable, Hashable {
         nextSince = try container.decodeIfPresent(String.self, forKey: .nextSince) ?? ""
         hasMore = try container.decodeIfPresent(Bool.self, forKey: .hasMore) ?? false
     }
-}
-
-// MARK: - Mutations
-
-/// `/rss_subscribe`.
-public struct RssSubscribeResult: Sendable, Codable, Hashable {
-    public var subscription: RssSubscription
-    public var existing: Bool
-
-    public init(subscription: RssSubscription, existing: Bool) {
-        self.subscription = subscription
-        self.existing = existing
-    }
-}
-
-/// `/rss_unsubscribe`.
-public struct RssUnsubscribeResult: Sendable, Codable, Hashable {
-    public var subscriptionId: String
-    public var feedId: String
-    public var feedPurged: Bool
-
-    private enum CodingKeys: String, CodingKey {
-        case subscriptionId = "subscription_id", feedId = "feed_id", feedPurged = "feed_purged"
-    }
-}
-
-/// The optional fields of `/rss_update_subscription`; nil means "leave alone".
-public struct RssSubscriptionUpdate: Sendable, Hashable {
-    public var customTitle: String?
-    /// "" moves the subscription to the root.
-    public var folderId: String?
-    public var orderingMode: RssOrderingMode?
-    public var defaultOpenMode: RssOpenMode?
-    public var defaultStyling: RssStyling?
-    public var notificationsEnabled: Bool?
-
-    public init(
-        customTitle: String? = nil, folderId: String? = nil, orderingMode: RssOrderingMode? = nil,
-        defaultOpenMode: RssOpenMode? = nil, defaultStyling: RssStyling? = nil,
-        notificationsEnabled: Bool? = nil
-    ) {
-        self.customTitle = customTitle
-        self.folderId = folderId
-        self.orderingMode = orderingMode
-        self.defaultOpenMode = defaultOpenMode
-        self.defaultStyling = defaultStyling
-        self.notificationsEnabled = notificationsEnabled
-    }
-
-    var isEmpty: Bool {
-        customTitle == nil && folderId == nil && orderingMode == nil && defaultOpenMode == nil
-            && defaultStyling == nil && notificationsEnabled == nil
-    }
-}
-
-/// The optional fields of `/rss_update_folder`; nil means "leave alone".
-public struct RssFolderUpdate: Sendable, Hashable {
-    public var name: String?
-    /// "" moves the folder to the root.
-    public var parentFolderId: String?
-    public var displayOrder: Int?
-
-    public init(name: String? = nil, parentFolderId: String? = nil, displayOrder: Int? = nil) {
-        self.name = name
-        self.parentFolderId = parentFolderId
-        self.displayOrder = displayOrder
-    }
-}
-
-/// `/rss_delete_folder`.
-public struct RssFolderDeleteResult: Sendable, Codable, Hashable {
-    public var folderId: String
-    public var movedSubscriptions: Int
-    public var movedFolders: Int
-    public var parentFolderId: String
-
-    private enum CodingKeys: String, CodingKey {
-        case folderId = "folder_id", movedSubscriptions = "moved_subscriptions"
-        case movedFolders = "moved_folders", parentFolderId = "parent_folder_id"
-    }
-}
-
-/// One entry of `/rss_set_item_state`'s batch.
-public struct RssItemStateChange: Sendable, Hashable {
-    public var feedId: String
-    public var sortKey: String
-    public var isRead: Bool?
-    public var isFavorite: Bool?
-
-    public init(feedId: String, sortKey: String, isRead: Bool? = nil, isFavorite: Bool? = nil) {
-        self.feedId = feedId
-        self.sortKey = sortKey
-        self.isRead = isRead
-        self.isFavorite = isFavorite
-    }
-}
-
-/// `/rss_mark_all_read`.
-public struct RssMarkAllReadResult: Sendable, Codable, Hashable {
-    public var subscriptions: Int
-    public var flipped: Int
-    public var readWatermark: String
-
-    private enum CodingKeys: String, CodingKey {
-        case subscriptions, flipped, readWatermark = "read_watermark"
-    }
-}
-
-/// One rejected entry of an OPML import.
-public struct RssOpmlImportFailure: Sendable, Codable, Hashable {
-    public var url: String
-    public var code: String
-    public var message: String
-
-    private enum CodingKeys: String, CodingKey {
-        case url, code, message = "Error"
-    }
-}
-
-/// `/rss_opml_import`.
-public struct RssOpmlImportResult: Sendable, Codable, Hashable {
-    public var created: Int
-    public var existing: Int
-    public var foldersCreated: Int
-    public var failed: [RssOpmlImportFailure]
-
-    private enum CodingKeys: String, CodingKey {
-        case created, existing, foldersCreated = "folders_created", failed
-    }
-}
-
-/// `/rss_opml_export`.
-public struct RssOpmlExport: Sendable, Codable, Hashable {
-    public var opml: String
-    public var filename: String
 }

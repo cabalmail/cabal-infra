@@ -41,10 +41,11 @@ struct HTMLBodyView: View {
     /// child-index path + delta produced by a prior `onScrollCaptured`, resumed
     /// from the nav cursor). Nil for a normal open. See `NavStateCoordinator`.
     var restoreAnchor: String?
-    /// Reports the current scroll anchor while the message is on screen (polled
-    /// off the SwiftUI render loop). The reader relays it to the nav cursor so
-    /// the position survives across launches and devices.
-    var onScrollCaptured: ((String) -> Void)?
+    /// Reports the current scroll anchor while the message is on screen: after
+    /// each scroll settles (the scroll bridge, `HTMLBodyView+ScrollBridge`) and
+    /// on a slow poll as a fallback. The reader relays it to the nav
+    /// coordinator so the position survives across launches and devices.
+    var onScrollCaptured: ((ScrollCapture) -> Void)?
 
     /// Link the user primary-activated, driving the action popover; its
     /// anchor rect is copied to `menuAnchor` first because
@@ -64,7 +65,7 @@ struct HTMLBodyView: View {
         readerMode: Bool,
         printRequestTick: Int = 0,
         restoreAnchor: String? = nil,
-        onScrollCaptured: ((String) -> Void)? = nil
+        onScrollCaptured: ((ScrollCapture) -> Void)? = nil
     ) {
         self.html = html
         self.inlineImages = inlineImages
@@ -175,7 +176,7 @@ private struct MobileHTMLView: UIViewRepresentable {
     let readerMode: Bool
     let printRequestTick: Int
     let restoreAnchor: String?
-    let onScrollCaptured: ((String) -> Void)?
+    let onScrollCaptured: ((ScrollCapture) -> Void)?
     let onLinkTap: (LinkMenuTarget) -> Void
     let onLinkHover: (String?) -> Void
 
@@ -223,7 +224,7 @@ private struct MacHTMLView: NSViewRepresentable {
     let readerMode: Bool
     let printRequestTick: Int
     let restoreAnchor: String?
-    let onScrollCaptured: ((String) -> Void)?
+    let onScrollCaptured: ((ScrollCapture) -> Void)?
     let onLinkTap: (LinkMenuTarget) -> Void
     let onLinkHover: (String?) -> Void
 
@@ -276,6 +277,7 @@ func makeReaderWebView(coordinator: HTMLBodyCoordinator) -> WKWebView {
     preferences.allowsContentJavaScript = false
     configuration.defaultWebpagePreferences = preferences
     coordinator.installLinkBridge(on: configuration.userContentController)
+    coordinator.installScrollBridge(on: configuration.userContentController)
     let view = WKWebView(frame: .zero, configuration: configuration)
     view.navigationDelegate = coordinator
     view.allowsLinkPreview = false
@@ -305,8 +307,8 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     /// print sheet only opens when the parent's counter actually advances.
     private var lastPrintTick: Int = 0
     /// Reports the current in-message scroll anchor to the reader. Set from
-    /// `update*View`; invoked by the capture poll.
-    var onScrollCaptured: ((String) -> Void)?
+    /// `update*View`; invoked by the scroll bridge and the fallback poll.
+    var onScrollCaptured: ((ScrollCapture) -> Void)?
     /// Presents the link action menu for a primary-activated link. Set
     /// from `update*View`; invoked by the link bridge (see
     /// `HTMLBodyView+LinkBridge`).
@@ -318,11 +320,16 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     /// open. Applied exactly once (`didApplyRestore`).
     private var restoreAnchor: String?
     private var didApplyRestore = false
-    private var didFinishLoad = false
-    /// Polls the page for its scroll anchor while it's on screen. Scoped to the
-    /// web view's lifetime (cancelled on deinit) so it never touches the
-    /// SwiftUI render loop. Started after the first load so it can't capture the
-    /// pre-restore top-of-page position.
+    /// True once the first page load finished. The scroll bridge drops
+    /// anything reported before it (a layout-time scroll event could
+    /// otherwise record the pre-restore top of page and clear a saved
+    /// position before the restore ran).
+    var didFinishLoad = false
+    /// Slow fallback poll for the scroll anchor while the page is on screen —
+    /// the scroll bridge is the primary capture path. Scoped to the web view's
+    /// lifetime (cancelled on deinit) so it never touches the SwiftUI render
+    /// loop. Started after the first load so it can't capture the pre-restore
+    /// top-of-page position.
     private var pollTask: Task<Void, Never>?
 
     init(allowRemote: Bool) {
@@ -428,8 +435,10 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
 
     private func captureAndReport(from webView: WKWebView) async {
         let result = try? await webView.evaluateJavaScript(Self.captureScript)
-        guard let anchor = result as? String, !anchor.isEmpty else { return }
-        onScrollCaptured?(anchor)
+        guard let payload = result as? [String: Any], let capture = ScrollCapture(bridgePayload: payload) else {
+            return
+        }
+        onScrollCaptured?(capture)
     }
 
     /// Renders `html` into `webView`, putting the remote-content blocker into
@@ -603,12 +612,13 @@ extension HTMLBodyCoordinator {
 // MARK: - Scroll scripts
 
 extension HTMLBodyCoordinator {
-    /// Reads the top-most visible element and returns a compact anchor:
-    /// `"i<child.index.path>|<delta>"`, or a `"f<fraction>"` fallback when the
-    /// top of the viewport isn't over a concrete element. App-initiated (runs
-    /// even though page-content JS is disabled); reads geometry only.
-    static let captureScript = """
-    (function(){
+    /// JS defining `__cabalAnchor()`: reads the top-most visible element and
+    /// returns a compact anchor — `"i<child.index.path>|<delta>"`, or a
+    /// `"f<fraction>"` fallback when the top of the viewport isn't over a
+    /// concrete element. Shared by the fallback poll (`captureScript`) and the
+    /// scroll bridge's user script. Reads geometry only.
+    static let anchorFunctionSource = """
+    function __cabalAnchor(){
       var se=document.scrollingElement||document.documentElement;
       if(!se){return "";}
       var el=document.elementFromPoint(4,4);
@@ -625,6 +635,18 @@ extension HTMLBodyCoordinator {
         n=p;
       }
       return "i"+path.join(".")+"|"+top;
+    }
+    """
+
+    /// The poll's capture: the anchor plus the raw scroll offset (so the
+    /// receiver can tell "at the top" apart from a real position), as the
+    /// same `{anchor, top}` payload the scroll bridge posts. App-initiated
+    /// (runs even though page-content JS is disabled).
+    static let captureScript = """
+    (function(){
+      \(anchorFunctionSource)
+      var se=document.scrollingElement||document.documentElement;
+      return {anchor: __cabalAnchor(), top: se ? Math.round(se.scrollTop) : 0};
     })();
     """
 

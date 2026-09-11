@@ -24,13 +24,16 @@ extension RssStore {
         public var olderCursor: String
         public var olderExhausted: Bool
         public var lastSyncedAt: String
+        /// The state-sync cursor (opaque); "" before the first pull.
+        public var stateCursor: String
 
         public init(sinceCursor: String = "", olderCursor: String = "", olderExhausted: Bool = false,
-                    lastSyncedAt: String = "") {
+                    lastSyncedAt: String = "", stateCursor: String = "") {
             self.sinceCursor = sinceCursor
             self.olderCursor = olderCursor
             self.olderExhausted = olderExhausted
             self.lastSyncedAt = lastSyncedAt
+            self.stateCursor = stateCursor
         }
     }
 
@@ -63,6 +66,36 @@ extension RssStore {
         try database.run(
             "INSERT INTO pending (kind, subscription_id, feed_id, created_at) VALUES ('mark_all_read', ?, ?, ?)",
             [.init(subscriptionId), .init(sub.feedId), .init(Self.isoNow())])
+    }
+
+    /// Applies state rows the server reported (the state sync) to the
+    /// items this device has, without queueing anything. A flag with a
+    /// queued local change is left alone - the local intent is newer than
+    /// whatever the server had when it answered - and an item not cached
+    /// here is skipped; it arrives with its state when it is listed.
+    public func applyServerStates(_ states: [RssItemState]) throws {
+        guard !states.isEmpty else { return }
+        try database.exec("BEGIN")
+        do {
+            for state in states {
+                try database.run("""
+                    UPDATE items SET is_read = ?, state_is_explicit = ?
+                    WHERE feed_id = ? AND sort_key = ? AND NOT EXISTS (
+                      SELECT 1 FROM pending WHERE kind = 'read' AND feed_id = items.feed_id
+                        AND sort_key = items.sort_key)
+                    """, [.init(state.isRead), .init(state.isReadExplicit), .init(state.feedId), .init(state.sortKey)])
+                try database.run("""
+                    UPDATE items SET is_favorite = ?
+                    WHERE feed_id = ? AND sort_key = ? AND NOT EXISTS (
+                      SELECT 1 FROM pending WHERE kind = 'favorite' AND feed_id = items.feed_id
+                        AND sort_key = items.sort_key)
+                    """, [.init(state.isFavorite), .init(state.feedId), .init(state.sortKey)])
+            }
+            try database.exec("COMMIT")
+        } catch {
+            try? database.exec("ROLLBACK")
+            throw error
+        }
     }
 
     /// Applies a watermark the SERVER reported (after a push or a catalog
@@ -110,22 +143,23 @@ extension RssStore {
     // MARK: Sync cursors
 
     public func syncState(feedId: String) throws -> FeedSyncState {
-        guard let row = try database.rows(
-            "SELECT since_cursor, older_cursor, older_exhausted, last_synced_at FROM feed_sync WHERE feed_id = ?",
-            [.init(feedId)]).first else { return FeedSyncState() }
+        guard let row = try database.rows("""
+            SELECT since_cursor, older_cursor, older_exhausted, last_synced_at, state_cursor
+            FROM feed_sync WHERE feed_id = ?
+            """, [.init(feedId)]).first else { return FeedSyncState() }
         return FeedSyncState(sinceCursor: row.string(0), olderCursor: row.string(1),
-                             olderExhausted: row.bool(2), lastSyncedAt: row.string(3))
+                             olderExhausted: row.bool(2), lastSyncedAt: row.string(3), stateCursor: row.string(4))
     }
 
     public func setSyncState(feedId: String, _ state: FeedSyncState) throws {
         try database.run("""
-            INSERT INTO feed_sync (feed_id, since_cursor, older_cursor, older_exhausted, last_synced_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO feed_sync (feed_id, since_cursor, older_cursor, older_exhausted, last_synced_at, state_cursor)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(feed_id) DO UPDATE SET since_cursor = excluded.since_cursor,
               older_cursor = excluded.older_cursor, older_exhausted = excluded.older_exhausted,
-              last_synced_at = excluded.last_synced_at
+              last_synced_at = excluded.last_synced_at, state_cursor = excluded.state_cursor
             """, [.init(feedId), .init(state.sinceCursor), .init(state.olderCursor),
-                  .init(state.olderExhausted), .init(state.lastSyncedAt)])
+                  .init(state.olderExhausted), .init(state.lastSyncedAt), .init(state.stateCursor)])
     }
 
     public func itemCount(feedId: String) throws -> Int {

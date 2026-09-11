@@ -137,6 +137,61 @@ class ListItems(unittest.TestCase):
         status, body = call(self.mod, params={'since': ''})
         self.assertEqual((status, body['code']), (400, 'since_needs_subscription'))
 
+    def test_state_sync_full_pull_then_changes(self):
+        seed(self.tables, sub_extra={'read_watermark': '2024-01-03T00:00:00+00:00'})
+        state = self.tables['cabal-rss-user-item-state']
+        uf = f'{USER}#f1'
+
+        def row(i, **flags):
+            sk = f'2024-01-{i:02d}T00:00:00+00:00#i{i}'
+            state.rows[(uf, sk)] = {'user_feed': uf, 'sort_key': sk, 'item_id': f'i{i}',
+                                    'updated_at': '2024-03-01T00:00:00+00:00', **flags}
+            return sk
+        # i1: marked unread after mark-all-read (a legacy row: no updated_key).
+        row(1, is_read=False)
+        # i2: favorited, never marked read: read follows the watermark.
+        row(2, is_favorite=True, favorite_key='2024-01-02T00:00:00+00:00#i2',
+            updated_key='2024-03-01T00:00:00+00:00#i2')
+        row(4, is_read=True, updated_key='2024-03-01T00:00:00+00:00#i4')
+        # Phase one: the whole partition, in sort-key order, paged.
+        _, body = call(self.mod, params={'subscription_id': 'sub-f1', 'state_since': '', 'limit': '2'})
+        self.assertEqual([s['item_id'] for s in body['states']], ['i1', 'i2'])
+        self.assertTrue(body['has_more'])
+        self.assertEqual([(s['is_read'], s['is_read_explicit'], s['is_favorite']) for s in body['states']],
+                         [(False, True, False), (True, False, True)])
+        self.assertEqual(body['states'][0]['feed_id'], 'f1')
+        _, body = call(self.mod, params={'subscription_id': 'sub-f1', 'state_since': body['next_state_since'],
+                                         'limit': '2'})
+        self.assertEqual([s['item_id'] for s in body['states']], ['i4'])
+        self.assertFalse(body['has_more'])
+        cursor = rss_api.decode_cursor(body['next_state_since'])
+        self.assertEqual(cursor['phase'], 'updated')
+        # Phase two: only rows changed since; the legacy row never reappears.
+        settled = body['next_state_since']
+        _, body = call(self.mod, params={'subscription_id': 'sub-f1', 'state_since': settled})
+        self.assertEqual(body['states'], [])
+        self.assertFalse(body['has_more'])
+        state.rows[(uf, '2024-01-01T00:00:00+00:00#i1')]['is_read'] = True
+        state.rows[(uf, '2024-01-01T00:00:00+00:00#i1')]['updated_key'] = '2999-01-01T00:00:00+00:00#i1'
+        _, body = call(self.mod, params={'subscription_id': 'sub-f1', 'state_since': settled})
+        self.assertEqual([(s['item_id'], s['is_read'], s['is_read_explicit']) for s in body['states']],
+                         [('i1', True, True)])
+        # A row newer than the overlap boundary keeps the cursor behind it,
+        # so it is delivered again rather than stepped past.
+        _, again = call(self.mod, params={'subscription_id': 'sub-f1', 'state_since': body['next_state_since']})
+        self.assertEqual([s['item_id'] for s in again['states']], ['i1'])
+        status, body = call(self.mod, params={'state_since': ''})
+        self.assertEqual((status, body['code']), (400, 'state_since_needs_subscription'))
+
+    def test_items_carry_explicit_marker(self):
+        seed(self.tables, n=2, sub_extra={'read_watermark': '2024-12-31T00:00:00+00:00'})
+        sk = '2024-01-01T00:00:00+00:00#i1'
+        self.tables['cabal-rss-user-item-state'].rows[(f'{USER}#f1', sk)] = {
+            'user_feed': f'{USER}#f1', 'sort_key': sk, 'is_read': False}
+        _, body = call(self.mod, params={'subscription_id': 'sub-f1', 'order': 'oldest'})
+        self.assertEqual([(i['is_read'], i['is_read_explicit']) for i in body['items']],
+                         [(False, True), (True, False)])
+
     def test_bad_inputs(self):
         seed(self.tables)
         self.assertEqual(call(self.mod, params={'filter': 'starred'})[1]['code'], 'invalid_filter')
@@ -177,6 +232,7 @@ class SetState(unittest.TestCase):
         row = tables['cabal-rss-user-item-state'].rows[(f'{USER}#f1', sk1)]
         self.assertEqual((row['is_read'], row['is_favorite'], row['favorite_key'], row['item_id']),
                          (True, True, sk1, 'i1'))
+        self.assertEqual(row['updated_key'], f"{row['updated_at']}#i1")
         row2 = tables['cabal-rss-user-item-state'].rows[(f'{USER}#f1', '2024-01-02T00:00:00+00:00#i2')]
         self.assertNotIn('favorite_key', row2)
         self.assertEqual(call(mod, body={'items': [{'feed_id': 'zz', 'sort_key': 'a#b', 'is_read': True}]})[1]['code'],
@@ -198,6 +254,8 @@ class MarkAllRead(unittest.TestCase):
         self.assertEqual((status, body['subscriptions'], body['flipped']), (200, 1, 1))
         self.assertTrue(state.rows[(f'{USER}#f1', sk)]['is_read'])
         self.assertTrue(tables['cabal-rss-subscription'].rows[(USER, 'sub-f1')]['read_watermark'])
+        self.assertEqual(state.rows[(f'{USER}#f1', sk)]['updated_key'],
+                         f"{state.rows[(f'{USER}#f1', sk)]['updated_at']}#i1")
         self.assertNotIn('read_watermark', tables['cabal-rss-subscription'].rows[(USER, 'sub-f2')])
         _, body = call(mod, body={})
         self.assertEqual(body['subscriptions'], 2)

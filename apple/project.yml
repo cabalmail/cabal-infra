@@ -227,6 +227,10 @@ targets:
       - path: Cabalmail/AppState.swift
       - path: Cabalmail/AppStateSignals.swift
       - path: Cabalmail/NavStateCoordinator.swift
+      # The local resume-session layer of the coordinator (per-install
+      # session record + reading positions; docs/1.x/resume-session-plan.md).
+      - path: Cabalmail/NavStateCoordinator+Session.swift
+      - path: Cabalmail/NavStateCoordinator+ServerCursor.swift
       # Spotlight tap routing (shared AppState extension; both app entries
       # attach the .onContinueUserActivity handler that calls into it).
       - path: Cabalmail/SpotlightRouting.swift
@@ -241,6 +245,9 @@ targets:
       - path: Cabalmail/AppStateSessionPersistence.swift
       # Feed reader session flows (RSS plan, phase 5d): the periodic refresh.
       - path: Cabalmail/AppState+Feeds.swift
+      # Folder-subscription set mutators, read by the message list's
+      # unsubscribed-folder banner gate.
+      - path: Cabalmail/AppState+Subscriptions.swift
       # Push notifications (phase 6, macOS parity): one implementation for
       # both platforms — each file carries an `#if os(iOS)` / `#else`
       # (AppKit) branch around the small platform seams.

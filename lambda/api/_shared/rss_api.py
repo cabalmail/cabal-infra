@@ -39,6 +39,9 @@ ORDERING_MODES = ('newest_first', 'oldest_first',
                   'newest_day_oldest_within', 'oldest_day_newest_within')
 OPEN_MODES = ('summary', 'article')
 STYLING_MODES = ('reader', 'native')
+# Per-feed remote-content default: 'inherit' defers to the client's global
+# remote-content preference; 'show' / 'hide' override it for this feed.
+REMOTE_CONTENT_MODES = ('inherit', 'show', 'hide')
 MAX_TITLE_LENGTH = 256
 MAX_PAGE = 100
 DEFAULT_PAGE = 50
@@ -244,9 +247,24 @@ def state_map(user, feed_id, sort_keys):
 
 def is_read(state_row, published_at, watermark):
     '''The rule from the module docstring.'''
-    if state_row is not None and 'is_read' in state_row:
+    if read_is_explicit(state_row):
         return bool(state_row['is_read'])
     return bool(watermark) and str(published_at) <= str(watermark)
+
+
+def read_is_explicit(state_row):
+    '''Whether the caller marked this item read or unread by hand. Sent on
+    the wire as is_read_explicit so a client keeps the same rule: an
+    explicit mark is exempt from its local watermark, which otherwise
+    would turn a mark-unread on an old item straight back into read.'''
+    return state_row is not None and 'is_read' in state_row
+
+
+def updated_key(now, sort_key):
+    '''The by_updated index key of a state row: "<updated_at>#<item_id>",
+    unique per row so the state sync can page with a strict cursor. Every
+    write of a state row sets it alongside updated_at.'''
+    return f'{now}#{sort_key.split("#", 1)[-1]}'
 
 
 def serialize_item(row, subscription, state_row, inline_body=True):
@@ -268,11 +286,28 @@ def serialize_item(row, subscription, state_row, inline_body=True):
         'content_html': row.get('content_html', ''),
         'is_read': is_read(state_row, row.get('published_at', ''),
                            subscription.get('read_watermark')),
+        'is_read_explicit': read_is_explicit(state_row),
         'is_favorite': bool(state_row.get('is_favorite')) if state_row else False,
     }
     if inline_body and not out['content_html'] and row.get('content_s3_key'):
         out['content_html'] = spilled_body(row['content_s3_key'])
     return out
+
+
+def serialize_state(row, subscription):
+    '''Wire form of one state row (the state-sync form of /rss_list_items):
+    the same is_read / is_read_explicit / is_favorite an item carries, keyed
+    by feed and sort key so the client can apply it to a cached item.'''
+    return {
+        'feed_id': row['user_feed'].split('#', 1)[-1],
+        'sort_key': row['sort_key'],
+        'item_id': row.get('item_id') or row['sort_key'].split('#', 1)[-1],
+        'is_read': is_read(row, row['sort_key'].split('#', 1)[0],
+                           subscription.get('read_watermark')),
+        'is_read_explicit': read_is_explicit(row),
+        'is_favorite': bool(row.get('is_favorite')),
+        'updated_at': row.get('updated_at', ''),
+    }
 
 
 def spilled_body(key):
@@ -320,6 +355,7 @@ def serialize_subscription(row, feed_row=None):
         'ordering_mode': row.get('ordering_mode', ORDERING_MODES[0]),
         'default_open_mode': row.get('default_open_mode', OPEN_MODES[0]),
         'default_styling': row.get('default_styling', STYLING_MODES[0]),
+        'default_remote_content': row.get('default_remote_content', REMOTE_CONTENT_MODES[0]),
         'notifications_enabled': bool(row.get('notifications_enabled', False)),
         'credentials_scheme': row.get('credentials_scheme') or '',
         'read_watermark': row.get('read_watermark', ''),

@@ -224,6 +224,7 @@ def create_subscription(user, feed, folder_id):
         'ordering_mode': 'newest_first',
         'default_open_mode': 'summary',
         'default_styling': 'reader',
+        'default_remote_content': 'inherit',
         'notifications_enabled': False,
         'data_store_uuid': str(uuid.uuid4()),
         'created_at': now,
