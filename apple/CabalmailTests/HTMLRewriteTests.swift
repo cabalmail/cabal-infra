@@ -10,9 +10,18 @@ final class HTMLRewriteTests: XCTestCase {
     /// in step with `defaultLinkStyle` / `brandLinkColorLight` in
     /// `HTMLRewrite.swift`.
     private let linkStyle = "<style>a { color: #2E5235; }</style>"
-    private var headDefaults: String { viewport + linkStyle }
+    /// Between the two: the policy that has WebKit fetch `http` subresources
+    /// over `https` (`upgradeInsecureRequests` in `HTMLRewrite.swift`).
+    private let upgrade = "<meta http-equiv=\"Content-Security-Policy\" content=\"upgrade-insecure-requests\">"
+    private var headDefaults: String { viewport + upgrade + linkStyle }
 
     // MARK: - Viewport injection
+
+    func testBothModesUpgradeInsecureSubresources() {
+        let meta = "<meta http-equiv=\"Content-Security-Policy\" content=\"upgrade-insecure-requests\">"
+        XCTAssertTrue(rewrite(html: "<p>x</p>", inlineImages: [:]).contains(meta))
+        XCTAssertTrue(rewrite(html: "<p>x</p>", inlineImages: [:], readerMode: true).contains(meta))
+    }
 
     func testOriginalModeInjectsViewport() {
         let html = "<html><head><title>hi</title></head><body>two words</body></html>"

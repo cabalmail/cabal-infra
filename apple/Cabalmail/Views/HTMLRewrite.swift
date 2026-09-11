@@ -53,6 +53,18 @@ private let viewportMeta =
 private let defaultLinkStyle =
     "<style>a { color: \(brandLinkColorLight); }</style>"
 
+/// Also injected on both paths. App Transport Security refuses plain
+/// `http://` subresources inside the web view, so a body whose images are
+/// still addressed over `http` (Electoral Vote's, 2026-09-10) showed broken
+/// boxes even with remote content allowed. This directive has WebKit fetch
+/// every `http` subresource over `https` instead - the fix Reeder-class
+/// readers apply, and one that keeps ATS intact rather than exempting web
+/// content from it. A host with no `https` at all still fails, as before.
+/// When remote content is off, the content blocker stops the request
+/// either way; the upgrade only changes what is asked for once allowed.
+private let upgradeInsecureRequests =
+    "<meta http-equiv=\"Content-Security-Policy\" content=\"upgrade-insecure-requests\">"
+
 /// Places the head defaults at the *start* of the document head, so a sender
 /// that declares its own viewport still wins (WebKit takes the last
 /// declaration in document order). The insertion point matters: prepending
@@ -60,7 +72,7 @@ private let defaultLinkStyle =
 /// and change how their CSS renders, which is exactly what "Original" mode
 /// must not do.
 private func insertingHeadDefaults(into html: String) -> String {
-    let headDefaults = viewportMeta + defaultLinkStyle
+    let headDefaults = viewportMeta + upgradeInsecureRequests + defaultLinkStyle
     // `<head>` first, then `<html>`, then the doctype; a bare fragment has
     // none of them and can simply be prefixed (the parser synthesizes the
     // head around it).
