@@ -19,15 +19,15 @@ phase are updated in the same PR as the work, per the docs convention.
 | Phase | Work item                                         | Status      |
 | ----- | ------------------------------------------------- | ----------- |
 | 1     | DynamoDB tables + supporting infra                | Shipped 1.12.2 (2026-09-09) |
-| 2     | Scheduler + fetcher Lambdas                       | On stage (2026-09-09) |
-| 3     | Subscription + reader API                         | On stage (2026-09-09) |
-| 4     | OPML import/export (API)                          | On stage (2026-09-10) |
-| 5     | Apple clients (offline + FTS + cookie scoping)    | 5a and 5b on stage (2026-09-10)        |
-| 6     | Android client (offline + FTS + profile scoping)  | Not started |
+| 2     | Scheduler + fetcher Lambdas                       | Shipped 1.13.0 (2026-09-10) |
+| 3     | Subscription + reader API                         | Shipped 1.13.0 (2026-09-10) |
+| 4     | OPML import/export (API)                          | Shipped 1.14.0 (2026-09-10) |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | Shipped 1.15.0 (2026-09-10); www fallback 1.15.1 |
+| 6     | Android client (offline + FTS + profile scoping)  | Deferred: Apple refinement first (2026-09-10) |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
 | 9     | Credentialed feeds                                | Not started |
-| 10    | Adaptive cadence + health surface polish          | Not started |
+| 10    | Adaptive cadence + health surface polish          | Health badge in review (2026-09-10); rest not started |
 
 ## Revisions (2026-09-09)
 
@@ -604,6 +604,18 @@ filters never need a network round trip.
    `/rss_mark_all_read` calls whenever online, on reconnect
    (`Reachability`), and before each item sync. Last write wins; a
    server row that disagrees after a drain is taken as truth.
+
+   > **Erratum (2026-09-11):** as shipped, nothing carried a server row
+   > back to a device that had not written it. The since-sync in step 2 is
+   > keyed on `fetched_key`, which a state change never touches, so a mark
+   > made on one device was invisible to the others until they re-listed
+   > the item; the wire item had no explicit-state marker, so even a
+   > re-listed explicit unread older than the watermark read as read
+   > locally; and the drain sent every item mark before any mark-all-read
+   > regardless of the order the user made them. Fixed by a state-sync
+   > form of `/rss_list_items` (`state_since`, backed by a `by_updated`
+   > index), `is_read_explicit` on the wire, and an order-preserving
+   > drain; see `docs/rss.md`.
 4. **Triggers**: selecting a feed or folder syncs the visible feeds;
    foreground syncs everything subscribed; iOS `BGAppRefreshTask`
    (system-scheduled, at least hourly requested) and a 15-minute timer
@@ -1277,6 +1289,57 @@ had failed on stage, which also skipped the TestFlight uploads). Noted for
 5d: the disabled mail toolbar items still show while a feed is selected
 with no item open, compose leaves the toolbar in feed scope, and item rows
 want accessibility identifiers for the tester.
+**5d (polish) on stage (2026-09-10), taken before 5c because the read path
+is what is being dogfooded:** rows in multi-feed scopes and the reader
+header name the feed (subscription title, host as fallback); a
+fifteen-minute foreground refresh in `AppState+Feeds.swift` mirrors the
+inbox badge poller and posts to `FeedStateBus` so badges and first-page
+lists follow (iOS background fetch waits for phase 8); the article button
+reads "needs a connection" while unreachable and `ArticleWebView` replaces
+WebKit's error page with a notice and Retry; "Search older items" appears
+when a feed search finds nothing cached; the macOS empty feed pane
+reserves the feed toolbar's six slots (`EmptyFeedDetailToolbar`, order
+shared with the live toolbar through `FeedReaderAction`) instead of the
+mail reader's eleven; New Message stays in the toolbar in feed scope;
+item rows carry `feed.item.<id>` identifiers. Deliberately not done: the
+mail list's index-addressed virtualization. The feed list reads pages of
+100 from SQLite and appends on demand, and SwiftUI's `List` is already
+lazy per row; the mail pattern exists because envelopes arrive from the
+server by index window, which the local store makes unnecessary. Revisit
+only if a feed with thousands of cached items scrolls badly.
+**5c (management) on stage (2026-09-10):** `FeedManagementViewModel`
+over the Kit's `RssClient` + `RssStore` (server first, then the store,
+then `FeedStateBus`, which gained a catalog channel the sidebar re-reads
+on); `SubscribeFeedSheet`, `FeedFolderSheet` (create / rename / move),
+`FeedSubscriptionSettingsSheet` (title, folder, ordering, open mode,
+styling, fetcher health, Unsubscribe); the sidebar's `+` menu and row
+context menus (`FeedAddMenu`, `FeedSidebarContextMenu`), hosted by
+`FeedManagementActions` + the `.feedManagementSheets` modifier so the
+mail sidebar, the Feeds tab, and the item list's settings button share
+one presenter; OPML import / export through the system open and save
+panels (`FeedOpml.swift`); the Feeds menu (`FeedsMenuCommands`, ⌥⌘N
+subscribe) dispatching through `AppState.requestFeedCommand`; Settings ›
+Feeds with the `rss_mark_as_read` picker and the OPML actions. Forms are
+owned by the presenter, not the sheet (#889). Found while driving it: on
+macOS 26 `WKWebsiteDataStore.remove(forIdentifier:)` (and
+`allDataStoreIdentifiers`) segfaults in a process that has not yet stood
+up a web view, which is the state after unsubscribing a feed whose article
+was never opened; `FeedWebStorage` now opens the store for the identifier
+and clears it through the instance `removeData` API instead (reproduced
+standalone, so it is WebKit's, not ours). Not done: drag-to-reorder into
+folders (the settings sheet and "Rename or Move" cover moves) and the
+notifications toggle (waits for phase 8's push).
+**Post-5c fix (2026-09-10):** the first real OPML imports showed two feeds
+with no items because the apex host does not serve them: one 404s the apex
+path, the other redirects every apex path to its front page, and only
+`www.` works. D1's "apex is canonical" is kept as the preference, verified:
+`rss_url.www_variant` names the `www.` form of an apex canonical, the
+fetcher's `www_fallback` and the probe's `fetch_probe` try it once when the
+apex does not yield a feed and adopt it as canonical (conflict-aware via
+the same path permanent redirects use), `redirect_target` keeps `www.` when
+a redirect points from the apex form to the `www.` form of the same URL,
+and the subscribe lookup also checks the `www.` row so a second subscriber
+typing the apex form lands on the existing feed.
 
 **Goal.** The iOS, iPadOS, visionOS, and macOS clients have a reader
 UI with per-feed `WKWebsiteDataStore` isolation, offline reading, and
@@ -1335,7 +1398,11 @@ populate from server."
 
 ### Phase 6: Android client (with offline + FTS)
 
-**Status:** Not started.
+**Status:** Deferred (2026-09-10). With phase 5 shipped, the operator
+chose to pause and refine the Apple implementation on real use before
+porting it: each week of dogfooding has been surfacing issues (the
+`www`-only publishers, the health badge below) that are cheaper to fix in
+one client than two. Android starts when the Apple reader has settled.
 
 **Goal.** The Android client reaches parity with phase 5: reader UI,
 offline reading, per-feed FTS, per-feed WebView profile scoping.
@@ -1477,7 +1544,14 @@ unhealthy).
 
 ### Phase 10: Adaptive cadence + health surface polish
 
-**Status:** Not started.
+**Status:** Health badge pulled forward, in review (2026-09-10): the first
+OPML import left two feeds silently empty, and a badge would have said
+why. `FeedHealth` (app layer) maps the fetcher's summary to healthy /
+failing (3+ consecutive failures, warning tint) / stopped (20+ or
+dead-lettered, danger tint); the sidebar row shows the mark with the
+fetcher's words as tooltip and accessibility label, and a single feed's
+item list carries the same words as a header line. The rest of the phase
+is not started.
 
 **Goal.** Tune the adaptive cadence formula based on observed
 production behavior, and surface feed health visibly enough that

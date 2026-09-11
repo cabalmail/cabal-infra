@@ -98,7 +98,11 @@ final class ApiClientRssTests: XCTestCase {
         {"items": [{"feed_id": "f", "sort_key": "2026#i1", "title": "T", "is_read": true}], "next_cursor": "c2"}
         """
         let sync = #"{"items": [], "next_since": "k9", "has_more": false}"#
-        let (client, http) = makeClient([(page, 200), (sync, 200)])
+        let states = """
+        {"states": [{"feed_id": "f", "sort_key": "2026#i1", "is_read": false, "is_read_explicit": true,
+                     "is_favorite": true, "updated_at": "u"}], "next_state_since": "sc", "has_more": true}
+        """
+        let (client, http) = makeClient([(page, 200), (sync, 200), (states, 200)])
         let listed = try await client.listItems(scope: .folder("fo"), filter: .unread, order: .oldest,
                                                 limit: 25, cursor: "c1")
         XCTAssertEqual(listed.items[0].title, "T")
@@ -111,6 +115,13 @@ final class ApiClientRssTests: XCTestCase {
         XCTAssertEqual(queryItems(requests[0]),
                        ["folder_id": "fo", "filter": "unread", "order": "oldest", "limit": "25", "cursor": "c1"])
         XCTAssertEqual(queryItems(requests[1]), ["subscription_id": "s", "since": "", "limit": "100"])
+        let stateSync = try await client.syncItemStates(subscriptionId: "s", since: "c0", limit: 50)
+        XCTAssertEqual(stateSync.states, [RssItemState(feedId: "f", sortKey: "2026#i1", isRead: false,
+                                                       isReadExplicit: true, isFavorite: true, updatedAt: "u")])
+        XCTAssertEqual(stateSync.nextSince, "sc")
+        XCTAssertTrue(stateSync.hasMore)
+        let stateRequest = await http.requests[2]
+        XCTAssertEqual(queryItems(stateRequest), ["subscription_id": "s", "state_since": "c0", "limit": "50"])
     }
 
     func testSetItemStateAndMarkAllReadBodies() async throws {
@@ -144,7 +155,39 @@ final class ApiClientRssTests: XCTestCase {
         XCTAssertEqual(sent["folder_id"] as? String, "")
         XCTAssertEqual(sent["notifications_enabled"] as? Bool, true)
         XCTAssertNil(sent["custom_title"])
+        XCTAssertNil(sent["default_remote_content"])
         XCTAssertEqual(requests[0].httpMethod, "PUT")
+    }
+
+    func testUpdateSubscriptionSendsRemoteContentDefaultAndDecodesIt() async throws {
+        let json = #"{"subscription": {"subscription_id": "s", "feed_id": "f", "default_remote_content": "show"}}"#
+        let (client, http) = makeClient([(json, 200)])
+        let updated = try await client.updateSubscription("s", RssSubscriptionUpdate(defaultRemoteContent: .hide))
+        let sent = body(await http.requests[0])
+        XCTAssertEqual(sent["default_remote_content"] as? String, "hide")
+        XCTAssertEqual(updated.defaultRemoteContent, .show)
+    }
+
+    /// A row from before the field existed, or one carrying a value from a
+    /// newer server, reads as `inherit` rather than failing the decode.
+    func testSubscriptionRemoteContentDecodesLeniently() throws {
+        let absent = try JSONDecoder().decode(
+            RssSubscription.self, from: Data(#"{"subscription_id": "s", "feed_id": "f"}"#.utf8))
+        XCTAssertEqual(absent.defaultRemoteContent, .inherit)
+        let unknown = try JSONDecoder().decode(
+            RssSubscription.self,
+            from: Data(#"{"subscription_id": "s", "feed_id": "f", "default_remote_content": "sometimes"}"#.utf8))
+        XCTAssertEqual(unknown.defaultRemoteContent, .inherit)
+    }
+
+    func testSubscriptionApplyingUpdate() {
+        let sub = RssSubscription(subscriptionId: "s", feedId: "f")
+        let applied = sub.applying(RssSubscriptionUpdate(defaultOpenMode: .article, defaultRemoteContent: .show))
+        XCTAssertEqual(applied.defaultOpenMode, .article)
+        XCTAssertEqual(applied.defaultRemoteContent, .show)
+        XCTAssertEqual(applied.defaultStyling, .reader, "untouched fields carry over")
+        XCTAssertTrue(RssSubscriptionUpdate().isEmpty)
+        XCTAssertFalse(RssSubscriptionUpdate(defaultRemoteContent: .inherit).isEmpty)
     }
 
     func testOpmlRoundTrip() async throws {

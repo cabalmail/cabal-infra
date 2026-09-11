@@ -160,9 +160,18 @@ def _convert_entry(entry):
     summary = entry.get('summary') or ''
     if summary == content_html:
         summary = ''
+    # Identity from the body as the publisher wrote it, before any image is
+    # folded in, so a feed without guids keeps stable ids across this change.
+    guid = item_identity(entry.get('id'), entry.get('link'), entry.get('title'),
+                         content_html or summary)
+    image = _attached_image(entry)
+    if image and '<img' not in (content_html or summary):
+        # NASA's Image of the Day and many podcast-style feeds carry the
+        # picture as an enclosure or media:content and only prose in the
+        # body; readers show it inline, so the body gets it too.
+        content_html = f'<p><img src="{_attr(image)}" alt=""></p>' + (content_html or summary)
     return ParsedItem(
-        guid=item_identity(entry.get('id'), entry.get('link'), entry.get('title'),
-                           content_html or summary),
+        guid=guid,
         title=str(entry.get('title') or ''),
         author=str(entry.get('author') or ''),
         url=str(entry.get('link') or ''),
@@ -172,6 +181,31 @@ def _convert_entry(entry):
                                          or entry.get('updated_parsed')),
         updated_at=_struct_to_datetime(entry.get('updated_parsed')),
     )
+
+
+def _attached_image(entry):
+    '''The first image the entry attaches outside its body: an `enclosure`
+    with an image type, a `media:content` of medium image (or image type),
+    or a `media:thumbnail`. Empty when there is none.'''
+    for enclosure in entry.get('enclosures') or []:
+        if str(enclosure.get('type') or '').startswith('image/') and enclosure.get('href'):
+            return str(enclosure['href'])
+    for media in entry.get('media_content') or []:
+        url = media.get('url') or ''
+        media_type = str(media.get('type') or '')
+        is_image = media.get('medium') == 'image' or media_type.startswith('image/')
+        if url and is_image:
+            return str(url)
+    for thumb in entry.get('media_thumbnail') or []:
+        if thumb.get('url'):
+            return str(thumb['url'])
+    return ''
+
+
+def _attr(value):
+    '''Escapes a URL for an HTML attribute.'''
+    return (value.replace('&', '&amp;').replace('"', '&quot;')
+            .replace('<', '&lt;').replace('>', '&gt;'))
 
 
 def _struct_to_datetime(struct):

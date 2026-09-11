@@ -39,6 +39,12 @@ struct SignedInRootView: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var settingsPresented = false
+    /// The compact tab bar's selection. Seeded synchronously from the stored
+    /// resume session so a launch that ended in the feed reader opens on
+    /// Feeds without first drawing Mail for a frame (a `@State` default can't
+    /// reach the environment, hence the direct store read — see
+    /// `ResumeSessionStore.storedSection`).
+    @State private var compactTab: CompactTab = ResumeSessionStore.storedSection() == .feeds ? .feeds : .mail
     #endif
 
     var body: some View {
@@ -105,20 +111,20 @@ struct SignedInRootView: View {
     /// fall through to the rows visible behind the bar (see
     /// `TabBarTrayShield.swift`).
     private var compactTabs: some View {
-        TabView {
-            Tab("Mail", systemImage: "tray") {
+        TabView(selection: $compactTab) {
+            Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
                 MailRootView()
                     .tabBarTrayShield()
             }
-            Tab("Feeds", systemImage: "dot.radiowaves.up.forward") {
+            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: CompactTab.feeds) {
                 FeedRootView()
                     .tabBarTrayShield()
             }
-            Tab("Addresses", systemImage: "at") {
+            Tab("Addresses", systemImage: "at", value: CompactTab.addresses) {
                 AddressManagementTab()
                     .tabBarTrayShield()
             }
-            Tab("Settings", systemImage: "gear") {
+            Tab("Settings", systemImage: "gear", value: CompactTab.settings) {
                 SettingsView()
                     .tabBarTrayShield()
             }
@@ -127,9 +133,31 @@ struct SignedInRootView: View {
             // button, the button expands into a focused field); on iOS 18–25
             // it's a plain search tab. The morph itself comes from the
             // `.searchable` inside `SearchView`.
-            Tab(role: .search) {
+            Tab(value: CompactTab.search, role: .search) {
                 SearchView()
                     .tabBarTrayShield()
+            }
+        }
+        // The resume session remembers which section the user was in; the
+        // Mail and Feeds tabs each keep their own position, so only the
+        // section moves here. Other tabs leave it alone.
+        .onChange(of: compactTab) { _, tab in
+            if let section = tab.resumeSection {
+                appState.navCoordinator?.noteSection(section)
+            }
+        }
+    }
+
+    /// Compact tab identities. `resumeSection` maps the two content tabs onto
+    /// the resume session's sections; the utility tabs have none.
+    enum CompactTab: Hashable {
+        case mail, feeds, addresses, settings, search
+
+        var resumeSection: ResumeSession.Section? {
+            switch self {
+            case .mail: return .mail
+            case .feeds: return .feeds
+            case .addresses, .settings, .search: return nil
             }
         }
     }

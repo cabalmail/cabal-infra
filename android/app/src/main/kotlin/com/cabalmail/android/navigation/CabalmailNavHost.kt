@@ -66,6 +66,7 @@ import com.cabalmail.android.ui.folders.FoldersAdminScreen
 import com.cabalmail.android.ui.folders.FoldersAdminViewModel
 import com.cabalmail.android.ui.mail.FolderListScreen
 import com.cabalmail.android.ui.mail.FolderPane
+import com.cabalmail.android.ui.mail.FolderSections
 import com.cabalmail.android.ui.mail.FoldersViewModel
 import com.cabalmail.android.ui.mail.MailListDetailScreen
 import com.cabalmail.android.ui.mail.MessageDetailScreen
@@ -400,6 +401,34 @@ private fun MailNavGraph(
             val viewModel: MessageListViewModel =
                 viewModel(factory = MessageListViewModel.factory(container, folder))
             val state by viewModel.state.collectAsState()
+            // The folder list behind the title's folder-switch menu (and the
+            // wide-window folder pane), scoped to the "folders" hub entry —
+            // always beneath us, it is the start destination — so the list
+            // and its statuses survive folder switches.
+            val foldersOwner =
+                remember(entry) {
+                    runCatching {
+                        navController.getBackStackEntry("folders")
+                    }.getOrNull() ?: entry
+                }
+            val foldersViewModel: FoldersViewModel =
+                viewModel(
+                    viewModelStoreOwner = foldersOwner,
+                    factory = FoldersViewModel.factory(container),
+                )
+            val foldersState by foldersViewModel.state.collectAsState()
+            val folderMenu =
+                foldersState.folders?.let { FolderSections.switchMenu(it, foldersState.subscribed) }
+            // Swap the list in place: pop the current messages entry rather
+            // than stacking one per visited folder.
+            val switchFolder: (String) -> Unit = { target ->
+                if (target != folder) {
+                    navController.navigate("messages/${Uri.encode(target)}") {
+                        popUpTo(MAIL_HUB_ROUTE)
+                        launchSingleTop = true
+                    }
+                }
+            }
             if (compactWidth) {
                 val config by container.configService.config.collectAsState()
                 MessageListScreen(
@@ -414,6 +443,8 @@ private fun MailNavGraph(
                     onOpenSearch = { navController.navigate("search?folder=${Uri.encode(folder)}") },
                     onBack = { navController.popBackStack() },
                     onCompose = composeNew,
+                    folderMenu = folderMenu,
+                    onSwitchFolder = switchFolder,
                 )
             } else {
                 // Tablet / foldable / landscape phone (plan §7.2): list |
@@ -428,22 +459,9 @@ private fun MailNavGraph(
                     onBack = { navController.popBackStack() },
                     onCompose = composeNew,
                     openCompose = openCompose,
+                    folderMenu = folderMenu,
+                    onSwitchFolder = switchFolder,
                     folderPane = {
-                        // Scoped to the "folders" hub entry (always beneath
-                        // us — it is the start destination) so the folder
-                        // list and its statuses survive folder switches.
-                        val foldersOwner =
-                            remember(entry) {
-                                runCatching {
-                                    navController.getBackStackEntry("folders")
-                                }.getOrNull() ?: entry
-                            }
-                        val foldersViewModel: FoldersViewModel =
-                            viewModel(
-                                viewModelStoreOwner = foldersOwner,
-                                factory = FoldersViewModel.factory(container),
-                            )
-                        val foldersState by foldersViewModel.state.collectAsState()
                         val preferences by container.preferences.preferences.collectAsState()
                         FolderPane(
                             state = foldersState,
@@ -452,17 +470,7 @@ private fun MailNavGraph(
                             allExpanded = preferences.folderSectionAllExpanded,
                             onToggleSection = foldersViewModel::toggleSection,
                             selectedFolder = folder,
-                            onOpenFolder = { target ->
-                                if (target != folder) {
-                                    // Swap the list in place: pop the current
-                                    // messages entry rather than stacking one
-                                    // per visited folder.
-                                    navController.navigate("messages/${Uri.encode(target)}") {
-                                        popUpTo(MAIL_HUB_ROUTE)
-                                        launchSingleTop = true
-                                    }
-                                }
-                            },
+                            onOpenFolder = switchFolder,
                             onEmptyTrash = foldersViewModel::emptyTrash,
                             onPoll = foldersViewModel::poll,
                         )

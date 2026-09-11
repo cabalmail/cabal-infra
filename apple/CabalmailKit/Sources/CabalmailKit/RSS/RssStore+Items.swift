@@ -25,7 +25,10 @@ extension RssStore {
 
     /// Writes items from the server. An item with a pending local mutation
     /// keeps its local state (the server copy predates what the user did);
-    /// every other item takes the server's `is_read` / `is_favorite`.
+    /// every other item takes the server's `is_read` / `is_favorite`, and
+    /// whether that read state is an explicit mark - without which an
+    /// explicit unread on an item older than the watermark would read as
+    /// read here.
     public func upsertItems(_ items: [RssItem]) throws {
         guard !items.isEmpty else { return }
         let now = Self.isoNow()
@@ -41,7 +44,7 @@ extension RssStore {
                     INSERT INTO items (feed_id, sort_key, item_id, guid, title, author, url, published_at,
                       updated_at, fetched_at, fetched_key, summary_html, content_html, body_text,
                       is_read, is_favorite, state_is_explicit, cached_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(feed_id, sort_key) DO UPDATE SET item_id = excluded.item_id,
                       guid = excluded.guid, title = excluded.title, author = excluded.author,
                       url = excluded.url, published_at = excluded.published_at,
@@ -50,7 +53,8 @@ extension RssStore {
                       content_html = excluded.content_html, body_text = excluded.body_text,
                       is_read = CASE WHEN ? THEN items.is_read ELSE excluded.is_read END,
                       is_favorite = CASE WHEN ? THEN items.is_favorite ELSE excluded.is_favorite END,
-                      state_is_explicit = CASE WHEN ? THEN items.state_is_explicit ELSE 0 END,
+                      state_is_explicit = CASE WHEN ? THEN items.state_is_explicit
+                                               ELSE excluded.state_is_explicit END,
                       cached_at = excluded.cached_at
                     """, [
                         .init(item.feedId), .init(item.sortKey), .init(item.itemId), .init(item.guid),
@@ -58,7 +62,7 @@ extension RssStore {
                         .init(item.updatedAt), .init(item.fetchedAt), .init(item.fetchedKey),
                         .init(item.summaryHtml), .init(item.contentHtml),
                         .init(HTMLText.plainText(from: item.bodyHtml)),
-                        .init(item.isRead), .init(item.isFavorite), .init(now),
+                        .init(item.isRead), .init(item.isFavorite), .init(item.isReadExplicit), .init(now),
                         .init(keepLocalState), .init(keepLocalState), .init(keepLocalState),
                     ])
             }
@@ -150,7 +154,7 @@ extension RssStore {
             guid: row.string(3), title: row.string(4), author: row.string(5), url: row.string(6),
             publishedAt: row.string(7), updatedAt: row.string(8), fetchedAt: row.string(9),
             fetchedKey: row.string(10), summaryHtml: row.string(11), contentHtml: row.string(12),
-            isRead: row.bool(13), isFavorite: row.bool(14)
+            isRead: row.bool(13), isReadExplicit: row.bool(16), isFavorite: row.bool(14)
         )
     }
 

@@ -13,6 +13,13 @@ struct FeedItemListView: View {
     @Environment(Preferences.self) private var preferences
     @State private var model: FeedItemListViewModel?
     @State private var title = "Feeds"
+    // Feed Settings (RSS plan, phase 5c) for a single-feed list: the most
+    // discoverable path to a feed's settings on iPhone, where the sidebar
+    // row's context menu is a long-press away.
+    @State private var management: FeedManagementViewModel?
+    @State private var actions = FeedManagementActions()
+    @State private var folders: [RssFolder] = []
+    @State private var confirmMarkAllRead = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,29 +33,74 @@ struct FeedItemListView: View {
         }
         .navigationTitle(title)
         .toolbar {
+            // New Message stays in the toolbar in feed scope, in the same
+            // slot the mail list gives it, so switching between mail and
+            // feeds never moves the primary action (macOS groups it with
+            // Refresh for the same reason the mail list does).
+            #if os(macOS)
+            ToolbarItemGroup(placement: .primaryAction) {
+                composeButton
+                if let model { refreshButton(model) }
+            }
+            #else
+            ToolbarItem { composeButton }
+            if let model { ToolbarItem { refreshButton(model) } }
+            #endif
             if let model {
                 ToolbarItem {
+                    // Confirmed first: it sat beside Refresh with no way back,
+                    // and a stray tap read a whole feed (2026-09-10).
                     Button {
-                        Task { await model.sync() }
-                    } label: {
-                        RefreshActivityIcon(isLoading: model.isSyncing)
-                            .accessibilityLabel("Refresh feed")
-                    }
-                    .disabled(model.isSyncing)
-                    .accessibilityIdentifier("feed.refresh")
-                }
-                ToolbarItem {
-                    Button {
-                        Task { await model.markAllRead() }
+                        confirmMarkAllRead = true
                     } label: {
                         Label("Mark all as read", systemImage: "envelope.open")
                     }
                     .disabled(model.items.allSatisfy(\.isRead))
                     .accessibilityIdentifier("feed.markAllRead")
                 }
+                if let subscription = model.subscription {
+                    ToolbarItem {
+                        Button {
+                            actions.settings(for: subscription)
+                        } label: {
+                            Label("Feed settings", systemImage: "gearshape")
+                        }
+                        .disabled(management == nil)
+                        .accessibilityIdentifier("feed.settings")
+                    }
+                }
             }
         }
+        .feedManagementSheets(actions, management: management, folders: folders, selection: .constant(nil),
+                              onSaved: { updated in title = updated.displayTitle })
+        .confirmationDialog("Mark all items in \(title) as read?", isPresented: $confirmMarkAllRead,
+                            titleVisibility: .visible) {
+            Button("Mark All as Read") { Task { await model?.markAllRead() } }
+        } message: {
+            Text("Items you have not opened will be marked read too.")
+        }
         .task(id: scope) { await start() }
+    }
+
+    private var composeButton: some View {
+        Button {
+            appState.requestCompose(seed: ReplyBuilder.newDraft())
+        } label: {
+            Image(systemName: "square.and.pencil")
+                .accessibilityLabel("New Message")
+        }
+        .keyboardShortcut("n", modifiers: .command)
+    }
+
+    private func refreshButton(_ model: FeedItemListViewModel) -> some View {
+        Button {
+            Task { await model.sync() }
+        } label: {
+            RefreshActivityIcon(isLoading: model.isSyncing)
+                .accessibilityLabel("Refresh feed")
+        }
+        .disabled(model.isSyncing)
+        .accessibilityIdentifier("feed.refresh")
     }
 
     private func start() async {
@@ -58,6 +110,10 @@ struct FeedItemListView: View {
             subscription = try? await client.rssStore?.subscription(id: id)
         }
         title = await scopeTitle(client: client, subscription: subscription)
+        if subscription != nil {
+            management = FeedManagementViewModel(client: client)
+            folders = (try? await client.rssStore?.folders()) ?? []
+        }
         let model = FeedItemListViewModel(scope: scope, subscription: subscription, client: client,
                                           preferences: preferences)
         self.model = model
@@ -99,16 +155,26 @@ struct FeedItemListView: View {
                 Spacer()
                 if model.canSearch {
                     Menu {
+                        // A `Picker` inside a `Menu` renders as a submenu on
+                        // macOS, which put all four orderings one level down
+                        // behind an "Order" row (#1508). Inline, they are the
+                        // menu's own rows, the way the Sort menu reads. An
+                        // inline picker still draws its title as a section
+                        // header, repeating the word on the button just
+                        // pressed, so the label is hidden (VoiceOver keeps it).
                         Picker("Order", selection: $model.ordering) {
                             Text("Newest first").tag(RssOrderingMode.newestFirst)
                             Text("Oldest first").tag(RssOrderingMode.oldestFirst)
                             Text("Newest day, oldest first within").tag(RssOrderingMode.newestDayOldestWithin)
                             Text("Oldest day, newest first within").tag(RssOrderingMode.oldestDayNewestWithin)
                         }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
                             .accessibilityLabel("Order")
                     }
+                    .accessibilityIdentifier("feed.order")
                     .onChange(of: model.ordering) { _, _ in Task { await model.reload() } }
                 }
             }
@@ -117,16 +183,32 @@ struct FeedItemListView: View {
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("feed.search")
             }
-            if let errorMessage = model.errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .font(.footnote)
-                    .foregroundStyle(ColorTokens.dangerFg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            statusLines(model)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.bar)
+    }
+
+    /// The sync error, then the fetcher's health for a single feed in its
+    /// own words, so an empty or stale list is explained where the user is
+    /// looking.
+    @ViewBuilder
+    private func statusLines(_ model: FeedItemListViewModel) -> some View {
+        if let errorMessage = model.errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(ColorTokens.dangerFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        if let subscription = model.subscription, let headline = FeedHealth.headline(for: subscription.feed) {
+            let stopped = FeedHealth.level(for: subscription.feed) == .stopped
+            Label(headline, systemImage: stopped ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
+                .font(.footnote)
+                .foregroundStyle(stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("feed.health.headline")
+        }
     }
 
     private func filterLabel(_ filter: RssItemFilter) -> String {
@@ -166,9 +248,11 @@ struct FeedItemListView: View {
 
     @ViewBuilder
     private func itemRow(_ item: RssItem, model: FeedItemListViewModel) -> some View {
-        FeedItemRow(item: item, showsFeedName: model.subscription == nil,
+        FeedItemRow(item: item,
+                    feedName: model.subscription == nil ? model.feedName(for: item) : nil,
                     isPending: model.pendingIds.contains(item.id))
                     .tag(item)
+                    .accessibilityIdentifier("feed.item.\(item.id)")
                     .onAppear {
                         if item.id == model.items.last?.id { Task { await model.loadMore() } }
                     }
@@ -202,50 +286,6 @@ struct FeedItemListView: View {
                         }
                     }
     }
-
-    @ViewBuilder
-    private func listFooter(_ model: FeedItemListViewModel) -> some View {
-            if model.items.isEmpty {
-                ContentUnavailableView(
-                    emptyTitle(model),
-                    systemImage: "dot.radiowaves.up.forward",
-                    description: Text(emptyDescription(model))
-                )
-                .listRowSeparator(.hidden)
-            }
-            if model.canLoadOlder && model.searchQuery.isEmpty {
-                Button {
-                    Task { await model.loadOlder() }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if model.isLoadingOlder { ProgressView() } else { Text("Load older items") }
-                        Spacer()
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(ColorTokens.accentForestFg)
-                .accessibilityIdentifier("feed.loadOlder")
-            }
-    }
-
-    private func emptyTitle(_ model: FeedItemListViewModel) -> String {
-        if !model.searchQuery.isEmpty { return "No matches" }
-        switch model.filter {
-        case .all: return model.isSyncing ? "Fetching…" : "No items yet"
-        case .unread: return "All caught up"
-        case .favorite: return "No favorites"
-        }
-    }
-
-    private func emptyDescription(_ model: FeedItemListViewModel) -> String {
-        if !model.searchQuery.isEmpty { return "Nothing cached for this feed matches. Try “Load older items” first." }
-        switch model.filter {
-        case .all: return "New items appear here as the feed is fetched."
-        case .unread: return "Every item here has been read."
-        case .favorite: return "Swipe an item or use its menu to favorite it."
-        }
-    }
 }
 
 /// One item row: unread dot, title, feed name (in multi-feed scopes),
@@ -253,7 +293,8 @@ struct FeedItemListView: View {
 /// waits for the network.
 struct FeedItemRow: View {
     let item: RssItem
-    let showsFeedName: Bool
+    /// The feed's name, in multi-feed scopes; nil in a single feed's list.
+    let feedName: String?
     let isPending: Bool
 
     var body: some View {
@@ -268,8 +309,8 @@ struct FeedItemRow: View {
                     .font(.body.weight(item.isRead ? .regular : .semibold))
                     .lineLimit(2)
                 HStack(spacing: 6) {
-                    if showsFeedName, !item.subscriptionId.isEmpty {
-                        Text(FeedItemDate.feedLabel(for: item))
+                    if let feedName, !feedName.isEmpty {
+                        Text(feedName)
                             .lineLimit(1)
                     }
                     Text(FeedItemDate.relative(item.publishedAt))
@@ -324,7 +365,4 @@ enum FeedItemDate {
     /// The feed's name for a multi-feed list. The item itself only carries
     /// ids; the row shows the host of the item URL as the cheap, always-
     /// available stand-in until the list model resolves titles (5d).
-    static func feedLabel(for item: RssItem) -> String {
-        URL(string: item.url)?.host() ?? ""
-    }
 }

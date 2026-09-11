@@ -451,7 +451,11 @@ resource "aws_dynamodb_table" "rss_folder" {
 * subscription's read watermark), never indexed - a never-touched item has
 * no row to index. Favorite IS indexed: `favorite_key` is set to sort_key
 * only while is_favorite is true, giving a sparse index of exactly the
-* favorites.
+* favorites. Change order is indexed too: every write sets `updated_key`
+* ("<updated_at>#<item_id>", unique per row), and `by_updated` is what the
+* state-sync form of /rss_list_items pages so a mark made on one device
+* reaches the others. Rows written before the key existed are picked up by
+* that sync's initial full pull of the partition, never by the index.
 */
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
@@ -474,12 +478,24 @@ resource "aws_dynamodb_table" "rss_user_item_state" {
     name = "favorite_key"
     type = "S"
   }
+  attribute {
+    name = "updated_key"
+    type = "S"
+  }
 
   global_secondary_index {
     name            = "favorite_by_feed"
     hash_key        = "user_feed"
     range_key       = "favorite_key"
     projection_type = "KEYS_ONLY"
+  }
+
+  # Rows are a few flags; projecting them saves the state sync a BatchGet.
+  global_secondary_index {
+    name            = "by_updated"
+    hash_key        = "user_feed"
+    range_key       = "updated_key"
+    projection_type = "ALL"
   }
 
   server_side_encryption {

@@ -225,6 +225,28 @@ extension MessageListViewModel {
         sourceFolderIndex.folder(for: envelope) ?? folder.path
     }
 
+    /// The folder "This folder only" narrows to. Folder scope is its own
+    /// folder; the global search surface's `folder` is a sentinel, so it
+    /// narrows to `searchAnchor` instead — nil where nothing feeds one in
+    /// (the iPhone / visionOS `SearchView`), which is what hides the toggle
+    /// there (#1510).
+    var searchFolder: Folder? {
+        isSearchScope ? searchAnchor : folder
+    }
+
+    /// Moves the search surface's anchor. An active single-folder search
+    /// re-runs against the new folder, so the banner never names a folder the
+    /// rows did not come from; losing the anchor drops the scope, since there
+    /// is nothing left to narrow to.
+    func setSearchAnchor(_ anchor: Folder?) async {
+        guard anchor?.path != searchAnchor?.path else { return }
+        searchAnchor = anchor
+        guard searchFilters.thisFolderOnly else { return }
+        if anchor == nil { searchFilters.thisFolderOnly = false }
+        guard isSearchActive else { return }
+        await runSearch(resetFilterTab: false)
+    }
+
     /// Per-request page size for search fetches — `runSearch`'s initial page
     /// (and an in-place refresh's chunked re-walk) and each
     /// `loadMoreSearchResults` page. No single request asks the Lambda for
@@ -235,7 +257,7 @@ extension MessageListViewModel {
 
     private func buildSearchQuery(text: String, filters: MessageSearchFilters) -> SearchQuery {
         SearchQuery(
-            folder: filters.thisFolderOnly ? folder.path : nil,
+            folder: filters.thisFolderOnly ? searchFolder?.path : nil,
             text: text.isEmpty ? nil : text,
             from: filters.from.isEmpty ? nil : filters.from,
             to: filters.to.isEmpty ? nil : filters.to,

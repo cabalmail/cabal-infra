@@ -40,6 +40,12 @@ RSS = b'''<?xml version="1.0"?>
 <pubDate>Tue, 02 Jan 2024 03:04:05 GMT</pubDate><description>sum</description>
 <content:encoded><![CDATA[<p>full</p><script>alert(1)</script>]]></content:encoded></item>
 <item><title>T2 no guid</title><link>https://example.com/2</link></item>
+<item><guid>g3</guid><title>Picture</title><link>https://example.com/3</link>
+<description>Just prose about the picture.</description>
+<enclosure url="https://example.com/i.png?a=1&amp;b=2" length="1" type="image/png"/></item>
+<item><guid>g4</guid><title>Already illustrated</title><link>https://example.com/4</link>
+<description>&lt;p&gt;&lt;img src="https://example.com/inline.jpg"&gt;&lt;/p&gt;</description>
+<enclosure url="https://example.com/other.png" length="1" type="image/png"/></item>
 </channel></rss>'''
 
 ATOM = b'''<?xml version="1.0"?>
@@ -97,8 +103,14 @@ class RssAtom(unittest.TestCase):
         self.assertEqual(feed.feed_type, 'rss')
         self.assertEqual((feed.title, feed.ttl_minutes, feed.sy_period, feed.sy_frequency),
                          ('R', 90, 'hourly', 2))
-        first, second = feed.items
+        first, second, picture, illustrated = feed.items
         self.assertEqual((first.guid, first.title, first.summary_html), ('g1', 'T1', 'sum'))
+        # An image enclosure with no image in the body is folded into the body
+        # (NASA Image of the Day); a body that already has one is left alone.
+        self.assertTrue(picture.content_html.startswith('<p><img src="https://example.com/i.png?a=1&amp;b=2" alt=""></p>'))
+        self.assertIn('Just prose', picture.content_html)
+        self.assertEqual(picture.summary_html, 'Just prose about the picture.')
+        self.assertNotIn('other.png', illustrated.content_html + illustrated.summary_html)
         self.assertIn('<p>full</p>', first.content_html)
         self.assertNotIn('<script', first.content_html)   # feedparser sanitizer stays on
         self.assertEqual(first.published_at, datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc))

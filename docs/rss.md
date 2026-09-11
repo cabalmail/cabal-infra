@@ -19,7 +19,12 @@ requirements and the decisions behind them in
 - **Feeds are deduplicated by canonical URL.** `http://` is upgraded to
   https (a feed that is not served over https is refused), the host is
   lower-cased and a leading `www.` is dropped when the rest is a
-  registrable apex (Public Suffix List), query parameters are sorted,
+  registrable apex (Public Suffix List) - unless the apex turns out not to
+  serve the feed: when the fetcher or the subscribe probe gets a 404, a
+  non-feed body, or a redirect to the front page from an apex host, it
+  tries the `www.` form once and, if that parses as a feed, makes it the
+  canonical URL (`rss_url.www_variant`, `rss_fetch.www_fallback`,
+  `rss_subscribe_core.fetch_probe`); query parameters are sorted,
   fragments are dropped. `/` is canonical only right after the host; the
   rest of the path is kept exactly as given, since only the server knows
   whether `/dir` and `/dir/` are one object. A publisher that treats them
@@ -32,7 +37,11 @@ requirements and the decisions behind them in
   says so, or, absent a row, when it was published at or before the
   subscription's `read_watermark` (what mark-all-read writes). A
   never-touched item has no row and is unread. Favorites are explicit and
-  indexed.
+  indexed. Every state write also sets `updated_key`
+  (`<updated_at>#<item_id>`), and the `by_updated` index over it is what
+  carries a mark made on one device to the others (the state-sync form of
+  `/rss_list_items` below); item ingest time does not move when state
+  does, so the item sync alone never re-delivers a changed item.
 
 ## Fetcher
 
@@ -80,7 +89,9 @@ fields may appear and clients must ignore unknown ones.
 root), `custom_title`, `ordering_mode` (`newest_first` | `oldest_first` |
 `newest_day_oldest_within` | `oldest_day_newest_within`),
 `default_open_mode` (`summary` | `article`), `default_styling` (`reader`
-| `native`), `notifications_enabled`, `credentials_scheme`,
+| `native`), `default_remote_content` (`inherit` | `show` | `hide`; `inherit`
+defers to the client's global remote-content preference, the others
+override it for this feed), `notifications_enabled`, `credentials_scheme`,
 `read_watermark`, `data_store_uuid` (the per-subscription identifier the
 clients key their isolated web-view storage on), `created_at`, and
 `feed`.
@@ -98,7 +109,12 @@ clients key their isolated web-view storage on), `created_at`, and
 key; opaque, pass it back), `guid`, `title`, `author`, `url`,
 `published_at`, `updated_at`, `fetched_at`, `fetched_key` (the sync
 cursor), `summary_html`, `content_html` (spilled bodies inlined),
-`is_read`, `is_favorite`.
+`is_read`, `is_read_explicit` (whether `is_read` is the user's own mark
+rather than the watermark rule; a client applying its own watermark must
+exempt explicit marks), `is_favorite`.
+
+**state** (state sync only): `feed_id`, `sort_key`, `item_id`,
+`is_read`, `is_read_explicit`, `is_favorite`, `updated_at`.
 
 Display preferences on a subscription are stored by the server and
 applied by the client; the server never reorders or filters items by
@@ -110,13 +126,14 @@ them except as documented under `/rss_list_items`.
 |---|---|---|---|
 | `/rss_subscribe` | POST | `{url, folder_id?}` | `{subscription, existing}`. Reuses the shared feed for a known canonical URL; otherwise fetches the document once (autodiscovering the feed a web page advertises), creates the feed, and hands it to the fetcher immediately. Idempotent per user and feed. Codes: `invalid_url`, `not_https`, `unreachable`, `not_a_feed`, `needs_credentials`, `feed_gone`, `publisher_error`, `unknown_folder` (404). |
 | `/rss_unsubscribe` | POST | `{subscription_id}` | `{subscription_id, feed_id, feed_purged}`. Deletes the caller's state for the feed; purges the feed when no subscribers remain. |
-| `/rss_update_subscription` | PUT | `{subscription_id, custom_title?, folder_id?, ordering_mode?, default_open_mode?, default_styling?, notifications_enabled?}` | `{subscription}`. Codes: `invalid_<field>`, `unknown_folder`, `nothing_to_update`. |
+| `/rss_update_subscription` | PUT | `{subscription_id, custom_title?, folder_id?, ordering_mode?, default_open_mode?, default_styling?, default_remote_content?, notifications_enabled?}` | `{subscription}`. Codes: `invalid_<field>`, `unknown_folder`, `nothing_to_update`. |
 | `/rss_list_subscriptions` | GET | | `{folders, subscriptions}`, each subscription with its `feed` summary. |
 | `/rss_new_folder` | POST | `{name, parent_folder_id?, display_order?}` | `{folder}` |
 | `/rss_update_folder` | PUT | `{folder_id, name?, parent_folder_id? ("" = root), display_order?}` | `{folder}`. Code `cyclic_folder` when moved under itself. |
 | `/rss_delete_folder` | POST | `{folder_id}` | `{folder_id, moved_subscriptions, moved_folders, parent_folder_id}`. Contents move to the parent, never deleted. |
 | `/rss_list_items` | GET | `subscription_id` \| `folder_id` \| neither (all); `filter=all\|unread\|favorite`; `order=newest\|oldest`; `limit` (1–100, default 50); `cursor` | `{items, next_cursor}`. Folder scope includes nested folders. Pages of several feeds are merged by sort key; `next_cursor` is opaque. |
 | `/rss_list_items` (sync) | GET | `subscription_id`, `since=<fetched_key or empty>`, `limit` | `{items, next_since, has_more}`: items ingested after `since`, oldest-ingested first. This is the cursor client caches sync on; it is keyed on ingest time, so backdated items are never missed. |
+| `/rss_list_items` (state sync) | GET | `subscription_id`, `state_since=<opaque or empty>`, `limit` | `{states, next_state_since, has_more}`: the caller's state rows for the feed changed since the cursor. An empty cursor first pulls the whole partition in `sort_key` order (a fresh or pre-existing cache catching up), then the cursor moves to the `by_updated` index and each call returns only what changed. The cursor trails "now" by a few seconds so a late commit is not stepped past; a row on a boundary is delivered twice, and applying state is idempotent. |
 | `/rss_get_item` | GET | `feed_id`, `sort_key` | `{item}` with the body inlined. Codes: `not_subscribed`, `unknown_item`. |
 | `/rss_set_item_state` | POST | `{items: [{feed_id, sort_key, is_read?, is_favorite?}]}` (≤100) | `{updated}`. An explicit `is_read` overrides the watermark in either direction. |
 | `/rss_mark_all_read` | POST | `{subscription_id}` \| `{folder_id}` \| `{}` | `{subscriptions, flipped, read_watermark}`. Writes the watermark and flips items explicitly marked unread. |

@@ -32,6 +32,11 @@ struct MessageListView: View {
     /// select list drives `selectedUIDs`; compact iPhone keeps the single-
     /// selection + touch edit-mode flow and never calls this.
     let onSelectionCountChanged: (Int) -> Void
+    /// Fires when the user picks another folder from the folder-switch menu
+    /// behind the list's title (see `+FolderSwitch`). The parent owns the
+    /// selection, so it applies the pick exactly as a sidebar tap would.
+    /// Defaults to a no-op for hosts with no folder selection (search).
+    var onSwitchFolder: (Folder) -> Void = { _ in }
 
     // `appState` is not private so the +Bulk sibling can reach it for
     // the move-destination sheet's `client` lookup; matches the pattern
@@ -59,6 +64,9 @@ struct MessageListView: View {
     // modifier) so the same-module extensions in `+Search` and `+macOS`
     // can read them without round-tripping through accessors.
     @State var model: MessageListViewModel?
+    /// The folder list the folder-switch menu offers, loaded once per mount
+    /// by `loadFolderSwitchChoices()` (`+FolderSwitch`). Empty until then.
+    @State var switchFolders: [Folder] = []
     /// List-row height. Rows are pinned to this so the virtualized list
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
@@ -245,7 +253,10 @@ struct MessageListView: View {
             VStack(spacing: 0) {
                 // The unsubscribed-folder banner is a folder-view concern; the
                 // global search surface has no single folder to subscribe to.
-                if !isSearchScope, !folder.isSubscribed {
+                if !isSearchScope,
+                   UnsubscribedBannerPolicy.shouldShow(
+                       folder: folder, subscribedPaths: appState.subscribedFolderPaths
+                   ) {
                     unsubscribedFolderBanner(model: model)
                 }
                 if showsBulkActionBar(model: model) { bulkActionBar(model: model) }
@@ -268,14 +279,19 @@ struct MessageListView: View {
 extension MessageListView {
     /// The list itself with its navigation chrome (title + toolbar).
     private var chromeLayer: some View {
-        Group {
-            if let model {
-                content(for: model)
-            } else {
-                ProgressView()
+        folderSwitchTitle(
+            Group {
+                if let model {
+                    content(for: model)
+                } else {
+                    ProgressView()
+                }
             }
-        }
-        .navigationTitle(isSearchScope ? "Search" : folder.name)
+            .navigationTitle(isSearchScope ? "Search" : folder.name)
+        )
+        // The folder-switch menu's rows (`+FolderSwitch`); a no-op on the
+        // search surface.
+        .task { await loadFolderSwitchChoices() }
         #if os(iOS) || os(visionOS)
         // Without this, `.searchable` + the `safeAreaInset(.top)` filter
         // tabs leave the default large-title bar in a half-collapsed

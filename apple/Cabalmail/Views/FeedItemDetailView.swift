@@ -13,6 +13,12 @@ struct FeedItemDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     @State private var model: FeedItemDetailViewModel?
+    @State private var isOffline = false
+    /// Where the reader was in this item's body last time it was open, from
+    /// the local position cache — reapplied once the body loads. Snapshotted
+    /// into state (rather than read from the coordinator in `body`) so the
+    /// capture stream below doesn't re-render the web view on every report.
+    @State private var restoreAnchor: String?
 
     var body: some View {
         Group {
@@ -23,20 +29,53 @@ struct FeedItemDetailView: View {
                 ProgressView()
             }
         }
-        .navigationTitle(subscription?.displayTitle ?? "Feed")
+        .navigationTitle((model?.subscription ?? subscription)?.displayTitle ?? "Feed")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task(id: item.id) {
-            model = FeedItemDetailViewModel(item: item, subscription: subscription,
+            restoreAnchor = appState.navCoordinator?.readingPosition(key: positionKey)?.anchor
+            // Resolve the subscription here rather than trusting the parent's
+            // copy. The parent looks it up asynchronously *after* the
+            // selection changes, so on a first open — or any open after the
+            // reader was popped — `subscription` is still nil at this point,
+            // and a model built from it would silently fall back to the
+            // default open mode, styling, and remote-content policy instead
+            // of the feed's own. The store read is local and fast.
+            let resolved: RssSubscription?
+            if let subscription {
+                resolved = subscription
+            } else if let store = appState.client?.rssStore {
+                resolved = (try? await store.subscription(id: item.subscriptionId)) ?? nil
+            } else {
+                resolved = nil
+            }
+            model = FeedItemDetailViewModel(item: item, subscription: resolved,
                                             engine: appState.client?.rssSync, preferences: preferences)
         }
+        .task { await observeReachability() }
+    }
+
+    /// The item's key in the reading-position cache.
+    private var positionKey: String { ReadingPositionKey.feed(itemID: item.id) }
+
+    /// Mirrors reachability into the toolbar (the article button says when
+    /// it needs a connection) and the article view (its offline notice).
+    private func observeReachability() async {
+        #if canImport(Network)
+        guard let reachability = appState.client?.reachability else { return }
+        isOffline = !reachability.isReachable
+        for await reachable in reachability.changes() {
+            isOffline = !reachable
+        }
+        #endif
     }
 
     @ViewBuilder
     private func content(_ model: FeedItemDetailViewModel) -> some View {
         if model.showingArticle, let url = model.articleURL {
-            ArticleWebView(url: url, dataStoreID: model.dataStoreID, readerMode: model.readerMode)
+            ArticleWebView(url: url, dataStoreID: model.dataStoreID, readerMode: model.readerMode,
+                           isOffline: isOffline)
                 .id(url)
         } else {
             VStack(alignment: .leading, spacing: 0) {
@@ -50,11 +89,20 @@ struct FeedItemDetailView: View {
                         description: Text("This feed only lists the item. Open the article to read it.")
                     )
                 } else {
+                    // Same reader as mail, same scroll anchor plumbing: the
+                    // position is restored from and streamed back to the
+                    // local cache so a half-read item reopens where it was.
                     HTMLBodyView(
                         html: model.item.bodyHtml,
                         inlineImages: [:],
                         allowRemote: model.remoteContentAllowed,
-                        readerMode: model.readerMode
+                        readerMode: model.readerMode,
+                        restoreAnchor: restoreAnchor,
+                        onScrollCaptured: { capture in
+                            appState.navCoordinator?.savePosition(
+                                key: positionKey, anchor: capture.anchor, offset: nil, atTop: capture.isAtTop
+                            )
+                        }
                     )
                 }
             }
@@ -67,7 +115,21 @@ struct FeedItemDetailView: View {
             Text(model.item.title.isEmpty ? "Untitled" : model.item.title)
                 .font(.title3.weight(.semibold))
                 .textSelection(.enabled)
+            if let url = model.articleURL {
+                // The published article, in the browser, one tap from the
+                // headline on every platform; the toolbar's in-app article
+                // view is a separate thing and can be off screen on iPhone.
+                Link(destination: url) {
+                    Label("Open on \(url.host() ?? "the web")", systemImage: "arrow.up.right.square")
+                        .font(.caption)
+                }
+                .accessibilityIdentifier("feed.reader.openInBrowser")
+            }
             HStack(spacing: 8) {
+                if let feed = subscription?.displayTitle, !feed.isEmpty {
+                    Text(feed)
+                        .lineLimit(1)
+                }
                 if !model.item.author.isEmpty {
                     Text(model.item.author)
                 }
@@ -102,16 +164,59 @@ struct FeedItemDetailView: View {
             }
             .accessibilityIdentifier("feed.reader.favorite")
         }
+        #if os(iOS)
+        // An iPhone navigation bar shows about three trailing items and
+        // silently drops the rest, which is where "Open article" went. The
+        // view controls share one menu there; macOS and visionOS have room.
         ToolbarItem {
-            Button {
-                model.toggleReaderMode()
+            Menu {
+                readerModeButton(model)
+                articleMenuItems(model)
             } label: {
-                Label(model.readerMode ? "Show original formatting" : "Show reader view",
-                      systemImage: model.readerMode ? "text.alignleft" : "doc.richtext")
+                Label("View", systemImage: "ellipsis.circle")
             }
-            .accessibilityIdentifier("feed.reader.readerMode")
+            .accessibilityIdentifier("feed.reader.more")
         }
+        #else
+        ToolbarItem { readerModeButton(model) }
         articleToolbarItems(model)
+        #endif
+    }
+
+    private func readerModeButton(_ model: FeedItemDetailViewModel) -> some View {
+        Button {
+            model.toggleReaderMode()
+        } label: {
+            Label(model.readerMode ? "Show original formatting" : "Show reader view",
+                  systemImage: model.readerMode ? "text.alignleft" : "doc.richtext")
+        }
+        .accessibilityIdentifier("feed.reader.readerMode")
+    }
+
+    /// The article controls as menu rows (iOS), same actions as the toolbar
+    /// items on the wide platforms.
+    @ViewBuilder
+    private func articleMenuItems(_ model: FeedItemDetailViewModel) -> some View {
+        if !model.showingArticle {
+            Button {
+                model.toggleRemoteContent()
+            } label: {
+                Label(model.remoteContentAllowed ? "Hide remote content" : "Show remote content",
+                      systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash")
+            }
+            .disabled(model.item.bodyHtml.isEmpty)
+        }
+        if let url = model.articleURL {
+            Divider()
+            Button {
+                model.toggleArticle()
+            } label: {
+                Label(articleTitle(model), systemImage: articleSymbol(model))
+            }
+            Link(destination: url) { Label("Open in browser", systemImage: "safari") }
+            ShareLink(item: url) { Label("Share link", systemImage: "square.and.arrow.up") }
+            Button("Copy link") { copyToPasteboard(url.absoluteString) }
+        }
     }
 
     @ToolbarContentBuilder
@@ -133,8 +238,7 @@ struct FeedItemDetailView: View {
                 Button {
                     model.toggleArticle()
                 } label: {
-                    Label(model.showingArticle ? "Show feed content" : "Open article",
-                          systemImage: model.showingArticle ? "doc.plaintext" : "safari")
+                    Label(articleTitle(model), systemImage: articleSymbol(model))
                 }
                 .accessibilityIdentifier("feed.reader.article")
             }
@@ -152,4 +256,17 @@ struct FeedItemDetailView: View {
             }
         }
     }
+
+    /// "Open article" gains a "needs a connection" note while unreachable;
+    /// the button stays enabled because the page may already be cached.
+    private func articleTitle(_ model: FeedItemDetailViewModel) -> String {
+        if model.showingArticle { return "Show feed content" }
+        return isOffline ? "Open article (needs a connection)" : "Open article"
+    }
+
+    private func articleSymbol(_ model: FeedItemDetailViewModel) -> String {
+        if model.showingArticle { return "doc.plaintext" }
+        return isOffline ? "wifi.slash" : "safari"
+    }
+
 }

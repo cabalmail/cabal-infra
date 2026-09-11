@@ -10,11 +10,12 @@ import CabalmailKit
 /// sidebar's `List(selection: $folder)`: one list carries one selection
 /// type, and the mail folders own it. The standalone `FeedSidebarList`
 /// below uses native selection.
-struct FeedSidebarRowsView: View {
+struct FeedSidebarRowsView<RowMenu: View>: View {
     let rows: [FeedSidebarRow]
     @Binding var selection: RssItemScope?
     let toggleCollapse: (String) -> Void
     let isCollapsed: (String) -> Bool
+    @ViewBuilder let contextMenu: (FeedSidebarRow) -> RowMenu
 
     var body: some View {
         ForEach(rows) { row in
@@ -25,6 +26,7 @@ struct FeedSidebarRowsView: View {
                                     isCollapsed: isCollapsed, toggleCollapse: toggleCollapse)
             }
             .buttonStyle(.plain)
+            .contextMenu { contextMenu(row) }
             .listRowBackground(
                 selection == row.scope
                     ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.18))
@@ -69,6 +71,7 @@ struct FeedSidebarRowLabel: View {
                 .foregroundStyle(row.unread > 0 || isSelected ? AnyShapeStyle(.primary)
                                  : AnyShapeStyle(Color.primary.opacity(0.7)))
             Spacer(minLength: 4)
+            healthBadge
             if row.unread > 0 {
                 Text("\(row.unread)")
                     .font(.caption.monospacedDigit())
@@ -81,6 +84,24 @@ struct FeedSidebarRowLabel: View {
         .padding(.leading, CGFloat(row.depth) * 14)
         .contentShape(Rectangle())
     }
+
+    /// The fetcher's health for a subscription row: a warning mark from
+    /// three consecutive failures, a stop mark once it has given up. Silent
+    /// otherwise, and never on folders (their feeds carry their own).
+    @ViewBuilder
+    private var healthBadge: some View {
+        if case .subscription(let sub) = row.kind {
+            let level = FeedHealth.level(for: sub.feed)
+            if let symbol = level.symbol, let summary = level.summary {
+                Image(systemName: symbol)
+                    .font(.caption)
+                    .foregroundStyle(level == .stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
+                    .help(summary)
+                    .accessibilityLabel(summary)
+                    .accessibilityIdentifier("feed.health.\(sub.subscriptionId)")
+            }
+        }
+    }
 }
 
 /// Standalone Feeds sidebar (the Feeds tab on iPhone and visionOS): the same
@@ -89,6 +110,8 @@ struct FeedSidebarList: View {
     @Binding var selection: RssItemScope?
     @Environment(AppState.self) private var appState
     @State private var model: FeedSidebarViewModel?
+    @State private var management: FeedManagementViewModel?
+    @State private var actions = FeedManagementActions()
     @AppStorage("cabalmail.feeds.collapsedFolders") private var collapsedRaw = ""
     @State private var filter = ""
 
@@ -101,18 +124,31 @@ struct FeedSidebarList: View {
                         .font(.footnote)
                 }
                 if model.hasLoaded, !model.hasSubscriptions {
-                    ContentUnavailableView("No feeds yet", systemImage: "dot.radiowaves.up.forward",
-                                           description: Text("Subscribe to a feed to start reading here."))
-                        .listRowSeparator(.hidden)
+                    ContentUnavailableView {
+                        Label("No feeds yet", systemImage: "dot.radiowaves.up.forward")
+                    } description: {
+                        Text("Subscribe to a feed to start reading here.")
+                    } actions: {
+                        Button("Subscribe to a Feed…") { actions.subscribe() }
+                            .disabled(management == nil)
+                    }
+                    .listRowSeparator(.hidden)
                 } else {
                     Label("All Feeds", systemImage: "tray.full")
                         .badge(FeedSidebarRows.totalUnread(model.unreadCounts))
                         .tag(RssItemScope.all)
+                        .contextMenu {
+                            FeedSidebarContextMenu(scope: .all, row: nil, actions: actions, management: management)
+                        }
                     ForEach(model.rows(collapsed: collapsed, filter: filter)) { row in
                         FeedSidebarRowLabel(row: row, isSelected: selection == row.scope,
                                             isCollapsed: { collapsed.contains($0) },
                                             toggleCollapse: toggleCollapse)
                             .tag(row.scope)
+                            .contextMenu {
+                                FeedSidebarContextMenu(scope: row.scope, row: row, actions: actions,
+                                                       management: management)
+                            }
                     }
                 }
             } else {
@@ -122,6 +158,9 @@ struct FeedSidebarList: View {
         .navigationTitle("Feeds")
         .searchable(text: $filter, prompt: "Filter feeds")
         .toolbar {
+            ToolbarItem {
+                FeedAddMenu(actions: actions, management: management)
+            }
             ToolbarItem {
                 Button {
                     Task { await model?.refresh() }
@@ -134,8 +173,12 @@ struct FeedSidebarList: View {
             }
         }
         .refreshable { await model?.refresh() }
+        .feedManagementSheets(actions, management: management, folders: model?.folders ?? [],
+                              subscriptions: model?.subscriptions ?? [], selection: $selection,
+                              handlesCommands: true, onRefresh: { Task { await model?.refresh() } })
         .task {
             guard model == nil, let client = appState.client else { return }
+            management = FeedManagementViewModel(client: client)
             let model = FeedSidebarViewModel(client: client)
             self.model = model
             await model.load()

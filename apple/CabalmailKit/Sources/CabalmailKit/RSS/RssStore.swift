@@ -9,18 +9,21 @@ import Foundation
 /// (which also enqueue the mutation for the engine to push).
 ///
 /// Read state follows the server's rule so the two never disagree: an item
-/// the user explicitly marked (locally or server-side) keeps that mark;
-/// otherwise it is read once the subscription's read watermark passes its
-/// publication time. The server already folds ITS watermark into the
-/// `is_read` it sends, and the local watermark only ever advances, so
-/// `is_read OR published_at <= watermark` is exact.
+/// the user explicitly marked (locally, or on any device - the server says
+/// which with `is_read_explicit`) keeps that mark; otherwise it is read
+/// once the subscription's read watermark passes its publication time. The
+/// server already folds ITS watermark into the `is_read` it sends, and the
+/// local watermark only ever advances, so `is_read OR published_at <=
+/// watermark` is exact for a non-explicit item. Marks made elsewhere
+/// arrive through the engine's state sync (`applyServerStates`), since the
+/// item sync is keyed on ingest time and never re-delivers a changed item.
 public actor RssStore {
     let database: SQLiteDatabase
     /// Directory the database lives in (the caller may put other per-account
     /// RSS state beside it).
     public nonisolated let directory: URL
 
-    static let schemaVersion = 1
+    static let schemaVersion = 3
 
     public init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -37,6 +40,14 @@ public actor RssStore {
         if database.userVersion < 1 {
             try database.exec(Schema.version1)
             database.userVersion = 1
+        }
+        if database.userVersion < 2 {
+            try database.exec(Schema.version2)
+            database.userVersion = 2
+        }
+        if database.userVersion < 3 {
+            try database.exec(Schema.version3)
+            database.userVersion = 3
         }
     }
 
@@ -108,12 +119,13 @@ public actor RssStore {
         try database.run("""
             INSERT INTO subscriptions (subscription_id, feed_id, folder_id, custom_title, ordering_mode,
               default_open_mode, default_styling, notifications_enabled, credentials_scheme,
-              read_watermark, data_store_uuid, created_at, feed_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              read_watermark, data_store_uuid, created_at, feed_json, default_remote_content)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(subscription_id) DO UPDATE SET feed_id = excluded.feed_id,
               folder_id = excluded.folder_id, custom_title = excluded.custom_title,
               ordering_mode = excluded.ordering_mode, default_open_mode = excluded.default_open_mode,
               default_styling = excluded.default_styling,
+              default_remote_content = excluded.default_remote_content,
               notifications_enabled = excluded.notifications_enabled,
               credentials_scheme = excluded.credentials_scheme,
               read_watermark = MAX(subscriptions.read_watermark, excluded.read_watermark),
@@ -124,7 +136,7 @@ public actor RssStore {
                   .init(sub.orderingMode.rawValue), .init(sub.defaultOpenMode.rawValue),
                   .init(sub.defaultStyling.rawValue), .init(sub.notificationsEnabled),
                   .init(sub.credentialsScheme), .init(sub.readWatermark), .init(sub.dataStoreUuid),
-                  .init(sub.createdAt), .init(feedJson ?? "")])
+                  .init(sub.createdAt), .init(feedJson ?? ""), .init(sub.defaultRemoteContent.rawValue)])
     }
 
     public func folders() throws -> [RssFolder] {
@@ -154,6 +166,7 @@ public actor RssStore {
             customTitle: row.string(3), orderingMode: RssOrderingMode(rawValue: row.string(4)) ?? .newestFirst,
             defaultOpenMode: RssOpenMode(rawValue: row.string(5)) ?? .summary,
             defaultStyling: RssStyling(rawValue: row.string(6)) ?? .reader,
+            defaultRemoteContent: RssRemoteContentMode(rawValue: row.string(13)) ?? .inherit,
             notificationsEnabled: row.bool(7), credentialsScheme: row.string(8), readWatermark: row.string(9),
             dataStoreUuid: row.string(10), createdAt: row.string(11), feed: feed
         )
@@ -197,13 +210,14 @@ enum Schema {
     static let subscriptionColumns = """
         subscription_id, feed_id, folder_id, custom_title, ordering_mode, default_open_mode,
         default_styling, notifications_enabled, credentials_scheme, read_watermark,
-        data_store_uuid, created_at, feed_json
+        data_store_uuid, created_at, feed_json, default_remote_content
         """
     static let itemColumns = """
         i.feed_id, i.sort_key, i.item_id, i.guid, i.title, i.author, i.url, i.published_at,
         i.updated_at, i.fetched_at, i.fetched_key, i.summary_html, i.content_html,
         (\(readExpression)) AS effective_read, i.is_favorite,
-        COALESCE((SELECT s.subscription_id FROM subscriptions s WHERE s.feed_id = i.feed_id LIMIT 1), '')
+        COALESCE((SELECT s.subscription_id FROM subscriptions s WHERE s.feed_id = i.feed_id LIMIT 1), ''),
+        i.state_is_explicit
         """
     /// The read-state rule in SQL; `i` is the items alias and the
     /// subscription's watermark is looked up per row.
@@ -259,5 +273,19 @@ enum Schema {
           id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, feed_id TEXT NOT NULL DEFAULT '',
           sort_key TEXT NOT NULL DEFAULT '', subscription_id TEXT NOT NULL DEFAULT '',
           value INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+        """
+
+    /// The state-sync cursor per feed. Empty on an upgraded store, which
+    /// makes the next sync pull the feed's whole state partition - the
+    /// repair for caches that lost explicit marks before this existed.
+    static let version2 = """
+        ALTER TABLE feed_sync ADD COLUMN state_cursor TEXT NOT NULL DEFAULT '';
+        """
+
+    /// The per-feed remote-content default (`inherit` | `show` | `hide`);
+    /// rows from before it existed read as `inherit`, which is also what
+    /// the server returns for a subscription that never set it.
+    static let version3 = """
+        ALTER TABLE subscriptions ADD COLUMN default_remote_content TEXT NOT NULL DEFAULT 'inherit';
         """
 }

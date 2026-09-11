@@ -10,24 +10,35 @@ Query: subscription_id | folder_id | (neither = all subscriptions)
                                      sync by server ingest time, returns
                                      items ingested after the cursor,
                                      oldest-ingested first)
+       state_since=<opaque>         (single subscription only: the caller's
+                                     per-item state rows changed since the
+                                     cursor; "" pulls the feed's whole
+                                     state partition first)
 
 Response: {"items": [...], "next_cursor": "..."|null, "next_since": "..."}
+      or  {"states": [...], "next_state_since": "...", "has_more": bool}
 
 Read state is computed per rss_api.is_read (explicit state row, else the
 subscription's read watermark). Folder and all views merge one page per
 feed by sort key; the cursor remembers where each feed's page ended.
 '''
+from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
 from rss_api import (ApiError, ITEM_TABLE, ROOT_FOLDER, batch_get,  # pylint: disable=import-error
                      decode_cursor, encode_cursor, folder_and_descendants,
                      get_subscription, guarded, is_read, items, list_subscriptions,
-                     ok, page_size, params_of, serialize_item, state, state_map,
-                     user_feed_key, username)
+                     ok, page_size, params_of, serialize_item, serialize_state, state,
+                     state_map, user_feed_key, username)
 
 FILTERS = ('all', 'unread', 'favorite')
 # Pages of a feed inspected per call while hunting unread items; bounds the
 # work for a feed whose recent items are all read.
 MAX_UNREAD_PAGES = 4
+# How far behind "now" a state-sync cursor is allowed to settle. Two Lambdas
+# writing the same feed's state at once can commit out of timestamp order;
+# a cursor that trails the newest row by this much re-delivers the tail
+# (idempotent) instead of stepping past a late commit.
+STATE_SYNC_OVERLAP = timedelta(seconds=5)
 
 
 @guarded
@@ -37,11 +48,12 @@ def handler(event, _context):
     params = params_of(event)
     limit = page_size(params)
     subs = target_subscriptions(user, params)
-    if params.get('since') is not None:
-        if len(subs) != 1 or not params.get('subscription_id'):
-            raise ApiError(400, 'since_needs_subscription',
-                           'since requires a single subscription_id.')
-        return ok(sync_since(user, subs[0], params['since'], limit))
+    for name, sync in (('since', sync_since), ('state_since', sync_state)):
+        if params.get(name) is not None:
+            if len(subs) != 1 or not params.get('subscription_id'):
+                raise ApiError(400, f'{name}_needs_subscription',
+                               f'{name} requires a single subscription_id.')
+            return ok(sync(user, subs[0], params[name], limit))
     flt = params.get('filter', 'all')
     if flt not in FILTERS:
         raise ApiError(400, 'invalid_filter', f'filter must be one of {", ".join(FILTERS)}.')
@@ -79,6 +91,67 @@ def sync_since(user, sub, since, limit):
     next_since = rows[-1]['fetched_key'] if rows else since
     return {'items': out, 'next_since': next_since or '',
             'has_more': 'LastEvaluatedKey' in response}
+
+
+def sync_state(user, sub, cursor, limit):
+    '''The caller's state rows for one feed, changed since `cursor`.
+
+    Per-item state (an explicit read/unread, a favorite) lives in its own
+    table, so a change made on another device never moves an item's
+    fetched_key and the since-sync above never re-delivers it. This is the
+    channel that carries it. Two phases behind one opaque cursor:
+
+      * An empty cursor starts a full pull of the feed's state partition in
+        sort_key order - what a device with a fresh cache needs, and what
+        brings a device that predates state sync up to date (rows written
+        before updated_key existed are not in the by_updated index).
+      * When the pull completes, the cursor moves to the by_updated index
+        (updated_key = "<updated_at>#<item_id>"), starting STATE_SYNC_OVERLAP
+        before the pull began so nothing written during it is missed. Every
+        later call is a plain "changed after" query, and the cursor never
+        settles closer than the overlap to "now".
+
+    A row on a boundary is delivered twice; applying state is idempotent.'''
+    key = user_feed_key(user, sub['feed_id'])
+    phase = decode_cursor(cursor) if cursor else {}
+    if phase.get('phase') == 'updated':
+        after = phase.get('after', '')
+        condition = Key('user_feed').eq(key) & Key('updated_key').gt(after)
+        response = state.query(IndexName='by_updated', KeyConditionExpression=condition,
+                               Limit=limit)
+        rows = response.get('Items', [])
+        has_more = 'LastEvaluatedKey' in response
+        if has_more:
+            after = rows[-1]['updated_key']
+        else:
+            boundary = overlap_boundary(now_iso())
+            after = max(after, min(rows[-1]['updated_key'], boundary) if rows else boundary)
+        resume = encode_cursor({'phase': 'updated', 'after': after})
+    else:
+        started = phase.get('started') or now_iso()
+        condition = Key('user_feed').eq(key)
+        if phase.get('after'):
+            condition = condition & Key('sort_key').gt(phase['after'])
+        response = state.query(KeyConditionExpression=condition, Limit=limit)
+        rows = response.get('Items', [])
+        has_more = 'LastEvaluatedKey' in response
+        if has_more:
+            resume = encode_cursor({'phase': 'all', 'after': rows[-1]['sort_key'],
+                                    'started': started})
+        else:
+            resume = encode_cursor({'phase': 'updated', 'after': overlap_boundary(started)})
+    return {'states': [serialize_state(row, sub) for row in rows],
+            'next_state_since': resume, 'has_more': has_more}
+
+
+def now_iso():
+    '''Server time in the format every state row's updated_at uses.'''
+    return datetime.now(timezone.utc).isoformat()
+
+
+def overlap_boundary(iso):
+    '''`iso` minus STATE_SYNC_OVERLAP, as an updated_key prefix.'''
+    return (datetime.fromisoformat(iso) - STATE_SYNC_OVERLAP).isoformat()
 
 
 # -- Merged listing ----------------------------------------------------------------

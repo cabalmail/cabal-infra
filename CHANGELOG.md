@@ -5,6 +5,112 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.1] - 2026-09-11
+
+### Fixed
+- Apple: **Feed orderings sit at the top of the Order menu.** On macOS the
+  feed item list's Order menu held a single "Order" submenu, so choosing
+  an ordering took a click, a hover and a second click. The four orderings
+  are now the menu's own rows, with the one in effect checked, the way the
+  message list's Sort menu already reads.
+- Apple: **Search Filters sheet stays inside its margins on macOS.** The
+  "Subject" label no longer hangs off the sheet's left edge and the From,
+  To and Subject fields no longer run flush to its right edge; the sheet
+  now uses the same inset layout as the New Folder and Create Address
+  sheets. Each date picker sits beside its Since or Before checkbox,
+  dimmed until the box is ticked, instead of appearing below it.
+
+## [1.16.0] - 2026-09-11
+
+### Added
+- Apple: **Feed health badges.** A feed the fetcher has failed to read
+  three times in a row shows a warning mark beside its name in the sidebar,
+  and one the fetcher has given up on shows a stop mark; the mark's tooltip
+  and the top of the feed's item list say what went wrong, in the fetcher's
+  own words. Until now such a feed simply looked empty.
+
+### Changed
+- **CodeQL runs only the analyses a pull request can affect.** Code
+  scanning moved from GitHub's default setup, which analysed every
+  language on every pull request, to a checked-in `codeql.yml` that
+  gates each language on its own path filter, the way `lint.yml` gates
+  its linters. A Lambda-only PR no longer waits four to six minutes for
+  the Linux client's Rust analysis. Pushes to `stage` and `main`, and a
+  weekly scheduled run, still analyse everything so the per-branch alert
+  lists stay current, and a `codeql-gate` job gives branch protection one
+  stable check name to require.
+
+### Fixed
+- Apple: **Images addressed over plain `http` now load.** A message or
+  feed item whose pictures still use `http://` addresses (Electoral Vote's
+  do) showed broken boxes even with remote content allowed, because the
+  reader refuses insecure loads. The reader now asks for every such
+  picture over `https` instead, which is what those publishers serve.
+- **Feed images attached as enclosures.** A feed that carries an item's
+  picture as an `enclosure` or `media:content` and only prose in the body
+  (NASA's Image of the Day) now shows the picture at the top of the item;
+  before, the item looked like text only.
+- Apple: **Feed reader fixes from the first day of use.** "Mark all as
+  read" now asks first, in the item list and in the sidebar menus; a stray
+  tap beside Refresh used to read a whole feed. "Load older items" appears
+  only when the server has older items to give. The published article is
+  one tap from the headline on every platform, and on iPhone the reader's
+  view controls (reader styling, remote content, the in-app article view,
+  open in browser, share) share one menu instead of falling off the end of
+  the navigation bar.
+
+## [1.15.1] - 2026-09-10
+
+### Fixed
+- **Feeds served only on `www`.** The canonical feed URL keeps the apex
+  host (Decision 1), but some publishers answer the apex path with a 404
+  or redirect every apex path to their front page, and only `www.` serves
+  the feed. The fetcher and the subscribe probe now try the `www.` form
+  once when the apex does not yield a feed, and a feed found there becomes
+  the canonical URL. A permanent redirect from the apex form to the `www.`
+  form of the same URL keeps `www.` instead of normalizing straight back.
+  Found on the first OPML imports (2026-09-10).
+
+## [1.15.0] - 2026-09-10
+
+### Added
+- Android: **Folder menu behind the list title.** The folder name in the
+  message list's top bar is now a tappable affordance with a drop-down
+  arrow: a tap lists the subscribed folders, with the unsubscribed ones one
+  tap further under "Other folders", and the folder in view carries the
+  check mark. With nothing subscribed every folder is listed at the top
+  level, as in the folder list. A pick swaps the list in place, exactly as
+  a folder-pane tap does on a wide window.
+- Apple: **Folder menu behind the list title.** The folder name at the top
+  of the message list is now a tappable affordance: on iPhone, iPad and
+  Apple Vision Pro the title opens a menu, and on the Mac the bold folder
+  name in the toolbar is the menu, with a chevron beside it. The menu lists
+  subscribed folders, with the unsubscribed ones one tap further under
+  "Other folders", the folder in view carrying the check mark wherever it
+  sits. With nothing subscribed every folder is listed at the top level, as
+  in the sidebar. A pick applies exactly as a sidebar tap does.
+- Apple: **Feed management (phase 5c of the RSS plan).** Subscribe to a
+  feed from the sidebar's `+` menu, a folder's context menu, or the new
+  Feeds menu (⌥⌘N); paste a site address and the server finds its feed.
+  Each feed has a settings sheet for its title, folder, item order, what
+  opens first (feed content or the article) and in which styling, the
+  fetcher's view of its health, and Unsubscribe. Feed folders can be
+  created, renamed, moved, and deleted (contents move up a level). OPML
+  import and export from the `+` menu, the Feeds menu, and Settings ›
+  Feeds, which also holds the reader's own mark-as-read setting.
+
+### Changed
+- Apple: **Feed reader polish (phase 5d of the RSS plan).** Rows in All
+  Feeds and folder views name the feed instead of the article's host, and
+  the reader header does the same. Feeds refresh every fifteen minutes while
+  the app is open, not only at launch and on foreground, and the sidebar
+  badges follow. The "Open article" button says when it needs a connection,
+  and an article that cannot load shows a plain notice with a retry instead
+  of a browser error page. A feed search with no local matches offers to
+  fetch older items and search again. On the Mac, an empty feed reading pane
+  reserves the feed toolbar's own six slots rather than the mail reader's
+  eleven, and New Message stays in the toolbar while a feed is selected.
+
 ## [1.14.0] - 2026-09-10
 
 ### Added

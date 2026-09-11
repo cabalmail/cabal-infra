@@ -122,6 +122,71 @@ final class RssSyncEngineTests: XCTestCase {
         XCTAssertEqual(observed11, "w")   // MAX("w", "server-w")
     }
 
+    func testDrainReplaysMarkAllReadInQueueOrder() async throws {
+        await client.set(catalog: RssCatalog(folders: [], subscriptions: [subscription]))
+        try await engine.refreshCatalog()
+        try await store.upsertItems((1...3).map { item($0) })
+        // Offline: read 1, mark all read, then change your mind about 2.
+        try await store.setRead(feedId: "f1", sortKey: item(1).sortKey, true)
+        try await store.markAllRead(subscriptionId: "s1", watermark: "w")
+        try await store.setRead(feedId: "f1", sortKey: item(2).sortKey, false)
+        try await store.setFavorite(feedId: "f1", sortKey: item(2).sortKey, true)
+        let cleared = try await engine.drainPending()
+        XCTAssertEqual(cleared, 4)
+        let observed108 = await client.pushLog
+        XCTAssertEqual(observed108, ["state", "mark_all_read", "state"])
+        let calls = await client.stateCalls
+        XCTAssertEqual(calls.map { $0.map(\.sortKey) }, [[item(1).sortKey], [item(2).sortKey]])
+        XCTAssertEqual(calls[1][0].isRead, false)
+        XCTAssertEqual(calls[1][0].isFavorite, true)
+        let observed109 = try await store.pendingCount()
+        XCTAssertEqual(observed109, 0)
+    }
+
+    func testStateSyncAppliesMarksFromOtherDevicesAndKeepsCursor() async throws {
+        await client.set(catalog: RssCatalog(folders: [],
+            subscriptions: [RssSubscription(subscriptionId: "s1", feedId: "f1", readWatermark: item(4).publishedAt,
+                                            dataStoreUuid: "ds1", feed: RssFeedSummary(feedId: "f1", title: "F1"))]))
+        try await engine.refreshCatalog()
+        try await store.setSyncState(feedId: "f1", .init(sinceCursor: "k"))
+        try await store.upsertItems((1...5).map { item($0) })
+        // Items 1-4 read by the watermark, 5 unread. Another device marked
+        // 2 unread and favorited 5; the state sync pages that in.
+        await client.set(syncPages: [RssSyncPage(items: [], nextSince: "", hasMore: false),
+                                     RssSyncPage(items: [], nextSince: "", hasMore: false)])
+        await client.set(statePages: [
+            RssStateSyncPage(states: [RssItemState(feedId: "f1", sortKey: item(2).sortKey, isRead: false,
+                                                   isReadExplicit: true)],
+                             nextSince: "c1", hasMore: true),
+            RssStateSyncPage(states: [RssItemState(feedId: "f1", sortKey: item(5).sortKey, isFavorite: true),
+                                      RssItemState(feedId: "f1", sortKey: "2026-01-09T00:00:00+00:00#i9")],
+                             nextSince: "c2", hasMore: false),
+        ])
+        try await engine.syncItems(for: subscription)
+        let observed110 = await client.stateSyncCalls.map(\.since)
+        XCTAssertEqual(observed110, ["", "c1"])
+        let observed111 = try await store.syncState(feedId: "f1").stateCursor
+        XCTAssertEqual(observed111, "c2")
+        let rows = try await store.items(.init(scope: .all, ordering: .oldestFirst))
+        XCTAssertEqual(rows.map(\.isRead), [true, false, true, true, false])
+        XCTAssertEqual(rows.map(\.isReadExplicit), [false, true, false, false, false])
+        XCTAssertEqual(rows.map(\.isFavorite), [false, false, false, false, true])
+        XCTAssertEqual(rows.count, 5)                       // the unknown item is skipped, not created
+        // A queued local change outranks what the server reports for that flag.
+        try await store.setRead(feedId: "f1", sortKey: item(2).sortKey, true)
+        await client.set(failNextState: true)
+        _ = try? await engine.drainPending()
+        await client.set(statePages: [
+            RssStateSyncPage(states: [RssItemState(feedId: "f1", sortKey: item(2).sortKey, isRead: false,
+                                                   isReadExplicit: true, isFavorite: true)],
+                             nextSince: "c3", hasMore: false),
+        ])
+        try await engine.syncItems(for: subscription)
+        let observed112 = try await store.item(feedId: "f1", sortKey: item(2).sortKey)
+        XCTAssertEqual(observed112?.isRead, true)
+        XCTAssertEqual(observed112?.isFavorite, true)
+    }
+
     func testDrainFailureLeavesQueue() async throws {
         await client.set(catalog: RssCatalog(folders: [], subscriptions: [subscription]))
         try await engine.refreshCatalog()
@@ -168,16 +233,22 @@ actor FakeRssClient: RssClient {
     private var catalog = RssCatalog(folders: [], subscriptions: [])
     private var listPages: [RssItemsPage] = []
     private var syncPages: [RssSyncPage] = []
+    private var statePages: [RssStateSyncPage] = []
     private var markAllReadWatermark = "w"
     private var failNextState = false
     private(set) var listCalls: [ListCall] = []
     private(set) var syncCalls: [SyncCall] = []
+    private(set) var stateSyncCalls: [SyncCall] = []
     private(set) var stateCalls: [[RssItemStateChange]] = []
     private(set) var markAllReadCalls: [RssItemScope] = []
+    /// Every mutating call in the order it arrived ("state" / "mark_all_read").
+    private(set) var pushLog: [String] = []
 
     func set(catalog: RssCatalog) { self.catalog = catalog }
     func set(listPages: [RssItemsPage]) { self.listPages = listPages }
     func set(syncPages: [RssSyncPage]) { self.syncPages = syncPages }
+    /// Unscripted state syncs answer with an empty, exhausted page.
+    func set(statePages: [RssStateSyncPage]) { self.statePages = statePages }
     func set(markAllReadWatermark: String) { self.markAllReadWatermark = markAllReadWatermark }
     func set(failNextState: Bool) { self.failNextState = failNextState }
 
@@ -206,6 +277,12 @@ actor FakeRssClient: RssClient {
         return syncPages.removeFirst()
     }
 
+    func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage {
+        stateSyncCalls.append(SyncCall(subscriptionId: subscriptionId, since: since))
+        guard !statePages.isEmpty else { return RssStateSyncPage(states: [], nextSince: "", hasMore: false) }
+        return statePages.removeFirst()
+    }
+
     func getItem(feedId: String, sortKey: String) async throws -> RssItem { fatalError("unused") }
 
     func setItemState(_ changes: [RssItemStateChange]) async throws -> Int {
@@ -214,11 +291,13 @@ actor FakeRssClient: RssClient {
             throw CabalmailError.transport("offline")
         }
         stateCalls.append(changes)
+        pushLog.append("state")
         return changes.count
     }
 
     func markAllRead(scope: RssItemScope) async throws -> RssMarkAllReadResult {
         markAllReadCalls.append(scope)
+        pushLog.append("mark_all_read")
         let json = #"{"subscriptions": 1, "flipped": 0, "read_watermark": "\#(markAllReadWatermark)"}"#
         return try JSONDecoder().decode(RssMarkAllReadResult.self, from: Data(json.utf8))
     }

@@ -8,6 +8,13 @@ import CabalmailKit
 /// banner makes that contract visible and gives them a one-tap escape
 /// for the times they do want a current view.
 ///
+/// Whether the folder *is* unsubscribed is decided by
+/// `UnsubscribedBannerPolicy` against `AppState.subscribedFolderPaths`,
+/// not by `folder.isSubscribed`: the selection can hold a stand-in
+/// `Folder(path:)` (resume-position toast, push-notification tap,
+/// Spotlight, Siri) whose flag is a default, and the banner used to
+/// call a subscribed folder unsubscribed on every one of those routes.
+///
 /// Lives in `safeAreaInset(edge: .bottom)`, which extends the list's
 /// scroll inset rather than overlaying the bottom row — so the last
 /// envelope still scrolls above the banner and the row-level

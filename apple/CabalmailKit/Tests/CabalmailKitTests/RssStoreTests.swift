@@ -52,6 +52,44 @@ final class RssStoreTests: XCTestCase {
         XCTAssertEqual(observed2, 0)
     }
 
+    /// The per-feed defaults round-trip through the row, including the
+    /// remote-content column added in schema version 3.
+    func testSubscriptionDefaultsRoundTrip() async throws {
+        var one = sub("s1", feed: "f1")
+        one.defaultOpenMode = .article
+        one.defaultStyling = .native
+        one.defaultRemoteContent = .show
+        try await store.upsertSubscription(one)
+        let loaded = try await store.subscription(id: "s1")
+        XCTAssertEqual(loaded?.defaultOpenMode, .article)
+        XCTAssertEqual(loaded?.defaultStyling, .native)
+        XCTAssertEqual(loaded?.defaultRemoteContent, .show)
+        one.defaultRemoteContent = .hide
+        try await store.upsertSubscription(one)
+        let updated = try await store.subscription(id: "s1")
+        XCTAssertEqual(updated?.defaultRemoteContent, .hide)
+    }
+
+    /// A version-2 store (no remote-content column) migrates in place and
+    /// its existing rows read as `inherit`.
+    func testMigrationFromVersionTwoAddsRemoteContentColumn() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cabalmail-rss-store-v2-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let database = try SQLiteDatabase(path: dir.appendingPathComponent("rss.sqlite").path)
+        try database.exec(Schema.version1)
+        try database.exec(Schema.version2)
+        try database.run("""
+            INSERT INTO subscriptions (subscription_id, feed_id, default_open_mode) VALUES ('s1', 'f1', 'article')
+            """, [])
+        database.userVersion = 2
+        let migrated = try RssStore(directory: dir)
+        let loaded = try await migrated.subscription(id: "s1")
+        XCTAssertEqual(loaded?.defaultOpenMode, .article)
+        XCTAssertEqual(loaded?.defaultRemoteContent, .inherit)
+    }
+
     func testReadStateRuleWatermarkAndExplicit() async throws {
         _ = try await store.replaceCatalog(RssCatalog(folders: [],
             subscriptions: [sub("s1", feed: "f1", watermark: "2026-01-03T00:00:00+00:00")]))
@@ -69,6 +107,24 @@ final class RssStoreTests: XCTestCase {
         XCTAssertEqual(all.map(\.itemId), ["i1", "i2", "i3", "i4", "i5"])
         XCTAssertEqual(all.map(\.isRead), [true, false, true, true, true])
         XCTAssertEqual(all[0].subscriptionId, "s1")
+    }
+
+    func testServerExplicitUnreadSurvivesTheLocalWatermark() async throws {
+        _ = try await store.replaceCatalog(RssCatalog(folders: [],
+            subscriptions: [sub("s1", feed: "f1", watermark: "2026-01-03T00:00:00+00:00")]))
+        // Item 1 is older than the watermark but the server says the user
+        // marked it unread by hand; that mark must not read as read here.
+        var unread = item("f1", 1)
+        unread.isReadExplicit = true
+        try await store.upsertItems([unread, item("f1", 2)])
+        let rows = try await store.items(.init(scope: .all, ordering: .oldestFirst))
+        XCTAssertEqual(rows.map(\.isRead), [false, true])
+        XCTAssertEqual(rows.map(\.isReadExplicit), [true, false])
+        // Re-listed without the marker (say, after the user marked it read
+        // elsewhere), the watermark rule applies again.
+        try await store.upsertItems([item("f1", 1)])
+        let observed8 = try await store.items(.init(scope: .all, ordering: .oldestFirst))[0].isRead
+        XCTAssertTrue(observed8)
     }
 
     func testServerUpsertKeepsLocalStateWhilePending() async throws {
@@ -151,9 +207,9 @@ final class RssStoreTests: XCTestCase {
         let observed14 = try await store.syncState(feedId: "f1")
         XCTAssertEqual(observed14, RssStore.FeedSyncState())
         try await store.setSyncState(feedId: "f1", .init(sinceCursor: "k",
-            olderCursor: "c", olderExhausted: true, lastSyncedAt: "t"))
+            olderCursor: "c", olderExhausted: true, lastSyncedAt: "t", stateCursor: "sc"))
         let observed15 = try await store.syncState(feedId: "f1")
-        XCTAssertEqual(observed15,
-                       .init(sinceCursor: "k", olderCursor: "c", olderExhausted: true, lastSyncedAt: "t"))
+        XCTAssertEqual(observed15, .init(sinceCursor: "k", olderCursor: "c", olderExhausted: true,
+                                         lastSyncedAt: "t", stateCursor: "sc"))
     }
 }

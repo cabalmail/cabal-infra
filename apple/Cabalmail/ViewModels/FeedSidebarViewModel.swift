@@ -1,9 +1,6 @@
 import Foundation
 import Observation
 import CabalmailKit
-#if canImport(WebKit)
-import WebKit
-#endif
 
 /// Backs the Feeds sidebar section (wide layouts) and the Feeds tab's
 /// sidebar (compact / visionOS): the catalog and unread counts from the
@@ -30,9 +27,16 @@ final class FeedSidebarViewModel {
 
     init(client: CabalmailClient, bus: FeedStateBus = .shared) {
         self.client = client
-        // Any read / favorite change or refetch elsewhere moves the badges.
-        bus.subscribe(self) { [weak self] _ in
-            Task { await self?.reloadCounts() }
+        // Any read / favorite change or refetch elsewhere moves the unread
+        // badges; a refetch also refreshes each feed's health, so the whole
+        // catalog is re-read from the store (cheap: one SQLite pass).
+        bus.subscribe(self) { [weak self] change in
+            Task { if change == nil { await self?.load() } else { await self?.reloadCounts() } }
+        }
+        // A subscribe, unsubscribe, or folder edit (the management sheets,
+        // an OPML import) changes the tree itself.
+        bus.subscribeCatalog(self) { [weak self] in
+            Task { await self?.load() }
         }
     }
 
@@ -61,7 +65,7 @@ final class FeedSidebarViewModel {
         do {
             let diff = try await engine.refreshCatalog()
             await load()
-            dropWebViewStorage(for: diff.removedDataStoreUuids)
+            FeedWebStorage.drop(uuids: diff.removedDataStoreUuids)
         } catch {
             errorMessage = FeedErrorText.describe(error)
         }
@@ -102,32 +106,30 @@ final class FeedSidebarViewModel {
                              collapsed: collapsed, filter: filter)
     }
 
-    private func dropWebViewStorage(for uuids: [String]) {
-        #if canImport(WebKit)
-        for raw in uuids {
-            guard let uuid = UUID(uuidString: raw) else { continue }
-            Task { try? await WKWebsiteDataStore.remove(forIdentifier: uuid) }
-        }
-        #endif
-    }
 }
 
 /// User-facing wording for the RSS API's error codes (`docs/rss.md`) and
 /// the transport failures around them.
 enum FeedErrorText {
+    /// The RSS API's error codes (`docs/rss.md`) in the user's words.
+    private static let serverMessages: [String: String] = [
+        "invalid_url": "That doesn't look like a feed address.",
+        "not_https": "This feed isn't available over a secure connection, so Cabalmail can't fetch it.",
+        "unreachable": "Cabalmail couldn't reach that address.",
+        "not_a_feed": "That address didn't return a feed, and the page doesn't advertise one.",
+        "needs_credentials": "The publisher requires a login for this feed. Private feeds arrive in a later release.",
+        "feed_gone": "The publisher says that feed is gone.",
+        "publisher_error": "The publisher returned an error. Try again later.",
+        "unknown_folder": "That folder no longer exists.",
+        "cyclic_folder": "A folder can't be moved inside itself.",
+        "nothing_to_update": "Nothing to change.",
+        "invalid_opml": "That file isn't an OPML outline.",
+    ]
+
     static func describe(_ error: Error) -> String {
         if case let CabalmailError.server(code, message) = error {
-            switch code {
-            case "invalid_url": return "That doesn't look like a feed address."
-            case "not_https": return "This feed isn't available over a secure connection, so Cabalmail can't fetch it."
-            case "unreachable": return "Cabalmail couldn't reach that address."
-            case "not_a_feed": return "That address didn't return a feed, and the page doesn't advertise one."
-            case "needs_credentials":
-                return "The publisher requires a login for this feed. Private feeds arrive in a later release."
-            case "feed_gone": return "The publisher says that feed is gone."
-            case "publisher_error": return "The publisher returned an error. Try again later."
-            default: return message.isEmpty ? "Something went wrong (\(code))." : message
-            }
+            if let known = serverMessages[code] { return known }
+            return message.isEmpty ? "Something went wrong (\(code))." : message
         }
         return error.localizedDescription
     }
