@@ -46,10 +46,11 @@ extension MessageListView {
             @Bindable var bindable = model
             SearchFiltersSheet(
                 filters: $bindable.searchFilters,
-                currentFolderName: folder.name,
-                // The global search surface has no anchor folder to scope to,
-                // so it hides the "This folder only" toggle.
-                allowFolderScope: !isSearchScope,
+                currentFolderName: (model.searchFolder ?? folder).name,
+                // The global search surface scopes to the sidebar's selected
+                // folder; where nothing feeds it one (iPhone / visionOS
+                // `SearchView`) there is no folder to offer (#1510).
+                allowFolderScope: model.searchFolder != nil,
                 onApply: { snapshot in
                     bindable.searchFilters = snapshot
                     filtersPresented = false
@@ -106,7 +107,7 @@ extension MessageListView {
         SearchScopeSummary(
             foldersSearched: model.searchFoldersSearched,
             thisFolderOnly: model.searchFilters.thisFolderOnly,
-            anchorFolderName: folder.name
+            anchorFolderName: (model.searchFolder ?? folder).name
         )
     }
 

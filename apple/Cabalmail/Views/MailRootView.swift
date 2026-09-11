@@ -333,6 +333,9 @@ struct MailRootView: View {
             selectedEnvelope = nil
             crossFolderDetail = nil
             listSelectionCount = 0
+            // Search's "This folder only" narrows to the sidebar selection
+            // (#1510), including programmatic writes that land mid-search.
+            Task { await searchModel?.setSearchAnchor(folder) }
             // Picking a folder shows its list on compact (it's pushed natively
             // from the sidebar List, but keep the binding in step).
             compactColumn = folder == nil ? .sidebar : .content
@@ -453,6 +456,7 @@ struct MailRootView: View {
                     preferences: preferences,
                     appState: appState
                 )
+                searchModel?.searchAnchor = selectedFolder
             }
         }
         // Addresses live in a trailing panel rather than the left sidebar,
