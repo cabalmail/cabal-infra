@@ -4,14 +4,45 @@ import browser from 'webextension-polyfill';
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { TOKEN_KEY } from '@cabalmail/extension-shared/auth/tokens';
+import { copyWhenReady } from '@cabalmail/extension-shared/clipboard/copyWhenReady';
 import { requiredOrigins } from '@cabalmail/extension-shared/config/controlDomain';
+import { generateAddress } from '@cabalmail/extension-shared/generate/generateAddress';
 import { sendToBackground } from '@cabalmail/extension-shared/messaging/client';
+import { isPageResponse, type PageRequest } from '@cabalmail/extension-shared/messaging/messages';
 
 declare const __REPORT_URL__: string;
 
 // Build-time (CABALMAIL_REPORT_URL) so forks point reports at their own
 // tracker; defaults to the upstream cabal-infra issue template.
 const REPORT_URL = __REPORT_URL__;
+
+/**
+ * The hostname of the page behind the popup, for labelling a minted address
+ * the way the in-page popover labels one. Asked of the content script in the
+ * tab's top frame rather than read from the tab itself, so the popup needs
+ * no `tabs`/`activeTab` grant. Empty when nothing answers: browser-internal
+ * pages, tabs opened before the extension was installed.
+ */
+async function activeTabHostname(): Promise<string> {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id === undefined) return '';
+    const request: PageRequest = { kind: 'get-page-hostname' };
+    const reply: unknown = await browser.tabs.sendMessage(tab.id, request, { frameId: 0 });
+    return isPageResponse(reply) ? reply.hostname : '';
+  } catch {
+    return '';
+  }
+}
+
+const linkButton = {
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  font: 'inherit',
+  color: 'var(--cm-accent-text)',
+  cursor: 'pointer',
+} as const;
 
 /**
  * Ask for the host permissions the flow needs, for the deployment this
@@ -49,6 +80,11 @@ function Popup() {
   const [domains, setDomains] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  // Mint + copy: the escape hatch for a sign-up form the detector missed.
+  const [apex, setApex] = useState<string>('');
+  const [label, setLabel] = useState<string>('');
+  const [minting, setMinting] = useState(false);
+  const [minted, setMinted] = useState<string | null>(null);
 
   // Raw fetch errors name nothing actionable; translate the common cases.
   // Never return something falsy: an empty error renders as no error at all.
@@ -103,6 +139,11 @@ function Popup() {
 
   useEffect(() => {
     void guard(refresh);
+    // Prefill the mint label with the page's hostname. It is a default, so
+    // it never overwrites something the user has already typed.
+    void activeTabHostname().then((hostname) => {
+      if (hostname) setLabel((current) => current || hostname);
+    });
     // The tab-based flow (Safari) completes in the background long after the
     // click, so watch the session rather than waiting on the click's reply.
     const onChanged = (
@@ -170,8 +211,109 @@ function Popup() {
       await sendToBackground({ kind: 'sign-out' });
       setSignedIn(false);
       setDomains(null);
+      setMinted(null);
       setStatus(null);
     });
+
+  // The apex the mint uses: the user's pick if it is still one of theirs,
+  // else the first assigned domain.
+  const apexOptions = domains ?? [];
+  const mintApex = apex && apexOptions.includes(apex) ? apex : (apexOptions[0] ?? '');
+
+  const mint = () =>
+    guard(async () => {
+      if (!mintApex) return;
+      setError(null);
+      setMinted(null);
+      setMinting(true);
+      setStatus('Creating an address…');
+      const generated = generateAddress(mintApex);
+      const created = sendToBackground({
+        kind: 'create-address',
+        address: {
+          username: generated.local,
+          subdomain: generated.subdomain,
+          tld: mintApex,
+          comment: label.trim().slice(0, 100),
+        },
+        // No form submission will ever confirm this one, so it is born
+        // confirmed rather than pending.
+        pending: false,
+      }).then((result) => {
+        if (!result.ok) throw new Error(result.message);
+        return result.kind === 'address-created' ? result.address : generated.address;
+      });
+      // Issued before the first await: the click is what authorizes the
+      // clipboard write, and the address only exists once the server says so.
+      const copied = copyWhenReady(created).then(
+        () => true,
+        () => false,
+      );
+      try {
+        const address = await created;
+        setMinted(address);
+        setStatus(
+          (await copied)
+            ? 'Created and copied to the clipboard.'
+            : 'Created. The browser refused the automatic copy, so use the Copy button.',
+        );
+      } finally {
+        setMinting(false);
+      }
+    });
+
+  const copyMinted = () =>
+    guard(async () => {
+      if (!minted) return;
+      await navigator.clipboard.writeText(minted);
+      setStatus('Copied to the clipboard.');
+    });
+
+  const mintForm = (
+    <div style={{ margin: '0 0 8px' }}>
+      <p style={{ margin: '0 0 4px' }}>
+        Need an address for a form the extension didn't spot? Mint one here and paste it.
+      </p>
+      {apexOptions.length > 1 && (
+        <label style={{ display: 'block', marginBottom: '4px' }}>
+          Apex domain{' '}
+          <select
+            value={mintApex}
+            disabled={minting}
+            onChange={(e) => setApex((e.target as HTMLSelectElement).value)}
+          >
+            {apexOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label style={{ display: 'block', marginBottom: '6px' }}>
+        Label{' '}
+        <input
+          value={label}
+          maxLength={100}
+          placeholder="what this address is for"
+          disabled={minting}
+          style={{ width: '100%', boxSizing: 'border-box' }}
+          onInput={(e) => setLabel((e.target as HTMLInputElement).value)}
+        />
+      </label>
+      <button onClick={mint} disabled={minting || !mintApex}>
+        {minting ? 'Minting…' : 'Mint + copy address'}
+      </button>
+      {minted && (
+        <p style={{ margin: '6px 0 0', wordBreak: 'break-all' }}>
+          <code>{minted}</code>{' '}
+          <button onClick={copyMinted} style={linkButton}>
+            Copy
+          </button>
+        </p>
+      )}
+    </div>
+  );
 
   const domainForm = (
     <form onSubmit={saveDomain}>
@@ -210,6 +352,7 @@ function Popup() {
                       <li key={d}>{d}</li>
                     ))}
                   </ul>
+                  {mintForm}
                 </div>
               )}
               {domains && domains.length === 0 && (
@@ -237,17 +380,7 @@ function Popup() {
               Manage addresses
             </a>
             {' · '}
-            <button
-              onClick={() => setEditingDomain(true)}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                font: 'inherit',
-                color: '#06c',
-                cursor: 'pointer',
-              }}
-            >
+            <button onClick={() => setEditingDomain(true)} style={linkButton}>
               Change server
             </button>
             {' · '}
