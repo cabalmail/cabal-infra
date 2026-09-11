@@ -11,7 +11,7 @@ direction - marking something unread after mark-all-read sticks.
 '''
 from datetime import datetime, timezone
 from rss_api import (ApiError, body_of, guarded, list_subscriptions, ok,  # pylint: disable=import-error
-                     state, user_feed_key, username)
+                     state, updated_key, user_feed_key, username)
 
 MAX_ITEMS = 100
 
@@ -54,9 +54,11 @@ def validate_entry(entry, subscribed):
 
 def build_expression(entry, sort_key, now):
     '''(UpdateExpression, values) for the flags present in `entry`.'''
-    sets = ['item_id = if_not_exists(item_id, :item_id)', 'updated_at = :now']
+    sets = ['item_id = if_not_exists(item_id, :item_id)', 'updated_at = :now',
+            'updated_key = :ukey']
     removes = []
-    values = {':item_id': sort_key.split('#', 1)[1], ':now': now}
+    values = {':item_id': sort_key.split('#', 1)[1], ':now': now,
+              ':ukey': updated_key(now, sort_key)}
     touched = False
     if 'is_read' in entry:
         sets.append('is_read = :read')

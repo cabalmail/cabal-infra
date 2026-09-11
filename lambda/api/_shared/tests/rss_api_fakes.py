@@ -207,7 +207,8 @@ SCHEMAS = {
     'cabal-rss-subscription': (['user', 'subscription_id'], {}),
     'cabal-rss-folder': (['user', 'folder_id'], {}),
     'cabal-rss-user-item-state': (['user_feed', 'sort_key'],
-                                  {'favorite_by_feed': ('user_feed', 'favorite_key')}),
+                                  {'favorite_by_feed': ('user_feed', 'favorite_key'),
+                                   'by_updated': ('user_feed', 'updated_key')}),
 }
 TABLES = {}
 

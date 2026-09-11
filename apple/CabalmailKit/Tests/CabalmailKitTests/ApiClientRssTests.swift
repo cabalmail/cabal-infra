@@ -98,7 +98,11 @@ final class ApiClientRssTests: XCTestCase {
         {"items": [{"feed_id": "f", "sort_key": "2026#i1", "title": "T", "is_read": true}], "next_cursor": "c2"}
         """
         let sync = #"{"items": [], "next_since": "k9", "has_more": false}"#
-        let (client, http) = makeClient([(page, 200), (sync, 200)])
+        let states = """
+        {"states": [{"feed_id": "f", "sort_key": "2026#i1", "is_read": false, "is_read_explicit": true,
+                     "is_favorite": true, "updated_at": "u"}], "next_state_since": "sc", "has_more": true}
+        """
+        let (client, http) = makeClient([(page, 200), (sync, 200), (states, 200)])
         let listed = try await client.listItems(scope: .folder("fo"), filter: .unread, order: .oldest,
                                                 limit: 25, cursor: "c1")
         XCTAssertEqual(listed.items[0].title, "T")
@@ -111,6 +115,13 @@ final class ApiClientRssTests: XCTestCase {
         XCTAssertEqual(queryItems(requests[0]),
                        ["folder_id": "fo", "filter": "unread", "order": "oldest", "limit": "25", "cursor": "c1"])
         XCTAssertEqual(queryItems(requests[1]), ["subscription_id": "s", "since": "", "limit": "100"])
+        let stateSync = try await client.syncItemStates(subscriptionId: "s", since: "c0", limit: 50)
+        XCTAssertEqual(stateSync.states, [RssItemState(feedId: "f", sortKey: "2026#i1", isRead: false,
+                                                       isReadExplicit: true, isFavorite: true, updatedAt: "u")])
+        XCTAssertEqual(stateSync.nextSince, "sc")
+        XCTAssertTrue(stateSync.hasMore)
+        let stateRequest = await http.requests[2]
+        XCTAssertEqual(queryItems(stateRequest), ["subscription_id": "s", "state_since": "c0", "limit": "50"])
     }
 
     func testSetItemStateAndMarkAllReadBodies() async throws {

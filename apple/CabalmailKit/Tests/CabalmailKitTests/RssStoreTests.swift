@@ -71,6 +71,24 @@ final class RssStoreTests: XCTestCase {
         XCTAssertEqual(all[0].subscriptionId, "s1")
     }
 
+    func testServerExplicitUnreadSurvivesTheLocalWatermark() async throws {
+        _ = try await store.replaceCatalog(RssCatalog(folders: [],
+            subscriptions: [sub("s1", feed: "f1", watermark: "2026-01-03T00:00:00+00:00")]))
+        // Item 1 is older than the watermark but the server says the user
+        // marked it unread by hand; that mark must not read as read here.
+        var unread = item("f1", 1)
+        unread.isReadExplicit = true
+        try await store.upsertItems([unread, item("f1", 2)])
+        let rows = try await store.items(.init(scope: .all, ordering: .oldestFirst))
+        XCTAssertEqual(rows.map(\.isRead), [false, true])
+        XCTAssertEqual(rows.map(\.isReadExplicit), [true, false])
+        // Re-listed without the marker (say, after the user marked it read
+        // elsewhere), the watermark rule applies again.
+        try await store.upsertItems([item("f1", 1)])
+        let observed8 = try await store.items(.init(scope: .all, ordering: .oldestFirst))[0].isRead
+        XCTAssertTrue(observed8)
+    }
+
     func testServerUpsertKeepsLocalStateWhilePending() async throws {
         _ = try await store.replaceCatalog(RssCatalog(folders: [], subscriptions: [sub("s1", feed: "f1")]))
         try await store.upsertItems([item("f1", 1), item("f1", 2)])
@@ -151,9 +169,9 @@ final class RssStoreTests: XCTestCase {
         let observed14 = try await store.syncState(feedId: "f1")
         XCTAssertEqual(observed14, RssStore.FeedSyncState())
         try await store.setSyncState(feedId: "f1", .init(sinceCursor: "k",
-            olderCursor: "c", olderExhausted: true, lastSyncedAt: "t"))
+            olderCursor: "c", olderExhausted: true, lastSyncedAt: "t", stateCursor: "sc"))
         let observed15 = try await store.syncState(feedId: "f1")
-        XCTAssertEqual(observed15,
-                       .init(sinceCursor: "k", olderCursor: "c", olderExhausted: true, lastSyncedAt: "t"))
+        XCTAssertEqual(observed15, .init(sinceCursor: "k", olderCursor: "c", olderExhausted: true,
+                                         lastSyncedAt: "t", stateCursor: "sc"))
     }
 }

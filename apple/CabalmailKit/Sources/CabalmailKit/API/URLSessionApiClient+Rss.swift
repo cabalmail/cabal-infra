@@ -88,6 +88,15 @@ extension URLSessionApiClient: RssClient {
         return try await decodeRss(RssSyncPage.self, from: request)
     }
 
+    public func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage {
+        let request = try await get("/rss_list_items", query: [
+            URLQueryItem(name: "subscription_id", value: subscriptionId),
+            URLQueryItem(name: "state_since", value: since),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ])
+        return try await decodeRss(RssStateSyncPage.self, from: request)
+    }
+
     public func getItem(feedId: String, sortKey: String) async throws -> RssItem {
         let request = try await get("/rss_get_item", query: [
             URLQueryItem(name: "feed_id", value: feedId),
