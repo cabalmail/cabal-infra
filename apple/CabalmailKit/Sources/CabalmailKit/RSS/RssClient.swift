@@ -25,6 +25,12 @@ public protocol RssClient: Sendable {
     /// The since-sync form: items ingested after `since` (a `fetchedKey`),
     /// oldest-ingested first. `since` "" starts from the beginning.
     func syncItems(subscriptionId: String, since: String, limit: Int) async throws -> RssSyncPage
+    /// The state-sync form: the caller's per-item state rows changed since
+    /// `since` (opaque; "" pulls the feed's whole state partition first).
+    /// This is how a mark made on another device reaches this one - the
+    /// since-sync above is keyed on ingest time and never re-delivers an
+    /// item whose state changed.
+    func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage
     func getItem(feedId: String, sortKey: String) async throws -> RssItem
     /// Returns the number of state rows written (at most 100 per call).
     func setItemState(_ changes: [RssItemStateChange]) async throws -> Int

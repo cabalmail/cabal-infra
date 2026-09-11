@@ -9,18 +9,21 @@ import Foundation
 /// (which also enqueue the mutation for the engine to push).
 ///
 /// Read state follows the server's rule so the two never disagree: an item
-/// the user explicitly marked (locally or server-side) keeps that mark;
-/// otherwise it is read once the subscription's read watermark passes its
-/// publication time. The server already folds ITS watermark into the
-/// `is_read` it sends, and the local watermark only ever advances, so
-/// `is_read OR published_at <= watermark` is exact.
+/// the user explicitly marked (locally, or on any device - the server says
+/// which with `is_read_explicit`) keeps that mark; otherwise it is read
+/// once the subscription's read watermark passes its publication time. The
+/// server already folds ITS watermark into the `is_read` it sends, and the
+/// local watermark only ever advances, so `is_read OR published_at <=
+/// watermark` is exact for a non-explicit item. Marks made elsewhere
+/// arrive through the engine's state sync (`applyServerStates`), since the
+/// item sync is keyed on ingest time and never re-delivers a changed item.
 public actor RssStore {
     let database: SQLiteDatabase
     /// Directory the database lives in (the caller may put other per-account
     /// RSS state beside it).
     public nonisolated let directory: URL
 
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
     public init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -37,6 +40,10 @@ public actor RssStore {
         if database.userVersion < 1 {
             try database.exec(Schema.version1)
             database.userVersion = 1
+        }
+        if database.userVersion < 2 {
+            try database.exec(Schema.version2)
+            database.userVersion = 2
         }
     }
 
@@ -203,7 +210,8 @@ enum Schema {
         i.feed_id, i.sort_key, i.item_id, i.guid, i.title, i.author, i.url, i.published_at,
         i.updated_at, i.fetched_at, i.fetched_key, i.summary_html, i.content_html,
         (\(readExpression)) AS effective_read, i.is_favorite,
-        COALESCE((SELECT s.subscription_id FROM subscriptions s WHERE s.feed_id = i.feed_id LIMIT 1), '')
+        COALESCE((SELECT s.subscription_id FROM subscriptions s WHERE s.feed_id = i.feed_id LIMIT 1), ''),
+        i.state_is_explicit
         """
     /// The read-state rule in SQL; `i` is the items alias and the
     /// subscription's watermark is looked up per row.
@@ -259,5 +267,12 @@ enum Schema {
           id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, feed_id TEXT NOT NULL DEFAULT '',
           sort_key TEXT NOT NULL DEFAULT '', subscription_id TEXT NOT NULL DEFAULT '',
           value INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+        """
+
+    /// The state-sync cursor per feed. Empty on an upgraded store, which
+    /// makes the next sync pull the feed's whole state partition - the
+    /// repair for caches that lost explicit marks before this existed.
+    static let version2 = """
+        ALTER TABLE feed_sync ADD COLUMN state_cursor TEXT NOT NULL DEFAULT '';
         """
 }

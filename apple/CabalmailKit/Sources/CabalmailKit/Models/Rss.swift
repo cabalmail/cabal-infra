@@ -318,6 +318,11 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
     public var summaryHtml: String
     public var contentHtml: String
     public var isRead: Bool
+    /// Whether `isRead` is the user's own mark (server state row) rather
+    /// than the subscription's read watermark. An explicit mark is exempt
+    /// from the local watermark rule, so a mark-unread on an old item
+    /// survives a later listing.
+    public var isReadExplicit: Bool
     public var isFavorite: Bool
 
     /// Stable across feeds: two feeds could carry the same sort key.
@@ -331,7 +336,8 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
         feedId: String, subscriptionId: String = "", itemId: String, sortKey: String, guid: String = "",
         title: String = "", author: String = "", url: String = "", publishedAt: String = "",
         updatedAt: String = "", fetchedAt: String = "", fetchedKey: String = "",
-        summaryHtml: String = "", contentHtml: String = "", isRead: Bool = false, isFavorite: Bool = false
+        summaryHtml: String = "", contentHtml: String = "", isRead: Bool = false, isReadExplicit: Bool = false,
+        isFavorite: Bool = false
     ) {
         self.feedId = feedId
         self.subscriptionId = subscriptionId
@@ -348,6 +354,7 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
         self.summaryHtml = summaryHtml
         self.contentHtml = contentHtml
         self.isRead = isRead
+        self.isReadExplicit = isReadExplicit
         self.isFavorite = isFavorite
     }
 
@@ -356,7 +363,7 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
         case sortKey = "sort_key", guid, title, author, url
         case publishedAt = "published_at", updatedAt = "updated_at", fetchedAt = "fetched_at"
         case fetchedKey = "fetched_key", summaryHtml = "summary_html", contentHtml = "content_html"
-        case isRead = "is_read", isFavorite = "is_favorite"
+        case isRead = "is_read", isReadExplicit = "is_read_explicit", isFavorite = "is_favorite"
     }
 
     public init(from decoder: Decoder) throws {
@@ -376,7 +383,70 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
         summaryHtml = try container.decodeIfPresent(String.self, forKey: .summaryHtml) ?? ""
         contentHtml = try container.decodeIfPresent(String.self, forKey: .contentHtml) ?? ""
         isRead = try container.decodeIfPresent(Bool.self, forKey: .isRead) ?? false
+        isReadExplicit = try container.decodeIfPresent(Bool.self, forKey: .isReadExplicit) ?? false
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+    }
+}
+
+/// One row of the caller's per-item state, from the state-sync form of
+/// `/rss_list_items`: the flags an item carries, keyed so they can be
+/// applied to the cached copy.
+public struct RssItemState: Sendable, Codable, Hashable {
+    public var feedId: String
+    public var sortKey: String
+    public var isRead: Bool
+    public var isReadExplicit: Bool
+    public var isFavorite: Bool
+    public var updatedAt: String
+
+    public init(feedId: String, sortKey: String, isRead: Bool = false, isReadExplicit: Bool = false,
+                isFavorite: Bool = false, updatedAt: String = "") {
+        self.feedId = feedId
+        self.sortKey = sortKey
+        self.isRead = isRead
+        self.isReadExplicit = isReadExplicit
+        self.isFavorite = isFavorite
+        self.updatedAt = updatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case feedId = "feed_id", sortKey = "sort_key", isRead = "is_read"
+        case isReadExplicit = "is_read_explicit", isFavorite = "is_favorite", updatedAt = "updated_at"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        feedId = try container.decode(String.self, forKey: .feedId)
+        sortKey = try container.decode(String.self, forKey: .sortKey)
+        isRead = try container.decodeIfPresent(Bool.self, forKey: .isRead) ?? false
+        isReadExplicit = try container.decodeIfPresent(Bool.self, forKey: .isReadExplicit) ?? false
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
+    }
+}
+
+/// A page of the state-sync form of `/rss_list_items`. `nextSince` is
+/// opaque: pass it back unchanged.
+public struct RssStateSyncPage: Sendable, Codable, Hashable {
+    public var states: [RssItemState]
+    public var nextSince: String
+    public var hasMore: Bool
+
+    public init(states: [RssItemState], nextSince: String, hasMore: Bool) {
+        self.states = states
+        self.nextSince = nextSince
+        self.hasMore = hasMore
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case states, nextSince = "next_state_since", hasMore = "has_more"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        states = try container.decodeIfPresent([RssItemState].self, forKey: .states) ?? []
+        nextSince = try container.decodeIfPresent(String.self, forKey: .nextSince) ?? ""
+        hasMore = try container.decodeIfPresent(Bool.self, forKey: .hasMore) ?? false
     }
 }
 

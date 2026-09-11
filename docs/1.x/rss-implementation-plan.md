@@ -604,6 +604,18 @@ filters never need a network round trip.
    `/rss_mark_all_read` calls whenever online, on reconnect
    (`Reachability`), and before each item sync. Last write wins; a
    server row that disagrees after a drain is taken as truth.
+
+   > **Erratum (2026-09-11):** as shipped, nothing carried a server row
+   > back to a device that had not written it. The since-sync in step 2 is
+   > keyed on `fetched_key`, which a state change never touches, so a mark
+   > made on one device was invisible to the others until they re-listed
+   > the item; the wire item had no explicit-state marker, so even a
+   > re-listed explicit unread older than the watermark read as read
+   > locally; and the drain sent every item mark before any mark-all-read
+   > regardless of the order the user made them. Fixed by a state-sync
+   > form of `/rss_list_items` (`state_since`, backed by a `by_updated`
+   > index), `is_read_explicit` on the wire, and an order-preserving
+   > drain; see `docs/rss.md`.
 4. **Triggers**: selecting a feed or folder syncs the visible feeds;
    foreground syncs everything subscribed; iOS `BGAppRefreshTask`
    (system-scheduled, at least hourly requested) and a 15-minute timer

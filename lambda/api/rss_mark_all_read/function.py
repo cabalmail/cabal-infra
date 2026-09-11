@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Attr, Key  # pylint: disable=import-error
 from rss_api import (ROOT_FOLDER, body_of, folder_and_descendants,  # pylint: disable=import-error
                      get_subscription, guarded, list_subscriptions, ok, state,
-                     subscriptions, user_feed_key, username)
+                     subscriptions, updated_key, user_feed_key, username)
 
 
 @guarded
@@ -46,9 +46,11 @@ def clear_explicit_unread(user, feed_id, now):
     while True:
         response = state.query(**kwargs)
         for row in response.get('Items', []):
-            state.update_item(Key={'user_feed': key, 'sort_key': row['sort_key']},
-                              UpdateExpression='SET is_read = :true, updated_at = :now',
-                              ExpressionAttributeValues={':true': True, ':now': now})
+            state.update_item(
+                Key={'user_feed': key, 'sort_key': row['sort_key']},
+                UpdateExpression='SET is_read = :true, updated_at = :now, updated_key = :ukey',
+                ExpressionAttributeValues={':true': True, ':now': now,
+                                           ':ukey': updated_key(now, row['sort_key'])})
             flipped += 1
         if 'LastEvaluatedKey' not in response:
             return flipped
