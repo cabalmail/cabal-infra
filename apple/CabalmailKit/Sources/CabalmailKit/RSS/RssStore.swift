@@ -23,7 +23,7 @@ public actor RssStore {
     /// RSS state beside it).
     public nonisolated let directory: URL
 
-    static let schemaVersion = 2
+    static let schemaVersion = 3
 
     public init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -44,6 +44,10 @@ public actor RssStore {
         if database.userVersion < 2 {
             try database.exec(Schema.version2)
             database.userVersion = 2
+        }
+        if database.userVersion < 3 {
+            try database.exec(Schema.version3)
+            database.userVersion = 3
         }
     }
 
@@ -115,12 +119,13 @@ public actor RssStore {
         try database.run("""
             INSERT INTO subscriptions (subscription_id, feed_id, folder_id, custom_title, ordering_mode,
               default_open_mode, default_styling, notifications_enabled, credentials_scheme,
-              read_watermark, data_store_uuid, created_at, feed_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              read_watermark, data_store_uuid, created_at, feed_json, default_remote_content)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(subscription_id) DO UPDATE SET feed_id = excluded.feed_id,
               folder_id = excluded.folder_id, custom_title = excluded.custom_title,
               ordering_mode = excluded.ordering_mode, default_open_mode = excluded.default_open_mode,
               default_styling = excluded.default_styling,
+              default_remote_content = excluded.default_remote_content,
               notifications_enabled = excluded.notifications_enabled,
               credentials_scheme = excluded.credentials_scheme,
               read_watermark = MAX(subscriptions.read_watermark, excluded.read_watermark),
@@ -131,7 +136,7 @@ public actor RssStore {
                   .init(sub.orderingMode.rawValue), .init(sub.defaultOpenMode.rawValue),
                   .init(sub.defaultStyling.rawValue), .init(sub.notificationsEnabled),
                   .init(sub.credentialsScheme), .init(sub.readWatermark), .init(sub.dataStoreUuid),
-                  .init(sub.createdAt), .init(feedJson ?? "")])
+                  .init(sub.createdAt), .init(feedJson ?? ""), .init(sub.defaultRemoteContent.rawValue)])
     }
 
     public func folders() throws -> [RssFolder] {
@@ -161,6 +166,7 @@ public actor RssStore {
             customTitle: row.string(3), orderingMode: RssOrderingMode(rawValue: row.string(4)) ?? .newestFirst,
             defaultOpenMode: RssOpenMode(rawValue: row.string(5)) ?? .summary,
             defaultStyling: RssStyling(rawValue: row.string(6)) ?? .reader,
+            defaultRemoteContent: RssRemoteContentMode(rawValue: row.string(13)) ?? .inherit,
             notificationsEnabled: row.bool(7), credentialsScheme: row.string(8), readWatermark: row.string(9),
             dataStoreUuid: row.string(10), createdAt: row.string(11), feed: feed
         )
@@ -204,7 +210,7 @@ enum Schema {
     static let subscriptionColumns = """
         subscription_id, feed_id, folder_id, custom_title, ordering_mode, default_open_mode,
         default_styling, notifications_enabled, credentials_scheme, read_watermark,
-        data_store_uuid, created_at, feed_json
+        data_store_uuid, created_at, feed_json, default_remote_content
         """
     static let itemColumns = """
         i.feed_id, i.sort_key, i.item_id, i.guid, i.title, i.author, i.url, i.published_at,
@@ -274,5 +280,12 @@ enum Schema {
     /// repair for caches that lost explicit marks before this existed.
     static let version2 = """
         ALTER TABLE feed_sync ADD COLUMN state_cursor TEXT NOT NULL DEFAULT '';
+        """
+
+    /// The per-feed remote-content default (`inherit` | `show` | `hide`);
+    /// rows from before it existed read as `inherit`, which is also what
+    /// the server returns for a subscription that never set it.
+    static let version3 = """
+        ALTER TABLE subscriptions ADD COLUMN default_remote_content TEXT NOT NULL DEFAULT 'inherit';
         """
 }

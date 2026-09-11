@@ -2,7 +2,7 @@
 
 Body: {"subscription_id": "...", and any of
        "custom_title", "folder_id", "ordering_mode", "default_open_mode",
-       "default_styling", "notifications_enabled"}
+       "default_styling", "default_remote_content", "notifications_enabled"}
 
 Settings are stored here and APPLIED on the client (open Q5 in the
 requirements): the shared feed row is never touched. notifications_enabled
@@ -10,14 +10,15 @@ also maintains the sparse notify_feed_id attribute that the phase 8
 fan-out queries (present only while notifications are on).
 '''
 from rss_api import (ApiError, MAX_TITLE_LENGTH, OPEN_MODES, ORDERING_MODES,  # pylint: disable=import-error
-                     ROOT_FOLDER, STYLING_MODES, body_of, feeds, folder_key,
-                     folders, get_subscription, guarded, ok, serialize_subscription,
-                     subscriptions, username)
+                     REMOTE_CONTENT_MODES, ROOT_FOLDER, STYLING_MODES, body_of, feeds,
+                     folder_key, folders, get_subscription, guarded, ok,
+                     serialize_subscription, subscriptions, username)
 
 ENUMS = {
     'ordering_mode': ORDERING_MODES,
     'default_open_mode': OPEN_MODES,
     'default_styling': STYLING_MODES,
+    'default_remote_content': REMOTE_CONTENT_MODES,
 }
 
 

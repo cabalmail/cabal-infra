@@ -29,13 +29,28 @@ struct FeedItemDetailView: View {
                 ProgressView()
             }
         }
-        .navigationTitle(subscription?.displayTitle ?? "Feed")
+        .navigationTitle((model?.subscription ?? subscription)?.displayTitle ?? "Feed")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task(id: item.id) {
             restoreAnchor = appState.navCoordinator?.readingPosition(key: positionKey)?.anchor
-            model = FeedItemDetailViewModel(item: item, subscription: subscription,
+            // Resolve the subscription here rather than trusting the parent's
+            // copy. The parent looks it up asynchronously *after* the
+            // selection changes, so on a first open — or any open after the
+            // reader was popped — `subscription` is still nil at this point,
+            // and a model built from it would silently fall back to the
+            // default open mode, styling, and remote-content policy instead
+            // of the feed's own. The store read is local and fast.
+            let resolved: RssSubscription?
+            if let subscription {
+                resolved = subscription
+            } else if let store = appState.client?.rssStore {
+                resolved = (try? await store.subscription(id: item.subscriptionId)) ?? nil
+            } else {
+                resolved = nil
+            }
+            model = FeedItemDetailViewModel(item: item, subscription: resolved,
                                             engine: appState.client?.rssSync, preferences: preferences)
         }
         .task { await observeReachability() }

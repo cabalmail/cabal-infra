@@ -64,6 +64,7 @@ actor FakeRssClient: RssClient {
         if let value = update.orderingMode { sub.orderingMode = value }
         if let value = update.defaultOpenMode { sub.defaultOpenMode = value }
         if let value = update.defaultStyling { sub.defaultStyling = value }
+        if let value = update.defaultRemoteContent { sub.defaultRemoteContent = value }
         catalog.subscriptions = catalog.subscriptions.map { $0.subscriptionId == subscriptionId ? sub : $0 }
         return sub
     }
