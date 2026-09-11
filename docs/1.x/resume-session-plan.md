@@ -102,7 +102,7 @@ additive optional fields.
 
 | Phase | Work item                                                | Status      |
 | ----- | -------------------------------------------------------- | ----------- |
-| A     | Apple: session record, feed-aware launch, position cache | In review (2026-09-11) |
+| A     | Apple: session record, feed-aware launch, position cache | In review: PR #1538 (2026-09-11) |
 | B     | Android: position cache + local session record           | Not started |
 | C     | Cross-device RSS toast (server additive fields)          | Not started |
 
@@ -111,7 +111,7 @@ tracked separately in #1537 and is independent of every phase here.
 
 ## Phase A — Apple
 
-**Status:** In review (2026-09-11).
+**Status:** In review, PR #1538 (2026-09-11). Not yet device-tested.
 
 ### Kit (`CabalmailKit`)
 
