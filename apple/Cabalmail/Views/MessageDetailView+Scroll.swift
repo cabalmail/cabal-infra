@@ -3,10 +3,13 @@ import CabalmailKit
 
 // In-message scroll capture and restore, split out of `MessageDetailView` to
 // keep that file under SwiftLint's file-length cap (matching the `+Toolbar` /
-// `+Compose` sibling pattern). The nav cursor carries an exact content offset
-// for plain-text bodies (`messageScroll`) and a reflow-robust DOM anchor for
-// HTML bodies (`messageAnchor`); the reader consumes whichever matches the body
-// it rendered, and streams the live position back as the user reads.
+// `+Compose` sibling pattern). A position is an exact content offset for a
+// plain-text body or a reflow-robust DOM anchor for an HTML body; the reader
+// consumes whichever matches the body it rendered, and streams the live
+// position back as the user reads. It comes from one of two places: a
+// cross-device restore the user accepted (the server cursor's `msg_scroll` /
+// `msg_anchor`, parked on the coordinator), else this install's own
+// reading-position cache — so a half-read message reopens where it was.
 extension MessageDetailView {
     /// The body region: spinner, HTML/plain renderer, or error/empty state.
     /// Lives here (not in the main struct) so `MessageDetailView` stays under
@@ -57,7 +60,9 @@ extension MessageDetailView {
             readerMode: model.readerMode,
             printRequestTick: model.printRequestTick,
             restoreAnchor: restoreScrollAnchor,
-            onScrollCaptured: { anchor in reportMessageScroll(offset: nil, anchor: anchor) }
+            onScrollCaptured: { capture in
+                reportMessageScroll(offset: nil, anchor: capture.anchor, atTop: capture.isAtTop)
+            }
         )
     }
 
@@ -84,33 +89,44 @@ extension MessageDetailView {
         }
     }
 
-    /// Pulls a pending scroll restore off the nav coordinator once the body is
-    /// available, matched to this exact message. Runs at most once per message
-    /// (`didConsumeScrollRestore`); a normal open finds nothing pending and
-    /// leaves the reader at the top.
+    /// Resolves where to open this message once the body is available: a
+    /// pending cross-device restore matched to this exact message first, else
+    /// the local reading-position cache. Runs at most once per message
+    /// (`didConsumeScrollRestore`); a message never scrolled leaves the
+    /// reader at the top.
     func consumeScrollRestoreIfReady() {
-        guard !didConsumeScrollRestore, let model else { return }
+        guard !didConsumeScrollRestore, let model, let coordinator = appState.navCoordinator else { return }
         guard model.htmlBody != nil || model.plainText != nil else { return }
         didConsumeScrollRestore = true
-        guard let restore = appState.navCoordinator?.consumeScrollRestore(
+        if let restore = coordinator.consumeScrollRestore(
             folderPath: folder.path,
             uid: envelope.uid,
             messageID: envelope.messageId
-        ) else { return }
-        restoreScrollAnchor = restore.anchor
-        restoreScrollOffset = restore.offset
+        ) {
+            restoreScrollAnchor = restore.anchor
+            restoreScrollOffset = restore.offset
+        } else if let position = coordinator.readingPosition(
+            folderPath: folder.path,
+            uid: envelope.uid,
+            messageID: envelope.messageId
+        ) {
+            restoreScrollAnchor = position.anchor
+            restoreScrollOffset = position.offset
+        }
     }
 
-    /// Relays the current in-message scroll position to the nav cursor. `offset`
-    /// is set for plain text, `anchor` for HTML; the coordinator debounces and
-    /// only writes on change, and ignores it unless the cursor is still on this
-    /// message.
-    func reportMessageScroll(offset: Int?, anchor: String?) {
+    /// Relays the current in-message scroll position to the nav coordinator:
+    /// the server cursor and the local position cache. `offset` is set for
+    /// plain text, `anchor` for HTML; `atTop` clears both rather than storing
+    /// a trivial position. The coordinator debounces and only writes on
+    /// change, and ignores it unless the cursor is still on this message.
+    func reportMessageScroll(offset: Int?, anchor: String?, atTop: Bool) {
         appState.navCoordinator?.recordMessageScroll(
             folderPath: folder.path,
             uid: envelope.uid,
-            offset: offset,
-            anchor: anchor
+            messageID: envelope.messageId,
+            position: ReadingPosition(anchor: anchor, offset: offset),
+            atTop: atTop
         )
     }
 
@@ -122,6 +138,6 @@ extension MessageDetailView {
         let offset = max(0, Int(offsetY))
         if let last = lastReportedPlainOffset, abs(offset - last) < 8 { return }
         lastReportedPlainOffset = offset
-        reportMessageScroll(offset: offset, anchor: nil)
+        reportMessageScroll(offset: offset, anchor: nil, atTop: offset < 8)
     }
 }

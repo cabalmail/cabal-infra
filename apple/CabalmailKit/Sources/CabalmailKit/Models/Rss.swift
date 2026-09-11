@@ -54,6 +54,56 @@ public enum RssItemScope: Sendable, Hashable {
     case all
 }
 
+extension RssItemScope {
+    /// A compact string form for persistence (the local resume session, and
+    /// later the server cursor): `all`, `sub:<subscriptionId>`,
+    /// `folder:<folderId>`. Ids are opaque server strings that never contain
+    /// a colon, but the parser splits on the first one regardless.
+    public var token: String {
+        switch self {
+        case .all: return "all"
+        case .subscription(let id): return "sub:\(id)"
+        case .folder(let id): return "folder:\(id)"
+        }
+    }
+
+    /// Inverse of `token`; nil for anything malformed (an unknown prefix, an
+    /// empty id) so a stale or hand-edited value reads as "no scope".
+    public init?(token: String) {
+        if token == "all" {
+            self = .all
+            return
+        }
+        guard let colon = token.firstIndex(of: ":") else { return nil }
+        let prefix = token[..<colon]
+        let id = String(token[token.index(after: colon)...])
+        guard !id.isEmpty else { return nil }
+        switch prefix {
+        case "sub": self = .subscription(id)
+        case "folder": self = .folder(id)
+        default: return nil
+        }
+    }
+}
+
+extension RssItemScope: Codable {
+    public init(from decoder: Decoder) throws {
+        let token = try decoder.singleValueContainer().decode(String.self)
+        guard let scope = RssItemScope(token: token) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Unrecognised RssItemScope token: \(token)"
+            ))
+        }
+        self = scope
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(token)
+    }
+}
+
 // MARK: - Catalog
 
 /// The `feed` summary riding on each subscription (title, site, health).

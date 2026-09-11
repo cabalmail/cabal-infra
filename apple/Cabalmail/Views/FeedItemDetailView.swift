@@ -14,6 +14,11 @@ struct FeedItemDetailView: View {
     @Environment(Preferences.self) private var preferences
     @State private var model: FeedItemDetailViewModel?
     @State private var isOffline = false
+    /// Where the reader was in this item's body last time it was open, from
+    /// the local position cache — reapplied once the body loads. Snapshotted
+    /// into state (rather than read from the coordinator in `body`) so the
+    /// capture stream below doesn't re-render the web view on every report.
+    @State private var restoreAnchor: String?
 
     var body: some View {
         Group {
@@ -29,11 +34,15 @@ struct FeedItemDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task(id: item.id) {
+            restoreAnchor = appState.navCoordinator?.readingPosition(key: positionKey)?.anchor
             model = FeedItemDetailViewModel(item: item, subscription: subscription,
                                             engine: appState.client?.rssSync, preferences: preferences)
         }
         .task { await observeReachability() }
     }
+
+    /// The item's key in the reading-position cache.
+    private var positionKey: String { ReadingPositionKey.feed(itemID: item.id) }
 
     /// Mirrors reachability into the toolbar (the article button says when
     /// it needs a connection) and the article view (its offline notice).
@@ -65,11 +74,20 @@ struct FeedItemDetailView: View {
                         description: Text("This feed only lists the item. Open the article to read it.")
                     )
                 } else {
+                    // Same reader as mail, same scroll anchor plumbing: the
+                    // position is restored from and streamed back to the
+                    // local cache so a half-read item reopens where it was.
                     HTMLBodyView(
                         html: model.item.bodyHtml,
                         inlineImages: [:],
                         allowRemote: model.remoteContentAllowed,
-                        readerMode: model.readerMode
+                        readerMode: model.readerMode,
+                        restoreAnchor: restoreAnchor,
+                        onScrollCaptured: { capture in
+                            appState.navCoordinator?.savePosition(
+                                key: positionKey, anchor: capture.anchor, offset: nil, atTop: capture.isAtTop
+                            )
+                        }
                     )
                 }
             }

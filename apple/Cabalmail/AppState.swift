@@ -650,6 +650,9 @@ extension AppState {
         try? await client.authService.signOut()
         // Tell the watch to drop its copy of the credentials too.
         WatchSessionBridge.shared.pushSignedOut()
+        // Forget this install's resume session and reading positions too, so
+        // the next account on the device doesn't inherit them.
+        self.navCoordinator?.clearLocalState()
         self.client = nil
         self.navCoordinator = nil
         self.prefsCoordinator?.stop()

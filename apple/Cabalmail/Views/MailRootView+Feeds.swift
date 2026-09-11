@@ -133,7 +133,8 @@ extension MailRootView {
 /// Feed navigation state transitions: a scope shows its list, an item
 /// pushes the reader on compact and pops it when the column falls back, and
 /// the reader is handed the item's subscription (per-feed preferences and
-/// web-view storage) as soon as it is known.
+/// web-view storage) as soon as it is known. Every transition is recorded on
+/// the local resume session so a relaunch reopens the same scope and item.
 struct FeedNavigationModifier: ViewModifier {
     @Binding var selectedFeedScope: RssItemScope?
     @Binding var selectedFeedItem: RssItem?
@@ -144,11 +145,19 @@ struct FeedNavigationModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChange(of: selectedFeedScope) { _, scope in
-                selectedFeedItem = nil
-                if scope != nil { compactColumn = .content }
+                // A launch restore parks the item to reopen under this scope;
+                // consuming it here — after the scope change landed — is what
+                // keeps this very handler from clearing it. Jump straight to
+                // `.detail` in that case so the column handler below never
+                // sees an intermediate `.content` and drops the item again.
+                let restored = scope.flatMap { appState.navCoordinator?.consumeFeedItemRestore(for: $0) }
+                selectedFeedItem = restored
+                if scope != nil { compactColumn = restored == nil ? .content : .detail }
+                appState.navCoordinator?.recordFeedScope(scope)
             }
             .onChange(of: selectedFeedItem) { _, item in
                 compactColumn = CompactColumnPolicy.column(hasSelectedMessage: item != nil, current: compactColumn)
+                appState.navCoordinator?.recordFeedItem(item)
             }
             .onChange(of: compactColumn) { _, column in
                 if column != .detail, selectedFeedItem != nil { selectedFeedItem = nil }
