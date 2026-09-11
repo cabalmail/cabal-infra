@@ -29,9 +29,11 @@ Then store all three, with the listing's item ID, as repository secrets:
 Two prerequisites the console side must satisfy, because neither fails
 loudly here: the OAuth client must be of type **Desktop Application** (the
 "Chrome Extension" type is a secretless client for an unrelated feature and
-cannot drive the upload API), and the consent screen's publishing status
-must be **In production** — in Testing mode Google expires refresh tokens
-after seven days, which silently kills unattended uploads weeks later.
+cannot drive the upload API), and the app's publishing status must be
+**In production** — in Testing mode Google expires refresh tokens after
+seven days, which silently kills unattended uploads a week later. The
+status lives on the Google Auth Platform → Audience page ("Publish app"),
+and that button is disabled until the Branding page is filled in.
 """
 
 import argparse
