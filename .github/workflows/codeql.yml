@@ -1,0 +1,182 @@
+---
+name: CodeQL
+
+# CodeQL code scanning, run from this checked-in workflow ("advanced setup")
+# instead of GitHub's default setup. Default setup has no path filtering: it
+# analysed every language on every pull request, and the Rust analysis of the
+# Linux client took four to six minutes on PRs that touched no Rust at all.
+# Here each language is gated on its own path filter, exactly as lint.yml
+# gates its linters, so a PR only pays for the analyses it can affect.
+#
+# Trigger by trigger:
+#
+#   - pull_request: analyse only the languages whose sources the PR changes.
+#   - push to stage / main: analyse every language, unfiltered. The alerts
+#     shown under Security -> Code scanning are keyed to a branch's latest
+#     analysis, and code-scanning-alerts.yml reads that list; a language
+#     skipped on a push would leave its alerts stale on that branch.
+#   - schedule: a weekly full run on the default branch, so newly published
+#     queries are applied to unchanged code (default setup did this too).
+#
+# The check names ("Analyze (python)" etc.) and the per-language SARIF
+# category ("/language:python") are the same ones default setup used, so the
+# existing alerts carry straight over. Default setup must be switched OFF in
+# Settings -> Code security before this workflow can upload: GitHub rejects
+# advanced-setup results for a language while default setup still owns it.
+#
+# A language is deliberately absent from the PR-time matrix, not skipped, when
+# nothing it scans changed, so its check does not appear on the PR at all.
+# Do not make the per-language checks required for that reason; the
+# `codeql-gate` job at the bottom is the one stable name to require.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, stage]
+  schedule:
+    # Mondays 06:17 UTC, on the default branch.
+    - cron: '17 6 * * 1'
+
+permissions:
+  contents: read
+  # codeql-action/analyze uploads SARIF to code scanning.
+  security-events: write
+  # dorny/paths-filter lists the PR's changed files via the pulls API on
+  # pull_request events.
+  pull-requests: read
+
+# Supersede in-flight PR analyses when the PR is updated; a stale result is
+# never worth finishing. Push runs are never cancelled: a cancelled push
+# analysis is what would leave a branch's alert list stale.
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      # JSON array of CodeQL language ids to analyse, consumed as the matrix.
+      languages: ${{ steps.languages.outputs.languages }}
+    steps:
+    - name: checkout
+      if: github.event_name == 'pull_request'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+    - name: filter
+      id: filter
+      if: github.event_name == 'pull_request'
+      # On pull_request, dorny/paths-filter diffs against the PR base branch
+      # automatically (no `base:` needed). Changing this workflow runs every
+      # language so it can be validated against real code in one PR. The
+      # filters are by file type rather than directory because the CodeQL
+      # extractors are: Python lives under lambda/, scripts/, docker/shared/
+      # and .github/scripts/; JavaScript under react/, extensions/ and a few
+      # docs; Rust only under linux/.
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+      with:
+        filters: |
+          actions:
+            - '.github/workflows/**'
+            - '.github/actions/**'
+          python:
+            - '**/*.py'
+            - '.github/workflows/codeql.yml'
+          javascript-typescript:
+            - '**/*.js'
+            - '**/*.jsx'
+            - '**/*.mjs'
+            - '**/*.cjs'
+            - '**/*.ts'
+            - '**/*.tsx'
+            - '**/*.html'
+            - '.github/workflows/codeql.yml'
+          rust:
+            - 'linux/**'
+            - '.github/workflows/codeql.yml'
+    - name: languages
+      id: languages
+      # Every language on push and schedule; on a pull request only the ones
+      # whose filter matched. Emits a JSON array for the analyze matrix, or []
+      # when nothing scannable changed (the analyze job is then skipped).
+      env:
+        IS_PR: ${{ github.event_name == 'pull_request' }}
+        CHANGED_ACTIONS: ${{ steps.filter.outputs.actions }}
+        CHANGED_PYTHON: ${{ steps.filter.outputs.python }}
+        CHANGED_JS: ${{ steps.filter.outputs.javascript-typescript }}
+        CHANGED_RUST: ${{ steps.filter.outputs.rust }}
+      run: |
+        set -euo pipefail
+        langs=()
+        for pair in "actions:$CHANGED_ACTIONS" "python:$CHANGED_PYTHON" \
+                    "javascript-typescript:$CHANGED_JS" "rust:$CHANGED_RUST"; do
+          lang=${pair%%:*}
+          changed=${pair#*:}
+          if [ "$IS_PR" != "true" ] || [ "$changed" = "true" ]; then
+            langs+=("$lang")
+          fi
+        done
+        if [ "${#langs[@]}" -eq 0 ]; then
+          json='[]'
+        else
+          json=$(printf '%s\n' "${langs[@]}" | jq -Rc . | jq -sc .)
+        fi
+        echo "[codeql] languages to analyse: $json"
+        echo "languages=$json" >> "$GITHUB_OUTPUT"
+
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: changes
+    if: needs.changes.outputs.languages != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.changes.outputs.languages) }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+    - name: setup-linux-rust
+      # The Rust extractor resolves the workspace through cargo, so give it
+      # the toolchain linux/rust-toolchain.toml pins (and the registry cache)
+      # the same way every linux.yml job does. It does not compile the crates,
+      # so the GTK development packages are not installed here.
+      if: matrix.language == 'rust'
+      uses: ./.github/actions/setup-linux-rust
+      with:
+        cache-key: codeql
+    - name: init
+      uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
+      with:
+        languages: ${{ matrix.language }}
+        # None of the four languages needs a build for extraction; this is
+        # what default setup used as well.
+        build-mode: none
+    - name: analyze
+      uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
+      with:
+        category: /language:${{ matrix.language }}
+
+  codeql-gate:
+    # One stable check that reflects the whole run, for branch protection to
+    # require if wanted: green when every selected analysis passed or none
+    # was needed, red if any analysis failed or was cancelled.
+    needs: [changes, analyze]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: gate
+      env:
+        CHANGES_RESULT: ${{ needs.changes.result }}
+        ANALYZE_RESULT: ${{ needs.analyze.result }}
+      run: |
+        set -euo pipefail
+        echo "[codeql] changes=$CHANGES_RESULT analyze=$ANALYZE_RESULT"
+        if [ "$CHANGES_RESULT" != "success" ]; then
+          echo "::error::change detection did not succeed ($CHANGES_RESULT)"
+          exit 1
+        fi
+        case "$ANALYZE_RESULT" in
+          success|skipped) exit 0 ;;
+          *) echo "::error::a CodeQL analysis did not succeed ($ANALYZE_RESULT)"; exit 1 ;;
+        esac
