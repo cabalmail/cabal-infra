@@ -54,102 +54,217 @@ struct SearchFiltersSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Recipients") {
-                    TextField("From", text: $draft.from, prompt: Text("sender@example.com"))
-                        .textContentType(.emailAddress)
-                        .autocorrectionDisabled()
-                        #if !os(macOS)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
-                        #endif
-                    TextField("To", text: $draft.to, prompt: Text("recipient@example.com"))
-                        .textContentType(.emailAddress)
-                        .autocorrectionDisabled()
-                        #if !os(macOS)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
-                        #endif
-                }
-                Section("Subject") {
-                    TextField("Subject", text: $draft.subject, prompt: Text("invoice"))
-                }
-                Section("Date range") {
-                    Toggle("Since", isOn: $sinceEnabled)
-                    if sinceEnabled {
-                        DatePicker(
-                            "Since date",
-                            selection: Binding(
-                                get: { draft.since ?? Date() },
-                                set: { draft.since = $0 }
-                            ),
-                            displayedComponents: .date
-                        )
-                        .labelsHidden()
+            content
+                .navigationTitle("Filters")
+                #if !os(macOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", action: onCancel)
                     }
-                    Toggle("Before", isOn: $beforeEnabled)
-                    if beforeEnabled {
-                        DatePicker(
-                            "Before date",
-                            selection: Binding(
-                                get: { draft.before ?? Date() },
-                                set: { draft.before = $0 }
-                            ),
-                            displayedComponents: .date
-                        )
-                        .labelsHidden()
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button("Reset", role: .destructive, action: resetDraft)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Apply", action: applyDraft)
                     }
                 }
-                Section("Flags") {
-                    Toggle("Unread", isOn: $draft.unread)
-                    Toggle("Flagged", isOn: $draft.flagged)
-                    Toggle("Has attachment", isOn: $draft.hasAttachment)
+                .onChange(of: sinceEnabled) { _, enabled in
+                    if !enabled {
+                        draft.since = nil
+                    } else if draft.since == nil {
+                        draft.since = Date()
+                    }
                 }
-                if allowFolderScope {
-                    Section {
-                        Toggle("This folder only", isOn: $draft.thisFolderOnly)
-                    } footer: {
-                        Text(
-                            draft.thisFolderOnly
-                                ? "Search restricted to \(currentFolderName)."
-                                : "Search every subscribed folder except Trash."
-                        )
+                .onChange(of: beforeEnabled) { _, enabled in
+                    if !enabled {
+                        draft.before = nil
+                    } else if draft.before == nil {
+                        draft.before = Date()
+                    }
+                }
+        }
+    }
+
+    // MARK: - Platform layouts
+    //
+    // `Form` is kept for iOS/visionOS, where its grouped list style insets
+    // the rows and renders the section headers as group captions. On macOS
+    // the same `Form` promotes each text field's title into an external
+    // leading label column, right-aligned to a column edge, and gives the
+    // rows no horizontal margins: "Subject" landed 0 pt from the sheet's left
+    // border and all three fields ran flush to its right one (#1501). macOS
+    // therefore gets the hand-built layout the create sheets share,
+    // `MacSheetForm`.
+
+    @ViewBuilder
+    private var content: some View {
+        #if os(macOS)
+        macContent
+        #else
+        formContent
+        #endif
+    }
+
+    #if os(macOS)
+    private var macContent: some View {
+        MacSheetForm {
+            MacSheetSection(caption: "Recipients") {
+                // The two fields share a caption, so each keeps a visible
+                // label — in a column inside the margins rather than one the
+                // Form hangs off the sheet's edge.
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 8, verticalSpacing: 8) {
+                    GridRow {
+                        Text("From")
+                            .gridColumnAlignment(.trailing)
+                        fromField
+                    }
+                    GridRow {
+                        Text("To")
+                        toField
+                    }
+                }
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+            }
+            MacSheetSection(caption: "Subject") {
+                // The caption already says "Subject"; hidden, the field's
+                // own title survives for VoiceOver.
+                subjectField
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+            }
+            MacSheetSection(caption: "Date range") {
+                // Each picker stays on its checkbox's row, dimmed until the
+                // box is ticked, so ticking one moves nothing below it.
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                    GridRow {
+                        Toggle("Since", isOn: $sinceEnabled)
+                        sincePicker
+                            .disabled(!sinceEnabled)
+                    }
+                    GridRow {
+                        Toggle("Before", isOn: $beforeEnabled)
+                        beforePicker
+                            .disabled(!beforeEnabled)
+                    }
+                }
+            }
+            MacSheetSection(caption: "Flags") {
+                flagToggles
+            }
+            if allowFolderScope {
+                MacSheetSection(caption: "Scope") {
+                    folderScopeToggle
+                    Text(folderScopeFooter)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                         .sectionFooter()
-                    }
-                }
-            }
-            .navigationTitle("Filters")
-            #if os(macOS)
-            .frame(minWidth: 380, minHeight: 520)
-            #else
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
-                }
-                ToolbarItem(placement: .destructiveAction) {
-                    Button("Reset", role: .destructive, action: resetDraft)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply", action: applyDraft)
-                }
-            }
-            .onChange(of: sinceEnabled) { _, enabled in
-                if !enabled {
-                    draft.since = nil
-                } else if draft.since == nil {
-                    draft.since = Date()
-                }
-            }
-            .onChange(of: beforeEnabled) { _, enabled in
-                if !enabled {
-                    draft.before = nil
-                } else if draft.before == nil {
-                    draft.before = Date()
                 }
             }
         }
+    }
+    #else
+    private var formContent: some View {
+        Form {
+            Section("Recipients") {
+                fromField
+                toField
+            }
+            Section("Subject") {
+                subjectField
+            }
+            Section("Date range") {
+                Toggle("Since", isOn: $sinceEnabled)
+                if sinceEnabled {
+                    sincePicker
+                }
+                Toggle("Before", isOn: $beforeEnabled)
+                if beforeEnabled {
+                    beforePicker
+                }
+            }
+            Section("Flags") {
+                flagToggles
+            }
+            if allowFolderScope {
+                Section {
+                    folderScopeToggle
+                } footer: {
+                    Text(folderScopeFooter)
+                        .sectionFooter()
+                }
+            }
+        }
+    }
+    #endif
+
+    // MARK: - Controls shared by both layouts
+
+    private var fromField: some View {
+        TextField("From", text: $draft.from, prompt: Text("sender@example.com"))
+            .textContentType(.emailAddress)
+            .autocorrectionDisabled()
+            #if !os(macOS)
+            .textInputAutocapitalization(.never)
+            .keyboardType(.emailAddress)
+            #endif
+    }
+
+    private var toField: some View {
+        TextField("To", text: $draft.to, prompt: Text("recipient@example.com"))
+            .textContentType(.emailAddress)
+            .autocorrectionDisabled()
+            #if !os(macOS)
+            .textInputAutocapitalization(.never)
+            .keyboardType(.emailAddress)
+            #endif
+    }
+
+    private var subjectField: some View {
+        TextField("Subject", text: $draft.subject, prompt: Text("invoice"))
+    }
+
+    private var sincePicker: some View {
+        DatePicker(
+            "Since date",
+            selection: Binding(
+                get: { draft.since ?? Date() },
+                set: { draft.since = $0 }
+            ),
+            displayedComponents: .date
+        )
+        .labelsHidden()
+    }
+
+    private var beforePicker: some View {
+        DatePicker(
+            "Before date",
+            selection: Binding(
+                get: { draft.before ?? Date() },
+                set: { draft.before = $0 }
+            ),
+            displayedComponents: .date
+        )
+        .labelsHidden()
+    }
+
+    @ViewBuilder
+    private var flagToggles: some View {
+        Toggle("Unread", isOn: $draft.unread)
+        Toggle("Flagged", isOn: $draft.flagged)
+        Toggle("Has attachment", isOn: $draft.hasAttachment)
+    }
+
+    private var folderScopeToggle: some View {
+        Toggle("This folder only", isOn: $draft.thisFolderOnly)
+    }
+
+    private var folderScopeFooter: String {
+        draft.thisFolderOnly
+            ? "Search restricted to \(currentFolderName)."
+            : "Search every subscribed folder except Trash."
     }
 
     private func resetDraft() {

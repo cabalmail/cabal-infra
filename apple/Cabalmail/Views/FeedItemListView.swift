@@ -155,16 +155,26 @@ struct FeedItemListView: View {
                 Spacer()
                 if model.canSearch {
                     Menu {
+                        // A `Picker` inside a `Menu` renders as a submenu on
+                        // macOS, which put all four orderings one level down
+                        // behind an "Order" row (#1508). Inline, they are the
+                        // menu's own rows, the way the Sort menu reads. An
+                        // inline picker still draws its title as a section
+                        // header, repeating the word on the button just
+                        // pressed, so the label is hidden (VoiceOver keeps it).
                         Picker("Order", selection: $model.ordering) {
                             Text("Newest first").tag(RssOrderingMode.newestFirst)
                             Text("Oldest first").tag(RssOrderingMode.oldestFirst)
                             Text("Newest day, oldest first within").tag(RssOrderingMode.newestDayOldestWithin)
                             Text("Oldest day, newest first within").tag(RssOrderingMode.oldestDayNewestWithin)
                         }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
                             .accessibilityLabel("Order")
                     }
+                    .accessibilityIdentifier("feed.order")
                     .onChange(of: model.ordering) { _, _ in Task { await model.reload() } }
                 }
             }

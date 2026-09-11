@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.1] - 2026-09-11
+
+### Fixed
+- Apple: **Feed orderings sit at the top of the Order menu.** On macOS the
+  feed item list's Order menu held a single "Order" submenu, so choosing
+  an ordering took a click, a hover and a second click. The four orderings
+  are now the menu's own rows, with the one in effect checked, the way the
+  message list's Sort menu already reads.
+- Apple: **Search Filters sheet stays inside its margins on macOS.** The
+  "Subject" label no longer hangs off the sheet's left edge and the From,
+  To and Subject fields no longer run flush to its right edge; the sheet
+  now uses the same inset layout as the New Folder and Create Address
+  sheets. Each date picker sits beside its Since or Before checkbox,
+  dimmed until the box is ticked, instead of appearing below it.
+
 ## [1.16.0] - 2026-09-11
 
 ### Added
