@@ -113,6 +113,10 @@ actor FakeRssClient: RssClient {
         RssSyncPage(items: [], nextSince: since, hasMore: false)
     }
 
+    func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage {
+        RssStateSyncPage(states: [], nextSince: since, hasMore: false)
+    }
+
     func getItem(feedId: String, sortKey: String) async throws -> RssItem {
         throw CabalmailError.server(code: "not_found", message: "unused")
     }
