@@ -330,9 +330,9 @@ jobs:
   # ---------------------------------------------------------------------------
   # Rust. `cargo xtask ci` is the single source of truth for the Linux client's
   # gate (fmt --check, clippy -D warnings, kit tests, xtask repo-shape tests,
-  # app tests under xvfb — see linux/xtask/src/ci.rs); invoking the subcommand
-  # instead of restating its steps in YAML is what keeps this job and the
-  # pre-push gate from drifting. ubuntu-latest (24.04) is deliberately the
+  # app tests under xvfb, cargo-deny — see linux/xtask/src/ci.rs); invoking the
+  # subcommand instead of restating its steps in YAML is what keeps this job and
+  # the pre-push gate from drifting. ubuntu-latest (24.04) is deliberately the
   # GTK 4.14 / libadwaita 1.4 API floor that the gtk4/libadwaita crate
   # features enforce — newer API must fail to compile here.
   # ---------------------------------------------------------------------------
@@ -360,6 +360,15 @@ jobs:
       # (the exact 1.97.1 pin, with clippy + rustfmt), so no third-party
       # toolchain action is needed.
       run: rustup toolchain install
+    - name: install-cargo-deny
+      # The gate's supply-chain step runs this binary, and a missing one is
+      # fatal wherever CI is set rather than a skip — a licence or advisory
+      # check that quietly did not run is the failure the step exists to
+      # prevent. Pinned to the same version linux.yml installs; a test in
+      # linux/xtask/tests/workflow_contract.rs fails if the two drift.
+      uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b  # v2.87.4
+      with:
+        tool: cargo-deny@0.20.2
     - name: cache-cargo
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:

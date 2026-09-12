@@ -29,6 +29,16 @@ const FLOOR_IMAGE: &str = "image: ubuntu:24.04";
 /// quietly stop enforcing the floor the first time GitHub rolls the label.
 const STEPS_ON_THE_FLOOR: &[&str] = &["clippy", "app-tests"];
 
+/// How a job installs the one binary the gate runs that is not part of the
+/// toolchain. Both workflows install it, and they have to install the same one.
+const DENY_TOOL: &str = "tool: cargo-deny@";
+
+/// How `xtask/src/ci.rs` names the version it tells a developer to install,
+/// and how `linux/README.md` spells the same instruction. Four files carry
+/// that version and none can see the others.
+const DENY_PIN_CONST: &str = "const CARGO_DENY_PIN: &str = \"";
+const DENY_INSTALL: &str = "cargo install --locked cargo-deny@";
+
 /// What a widget test prints when it has nothing to draw on, and what the
 /// app-test job greps its log for. It is written in two places that cannot see
 /// each other - a Rust source file and a YAML file - so it is pinned here.
@@ -461,6 +471,138 @@ fn the_workflow_runs_its_steps_under_bash() {
             );
         }
     }
+}
+
+/// A file inside the workspace, read as text.
+fn workspace_file(relative: &str) -> String {
+    let path = repo_root().join("linux").join(relative);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+}
+
+/// The version each workflow installs `cargo-deny` at, by job.
+fn cargo_deny_versions(workflow: &str) -> Vec<(String, String)> {
+    jobs(workflow)
+        .into_iter()
+        .filter_map(|job| {
+            job.body
+                .lines()
+                .find_map(|line| line.trim().split_once(DENY_TOOL))
+                .map(|(_, version)| (job.name.clone(), version.trim().to_owned()))
+        })
+        .collect()
+}
+
+/// The gate's `supply-chain` step runs `cargo deny`, which is a separate
+/// binary: a job that runs the step without installing it fails with "not on
+/// PATH" rather than reporting a licence result. Two workflows run that step -
+/// `linux.yml` by name on a push, `lint.yml` as part of the whole gate on a
+/// pull request - and neither can see what the other installs.
+///
+/// Both are asserted, and asserted to agree with the version `xtask/src/ci.rs`
+/// and the README tell a developer to install. A pull request checked against
+/// one version of the advisory rules and merged against another is a
+/// difference nobody would think to look for, and a developer sent to a fifth
+/// version reproduces neither.
+#[test]
+fn every_copy_of_the_cargo_deny_pin_agrees() {
+    let push_gate = workflow();
+    let pull_request_gate = lint_workflow();
+
+    let running_the_step: Vec<String> = jobs(&push_gate)
+        .into_iter()
+        .filter(|job| job.steps().iter().any(|step| step == "supply-chain"))
+        .map(|job| job.name)
+        .collect();
+    assert_eq!(
+        running_the_step.len(),
+        1,
+        "expected exactly one job in linux.yml to run the supply-chain step, found {running_the_step:?}"
+    );
+
+    let whole_gate: Vec<String> = jobs(&pull_request_gate)
+        .into_iter()
+        .filter(|job| {
+            job.body
+                .lines()
+                .any(|line| line.trim().ends_with("run: cargo xtask ci"))
+        })
+        .map(|job| job.name)
+        .collect();
+    assert_eq!(
+        whole_gate.len(),
+        1,
+        "expected exactly one job in lint.yml to run the whole gate, found {whole_gate:?}"
+    );
+
+    let installed = |name: &str, workflow: &str, job: &str| -> String {
+        let found = cargo_deny_versions(workflow);
+        let (_, version) = found
+            .iter()
+            .find(|(installed_in, _)| installed_in == job)
+            .unwrap_or_else(|| {
+                panic!(
+                    "job `{job}` in {name} runs the gate's supply-chain step but \
+                     installs no cargo-deny, so it will fail with `not on PATH` \
+                     instead of checking anything. Add a `{DENY_TOOL}<version>` step."
+                )
+            });
+        version.clone()
+    };
+
+    let on_push = installed("linux.yml", &push_gate, &running_the_step[0]);
+    let on_pull_request = installed("lint.yml", &pull_request_gate, &whole_gate[0]);
+    assert_eq!(
+        on_push, on_pull_request,
+        "the two gates check the dependency graph with different cargo-deny versions"
+    );
+    assert!(
+        on_push.split('.').count() == 3,
+        "cargo-deny is pinned to `{on_push}`, which is not an exact x.y.z version"
+    );
+
+    for (file, found) in [
+        ("xtask/src/ci.rs", pin_in_source()),
+        ("README.md", pin_in_readme()),
+    ] {
+        assert_eq!(
+            found, on_push,
+            "{file} names cargo-deny {found}, the workflows install {on_push}. A \
+             developer following that instruction checks the dependency graph \
+             against different rules than the gate that has to pass."
+        );
+    }
+}
+
+/// The version `cargo xtask ci` prints when the binary is missing, taken from
+/// the constant rather than from the message, so a reworded message still
+/// points at one place.
+fn pin_in_source() -> String {
+    let source = workspace_file("xtask/src/ci.rs");
+    let (_, after) = source
+        .split_once(DENY_PIN_CONST)
+        .expect("ci.rs declares CARGO_DENY_PIN");
+    after
+        .split_once('"')
+        .expect("CARGO_DENY_PIN is a string literal")
+        .0
+        .to_owned()
+}
+
+/// The version the README tells a developer to install.
+fn pin_in_readme() -> String {
+    let readme = workspace_file("README.md");
+    let (_, after) = readme.split_once(DENY_INSTALL).unwrap_or_else(|| {
+        panic!(
+            "linux/README.md does not spell the install as `{DENY_INSTALL}<version>`, \
+             so nothing holds it to the version CI uses"
+        )
+    });
+    after
+        .split_whitespace()
+        .next()
+        .expect("the install line names a version")
+        .trim_end_matches('`')
+        .to_owned()
 }
 
 /// The `on:` block: everything above the first job.

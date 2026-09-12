@@ -191,8 +191,9 @@ fn the_xtask_alias_cannot_rewrite_the_lock_file_on_its_way_in() {
 }
 
 /// The kit's freedom from GUI dependencies is what lets its tests run on a bare
-/// runner. Phase 2 adds the transitive `cargo tree` check in CI; this catches
-/// the direct case at the point someone types it.
+/// runner. `kit_purity.rs` catches the transitive case by asking cargo for the
+/// resolved tree; this catches the direct case by reading the manifest, which
+/// costs nothing and names the line someone just typed.
 #[test]
 fn kit_declares_no_gui_dependency() {
     let manifest = read("cabalmail-kit/Cargo.toml");
