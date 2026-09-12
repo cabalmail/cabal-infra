@@ -104,6 +104,50 @@ final class SearchFolderScopeTests: XCTestCase {
         XCTAssertEqual(count, 1, "a cross-folder search does not depend on the anchor")
     }
 
+    // A sidebar pick empties the query (`endGlobalSearch`) and then writes
+    // the new folder, which moves the anchor. Re-running there drew the whole
+    // folder as a query-less search and left the surface stuck over it
+    // (#1536).
+    func testAnchorMoveEndsASearchWithNothingLeftToMatchOn() async throws {
+        let imap = FakeImapClient()
+        let model = try await makeScopedSearch(imap: imap)
+
+        model.searchQuery = ""
+        await model.setSearchAnchor(Folder(path: "INBOX"))
+
+        let calls = await imap.searchCalls
+        XCTAssertEqual(
+            calls.map(\.folder), ["Archive"],
+            "the scope alone is not a search; no request goes out for the folder just picked"
+        )
+        XCTAssertFalse(model.isSearchActive, "the pick ends the search rather than re-scoping it")
+        XCTAssertFalse(model.searchFilters.thisFolderOnly)
+        XCTAssertTrue(model.envelopes.isEmpty, "the folder view owns the column again")
+    }
+
+    // The same stuck surface, reached with a request in flight rather than a
+    // completed one: the pick's teardown lands while the search is still out,
+    // and its answer must not raise the banner back over the folder (#1536).
+    func testAResultLandingAfterTheSearchEndsIsDropped() async throws {
+        let imap = FakeImapClient()
+        await imap.scriptSearch(result(folder: "Archive"))
+        let model = try makeSearchModel(imap: imap)
+        await model.setSearchAnchor(Folder(path: "Archive"))
+        model.searchQuery = "invoice"
+        model.searchFilters.thisFolderOnly = true
+
+        await imap.holdNextSearch()
+        let search = Task { await model.runSearch() }
+        await imap.awaitHeldSearch()
+        await model.clearSearch()
+        await imap.releaseHeldSearch()
+        await search.value
+
+        XCTAssertFalse(model.isSearchActive, "the search the answer belongs to is over")
+        XCTAssertTrue(model.envelopes.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testLosingTheAnchorDropsTheScopeAndRerunsCrossFolder() async throws {
         let imap = FakeImapClient()
         let model = try await makeScopedSearch(imap: imap)

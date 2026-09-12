@@ -1,5 +1,76 @@
 # Native Linux Client Plan
 
+## Contents
+
+Status tags mirror the **Status:** line on each work item. An item with no tag has not been started; the [Progress](#progress) table is the phase-level summary.
+
+- [Context](#context)
+- [Approach](#approach) — [guiding principles](#guiding-principles), [lessons carried forward](#lessons-carried-forward), [stack decisions](#stack-decisions), [configuration model](#configuration-model), [desktop compatibility](#desktop-compatibility), [distro support matrix](#distro-support-matrix), [repository layout](#repository-layout), [working agreement](#working-agreement-for-ai-executed-phases)
+- [Progress](#progress)
+- [Phase 1: Workspace Scaffolding](#phase-1-workspace-scaffolding) — **complete**
+  - [1. Cargo workspace](#1-cargo-workspace) — **shipped**
+  - [2. `cabalmail-kit` skeleton](#2-cabalmail-kit-skeleton) — **shipped**
+  - [3. Layered configuration](#3-layered-configuration) — **shipped**
+  - [4. `cabalmail-gtk` shell](#4-cabalmail-gtk-shell) — **shipped**
+  - [5. `xtask`](#5-xtask) — **shipped** (`smoke` and `fixtures` declared only)
+  - [Phase 1 verification](#phase-1-verification)
+- [Phase 2: Build Pipeline, Packaging & Test Harness](#phase-2-build-pipeline-packaging--test-harness) — **in progress**
+  - [1. Workflow layout](#1-workflow-layout) — **shipped** (`smoke` and `coverage` wait on item 3)
+  - [2. Toolchain pinning](#2-toolchain-pinning) — **partial** (`cargo-llvm-cov` waits on item 3)
+  - [3. Test harness](#3-test-harness)
+  - [4. Arch packaging](#4-arch-packaging) — **shipped**
+  - [5. Release artifacts](#5-release-artifacts) — **blocked** (AUR); artifact upload outstanding
+  - [6. Guard rails](#6-guard-rails) — **shipped** (WebView grep moved to Phase 4)
+  - [Phase 2 verification](#phase-2-verification)
+- [Phase 3: Configuration, Authentication & API Client](#phase-3-configuration-authentication--api-client)
+  - [1. Runtime configuration](#1-runtime-configuration)
+  - [2. Authentication](#2-authentication)
+  - [3. Secret storage](#3-secret-storage)
+  - [4. API client](#4-api-client)
+  - [5. Models and caching](#5-models-and-caching)
+  - [Phase 3 verification](#phase-3-verification)
+- [Phase 4: Mail Reading](#phase-4-mail-reading)
+  - [1. Shell and folder sidebar](#1-shell-and-folder-sidebar)
+  - [2. Message list](#2-message-list)
+  - [3. Reader](#3-reader)
+  - [4. Search](#4-search)
+  - [5. Resume cursor](#5-resume-cursor)
+  - [Phase 4 verification](#phase-4-verification)
+- [Phase 5: Mail Composition & On-the-Fly `From`](#phase-5-mail-composition--on-the-fly-from)
+  - [1. Compose window](#1-compose-window)
+  - [2. From-address picker](#2-from-address-picker)
+  - [3. Reply / Reply All / Forward](#3-reply--reply-all--forward)
+  - [4. Drafts](#4-drafts)
+  - [5. Send and outbox](#5-send-and-outbox)
+  - [6. Desktop compose entry points](#6-desktop-compose-entry-points)
+  - [Phase 5 verification](#phase-5-verification)
+- [Phase 6: Address & Folder Management + Settings](#phase-6-address--folder-management--settings)
+  - [1. Addresses](#1-addresses)
+  - [2. Folders](#2-folders)
+  - [3. Settings](#3-settings)
+  - [Phase 6 verification](#phase-6-verification)
+- [Phase 7: Desktop Integration & Polish](#phase-7-desktop-integration--polish)
+  - [1. New-mail notification (no push)](#1-new-mail-notification-no-push)
+  - [2. Keyboard and menus](#2-keyboard-and-menus)
+  - [3. Session and window state](#3-session-and-window-state)
+  - [4. Offline](#4-offline)
+  - [5. Accessibility and theming](#5-accessibility-and-theming)
+  - [6. Diagnostics](#6-diagnostics)
+  - [Phase 7 verification](#phase-7-verification)
+- [Phase 8: Debian & RHEL Packaging](#phase-8-debian--rhel-packaging)
+  - [1. Debian / Ubuntu](#1-debian--ubuntu)
+  - [2. RHEL / Fedora](#2-rhel--fedora)
+  - [3. CI matrix extension](#3-ci-matrix-extension)
+  - [Phase 8 verification](#phase-8-verification)
+- [Parity matrix](#parity-matrix)
+- [Out of scope for 1.1.0](#out-of-scope-for-110)
+- [Prerequisites](#prerequisites)
+- [Decisions taken](#decisions-taken)
+- [Open questions](#open-questions)
+- [Sources](#sources)
+
+---
+
 ## Context
 
 The React admin app (`react/admin/`) and the native Apple clients (`apple/`) currently serve as the Cabalmail clients. Version 1.1.0 adds two native clients alongside the existing pair: the Android client (see [`android-client-plan.md`](android-client-plan.md)) and the Linux desktop client described here. The two are independent efforts that share this version slot, a set of guiding principles, and the Lambda API contract — nothing else.
@@ -331,10 +402,12 @@ Where the work stands, so it does not have to be reverse-engineered from git. Ev
 | Phase | Status |
 | --- | --- |
 | 1. Workspace scaffolding | **Complete** (2026-08-08). All five items shipped; `cargo run -p cabalmail-gtk` opens a window. |
-| 2. Build pipeline, packaging & test harness | **In progress.** Items 1 and 4 done, item 2 done for the Ubuntu containers. Items 3, 5, 6 outstanding. |
+| 2. Build pipeline, packaging & test harness | **In progress.** Items 1, 4, and 6 shipped; item 2 waits only on `cargo-llvm-cov`, which arrives with the coverage job. Item 3 is untouched, and it is the substance of the phase. Item 5's artifact upload is outstanding, its AUR half blocked. |
 | 3-8 | Not started. |
 
 > **Paused (2026-08-24): AUR publication.** The AUR is closed to new account registrations, so the Arch package has no route to publication. Item 4's work is written, tested, and committed on the branch `claude/linux-phase-2-arch-packaging`, which is **not** pushed and has **no PR open** - deliberately, until the AUR question resolves. Item 5's AUR step was already a manual, human-gated act; it is now blocked outright. Nothing else in Phase 2 depends on either, so items 3 and 6 can proceed.
+
+> **Erratum (2026-09-02):** Item 4 merged - `5973542b` is on `stage`, `linux/packaging/arch/PKGBUILD` is in the tree, and `package-arch` runs on every push. The paragraph above is the record of a hold that has since lifted for the packaging itself; what remains blocked is item 5's AUR upload, which is the only step that needs an AUR account.
 
 ---
 
@@ -417,7 +490,7 @@ Goal: everything after this phase is developed under green CI and produces an in
 
 ### 1. Workflow layout
 
-**Status:** Shipped 2026-08-15 (`8999dd4a`, `c31e6031`). Five of the seven jobs exist; `smoke` and `coverage` wait on item 3.
+**Status:** Shipped 2026-08-15 (`8999dd4a`, `c31e6031`), with follow-ups in `d8a25d26` and `89ff60f3`. Seven of the nine jobs exist - the five planned here plus `workspace-checks`, which runs the `xtask` drift tests, and `supply-chain` from item 6. `smoke` and `coverage` wait on item 3.
 
 New `.github/workflows/linux.yml`, modelled on `apple.yml`: triggered by `workflow_dispatch` and by pushes to `main` / `stage` under `linux/**` and `.github/workflows/linux.yml`. Like `apple.yml`, it deploys nothing to AWS.
 
@@ -436,7 +509,7 @@ jobs:
 
 ### 2. Toolchain pinning
 
-**Status:** Partly done. The pinned toolchain action, the Ubuntu dependency list, and the Arch one all exist; `cargo-llvm-cov` and `cargo-deny` land with the jobs that run them (items 3 and 6).
+**Status:** Partial. The pinned toolchain action, the Ubuntu dependency list, and the Arch one all exist; `cargo-deny` arrived with item 6, pinned and installed from a prebuilt binary. `cargo-llvm-cov` lands with the coverage job (item 3).
 
 - Rust from `rust-toolchain.toml` (1.97.1), installed by `dtolnay/rust-toolchain` pinned to a commit SHA (the repo's convention — every third-party action in `apple.yml` is SHA-pinned; match it). A toolchain bump is a deliberate PR touching one line, which is the point of pinning exactly rather than tracking `stable` under `clippy -D warnings`.
 - `blueprint-compiler` in every container that builds the app crate. Verifying it is present and new enough in the Ubuntu 24.04, Debian, and Fedora images is a Phase 2 acceptance criterion, not a Phase 8 discovery.
@@ -475,7 +548,7 @@ Anything in this table that ends up needing a `gtk::Widget` has been modelled wr
 
 ### 4. Arch packaging
 
-**Status:** Written and committed 2026-08-24 on `claude/linux-phase-2-arch-packaging`, **not merged** - see the AUR pause under Progress. `cargo xtask package arch` stages the PKGBUILD against the working tree, builds it with `makepkg`, and lints both with `namcap`; a `package-arch` job runs it in an `archlinux:base-devel` container.
+**Status:** Shipped 2026-08-24 (`5973542b`). Publication to the AUR is still paused - see the note under Progress - but the packaging itself is on `stage`. `cargo xtask package arch` stages the PKGBUILD against the working tree, builds it with `makepkg`, and lints both with `namcap`; a `package-arch` job runs it in an `archlinux:base-devel` container.
 
 `packaging/arch/PKGBUILD`:
 
@@ -504,13 +577,17 @@ The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow
 
 ### 6. Guard rails
 
+**Status:** Shipped 2026-09-02. `cargo deny check` runs as the `supply-chain` step in its own job; the kit's freedom from GUI dependencies is asserted transitively by `xtask/tests/kit_purity.rs`, under the existing `workspace-checks` step. The reader WebView grep moved to Phase 4 — see below.
+
 - `cargo deny check` for licence and advisory policy.
 - A CI step asserting `cabalmail-kit` has no GTK/WebKit dependency (`cargo tree` grep).
 - A CI step asserting the reader WebView's settings are hardened, grepping for `enable_javascript(false)` on the reader configuration — the analog of the CLAUDE.md rule forbidding `allow-scripts` on the React reader iframe. Add the corresponding prohibition to `CLAUDE.md` in this phase.
 
+> **Erratum (2026-09-02):** The third bullet cannot be written in this phase. There is no reader, no `WebKitWebView`, and no `webkit6` dependency until Phase 4, so a grep written now matches nothing and passes for reasons unrelated to what it guards — a check that cannot be made to fail is not a guard. It moves to Phase 4, work item 3, alongside the code it protects. The `CLAUDE.md` prohibition is written in this phase, since a rule can precede its enforcement.
+
 ### Phase 2 verification
 
-- A push to `stage` under `linux/**` runs all eight jobs green.
+- A push to `stage` under `linux/**` runs every job in `linux.yml` green.
 - `cargo xtask package arch` produces an installable package on a clean Arch container.
 - `cargo xtask smoke` passes against that package.
 - Deliberately introducing a GTK 4.16-only call fails `app-build` and not `lint` — proving the floor is enforced where intended.
@@ -607,7 +684,7 @@ The control domain comes from `Settings.control_domain` (so it can be set in `co
 
 Body render in a `WebKitWebView`, hardened:
 
-- `enable_javascript(false)` on the reader view. Non-negotiable; CI greps for it.
+- `enable_javascript(false)` on the reader view. Non-negotiable. This work item owns the CI grep that enforces it — deferred here from Phase 2, work item 6, which had nothing to grep. Write the check with the view: break it once and watch it fail.
 - Remote content blocked by default via `WebKitWebContext` request interception, honouring the `load_remote_content` preference (off / ask / always). "Ask" shows an `AdwBanner` with a per-message allow.
 - Inline images served through a custom `cabalmail-cid:` URI scheme handler backed by `/fetch_inline_image`.
 - All navigation intercepted in `decide-policy`; links never load in-view. Hovering shows the target; activating opens the system browser after confirmation for mismatched display text (the `LinkMenu` / `HTMLRewrite` behaviour).

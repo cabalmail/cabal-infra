@@ -246,7 +246,7 @@ In the Google Cloud console: pick a project (which project is immaterial — reu
 Two details are load-bearing:
 
 - Authorise as the **Google account that owns the Web Store developer account**. The token acts as the publisher; the hosting project is irrelevant to that.
-- Set the consent screen's publishing status to **"In production"**. In "Testing" mode Google expires refresh tokens after seven days, which silently kills unattended CI uploads weeks later. The `chromewebstore` scope is not on the sensitive list, so production status needs no verification review — the one-time authorisation just shows an "unverified app" interstitial.
+- Set the app's publishing status to **"In production"**. In "Testing" mode Google expires refresh tokens after seven days, which silently kills unattended CI uploads weeks later — the failure is an `invalid_grant: Token has been expired or revoked` at the token exchange, a week to the hour after the token was minted. The setting has moved: the console's "OAuth consent screen" page is now **APIs & Services → Google Auth Platform**, and the status lives on its **Audience** tab as a **Publish app** button (`https://console.cloud.google.com/auth/audience?project=<project-id>`). That button stays disabled until the **Branding** tab is complete — app name, user support email, and developer contact email — so fill that in first. The `chromewebstore` scope is not on the sensitive list, so production status needs no verification review — the one-time authorisation just shows an "unverified app" interstitial.
 
 Then mint the refresh token once, on a machine whose browser is signed in as the publisher account:
 
