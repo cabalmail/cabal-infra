@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.1] - 2026-09-12
+
+### Added
+- **Licence and advisory gate for the Linux client.** `cargo xtask ci` gained a
+  `supply-chain` step running `cargo deny check` against a new
+  `linux/deny.toml`, with its own job in `linux.yml` and in the pull-request
+  gate. A test fails if the two workflows, the task runner, and the README stop
+  naming one pinned version of `cargo-deny`. The kit's freedom from GTK,
+  libadwaita, GDK, GSK, and WebKit is now asserted transitively against the
+  resolved dependency tree, not just against its manifest.
+
+### Fixed
+- Apple: **Picking a folder ends a single-folder search.** Choosing a folder
+  in the sidebar while a "This folder only" search was on screen left a
+  query-less search of the folder just picked in the content column — the
+  whole mailbox drawn as matches, with further sidebar picks only moving the
+  highlight — and the search banner's clear button was the only way out. The
+  pick now ends the search and lands on the folder's own list. A search
+  result that arrives after the search has ended is also dropped rather than
+  raising the banner back over the folder view.
+
 ## [1.17.0] - 2026-09-11
 
 ### Added
