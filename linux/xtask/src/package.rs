@@ -27,6 +27,19 @@ const DISTROS: &[(&str, Option<&str>)] = &[
     ("rpm", Some("Phase 8, Fedora and RHEL packaging")),
 ];
 
+/// Whether `name` is the package proper rather than makepkg's separate
+/// debug-symbol package.
+///
+/// `cabalmail-debug-…` sits beside `cabalmail-…` under the stock
+/// `/etc/makepkg.conf` and is a package file by every other test, so anything
+/// picking one out of a directory has to know the difference. Installing the
+/// debug package would succeed and install no binary.
+pub fn is_main_package(name: &str) -> bool {
+    name.contains(".pkg.tar")
+        && name.starts_with(&format!("{PKGNAME}-"))
+        && !name.starts_with(&format!("{PKGNAME}-debug-"))
+}
+
 /// The distribution names, for a usage message.
 pub fn distro_names() -> Vec<&'static str> {
     DISTROS.iter().map(|(name, _)| *name).collect()
@@ -96,32 +109,84 @@ pub fn arch(workspace: &Path) -> Result<(), String> {
     let package = built_package(&staging, PKGNAME, &pkgver)?;
     lint(&staging, Path::new("PKGBUILD"))?;
     lint(&staging, &package)?;
+    write_srcinfo(workspace, &staging)?;
     for artifact in packages_in(&staging)? {
         println!("[xtask] package: {}", staging.join(&artifact).display());
     }
     Ok(())
 }
 
+/// Writes `.SRCINFO` beside the package.
+///
+/// The AUR reads this rather than the `PKGBUILD` — it is the metadata a
+/// consumer sees before deciding to build anything — so publishing a package
+/// without it publishes one nobody can search for.
+///
+/// Generated from `packaging/arch/PKGBUILD`, **not** from the staged copy this
+/// run built. The staged copy points its git source at the local checkout and
+/// carries a `git describe` version, which is right for building the working
+/// tree and wrong for every other purpose: published, it would name a path on
+/// whatever machine ran the build, and nobody could build it. The metadata a
+/// consumer gets has to describe the release, so it comes from the file a
+/// consumer would have.
+fn write_srcinfo(workspace: &Path, staging: &Path) -> Result<(), String> {
+    let source = workspace.join("packaging/arch");
+    let output = Command::new("makepkg")
+        .arg("--printsrcinfo")
+        .current_dir(&source)
+        .output()
+        .map_err(|e| format!("could not run `makepkg --printsrcinfo`: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "makepkg --printsrcinfo failed ({}): {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let text = String::from_utf8(output.stdout)
+        .map_err(|e| format!("makepkg --printsrcinfo produced non-UTF-8: {e}"))?;
+    check_publishable(&text)?;
+    let path = staging.join(".SRCINFO");
+    std::fs::write(&path, text).map_err(|e| format!("writing {}: {e}", path.display()))
+}
+
+/// Refuses metadata that describes this machine rather than a release.
+///
+/// The failure this exists for is silent: a `.SRCINFO` generated from the
+/// staged PKGBUILD parses, uploads, and looks like metadata, and the first
+/// person to notice is whoever tries to build from it. A `file://` source is
+/// what that mistake looks like from the outside.
+fn check_publishable(srcinfo: &str) -> Result<(), String> {
+    let local: Vec<&str> = srcinfo
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("source =") && line.contains("file://"))
+        .collect();
+    if local.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "the generated .SRCINFO names a local checkout ({}), so it describes \
+         this machine rather than a release. It is generated from \
+         packaging/arch/PKGBUILD for exactly that reason - something is \
+         reading the staged copy instead.",
+        local.join(", ")
+    ))
+}
+
 /// makepkg refuses to run as root, and its message arrives after the staging
 /// work is already done. Saying so first — and saying what to do instead — is
 /// the difference between a readable CI log and a puzzle.
 fn refuse_to_run_as_root() -> Result<(), String> {
-    use std::os::unix::fs::MetadataExt as _;
-
-    // /proc/self is owned by the process's own uid, which is the cheapest way
-    // to ask without taking a dependency for one call.
-    let uid = std::fs::metadata("/proc/self")
-        .map_err(|e| format!("reading /proc/self: {e}"))?
-        .uid();
-    if uid == 0 {
-        return Err(
-            "makepkg refuses to run as root, so this does too. Run it as \
-                    an unprivileged user with the dependencies from \
-                    packaging/deps/arch.txt already installed."
-                .to_owned(),
-        );
+    if !process::running_as_root()? {
+        return Ok(());
     }
-    Ok(())
+    Err(
+        "makepkg refuses to run as root, so this does too. Run it as an \
+         unprivileged user with the dependencies from packaging/deps/arch.txt \
+         already installed."
+            .to_owned(),
+    )
 }
 
 /// `git describe` against the release tags, which are bare semver — the same
@@ -361,6 +426,27 @@ fn short(commit: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
+    /// The mistake this guard exists for, in the shape `makepkg
+    /// --printsrcinfo` produces it when run against the staged PKGBUILD: a
+    /// source pointing at whatever checkout did the build.
+    #[test]
+    fn srcinfo_naming_a_local_checkout_is_refused() {
+        let staged = "pkgbase = cabalmail\n\tpkgver = 1.5.0.r3.gdeadbee\n\t\
+                      source = cabalmail::git+file:///__w/cabal-infra/cabal-infra#commit=deadbeef\n";
+        let error = check_publishable(staged).expect_err("that describes a build machine");
+        assert!(error.contains("file://"), "{error}");
+    }
+
+    /// What the release PKGBUILD produces: a tagged upstream source anyone can
+    /// build from.
+    #[test]
+    fn srcinfo_naming_the_upstream_tag_is_accepted() {
+        let released = "pkgbase = cabalmail\n\tpkgver = 1.5.0\n\t\
+                        source = cabalmail::git+https://github.com/cabalmail/cabal-infra.git#tag=1.5.0\n\t\
+                        source = marked-18.0.2.tgz::https://registry.npmjs.org/marked/-/marked-18.0.2.tgz\n";
+        assert_eq!(check_publishable(released), Ok(()));
+    }
+
     use super::*;
 
     const PKGBUILD: &str = "\

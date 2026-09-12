@@ -55,16 +55,17 @@ PKGBUILD's dependency arrays come from:
 grep -vE '^\s*(#|$)' packaging/deps/arch.txt | sudo pacman -S --needed -
 ```
 
-The gate's last step checks the dependency graph against
-[`deny.toml`](deny.toml) and needs `cargo-deny`, which is not part of the
-toolchain:
+Two of the gate's steps run a binary that is not part of the toolchain: the
+coverage floor over `cabalmail-kit`, and the dependency-graph check against
+[`deny.toml`](deny.toml).
 
 ```sh
+cargo install --locked cargo-llvm-cov@0.9.1
 cargo install --locked cargo-deny@0.20.2
 ```
 
-Without it `cargo xtask ci` says so and runs everything else. CI installs the
-same pinned version and treats a missing one as a failure, so the check is never
+Without one, `cargo xtask ci` says so and runs everything else. CI installs the
+same pinned versions and treats a missing one as a failure, so neither check is
 skipped where it counts.
 
 ## Build and test
@@ -78,6 +79,28 @@ cargo run -p cabalmail-gtk
 cargo xtask ci                   # what CI runs, in CI's order — run before every push
 ```
 
+`cargo xtask smoke` installs into the root filesystem, so run it in a throwaway
+container rather than on your own machine. From the repository root, after
+`cargo xtask package arch`:
+
+```sh
+podman run --rm -v "$PWD:/repo:ro" -w /repo/linux archlinux:base-devel bash -c '
+  pacman -Syu --needed --noconfirm rustup xorg-server-xvfb xorg-xauth
+  rustup toolchain install --profile minimal 1.97.1
+  export PATH="$HOME/.cargo/bin:$PATH" CARGO_TARGET_DIR=/tmp/t
+  cargo +1.97.1 run --locked -q -p xtask -- smoke target/package/arch
+'
+```
+
+```
+[xtask] smoke: /usr/bin/cabalmail
+cabalmail: self-test reached a main window
+[xtask] smoke: target/package/arch/cabalmail-…-x86_64.pkg.tar.zst started and drew a window
+```
+
+The checkout is mounted read-only, which is why nothing `smoke` writes lives
+under it. `docker` works the same way.
+
 `cargo test -p xtask` also asserts that `cabalmail-kit` reaches no GTK,
 libadwaita, or WebKit crate at any depth. That is the property that lets its
 tests run on a bare runner with no display, and the one a new transitive
@@ -90,13 +113,13 @@ by the workflow, so neither can drift from the other:
 
 | Subcommand | What it does |
 | --- | --- |
-| `cargo xtask ci` | `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace checks, app tests, `cargo deny check` — in that order, stopping at the first failure. Wraps the app tests in `xvfb-run` when there is no session to use. `--step <name>` runs one of them, which is how each CI job runs exactly one; `--list` prints the names. |
+| `cargo xtask ci` | `cargo fmt --check`, `clippy -D warnings`, kit tests, workspace checks, app tests, the kit's coverage floor, `cargo deny check` — in that order, stopping at the first failure. Wraps the app tests in `xvfb-run` when there is no session to use. `--step <name>` runs one of them, which is how each CI job runs exactly one; `--list` prints the names. |
 | `cargo xtask sync-vendored` | Materializes marked and turndown into `cabalmail-gtk/resources/editor/` from `react/admin/node_modules`, running `npm ci` first if needed. Needs node and npm; the files it writes are gitignored. Wraps [`scripts/sync-vendored.sh`](scripts/sync-vendored.sh), the sibling of `apple/scripts/sync-vendored.sh`. |
 | `cargo xtask package arch` | Builds the Arch package from the working tree and lints it with `namcap`. Stages a copy of [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) with `pkgver` taken from `git describe` and the git source pointed at the local checkout, then runs `makepkg`. Needs an Arch machine with `packaging/deps/arch.txt` installed, and refuses to run as root, as makepkg does. `deb` and `rpm` name their Phase 8 work item. |
-| `cargo xtask smoke` | Declared; lands with the test harness in Phase 2. |
-| `cargo xtask fixtures` | Declared; lands with the HTTP contract fixtures in Phase 2. |
+| `cargo xtask smoke` | Installs a built package and launches what it installed, asserting the client reaches a main window. The only check over the packaged artifact rather than the source tree. Takes the package to install, or a directory holding one, or uses the one `package arch` last built. Needs root, since it installs into the root filesystem — meant for a throwaway container, not a developer's machine (see below). |
+| `cargo xtask fixtures` | Declared; lands with the API client in Phase 3. |
 
-The two that have not landed answer with the work item that implements them
+The one that has not landed answers with the work item that implements it
 rather than with "unknown subcommand" — the vocabulary is fixed now so the
 plan, the workflow, and this README can name an operation before it exists.
 
@@ -144,7 +167,10 @@ pre-push gate and a failure names itself:
 | `workspace-checks` | `workspace-checks` | `ubuntu-latest` — the checks that reach outside the workspace, including the Lambda contract |
 | `app-build` | `clippy` | `ubuntu:24.04` container — the API floor |
 | `app-test` | `app-tests` | `ubuntu:24.04` container, under Xvfb |
-| `package-arch` | — | `archlinux:base-devel` container — `cargo xtask package arch` as an unprivileged build user |
+| `supply-chain` | `supply-chain` | `ubuntu-latest` — `cargo-deny`; the one job that can redden without anything here changing |
+| `coverage` | `coverage` | `ubuntu-latest` — `cargo-llvm-cov` over the kit, against the line floor |
+| `package-arch` | — | `archlinux:base-devel` container — `cargo xtask package arch` as an unprivileged build user, uploading the package and its `.SRCINFO` |
+| `smoke` | — | `archlinux:base-devel` container — installs that package and runs `cargo xtask smoke` under Xvfb |
 
 `app-build` runs clippy rather than a build of its own: `clippy --workspace
 --all-targets` is a full compile, so building against the floor and linting are
@@ -156,13 +182,16 @@ distro packaging builds offline against vendored crates, so a dependency bump
 whose lock update was never committed has to fail in CI rather than resolve
 silently there and fail in `makepkg`.
 
-`package-arch` is the exception to one-job-one-step: packaging needs an Arch
-container and several minutes, which no developer should pay for on every
-pre-push gate, so it runs `cargo xtask package arch` instead. It is also the
-only job that builds what a user installs rather than what a developer builds —
-`makepkg` clones the checkout, builds it offline against the committed lock,
-runs the kit tests inside `check()`, and `namcap` lints both the PKGBUILD and
-the package.
+`package-arch` and `smoke` are the exceptions to one-job-one-step: packaging
+needs an Arch container and several minutes, and installing a package into the
+root filesystem is not something to do on a pre-push gate, so neither belongs in
+`cargo xtask ci`. They are the two jobs that handle what a user installs rather
+than what a developer builds — `makepkg` clones the checkout, builds it offline
+against the committed lock, runs the kit tests inside `check()`, and `namcap`
+lints both the PKGBUILD and the package; then `smoke` installs the result into a
+clean container and launches it. A GResource that never got bundled, a data file
+the package forgot to install, or a shared library missing from the dependency
+array fails there and in no other job.
 
 System packages come from [`packaging/deps/ubuntu.txt`](packaging/deps/ubuntu.txt)
 and [`packaging/deps/arch.txt`](packaging/deps/arch.txt) — one list per
@@ -185,9 +214,9 @@ workflow's `paths:`, or the `rust` filter in
 [`lint.yml`](../.github/workflows/lint.yml), which runs the same
 `cargo xtask ci` on pull requests.
 
-The packaged-artifact smoke test, coverage, and the `cargo-deny`/dependency-tree
-guards are the remaining Phase 2 work items; the workflow names the item that
-owns each.
+The HTTP contract fixtures are the one part of the test harness still to come:
+there is no API client to decode a captured response into until Phase 3, so
+`cargo xtask fixtures` names that work item rather than capturing anything.
 
 ## Configuration
 

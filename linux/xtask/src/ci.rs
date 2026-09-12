@@ -54,18 +54,20 @@ pub fn run(workspace: &Path, only: Option<&str>) -> Result<(), String> {
         ));
     }
 
-    // `cargo deny` is a separate binary rather than a toolchain component, so
-    // the gate has to say what it does when it is absent. In CI, nothing: a
+    // Two steps run a separate binary rather than a toolchain component, so
+    // the gate has to say what it does when one is absent. In CI, nothing: a
     // check that quietly did not run is the failure this whole file is
     // arranged against. On a developer's machine a whole-gate run says so and
     // carries on, the same bargain the widget tests strike with a missing
-    // display — but `--step supply-chain` is a request to run this and
-    // nothing else, so that fails rather than reporting success having run
-    // no step at all.
-    if steps.iter().any(|step| step.label == SUPPLY_CHAIN) && !on_path("cargo-deny") {
-        let shortfall =
-            "`cargo-deny` is not on PATH, so the licence and advisory policy is unchecked";
-        let remedy = format!("cargo install --locked cargo-deny@{CARGO_DENY_PIN}");
+    // display — but `--step <name>` is a request to run that step and nothing
+    // else, so it fails rather than reporting success having run no step at
+    // all.
+    for tool in EXTERNAL_TOOLS {
+        if !steps.iter().any(|step| step.label == tool.step) || on_path(tool.binary) {
+            continue;
+        }
+        let shortfall = format!("`{}` is not on PATH, so {}", tool.binary, tool.shortfall);
+        let remedy = format!("cargo install --locked {}@{}", tool.binary, tool.pin);
         if missing_tool_is_fatal(in_ci(), only.is_some()) {
             return Err(format!("{shortfall}. Install it with `{remedy}`."));
         }
@@ -73,7 +75,37 @@ pub fn run(workspace: &Path, only: Option<&str>) -> Result<(), String> {
             "[xtask] ci: {shortfall}. `{remedy}` to run it here; CI runs it on \
              every push."
         );
-        steps.retain(|step| step.label != SUPPLY_CHAIN);
+        steps.retain(|step| step.label != tool.step);
+    }
+
+    // Being on PATH is not the same as being the version CI reads. A
+    // distribution package satisfies the check above and can be years ahead:
+    // the same advisory database read under different rules, or a coverage
+    // number computed differently, with nothing saying so. The pin is written
+    // in four places and held together by a test; this is what holds the
+    // *binary* to it.
+    for tool in EXTERNAL_TOOLS {
+        if !steps.iter().any(|step| step.label == tool.step) {
+            continue;
+        }
+        let Some(found) = installed_version(tool.binary) else {
+            continue;
+        };
+        if found == tool.pin {
+            continue;
+        }
+        let mismatch = format!(
+            "`{}` on PATH is {found}, and this gate is calibrated against {}",
+            tool.binary, tool.pin
+        );
+        if missing_tool_is_fatal(in_ci(), only.is_some()) {
+            return Err(format!(
+                "{mismatch}. A result read against different rules than CI's is \
+                 worse than no result. Install the pinned version, or move the \
+                 pin deliberately."
+            ));
+        }
+        eprintln!("[xtask] ci: {mismatch}, so this result and CI's are not comparable.");
     }
 
     if steps.iter().any(|step| step.label == APP_TESTS) {
@@ -117,16 +149,59 @@ fn cargo() -> String {
 /// The one step name that cares whether there is a display to draw on.
 const APP_TESTS: &str = "app-tests";
 
-/// The one step run by a binary that is not part of the toolchain.
+/// The steps run by a binary that is not part of the toolchain.
 const SUPPLY_CHAIN: &str = "supply-chain";
+const COVERAGE: &str = "coverage";
 
-/// The version of that binary this gate is calibrated against. An advisory
+/// The version each of those binaries this gate is calibrated against. A
 /// result is only comparable between a developer's run and CI's while both
 /// read the same rules, so the instruction printed here names the version the
 /// workflows install rather than whatever `cargo install` resolves today.
-/// `xtask/tests/workflow_contract.rs` fails if this and the two workflows and
-/// the README stop agreeing.
+/// `xtask/tests/workflow_contract.rs` fails if one of these and the two
+/// workflows and the README stop agreeing.
 const CARGO_DENY_PIN: &str = "0.20.2";
+const CARGO_LLVM_COV_PIN: &str = "0.9.1";
+
+/// The share of `cabalmail-kit`'s lines the tests have to reach.
+///
+/// Set from what the suite measured when the floor landed — 95.75% — with
+/// enough margin that ordinary work does not redden CI on a line or two.
+///
+/// What it catches is a broad regression: tests deleted, a suite that stopped
+/// running, a large module landing untested. What it does **not** catch is a
+/// small untested module, which can sit under a crate-wide figure without
+/// moving it — the arithmetic is unavoidable in any whole-crate floor. That
+/// case is a reviewer's to catch, and the floor's job is to re-set upward each
+/// time the measured figure moves up and stays there. It is a floor, not a
+/// target.
+const KIT_LINE_COVERAGE_FLOOR: &str = "90";
+
+/// A binary the gate runs that `rustup` does not install.
+struct ExternalTool {
+    /// The step that needs it.
+    step: &'static str,
+    /// The binary, as `cargo install` and `PATH` both spell it.
+    binary: &'static str,
+    /// The version the workflows install.
+    pin: &'static str,
+    /// What goes unchecked without it, phrased to follow "is not on PATH, so".
+    shortfall: &'static str,
+}
+
+const EXTERNAL_TOOLS: &[ExternalTool] = &[
+    ExternalTool {
+        step: SUPPLY_CHAIN,
+        binary: "cargo-deny",
+        pin: CARGO_DENY_PIN,
+        shortfall: "the licence and advisory policy is unchecked",
+    },
+    ExternalTool {
+        step: COVERAGE,
+        binary: "cargo-llvm-cov",
+        pin: CARGO_LLVM_COV_PIN,
+        shortfall: "the kit's coverage floor is unenforced",
+    },
+];
 
 /// Whether starting the app tests with nothing to draw on should stop the run
 /// rather than warn. On a developer's machine a skip is the right answer — a
@@ -143,6 +218,30 @@ fn missing_display_is_fatal(display: Display, in_ci: bool) -> bool {
 /// a successful exit would be a job that reported success having run nothing.
 fn missing_tool_is_fatal(in_ci: bool, selected_by_name: bool) -> bool {
     in_ci || selected_by_name
+}
+
+/// The version of `binary` on PATH, or `None` when it will not say.
+///
+/// Every one of these is a cargo subcommand, so it is asked the way cargo
+/// would: `cargo <subcommand> --version` prints `<name> <version>`. A binary
+/// that answers in some other shape is left alone rather than guessed at —
+/// refusing to run over an unparsed version string would be a gate that failed
+/// for its own reasons.
+fn installed_version(binary: &str) -> Option<String> {
+    let subcommand = binary.strip_prefix("cargo-")?;
+    let output = std::process::Command::new(cargo())
+        .args([subcommand, "--version"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let printed = String::from_utf8(output.stdout).ok()?;
+    let version = printed.split_whitespace().nth(1)?;
+    version
+        .chars()
+        .all(|character| character.is_ascii_digit() || character == '.')
+        .then(|| version.to_owned())
 }
 
 /// Every CI provider sets this; GitHub Actions sets it to `true`.
@@ -185,6 +284,24 @@ fn plan(cargo: &str, display: Display) -> Vec<Step> {
             ["test", "--locked", "-p", "xtask"],
         ),
         app_tests(cargo, display),
+        // The kit's tests again, this time instrumented, so the floor is
+        // measured over the same suite `kit-tests` runs rather than over a
+        // selection of it. `--summary-only` because a per-function table is
+        // several hundred lines of log for a number the job either passes or
+        // fails on; the job that failed prints the per-file summary above it.
+        Step::new(
+            COVERAGE,
+            cargo,
+            [
+                "llvm-cov",
+                "--locked",
+                "-p",
+                "cabalmail-kit",
+                "--summary-only",
+                "--fail-under-lines",
+                KIT_LINE_COVERAGE_FLOOR,
+            ],
+        ),
         // Last because it is the one step that needs the network: it fetches
         // the RustSec advisory database. A run that fails for want of a
         // network connection should do it after everything local has had its
@@ -266,6 +383,7 @@ mod tests {
                 "kit-tests",
                 "workspace-checks",
                 "app-tests",
+                "coverage",
                 "supply-chain"
             ]
         );
@@ -398,6 +516,84 @@ mod tests {
             assert!(
                 error.contains(name),
                 "the error should list `{name}`: {error}"
+            );
+        }
+    }
+
+    /// The floor is a number the step passes to a tool, so it has to be one
+    /// the tool reads as a percentage. A typo'd `"90%"` or `"ninety"` would
+    /// fail the step for the wrong reason, on every run.
+    #[test]
+    fn the_coverage_floor_is_a_percentage() {
+        let floor: u32 = KIT_LINE_COVERAGE_FLOOR
+            .parse()
+            .expect("the coverage floor is a plain integer");
+        assert!(
+            (1..=100).contains(&floor),
+            "a floor of {floor} is not a share of anything"
+        );
+    }
+
+    /// The floor is measured over the same tests `kit-tests` runs. A coverage
+    /// step scoped to some other package would report a number about code the
+    /// floor was never set from.
+    #[test]
+    fn the_coverage_step_measures_the_kit() {
+        let step = plan("cargo", Display::Session)
+            .into_iter()
+            .find(|step| step.label == COVERAGE)
+            .expect("the plan measures coverage");
+        assert_eq!(
+            step.command_line(),
+            format!(
+                "cargo llvm-cov --locked -p cabalmail-kit --summary-only \
+                 --fail-under-lines {KIT_LINE_COVERAGE_FLOOR}"
+            )
+            .replace("\n", "")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+        );
+    }
+
+    /// The pins are what a developer is told to install and what CI installs.
+    /// A gate that accepted any version on PATH would read a distribution
+    /// package's rules and report them as CI's.
+    #[test]
+    fn the_installed_version_is_read_from_the_binary_itself() {
+        for tool in EXTERNAL_TOOLS {
+            let Some(found) = installed_version(tool.binary) else {
+                continue;
+            };
+            assert!(
+                found.split('.').count() == 3,
+                "`{}` reported `{found}`, which is not an x.y.z version",
+                tool.binary
+            );
+        }
+        assert_eq!(installed_version("cargo"), None, "not a cargo subcommand");
+        assert_eq!(installed_version("cargo-no-such-tool"), None);
+    }
+
+    /// Both external binaries answer to the same policy, and each names the
+    /// step it belongs to. A tool whose step does not exist would never be
+    /// checked for, and its step would fail with "not on PATH" in CI.
+    #[test]
+    fn every_external_tool_names_a_step_the_plan_runs() {
+        assert!(!EXTERNAL_TOOLS.is_empty());
+        for tool in EXTERNAL_TOOLS {
+            assert!(
+                step_names().contains(&tool.step),
+                "`{}` is needed by `{}`, which the plan does not run",
+                tool.binary,
+                tool.step
+            );
+            assert_eq!(
+                tool.pin.split('.').count(),
+                3,
+                "`{}` is pinned to `{}`, which is not an exact x.y.z version",
+                tool.binary,
+                tool.pin
             );
         }
     }

@@ -206,6 +206,82 @@ pub fn run(settings: Settings) -> Result<ExitCode, String> {
     Ok(ExitCode::from(application.run_with_args(&[program])))
 }
 
+/// Starts the application, asserts it reaches a main window, and quits.
+///
+/// The only assertion that covers the *packaged artifact* rather than the
+/// source tree: the smoke job installs the built package into a clean
+/// container and runs the installed binary through this. A break that the
+/// widget tests cannot see — a GResource that did not get bundled, a data file
+/// the package forgot to install, a shared library the dependency array does
+/// not name — shows up here and nowhere else.
+///
+/// [`NON_UNIQUE`](gio::ApplicationFlags::NON_UNIQUE) because the whole point
+/// is to start a client: without it a self-test run on a machine where the
+/// client is already up registers as a remote instance, exits 0 having built
+/// no window, and reports success for a binary it never started.
+///
+/// # Errors
+///
+/// If the application cannot register, if the I/O runtime cannot be built, or
+/// if the run finished without a window ever becoming visible.
+pub fn self_test(settings: Settings) -> Result<ExitCode, String> {
+    crate::register_resources();
+    let application = CabalmailApplication::new(settings);
+    application.set_flags(application.flags() | gio::ApplicationFlags::NON_UNIQUE);
+
+    application
+        .register(gio::Cancellable::NONE)
+        .map_err(|error| format!("the application could not register: {error}"))?;
+    let runtime =
+        Runtime::new().map_err(|error| format!("the I/O runtime could not start: {error}"))?;
+    application.attach_runtime(runtime);
+
+    let reached = std::rc::Rc::new(std::cell::Cell::new(false));
+    let recorder = std::rc::Rc::clone(&reached);
+    application.connect_activate(move |application| {
+        // From an idle callback rather than from here: a handler connected to
+        // `activate` runs before the class closure that builds the window, so
+        // asking now would find no window and report a failure that is only
+        // this test's own ordering.
+        let application = application.clone();
+        let recorder = std::rc::Rc::clone(&recorder);
+        glib::idle_add_local_once(move || {
+            recorder.set(
+                application
+                    .active_window()
+                    .is_some_and(|window| window.is_visible()),
+            );
+            application.quit();
+        });
+    });
+
+    let program = std::env::args()
+        .next()
+        .unwrap_or_else(|| "cabalmail".to_owned());
+    let code = application.run_with_args(&[program]);
+    verdict(reached.get(), code == glib::ExitCode::SUCCESS)?;
+    println!("{}", cabalmail_kit::SELF_TEST_MARKER);
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Whether the run counts as a started client.
+///
+/// Split out because it is the whole assertion: the rest of [`self_test`]
+/// needs a display and a main loop to exercise, and a rule that only runs
+/// inside those is a rule nothing can check. Both conditions are required —
+/// a client that drew nothing and exited 0 is the failure the smoke job
+/// exists to catch, and reporting it as success is exactly the shape of
+/// falsely-green this whole arrangement is built against.
+fn verdict(reached_a_window: bool, exited_cleanly: bool) -> Result<(), String> {
+    if !reached_a_window {
+        return Err("the client exited without ever showing a window".to_owned());
+    }
+    if !exited_cleanly {
+        return Err("the client reached a window but exited non-zero".to_owned());
+    }
+    Ok(())
+}
+
 /// What to say when this invocation only raises the window of a client that is
 /// already running.
 ///
@@ -283,6 +359,30 @@ mod tests {
         let application = CabalmailApplication::new(Settings::defaults());
         application.attach_runtime(Runtime::new().expect("the runtime builds"));
         application.runtime().shutdown(Duration::from_millis(0));
+    }
+
+    /// The assertion the smoke job rests on. A client that drew nothing must
+    /// not report success, whatever it exited with — that is the failure the
+    /// job exists to catch, and the one a packaging break looks like.
+    #[test]
+    fn a_self_test_that_drew_no_window_is_a_failure() {
+        for exited_cleanly in [true, false] {
+            let error = verdict(false, exited_cleanly).expect_err("nothing was drawn");
+            assert!(error.contains("without ever showing a window"), "{error}");
+        }
+    }
+
+    /// A window that came up and then took the process down with it is a
+    /// break too — a crash on shutdown is still a crash.
+    #[test]
+    fn a_self_test_that_exited_badly_is_a_failure() {
+        let error = verdict(true, false).expect_err("it exited non-zero");
+        assert!(error.contains("exited non-zero"), "{error}");
+    }
+
+    #[test]
+    fn a_self_test_that_drew_a_window_and_exited_cleanly_passes() {
+        assert_eq!(verdict(true, true), Ok(()));
     }
 
     /// A launch that overrode nothing only asked for the window, so raising it
