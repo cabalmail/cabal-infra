@@ -83,8 +83,39 @@ actor FakeImapClient: ImapClient {
         searchPages = pages
     }
 
+    // A search the test can hold open at the transport, so a result can be
+    // made to land after the user has ended the search (#1536):
+    // `holdNextSearch()` parks the next request, `awaitHeldSearch()` waits
+    // for it to arrive, `releaseHeldSearch()` lets it answer.
+    private var holdNext = false
+    private var heldSearch: CheckedContinuation<Void, Never>?
+    private var searchArrived: CheckedContinuation<Void, Never>?
+
+    func holdNextSearch() {
+        holdNext = true
+    }
+
+    func awaitHeldSearch() async {
+        guard heldSearch == nil else { return }
+        await withCheckedContinuation { searchArrived = $0 }
+    }
+
+    func releaseHeldSearch() {
+        holdNext = false
+        heldSearch?.resume()
+        heldSearch = nil
+    }
+
     func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
         searchCalls.append(query)
+        if holdNext {
+            holdNext = false
+            await withCheckedContinuation { continuation in
+                heldSearch = continuation
+                searchArrived?.resume()
+                searchArrived = nil
+            }
+        }
         if !searchPages.isEmpty { return searchPages.removeFirst() }
         guard let searchResult else { return try trap() }
         return searchResult

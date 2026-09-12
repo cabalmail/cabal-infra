@@ -23,11 +23,16 @@ struct MessageSearchFilters: Sendable, Equatable {
     var hasAttachment: Bool = false
     var thisFolderOnly: Bool = false
 
-    /// `true` when no filter is active — every text field is empty, every
-    /// flag is off, and the scope is the default cross-folder mode. Used
-    /// by `runSearch()` to drop back to the folder view when the user
-    /// submits an empty free-text query with no filters set.
-    var isEmpty: Bool {
+    /// `true` when nothing here can narrow a result set — every text field
+    /// empty and every flag off. Used by `runSearch()` to drop back to the
+    /// folder view when the user submits an empty free-text query with no
+    /// filters set.
+    ///
+    /// `thisFolderOnly` deliberately doesn't count: it's a scope, not a
+    /// predicate, and scoping "everything" to one folder is the folder view
+    /// itself. Counting it made an emptied query with the toggle still on a
+    /// runnable search, which drew the whole mailbox as matches (#1536).
+    var hasNoPredicate: Bool {
         from.isEmpty
             && to.isEmpty
             && subject.isEmpty
@@ -36,7 +41,6 @@ struct MessageSearchFilters: Sendable, Equatable {
             && !unread
             && !flagged
             && !hasAttachment
-            && !thisFolderOnly
     }
 
     /// Number of non-default filter values. Drives the "Filters · 3"
