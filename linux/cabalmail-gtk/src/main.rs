@@ -52,6 +52,10 @@ fn run(arguments: &[String]) -> Result<ExitCode, String> {
                 .map_err(|detail| format!("the default for `{key}` is not valid: {detail}"))?;
             write(&environment, key, &value)
         }
+        Invocation::SelfTest { overrides } => {
+            let loaded = load(&environment, &overrides)?;
+            cabalmail_gtk::application::self_test(loaded.settings)
+        }
         Invocation::Run { overrides } => {
             let loaded = load(&environment, &overrides)?;
             // Warnings are not fatal — a stale `CABALMAIL_*` variable in a

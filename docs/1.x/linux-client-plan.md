@@ -12,14 +12,14 @@ Status tags mirror the **Status:** line on each work item. An item with no tag h
   - [2. `cabalmail-kit` skeleton](#2-cabalmail-kit-skeleton) — **shipped**
   - [3. Layered configuration](#3-layered-configuration) — **shipped**
   - [4. `cabalmail-gtk` shell](#4-cabalmail-gtk-shell) — **shipped**
-  - [5. `xtask`](#5-xtask) — **shipped** (`smoke` and `fixtures` declared only)
+  - [5. `xtask`](#5-xtask) — **shipped** (`fixtures` declared only)
   - [Phase 1 verification](#phase-1-verification)
 - [Phase 2: Build Pipeline, Packaging & Test Harness](#phase-2-build-pipeline-packaging--test-harness) — **in progress**
-  - [1. Workflow layout](#1-workflow-layout) — **shipped** (`smoke` and `coverage` wait on item 3)
-  - [2. Toolchain pinning](#2-toolchain-pinning) — **partial** (`cargo-llvm-cov` waits on item 3)
-  - [3. Test harness](#3-test-harness)
+  - [1. Workflow layout](#1-workflow-layout) — **shipped** (all nine jobs)
+  - [2. Toolchain pinning](#2-toolchain-pinning) — **shipped**
+  - [3. Test harness](#3-test-harness) — **partial** (layer c whole; a and d in part; b moved to Phase 3)
   - [4. Arch packaging](#4-arch-packaging) — **shipped**
-  - [5. Release artifacts](#5-release-artifacts) — **blocked** (AUR); artifact upload outstanding
+  - [5. Release artifacts](#5-release-artifacts) — **partial**; AUR publication **blocked**
   - [6. Guard rails](#6-guard-rails) — **shipped** (WebView grep moved to Phase 4)
   - [Phase 2 verification](#phase-2-verification)
 - [Phase 3: Configuration, Authentication & API Client](#phase-3-configuration-authentication--api-client)
@@ -402,7 +402,7 @@ Where the work stands, so it does not have to be reverse-engineered from git. Ev
 | Phase | Status |
 | --- | --- |
 | 1. Workspace scaffolding | **Complete** (2026-08-08). All five items shipped; `cargo run -p cabalmail-gtk` opens a window. |
-| 2. Build pipeline, packaging & test harness | **In progress.** Items 1, 4, and 6 shipped; item 2 waits only on `cargo-llvm-cov`, which arrives with the coverage job. Item 3 is untouched, and it is the substance of the phase. Item 5's artifact upload is outstanding, its AUR half blocked. |
+| 2. Build pipeline, packaging & test harness | **In progress.** Items 1, 2, 4, and 6 shipped, and item 5's artifact upload with them. Item 3 shipped layer (c) whole, and the *enforcement* halves of (a) and (d) - the coverage floor and the smoke job. What those two layers test is written with the code they test, so most of (a) and (d) arrives with Phases 3 to 5. Layer (b) moved to Phase 3, where the API client its fixtures decode into lands. Item 5's AUR publication is the one thing still blocked. |
 | 3-8 | Not started. |
 
 > **Paused (2026-08-24): AUR publication.** The AUR is closed to new account registrations, so the Arch package has no route to publication. Item 4's work is written, tested, and committed on the branch `claude/linux-phase-2-arch-packaging`, which is **not** pushed and has **no PR open** - deliberately, until the AUR question resolves. Item 5's AUR step was already a manual, human-gated act; it is now blocked outright. Nothing else in Phase 2 depends on either, so items 3 and 6 can proceed.
@@ -459,7 +459,7 @@ The propagation machinery itself (inotify watching, debounce, push/pull wiring) 
 
 ### 5. `xtask`
 
-**Status:** Shipped 2026-08-08 (`ed7c8d7f`). `package arch` landed with Phase 2 item 4; `smoke` and `fixtures` are still declared-only.
+**Status:** Shipped 2026-08-08 (`ed7c8d7f`). `package arch` landed with Phase 2 item 4 and `smoke` with Phase 2 item 3; `fixtures` is still declared-only.
 
 Subcommands, each a thin wrapper so both humans and CI have one spelling:
 
@@ -490,7 +490,7 @@ Goal: everything after this phase is developed under green CI and produces an in
 
 ### 1. Workflow layout
 
-**Status:** Shipped 2026-08-15 (`8999dd4a`, `c31e6031`), with follow-ups in `d8a25d26` and `89ff60f3`. Seven of the nine jobs exist - the five planned here plus `workspace-checks`, which runs the `xtask` drift tests, and `supply-chain` from item 6. `smoke` and `coverage` wait on item 3.
+**Status:** Shipped 2026-08-15 (`8999dd4a`, `c31e6031`), with follow-ups in `d8a25d26` and `89ff60f3`, and `smoke` and `coverage` added with item 3 on 2026-09-12. All nine jobs exist - the five planned here plus `workspace-checks`, which runs the `xtask` drift tests, `supply-chain` from item 6, and the two the layout above named.
 
 New `.github/workflows/linux.yml`, modelled on `apple.yml`: triggered by `workflow_dispatch` and by pushes to `main` / `stage` under `linux/**` and `.github/workflows/linux.yml`. Like `apple.yml`, it deploys nothing to AWS.
 
@@ -509,7 +509,7 @@ jobs:
 
 ### 2. Toolchain pinning
 
-**Status:** Partial. The pinned toolchain action, the Ubuntu dependency list, and the Arch one all exist; `cargo-deny` arrived with item 6, pinned and installed from a prebuilt binary. `cargo-llvm-cov` lands with the coverage job (item 3).
+**Status:** Shipped. The pinned toolchain action, the Ubuntu dependency list, and the Arch one all exist; `cargo-deny` arrived with item 6 and `cargo-llvm-cov` with item 3's coverage job on 2026-09-12, both pinned and installed from prebuilt binaries. `lint.yml` installs both, since its one job runs the whole gate; `linux.yml` installs each in the job that runs its step. `xtask/tests/workflow_contract.rs` fails if either pin stops agreeing across the two workflows, `xtask/src/ci.rs`, and the README.
 
 - Rust from `rust-toolchain.toml` (1.97.1), installed by `dtolnay/rust-toolchain` pinned to a commit SHA (the repo's convention — every third-party action in `apple.yml` is SHA-pinned; match it). A toolchain bump is a deliberate PR touching one line, which is the point of pinning exactly rather than tracking `stable` under `clippy -D warnings`.
 - `blueprint-compiler` in every container that builds the app crate. Verifying it is present and new enough in the Ubuntu 24.04, Debian, and Fedora images is a Phase 2 acceptance criterion, not a Phase 8 discovery.
@@ -517,6 +517,13 @@ jobs:
 - `cargo-llvm-cov`, `cargo-deny`, `namcap` installed by pinned version.
 
 ### 3. Test harness
+
+**Status:** Partial, 2026-09-12. What shipped is the harness - the machinery each layer needs - not the tests each layer will eventually hold, since most of those are written with the code they cover.
+
+- **(a)** The floor, not the suite. `cargo-llvm-cov` over `cabalmail-kit` in a `coverage` job, failing under 90% of lines against a suite measuring 96%. A whole-crate floor catches a broad regression, not one untested module slipping in under it; that stays a reviewer's job. The MIME, header, reply, signature, folder-tree, cache, and preference tests this layer lists are Phases 3 to 5; the modules that would hold them are still doc-comment stubs.
+- **(b)** Not started, and moved to Phase 3 - see the erratum below.
+- **(c)** Whole. Eight modules under `cabalmail-kit/src/policy/`, one per row of the table below, each with its own tests — including the second Apple type in the two rows that name a pair: `ComposeCancelChoice` as `compose_cancel::Choice`, and `RowDisposal` as `dispose::DisposalPhase`.
+- **(d)** The smoke half. `--self-test` is a real code path in `cabalmail-gtk`, and `cargo xtask smoke` installs the package `package-arch` uploaded into a clean Arch container and launches it under Xvfb. The widget tests against a fake `ApiClient` need an `ApiClient` to fake, so they follow it in Phase 3.
 
 This is the substance of the phase. Four layers:
 
@@ -528,6 +535,8 @@ This is the substance of the phase. Four layers:
 - The fixture corpus is a written specification of the API contract — useful to the Android effort in the same version slot, and to anyone touching `lambda/api/`.
 
 Redact tokens and real addresses on capture; `cargo xtask fixtures` enforces this and fails on anything matching a JWT or a live mail domain.
+
+> **Erratum (2026-09-12):** Layer (b) cannot be written in this phase. There is no API client, no models, and no `reqwest` dependency until Phase 3, so there is nothing for a captured fixture to decode into and nothing for `wiremock` to serve a request from - a corpus written now would assert that some JSON round-trips through `serde_json`, which is a test of `serde_json`. It moves to Phase 3, work item 4, alongside the client it pins, which is what `cargo xtask fixtures` now names when it is asked for. The reasoning above stands unchanged; only the phase it lands in moves. This is the same shape as item 6's third bullet, and for the same reason: a check that cannot be made to fail is not a check.
 
 **(c) Pure policy types.** `apple/CabalmailTests/` is 24 files of tests over *pure* types that encode UI decisions without owning widgets. That file list is the specification for this layer. Port the equivalents into `cabalmail-kit/src/policy/` as plain functions and test them in layer (a):
 
@@ -544,7 +553,17 @@ Redact tokens and real addresses on capture; `cargo xtask fixtures` enforces thi
 
 Anything in this table that ends up needing a `gtk::Widget` has been modelled wrong.
 
+> **Erratum (2026-09-12):** As shipped, `policy::reader` is not a transliteration of `ReaderToolbarLayout`. Half of that type is arithmetic about which iOS SDK folds a `.bottomBar` at what width and how AppKit demotes a crowded toolbar's trailing items, and libadwaita does neither - an `AdwHeaderBar` draws exactly what it is packed with. What ported is the idea of a budget and a demotion order, and the header-height cap verbatim; the platform arithmetic did not, and neither did Apple's actual order - `macToolbar`'s is arranged for AppKit to do the demoting. The Linux module declares its own order in `all()`, and takes both the bar and the menu from it, so the order is enforced rather than described.
+>
+> Two rows of the table name a pair of Apple types, and both halves ported: the dialog's button set and which of them a dismissal resolves to (`ComposeCancelChoice`), and the two-leg row-disposal animation and its durations (`RowDisposal`). The first is the one with a hazard attached — SwiftUI dropped the cancel-role button in a popover, `AdwAlertDialog` defaults its close response to the first one added, and both roads lead to a stray click discarding a draft.
+>
+> Two defects were carried by `HTMLRewrite` and are *not* reproduced here, since a port is where they can be fixed: substituting each `cid:` reference in turn corrupts a Content-ID that is a prefix of another (`logo`, `logo2`), and matching `<head` by prefix injects the head defaults into the middle of a fragment that opens with `<header>`. The Linux version scans once and matches whole tags; both have tests.
+>
+> Every function in these modules takes the fields it decides on rather than a model type, which is what let the layer land ahead of Phase 3's models. It is also the property worth keeping: a policy that needed an `Envelope` would be one no test could exercise without building one.
+
 **(d) Widget and smoke tests.** Thin by design. `cargo test -p cabalmail-gtk` under `xvfb-run` covers construction of each top-level view against a fake `ApiClient`, and the `spawn_to_ui!` bridge. The `smoke` job goes further: installs the built package into a clean container, launches it with `--self-test` against a `wiremock` instance, and asserts the process reaches a signed-out main window and exits 0. That flag is a real code path added in this phase — it is the only end-to-end assertion that the *packaged artifact* works, as opposed to the source tree.
+
+> **Erratum (2026-09-12):** The `wiremock` half of that sentence went with layer (b). `--self-test` as shipped starts the application, waits for the window to become visible, prints a marker, and quits; there is no client to point at a stub server yet. The marker is a constant in `cabalmail-kit` that both the app and `cargo xtask smoke` read, so the printer and the grep cannot drift. Pointing the self-test at a `wiremock` instance follows the API client into Phase 3.
 
 ### 4. Arch packaging
 
@@ -571,7 +590,7 @@ Anything in this table that ends up needing a `gtk::Widget` has been modelled wr
 
 ### 5. Release artifacts
 
-**Status:** Blocked on the AUR pause. The workflow-artifact upload is not blocked and is still to do.
+**Status:** Partial, 2026-09-12. `package-arch` uploads the `.pkg.tar.zst` and the `.SRCINFO` that `cargo xtask package arch` now generates beside it; the `smoke` job downloads that artifact rather than building its own. The `.SRCINFO` is generated from `packaging/arch/PKGBUILD` rather than from the staged copy this run built - the staged copy points its git source at the local checkout, which would publish metadata naming a path on whatever machine ran the build - and a check refuses to write one carrying a `file://` source. Publication to the AUR remains blocked - see the note under Progress - and stays a manual step whenever it unblocks.
 
 The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow artifacts on every run. Publishing to the AUR is a manual, human-gated step — not automated in this phase, and not something an AI-executed work item should perform.
 
@@ -592,6 +611,17 @@ The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow
 - `cargo xtask smoke` passes against that package.
 - Deliberately introducing a GTK 4.16-only call fails `app-build` and not `lint` — proving the floor is enforced where intended.
 - Deliberately corrupting a fixture fails `kit-test`.
+
+> **Erratum (2026-09-12):** Three of these five are met, one cannot be met from a branch, and one moves to Phase 3.
+>
+> - The first cannot be met here at all: `linux.yml` fires only on a push to `main` or `stage`, so `package-arch` and the new `smoke` job have never run as jobs. It is met, or not, on the promotion that merges them.
+> - The second and third are met, by hand rather than by CI: `cargo xtask package arch` built a namcap-clean package on an Arch workstation, and `cargo xtask smoke` installed that package into a clean `archlinux:base-devel` container and got `self-test reached a main window` out of the installed binary under Xvfb. The container half is what the `smoke` job automates.
+> - The fourth is met, and was when the floor landed.
+> - The fifth goes to Phase 3 with layer (b).
+>
+> Running it that way is also what found the last defect in it: `smoke` wrote its throwaway `HOME` under `target/`, which fails outright against a read-only checkout — the ordinary way to hand a container a source tree. It uses the system temp directory now.
+>
+> What was proved by breaking it once, rather than by watching it pass: the self-test reports failure when the window is not presented, the coverage step exits non-zero when the floor is raised above the measured figure, and the two new drift tests fail when the `smoke` job's command is removed or the package artifact is renamed at one end.
 
 ---
 
@@ -646,6 +676,8 @@ The control domain comes from `Settings.control_domain` (so it can be set in `co
 | Other | `/fetch_bimi` |
 
 `/push_register`, `/push_deregister`, and `/push_envelope` are **not** implemented — they are APNs-specific (see Phase 7).
+
+Phase 2's test harness moved its HTTP contract layer here, by the erratum under [that work item](#3-test-harness): every endpoint above gets a golden fixture under `cabalmail-kit/tests/fixtures/<endpoint>/<case>.json`, served through `wiremock` and asserted against the decoded Rust type, captured and redacted by `cargo xtask fixtures`. The client and the fixtures land together because neither is testable without the other. `cargo xtask fixtures` names this work item today.
 
 ### 5. Models and caching
 
