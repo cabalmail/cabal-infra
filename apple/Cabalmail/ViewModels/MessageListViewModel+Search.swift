@@ -31,7 +31,12 @@ extension MessageListViewModel {
             filterTab = .all
         }
         let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty && searchFilters.isEmpty {
+        // Nothing to match on drops back to the folder view. "This folder
+        // only" alone is not something to match on (see `hasNoPredicate`):
+        // a sidebar pick empties the query and then moves the anchor, so
+        // counting the scope re-ran the search with no term and drew the
+        // whole folder as matches (#1536).
+        if trimmed.isEmpty && searchFilters.hasNoPredicate {
             await clearSearch()
             return
         }
@@ -55,9 +60,12 @@ extension MessageListViewModel {
         searchNextCursor = nil
         isLoading = true
         defer { isLoading = false }
+        // Snapshotted for the staleness check below: the filters this request
+        // asked with, not whatever they hold when it answers.
+        let filters = searchFilters
         do {
             try await client.imapClient.connectAndAuthenticate()
-            let query = buildSearchQuery(text: trimmed, filters: searchFilters)
+            let query = buildSearchQuery(text: trimmed, filters: filters)
             // Fetch in bounded `searchPageSize` chunks by walking the cursor,
             // rather than asking for the whole set in one request (Layer 3.2
             // of the large-mailbox-hardening plan).
@@ -66,6 +74,12 @@ extension MessageListViewModel {
                 pageSize: Self.searchPageSize,
                 maxResults: targetDepth
             )
+            // A `clearSearch()` (or a newer submission) during the await owns
+            // the surface now, so this answer belongs to a search that is
+            // over: applying it would raise the banner back over a search the
+            // user has already ended (#1536). Same staleness rule
+            // `loadMoreSearchResults` applies to its cursor.
+            guard submittedQuery == trimmed, searchFilters == filters else { return }
             envelopes = result.envelopes.map(\.envelope)
             sourceFolderIndex = SearchSourceFolderIndex(result.envelopes)
             searchTotalEstimate = result.totalEstimate
@@ -75,6 +89,9 @@ extension MessageListViewModel {
             isSearchActive = true
             errorMessage = nil
         } catch {
+            // Same staleness rule: an ended search's failure is not worth a
+            // banner over the folder view the user is now looking at.
+            guard submittedQuery == trimmed, searchFilters == filters else { return }
             errorMessage = "\(error)"
         }
     }
@@ -238,6 +255,11 @@ extension MessageListViewModel {
     /// re-runs against the new folder, so the banner never names a folder the
     /// rows did not come from; losing the anchor drops the scope, since there
     /// is nothing left to narrow to.
+    ///
+    /// The re-run lands in `runSearch`, which ends the search instead when
+    /// there is no longer anything to match on — a sidebar pick empties the
+    /// query before it writes the new folder, and that is a teardown, not a
+    /// search of the folder just picked (#1536).
     func setSearchAnchor(_ anchor: Folder?) async {
         guard anchor?.path != searchAnchor?.path else { return }
         searchAnchor = anchor
