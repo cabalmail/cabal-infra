@@ -1704,8 +1704,16 @@ Android's `HtmlBody` runs with JavaScript off, so the Apple DOM-anchor
 script cannot run there; 6d must decide between a native `scrollY`
 fraction (the `f<fraction>` form only) and an app-installed bridge, which
 would mean enabling JavaScript in the mail reader and is not a change to
-make unasked. Not yet driven on a device: the Room DAO's first exercise
-(search, mark-all-read) is the first emulator run of this PR.
+make unasked. Driven on the Pixel 8 API 35 emulator against the `claude` stage account
+(2026-09-13): the tree with its roll-ups (All Feeds 97, Tech 15 = Rust
+Blog 10 + xkcd 5), a feed list opening on its stored Unread pill, a
+per-feed search hitting the FTS4 index by title and by body, the reader
+with the feed's body in reader styling and the header links, the
+article web view loading the publisher's page, a confirmed
+mark-all-read emptying the Unread view and recounting the tree (97 to
+87, 15 to 5), and the article toggle sticking as the feed's default so
+the next item opened into the article — the Room store's catalog,
+items, read-state, FTS, and watermark SQL all exercised on device.
 
 6a as built. `com.cabalmail.kit.models.Rss`
 (wire types, lenient enum decoding through `RssWire.json`, the
