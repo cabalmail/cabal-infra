@@ -217,7 +217,7 @@ struct RevokeAddressConfirmation: ViewModifier {
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            pending.map { "Revoke \($0.address)?" } ?? "Revoke address?",
+            pending.map { AddressDisplay.revokeTitle($0.address) } ?? "Revoke address?",
             isPresented: Binding(
                 get: { pending != nil },
                 set: { if !$0 { pending = nil } }
@@ -231,7 +231,8 @@ struct RevokeAddressConfirmation: ViewModifier {
             }
             Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) { pending = nil }
         } message: { address in
-            Text("Mail sent to \(address.address) will be rejected. This can't be undone.")
+            Text(AddressDisplay.revokeMessage(address.address))
+                .accessibilityLabel("Mail sent to \(address.address) will be rejected. This can't be undone.")
         }
     }
 }
