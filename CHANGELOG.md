@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.1] - 2026-09-13
+
+### Fixed
+- Apple: **Revoke and suspend confirmations name the address exactly.** A long
+  address had to wrap in the confirmation's title or message, and with no break
+  available the layout engine hyphenated it — drawing a hyphen the address does
+  not contain, on the one string the user is being asked to check before a
+  destructive, irreversible action. The address now carries invisible break
+  opportunities instead, so it wraps without gaining a character, on every
+  client including the watch.
+- Apple: **"All Feeds" matches the rows beneath it.** On the iPhone and
+  visionOS Feeds tab it was the one row drawn differently from its own list —
+  a plain icon instead of the accent one, and a bare unread number instead of
+  the capsule every sibling gets — because the compact layout built that row
+  by hand while the wide sidebar drew it with the shared row. Both now ask for
+  the same row.
+- **Named 400 for a GET missing its `host` parameter.** `fetch_message`,
+  `list_attachments`, `list_envelopes`, `list_folders` and `list_messages`
+  indexed `host` without a presence check, so omitting it (or sending no query
+  string at all) escaped as a bodiless `502 {"message": "Internal server
+  error"}` with nothing for a client author to act on. They now answer
+  `400 Invalid input: missing required parameter(s): host`, the same shape
+  `/send` has returned since the equivalent fix for its JSON body.
+- **Mail authentication resolves from inside the VPC.** The VPC private zone is
+  named for the control domain, so it shadowed the public zone's SPF, DKIM and
+  DMARC records for every VPC-internal lookup. Every address subdomain points
+  its mail authentication at those names (SPF `include:`, DKIM and DMARC
+  CNAMEs), so `smtp-in` resolved no DMARC policy and stamped inbound mail
+  `dmarc=none (p=none)` while the published policy was `p=reject`. The private
+  zone now carries the same three records, taken from the public ones so the
+  two cannot drift.
+- Apple: **Tapping a notification no longer crashes the app.** The system's
+  completion handler for a notification action ran off the main thread, and
+  UIKit's answer to it — refreshing the window scene's snapshot and
+  state-restoration archive — asserts that it is on the main thread, so every
+  tap on a banner aborted the app instead of opening the message.
+- Apple: **The unsubscribed-folder banner stops inflating the window.**
+  Selecting Drafts, Sent or Trash on macOS grew the main window's minimum
+  height to 973 pt, and the window then refused to shrink until a subscribed
+  folder was selected again — on a display under about 1000 pt tall it no
+  longer fit the screen. The banner sits in a bottom safe-area inset, so its
+  height at the near-zero width AppKit proposes while sizing a window was the
+  sentence wrapped to about one word per line. It is now bounded to the three
+  lines it needs at the narrowest message-list column, so it reads exactly as
+  before and asks the window for 54 pt instead of 731 pt.
+
 ## [1.19.0] - 2026-09-13
 
 ### Added
