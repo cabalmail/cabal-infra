@@ -1,4 +1,5 @@
 import AuthShell from '../Login/AuthShell';
+import EmailField from '../Login/EmailField';
 import VerificationCodeField from '../Login/VerificationCodeField';
 
 /**
@@ -44,28 +45,11 @@ function VerifyEmail({
           back in. It is never used for mail delivery.
         </p>
         <form className="auth__form" onSubmit={onSaveEmail} noValidate>
-          <div className="auth__field">
-            <div className="auth__field-header">
-              <label className="auth__field-label" htmlFor="email">Email address</label>
-            </div>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              className="mono"
-              autoComplete="email"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck="false"
-              placeholder="you@example.com"
-              onChange={onEmailChange}
-              value={email || ''}
-              required
-            />
+          <EmailField value={email} onChange={onEmailChange}>
             <p className="auth__field-help">
               An existing address outside Cabalmail.
             </p>
-          </div>
+          </EmailField>
           <button type="submit" className="auth__btn-primary">
             Send verification code
           </button>
