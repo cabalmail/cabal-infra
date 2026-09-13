@@ -193,7 +193,9 @@ final class FeedItemListViewModel {
             for sub in subs where feedIds.contains(sub.feedId) {
                 try await engine.syncItems(for: sub)
             }
-            try? await engine.drainPending()
+            // Best-effort: a drain failure must not fail the sync, which has
+            // already fetched. `_ =` says the discard is deliberate (#1507).
+            _ = try? await engine.drainPending()
             errorMessage = nil
         } catch {
             errorMessage = FeedErrorText.describe(error)
