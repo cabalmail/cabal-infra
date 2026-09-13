@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.cabalmail.kit.api.ApiClient
+import com.cabalmail.kit.models.RssItemFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -51,6 +52,8 @@ class PreferencesRepository(
         val FLAG_PALETTE = stringPreferencesKey("flag_palette")
         val FLAG_PALETTE_SYNCABLE = booleanPreferencesKey("flag_palette_syncable")
         val MAIL_FOLDER_FILTERS = stringPreferencesKey("mail_folder_filters")
+        val RSS_MARK_AS_READ = stringPreferencesKey("rss_mark_as_read")
+        val FEEDS_ALL_FILTER = stringPreferencesKey("feeds_all_filter")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         val PUSH_FOLDERS = stringSetPreferencesKey("push_folders")
@@ -58,6 +61,7 @@ class PreferencesRepository(
         val DEFAULT_SORT_DESCENDING = booleanPreferencesKey("default_sort_descending")
         val FOLDER_SECTION_SUBSCRIBED_EXPANDED = booleanPreferencesKey("folder_section_subscribed_expanded")
         val FOLDER_SECTION_ALL_EXPANDED = booleanPreferencesKey("folder_section_all_expanded")
+        val FEED_COLLAPSED_FOLDERS = stringSetPreferencesKey("feed_collapsed_folders")
     }
 
     private val pushRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -125,6 +129,8 @@ class PreferencesRepository(
             flagPalette = store[Keys.FLAG_PALETTE]?.let(FlagPalette::decode) ?: defaults.flagPalette,
             flagPaletteSyncable = store[Keys.FLAG_PALETTE_SYNCABLE] ?: defaults.flagPaletteSyncable,
             mailFolderFilters = MailFolderFilters.decode(store[Keys.MAIL_FOLDER_FILTERS]),
+            rssMarkAsRead = wireEnum<MarkAsRead>(store[Keys.RSS_MARK_AS_READ]),
+            feedsAllFilter = wireEnum<RssItemFilter>(store[Keys.FEEDS_ALL_FILTER]),
             dynamicColor = store[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
             notificationsEnabled = store[Keys.NOTIFICATIONS_ENABLED] ?: defaults.notificationsEnabled,
             pushFolders = store[Keys.PUSH_FOLDERS] ?: defaults.pushFolders,
@@ -134,6 +140,7 @@ class PreferencesRepository(
                 store[Keys.FOLDER_SECTION_SUBSCRIBED_EXPANDED] ?: defaults.folderSectionSubscribedExpanded,
             folderSectionAllExpanded =
                 store[Keys.FOLDER_SECTION_ALL_EXPANDED] ?: defaults.folderSectionAllExpanded,
+            feedCollapsedFolders = store[Keys.FEED_COLLAPSED_FOLDERS] ?: defaults.feedCollapsedFolders,
         )
     }
 
@@ -156,6 +163,9 @@ class PreferencesRepository(
         store[Keys.FLAG_PALETTE] = FlagPalette.encode(value.flagPalette)
         store[Keys.FLAG_PALETTE_SYNCABLE] = value.flagPaletteSyncable
         store[Keys.MAIL_FOLDER_FILTERS] = MailFolderFilters.encode(value.mailFolderFilters)
+        // Absent, not defaulted: null means "never set", which keeps the key off the wire.
+        value.rssMarkAsRead?.let { store[Keys.RSS_MARK_AS_READ] = it.wire } ?: store.remove(Keys.RSS_MARK_AS_READ)
+        value.feedsAllFilter?.let { store[Keys.FEEDS_ALL_FILTER] = it.wire } ?: store.remove(Keys.FEEDS_ALL_FILTER)
         store[Keys.DYNAMIC_COLOR] = value.dynamicColor
         store[Keys.NOTIFICATIONS_ENABLED] = value.notificationsEnabled
         store[Keys.PUSH_FOLDERS] = value.pushFolders
@@ -163,6 +173,7 @@ class PreferencesRepository(
         store[Keys.DEFAULT_SORT_DESCENDING] = value.defaultSortDescending
         store[Keys.FOLDER_SECTION_SUBSCRIBED_EXPANDED] = value.folderSectionSubscribedExpanded
         store[Keys.FOLDER_SECTION_ALL_EXPANDED] = value.folderSectionAllExpanded
+        store[Keys.FEED_COLLAPSED_FOLDERS] = value.feedCollapsedFolders
     }
 
     companion object {

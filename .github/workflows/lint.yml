@@ -414,5 +414,15 @@ jobs:
           ~/.gradle/wrapper
         key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
         restore-keys: gradle-${{ runner.os }}-
+    - name: setup-node
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: react/admin/package-lock.json
+    # Readability.js for the article view, vendored from react/admin
+    # (pin in react/admin/package.json), like the Apple kit's.
+    - name: sync-vendored
+      run: scripts/sync-vendored.sh
     - name: gradle-gate
       run: ./gradlew :kit:test :app:testDebugUnitTest ktlintCheck lint

@@ -74,6 +74,7 @@ import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.mailboxDisplayName
 import com.cabalmail.kit.models.readerModeHtml
 import com.cabalmail.kit.models.sentInstant
+import com.cabalmail.kit.models.upgradeInsecureRequests
 import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.DisposeAdvance
 import com.cabalmail.kit.settings.FlagPalette
@@ -377,10 +378,12 @@ fun MessageDetailScreen(
                     val darkMode = isSystemInDarkTheme()
                     HtmlBody(
                         html =
-                            when (state.renderMode) {
-                                RenderMode.ORIGINAL -> html
-                                RenderMode.READER -> readerModeHtml(html, darkMode)
-                            },
+                            upgradeInsecureRequests(
+                                when (state.renderMode) {
+                                    RenderMode.ORIGINAL -> html
+                                    RenderMode.READER -> readerModeHtml(html, darkMode)
+                                },
+                            ),
                         allowRemoteContent = state.loadRemoteContent,
                         onLinkTap = { url -> LinkMenuTarget.from(url)?.let { linkTarget = it } },
                         modifier = Modifier.fillMaxSize(),
@@ -666,13 +669,19 @@ private fun AttachmentRow(
  * instead of being silently dropped.
  */
 @Composable
-private fun HtmlBody(
+internal fun HtmlBody(
     html: String,
     allowRemoteContent: Boolean,
     onLinkTap: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Where to scroll to once the document has laid out, as a fraction of the scrollable height. */
+    restoreFraction: Float? = null,
+    /** Reports the scroll position as a fraction while the reader is scrolled; null = no capture. */
+    onScrollFraction: ((Float) -> Unit)? = null,
 ) {
     val currentOnLinkTap by rememberUpdatedState(onLinkTap)
+    val currentOnScroll by rememberUpdatedState(onScrollFraction)
+    val currentRestore by rememberUpdatedState(restoreFraction)
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -693,7 +702,20 @@ private fun HtmlBody(
                             }
                             return true
                         }
+
+                        override fun onPageFinished(
+                            view: WebView?,
+                            url: String?,
+                        ) {
+                            // The layout settles after this callback; try a few times.
+                            val target = currentRestore ?: return
+                            view?.let { restoreScrollFraction(it, target, attemptsLeft = 5) }
+                        }
                     }
+                setOnScrollChangeListener { view, _, scrollY, _, _ ->
+                    val range = (view as WebView).scrollRange()
+                    if (range > 0) currentOnScroll?.invoke((scrollY.toFloat() / range).coerceIn(0f, 1f))
+                }
             }
         },
         update = { webView ->
@@ -708,4 +730,20 @@ private fun HtmlBody(
             }
         },
     )
+}
+
+/** The scrollable height in view pixels: the laid-out content beyond the viewport. */
+private fun WebView.scrollRange(): Int = (contentHeight * scale).toInt() - height
+
+private fun restoreScrollFraction(
+    view: WebView,
+    fraction: Float,
+    attemptsLeft: Int,
+) {
+    val range = view.scrollRange()
+    if (range > 0) {
+        view.scrollTo(0, (range * fraction).toInt())
+    } else if (attemptsLeft > 0) {
+        view.postDelayed({ restoreScrollFraction(view, fraction, attemptsLeft - 1) }, 120)
+    }
 }

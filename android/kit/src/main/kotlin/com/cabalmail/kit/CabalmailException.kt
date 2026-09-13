@@ -24,10 +24,15 @@ sealed class CabalmailException(
         message: String,
     ) : CabalmailException(message)
 
-    /** Non-2xx from the Lambda API, carrying the server's message. */
+    /**
+     * Non-2xx from the Lambda API, carrying the server's message and, when
+     * the response was the `{"Error", "code"}` envelope (the RSS endpoints,
+     * `docs/rss.md`), its stable [code] token.
+     */
     class ApiError(
         val httpStatus: Int,
         message: String,
+        val code: String? = null,
     ) : CabalmailException(message)
 
     /**

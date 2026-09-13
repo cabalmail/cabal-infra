@@ -149,6 +149,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.webkit)
     implementation(libs.firebase.messaging)
     implementation(libs.play.services.base)
     implementation(libs.ktor.client.okhttp)

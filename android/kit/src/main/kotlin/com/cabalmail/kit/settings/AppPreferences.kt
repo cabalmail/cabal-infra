@@ -1,5 +1,7 @@
 package com.cabalmail.kit.settings
 
+import com.cabalmail.kit.models.RssItemFilter
+
 /**
  * The client's preference set (plan §6.3), one enum per server-validated
  * wire vocabulary. Wire values are the cross-client JSON contract shared
@@ -149,6 +151,23 @@ data class AppPreferences(
      * another device), so no syncable gate is needed.
      */
     val mailFolderFilters: Map<String, MailFolderFilter> = emptyMap(),
+    /**
+     * The feed reader's own mark-as-read mode (`rss_mark_as_read`, its own
+     * key so mail and feed habits can differ; rss plan, phase 5). Null =
+     * never set here or on another device, which reads as
+     * [MarkAsRead.MANUAL] and keeps the key off the wire — the same gate
+     * [flagPaletteSyncable] applies, since a server that predates the key
+     * 400s the whole map. Once set (locally, or by a fetched map carrying
+     * it) the key rides on every push, the default value included.
+     */
+    val rssMarkAsRead: MarkAsRead? = null,
+    /**
+     * The pill the All Feeds list opens on (`filter:feeds:all`; a single
+     * feed's or feed folder's pill lives on its server row instead). Null =
+     * never set, which reads as [RssItemFilter.DEFAULT_FOR_FEEDS] and stays
+     * off the wire, with the same reasoning as [rssMarkAsRead].
+     */
+    val feedsAllFilter: RssItemFilter? = null,
     // ---- local only
     val dynamicColor: Boolean = true,
     /** Background new-mail notifications (plan §7.3); off until the user opts in. */
@@ -171,4 +190,12 @@ data class AppPreferences(
      */
     val folderSectionSubscribedExpanded: Boolean = true,
     val folderSectionAllExpanded: Boolean = false,
-)
+    /** Feed folders the user has collapsed in the feed list, per device like the Apple clients. */
+    val feedCollapsedFolders: Set<String> = emptySet(),
+) {
+    val effectiveRssMarkAsRead: MarkAsRead
+        get() = rssMarkAsRead ?: MarkAsRead.MANUAL
+
+    val effectiveFeedsAllFilter: RssItemFilter
+        get() = feedsAllFilter ?: RssItemFilter.DEFAULT_FOR_FEEDS
+}

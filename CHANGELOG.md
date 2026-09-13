@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0] - 2026-09-13
+
+### Added
+- Android: **Feeds.** A feed reader beside mail (phase 6b of the RSS
+  plan), built against the Apple reader as it shipped: a Feeds tab with the
+  folder tree, unread badges rolled up per folder, feed health marks, and
+  an All Feeds view; item lists with sticky All / Unread / Favorites pills
+  (feeds start on Unread), the four orderings, swipe to mark read or
+  favorite, per-feed search over what is cached, "Load older items" only
+  while the server has more, and a confirmed mark-all-read; a reader that
+  opens each item the way its feed's settings say (feed content or the
+  article, reader or original styling, remote content per feed) and
+  remembers the toggles per feed; the publisher's article in a web view
+  whose cookies belong to that one feed. Everything reads from a local
+  store, so lists and items work offline and changes made offline are
+  pushed when a connection returns. Pictures still addressed over plain
+  `http` now load over `https` in mail and feeds alike. Subscribing,
+  folders, and OPML arrive in the next phase.
+- Android: **Feed management.** Subscribe to a feed from the Feeds tab's
+  `+` menu, a folder's long-press menu, or the empty state; paste a site
+  address and the server finds its feed. Each feed has a settings sheet for
+  its title, folder, item order, what opens first (feed content or the
+  article) and in which styling, its remote-content setting, the fetcher's
+  view of its health, and Unsubscribe. Feed folders can be created,
+  renamed, moved, and deleted (contents move up a level). OPML import and
+  export from the `+` menu and Settings › Feeds; a folder or feed's
+  long-press menu also marks it all read, with a confirmation. Phase 6c of
+  the RSS plan.
+- Android: **Feed reader polish.** The article view gains a reader toggle
+  that extracts the story from the publisher's page and shows it in the
+  app's own styling, the way the Apple reader does; following a link
+  leaves reader mode for the live page. Half-read feed items reopen at the
+  same scroll position on this device. Feed rows read as one line to a
+  screen reader. Phase 6d of the RSS plan.
+
 ## [1.18.2] - 2026-09-13
 
 ### Fixed
