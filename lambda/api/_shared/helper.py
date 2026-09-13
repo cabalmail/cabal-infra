@@ -506,6 +506,25 @@ def too_many_ids_response():
     }
 
 
+def query_params(event, *required):
+    '''Returns the request's query string as a dict, raising ValueError naming
+    every required parameter the request omits.
+
+    The query-string twin of compose.require_fields (#895), and for the same
+    reason: a handler that subscripts the event value raises TypeError when
+    API Gateway sends `queryStringParameters: None` (a bare GET) and KeyError
+    when a parameter is absent, and both escape the handler as a bodiless
+    `502 {"message": "Internal server error"}` that tells a client author
+    nothing (#1410). Presence only -- a supplied value still has to get past
+    whichever validate_* the caller runs on it.
+    '''
+    params = event.get('queryStringParameters') or {}
+    missing = [name for name in required if name not in params]
+    if missing:
+        raise ValueError(f"missing required parameter(s): {', '.join(missing)}")
+    return params
+
+
 def parse_json_body(event):
     '''Parses the request body as a JSON object, returning (body, error).
 
