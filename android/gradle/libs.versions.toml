@@ -90,6 +90,9 @@ jetbrains-markdown = { group = "org.jetbrains", name = "markdown", version.ref =
 
 # Background work (app module)
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+# Per-feed WebView profiles for the RSS article view (rss plan, phase 6:
+# ProfileStore / WebViewCompat.setProfile, feature-gated at runtime).
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version = "1.14.0" }
 
 # Push (app module): FCM receive + Play services availability probe.
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }

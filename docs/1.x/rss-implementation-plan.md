@@ -27,7 +27,7 @@ summarized under "Revisions (2026-09-13)".
 | 3     | Subscription + reader API                         | Shipped 1.13.0 (2026-09-10); additive: `state_since` 1.17.0, `default_remote_content` 1.17.0, `default_filter` 1.18.0 |
 | 4     | OPML import/export (API)                          | Shipped 1.14.0 (2026-09-10) |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Shipped 1.14.0 (5b) / 1.15.0 (5c, 5d); UAT refinements 1.16.0 to 1.18.1, see "Post-5c UAT refinements" |
-| 6     | Android client (offline + FTS + profile scoping)  | 6a (kit) in review (2026-09-13); 6b to 6d not started |
+| 6     | Android client (offline + FTS + profile scoping)  | 6a (kit) merged to stage (2026-09-13); 6b (read path) in review (2026-09-13); 6c, 6d not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
 | 9     | Credentialed feeds                                | Not started |
@@ -1665,7 +1665,57 @@ populate from server."
 
 ### Phase 6: Android client (with offline + FTS)
 
-**Status:** 6a (kit) in review (2026-09-13). `com.cabalmail.kit.models.Rss`
+**Status:** 6b (read path) in review (2026-09-13); 6a merged to stage the
+same day. 6b as built, in `android/app/.../ui/feeds/`: a `FEEDS` top-level
+destination (a vendored `rss_feed` glyph, since the core icon set has
+none) with the feed tree (`FeedTree`, the Apple `FeedSidebarRows` rules:
+folders by display order then name, child folders before feeds, root
+feeds last, roll-ups over the unfiltered tree, collapse persisted in the
+local preferences), health marks from `FeedHealth` (3 / 20 thresholds),
+and an All Feeds row; `FeedItemListViewModel` resolving the scope's row
+from the store **at creation** so the stored pill and ordering apply on
+first open, sticky pills through `FeedListFilterPolicy` (row for a feed or
+folder, `feedsAllFilter` for All Feeds), the four orderings in the
+overflow menu written back to the feed's row, swipe read / favorite with
+the mail rows' once-per-gesture latch, per-feed search, the older-items
+footer gated on `olderExhausted`, a confirmed mark-all-read, and the
+health headline; `FeedItemDetailViewModel` reading the item and its
+subscription from the store, `FeedDetailPolicy` for the first render, the
+three toggles writing one field each (no rollback on a failed write), and
+mark-read-on-open under `rssMarkAsRead`; the body through the mail
+reader's `HtmlBody` (promoted to `internal`), both render modes now with
+the `upgrade-insecure-requests` meta from a new kit
+`upgradeInsecureRequests`, shared with mail; `ArticleWebView` on
+`androidx.webkit` (JavaScript on, the subscription's `data_store_uuid` as
+the profile name where `MULTI_PROFILE` is supported, an error notice with
+Retry, system back through the page history), `FeedWebProfiles.drop` on
+the catalog diff; the wide layout `FeedListDetailScreen` with the tree as
+the leading pane; a Settings › Feeds category with the feed mark-as-read
+picker; and a fifteen-minute `ForegroundPolling` on the tree and lists.
+Routes carry `RssItemScope.token` and `feedId` + `sortKey`
+(`FeedRoutes`). Tests: `FeedTreeTest`, `FeedHealthTest`,
+`FeedPoliciesTest`, and `FeedViewModelsTest` against the kit's
+`InMemoryRssStore` (first render honours the store row; a pill tap writes
+once; toggles write one field each; a failed write keeps the reader's
+state; mark-read-on-open under the feed key only). Deferred to 6d: the
+Readability reader toggle in the article view (needs the vendored script
+materialized into app assets), and the reader's scroll-anchor capture —
+Android's `HtmlBody` runs with JavaScript off, so the Apple DOM-anchor
+script cannot run there; 6d must decide between a native `scrollY`
+fraction (the `f<fraction>` form only) and an app-installed bridge, which
+would mean enabling JavaScript in the mail reader and is not a change to
+make unasked. Driven on the Pixel 8 API 35 emulator against the `claude` stage account
+(2026-09-13): the tree with its roll-ups (All Feeds 97, Tech 15 = Rust
+Blog 10 + xkcd 5), a feed list opening on its stored Unread pill, a
+per-feed search hitting the FTS4 index by title and by body, the reader
+with the feed's body in reader styling and the header links, the
+article web view loading the publisher's page, a confirmed
+mark-all-read emptying the Unread view and recounting the tree (97 to
+87, 15 to 5), and the article toggle sticking as the feed's default so
+the next item opened into the article — the Room store's catalog,
+items, read-state, FTS, and watermark SQL all exercised on device.
+
+6a as built. `com.cabalmail.kit.models.Rss`
 (wire types, lenient enum decoding through `RssWire.json`, the
 `RssItemScope` token codec shared with Apple's `ResumeSession`),
 `RssClient` implemented by `ApiClient` (all thirteen endpoints, the three

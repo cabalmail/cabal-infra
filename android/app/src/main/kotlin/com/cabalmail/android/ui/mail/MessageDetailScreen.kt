@@ -74,6 +74,7 @@ import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.mailboxDisplayName
 import com.cabalmail.kit.models.readerModeHtml
 import com.cabalmail.kit.models.sentInstant
+import com.cabalmail.kit.models.upgradeInsecureRequests
 import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.DisposeAdvance
 import com.cabalmail.kit.settings.FlagPalette
@@ -377,10 +378,12 @@ fun MessageDetailScreen(
                     val darkMode = isSystemInDarkTheme()
                     HtmlBody(
                         html =
-                            when (state.renderMode) {
-                                RenderMode.ORIGINAL -> html
-                                RenderMode.READER -> readerModeHtml(html, darkMode)
-                            },
+                            upgradeInsecureRequests(
+                                when (state.renderMode) {
+                                    RenderMode.ORIGINAL -> html
+                                    RenderMode.READER -> readerModeHtml(html, darkMode)
+                                },
+                            ),
                         allowRemoteContent = state.loadRemoteContent,
                         onLinkTap = { url -> LinkMenuTarget.from(url)?.let { linkTarget = it } },
                         modifier = Modifier.fillMaxSize(),
@@ -666,7 +669,7 @@ private fun AttachmentRow(
  * instead of being silently dropped.
  */
 @Composable
-private fun HtmlBody(
+internal fun HtmlBody(
     html: String,
     allowRemoteContent: Boolean,
     onLinkTap: (String) -> Unit,

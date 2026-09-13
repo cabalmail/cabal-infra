@@ -6,6 +6,7 @@ import com.cabalmail.android.navigation.NavCursor
 import com.cabalmail.android.ui.compose.OpenIntake
 import com.cabalmail.android.ui.compose.SendQueue
 import com.cabalmail.android.ui.compose.ShareIntake
+import com.cabalmail.android.ui.feeds.FeedEventBus
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.CognitoAuthService
@@ -21,6 +22,9 @@ import com.cabalmail.kit.cache.RoomEnvelopeCache
 import com.cabalmail.kit.config.Config
 import com.cabalmail.kit.config.ConfigService
 import com.cabalmail.kit.config.DataStoreConfigCache
+import com.cabalmail.kit.rss.RoomRssStore
+import com.cabalmail.kit.rss.RssStore
+import com.cabalmail.kit.rss.RssSyncEngine
 import com.cabalmail.kit.settings.PreferencesRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -112,6 +116,12 @@ class AppContainer(
     /** Reader-side mutations the message list mirrors without a refetch. */
     val mailEvents = MailEventBus()
 
+    /** Feed read/favorite changes and catalog changes, fanned out across the feed screens. */
+    val feedEvents = FeedEventBus()
+
+    /** The on-device mirror of the feed catalog and cached items (rss plan, phase 6). */
+    val rssStore: RssStore by lazy { RoomRssStore.open(appContext) }
+
     /** Connectivity for the offline banner and the send queue. */
     val connectivity: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }
 
@@ -162,6 +172,7 @@ class AppContainer(
     private var apiClient: ApiClient? = null
     private var addressRepository: AddressRepository? = null
     private var bimiRepository: BimiRepository? = null
+    private var rssSyncEngine: RssSyncEngine? = null
 
     /** The control domain the memoized auth/API stack was built for. */
     private var stackControlDomain: String? = null
@@ -189,6 +200,7 @@ class AppContainer(
                 apiClient = null
                 addressRepository = null
                 bimiRepository = null
+                rssSyncEngine = null
                 stackControlDomain = domain
                 CognitoAuthService(
                     clientId = config.cognitoClientId,
@@ -227,6 +239,14 @@ class AppContainer(
         val api = requireApi()
         return authMutex.withLock {
             bimiRepository ?: BimiRepository(api).also { bimiRepository = it }
+        }
+    }
+
+    /** The feed sync engine over the API client and the local store. */
+    suspend fun requireRssSync(): RssSyncEngine {
+        val api = requireApi()
+        return authMutex.withLock {
+            rssSyncEngine ?: RssSyncEngine(api, rssStore).also { rssSyncEngine = it }
         }
     }
 }

@@ -68,4 +68,22 @@ class BodyFormattingTest {
         assertTrue(out.contains("favicon.ico"))
         assertTrue(out.contains("""<p style="color: #333333">Hello</p>"""))
     }
+
+    @Test
+    fun `the upgrade-insecure-requests meta lands at the start of the head and never before a doctype`() {
+        val meta = UPGRADE_INSECURE_REQUESTS_META
+        assertEquals(
+            "<html><head>$meta<title>x</title></head></html>",
+            upgradeInsecureRequests("<html><head><title>x</title></head></html>"),
+        )
+        assertEquals("<!DOCTYPE html>$meta<p>x</p>", upgradeInsecureRequests("<!DOCTYPE html><p>x</p>"))
+        assertEquals(
+            "<html lang=\"en\">$meta<body/></html>",
+            upgradeInsecureRequests("<html lang=\"en\"><body/></html>"),
+        )
+        assertEquals("$meta<p>x</p>", upgradeInsecureRequests("<p>x</p>"))
+        val once = upgradeInsecureRequests(upgradeInsecureRequests("<p>x</p>"))
+        assertEquals(1, once.windowed(meta.length).count { it == meta })
+        assertTrue(upgradeInsecureRequests(readerModeHtml("<p>x</p>", darkMode = false)).contains(meta))
+    }
 }
