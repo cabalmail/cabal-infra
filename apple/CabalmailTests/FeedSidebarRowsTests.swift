@@ -52,4 +52,28 @@ final class FeedSidebarRowsTests: XCTestCase {
         XCTAssertEqual(FeedSidebarRows.totalUnread(["a": 2, "b": 3]), 5)
         XCTAssertEqual(FeedSidebarRows.totalUnread([:]), 0)
     }
+
+    /// #1548: the row both sidebars head their list with. Its identity is a
+    /// folder so the shared row label draws it exactly like the folder rows
+    /// beneath it — that sameness is the fix.
+    func testAllFeedsRowMatchesTheShapeOfAFolderRow() {
+        let row = FeedSidebarRows.allFeedsRow(unread: 7)
+        XCTAssertEqual(row.title, "All Feeds")
+        XCTAssertEqual(row.unread, 7)
+        XCTAssertEqual(row.depth, 0, "it heads the list, so it is never indented")
+        XCTAssertFalse(row.hasChildren, "no chevron: its scope is not expandable")
+        guard case .folder = row.kind else {
+            return XCTFail("a subscription row draws a different icon than its folder siblings")
+        }
+    }
+
+    /// The total is the row's whole content, so a zero has to survive as a
+    /// zero — the label drops the count rather than drawing an empty capsule.
+    func testAllFeedsRowCarriesTheUnreadTotalItIsGiven() {
+        XCTAssertEqual(FeedSidebarRows.allFeedsRow(unread: 0).unread, 0)
+        XCTAssertEqual(
+            FeedSidebarRows.allFeedsRow(unread: FeedSidebarRows.totalUnread(["a": 2, "b": 5])).unread,
+            7
+        )
+    }
 }

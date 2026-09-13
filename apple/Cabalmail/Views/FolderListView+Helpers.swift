@@ -121,8 +121,7 @@ extension FolderListView {
             selection.wrappedValue = .all
         } label: {
             FeedSidebarRowLabel(
-                row: FeedSidebarRow(kind: .folder(RssFolder(folderId: "", name: "All Feeds")),
-                                    depth: 0, hasChildren: false, unread: unread),
+                row: FeedSidebarRows.allFeedsRow(unread: unread),
                 isSelected: selection.wrappedValue == .all,
                 isCollapsed: { _ in true }, toggleCollapse: { _ in }
             )

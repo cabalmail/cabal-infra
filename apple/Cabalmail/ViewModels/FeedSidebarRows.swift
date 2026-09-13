@@ -43,6 +43,21 @@ struct FeedSidebarRow: Identifiable, Equatable {
 /// each folder's subscriptions after its child folders, root subscriptions
 /// last. Pure, so the tree rules are testable without standing up a `List`.
 enum FeedSidebarRows {
+    /// The "All Feeds" row that heads the list: every subscription's items in
+    /// one scope, with the total unread as its count.
+    ///
+    /// A row rather than a bespoke `Label` because both sidebars draw it
+    /// through `FeedSidebarRowLabel`, which is what gives it the accent icon
+    /// and the capsule count its siblings have. The compact Feeds tab used to
+    /// hand-build it and came out the only row in the list drawn differently
+    /// on both axes (#1548), so the shape lives here and neither layout owns
+    /// a copy. Its identity is a folder with an empty id: `RssItemScope.all`
+    /// is what selects it, so the id is never asked for a folder's items.
+    static func allFeedsRow(unread: Int) -> FeedSidebarRow {
+        FeedSidebarRow(kind: .folder(RssFolder(folderId: "", name: "All Feeds")),
+                       depth: 0, hasChildren: false, unread: unread)
+    }
+
     static func rows(
         folders: [RssFolder],
         subscriptions: [RssSubscription],
