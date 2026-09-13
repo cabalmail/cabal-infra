@@ -2,6 +2,7 @@ package com.cabalmail.kit.settings
 
 import com.cabalmail.kit.models.Preferences
 import com.cabalmail.kit.models.PreferencesUpdate
+import com.cabalmail.kit.models.RssItemFilter
 
 /**
  * Marshalling between [AppPreferences] and the `/get_preferences` /
@@ -21,6 +22,10 @@ object PreferencesWire {
         const val DEFAULT_BODY_RENDER_MODE = "default_body_render_mode"
         const val FOLDER_COUNT_DISPLAY = "folder_count_display"
         const val FLAG_PALETTE = "flag_palette"
+        const val RSS_MARK_AS_READ = "rss_mark_as_read"
+
+        /** The All Feeds list's sticky pill; validated by the server's `filter:` prefix arm. */
+        const val FILTER_FEEDS_ALL = "filter:feeds:all"
     }
 
     /**
@@ -57,6 +62,10 @@ object PreferencesWire {
                     // One key per mail folder whose pill the user has set
                     // (see [AppPreferences.mailFolderFilters]).
                     putAll(MailFolderFilters.toWire(preferences.mailFolderFilters))
+                    // The feed reader's keys ride once they have ever been
+                    // set (see [AppPreferences.rssMarkAsRead]).
+                    preferences.rssMarkAsRead?.let { put(AppKey.RSS_MARK_AS_READ, it.wire) }
+                    preferences.feedsAllFilter?.let { put(AppKey.FILTER_FEEDS_ALL, it.wire) }
                 },
         )
 
@@ -102,6 +111,8 @@ object PreferencesWire {
             flagPaletteSyncable =
                 current.flagPaletteSyncable || app.containsKey(AppKey.FLAG_PALETTE),
             mailFolderFilters = MailFolderFilters.mergeRemote(current.mailFolderFilters, app),
+            rssMarkAsRead = wireEnum<MarkAsRead>(app[AppKey.RSS_MARK_AS_READ]) ?: current.rssMarkAsRead,
+            feedsAllFilter = wireEnum<RssItemFilter>(app[AppKey.FILTER_FEEDS_ALL]) ?: current.feedsAllFilter,
         )
     }
 }

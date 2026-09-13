@@ -27,7 +27,7 @@ summarized under "Revisions (2026-09-13)".
 | 3     | Subscription + reader API                         | Shipped 1.13.0 (2026-09-10); additive: `state_since` 1.17.0, `default_remote_content` 1.17.0, `default_filter` 1.18.0 |
 | 4     | OPML import/export (API)                          | Shipped 1.14.0 (2026-09-10) |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Shipped 1.14.0 (5b) / 1.15.0 (5c, 5d); UAT refinements 1.16.0 to 1.18.1, see "Post-5c UAT refinements" |
-| 6     | Android client (offline + FTS + profile scoping)  | Deferred (2026-09-10); parity checklist written 2026-09-13, not started |
+| 6     | Android client (offline + FTS + profile scoping)  | 6a (kit) in review (2026-09-13); 6b to 6d not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
 | 9     | Credentialed feeds                                | Not started |
@@ -1665,7 +1665,28 @@ populate from server."
 
 ### Phase 6: Android client (with offline + FTS)
 
-**Status:** Deferred (2026-09-10), not started. With phase 5 shipped,
+**Status:** 6a (kit) in review (2026-09-13). `com.cabalmail.kit.models.Rss`
+(wire types, lenient enum decoding through `RssWire.json`, the
+`RssItemScope` token codec shared with Apple's `ResumeSession`),
+`RssClient` implemented by `ApiClient` (all thirteen endpoints, the three
+forms of `/rss_list_items`, the error envelope's `code` now carried on
+`CabalmailException.ApiError`), the `RssStore` contract with `RssRules`
+(the read-state rule, the four orderings, the search tokenizer, the
+indexed body text) shared by `InMemoryRssStore` (the JVM test double) and
+`RoomRssStore` (six entities mirroring the Apple schema at version 4, an
+`@Fts4` content table over title and body text with `unicode61`, the
+Apple store's SQL in `@RawQuery` and `@Query` strings), `RssSyncEngine`
+step for step with the Apple engine (initial population, bounded
+since- and state-sync loops, load older, the ordered drain with the
+mark-all-read fence, optimistic subscription and folder updates), and the
+two preferences (`rssMarkAsRead`, `feedsAllFilter`; null = never set,
+which keeps the key off the wire the way the Apple gates do). Tests
+mirror the Apple suites: models, API wire shapes, the store contract,
+and the engine against a scripted `FakeRssClient`. Two as-built notes:
+FTS4 has no rank, so search results are newest first; and the Room DAO
+is exercised on-device only, matching the envelope cache's posture, so
+6b's first emulator run must include a search and a mark-all-read.
+Deferred (2026-09-10) before that. With phase 5 shipped,
 the operator chose to pause and refine the Apple implementation on real
 use before porting it: each week of dogfooding has been surfacing issues
 (the `www`-only publishers, the health badge below) that are cheaper to
