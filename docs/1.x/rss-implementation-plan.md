@@ -134,7 +134,11 @@ phase is built against what Apple actually does, not against the
   key family, and the Android phase is rewritten as a parity checklist
   against the shipped Apple reader, including the pieces that live
   outside this plan (resume-where-you-left-off, the `http` image
-  upgrade).
+  upgrade). Three considerations from the resume-session work were
+  folded into that checklist the same day: stable scope and item
+  identities designed for the session record from the start, per-feed
+  defaults read at model creation, and the cross-device feed toast
+  sequenced after Android has feeds.
 
 Three decisions shape the architecture more than the rest:
 
@@ -1690,9 +1694,18 @@ appears with 6b.
   "Android-side item cache"; `rss_mark_as_read` in `AppPreferences`
   beside `mark_as_read`; the all-feeds pill on the `filter:feeds:all`
   key next to the existing `filter:mail:<folder>` family in
-  `MailFolderFilters`. Kit tests mirror the Apple ones: store, sync
-  engine (including the cross-device repair from an empty state cursor
-  and the mark-all-read fence), and recorded-transport API tests.
+  `MailFolderFilters`. **Stable identities from the start, designed
+  with the session record in mind rather than retrofitted:** the feed
+  scope (all feeds / folder / subscription) and the item route are
+  addressed by the same identities Apple's `ResumeSession` stores, the
+  scope's string token (`RssItemScope.token` in the Kit) and the pair
+  `feed_id` + `sort_key` that `RssStore.item(feedId:sortKey:)` looks up,
+  so the local session record of
+  [`resume-session-plan.md`](./resume-session-plan.md) Phase B can name
+  them without a mapping layer and Phase C can hand them between
+  platforms without translation. Kit tests mirror the Apple ones: store,
+  sync engine (including the cross-device repair from an empty state
+  cursor and the mark-all-read fence), and recorded-transport API tests.
 - **6b, read path.** Feeds destination in the navigation drawer / rail
   and the compact bottom bar, feed folder tree with unread badges and
   **health marks** (failing after three consecutive failures, stopped
@@ -1704,13 +1717,27 @@ appears with 6b.
   search with "Search older items", and "Load older items" only while
   `older_exhausted` is false. Item detail through the existing
   `MessageDetailScreen` body renderer (`HtmlBody`: JavaScript off,
-  remote loads blocked until allowed) and its reader-mode behaviour,
-  with the reader resolving its subscription from the store so the
-  per-feed defaults apply on first open. The three view toggles (article
-  view, reader / original styling, remote content) **write back** to
-  the subscription row as its defaults, optimistic store first. The
-  header links to the published article. Remote content is the per-feed
-  three-way (`inherit` / `show` / `hide`) over the app setting. Verify
+  remote loads blocked until allowed) and its reader-mode behaviour.
+  **Honour the per-feed defaults on day one:** the item-detail view
+  model reads `default_open_mode`, `default_styling`,
+  `default_remote_content`, and the list view model reads
+  `default_filter`, from the subscription (or folder) row in the store
+  **at model creation**, not from a parent that may not have resolved
+  the subscription yet. That ordering is what produced the "settings
+  have no effect" round on Apple (1.17.0); a view-model test that
+  constructs the model against a store row with non-default values and
+  asserts the first render honours them is the cheap guard. The three
+  view toggles (article view, reader / original styling, remote content)
+  **write back** to the subscription row as its defaults, optimistic
+  store first. The header links to the published article. Remote
+  content is the per-feed three-way (`inherit` / `show` / `hide`) over
+  the app setting. **Scroll capture the way Apple does it:** the reader
+  `WebView` runs the same anchor script (`HTMLBodyView+ScrollBridge`'s
+  probe is plain DOM JavaScript with no WebKit dependency) through
+  `evaluateJavascript`, posting the anchor after each scroll settles,
+  and the position cache is keyed by item identity in the same
+  `i<path>|<delta>` / `f<fraction>` format, so a position captured on a
+  Pixel restores on an iPhone once Phase C carries it. Verify
   that `HtmlBody` loads `http://` pictures when remote content is
   allowed; Android's default cleartext policy will refuse them the way
   App Transport Security did, and the fix is the same
@@ -1736,10 +1763,21 @@ appears with 6b.
   open (the Apple posture; `WorkManager` periodic refresh for
   background can wait for phase 8's push like iOS's background task
   did), the catalog re-read after a refetch so health marks follow,
-  accessibility identifiers on rows for the tester, and the
-  feeds section of resume-where-you-left-off
-  ([`resume-session-plan.md`](./resume-session-plan.md) Phase B, which
-  is blocked on this phase for its feed half).
+  accessibility identifiers on rows for the tester, and the feeds
+  section of the local session restore
+  ([`resume-session-plan.md`](./resume-session-plan.md) Phase B): the
+  feed scope, the open item, and its reading position reopen on a cold
+  launch, per device, on the identities and anchors 6a and 6b put in
+  place. Phase B's mail half does not wait for this phase; its feed half
+  does.
+- **Sequencing with the resume-session plan.** That plan's Phase C (the
+  cross-device feed toast, additive `kind` / `rss_scope` / `rss_item`
+  fields on `set_nav_state`) comes **after** this phase, not before.
+  Its whole value is the cross-platform hand-off; done earlier it would
+  serve only Mac to iPhone and be tested with one client. Nothing here
+  blocks on it, and nothing here should preclude it: keep the scope
+  token and item identity as the reader's routing keys so the toast
+  can navigate on them directly.
 - Changelog fragments carry the `Android:` prefix with a ~40-character
   headline each, per the Play release-notes budget; four PRs means four
   headlines sharing one release's 500 characters if they promote
@@ -1966,7 +2004,9 @@ any, go in both the plan and apply tfvars steps of `infra.yml`.
 Every phase has its own rollback note above. The dependency chain is
 1 -> 2 -> 3 -> {4, 5, 6, 7, 8} -> 9 -> 10. Phase 8's notification
 flow depends on phase 5/6 only for the on-device enrichment branches;
-the server side ships independently.
+the server side ships independently. Outside this plan, the
+resume-session plan's Phase C follows phase 6 (see the sequencing note
+under phase 6).
 
 ## Requirements challenges (raised and decided 2026-09-09)
 
