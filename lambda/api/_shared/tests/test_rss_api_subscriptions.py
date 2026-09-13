@@ -258,6 +258,14 @@ class UpdateSubscription(unittest.TestCase):
         self.assertEqual(tables['cabal-rss-subscription'].rows[(USER, 's1')]['default_remote_content'], 'show')
         self.assertEqual(call(mod, body={'subscription_id': 's1', 'default_remote_content': 'always'})[1]['code'],
                          'invalid_default_remote_content')
+        # The sticky filter pill: a row that never set it opens on Unread;
+        # the three pills round-trip; a mail-only pill name is rejected.
+        self.assertEqual(listed['subscription']['default_filter'], 'unread')
+        status, body = call(mod, body={'subscription_id': 's1', 'default_filter': 'favorite'})
+        self.assertEqual((status, body['subscription']['default_filter']), (200, 'favorite'))
+        self.assertEqual(tables['cabal-rss-subscription'].rows[(USER, 's1')]['default_filter'], 'favorite')
+        self.assertEqual(call(mod, body={'subscription_id': 's1', 'default_filter': 'flagged'})[1]['code'],
+                         'invalid_default_filter')
 
 
 class Folders(unittest.TestCase):
@@ -274,6 +282,13 @@ class Folders(unittest.TestCase):
         self.assertEqual(call(upd, body={'folder_id': top_id, 'parent_folder_id': child_id})[1]['code'], 'cyclic_folder')
         _, renamed = call(upd, body={'folder_id': child_id, 'name': 'Kid', 'display_order': 3})
         self.assertEqual((renamed['folder']['name'], renamed['folder']['display_order']), ('Kid', 3))
+        # A new folder's list opens on Unread; the pill sticks per folder.
+        self.assertEqual((top['folder']['default_filter'], renamed['folder']['default_filter']), ('unread', 'unread'))
+        _, filtered = call(upd, body={'folder_id': child_id, 'default_filter': 'all'})
+        self.assertEqual(filtered['folder']['default_filter'], 'all')
+        self.assertEqual(tables['cabal-rss-folder'].rows[(USER, child_id)]['default_filter'], 'all')
+        self.assertEqual(call(upd, body={'folder_id': child_id, 'default_filter': 'starred'})[1]['code'],
+                         'invalid_default_filter')
         tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'title': 'T', 'due_shard': 'active'}
         tables['cabal-rss-subscription'].rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1',
                                                                 'folder_id': child_id, 'folder_key': f'{child_id}#s1'}

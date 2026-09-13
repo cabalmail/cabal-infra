@@ -176,8 +176,19 @@ extension MessageListViewModel {
     /// `filterTab`, and because `filterTab` is non-`.all` the counts stay
     /// server-sourced (see `pillCount`) rather than counting the loaded
     /// results.
+    ///
+    /// The tap also makes the pill the one this folder's list opens on
+    /// (sticky per folder, synced through the preferences row); `loadInitial`
+    /// replays it through `applyFilter`, which is the tap without the
+    /// persistence.
     func selectFilter(_ filter: MessageFilter) async {
         guard filter != filterTab else { return }
+        if !isSearchScope { preferences.setMailFolderFilter(filter, for: folder.path) }
+        await applyFilter(filter)
+    }
+
+    /// `selectFilter`'s effect on the list, without recording the choice.
+    func applyFilter(_ filter: MessageFilter) async {
         filterTab = filter
         guard filter != .all else {
             await clearSearch()

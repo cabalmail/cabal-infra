@@ -180,6 +180,33 @@ final class ApiClientRssTests: XCTestCase {
         XCTAssertEqual(unknown.defaultRemoteContent, .inherit)
     }
 
+    func testUpdateFolderSendsStickyFilterAndDecodesIt() async throws {
+        let json = #"{"folder": {"folder_id": "fo", "name": "Tech", "default_filter": "all"}}"#
+        let (client, http) = makeClient([(json, 200)])
+        let updated = try await client.updateFolder("fo", RssFolderUpdate(defaultFilter: .favorite))
+        let sent = body(await http.requests[0])
+        XCTAssertEqual(sent["folder_id"] as? String, "fo")
+        XCTAssertEqual(sent["default_filter"] as? String, "favorite")
+        XCTAssertNil(sent["name"])
+        XCTAssertEqual(updated.defaultFilter, .all)
+    }
+
+    /// A subscription or folder from before the field existed, or carrying a
+    /// pill this build does not know, opens on Unread rather than failing.
+    func testStickyFilterDecodesLeniently() throws {
+        let absent = try JSONDecoder().decode(
+            RssFolder.self, from: Data(#"{"folder_id": "fo", "name": "Tech"}"#.utf8))
+        XCTAssertEqual(absent.defaultFilter, .unread)
+        let unknown = try JSONDecoder().decode(
+            RssSubscription.self,
+            from: Data(#"{"subscription_id": "s", "feed_id": "f", "default_filter": "flagged"}"#.utf8))
+        XCTAssertEqual(unknown.defaultFilter, .unread)
+        let folder = RssFolder(folderId: "fo", name: "Tech").applying(RssFolderUpdate(defaultFilter: .all))
+        XCTAssertEqual(folder.defaultFilter, .all)
+        XCTAssertTrue(RssFolderUpdate().isEmpty)
+        XCTAssertFalse(RssFolderUpdate(defaultFilter: .unread).isEmpty)
+    }
+
     func testSubscriptionApplyingUpdate() {
         let sub = RssSubscription(subscriptionId: "s", feedId: "f")
         let applied = sub.applying(RssSubscriptionUpdate(defaultOpenMode: .article, defaultRemoteContent: .show))

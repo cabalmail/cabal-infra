@@ -4,10 +4,36 @@ import CabalmailKit
 // Cache-merge helpers used by the refresh / loadMore paths. Pulled into
 // a sibling extension so the main view-model file stays under SwiftLint's
 // 400-line cap. Both helpers are internal so the sort-extension and the
-// main file can call them; the private cache-snapshot path
-// (`hydrateFromCache`, `persistCache`) stays in the main file because
-// the cache scope is intentionally narrow.
+// main file can call them; the cache-snapshot path (`hydrateFromCache`,
+// `persistCache`) stays in the main file because the cache scope is
+// intentionally narrow (`loadInitial` below is its one outside caller).
 extension MessageListViewModel {
+    /// First load for a freshly built model: the cached snapshot, then the
+    /// folder refresh, then the folder's sticky pill.
+    ///
+    /// The pill applies from the first paint: `filterTab` is set before the
+    /// cache hydrates so the cached rows are narrowed at once, and the
+    /// pill's server search runs once the folder's STATUS has driven the
+    /// pill counts -- the same two steps a tap performs (`selectFilter`).
+    ///
+    /// Unstructured, model-owned task, so a cancellation of the view's
+    /// `.task` (SwiftUI fires it mid-push transition — same class as the
+    /// detail view's #403) can't propagate into the first fetch. The view
+    /// only runs this once per model, so a cancelled first load would
+    /// paint `network("cancelled")` over an empty list with nothing left
+    /// to retry it. Mirrors `refreshFromPull`.
+    func loadInitial() async {
+        guard envelopes.isEmpty else { return }
+        let sticky = isSearchScope ? .all : preferences.mailFolderFilter(for: folder.path)
+        filterTab = sticky
+        await Task {
+            await self.hydrateFromCache()
+            await self.refresh()
+            if sticky != .all { await self.applyFilter(sticky) }
+        }.value
+        scheduleBottomPrefetch()
+    }
+
     /// Pull-to-refresh entry point. Runs `refresh()` on an unstructured,
     /// model-owned `Task` and awaits it, so a cancellation of SwiftUI's
     /// `.refreshable` task doesn't propagate into the in-flight request and

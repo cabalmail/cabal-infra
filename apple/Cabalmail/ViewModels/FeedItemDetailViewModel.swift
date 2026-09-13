@@ -126,12 +126,13 @@ final class FeedItemDetailViewModel {
     }
 }
 
-/// Where the reader's sticky per-feed defaults are written. `RssSyncEngine`
-/// is the production implementation (local store first, then the server);
-/// tests substitute a recorder.
+/// Where the reader's and the list's sticky per-feed (and per-folder)
+/// defaults are written. `RssSyncEngine` is the production implementation
+/// (local store first, then the server); tests substitute a recorder.
 protocol FeedDefaultsPersisting: Sendable {
     func updateSubscription(_ subscription: RssSubscription, _ update: RssSubscriptionUpdate) async throws
         -> RssSubscription
+    func updateFolder(_ folder: RssFolder, _ update: RssFolderUpdate) async throws -> RssFolder
 }
 
 extension RssSyncEngine: FeedDefaultsPersisting {}

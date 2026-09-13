@@ -18,6 +18,10 @@ final class FeedItemDetailStickyDefaultsTests: XCTestCase {
             if failing { throw CabalmailError.transport("offline") }
             return subscription.applying(update)
         }
+
+        func updateFolder(_ folder: RssFolder, _ update: RssFolderUpdate) async throws -> RssFolder {
+            folder.applying(update)
+        }
     }
 
     private func makeModel(

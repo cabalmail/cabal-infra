@@ -13,6 +13,7 @@ import com.cabalmail.kit.models.SearchFilters
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.DefaultSort
 import com.cabalmail.kit.settings.DisposeAction
+import com.cabalmail.kit.settings.MailFolderFilter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,8 +38,25 @@ enum class MessageSortField(
  * use — because a narrowing of the loaded window cannot deliver "every
  * match in the folder" on a large mailbox, where the matching rows may sit
  * thousands of positions deep.
+ *
+ * Sticky per folder: the list opens on the pill the user last chose for
+ * this folder (the synced [AppPreferences.mailFolderFilters]), All until
+ * then, and a tap writes the choice back.
  */
-enum class MessageFilter { ALL, UNREAD, FLAGGED }
+enum class MessageFilter(
+    /** The synced-preference form of this pill. */
+    val stored: MailFolderFilter,
+) {
+    ALL(MailFolderFilter.ALL),
+    UNREAD(MailFolderFilter.UNREAD),
+    FLAGGED(MailFolderFilter.FLAGGED),
+    ;
+
+    companion object {
+        /** The pill [stored] names; All for a folder never set. */
+        fun from(stored: MailFolderFilter?): MessageFilter = entries.firstOrNull { it.stored == stored } ?: ALL
+    }
+}
 
 data class FolderCounts(
     val all: Int,
@@ -217,7 +235,9 @@ class MessageListViewModel(
     val isTrashFolder: Boolean = folder == "Trash"
 
     init {
-        // Default sort (plan §6.3): a local preference seeds the first load.
+        // Default sort (plan §6.3): a local preference seeds the first load;
+        // the folder's sticky pill (synced) does too, and `refresh` runs the
+        // pill's search when it is not All.
         val prefs = container.preferences.preferences.value
         mutableState.update {
             it.copy(
@@ -229,6 +249,7 @@ class MessageListViewModel(
                         DefaultSort.SUBJECT -> MessageSortField.SUBJECT
                     },
                 sortDescending = prefs.defaultSortDescending,
+                filter = MessageFilter.from(prefs.mailFolderFilters[folder]),
             )
         }
         refresh()
@@ -341,6 +362,7 @@ class MessageListViewModel(
         ensureBand(0)
     }
 
+    /** A pill tap: applies, and makes it the pill this folder's list opens on. */
     fun setFilter(filter: MessageFilter) {
         if (mutableState.value.filter == filter) {
             return
@@ -351,6 +373,15 @@ class MessageListViewModel(
         }
         if (filter != MessageFilter.ALL) {
             fetchFilterPage(reset = true)
+        }
+        viewModelScope.launch {
+            container.preferences.update { prefs ->
+                if (prefs.mailFolderFilters[folder] == filter.stored) {
+                    prefs
+                } else {
+                    prefs.copy(mailFolderFilters = prefs.mailFolderFilters + (folder to filter.stored))
+                }
+            }
         }
     }
 
