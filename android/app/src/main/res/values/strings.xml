@@ -156,6 +156,7 @@
 
     <!-- Shell -->
     <string name="nav_mail">Mail</string>
+    <string name="nav_feeds">Feeds</string>
     <string name="nav_folders">Folders</string>
     <string name="offline_banner">Offline — showing cached mail</string>
     <string name="detail_placeholder">Select a message to read it</string>
@@ -215,6 +216,77 @@
         <item quantity="other">%d messages</item>
     </plurals>
 
+    <!-- Feeds (rss plan, phase 6; wording mirrors the Apple reader) -->
+    <string name="feeds_title">Feeds</string>
+    <string name="feeds_all">All Feeds</string>
+    <string name="feeds_refresh">Refresh feeds</string>
+    <string name="feeds_loading">Loading feeds…</string>
+    <string name="feeds_empty_title">No feeds yet</string>
+    <string name="feeds_empty_body">Subscribe to a feed to start reading here.</string>
+    <string name="feeds_expand">Expand %1$s</string>
+    <string name="feeds_collapse">Collapse %1$s</string>
+    <plurals name="feeds_unread_count">
+        <item quantity="one">%d unread</item>
+        <item quantity="other">%d unread</item>
+    </plurals>
+    <plurals name="feeds_health_failing">
+        <item quantity="one">Failing: %d fetch in a row</item>
+        <item quantity="other">Failing: %d fetches in a row</item>
+    </plurals>
+    <string name="feeds_health_stopped">Stopped: the fetcher gave up on this feed</string>
+    <string name="feeds_select_item">No item selected</string>
+    <string name="feed_title_fallback">Feed</string>
+    <string name="feed_folder_fallback">Folder</string>
+    <string name="feed_filter_favorites">Favorites</string>
+    <string name="feed_search_hint">Search this feed</string>
+    <string name="feed_order">Order</string>
+    <string name="feed_order_newest_first">Newest first</string>
+    <string name="feed_order_oldest_first">Oldest first</string>
+    <string name="feed_order_newest_day_oldest_within">Newest day, oldest first within</string>
+    <string name="feed_order_oldest_day_newest_within">Oldest day, newest first within</string>
+    <string name="feed_refresh">Refresh feed</string>
+    <string name="feed_mark_all_read">Mark all as read</string>
+    <string name="feed_mark_all_read_title">Mark all items in %1$s as read?</string>
+    <string name="feed_mark_all_read_body">Items you have not opened will be marked read too.</string>
+    <string name="feed_mark_all_read_confirm">Mark All as Read</string>
+    <string name="feed_favorite">Favorite</string>
+    <string name="feed_unfavorite">Unfavorite</string>
+    <string name="feed_remove_favorite">Remove favorite</string>
+    <string name="feed_mark_as_read">Mark as read</string>
+    <string name="feed_mark_as_unread">Mark as unread</string>
+    <string name="feed_open_in_browser">Open in browser</string>
+    <string name="feed_untitled">Untitled</string>
+    <string name="feed_change_queued">Change queued</string>
+    <string name="feed_load_older">Load older items</string>
+    <string name="feed_search_older">Search older items</string>
+    <string name="feed_empty_search_title">No matches</string>
+    <string name="feed_empty_search_body">Nothing cached for this feed matches.</string>
+    <string name="feed_empty_all_title">No items yet</string>
+    <string name="feed_empty_all_syncing">Fetching…</string>
+    <string name="feed_empty_all_body">New items appear here as the feed is fetched.</string>
+    <string name="feed_empty_unread_title">All caught up</string>
+    <string name="feed_empty_unread_body">Every item here has been read.</string>
+    <string name="feed_empty_favorite_title">No favorites</string>
+    <string name="feed_empty_favorite_body">Swipe an item or use its menu to favorite it.</string>
+    <string name="feed_open_on">Open on %1$s</string>
+    <string name="feed_open_on_web">Open on the web</string>
+    <string name="feed_open_article">Open article</string>
+    <string name="feed_open_article_offline">Open article (needs a connection)</string>
+    <string name="feed_show_feed_content">Show feed content</string>
+    <string name="feed_show_reader">Show reader view</string>
+    <string name="feed_show_original">Show original formatting</string>
+    <string name="feed_show_remote">Show remote content</string>
+    <string name="feed_hide_remote">Hide remote content</string>
+    <string name="feed_share_link">Share link</string>
+    <string name="feed_copy_link">Copy link</string>
+    <string name="feed_more">More</string>
+    <string name="feed_no_content_title">No content in the feed</string>
+    <string name="feed_no_content_body">This feed only lists the item. Open the article to read it.</string>
+    <string name="feed_article_needs_connection">Needs a connection</string>
+    <string name="feed_article_needs_connection_body">The article will load when you\'re back online.</string>
+    <string name="feed_article_failed">Couldn\'t load the article</string>
+    <string name="feed_article_back">Back to the item</string>
+
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_account">Account</string>
@@ -223,6 +295,8 @@
     <string name="settings_display_name">Display name</string>
     <string name="settings_display_name_empty">None — messages show only the address</string>
     <string name="settings_reading">Reading</string>
+    <string name="settings_feeds">Feeds</string>
+    <string name="settings_feeds_mark_as_read_footer">Applies to feed items only; mail has its own setting under Reading.</string>
     <string name="settings_mark_as_read">Mark as read</string>
     <string name="settings_load_remote_content">Load remote content</string>
     <string name="settings_render_mode">Body render mode</string>

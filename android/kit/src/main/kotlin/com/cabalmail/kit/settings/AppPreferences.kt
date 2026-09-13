@@ -190,6 +190,8 @@ data class AppPreferences(
      */
     val folderSectionSubscribedExpanded: Boolean = true,
     val folderSectionAllExpanded: Boolean = false,
+    /** Feed folders the user has collapsed in the feed list, per device like the Apple clients. */
+    val feedCollapsedFolders: Set<String> = emptySet(),
 ) {
     val effectiveRssMarkAsRead: MarkAsRead
         get() = rssMarkAsRead ?: MarkAsRead.MANUAL

@@ -29,6 +29,37 @@ fun resolveInlineImages(
         resolved[match.groupValues[1]]?.let { "src=\"$it\"" } ?: match.value
     }
 
+/**
+ * `<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">`,
+ * the head default every rendered body gets (the Apple reader's
+ * `HTMLRewrite` injects the same one): a body whose pictures are still
+ * addressed over `http://` would otherwise show broken boxes even with
+ * remote content allowed, since the WebView refuses cleartext loads. The
+ * directive has the engine ask for each such subresource over `https`
+ * instead; a host with no `https` at all still fails, as before. Inserted
+ * at the start of the head so an author's own declarations still win, and
+ * never ahead of a doctype, which would push the page into quirks mode.
+ */
+fun upgradeInsecureRequests(html: String): String {
+    if (html.contains(UPGRADE_INSECURE_REQUESTS_META)) return html
+    HEAD_OPEN.find(html)?.let { match ->
+        return html.replaceRange(match.range.last + 1, match.range.last + 1, UPGRADE_INSECURE_REQUESTS_META)
+    }
+    HTML_OPEN.find(html)?.let { match ->
+        return html.replaceRange(match.range.last + 1, match.range.last + 1, UPGRADE_INSECURE_REQUESTS_META)
+    }
+    DOCTYPE.find(html)?.let { match ->
+        return html.replaceRange(match.range.last + 1, match.range.last + 1, UPGRADE_INSECURE_REQUESTS_META)
+    }
+    return UPGRADE_INSECURE_REQUESTS_META + html
+}
+
+const val UPGRADE_INSECURE_REQUESTS_META =
+    "<meta http-equiv=\"Content-Security-Policy\" content=\"upgrade-insecure-requests\">"
+private val HEAD_OPEN = Regex("""<head\b[^>]*>""", RegexOption.IGNORE_CASE)
+private val HTML_OPEN = Regex("""<html\b[^>]*>""", RegexOption.IGNORE_CASE)
+private val DOCTYPE = Regex("""<!doctype\b[^>]*>""", RegexOption.IGNORE_CASE)
+
 private val AUTHOR_STYLE_BLOCK =
     Regex("""<style\b[^>]*>[\s\S]*?</style\s*>""", RegexOption.IGNORE_CASE)
 private val AUTHOR_STYLESHEET_LINK =

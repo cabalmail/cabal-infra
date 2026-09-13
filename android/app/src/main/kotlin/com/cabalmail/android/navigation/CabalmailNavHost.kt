@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -62,6 +63,16 @@ import com.cabalmail.android.ui.addresses.AddressesViewModel
 import com.cabalmail.android.ui.compose.ComposeLaunch
 import com.cabalmail.android.ui.compose.ComposeScreen
 import com.cabalmail.android.ui.compose.ComposeViewModel
+import com.cabalmail.android.ui.feeds.FeedItemDetailScreen
+import com.cabalmail.android.ui.feeds.FeedItemDetailViewModel
+import com.cabalmail.android.ui.feeds.FeedItemListScreen
+import com.cabalmail.android.ui.feeds.FeedItemListViewModel
+import com.cabalmail.android.ui.feeds.FeedListDetailScreen
+import com.cabalmail.android.ui.feeds.FeedListScreen
+import com.cabalmail.android.ui.feeds.FeedPane
+import com.cabalmail.android.ui.feeds.FeedRoutes
+import com.cabalmail.android.ui.feeds.FeedsViewModel
+import com.cabalmail.android.ui.feeds.scopeTitle
 import com.cabalmail.android.ui.folders.FoldersAdminScreen
 import com.cabalmail.android.ui.folders.FoldersAdminViewModel
 import com.cabalmail.android.ui.mail.FolderListScreen
@@ -84,6 +95,7 @@ import com.cabalmail.android.ui.settings.SettingsScreen
 import com.cabalmail.android.ui.settings.SettingsViewModel
 import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.kit.models.NavState
+import com.cabalmail.kit.models.RssItemScope
 import kotlinx.coroutines.launch
 
 /**
@@ -94,9 +106,12 @@ import kotlinx.coroutines.launch
 enum class TopLevel(
     val route: String,
     val labelRes: Int,
-    val icon: ImageVector,
+    /** A core-set glyph, or null when the icon is a vendored drawable ([iconRes]). */
+    val icon: ImageVector?,
+    val iconRes: Int? = null,
 ) {
     MAIL("folders", R.string.nav_mail, Icons.Default.Email),
+    FEEDS(FeedRoutes.HUB, R.string.nav_feeds, null, R.drawable.ic_rss_feed),
     ADDRESSES("addresses", R.string.addresses_title, Icons.Default.Person),
     FOLDERS("folders_admin", R.string.nav_folders, Icons.AutoMirrored.Filled.List),
     SETTINGS("settings", R.string.settings_title, Icons.Default.Settings),
@@ -232,7 +247,8 @@ fun CabalmailNavHost(
             TopLevel.entries.forEach { destination ->
                 val selected =
                     backStackEntry?.destination?.hierarchy?.any { it.route == destination.route } == true ||
-                        (destination == TopLevel.MAIL && currentRoute in MAIL_ROUTES)
+                        (destination == TopLevel.MAIL && currentRoute in MAIL_ROUTES) ||
+                        (destination == TopLevel.FEEDS && currentRoute in FeedRoutes.ALL)
                 item(
                     selected = selected,
                     onClick = {
@@ -242,7 +258,17 @@ fun CabalmailNavHost(
                             restoreState = true
                         }
                     },
-                    icon = { Icon(destination.icon, contentDescription = null) },
+                    icon = {
+                        val vector = destination.icon
+                        if (vector != null) {
+                            Icon(vector, contentDescription = null)
+                        } else {
+                            Icon(
+                                painterResource(destination.iconRes ?: R.drawable.ic_rss_feed),
+                                contentDescription = null,
+                            )
+                        }
+                    },
                     label = { Text(stringResource(destination.labelRes)) },
                 )
             }
@@ -566,6 +592,8 @@ private fun MailNavGraph(
             )
         }
 
+        feedsGraph(navController, container, compactWidth)
+
         composable("addresses") {
             val viewModel: AddressesViewModel =
                 viewModel(factory = AddressesViewModel.factory(container))
@@ -682,4 +710,143 @@ private fun NavHostController.openCursor(
         launchSingleTop = true
     }
     plan.readerRoute?.let { navigate(it) }
+}
+
+/**
+ * The Feeds tab (rss plan, phase 6b): the feed tree as the hub, one list
+ * destination for every scope (folder, feed, or All Feeds — swapped in
+ * place like the mail folders), and the item reader pushed on phones or
+ * shown in the detail pane on wide windows. Scopes travel as their token
+ * and items as `feedId` + `sortKey`, the identities the session record
+ * will name.
+ */
+private fun androidx.navigation.NavGraphBuilder.feedsGraph(
+    navController: NavHostController,
+    container: AppContainer,
+    compactWidth: Boolean,
+) {
+    val openScope: (RssItemScope) -> Unit = { scope ->
+        navController.navigate(FeedRoutes.items(scope)) {
+            popUpTo(FeedRoutes.HUB)
+            launchSingleTop = true
+        }
+    }
+
+    composable(FeedRoutes.HUB) {
+        val viewModel: FeedsViewModel = viewModel(factory = FeedsViewModel.factory(container))
+        val state by viewModel.state.collectAsState()
+        val preferences by container.preferences.preferences.collectAsState()
+        val scope = rememberCoroutineScope()
+        FeedListScreen(
+            state = state,
+            collapsed = preferences.feedCollapsedFolders,
+            onToggleCollapsed = { folderId ->
+                scope.launch {
+                    container.preferences.update {
+                        val set = it.feedCollapsedFolders
+                        it.copy(feedCollapsedFolders = if (folderId in set) set - folderId else set + folderId)
+                    }
+                }
+            },
+            onRefresh = viewModel::refresh,
+            onPoll = viewModel::poll,
+            onOpenScope = openScope,
+        )
+    }
+
+    composable(
+        route = FeedRoutes.ITEMS,
+        arguments =
+            listOf(
+                navArgument("scope") { type = NavType.StringType },
+                navArgument("item") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+    ) { entry ->
+        val token = Uri.decode(entry.arguments?.getString("scope").orEmpty())
+        val itemScope = RssItemScope.fromToken(token) ?: RssItemScope.All
+        val initialItemId = entry.arguments?.getString("item")?.let(Uri::decode)
+        val viewModel: FeedItemListViewModel =
+            viewModel(key = token, factory = FeedItemListViewModel.factory(container, itemScope))
+        val state by viewModel.state.collectAsState()
+        // The feed tree behind the wide-window pane, scoped to the hub entry
+        // so it survives scope switches.
+        val hubOwner =
+            remember(entry) { runCatching { navController.getBackStackEntry(FeedRoutes.HUB) }.getOrNull() ?: entry }
+        val feedsViewModel: FeedsViewModel =
+            viewModel(viewModelStoreOwner = hubOwner, factory = FeedsViewModel.factory(container))
+        val feedsState by feedsViewModel.state.collectAsState()
+        val title = scopeTitle(itemScope, feedsState)
+        if (compactWidth) {
+            FeedItemListScreen(
+                title = title,
+                state = state,
+                viewModel = viewModel,
+                onOpenItem = { item -> navController.navigate(FeedRoutes.item(item.feedId, item.sortKey)) },
+                onBack = { navController.popBackStack() },
+            )
+        } else {
+            val preferences by container.preferences.preferences.collectAsState()
+            val scope = rememberCoroutineScope()
+            FeedListDetailScreen(
+                container = container,
+                title = title,
+                listViewModel = viewModel,
+                listState = state,
+                onBack = { navController.popBackStack() },
+                initialItemId = initialItemId,
+                feedPane = {
+                    FeedPane(
+                        state = feedsState,
+                        collapsed = preferences.feedCollapsedFolders,
+                        selectedScope = itemScope,
+                        onToggleCollapsed = { folderId ->
+                            scope.launch {
+                                container.preferences.update {
+                                    val set = it.feedCollapsedFolders
+                                    it.copy(
+                                        feedCollapsedFolders =
+                                            if (folderId in
+                                                set
+                                            ) {
+                                                set - folderId
+                                            } else {
+                                                set + folderId
+                                            },
+                                    )
+                                }
+                            }
+                        },
+                        onOpenScope = openScope,
+                        onPoll = feedsViewModel::poll,
+                    )
+                },
+            )
+        }
+    }
+
+    composable(
+        route = FeedRoutes.ITEM,
+        arguments =
+            listOf(
+                navArgument("feedId") { type = NavType.StringType },
+                navArgument("sortKey") { type = NavType.StringType },
+            ),
+    ) { entry ->
+        val feedId = Uri.decode(entry.arguments?.getString("feedId").orEmpty())
+        val sortKey = Uri.decode(entry.arguments?.getString("sortKey").orEmpty())
+        val viewModel: FeedItemDetailViewModel =
+            viewModel(factory = FeedItemDetailViewModel.factory(container, feedId, sortKey))
+        val state by viewModel.state.collectAsState()
+        val online by container.connectivity.online.collectAsState()
+        FeedItemDetailScreen(
+            state = state,
+            viewModel = viewModel,
+            online = online,
+            onBack = { navController.popBackStack() },
+        )
+    }
 }
