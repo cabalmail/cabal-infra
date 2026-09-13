@@ -27,7 +27,7 @@ summarized under "Revisions (2026-09-13)".
 | 3     | Subscription + reader API                         | Shipped 1.13.0 (2026-09-10); additive: `state_since` 1.17.0, `default_remote_content` 1.17.0, `default_filter` 1.18.0 |
 | 4     | OPML import/export (API)                          | Shipped 1.14.0 (2026-09-10) |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Shipped 1.14.0 (5b) / 1.15.0 (5c, 5d); UAT refinements 1.16.0 to 1.18.1, see "Post-5c UAT refinements" |
-| 6     | Android client (offline + FTS + profile scoping)  | 6a (kit) merged to stage (2026-09-13); 6b (read path) in review (2026-09-13); 6c, 6d not started |
+| 6     | Android client (offline + FTS + profile scoping)  | 6a, 6b merged to stage (2026-09-13); 6c (management) in review (2026-09-13); 6d not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
 | 9     | Credentialed feeds                                | Not started |
@@ -1665,8 +1665,39 @@ populate from server."
 
 ### Phase 6: Android client (with offline + FTS)
 
-**Status:** 6b (read path) in review (2026-09-13); 6a merged to stage the
-same day. 6b as built, in `android/app/.../ui/feeds/`: a `FEEDS` top-level
+**Status:** 6c (management) in review (2026-09-13); 6a and 6b merged to
+stage the same day. 6c as built, in `ui/feeds/`:
+`FeedManagementViewModel` (the Apple `FeedManagementViewModel`'s effect
+order: subscribe and update write the server's row back and post the
+catalog change, a new feed's first page pulled best-effort; unsubscribe,
+folders, and import re-pull the catalog through the engine, whose diff
+drops the departed subscriptions' web profiles), `FeedFormRules` (the
+`https://` prefix rule, the folder picker walk that excludes a subtree,
+the settings and folder diffs that keep Save disabled when nothing
+changed), `FeedHealthText` and `FeedOpmlSummary` in the Apple wording,
+`FeedManagementSheets` hosting the subscribe, folder, and settings bottom
+sheets, the unsubscribe / delete-folder / mark-all-read confirmations,
+the OPML document picker (the file read on IO, the text sent to the
+model) and the export share through the FileProvider's attachments
+path, and the one-shot notices; the tree's `+` menu and long-press row
+menus (folder: subscribe here, new folder inside, rename or move, mark
+all read, delete; feed: settings, mark all read, open site,
+unsubscribe; All Feeds: mark all read), the empty state's subscribe
+button, a Feed Settings entry in the item list's menu, and Settings ›
+Feeds' Subscriptions rows for OPML. Tests: `FeedFormsTest` and
+`FeedManagementViewModelTest` against a server fake that keeps a
+catalog, so a refresh sees each write. Not in 6c, as on Apple:
+drag-to-reorder and the notifications toggle (phase 8). Driven on the
+Pixel 8 API 35 emulator against the `claude` stage account
+(2026-09-13): a folder created from the `+` menu, a feed subscribed into
+it from the folder's long-press menu (a site address, autodiscovered by
+the server, the list opening on the new feed), its title changed in the
+settings sheet and reflected in the tree, unsubscribed through the
+confirmation and gone from the tree, the folder renamed and then
+deleted through its confirmation, and the OPML export offered through
+the share sheet; no crashes, and the account left as found.
+
+6b as built, in `android/app/.../ui/feeds/`: a `FEEDS` top-level
 destination (a vendored `rss_feed` glyph, since the core icon set has
 none) with the feed tree (`FeedTree`, the Apple `FeedSidebarRows` rules:
 folders by display order then name, child folders before feeds, root

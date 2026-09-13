@@ -17,6 +17,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -96,6 +98,11 @@ fun SettingsScreen(
     rulesPane: @Composable (onBack: (() -> Unit)?) -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Settings › Feeds OPML actions; null hides the rows. */
+    onImportOpml: (() -> Unit)? = null,
+    onExportOpml: (() -> Unit)? = null,
+    /** Where the feeds actions' notices land, when the host provides one. */
+    feedSnackbarHostState: SnackbarHostState? = null,
 ) {
     val scope = rememberCoroutineScope()
     val navigator = rememberListDetailPaneScaffoldNavigator<SettingsCategory>()
@@ -146,6 +153,9 @@ fun SettingsScreen(
                             onPushFoldersChange = onPushFoldersChange,
                             onSignOut = onSignOut,
                             onBack = onBack,
+                            snackbarHostState = feedSnackbarHostState,
+                            onImportOpml = onImportOpml,
+                            onExportOpml = onExportOpml,
                         )
                 }
             }
@@ -205,9 +215,13 @@ private fun SettingsCategoryDetail(
     onPushFoldersChange: (Set<String>) -> Unit,
     onSignOut: () -> Unit,
     onBack: (() -> Unit)?,
+    snackbarHostState: SnackbarHostState? = null,
+    onImportOpml: (() -> Unit)? = null,
+    onExportOpml: (() -> Unit)? = null,
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(category.titleRes)) },
@@ -234,7 +248,7 @@ private fun SettingsCategoryDetail(
             when (category) {
                 SettingsCategory.ACCOUNT -> AccountSettings(state, preferences, onUpdate, onSignOut)
                 SettingsCategory.READING -> ReadingSettings(preferences, onUpdate)
-                SettingsCategory.FEEDS -> FeedsSettings(preferences, onUpdate)
+                SettingsCategory.FEEDS -> FeedsSettings(preferences, onUpdate, onImportOpml, onExportOpml)
                 SettingsCategory.COMPOSING -> ComposingSettings(state, preferences, onUpdate)
                 // Handled by the caller (the pane comes from the nav host).
                 SettingsCategory.RULES -> Unit
@@ -291,6 +305,8 @@ private fun AccountSettings(
 private fun FeedsSettings(
     preferences: AppPreferences,
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+    onImportOpml: (() -> Unit)?,
+    onExportOpml: (() -> Unit)?,
 ) {
     EnumRow(
         title = stringResource(R.string.settings_mark_as_read),
@@ -305,6 +321,22 @@ private fun FeedsSettings(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
+    if (onImportOpml != null && onExportOpml != null) {
+        Text(
+            text = stringResource(R.string.settings_feeds_subscriptions),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.feeds_import_opml)) },
+            modifier = Modifier.clickable(onClick = onImportOpml),
+        )
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.feeds_export_opml)) },
+            modifier = Modifier.clickable(onClick = onExportOpml),
+        )
+    }
 }
 
 @Composable
