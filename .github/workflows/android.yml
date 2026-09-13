@@ -54,6 +54,18 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
+
+      # The article view's Readability.js is vendored from react/admin's
+      # node_modules (pin in react/admin/package.json), like the Apple kit's.
+      - name: Sync vendored assets
+        run: android/scripts/sync-vendored.sh
+
       - name: Run tests and lint
         working-directory: android
         run: ./gradlew :kit:test :app:testDebugUnitTest ktlintCheck lint
@@ -84,6 +96,18 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
+
+      # The article view's Readability.js is vendored from react/admin's
+      # node_modules (pin in react/admin/package.json), like the Apple kit's.
+      - name: Sync vendored assets
+        run: android/scripts/sync-vendored.sh
 
       - name: Assemble release (unsigned)
         working-directory: android
@@ -141,6 +165,18 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
+
+      # The article view's Readability.js is vendored from react/admin's
+      # node_modules (pin in react/admin/package.json), like the Apple kit's.
+      - name: Sync vendored assets
+        run: android/scripts/sync-vendored.sh
 
       # Secrets are not readable in a job-level `if`, so the gate is a step
       # that every later step keys off.
