@@ -2,8 +2,10 @@ package com.cabalmail.kit.settings
 
 import com.cabalmail.kit.compose.SignatureFormatter
 import com.cabalmail.kit.models.Preferences
+import com.cabalmail.kit.models.RssItemFilter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PreferencesWireTest {
@@ -127,5 +129,33 @@ class PreferencesWireTest {
         assertEquals("\n\n-- \nsig", SignatureFormatter.seedBody("", "sig"))
         assertEquals("\n-- \nsig\n\n---\nquote", SignatureFormatter.seedBody("\n\n---\nquote", "sig"))
         assertEquals("\n-- \nsig\nbody", SignatureFormatter.seedBody("body", "sig"))
+    }
+
+    @Test
+    fun `feed reader keys stay off the wire until set and then ride, defaults included`() {
+        val untouched = PreferencesWire.toUpdate(AppPreferences()).app!!
+        assertTrue(untouched.keys.none { it.startsWith("rss_") || it.startsWith("filter:feeds") })
+        assertEquals(MarkAsRead.MANUAL, AppPreferences().effectiveRssMarkAsRead)
+        assertEquals(RssItemFilter.UNREAD, AppPreferences().effectiveFeedsAllFilter)
+
+        // A user choice rides, and keeps riding when set back to the default.
+        val chosen = AppPreferences(rssMarkAsRead = MarkAsRead.ON_OPEN, feedsAllFilter = RssItemFilter.ALL)
+        assertEquals("on_open", PreferencesWire.toUpdate(chosen).app!!["rss_mark_as_read"])
+        assertEquals("all", PreferencesWire.toUpdate(chosen).app!!["filter:feeds:all"])
+        val reverted = chosen.copy(rssMarkAsRead = MarkAsRead.MANUAL, feedsAllFilter = RssItemFilter.UNREAD)
+        assertEquals("manual", PreferencesWire.toUpdate(reverted).app!!["rss_mark_as_read"])
+        assertEquals("unread", PreferencesWire.toUpdate(reverted).app!!["filter:feeds:all"])
+
+        // A fetched map carrying the keys applies them (and so makes them ride); a mail-only pill
+        // name and an unknown mode leave the current value.
+        val remote = Preferences(app = mapOf("rss_mark_as_read" to "on_open", "filter:feeds:all" to "favorite"))
+        val merged = PreferencesWire.applyRemote(AppPreferences(), remote)
+        assertEquals(MarkAsRead.ON_OPEN, merged.rssMarkAsRead)
+        assertEquals(RssItemFilter.FAVORITE, merged.feedsAllFilter)
+        val junk = Preferences(app = mapOf("rss_mark_as_read" to "later", "filter:feeds:all" to "flagged"))
+        val kept = PreferencesWire.applyRemote(merged, junk)
+        assertEquals(MarkAsRead.ON_OPEN, kept.rssMarkAsRead)
+        assertEquals(RssItemFilter.FAVORITE, kept.feedsAllFilter)
+        assertNull(PreferencesWire.applyRemote(AppPreferences(), junk).rssMarkAsRead)
     }
 }

@@ -18,6 +18,26 @@ import com.cabalmail.kit.models.NavState
 import com.cabalmail.kit.models.Preferences
 import com.cabalmail.kit.models.PreferencesUpdate
 import com.cabalmail.kit.models.PushEnvelope
+import com.cabalmail.kit.models.RssCatalog
+import com.cabalmail.kit.models.RssFolder
+import com.cabalmail.kit.models.RssFolderDeleteResult
+import com.cabalmail.kit.models.RssFolderUpdate
+import com.cabalmail.kit.models.RssItem
+import com.cabalmail.kit.models.RssItemFilter
+import com.cabalmail.kit.models.RssItemOrder
+import com.cabalmail.kit.models.RssItemScope
+import com.cabalmail.kit.models.RssItemStateChange
+import com.cabalmail.kit.models.RssItemsPage
+import com.cabalmail.kit.models.RssMarkAllReadResult
+import com.cabalmail.kit.models.RssOpmlExport
+import com.cabalmail.kit.models.RssOpmlImportResult
+import com.cabalmail.kit.models.RssStateSyncPage
+import com.cabalmail.kit.models.RssSubscribeResult
+import com.cabalmail.kit.models.RssSubscription
+import com.cabalmail.kit.models.RssSubscriptionUpdate
+import com.cabalmail.kit.models.RssSyncPage
+import com.cabalmail.kit.models.RssUnsubscribeResult
+import com.cabalmail.kit.models.RssWire
 import com.cabalmail.kit.models.Rule
 import com.cabalmail.kit.models.RuleSet
 import com.cabalmail.kit.models.SaveDraftResult
@@ -26,6 +46,7 @@ import com.cabalmail.kit.models.SearchResult
 import com.cabalmail.kit.models.SendOutcome
 import com.cabalmail.kit.models.UploadGrant
 import com.cabalmail.kit.models.UploadGrantList
+import com.cabalmail.kit.rss.RssClient
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
 import io.ktor.client.request.put
@@ -48,6 +69,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -76,7 +98,7 @@ class ApiClient(
      * like, so both have to reach the UI (#1476).
      */
     private val onAuthExpired: (() -> Unit)? = null,
-) {
+) : RssClient {
     private val baseUrl = baseUrl.trimEnd('/')
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -169,7 +191,7 @@ class ApiClient(
                 message = message,
             )
         }
-        return CabalmailException.ApiError(httpStatus = status, message = message)
+        return CabalmailException.ApiError(httpStatus = status, message = message, code = obj?.stringOrNull("code"))
     }
 
     private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
@@ -179,6 +201,14 @@ class ApiClient(
             json.decodeFromString<T>(text)
         } catch (exception: Exception) {
             throw CabalmailException.DecodingError("Could not decode API response", exception)
+        }
+
+    /** RSS payloads decode leniently: an unknown enum value reads as the field's default. */
+    private inline fun <reified T> decodeRss(text: String): T =
+        try {
+            RssWire.json.decodeFromString<T>(text)
+        } catch (exception: Exception) {
+            throw CabalmailException.DecodingError("Could not decode RSS response", exception)
         }
 
     // ------------------------------------------------------------ addresses
@@ -849,4 +879,225 @@ class ApiClient(
         /** Mirrors `MAX_FILES_PER_REQUEST` in `lambda/api/upload_url/function.py`. */
         const val MAX_FILES_PER_REQUEST = 32
     }
+
+    // ------------------------------------------------------------------ rss
+
+    // The RSS reader API (`docs/rss.md`), as [RssClient]. Reads are GETs
+    // with query parameters, writes carry JSON bodies, and every error is
+    // the `{"Error", "code"}` envelope, whose code rides on
+    // [CabalmailException.ApiError.code].
+
+    override suspend fun listSubscriptions(): RssCatalog = decodeRss(call(HttpMethod.Get, "rss_list_subscriptions"))
+
+    override suspend fun subscribe(
+        url: String,
+        folderId: String?,
+    ): RssSubscribeResult =
+        decodeRss(
+            call(
+                HttpMethod.Post,
+                "rss_subscribe",
+                body =
+                    buildJsonObject {
+                        put("url", url)
+                        if (!folderId.isNullOrEmpty()) put("folder_id", folderId)
+                    },
+            ),
+        )
+
+    override suspend fun unsubscribe(subscriptionId: String): RssUnsubscribeResult =
+        decodeRss(
+            call(HttpMethod.Post, "rss_unsubscribe", body = buildJsonObject { put("subscription_id", subscriptionId) }),
+        )
+
+    /** Sends `subscription_id` plus only the fields the update sets. */
+    override suspend fun updateSubscription(
+        subscriptionId: String,
+        update: RssSubscriptionUpdate,
+    ): RssSubscription {
+        val body =
+            buildJsonObject {
+                put("subscription_id", subscriptionId)
+                update.customTitle?.let { put("custom_title", it) }
+                update.folderId?.let { put("folder_id", it) }
+                update.orderingMode?.let { put("ordering_mode", it.wire) }
+                update.defaultOpenMode?.let { put("default_open_mode", it.wire) }
+                update.defaultStyling?.let { put("default_styling", it.wire) }
+                update.defaultRemoteContent?.let { put("default_remote_content", it.wire) }
+                update.defaultFilter?.let { put("default_filter", it.wire) }
+                update.notificationsEnabled?.let { put("notifications_enabled", it) }
+            }
+        return decodeRss<RssSubscriptionEnvelope>(call(HttpMethod.Put, "rss_update_subscription", body = body))
+            .subscription
+    }
+
+    override suspend fun newRssFolder(
+        name: String,
+        parentFolderId: String?,
+        displayOrder: Int?,
+    ): RssFolder =
+        decodeRss<RssFolderEnvelope>(
+            call(
+                HttpMethod.Post,
+                "rss_new_folder",
+                body =
+                    buildJsonObject {
+                        put("name", name)
+                        if (!parentFolderId.isNullOrEmpty()) put("parent_folder_id", parentFolderId)
+                        displayOrder?.let { put("display_order", it) }
+                    },
+            ),
+        ).folder
+
+    override suspend fun updateRssFolder(
+        folderId: String,
+        update: RssFolderUpdate,
+    ): RssFolder {
+        val body =
+            buildJsonObject {
+                put("folder_id", folderId)
+                update.name?.let { put("name", it) }
+                update.parentFolderId?.let { put("parent_folder_id", it) }
+                update.displayOrder?.let { put("display_order", it) }
+                update.defaultFilter?.let { put("default_filter", it.wire) }
+            }
+        return decodeRss<RssFolderEnvelope>(call(HttpMethod.Put, "rss_update_folder", body = body)).folder
+    }
+
+    override suspend fun deleteRssFolder(folderId: String): RssFolderDeleteResult =
+        decodeRss(call(HttpMethod.Post, "rss_delete_folder", body = buildJsonObject { put("folder_id", folderId) }))
+
+    /** The merged listing: scope (none for all feeds), filter, order, limit, and the page cursor when there is one. */
+    override suspend fun listItems(
+        scope: RssItemScope,
+        filter: RssItemFilter,
+        order: RssItemOrder,
+        limit: Int,
+        cursor: String?,
+    ): RssItemsPage {
+        val query = mutableMapOf<String, String>()
+        when (scope) {
+            RssItemScope.All -> Unit
+            is RssItemScope.Folder -> query["folder_id"] = scope.folderId
+            is RssItemScope.Subscription -> query["subscription_id"] = scope.subscriptionId
+        }
+        query["filter"] = filter.wire
+        query["order"] = order.wire
+        query["limit"] = limit.toString()
+        if (!cursor.isNullOrEmpty()) query["cursor"] = cursor
+        return decodeRss(call(HttpMethod.Get, "rss_list_items", query = query))
+    }
+
+    /** The since-sync form; `since` is always sent, empty for the first pull. */
+    override suspend fun syncItems(
+        subscriptionId: String,
+        since: String,
+        limit: Int,
+    ): RssSyncPage =
+        decodeRss(
+            call(
+                HttpMethod.Get,
+                "rss_list_items",
+                query = mapOf("subscription_id" to subscriptionId, "since" to since, "limit" to limit.toString()),
+            ),
+        )
+
+    /** The state-sync form; `state_since` is always sent, empty for the first pull. */
+    override suspend fun syncItemStates(
+        subscriptionId: String,
+        since: String,
+        limit: Int,
+    ): RssStateSyncPage =
+        decodeRss(
+            call(
+                HttpMethod.Get,
+                "rss_list_items",
+                query = mapOf("subscription_id" to subscriptionId, "state_since" to since, "limit" to limit.toString()),
+            ),
+        )
+
+    override suspend fun getItem(
+        feedId: String,
+        sortKey: String,
+    ): RssItem =
+        decodeRss<RssItemEnvelope>(
+            call(HttpMethod.Get, "rss_get_item", query = mapOf("feed_id" to feedId, "sort_key" to sortKey)),
+        ).item
+
+    /** A null flag is omitted from the entry; the server leaves that flag alone. */
+    override suspend fun setItemState(changes: List<RssItemStateChange>): Int {
+        val body =
+            buildJsonObject {
+                put(
+                    "items",
+                    buildJsonArray {
+                        changes.forEach { change ->
+                            add(
+                                buildJsonObject {
+                                    put("feed_id", change.feedId)
+                                    put("sort_key", change.sortKey)
+                                    change.isRead?.let { put("is_read", it) }
+                                    change.isFavorite?.let { put("is_favorite", it) }
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+        val text = call(HttpMethod.Post, "rss_set_item_state", body = body)
+        return json
+            .parseToJsonElement(text)
+            .jsonObject["updated"]
+            ?.jsonPrimitive
+            ?.int ?: 0
+    }
+
+    override suspend fun markAllRead(scope: RssItemScope): RssMarkAllReadResult =
+        decodeRss(
+            call(
+                HttpMethod.Post,
+                "rss_mark_all_read",
+                body =
+                    buildJsonObject {
+                        when (scope) {
+                            RssItemScope.All -> Unit
+                            is RssItemScope.Folder -> put("folder_id", scope.folderId)
+                            is RssItemScope.Subscription -> put("subscription_id", scope.subscriptionId)
+                        }
+                    },
+            ),
+        )
+
+    override suspend fun importOpml(
+        opml: String,
+        folderId: String?,
+    ): RssOpmlImportResult =
+        decodeRss(
+            call(
+                HttpMethod.Post,
+                "rss_opml_import",
+                body =
+                    buildJsonObject {
+                        put("opml", opml)
+                        if (!folderId.isNullOrEmpty()) put("folder_id", folderId)
+                    },
+            ),
+        )
+
+    override suspend fun exportOpml(): RssOpmlExport = decodeRss(call(HttpMethod.Get, "rss_opml_export"))
+
+    @kotlinx.serialization.Serializable
+    private data class RssSubscriptionEnvelope(
+        val subscription: RssSubscription,
+    )
+
+    @kotlinx.serialization.Serializable
+    private data class RssFolderEnvelope(
+        val folder: RssFolder,
+    )
+
+    @kotlinx.serialization.Serializable
+    private data class RssItemEnvelope(
+        val item: RssItem,
+    )
 }
