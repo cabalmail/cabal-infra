@@ -103,8 +103,8 @@ additive optional fields.
 | Phase | Work item                                                | Status      |
 | ----- | -------------------------------------------------------- | ----------- |
 | A     | Apple: session record, feed-aware launch, position cache | Shipped 1.17.0 (2026-09-11); follow-ups for #1555, #1535, and the restored-item spinner in review (2026-09-13) |
-| B     | Android: position cache + local session record           | Not started |
-| C     | Cross-device RSS toast (server additive fields)          | Not started; follows Phase B, which follows the Android feed reader (RSS plan Phase 6) |
+| B     | Android: position cache + local session record           | Ready to start (2026-09-13): the Android feed reader shipped in 1.19.0 (RSS plan 6a–6d) and landed the feed half of the position cache and the route identities with it; the session record, launch restore, watermark, and mail positions remain |
+| C     | Cross-device RSS toast (server additive fields)          | Not started; follows Phase B. New prerequisite: a dual-form anchor (element + fraction), because Android can only apply the fraction form (see Phase C) |
 
 The background-termination investigation that surfaced this work is
 tracked separately in #1537 and is independent of every phase here.
@@ -182,34 +182,85 @@ tracked separately in #1537 and is independent of every phase here.
 
 ## Phase B — Android
 
-**Status:** Not started. Waits on the Android feed reader (RSS plan
-Phase 6) so it can be done whole: the mail half alone would touch the
-same navigation code twice. The Android reader should be built with this
-record in mind — stable identities for the feed scope and item routes,
-and scroll capture through the same anchor script Apple injects (plain
-DOM JavaScript; `i<path>|<delta>`), so Phase C later hands positions
-between platforms without translation.
+**Status:** Ready to start (2026-09-13). The Android feed reader shipped
+in 1.19.0 (RSS plan 6a–6d), and that work landed part of this phase
+ahead of it. Re-read of what is in place, and what is left, before the
+phase begins; the user chose to let the reader bake first.
 
-Android already restores its own server cursor silently and prompts
-for a foreign one, so its launch behaviour is right for mail. It needs:
+**Already in place from the Android reader (RSS plan 6a–6d):**
 
-- The per-item reading-position cache (its reader records no scroll at
-  all today; `NavCursor.record` carries neither `msg_anchor` nor
-  `msg_scroll`).
-- The local session record, so a relaunch does not depend on the
-  server round-trip, and so the feeds section can be restored once the
-  Android RSS reader (rss plan Phase 6) exists. Design the record shape
-  to match `ResumeSession` so the two clients agree on semantics.
-- The foreign-toast "already offered" persistence.
+- **Feed reading positions.** `FeedReadingPositions` (app layer, a JSON
+  file under `filesDir`, capacity 200, top clears, keyed by
+  `RssItem.id`) with capture on scroll settle and restore on open —
+  the feed half of this plan's position cache, done. It stores the
+  `f<fraction>` form only: the Android body `WebView` runs with
+  JavaScript off, and `evaluateJavascript` does not run under that
+  setting, so the element anchor Apple captures is not available there.
+  The two clients' fraction codecs agree (a leading `f`, a decimal
+  fraction; Apple writes four decimals, Android three, both parse
+  either).
+- **Route identities.** `FeedRoutes` names the item list by
+  `RssItemScope.token` and the item by `feed_id` + `sort_key`, the same
+  identities `ResumeSession` stores, so the session record can name a
+  feed position with no mapping layer.
+- **Per-feed defaults and sticky toggles.** `FeedPolicies` mirrors the
+  Apple `FeedDetailPolicy`: open mode, styling, remote content, and the
+  filter pill are read at model creation and written back per toggle.
+- **The mail reader's `HtmlBody` already exposes `restoreFraction` /
+  `onScrollFraction`** (the feed reader shares it), so mail reading
+  positions need only a store and the view-model wiring, not a reader
+  change.
+
+**Left for Phase B:**
+
+- **The local session record and launch restore.** Android still lands
+  every launch on INBOX (`launchDestinationDone`) and restores only its
+  own *server* cursor (`NavCursor.restoreOnce`), so a relaunch depends
+  on a network round trip and never returns to the Feeds tab. Add a
+  per-install record matching `ResumeSession` (section; mail folder and
+  message; feed scope and item), recorded from the nav host's route
+  changes, and a launch restore that navigates to
+  `FeedRoutes.items(scope, item)` or the mail cursor route silently.
+  Process-scoped like the existing one-shots, so an activity recreation
+  does not re-land; the Apple lesson from #1555 (a rebuilt root must
+  restore the *live* record, not the launch snapshot) applies if the
+  nav host is ever recreated mid-process.
+- **Mail reading positions**, by generalising `FeedReadingPositions` to
+  the `mail:<Message-ID>` / `feed:<id>` key scheme Apple uses
+  (`ReadingPositionKey`) and wiring `MessageDetailViewModel` to it
+  through the hooks `HtmlBody` already has.
+- **The foreign-toast "already offered" watermark**, persisted next to
+  the client id in `NavCursor`'s DataStore, and the same-place check,
+  so an ignored cross-device prompt is not repeated on the next launch
+  and a foreign cursor at the device's own position raises no prompt.
+- **The server cursor stays mail-only until Phase C**; nothing in this
+  phase writes a feed position to `set_nav_state`.
 
 ## Phase C — Cross-device RSS toast
 
 **Status:** Not started. Deliberately sequenced after the Android feed
-reader (RSS plan Phase 6) and this plan's Phase B, in that order: the
-toast's whole value is the cross-platform hand-off, so built earlier it
-would serve only Mac-to-iPhone and be tested with one client. The RSS
-plan records the same ordering from its side; the two documents should
-keep agreeing.
+reader (RSS plan Phase 6, shipped 1.19.0) and this plan's Phase B, in
+that order: the toast's whole value is the cross-platform hand-off, so
+built earlier it would serve only Mac-to-iPhone and be tested with one
+client. The RSS plan records the same ordering from its side; the two
+documents should keep agreeing.
+
+**Design constraint found on re-read (2026-09-13): the anchor must be
+dual-form.** Apple captures the element anchor (`i<path>|<delta>`) and
+since 1.18.2 rarely falls back to a fraction; Android can capture and
+apply only `f<fraction>` (JavaScript is off in its body `WebView`).
+So a position handed Android-to-Apple restores today (Apple applies
+the fraction form), but Apple-to-Android would carry an anchor Android
+cannot apply. Before or as part of Phase C, Apple's `ScrollCapture`
+should carry the fraction alongside the element anchor — it already
+reads the scroll offset, and the scrollable height is one more property
+in the same script — and the cursor should carry both (`msg_anchor`
+plus a sibling `msg_fraction`, additive and optional, with the
+element anchor preferred by a reader that can apply it). The same
+dual capture belongs in Apple's local position cache so its own
+fraction is available for the hand-off. Enabling JavaScript in the
+Android body view to gain element anchors is a security-posture change
+outside this plan and is not assumed.
 
 Let the server cursor carry a feed position so a device can offer
 "pick up this article on your Mac". Additive, optional fields on
