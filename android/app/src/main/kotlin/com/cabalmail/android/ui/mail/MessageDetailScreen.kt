@@ -674,8 +674,14 @@ internal fun HtmlBody(
     allowRemoteContent: Boolean,
     onLinkTap: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Where to scroll to once the document has laid out, as a fraction of the scrollable height. */
+    restoreFraction: Float? = null,
+    /** Reports the scroll position as a fraction while the reader is scrolled; null = no capture. */
+    onScrollFraction: ((Float) -> Unit)? = null,
 ) {
     val currentOnLinkTap by rememberUpdatedState(onLinkTap)
+    val currentOnScroll by rememberUpdatedState(onScrollFraction)
+    val currentRestore by rememberUpdatedState(restoreFraction)
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -696,7 +702,20 @@ internal fun HtmlBody(
                             }
                             return true
                         }
+
+                        override fun onPageFinished(
+                            view: WebView?,
+                            url: String?,
+                        ) {
+                            // The layout settles after this callback; try a few times.
+                            val target = currentRestore ?: return
+                            view?.let { restoreScrollFraction(it, target, attemptsLeft = 5) }
+                        }
                     }
+                setOnScrollChangeListener { view, _, scrollY, _, _ ->
+                    val range = (view as WebView).scrollRange()
+                    if (range > 0) currentOnScroll?.invoke((scrollY.toFloat() / range).coerceIn(0f, 1f))
+                }
             }
         },
         update = { webView ->
@@ -711,4 +730,20 @@ internal fun HtmlBody(
             }
         },
     )
+}
+
+/** The scrollable height in view pixels: the laid-out content beyond the viewport. */
+private fun WebView.scrollRange(): Int = (contentHeight * scale).toInt() - height
+
+private fun restoreScrollFraction(
+    view: WebView,
+    fraction: Float,
+    attemptsLeft: Int,
+) {
+    val range = view.scrollRange()
+    if (range > 0) {
+        view.scrollTo(0, (range * fraction).toInt())
+    } else if (attemptsLeft > 0) {
+        view.postDelayed({ restoreScrollFraction(view, fraction, attemptsLeft - 1) }, 120)
+    }
 }

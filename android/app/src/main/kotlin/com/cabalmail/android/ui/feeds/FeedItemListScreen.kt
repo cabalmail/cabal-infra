@@ -412,12 +412,21 @@ internal fun FeedItemRow(
     val unreadText = stringResource(R.string.unread)
     val queuedText = stringResource(R.string.feed_change_queued)
     val favoriteText = stringResource(R.string.feed_favorite)
+    // The row reads as one thing to a screen reader (and the tester's UI
+    // dump), in the Apple rows' form: "Unread, <title>, <date>".
+    val rowDescription =
+        listOfNotNull(
+            unreadText.takeIf { !item.isRead },
+            title,
+            date.ifEmpty { null },
+        ).joinToString(", ")
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
+                .semantics { contentDescription = rowDescription }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Box(

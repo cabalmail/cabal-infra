@@ -27,7 +27,7 @@ summarized under "Revisions (2026-09-13)".
 | 3     | Subscription + reader API                         | Shipped 1.13.0 (2026-09-10); additive: `state_since` 1.17.0, `default_remote_content` 1.17.0, `default_filter` 1.18.0 |
 | 4     | OPML import/export (API)                          | Shipped 1.14.0 (2026-09-10) |
 | 5     | Apple clients (offline + FTS + cookie scoping)    | Shipped 1.14.0 (5b) / 1.15.0 (5c, 5d); UAT refinements 1.16.0 to 1.18.1, see "Post-5c UAT refinements" |
-| 6     | Android client (offline + FTS + profile scoping)  | 6a, 6b merged to stage (2026-09-13); 6c (management) in review (2026-09-13); 6d not started |
+| 6     | Android client (offline + FTS + profile scoping)  | 6a to 6c merged to stage (2026-09-13); 6d (polish) in review (2026-09-13) |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
 | 9     | Credentialed feeds                                | Not started |
@@ -1665,8 +1665,34 @@ populate from server."
 
 ### Phase 6: Android client (with offline + FTS)
 
-**Status:** 6c (management) in review (2026-09-13); 6a and 6b merged to
-stage the same day. 6c as built, in `ui/feeds/`:
+**Status:** 6d (polish) in review (2026-09-13); 6a to 6c merged to stage
+the same day. 6d as built: the article view's **reader toggle** on the
+vendored Readability.js (`ReaderAssets`, read from `assets/reader/`;
+materialized by `android/scripts/sync-vendored.sh` from
+`react/admin/node_modules`, gitignored, run by `android.yml` and
+`lint.yml` before gradle; a build without it offers no toggle), with the
+Apple state machine (extract once the live page has loaded, cache the
+document, a link followed from the reader leaves reader mode) and the
+extraction restyled through `readerModeHtml`; the **scroll-anchor
+decision**: the native fraction. `HtmlBody` reports the WebView's own
+scroll position as a fraction of the scrollable height and restores to
+one after layout, no JavaScript involved, and `FeedReadingPositions`
+(per install, bounded to 200 items, one JSON file) stores it in the
+Apple reader's `f<fraction>` fallback form, so a position captured here
+restores there once the resume-session plan's Phase C carries it. The
+element anchor (`i<path>|<delta>`) stays Apple-only unless the mail
+reader's JavaScript posture changes, which is not a decision for this
+plan. Feed rows carry the Apple rows' combined accessibility label
+("Unread, title, date"). Not in 6d: the local session record and launch
+restore, which are the resume-session plan's Phase B and belong with its
+mail half. Driven on the Pixel 8 API 35 emulator (2026-09-13): a Daring
+Fireball item opened into the article view with reader mode on by the
+feed's default, and the page came back as the extracted story in the
+app's styling; a long AWS post scrolled, left, and reopened at the same
+place, the position file holding `f0.111` under the item's
+`feedId#sortKey`; no crashes.
+
+6c as built, in `ui/feeds/`:
 `FeedManagementViewModel` (the Apple `FeedManagementViewModel`'s effect
 order: subscribe and update write the server's row back and post the
 catalog change, a new feed's first page pulled best-effort; unsubscribe,

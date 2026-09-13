@@ -7,6 +7,7 @@ import com.cabalmail.android.ui.compose.OpenIntake
 import com.cabalmail.android.ui.compose.SendQueue
 import com.cabalmail.android.ui.compose.ShareIntake
 import com.cabalmail.android.ui.feeds.FeedEventBus
+import com.cabalmail.android.ui.feeds.FeedReadingPositions
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.CognitoAuthService
@@ -121,6 +122,11 @@ class AppContainer(
 
     /** The on-device mirror of the feed catalog and cached items (rss plan, phase 6). */
     val rssStore: RssStore by lazy { RoomRssStore.open(appContext) }
+
+    /** Where the feed reader left off in each item, per install (resume-session plan, Phase B's feed half). */
+    val feedReadingPositions: FeedReadingPositions by lazy {
+        FeedReadingPositions(File(appContext.filesDir, "feed-positions.json"))
+    }
 
     /** Connectivity for the offline banner and the send queue. */
     val connectivity: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }

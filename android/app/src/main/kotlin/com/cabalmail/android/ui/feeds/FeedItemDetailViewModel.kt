@@ -28,6 +28,8 @@ data class FeedItemDetailUiState(
     val remoteContentAllowed: Boolean = false,
     val loaded: Boolean = false,
     val error: String? = null,
+    /** Where the reader left off last time, as a fraction; null = the top. */
+    val restoreFraction: Float? = null,
 ) {
     /** The article link, when it is a web address. */
     val articleUrl: String?
@@ -54,7 +56,10 @@ class FeedItemDetailViewModel(
     private val engine: suspend () -> RssSyncEngine,
     private val events: FeedEventBus,
     private val preferences: StateFlow<AppPreferences>,
+    private val positions: FeedReadingPositions? = null,
 ) : ViewModel() {
+    private var latestFraction: Float? = null
+    private var recordJob: kotlinx.coroutines.Job? = null
     private val mutableState = MutableStateFlow(FeedItemDetailUiState())
     val state: StateFlow<FeedItemDetailUiState> = mutableState.asStateFlow()
 
@@ -83,6 +88,7 @@ class FeedItemDetailViewModel(
                     hasArticleUrl = FeedItemDetailUiState(item = item).articleUrl != null,
                     globalRemoteContent = preferences.value.loadRemoteContent,
                 )
+            val restore = item?.let { positions?.fraction(it.id) }
             mutableState.update {
                 it.copy(
                     item = item,
@@ -91,6 +97,7 @@ class FeedItemDetailViewModel(
                     readerMode = policy.readerMode,
                     remoteContentAllowed = policy.remoteContentAllowed,
                     loaded = true,
+                    restoreFraction = restore,
                 )
             }
             if (item != null && !item.isRead && preferences.value.effectiveRssMarkAsRead == MarkAsRead.ON_OPEN) {
@@ -105,6 +112,19 @@ class FeedItemDetailViewModel(
                 )
             }
         }
+    }
+
+    /** The body's scroll position, written after the scrolling settles. */
+    fun recordScroll(fraction: Float) {
+        val item = mutableState.value.item ?: return
+        val positions = positions ?: return
+        latestFraction = fraction
+        if (recordJob?.isActive == true) return
+        recordJob =
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(SCROLL_SETTLE_MS)
+                latestFraction?.let { runCatching { positions.record(item.id, it) } }
+            }
     }
 
     fun setRead(isRead: Boolean) {
@@ -170,6 +190,8 @@ class FeedItemDetailViewModel(
     }
 
     companion object {
+        const val SCROLL_SETTLE_MS = 800L
+
         fun factory(
             container: AppContainer,
             feedId: String,
@@ -184,6 +206,7 @@ class FeedItemDetailViewModel(
                         engine = { container.requireRssSync() },
                         events = container.feedEvents,
                         preferences = container.preferences.preferences,
+                        positions = container.feedReadingPositions,
                     )
                 }
             }

@@ -10,3 +10,8 @@ captures/
 # Play Console release notes are generated at upload time by
 # .github/scripts/play-release-notes.py from CHANGELOG.md; never hand-written.
 app/src/main/play/release-notes/
+# Vendored Readability.js for the feed reader's article view. Materialized
+# from react/admin/node_modules by android/scripts/sync-vendored.sh; the
+# canonical pin lives in react/admin/package.json.
+app/src/main/assets/reader/Readability.js
+app/src/main/assets/reader/readability-LICENSE.md

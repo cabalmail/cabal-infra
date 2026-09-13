@@ -112,24 +112,28 @@ fun FeedItemDetailScreen(
                         IconButton(onClick = { menuOpen = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.feed_more))
                         }
+                        val readerAvailable = readerScriptAvailable()
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        stringResource(
-                                            if (state.readerMode) {
-                                                R.string.feed_show_original
-                                            } else {
-                                                R.string.feed_show_reader
-                                            },
-                                        ),
-                                    )
-                                },
-                                onClick = {
-                                    menuOpen = false
-                                    viewModel.toggleReaderMode()
-                                },
-                            )
+                            // In the article view the toggle needs the vendored script.
+                            if (!state.showingArticle || readerAvailable) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(
+                                                if (state.readerMode) {
+                                                    R.string.feed_show_original
+                                                } else {
+                                                    R.string.feed_show_reader
+                                                },
+                                            ),
+                                        )
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        viewModel.toggleReaderMode()
+                                    },
+                                )
+                            }
                             if (!state.showingArticle) {
                                 DropdownMenuItem(
                                     text = {
@@ -216,6 +220,7 @@ fun FeedItemDetailScreen(
                         online = online,
                         onLeave = viewModel::toggleArticle,
                         modifier = Modifier.fillMaxSize(),
+                        wantsReader = state.readerMode,
                     )
                 } else {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -283,6 +288,8 @@ fun FeedItemDetailScreen(
                             allowRemoteContent = state.remoteContentAllowed,
                             onLinkTap = { url -> LinkMenuTarget.from(url)?.let { linkTarget = it } },
                             modifier = Modifier.fillMaxSize(),
+                            restoreFraction = state.restoreFraction,
+                            onScrollFraction = viewModel::recordScroll,
                         )
                     }
                 }
