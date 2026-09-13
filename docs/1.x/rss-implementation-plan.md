@@ -12,22 +12,26 @@ directory), each phase under its own release.
 
 ## Progress
 
-The plan is still at the **Planning** stage on the roadmap wiki. No
-phase has started. This table and the `**Status:**` line under each
-phase are updated in the same PR as the work, per the docs convention.
+This table and the `**Status:**` line under each phase are updated in
+the same PR as the work, per the docs convention. The Apple sections
+("Apple-side design", "Per-feed cookie scoping › Apple clients", and the
+phase 5 status) are the shipped record as of 1.18.1 and take dated
+errata; the Android phase and phases 7 to 10 are still forward-looking
+and are revised in place. The 2026-09-13 pass that split the two is
+summarized under "Revisions (2026-09-13)".
 
 | Phase | Work item                                         | Status      |
 | ----- | ------------------------------------------------- | ----------- |
 | 1     | DynamoDB tables + supporting infra                | Shipped 1.12.2 (2026-09-09) |
-| 2     | Scheduler + fetcher Lambdas                       | Shipped 1.13.0 (2026-09-10) |
-| 3     | Subscription + reader API                         | Shipped 1.13.0 (2026-09-10) |
+| 2     | Scheduler + fetcher Lambdas                       | Shipped 1.12.3 (2026-09-09); www fallback 1.15.1; image enclosures 1.16.0 |
+| 3     | Subscription + reader API                         | Shipped 1.13.0 (2026-09-10); additive: `state_since` 1.17.0, `default_remote_content` 1.17.0, `default_filter` 1.18.0 |
 | 4     | OPML import/export (API)                          | Shipped 1.14.0 (2026-09-10) |
-| 5     | Apple clients (offline + FTS + cookie scoping)    | Shipped 1.15.0 (2026-09-10); www fallback 1.15.1 |
-| 6     | Android client (offline + FTS + profile scoping)  | Deferred: Apple refinement first (2026-09-10) |
+| 5     | Apple clients (offline + FTS + cookie scoping)    | Shipped 1.14.0 (5b) / 1.15.0 (5c, 5d); UAT refinements 1.16.0 to 1.18.1, see "Post-5c UAT refinements" |
+| 6     | Android client (offline + FTS + profile scoping)  | Deferred (2026-09-10); parity checklist written 2026-09-13, not started |
 | 7     | Image proxy + cache                               | Not started |
 | 8     | Push notification integration                     | Not started |
 | 9     | Credentialed feeds                                | Not started |
-| 10    | Adaptive cadence + health surface polish          | Health badge in review (2026-09-10); rest not started |
+| 10    | Adaptive cadence + health surface polish          | Health badge shipped 1.16.0 (2026-09-11); rest not started |
 
 ## Revisions (2026-09-09)
 
@@ -101,6 +105,36 @@ errata; this section is the summary of what moved and why.
   rulings the same day dropped the reading-time estimate from v1
   (kept as future work) and confirmed the client order: Apple first,
   Android second, Linux once its mail client has caught up.
+
+## Revisions (2026-09-13)
+
+The operator's acceptance testing of the Apple reader (1.16.0 through
+1.18.1, 2026-09-10 to 2026-09-13) produced changes that the phase 5
+design note did not anticipate. This pass records them so the Android
+phase is built against what Apple actually does, not against the
+2026-09-10 design. Three kinds of edit were made:
+
+- **Unrecorded progress.** The Progress table, the phase 2, 3, 5, and 10
+  status lines, and a new "Post-5c UAT refinements" list under phase 5
+  name every RSS change that shipped after the plan was last updated,
+  with the release it shipped in.
+- **Errata in the Apple sections.** Where the 2026-09-10 design note or
+  the cookie-scoping section says something the shipped client no longer
+  does, a dated erratum blockquote follows the claim. The original text
+  is kept. The claims that turned out wrong: the sync loop's step 3
+  (already annotated 2026-09-11), step 4's iOS background task, the
+  reader's remote-content gating, the item list's filter pills and
+  virtualization, the sidebar's drag-to-reorder, the management sheet's
+  notifications toggle, the delivery order, the store schema, and
+  `WKWebsiteDataStore.remove(forIdentifier:)`.
+- **In-place updates to the forward-looking text.** The data model gains
+  the attributes and index the shipped API added (`default_filter`,
+  `default_remote_content`, `is_read_explicit`, `updated_key` /
+  `by_updated`, `has_more`), the preferences bullet gains the `filter:`
+  key family, and the Android phase is rewritten as a parity checklist
+  against the shipped Apple reader, including the pieces that live
+  outside this plan (resume-where-you-left-off, the `http` image
+  upgrade).
 
 Three decisions shape the architecture more than the rest:
 
@@ -424,6 +458,9 @@ cabal-rss-subscription
   SK: subscription_id (UUID)
   attrs: feed_id, folder_id, custom_title, ordering_mode,
          default_open_mode, default_styling,
+         default_remote_content ('inherit'|'show'|'hide', 1.17.0),
+         default_filter ('all'|'unread'|'favorite', default 'unread',
+                         1.18.0),
          notifications_enabled, credentials_scheme (null | 'basic' |
          'url_key' | 'cookie'), read_watermark_iso,
          data_store_uuid, created_at
@@ -438,16 +475,32 @@ cabal-rss-subscription
 cabal-rss-folder
   PK: user
   SK: folder_id (UUID)
-  attrs: parent_folder_id (null = root), name, display_order
+  attrs: parent_folder_id (null = root), name, display_order,
+         default_filter ('all'|'unread'|'favorite', default 'unread',
+                         1.18.0)
 
 cabal-rss-user-item-state
   PK: user#feed_id
   SK: published_at_iso#item_id    (matches item SK shape)
-  attrs: item_id, is_read, is_favorite, read_at, updated_at
+  attrs: item_id, is_read, is_favorite, read_at, updated_at,
+         updated_key (updated_at_iso#item_id, set on every write,
+                      1.17.0)
   GSI favorite_by_feed (sparse): PK = user#feed_id
                                  SK = published_at_iso#item_id
                                  (present when is_favorite = true)
+  GSI by_updated:  PK = user#feed_id
+                   SK = updated_key
+                   (the state_since cursor for cross-device state
+                    sync, 1.17.0; see "Sync loop" step 3's erratum)
 ```
+
+Wire-level additions that ride on these rows, all additive under
+`docs/compatibility.md`: items and state rows carry `is_read_explicit`
+(whether `is_read` is the user's own mark rather than the watermark
+rule), `/rss_list_items` reports `has_more` on both its list and its
+sync forms, and `/rss_list_items` has a third form keyed on
+`state_since` that returns state rows instead of items. `docs/rss.md`
+is the reference for all three.
 
 Five tables, down from eight. What went, and why:
 
@@ -461,7 +514,17 @@ Five tables, down from eight. What went, and why:
   `{string: string}`
   by contract with the shipped clients, which enum values satisfy. The
   Linux `xtask` drift test asserts client keys against `APP_ALLOWED`;
-  new keys land in both.
+  new keys land in both. As built (1.18.0): only `rss_mark_as_read` is
+  an `APP_ALLOWED` entry; `rss_last_ordering_mode` was never added,
+  because ordering is per subscription (`ordering_mode`) and the
+  all-feeds scope keeps the client default. The sticky filter pill for
+  the all-feeds list is the key `filter:feeds:all`
+  (`all | unread | favorite`), validated by a `filter:` **prefix arm** in
+  `set_preferences` beside the mail folders' `filter:mail:<folder>` keys
+  rather than by a new `APP_ALLOWED` entry, one key per list so the
+  server's per-key merge keeps two devices from clobbering each other.
+  A single feed's or folder's pill lives on its own row
+  (`default_filter`) instead.
 - **`cabal-rss-credentials`** — the SSM path is derivable from
   `(user, feed_id)`, so the table only ever held the scheme, which now
   sits on the subscription row.
@@ -563,6 +626,26 @@ pending        (id PK, kind, feed_id, sort_key, value, created_at)
                -- kind: read | favorite | mark_all_read(subscription)
 ```
 
+> **Erratum (2026-09-13):** the shipped store (`RssStore.swift`, at
+> `PRAGMA user_version = 4` as of 1.18.0) differs from this sketch in
+> ways Android should mirror. `subscriptions` carries the feed summary
+> as one `feed_json` column rather than the four `feed_*` columns, plus
+> `credentials_scheme`, `created_at`, `default_remote_content`
+> (`inherit | show | hide`, v3) and `default_filter`
+> (`all | unread | favorite`, v4); `folders` also carries
+> `default_filter` (v4). `items` adds `updated_at`, `fetched_at`,
+> `body_text` (the stripped text the FTS table is built from) and
+> `state_is_explicit` is the local name of the wire's
+> `is_read_explicit`; `feed_sync` replaces `oldest_sort_key` with
+> `older_cursor` + `older_exhausted` (what gates "Load older items") and
+> adds `state_cursor` (v2, the `state_since` cursor; empty on an upgraded
+> store so the next sync pulls the whole state partition); `pending`
+> adds `subscription_id` so a mark-all-read row can be replayed in
+> order as a fence. The FTS tokenizer is
+> `unicode61 remove_diacritics 2`. The read-state rule as shipped is
+> `RssStore.readExpression`: an explicit row wins, else `is_read = 1 OR
+> published_at <= watermark`.
+
 `body_text` for the FTS table is the stripped HTML of summary +
 content; stripping reuses the Kit's existing `HTMLText` plain-text path
 (the mail snippet code), not `NSAttributedString`'s WebKit-backed parser.
@@ -622,6 +705,16 @@ filters never need a network round trip.
    on macOS while the app runs; the push-assisted path arrives with
    phase 8 through the App Group handoff described there.
 
+   > **Erratum (2026-09-13):** no `BGAppRefreshTask` shipped. The
+   > fifteen-minute refresh (`AppState+Feeds.swift`, mirroring the inbox
+   > badge poller) runs on every platform while the app is in the
+   > foreground and posts to `FeedStateBus`; iOS background refresh is
+   > deferred to phase 8, where the push wake makes it worth registering.
+   > Two triggers were added that this list lacks: the reader's optimistic
+   > local writes (per-feed defaults and the sticky pill) go store-first
+   > and then to the server, and the catalog is re-read after every
+   > refetch so health marks stay current.
+
 ### Screens
 
 - **Sidebar.** On macOS and regular-width iPad the existing mail
@@ -633,16 +726,46 @@ filters never need a network round trip.
   column to the item list and the detail column to the item reader;
   selecting a mail folder swaps back. One sidebar, two content types,
   the way Reeder and Mail-plus-NetNewsWire users already think.
+
+  > **Erratum (2026-09-13):** drag-to-reorder into folders did not ship;
+  > the settings sheet and the context menu's "Rename or Move" cover
+  > moves. Rows carry a health mark (warning after three consecutive
+  > fetch failures, stop when dead-lettered, tooltip and accessibility
+  > label in the fetcher's words; 1.16.0). "Mark all as read" in the
+  > context menu, as in the item list, confirms first (1.16.0): a stray
+  > tap beside Refresh had read a whole prod feed on the first day.
 - **iPhone (compact)** gets a **Feeds** tab beside Mail, hosting its own
   `NavigationSplitView` that collapses to a stack (folders/feeds → items
   → reader), mirroring `MailRootView`. **visionOS** gets a Feeds tab in
   its ornament bar.
+
+  > **Erratum (2026-09-13):** the tab layout is chosen by device idiom
+  > first (`SectionLayoutPolicy`, 1.18.1), not by size class alone: a
+  > Plus / Max iPhone reports a regular width in landscape, and choosing
+  > on size class swapped the tab tree for the iPad split view on
+  > rotation, dropping the Feeds tab and the open item. On iPhone the
+  > reader's view controls (styling, remote content, article view, open
+  > in browser, share) share one menu (1.16.0) because they fell off the
+  > end of the navigation bar.
 - **Item list.** Filter pills all / unread / favorite, the four ordering
   modes applied locally (two by SQL order, two day-grouped in Swift),
   swipe read/unread and favorite, per-feed search field backed by FTS5
   with a "Search older items" affordance that pulls another page first,
   and the mail list's index-addressed virtualization pattern for long
   feeds.
+
+  > **Erratum (2026-09-13):** the pills are sticky (1.18.0): a feed's or
+  > feed folder's list opens on the pill last chosen for it, stored on
+  > its server row as `default_filter`, and the All Feeds list on the
+  > synced `filter:feeds:all` key; feeds start on **Unread** where mail
+  > folders start on All. Rows in multi-feed scopes name the feed, not
+  > the article's host (1.15.0). "Load older items" is shown only while
+  > the server reports `has_more` (1.16.0). The ordering picker renders
+  > inline in the Order menu on macOS (1.16.1); a source-scan test now
+  > requires every `Picker` inside a `Menu` to be inline. A single feed's
+  > list shows the fetcher's health words as a header line when the feed
+  > is failing or stopped (1.16.0). The virtualization pattern was
+  > deliberately not adopted (see the 5d status note).
 - **Reader.** Header (feed, title, author, date), then the in-feed body
   through the existing `HTMLBodyView` with the subscription's
   `default_styling` choosing reader or original styling (the mail
@@ -651,6 +774,28 @@ filters never need a network round trip.
   phase 7's proxy exists, and an **Open article** action. A subscription
   whose `default_open_mode` is `article` opens the article view
   directly.
+
+  > **Erratum (2026-09-13):** as first shipped the subscription's Open
+  > and Styling settings had no effect, because the reader built its
+  > state before the parent had resolved the subscription; the reader
+  > now resolves it from the local store itself (1.17.0). The same
+  > change made the reader's three toolbar toggles **sticky per feed**:
+  > article view, reader / original styling, and remote content each
+  > write back as the feed's default (`default_open_mode`,
+  > `default_styling`, `default_remote_content`), one field per toggle,
+  > optimistic local store first, so the next item in the feed opens the
+  > same way and the settings sheet shows the same choice. Remote content
+  > is therefore gated by a per-feed three-way (`inherit` the app
+  > setting / `show` / `hide`) layered over `loadRemoteContent`, not by
+  > the app setting alone. The header also carries a browser link to the
+  > published article on every platform (1.16.0). Every rendered body's
+  > head defaults include a `Content-Security-Policy:
+  > upgrade-insecure-requests` meta (1.16.0, `HTMLRewrite.swift`, shared
+  > with mail) so pictures still addressed over `http://` load over
+  > `https` instead of being refused by App Transport Security. Feeds
+  > that attach an item's picture as an enclosure or `media:content`
+  > show it because the **server** folds it into the body (phase 2 note),
+  > not because the reader renders enclosures.
 - **Article view.** `WKWebView` with
   `WKWebsiteDataStore(forIdentifier: data_store_uuid)`, JavaScript on
   (publisher pages need it), back/forward, Share, Open in Safari, and a
@@ -665,6 +810,12 @@ filters never need a network round trip.
   now, effective with phase 8), folder create/rename/move/delete, OPML
   import through `fileImporter` and export through the share sheet /
   `fileExporter`.
+
+  > **Erratum (2026-09-13):** the notifications toggle is not in the
+  > sheet; it waits for phase 8. The sheet gained a **Remote content**
+  > row (App setting / Show / Hide, 1.17.0) and shows the fetcher's view
+  > of the feed's health (1.15.0). OPML goes through the system open and
+  > save panels (`FeedOpml.swift`) rather than the share sheet.
 - **Settings.** A **Feeds** category: mark-as-read (manual / on open,
   the `rss_mark_as_read` synced key, mirroring the mail picker) and the
   OPML actions. macOS adds menu commands and shortcuts for mark read,
@@ -683,6 +834,13 @@ article view); **5c** management (subscribe, settings, folders, OPML,
 the Settings category, macOS commands); **5d** search, offline
 indicators, and polish from dogfooding. The Feeds section and tab
 appear with 5b.
+
+> **Erratum (2026-09-13):** the order was 5a, 5b, **5d, 5c** (5d was
+> taken first because the read path was what was being dogfooded), and
+> per-feed search shipped in 5b rather than 5d. 5b shipped in 1.14.0 and
+> 5c + 5d in 1.15.0. The polish "from dogfooding" then continued for
+> another five releases; the "Post-5c UAT refinements" list under the
+> phase 5 status is the record of it.
 
 ## Apple-side item cache, FTS, and offline reading (May 2026 sketch)
 
@@ -863,9 +1021,18 @@ The Android `kit` module already has a Room database
 and uid, exercised on-device rather than under Robolectric). The RSS
 cache is a sibling in the same module:
 
-- **Tables** mirror the Apple schema: `rss_items`, `rss_feed_sync`,
-  `rss_pending_mutations`. Unlike the envelope cache, items are
-  exploded into columns, because search needs real text columns.
+- **Tables** mirror the Apple schema **as shipped** (the erratum under
+  "Storage: a thin actor over the system SQLite", not the May sketch):
+  `rss_folders`, `rss_subscriptions` (with `feed_json`,
+  `default_remote_content`, `default_filter`), `rss_items` (with
+  `body_text`, `state_is_explicit`), `rss_feed_sync` (with
+  `since_cursor`, `older_cursor`, `older_exhausted`, `state_cursor`),
+  and `rss_pending` (with `subscription_id`, replayed in insertion
+  order). The whole catalog is mirrored, not just items, so the feed
+  list renders offline. Unlike the envelope cache, items are exploded
+  into columns, because search needs real text columns. Read state is
+  computed by the same rule as `RssStore.readExpression`: an explicit
+  row wins, else `is_read` or `published_at <= watermark`.
 - **FTS** uses Room's `@Fts4` entity (Room has first-class FTS3/FTS4
   support; FTS5 is not annotated and would need raw SQL plus a check
   that the platform SQLite on API 31+ devices enables it). FTS4 with
@@ -874,9 +1041,14 @@ cache is a sibling in the same module:
   per-feed search over a few hundred items is what users expect
   anyway.
 - **Sync, retention, and the offline mutation queue** follow the Apple
-  design exactly; the `kit` contract tests cover the in-memory
+  design as shipped: catalog refresh, per-feed `since` item sync, the
+  per-feed `state_since` state sync (empty cursor first, which is also
+  how a cache repairs itself), and an order-preserving drain with
+  mark-all-read as a fence. The `kit` contract tests cover the in-memory
   implementation and the Room DAO is exercised on-device, matching the
-  envelope cache's existing test posture.
+  envelope cache's existing test posture. Retention is the same
+  unbounded default Apple shipped with (nothing evicts; "load older"
+  appends), not the May sketch's 365-day rule.
 - **Push-assisted sync** is simpler than on Apple: the
   `FirebaseMessagingService` runs inside the app process, already
   calls the API for enrichment, and can write the cache directly.
@@ -948,6 +1120,18 @@ across launches and stay isolated from other feeds' data stores.
 Removal: when the user unsubscribes from a feed, the client calls
 `WKWebsiteDataStore.remove(forIdentifier:)` to delete all stored
 cookies and `localStorage` for that feed.
+
+> **Erratum (2026-09-13):** not as shipped. On macOS 26
+> `WKWebsiteDataStore.remove(forIdentifier:)` and
+> `allDataStoreIdentifiers` segfault in a process that has not yet stood
+> up a web view, which is exactly the state after unsubscribing a feed
+> whose article was never opened (reproduced standalone; WebKit's
+> defect, not ours). `FeedWebStorage` (1.15.0) instead opens the store
+> for the identifier and clears it through the instance
+> `removeData(ofTypes:modifiedSince:)` API. The Android analog
+> (`ProfileStore.deleteProfile`) has no such known trap, but the Android
+> phase should still clear through the profile's own cookie manager and
+> storage first, so a delete that fails leaves nothing behind.
 
 ### Android client
 
@@ -1063,7 +1247,17 @@ rather than carrying the release version (the fetcher zip is built
 without knowledge of the release), and a permanent redirect whose target
 already belongs to another feed row is **recorded** (`redirect_conflict_url`)
 rather than merged, because merging needs to re-point every subscriber
-and that is API-side work for phase 3.
+and that is API-side work for phase 3. **Shipped in 1.12.3 (2026-09-09).**
+Two parser and fetch changes followed from real feeds: the `www.` fallback
+(1.15.1, described under the phase 5 status) and, in 1.16.0, image
+enclosures folded into item bodies. When an entry attaches a picture as
+an image `<enclosure>`, a `media:content` of medium image, or a
+`media:thumbnail`, and its body has no `<img>`, `rss_parse` prepends the
+picture to the body (NASA's Image of the Day carries prose alone in the
+description). Item identity is computed from the body as published,
+before the fold, so guid-less feeds keep stable ids; the content hash
+does change, so already-stored items pick the picture up on the next
+fetch. Clients therefore never need to render enclosures themselves.
 
 **Goal.** Public feeds are fetched on their cadence, RSS/Atom/JSON
 parsed, items upserted, health tracked. Validate by seeding a few
@@ -1162,6 +1356,18 @@ Cabalmail guessing. The subscribe path itself moved into
 `_shared/rss_subscribe_core.py` so phase 4's OPML import shares it, and
 unsubscribe now deletes state before the subscription row (a failure
 between the two had stranded state that resurfaced on re-subscribe).
+**Shipped in 1.13.0 (2026-09-10).** Three additive changes followed
+from the Apple acceptance testing, all in `docs/rss.md`: the
+`state_since` form of `/rss_list_items` with the `by_updated` index,
+`updated_key` on every state write, and `is_read_explicit` on items and
+state rows (1.17.0, #1539); `default_remote_content` on the subscription
+row, settable through `/rss_update_subscription` (1.17.0); and
+`default_filter` on subscription **and** folder rows, settable through
+`/rss_update_subscription` and `/rss_update_folder`, plus the `filter:`
+prefix arm in `set_preferences` (1.18.0). None of these changes an
+existing field, so a client built against 1.13.0 keeps working; a
+client that wants cross-device read state must consume all three parts
+of the 1.17.0 change together.
 
 **Goal.** Authenticated clients can subscribe to a feed, organize
 feeds into folders, list items with filtering, mark items read/
@@ -1341,6 +1547,63 @@ a redirect points from the apex form to the `www.` form of the same URL,
 and the subscribe lookup also checks the `www.` row so a second subscriber
 typing the apex form lands on the existing feed.
 
+**Post-5c UAT refinements (2026-09-10 to 2026-09-13, releases 1.16.0 to
+1.18.1).** The operator's acceptance testing on all four Apple platforms
+drove the following, each shipped with its own changelog fragment. This
+list is the Android parity checklist's source; the erratum blocks in the
+"Apple-side design" section carry the design consequences.
+
+- *First-day fixes (1.16.0).* Mark-all-read confirms first in the item
+  list and both sidebar menus (a stray tap beside Refresh had set a prod
+  feed's watermark 41 minutes after import). "Load older items" is shown
+  only while `feed_sync.older_exhausted` is false. The reader header
+  links to the published article in the browser on every platform. On
+  iPhone the reader's view controls share one menu.
+- *Health badges (1.16.0, phase 10 pulled forward).* `FeedHealth` maps
+  the fetcher's summary to healthy / failing / stopped; the sidebar row
+  shows the mark and the single-feed list a header line, in the
+  fetcher's words. The sidebar re-reads the catalog, not just counts,
+  after a refetch.
+- *`http` pictures (1.16.0).* A `Content-Security-Policy:
+  upgrade-insecure-requests` meta in every rendered body's head defaults
+  (`HTMLRewrite.swift`, mail and feeds alike) has WebKit ask for
+  plain-`http` subresources over `https`, keeping App Transport Security
+  intact. A host with no `https` still fails, as before.
+- *Order menu (1.16.1, #1508).* The ordering picker is inline on macOS
+  so the four orderings are the menu's own rows; a source-scan test
+  enforces the inline style for every `Picker` in a `Menu`.
+- *Cross-device read state (1.17.0, #1539).* `RssSyncEngine` pulls the
+  feed's state changes (`state_since`) alongside new items, keeps
+  `is_read_explicit` so a re-listed explicit unread older than the
+  watermark stays unread, and drains the pending queue in order with
+  mark-all-read as a fence. Store schema v2. The app-layer
+  `FakeRssClient` had to be conformed in a follow-up (#1541): a Kit
+  protocol change must update the app-layer fakes and run the
+  `CabalmailMac` scheme, since `swift test` does not compile them.
+- *Sticky per-feed reader defaults (1.17.0).* The reader resolves its
+  subscription from the store, so Open and Styling apply; the three
+  toolbar toggles write back as the feed's defaults; `default_remote_content`
+  arrives on the API, the Kit model, the store (v3), and the settings
+  sheet. Tests: `FeedItemDetailStickyDefaultsTests`,
+  `FeedDetailPolicyTests`.
+- *Resume where you left off (1.17.0, [`resume-session-plan.md`](./resume-session-plan.md)
+  Phase A, #1538).* A cold launch reopens the feed list, a feed's item
+  list, or the open item, at its scroll position; reachability is a
+  local `RssStore` lookup. Per device, nothing synced; the cross-device
+  toast for a feed position is that plan's Phase C.
+- *Sticky filter pills (1.18.0).* Feed and folder rows carry
+  `default_filter`, the All Feeds list the `filter:feeds:all` preference;
+  feeds start on Unread. `RssSyncEngine.updateFolder` is new; store
+  schema v4. Tests: `FeedListStickyFilterTests`,
+  `PreferencesListFilterTests`.
+- *iPhone landscape (1.18.1).* `SectionLayoutPolicy` chooses the tab
+  layout by idiom first, so rotating a Plus / Max iPhone no longer
+  discards the Feeds tab and the open item.
+
+Still open against the Apple reader at the time of writing: #1548 (the
+iPhone All Feeds row lacks its siblings' accent icon and badge) and
+#1507 (compiler-warning sites from 5b). Neither changes the design.
+
 **Goal.** The iOS, iPadOS, visionOS, and macOS clients have a reader
 UI with per-feed `WKWebsiteDataStore` isolation, offline reading, and
 per-feed FTS. This is the first user-facing surface.
@@ -1398,32 +1661,89 @@ populate from server."
 
 ### Phase 6: Android client (with offline + FTS)
 
-**Status:** Deferred (2026-09-10). With phase 5 shipped, the operator
-chose to pause and refine the Apple implementation on real use before
-porting it: each week of dogfooding has been surfacing issues (the
-`www`-only publishers, the health badge below) that are cheaper to fix in
-one client than two. Android starts when the Apple reader has settled.
+**Status:** Deferred (2026-09-10), not started. With phase 5 shipped,
+the operator chose to pause and refine the Apple implementation on real
+use before porting it: each week of dogfooding has been surfacing issues
+(the `www`-only publishers, the health badge below) that are cheaper to
+fix in one client than two. That refinement ran 1.16.0 through 1.18.1
+(2026-09-10 to 2026-09-13) and is recorded under the phase 5 status as
+"Post-5c UAT refinements"; the work list below was rewritten on
+2026-09-13 against it, so Android targets the reader as it is, not as
+the 2026-09-10 design note described it. Android starts when the
+operator calls the Apple reader settled.
 
-**Goal.** The Android client reaches parity with phase 5: reader UI,
-offline reading, per-feed FTS, per-feed WebView profile scoping.
+**Goal.** The Android client reaches parity with phase 5 **as shipped
+in 1.18.1**: reader UI, offline reading, per-feed FTS, per-feed WebView
+profile scoping, cross-device read state, sticky per-feed reader
+defaults and filter pills, health badges, and the first-day fixes.
 
-**Work.**
+**Work.** Ordered like the Apple PRs (6a kit, 6b read path, 6c
+management, 6d polish), each shippable on its own; the Feeds destination
+appears with 6b.
 
-- `kit` gains the `RssClient` interface and API-backed implementation
-  (mirroring `ApiClient`'s existing shape), the Room RSS cache with
-  `@Fts4` search, sync, and the offline mutation queue, per
-  "Android-side item cache".
-- Compose reader screens: folder tree, item list from the cache, item
-  detail through the existing `MessageDetailScreen` body renderer and
-  its reader-mode behaviour.
-- Article `WebView` uses the `androidx.webkit` multi-profile API keyed
+- **6a, `kit`.** The `RssClient` interface and API-backed implementation
+  (mirroring `ApiClient`'s existing shape) over all thirteen endpoints
+  **including the three forms of `/rss_list_items`** (list, `since`
+  sync, `state_since` state sync) and the `default_remote_content` /
+  `default_filter` fields on subscriptions and folders; the Room RSS
+  cache with `@Fts4` search, sync engine, and ordered mutation queue per
+  "Android-side item cache"; `rss_mark_as_read` in `AppPreferences`
+  beside `mark_as_read`; the all-feeds pill on the `filter:feeds:all`
+  key next to the existing `filter:mail:<folder>` family in
+  `MailFolderFilters`. Kit tests mirror the Apple ones: store, sync
+  engine (including the cross-device repair from an empty state cursor
+  and the mark-all-read fence), and recorded-transport API tests.
+- **6b, read path.** Feeds destination in the navigation drawer / rail
+  and the compact bottom bar, feed folder tree with unread badges and
+  **health marks** (failing after three consecutive failures, stopped
+  when dead-lettered; the fetcher's words as content description), item
+  list from the cache with **sticky** All / Unread / Favorites pills
+  (`default_filter` on the row, `filter:feeds:all` for All Feeds,
+  Unread first), the four orderings inline in the overflow menu, rows
+  naming the feed in multi-feed scopes, swipe read / favorite, per-feed
+  search with "Search older items", and "Load older items" only while
+  `older_exhausted` is false. Item detail through the existing
+  `MessageDetailScreen` body renderer (`HtmlBody`: JavaScript off,
+  remote loads blocked until allowed) and its reader-mode behaviour,
+  with the reader resolving its subscription from the store so the
+  per-feed defaults apply on first open. The three view toggles (article
+  view, reader / original styling, remote content) **write back** to
+  the subscription row as its defaults, optimistic store first. The
+  header links to the published article. Remote content is the per-feed
+  three-way (`inherit` / `show` / `hide`) over the app setting. Verify
+  that `HtmlBody` loads `http://` pictures when remote content is
+  allowed; Android's default cleartext policy will refuse them the way
+  App Transport Security did, and the fix is the same
+  `upgrade-insecure-requests` meta in the head defaults, shared with
+  mail. Mark-as-read follows `rss_mark_as_read`.
+- **Article `WebView`** on the `androidx.webkit` multi-profile API keyed
   on `data_store_uuid`, with the runtime feature check and fallback
-  notice described under "Per-feed cookie scoping". Readability.js
-  injection for reader styling, vendored from the same pin.
-- OPML import via the system file picker; export via the share sheet.
-- `WorkManager` periodic refresh for notification-off feeds.
-- Changelog fragment carries the `Android:` prefix with a ~40-character
-  headline, per the Play release-notes budget.
+  notice described under "Per-feed cookie scoping"; Readability.js
+  injection for reader styling, vendored from the same pin; a plain
+  "needs a connection" state on the article action while offline and a
+  notice with Retry in place of the WebView's error page; back /
+  forward, share, open in browser.
+- **6c, management.** Subscribe sheet (paste a site address; the API's
+  error codes as sentences), subscription settings (title, folder,
+  ordering, open mode, styling, **remote content**, fetcher health,
+  Unsubscribe; no notifications toggle until phase 8), folder create /
+  rename / move / delete with contents moving up a level, mark-all-read
+  **with a confirmation** everywhere it is offered, OPML import via the
+  system file picker and export via the share sheet, Settings › Feeds
+  with the mark-as-read picker and the OPML actions. Unsubscribing
+  clears the profile's cookies and storage, then deletes the profile.
+- **6d, polish.** Fifteen-minute foreground refresh while the app is
+  open (the Apple posture; `WorkManager` periodic refresh for
+  background can wait for phase 8's push like iOS's background task
+  did), the catalog re-read after a refetch so health marks follow,
+  accessibility identifiers on rows for the tester, and the
+  feeds section of resume-where-you-left-off
+  ([`resume-session-plan.md`](./resume-session-plan.md) Phase B, which
+  is blocked on this phase for its feed half).
+- Changelog fragments carry the `Android:` prefix with a ~40-character
+  headline each, per the Play release-notes budget; four PRs means four
+  headlines sharing one release's 500 characters if they promote
+  together.
 
 **Rollback.** Feature flag hides the RSS destination.
 
@@ -1544,9 +1864,9 @@ unhealthy).
 
 ### Phase 10: Adaptive cadence + health surface polish
 
-**Status:** Health badge pulled forward, in review (2026-09-10): the first
-OPML import left two feeds silently empty, and a badge would have said
-why. `FeedHealth` (app layer) maps the fetcher's summary to healthy /
+**Status:** Health badge pulled forward, shipped in 1.16.0 (2026-09-11):
+the first OPML import left two feeds silently empty, and a badge would
+have said why. `FeedHealth` (app layer) maps the fetcher's summary to healthy /
 failing (3+ consecutive failures, warning tint) / stopped (20+ or
 dead-lettered, danger tint); the sidebar row shows the mark with the
 fetcher's words as tooltip and accessibility label, and a single feed's
@@ -1744,7 +2064,15 @@ Open implementation-time items, scoped per phase:
    v1 strategy but breaks down if the user marks an item favorite on
    iPhone offline, then unfavorites on Mac online, then the iPhone
    reconnects. Acceptable in v1 (the iPhone wins because its mutation
-   timestamp is later); revisit if it bites.
+   timestamp is later); revisit if it bites. *Update (2026-09-13):* the
+   first cross-device defect was not this race but the absence of any
+   path carrying a server state row to a device that had not written it
+   (#1539, fixed in 1.17.0 by `state_since`). The replay order within one
+   device's queue also mattered: item marks were sent before
+   mark-all-read regardless of the order made, so "mark all read, then
+   one unread" ended read. The queue now replays in order with
+   mark-all-read as a fence. The two-device race described here is still
+   open and still last-write-wins.
 10. **Android multi-profile WebView availability.** The
     `androidx.webkit` multi-profile feature depends on the installed
     system WebView, not the OS version. Measure how often the fallback
