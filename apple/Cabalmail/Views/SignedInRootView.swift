@@ -3,15 +3,18 @@ import CabalmailKit
 
 /// Signed-in root.
 ///
-/// The section layout (Mail / Addresses / Settings, plus a Search tab) branches
-/// on horizontal size class:
+/// The section layout (Mail / Feeds / Addresses / Settings, plus a Search tab)
+/// branches on device idiom and then horizontal size class
+/// (`SectionLayoutPolicy`):
 ///
-/// - Compact (iPhone, iPad in narrow multitasking): a bottom `TabView`, one
-///   tab per section. This is the natural compact idiom and the inner
-///   `MailRootView` `NavigationSplitView` collapses to a stack here, so the
-///   two never compete for the left edge. There's no dedicated Folders tab —
-///   the Mail tab's sidebar `FolderListView` already browses and manages
-///   folders.
+/// - iPhone (any orientation) and iPad in narrow multitasking: a bottom
+///   `TabView`, one tab per section. This is the natural compact idiom and the
+///   inner `MailRootView` `NavigationSplitView` collapses to a stack here, so
+///   the two never compete for the left edge. There's no dedicated Folders tab
+///   — the Mail tab's sidebar `FolderListView` already browses and manages
+///   folders. The idiom check matters: a Plus / Max iPhone reports a regular
+///   size class in landscape, and branching on size class alone rebuilt the
+///   whole tree on rotation, dropping the reader (see the policy's doc).
 /// - Regular iPad: just `MailRootView` — a single show/hide sidebar owns the
 ///   left edge, matching the macOS main window. Addresses / Folders / Settings
 ///   move into a modal `SettingsSheet`, opened by the sidebar gear button or
@@ -74,9 +77,10 @@ struct SignedInRootView: View {
         // `VisionSectionView`.
         VisionSectionView()
         #else
-        if horizontalSizeClass == .compact {
+        switch layoutChoice {
+        case .compactTabs:
             compactTabs
-        } else {
+        case .regularSplit:
             MailRootView()
                 .environment(\.showsSettingsGear, true)
                 .sheet(isPresented: $settingsPresented) {
@@ -93,6 +97,15 @@ struct SignedInRootView: View {
     }
 
     #if os(iOS)
+    /// Idiom first, then size class — see `SectionLayoutPolicy` for why the
+    /// size class alone is not enough on an iPhone.
+    private var layoutChoice: SectionLayoutPolicy.Layout {
+        SectionLayoutPolicy.layout(
+            isPhone: UIDevice.current.userInterfaceIdiom == .phone,
+            isCompactWidth: horizontalSizeClass == .compact
+        )
+    }
+
     /// Compact-width section switcher: a plain bottom tab bar. No
     /// `.sidebarAdaptable` - at compact width there's no sidebar to adapt to,
     /// and the regular-width path never renders this, so the adaptive style's
@@ -190,10 +203,12 @@ struct SignedInRootView: View {
     }
 
     /// Lift the banners above the tab bar wherever one occupies that band —
-    /// see `StatusBannerPlacement`.
+    /// see `StatusBannerPlacement`. Keyed on the layout actually drawn, not
+    /// the raw size class: a Plus / Max iPhone in landscape is regular-width
+    /// but still shows the tab bar.
     private var bannerBottomInset: CGFloat {
         #if os(iOS)
-        StatusBannerPlacement.bottomInset(isRegularWidth: horizontalSizeClass == .regular)
+        StatusBannerPlacement.bottomInset(isRegularWidth: layoutChoice == .regularSplit)
         #else
         StatusBannerPlacement.defaultBottomInset
         #endif

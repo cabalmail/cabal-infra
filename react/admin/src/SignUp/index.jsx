@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import AuthShell from '../Login/AuthShell';
+import EmailField from '../Login/EmailField';
 import PasswordField from '../Login/PasswordField';
 import UsernameField from '../Login/UsernameField';
 import { useAuth } from '../contexts/AuthContext';
@@ -101,30 +102,16 @@ function SignUp({
             3&ndash;32 characters. Lowercase letters, numbers, hyphens.
           </p>
         </UsernameField>
-        <div className="auth__field">
-          <div className="auth__field-header">
-            <label className="auth__field-label" htmlFor="email">Email address</label>
-            <span className="auth__field-hint">For verification and recovery</span>
-          </div>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            className="mono"
-            autoComplete="email"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck="false"
-            placeholder="you@example.com"
-            onChange={onEmailChange}
-            value={email || ''}
-            required
-          />
+        <EmailField
+          value={email}
+          onChange={onEmailChange}
+          hint="For verification and recovery"
+        >
           <p className="auth__field-help">
             An existing address outside Cabalmail, so you can recover access
             if you lose your phone.
           </p>
-        </div>
+        </EmailField>
         {sms_enabled ? (
           <div className="auth__field">
             <div className="auth__field-header">
