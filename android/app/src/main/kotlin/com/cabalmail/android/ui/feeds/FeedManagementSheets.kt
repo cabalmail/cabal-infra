@@ -541,7 +541,8 @@ internal fun FeedSubscriptionSettingsSheet(
             )
         } else {
             FeedDetailRow(stringResource(R.string.feed_settings_address), feed.canonicalUrl)
-            if (feed.siteUrl.isNotEmpty()) {
+            // Only a web address is offered; some publishers put a `tag:` URI here.
+            if (feed.siteUrl.lowercase().let { it.startsWith("http://") || it.startsWith("https://") }) {
                 TextButton(
                     onClick = {
                         runCatching {

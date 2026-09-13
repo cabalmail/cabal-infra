@@ -1687,7 +1687,15 @@ button, a Feed Settings entry in the item list's menu, and Settings ›
 Feeds' Subscriptions rows for OPML. Tests: `FeedFormsTest` and
 `FeedManagementViewModelTest` against a server fake that keeps a
 catalog, so a refresh sees each write. Not in 6c, as on Apple:
-drag-to-reorder and the notifications toggle (phase 8).
+drag-to-reorder and the notifications toggle (phase 8). Driven on the
+Pixel 8 API 35 emulator against the `claude` stage account
+(2026-09-13): a folder created from the `+` menu, a feed subscribed into
+it from the folder's long-press menu (a site address, autodiscovered by
+the server, the list opening on the new feed), its title changed in the
+settings sheet and reflected in the tree, unsubscribed through the
+confirmation and gone from the tree, the folder renamed and then
+deleted through its confirmation, and the OPML export offered through
+the share sheet; no crashes, and the account left as found.
 
 6b as built, in `android/app/.../ui/feeds/`: a `FEEDS` top-level
 destination (a vendored `rss_feed` glyph, since the core icon set has
