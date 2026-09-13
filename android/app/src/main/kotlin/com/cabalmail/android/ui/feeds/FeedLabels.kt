@@ -6,7 +6,10 @@ import androidx.compose.ui.res.stringResource
 import com.cabalmail.android.R
 import com.cabalmail.kit.models.RssItemFilter
 import com.cabalmail.kit.models.RssItemScope
+import com.cabalmail.kit.models.RssOpenMode
 import com.cabalmail.kit.models.RssOrderingMode
+import com.cabalmail.kit.models.RssRemoteContentMode
+import com.cabalmail.kit.models.RssStyling
 
 @Composable
 internal fun RssItemFilter.label(): String =
@@ -53,3 +56,31 @@ internal fun scopeTitle(
         is RssItemScope.Folder -> state.title(scope) ?: stringResource(R.string.feed_folder_fallback)
         is RssItemScope.Subscription -> state.title(scope) ?: stringResource(R.string.feed_title_fallback)
     }
+
+@Composable
+internal fun RssOpenMode.label(): String =
+    stringResource(
+        when (this) {
+            RssOpenMode.SUMMARY -> R.string.feed_open_mode_summary
+            RssOpenMode.ARTICLE -> R.string.feed_open_mode_article
+        },
+    )
+
+@Composable
+internal fun RssStyling.label(): String =
+    stringResource(
+        when (this) {
+            RssStyling.READER -> R.string.feed_styling_reader
+            RssStyling.NATIVE -> R.string.feed_styling_native
+        },
+    )
+
+@Composable
+internal fun RssRemoteContentMode.label(): String =
+    stringResource(
+        when (this) {
+            RssRemoteContentMode.INHERIT -> R.string.feed_remote_inherit
+            RssRemoteContentMode.SHOW -> R.string.feed_remote_show
+            RssRemoteContentMode.HIDE -> R.string.feed_remote_hide
+        },
+    )

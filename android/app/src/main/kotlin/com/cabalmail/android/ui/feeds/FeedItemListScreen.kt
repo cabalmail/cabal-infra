@@ -83,6 +83,8 @@ fun FeedItemListScreen(
     modifier: Modifier = Modifier,
     /** The item open in an adjacent detail pane, if any. */
     highlightedId: String? = null,
+    /** Opens the feed's settings sheet (single-feed scopes with a management model). */
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     ForegroundPolling(viewModel::poll, FEED_POLL_MS)
     var confirmMarkAllRead by remember { mutableStateOf(false) }
@@ -117,6 +119,16 @@ fun FeedItemListScreen(
                             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.feed_order))
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            if (onOpenSettings != null) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.feeds_feed_settings)) },
+                                    onClick = {
+                                        menuOpen = false
+                                        onOpenSettings()
+                                    },
+                                )
+                                HorizontalDivider()
+                            }
                             RssOrderingMode.entries.forEach { ordering ->
                                 DropdownMenuItem(
                                     text = { Text(ordering.label()) },

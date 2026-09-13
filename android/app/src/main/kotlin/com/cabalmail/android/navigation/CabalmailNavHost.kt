@@ -69,6 +69,8 @@ import com.cabalmail.android.ui.feeds.FeedItemListScreen
 import com.cabalmail.android.ui.feeds.FeedItemListViewModel
 import com.cabalmail.android.ui.feeds.FeedListDetailScreen
 import com.cabalmail.android.ui.feeds.FeedListScreen
+import com.cabalmail.android.ui.feeds.FeedManagementSheets
+import com.cabalmail.android.ui.feeds.FeedManagementViewModel
 import com.cabalmail.android.ui.feeds.FeedPane
 import com.cabalmail.android.ui.feeds.FeedRoutes
 import com.cabalmail.android.ui.feeds.FeedsViewModel
@@ -614,7 +616,16 @@ private fun MailNavGraph(
             val state by viewModel.state.collectAsState()
             val preferences by viewModel.preferences.collectAsState()
             val folderChoices by viewModel.folderChoices.collectAsState()
+            // Settings › Feeds OPML actions ride a management model of their
+            // own; its sheets and notices overlay the settings screen.
+            val feedManagement: FeedManagementViewModel =
+                viewModel(factory = FeedManagementViewModel.factory(container))
+            val feedSnackbar = remember { androidx.compose.material3.SnackbarHostState() }
+            FeedManagementSheets(viewModel = feedManagement, snackbarHostState = feedSnackbar)
             SettingsScreen(
+                onImportOpml = { feedManagement.requestImport() },
+                onExportOpml = { feedManagement.exportOpml() },
+                feedSnackbarHostState = feedSnackbar,
                 state = state,
                 preferences = preferences,
                 onUpdate = viewModel::update,
@@ -734,10 +745,12 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
 
     composable(FeedRoutes.HUB) {
         val viewModel: FeedsViewModel = viewModel(factory = FeedsViewModel.factory(container))
+        val management: FeedManagementViewModel = viewModel(factory = FeedManagementViewModel.factory(container))
         val state by viewModel.state.collectAsState()
         val preferences by container.preferences.preferences.collectAsState()
         val scope = rememberCoroutineScope()
         FeedListScreen(
+            management = management,
             state = state,
             collapsed = preferences.feedCollapsedFolders,
             onToggleCollapsed = { folderId ->
@@ -778,15 +791,34 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
             remember(entry) { runCatching { navController.getBackStackEntry(FeedRoutes.HUB) }.getOrNull() ?: entry }
         val feedsViewModel: FeedsViewModel =
             viewModel(viewModelStoreOwner = hubOwner, factory = FeedsViewModel.factory(container))
+        val management: FeedManagementViewModel =
+            viewModel(viewModelStoreOwner = hubOwner, factory = FeedManagementViewModel.factory(container))
         val feedsState by feedsViewModel.state.collectAsState()
         val title = scopeTitle(itemScope, feedsState)
+        val onSubscribed: (com.cabalmail.kit.models.RssSubscription) -> Unit = { sub ->
+            openScope(RssItemScope.Subscription(sub.subscriptionId))
+        }
         if (compactWidth) {
-            FeedItemListScreen(
-                title = title,
-                state = state,
-                viewModel = viewModel,
-                onOpenItem = { item -> navController.navigate(FeedRoutes.item(item.feedId, item.sortKey)) },
-                onBack = { navController.popBackStack() },
+            val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+            androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+                FeedItemListScreen(
+                    title = title,
+                    state = state,
+                    viewModel = viewModel,
+                    onOpenItem = { item -> navController.navigate(FeedRoutes.item(item.feedId, item.sortKey)) },
+                    onBack = { navController.popBackStack() },
+                    onOpenSettings = state.subscription?.let { sub -> { management.openSettings(sub) } },
+                )
+                androidx.compose.material3.SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
+            FeedManagementSheets(
+                viewModel = management,
+                snackbarHostState = snackbarHostState,
+                onSubscribed = onSubscribed,
+                onUnsubscribed = { navController.popBackStack(FeedRoutes.HUB, inclusive = false) },
             )
         } else {
             val preferences by container.preferences.preferences.collectAsState()
@@ -798,6 +830,9 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                 listState = state,
                 onBack = { navController.popBackStack() },
                 initialItemId = initialItemId,
+                management = management,
+                onSubscribed = onSubscribed,
+                onUnsubscribed = { navController.popBackStack(FeedRoutes.HUB, inclusive = false) },
                 feedPane = {
                     FeedPane(
                         state = feedsState,
@@ -822,6 +857,7 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                         },
                         onOpenScope = openScope,
                         onPoll = feedsViewModel::poll,
+                        management = management,
                     )
                 },
             )
