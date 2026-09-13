@@ -40,6 +40,23 @@ impl Step {
     }
 }
 
+/// Whether this process is running as root.
+///
+/// Both packaging and smoke-testing care, in opposite directions: `makepkg`
+/// refuses to run as root, and installing a package needs it. Asking here
+/// rather than in each of them keeps one answer to the question.
+///
+/// `/proc/self` is owned by the process's own uid, which is the cheapest way
+/// to ask without taking a dependency for one call.
+pub fn running_as_root() -> Result<bool, String> {
+    use std::os::unix::fs::MetadataExt as _;
+
+    Ok(std::fs::metadata("/proc/self")
+        .map_err(|e| format!("reading /proc/self: {e}"))?
+        .uid()
+        == 0)
+}
+
 /// Runs `step` in `dir`, inheriting its output.
 pub fn run(step: &Step, dir: &Path) -> Result<(), String> {
     // Our own line goes through the same fd as the child's output but not the
@@ -78,6 +95,25 @@ fn quote(arg: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Checked against `id -u` rather than against an expected answer: this
+    /// test runs unprivileged today and in a root container tomorrow, and an
+    /// implementation that always said `false` would pass either way if the
+    /// answer were hard-coded. `package arch` refuses to run when this says
+    /// true and `smoke` refuses when it says false, so a wrong answer breaks
+    /// one of them for everyone.
+    #[test]
+    fn the_root_check_agrees_with_the_system() {
+        let id = std::process::Command::new("id")
+            .arg("-u")
+            .output()
+            .expect("running `id -u`");
+        let uid: u32 = String::from_utf8_lossy(&id.stdout)
+            .trim()
+            .parse()
+            .expect("a numeric uid");
+        assert_eq!(running_as_root(), Ok(uid == 0));
+    }
 
     #[test]
     fn a_command_line_reads_back_as_it_was_typed() {
