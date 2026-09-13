@@ -92,17 +92,31 @@ final class ReaderScrollBridgeTests: XCTestCase {
         guard let hit = try await waitForCapture({ captures }, where: { !$0.isAtTop }) else {
             return XCTFail("no capture")
         }
-        let idBefore = try await view.evaluateJavaScript(
-            "(function(){var el=document.elementFromPoint(200,1);return el?el.id:''})()") as? String
+        let idBefore = try await view.evaluateJavaScript(Self.topParagraphScript) as? String
         view.evaluateJavaScript("window.scrollTo(0, 0)", completionHandler: nil)
         _ = try await waitForCapture({ captures }, where: { $0.isAtTop })
         view.evaluateJavaScript(HTMLBodyCoordinator.restoreScript(anchor: hit.anchor), completionHandler: nil)
         _ = try await waitForCapture({ captures }, where: { !$0.isAtTop })
-        let idAfter = try await view.evaluateJavaScript(
-            "(function(){var el=document.elementFromPoint(200,1);return el?el.id:''})()") as? String
+        let idAfter = try await view.evaluateJavaScript(Self.topParagraphScript) as? String
         XCTAssertFalse(idBefore?.isEmpty ?? true)
         XCTAssertEqual(idBefore, idAfter)
     }
+
+    /// The id of the first paragraph whose bottom edge is below the
+    /// viewport top — the paragraph "at the top" of the visible page.
+    /// Walks the paragraphs by geometry rather than hit-testing one point:
+    /// `elementFromPoint` at a fixed coordinate depends on the reader
+    /// stylesheet's padding and on WebKit's hit-testing of it, which the
+    /// Xcode 27 preview's WebKit answered differently (the body, no id).
+    private static let topParagraphScript = """
+    (function(){
+      var ps=document.getElementsByTagName("p");
+      for(var i=0;i<ps.length;i++){
+        if(ps[i].getBoundingClientRect().bottom>0){return ps[i].id;}
+      }
+      return "";
+    })()
+    """
 
     func testScrollingBackToTheTopReportsAtTop() async throws {
         let coordinator = HTMLBodyCoordinator(allowRemote: false)
