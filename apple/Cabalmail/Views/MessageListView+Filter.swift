@@ -1,16 +1,12 @@
 import SwiftUI
 import CabalmailKit
 
-/// Client-side narrowing of the loaded envelopes — the three tabs the
-/// React webmail shows (`react/admin/src/Email/Messages/index.jsx`),
-/// translated to a SwiftUI segmented control.
-public enum MessageFilter: String, CaseIterable, Identifiable {
-    case all
-    case unread
-    case flagged
-
-    public var id: String { rawValue }
-
+/// The three tabs the React webmail shows
+/// (`react/admin/src/Email/Messages/index.jsx`), translated to a SwiftUI
+/// segmented control. The enum itself lives in the kit (`MessageFilter`),
+/// where `Preferences` stores each folder's sticky pill; the labels and the
+/// client-side envelope predicate are the view's.
+extension MessageFilter {
     public var label: String {
         switch self {
         case .all:     return "All"

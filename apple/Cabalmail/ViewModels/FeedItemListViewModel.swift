@@ -6,6 +6,13 @@ import CabalmailKit
 /// store, the all / unread / favorite filter, the subscription's ordering,
 /// per-feed search, and the optimistic read / favorite mutations.
 ///
+/// The filter pill is sticky per scope: the list opens on the pill the user
+/// last chose for this feed (`RssSubscription.defaultFilter`), folder
+/// (`RssFolder.defaultFilter`), or the all-feeds list
+/// (`Preferences.rssAllFeedsFilter`) -- Unread until then -- and a tap
+/// writes the pill back there (`selectFilter`). The rows sync through the
+/// server, so the choice follows the account across devices.
+///
 /// Everything the list shows comes from `RssStore`; the network only runs
 /// in `sync()` (fresh items) and `loadOlder()` (history), both of which
 /// re-read the store afterwards.
@@ -14,7 +21,9 @@ import CabalmailKit
 final class FeedItemListViewModel {
     let scope: RssItemScope
     var items: [RssItem] = []
-    var filter: RssItemFilter = .all {
+    /// The active pill. Set through `selectFilter` from the UI; a direct
+    /// assignment reloads without recording the choice.
+    var filter: RssItemFilter {
         didSet { Task { await reload() } }
     }
     var ordering: RssOrderingMode
@@ -34,6 +43,7 @@ final class FeedItemListViewModel {
 
     private let client: CabalmailClient
     private let preferences: Preferences
+    private let defaults: FeedDefaultsPersisting?
     private let bus: FeedStateBus
     private let pageSize = 100
     private var loaded = 0
@@ -43,17 +53,56 @@ final class FeedItemListViewModel {
 
     /// The single subscription this list shows, when it shows exactly one;
     /// search, load-older, and the ordering preference only make sense then.
-    let subscription: RssSubscription?
+    /// Mutable only so a pill tap can hold the optimistic row (`selectFilter`).
+    private(set) var subscription: RssSubscription?
+    /// The folder this list shows, in folder scope; same optimistic role.
+    private(set) var folder: RssFolder?
 
-    init(scope: RssItemScope, subscription: RssSubscription?, client: CabalmailClient, preferences: Preferences,
+    init(scope: RssItemScope, subscription: RssSubscription?, folder: RssFolder? = nil,
+         client: CabalmailClient, preferences: Preferences, defaults: FeedDefaultsPersisting? = nil,
          bus: FeedStateBus = .shared) {
         self.scope = scope
         self.subscription = subscription
+        self.folder = folder
         self.client = client
         self.preferences = preferences
+        self.defaults = defaults ?? client.rssSync
         self.bus = bus
         self.ordering = subscription?.orderingMode ?? .newestFirst
+        self.filter = FeedListFilterPolicy.initial(scope: scope, subscription: subscription, folder: folder,
+                                                   allFeedsFilter: preferences.rssAllFeedsFilter)
         bus.subscribe(self) { [weak self] change in self?.apply(change) }
+    }
+
+    /// A pill tap: applies the filter, then makes it the pill this scope's
+    /// list opens on. Optimistic, like the reader's sticky toggles: the row
+    /// held here changes at once, the store and server follow, and a failure
+    /// leaves the next catalog refresh to reconcile.
+    func selectFilter(_ filter: RssItemFilter) {
+        guard filter != self.filter else { return }
+        self.filter = filter
+        switch scope {
+        case .all:
+            preferences.rssAllFeedsFilter = filter
+        case .subscription:
+            guard let subscription, let defaults,
+                  let update = FeedListFilterPolicy.stickyUpdate(for: subscription, filter: filter)
+            else { return }
+            self.subscription = subscription.applying(update)
+            Task { [bus] in
+                _ = try? await defaults.updateSubscription(subscription, update)
+                bus.postCatalogChanged()
+            }
+        case .folder:
+            guard let folder, let defaults,
+                  let update = FeedListFilterPolicy.stickyUpdate(for: folder, filter: filter)
+            else { return }
+            self.folder = folder.applying(update)
+            Task { [bus] in
+                _ = try? await defaults.updateFolder(folder, update)
+                bus.postCatalogChanged()
+            }
+        }
     }
 
     /// A state change made elsewhere (the reader's toolbar, another list):
@@ -219,6 +268,34 @@ final class FeedItemListViewModel {
             pending.insert(item.id)
         }
         pendingIds = pending
+    }
+}
+
+/// Which pill a feed list opens on, and what a tap writes back. Pure so it
+/// can be unit-tested without a client.
+enum FeedListFilterPolicy {
+    /// The scope's sticky pill: the subscription's or folder's stored
+    /// default, or the all-feeds preference. A scope whose row is not at
+    /// hand (a folder the store has not seen yet) opens on the feed default.
+    static func initial(
+        scope: RssItemScope, subscription: RssSubscription?, folder: RssFolder?, allFeedsFilter: RssItemFilter
+    ) -> RssItemFilter {
+        switch scope {
+        case .all: return allFeedsFilter
+        case .subscription: return subscription?.defaultFilter ?? .defaultForFeeds
+        case .folder: return folder?.defaultFilter ?? .defaultForFeeds
+        }
+    }
+
+    /// The subscription update a tap on `filter` writes, or nil when the
+    /// row already says so.
+    static func stickyUpdate(for subscription: RssSubscription, filter: RssItemFilter) -> RssSubscriptionUpdate? {
+        subscription.defaultFilter == filter ? nil : RssSubscriptionUpdate(defaultFilter: filter)
+    }
+
+    /// The folder counterpart of `stickyUpdate(for:filter:)`.
+    static func stickyUpdate(for folder: RssFolder, filter: RssItemFilter) -> RssFolderUpdate? {
+        folder.defaultFilter == filter ? nil : RssFolderUpdate(defaultFilter: filter)
     }
 }
 

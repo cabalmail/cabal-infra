@@ -204,6 +204,8 @@ public final class Preferences {
         case folderCountDisplay = "cabalmail.prefs.folder_count_display"
         case flagPalette = "cabalmail.prefs.flag_palette"
         case rssMarkAsRead = "cabalmail.prefs.rss_mark_as_read"
+        case rssAllFeedsFilter = "cabalmail.prefs.rss_all_feeds_filter"
+        case mailFolderFilters = "cabalmail.prefs.mail_folder_filters"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -276,6 +278,22 @@ public final class Preferences {
             persist(.flagPalette, FlagPalette.encode(flagPalette))
         }
     }
+    /// The filter pill the all-feeds list opens on; sticky, like a single
+    /// feed's or folder's (which live on their own rows instead). Unread by
+    /// default, the feed reader's posture.
+    public var rssAllFeedsFilter: RssItemFilter {
+        didSet {
+            persist(.rssAllFeedsFilter, rssAllFeedsFilter.rawValue)
+            if !isReloading && !isApplyingRemote { rssAllFeedsFilterSyncable = true }
+        }
+    }
+    /// The filter pill each mail folder's list opens on, by folder path; a
+    /// folder absent here opens on All. Sticky: the list writes the pill
+    /// back through `setMailFolderFilter` when the user changes it. Synced
+    /// one key per folder — see `Preferences+ListFilters.swift`.
+    public var mailFolderFilters: [String: MessageFilter] {
+        didSet { persist(.mailFolderFilters, Self.encodeFolderFilters(mailFolderFilters)) }
+    }
 
     private let store: PreferenceStore
     private var isReloading = false
@@ -292,6 +310,8 @@ public final class Preferences {
     /// whole map, so the key rides only once the server has shown it knows
     /// it (a fetched map carried it) or the user has actually set it.
     private var rssMarkAsReadSyncable = false
+    /// Same gate for the all-feeds pill (`filter:feeds:all`).
+    private var rssAllFeedsFilterSyncable = false
 
     /// Scope hash of the account whose settings are currently loaded, or
     /// `nil` before the first `activate` (fresh install, first launch
@@ -325,28 +345,14 @@ public final class Preferences {
         self.folderCountDisplay = .unread
         self.flagPalette = []
         self.rssMarkAsRead = .manual
+        self.rssAllFeedsFilter = .defaultForFeeds
+        self.mailFolderFilters = [:]
         store.startObserving { [weak self] in
             self?.reload()
         }
     }
 
     // MARK: - Account scoping
-
-    /// Stable per-account scope hash (FNV-1a 64 of the normalized control
-    /// domain + username). Hashing keeps usernames out of stored key names
-    /// and the key length bounded regardless of username length. `nil`
-    /// when either input is empty.
-    static func scopeIdentifier(controlDomain: String, username: String) -> String? {
-        let domain = controlDomain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let user = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !domain.isEmpty, !user.isEmpty else { return nil }
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in "\(domain)|\(user)".utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x0000_0100_0000_01b3
-        }
-        return String(format: "%016llx", hash)
-    }
 
     /// Switches the loaded settings to `username`'s account and reloads
     /// every property from that account's stored values (defaults on its
@@ -405,6 +411,8 @@ public final class Preferences {
         folderCountDisplay = readEnum(.folderCountDisplay, default: .unread)
         flagPalette = readString(.flagPalette).flatMap(FlagPalette.decode) ?? []
         rssMarkAsRead = readEnum(.rssMarkAsRead, default: .manual)
+        rssAllFeedsFilter = readEnum(.rssAllFeedsFilter, default: .defaultForFeeds)
+        mailFolderFilters = Self.decodeFolderFilters(readString(.mailFolderFilters))
     }
 
     private func persist(_ key: Key, _ value: String?) {
@@ -472,6 +480,7 @@ public final class Preferences {
         static let folderCountDisplay = "folder_count_display"
         static let flagPalette = "flag_palette"
         static let rssMarkAsRead = "rss_mark_as_read"
+        static let rssAllFeedsFilter = "filter:feeds:all"
     }
 
     /// The complete set of synced preferences as the `app` map the server
@@ -505,6 +514,13 @@ public final class Preferences {
         if rssMarkAsRead != .manual || rssMarkAsReadSyncable {
             payload[AppWireKey.rssMarkAsRead] = rssMarkAsRead.rawValue
         }
+        if rssAllFeedsFilter != .defaultForFeeds || rssAllFeedsFilterSyncable {
+            payload[AppWireKey.rssAllFeedsFilter] = rssAllFeedsFilter.rawValue
+        }
+        // A mail folder's pill exists only once a user set it (here or on
+        // another device), so a present entry is its own proof the server
+        // knows the key shape.
+        payload.merge(folderFilterWireEntries()) { _, folder in folder }
         return payload
     }
 
@@ -537,6 +553,11 @@ public final class Preferences {
             rssMarkAsReadSyncable = true
             applyEnum(remote[AppWireKey.rssMarkAsRead], to: \.rssMarkAsRead)
         }
+        if remote[AppWireKey.rssAllFeedsFilter] != nil {
+            rssAllFeedsFilterSyncable = true
+            applyEnum(remote[AppWireKey.rssAllFeedsFilter], to: \.rssAllFeedsFilter)
+        }
+        applyRemoteFolderFilters(remote)
         if let raw = remote[AppWireKey.flagPalette] {
             flagPaletteSyncable = true
             // An unparseable value leaves the current palette untouched,

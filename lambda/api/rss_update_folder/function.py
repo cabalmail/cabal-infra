@@ -1,12 +1,12 @@
 '''PUT /rss_update_folder - rename, move, or reorder a folder.
 
 Body: {"folder_id": "...", and any of "name", "parent_folder_id" (empty
-       string = root), "display_order"}
+       string = root), "display_order", "default_filter"}
 
 Moving a folder under itself or one of its descendants is refused: the
 tree must stay a tree.
 '''
-from rss_api import (ApiError, MAX_TITLE_LENGTH, body_of,  # pylint: disable=import-error
+from rss_api import (ApiError, ITEM_FILTERS, MAX_TITLE_LENGTH, body_of,  # pylint: disable=import-error
                      folder_and_descendants, folders, guarded, ok,
                      serialize_folder, username)
 
@@ -27,6 +27,14 @@ def handler(event, _context):
     if 'display_order' in body:
         sets.append('display_order = :order')
         values[':order'] = valid_order(body['display_order'])
+    if 'default_filter' in body:
+        # The pill the folder's list opens on (sticky, like a subscription's
+        # default_filter); the folder row is per user, so it syncs as-is.
+        if body['default_filter'] not in ITEM_FILTERS:
+            raise ApiError(400, 'invalid_default_filter',
+                           f'default_filter must be one of {", ".join(ITEM_FILTERS)}.')
+        sets.append('default_filter = :filter')
+        values[':filter'] = body['default_filter']
     if 'parent_folder_id' in body:
         parent = valid_parent(user, folder_id, body['parent_folder_id'])
         if parent:

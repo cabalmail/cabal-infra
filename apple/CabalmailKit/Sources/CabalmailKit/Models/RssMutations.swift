@@ -36,12 +36,14 @@ public struct RssSubscriptionUpdate: Sendable, Hashable {
     public var defaultOpenMode: RssOpenMode?
     public var defaultStyling: RssStyling?
     public var defaultRemoteContent: RssRemoteContentMode?
+    public var defaultFilter: RssItemFilter?
     public var notificationsEnabled: Bool?
 
     public init(
         customTitle: String? = nil, folderId: String? = nil, orderingMode: RssOrderingMode? = nil,
         defaultOpenMode: RssOpenMode? = nil, defaultStyling: RssStyling? = nil,
-        defaultRemoteContent: RssRemoteContentMode? = nil, notificationsEnabled: Bool? = nil
+        defaultRemoteContent: RssRemoteContentMode? = nil, defaultFilter: RssItemFilter? = nil,
+        notificationsEnabled: Bool? = nil
     ) {
         self.customTitle = customTitle
         self.folderId = folderId
@@ -49,12 +51,14 @@ public struct RssSubscriptionUpdate: Sendable, Hashable {
         self.defaultOpenMode = defaultOpenMode
         self.defaultStyling = defaultStyling
         self.defaultRemoteContent = defaultRemoteContent
+        self.defaultFilter = defaultFilter
         self.notificationsEnabled = notificationsEnabled
     }
 
     public var isEmpty: Bool {
         customTitle == nil && folderId == nil && orderingMode == nil && defaultOpenMode == nil
-            && defaultStyling == nil && defaultRemoteContent == nil && notificationsEnabled == nil
+            && defaultStyling == nil && defaultRemoteContent == nil && defaultFilter == nil
+            && notificationsEnabled == nil
     }
 }
 
@@ -70,6 +74,7 @@ extension RssSubscription {
         if let value = update.defaultOpenMode { sub.defaultOpenMode = value }
         if let value = update.defaultStyling { sub.defaultStyling = value }
         if let value = update.defaultRemoteContent { sub.defaultRemoteContent = value }
+        if let value = update.defaultFilter { sub.defaultFilter = value }
         if let value = update.notificationsEnabled { sub.notificationsEnabled = value }
         return sub
     }
@@ -81,11 +86,33 @@ public struct RssFolderUpdate: Sendable, Hashable {
     /// "" moves the folder to the root.
     public var parentFolderId: String?
     public var displayOrder: Int?
+    public var defaultFilter: RssItemFilter?
 
-    public init(name: String? = nil, parentFolderId: String? = nil, displayOrder: Int? = nil) {
+    public init(
+        name: String? = nil, parentFolderId: String? = nil, displayOrder: Int? = nil,
+        defaultFilter: RssItemFilter? = nil
+    ) {
         self.name = name
         self.parentFolderId = parentFolderId
         self.displayOrder = displayOrder
+        self.defaultFilter = defaultFilter
+    }
+
+    public var isEmpty: Bool {
+        name == nil && parentFolderId == nil && displayOrder == nil && defaultFilter == nil
+    }
+}
+
+extension RssFolder {
+    /// This folder with `update`'s fields applied — the subscription
+    /// counterpart's twin, for the same optimistic-before-round-trip use.
+    public func applying(_ update: RssFolderUpdate) -> RssFolder {
+        var folder = self
+        if let value = update.name { folder.name = value }
+        if let value = update.parentFolderId { folder.parentFolderId = value }
+        if let value = update.displayOrder { folder.displayOrder = value }
+        if let value = update.defaultFilter { folder.defaultFilter = value }
+        return folder
     }
 }
 

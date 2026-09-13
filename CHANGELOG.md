@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0] - 2026-09-13
+
+### Added
+- Android: **Sticky mail filter pills.** The All / Unread / Flagged pills
+  above a mail folder remember the last pill chosen for that folder and
+  open on it next time (All until then). The choice syncs with the Apple
+  clients through the same per-folder preference keys.
+- **Sticky filter pill on the RSS rows and in synced preferences.**
+  `/rss_list_subscriptions` subscriptions and folders carry `default_filter`
+  (`all` | `unread` | `favorite`, default `unread`), settable through
+  `/rss_update_subscription` and `/rss_update_folder`; `/set_preferences`
+  accepts `filter:feeds:all` and one `filter:mail:<folder>` key per mail
+  folder (`all` | `unread` | `flagged`) in the `app` map.
+- Apple: **Sticky filter pills.** The All / Unread / Flagged pills above a
+  mail folder and the All / Unread / Favorites pills above a feed, a feed
+  folder, or All Feeds now remember the last pill chosen for that folder or
+  feed and open on it next time. Mail folders start on All; feeds, feed
+  folders, and All Feeds start on Unread. The choice follows the account
+  across devices: a feed's or feed folder's pill lives on its server row
+  (`default_filter`), and a mail folder's on the synced preferences as one
+  `filter:mail:<folder>` key per folder, so two devices changing two
+  folders never overwrite each other.
+
 ## [1.17.1] - 2026-09-12
 
 ### Added

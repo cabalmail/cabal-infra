@@ -20,8 +20,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import boto3  # pylint: disable=import-error
 from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
-from rss_api import (ApiError, ROOT_FOLDER, SHARED_OWNER, feeds, folder_key,  # pylint: disable=import-error
-                     folders, list_subscriptions, subscriptions)
+from rss_api import (ApiError, DEFAULT_ITEM_FILTER, ROOT_FOLDER, SHARED_OWNER,  # pylint: disable=import-error
+                     feeds, folder_key, folders, list_subscriptions, subscriptions)
 from rss_discover import discover_feed_links, looks_like_html  # pylint: disable=import-error
 from rss_http import FetchError, fetch  # pylint: disable=import-error
 from rss_parse import ParseError, ParsedFeed, parse_feed  # pylint: disable=import-error
@@ -225,6 +225,7 @@ def create_subscription(user, feed, folder_id):
         'default_open_mode': 'summary',
         'default_styling': 'reader',
         'default_remote_content': 'inherit',
+        'default_filter': DEFAULT_ITEM_FILTER,
         'notifications_enabled': False,
         'data_store_uuid': str(uuid.uuid4()),
         'created_at': now,

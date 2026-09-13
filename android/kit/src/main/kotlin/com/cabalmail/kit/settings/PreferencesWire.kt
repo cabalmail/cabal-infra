@@ -54,6 +54,9 @@ object PreferencesWire {
                     if (preferences.flagPalette.isNotEmpty() || preferences.flagPaletteSyncable) {
                         put(AppKey.FLAG_PALETTE, FlagPalette.encode(preferences.flagPalette))
                     }
+                    // One key per mail folder whose pill the user has set
+                    // (see [AppPreferences.mailFolderFilters]).
+                    putAll(MailFolderFilters.toWire(preferences.mailFolderFilters))
                 },
         )
 
@@ -98,6 +101,7 @@ object PreferencesWire {
                 app[AppKey.FLAG_PALETTE]?.let(FlagPalette::decode) ?: current.flagPalette,
             flagPaletteSyncable =
                 current.flagPaletteSyncable || app.containsKey(AppKey.FLAG_PALETTE),
+            mailFolderFilters = MailFolderFilters.mergeRemote(current.mailFolderFilters, app),
         )
     }
 }

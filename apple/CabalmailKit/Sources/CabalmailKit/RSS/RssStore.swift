@@ -23,7 +23,7 @@ public actor RssStore {
     /// RSS state beside it).
     public nonisolated let directory: URL
 
-    static let schemaVersion = 3
+    static let schemaVersion = 4
 
     public init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -48,6 +48,10 @@ public actor RssStore {
         if database.userVersion < 3 {
             try database.exec(Schema.version3)
             database.userVersion = 3
+        }
+        if database.userVersion < 4 {
+            try database.exec(Schema.version4)
+            database.userVersion = 4
         }
     }
 
@@ -92,13 +96,7 @@ public actor RssStore {
                 try database.run("DELETE FROM folders WHERE folder_id = ?", [.init(row.string(0))])
             }
             for folder in catalog.folders {
-                try database.run("""
-                    INSERT INTO folders (folder_id, parent_folder_id, name, display_order)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(folder_id) DO UPDATE SET parent_folder_id = excluded.parent_folder_id,
-                      name = excluded.name, display_order = excluded.display_order
-                    """, [.init(folder.folderId), .init(folder.parentFolderId), .init(folder.name),
-                          .init(folder.displayOrder)])
+                try upsertFolder(folder)
             }
             try database.exec("COMMIT")
         } catch {
@@ -119,13 +117,14 @@ public actor RssStore {
         try database.run("""
             INSERT INTO subscriptions (subscription_id, feed_id, folder_id, custom_title, ordering_mode,
               default_open_mode, default_styling, notifications_enabled, credentials_scheme,
-              read_watermark, data_store_uuid, created_at, feed_json, default_remote_content)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              read_watermark, data_store_uuid, created_at, feed_json, default_remote_content, default_filter)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(subscription_id) DO UPDATE SET feed_id = excluded.feed_id,
               folder_id = excluded.folder_id, custom_title = excluded.custom_title,
               ordering_mode = excluded.ordering_mode, default_open_mode = excluded.default_open_mode,
               default_styling = excluded.default_styling,
               default_remote_content = excluded.default_remote_content,
+              default_filter = excluded.default_filter,
               notifications_enabled = excluded.notifications_enabled,
               credentials_scheme = excluded.credentials_scheme,
               read_watermark = MAX(subscriptions.read_watermark, excluded.read_watermark),
@@ -136,15 +135,34 @@ public actor RssStore {
                   .init(sub.orderingMode.rawValue), .init(sub.defaultOpenMode.rawValue),
                   .init(sub.defaultStyling.rawValue), .init(sub.notificationsEnabled),
                   .init(sub.credentialsScheme), .init(sub.readWatermark), .init(sub.dataStoreUuid),
-                  .init(sub.createdAt), .init(feedJson ?? ""), .init(sub.defaultRemoteContent.rawValue)])
+                  .init(sub.createdAt), .init(feedJson ?? ""), .init(sub.defaultRemoteContent.rawValue),
+                  .init(sub.defaultFilter.rawValue)])
+    }
+
+    /// Writes one folder (with the catalog, or after a server-side update).
+    public func upsertFolder(_ folder: RssFolder) throws {
+        try database.run("""
+            INSERT INTO folders (folder_id, parent_folder_id, name, display_order, default_filter)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(folder_id) DO UPDATE SET parent_folder_id = excluded.parent_folder_id,
+              name = excluded.name, display_order = excluded.display_order,
+              default_filter = excluded.default_filter
+            """, [.init(folder.folderId), .init(folder.parentFolderId), .init(folder.name),
+                  .init(folder.displayOrder), .init(folder.defaultFilter.rawValue)])
     }
 
     public func folders() throws -> [RssFolder] {
-        try database.rows(
-            "SELECT folder_id, parent_folder_id, name, display_order FROM folders ORDER BY display_order, name"
-        ).map {
-            RssFolder(folderId: $0.string(0), parentFolderId: $0.string(1), name: $0.string(2), displayOrder: $0.int(3))
+        try database.rows("""
+            SELECT folder_id, parent_folder_id, name, display_order, default_filter
+            FROM folders ORDER BY display_order, name
+            """).map {
+            RssFolder(folderId: $0.string(0), parentFolderId: $0.string(1), name: $0.string(2), displayOrder: $0.int(3),
+                      defaultFilter: RssItemFilter(rawValue: $0.string(4)) ?? .defaultForFeeds)
         }
+    }
+
+    public func folder(id: String) throws -> RssFolder? {
+        try folders().first { $0.folderId == id }
     }
 
     public func subscriptions() throws -> [RssSubscription] {
@@ -167,6 +185,7 @@ public actor RssStore {
             defaultOpenMode: RssOpenMode(rawValue: row.string(5)) ?? .summary,
             defaultStyling: RssStyling(rawValue: row.string(6)) ?? .reader,
             defaultRemoteContent: RssRemoteContentMode(rawValue: row.string(13)) ?? .inherit,
+            defaultFilter: RssItemFilter(rawValue: row.string(14)) ?? .defaultForFeeds,
             notificationsEnabled: row.bool(7), credentialsScheme: row.string(8), readWatermark: row.string(9),
             dataStoreUuid: row.string(10), createdAt: row.string(11), feed: feed
         )
@@ -210,7 +229,7 @@ enum Schema {
     static let subscriptionColumns = """
         subscription_id, feed_id, folder_id, custom_title, ordering_mode, default_open_mode,
         default_styling, notifications_enabled, credentials_scheme, read_watermark,
-        data_store_uuid, created_at, feed_json, default_remote_content
+        data_store_uuid, created_at, feed_json, default_remote_content, default_filter
         """
     static let itemColumns = """
         i.feed_id, i.sort_key, i.item_id, i.guid, i.title, i.author, i.url, i.published_at,
@@ -287,5 +306,14 @@ enum Schema {
     /// the server returns for a subscription that never set it.
     static let version3 = """
         ALTER TABLE subscriptions ADD COLUMN default_remote_content TEXT NOT NULL DEFAULT 'inherit';
+        """
+
+    /// The sticky filter pill per subscription and per folder
+    /// (`all` | `unread` | `favorite`); rows from before it existed read as
+    /// `unread`, which is also the server's default for a row that never
+    /// set it.
+    static let version4 = """
+        ALTER TABLE subscriptions ADD COLUMN default_filter TEXT NOT NULL DEFAULT 'unread';
+        ALTER TABLE folders ADD COLUMN default_filter TEXT NOT NULL DEFAULT 'unread';
         """
 }

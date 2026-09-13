@@ -37,6 +37,7 @@ extension URLSessionApiClient: RssClient {
         if let value = update.defaultOpenMode { body["default_open_mode"] = value.rawValue }
         if let value = update.defaultStyling { body["default_styling"] = value.rawValue }
         if let value = update.defaultRemoteContent { body["default_remote_content"] = value.rawValue }
+        if let value = update.defaultFilter { body["default_filter"] = value.rawValue }
         if let value = update.notificationsEnabled { body["notifications_enabled"] = value }
         let request = try await put("/rss_update_subscription", json: body)
         struct Payload: Decodable { let subscription: RssSubscription }
@@ -57,6 +58,7 @@ extension URLSessionApiClient: RssClient {
         if let value = update.name { body["name"] = value }
         if let value = update.parentFolderId { body["parent_folder_id"] = value }
         if let value = update.displayOrder { body["display_order"] = value }
+        if let value = update.defaultFilter { body["default_filter"] = value.rawValue }
         let request = try await put("/rss_update_folder", json: body)
         struct Payload: Decodable { let folder: RssFolder }
         return try await decodeRss(Payload.self, from: request).folder

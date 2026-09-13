@@ -250,6 +250,17 @@ public actor RssSyncEngine {
         return updated
     }
 
+    /// Changes a folder's settings (today only its sticky filter pill), with
+    /// the same optimistic store-first shape as `updateSubscription`.
+    @discardableResult
+    public func updateFolder(_ folder: RssFolder, _ update: RssFolderUpdate) async throws -> RssFolder {
+        guard !update.isEmpty else { return folder }
+        try await store.upsertFolder(folder.applying(update))
+        let updated = try await client.updateFolder(folder.folderId, update)
+        try await store.upsertFolder(updated)
+        return updated
+    }
+
     /// One drain attempt; a failure (offline, say) is expected and leaves
     /// the queue for the next trigger.
     private func pushSoon() async {

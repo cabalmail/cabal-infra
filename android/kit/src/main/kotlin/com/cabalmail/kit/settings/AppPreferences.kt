@@ -140,6 +140,15 @@ data class AppPreferences(
      * server would break every preference push from this build.
      */
     val flagPaletteSyncable: Boolean = false,
+    /**
+     * The filter pill each mail folder's list opens on, by folder path
+     * (sticky per folder; a folder absent here opens on All). Rides the
+     * `app` map as one `filter:mail:<path>` key per folder — see
+     * [MailFolderFilters]. A present entry is its own proof the server
+     * knows the key shape (it exists only once a user set it, here or on
+     * another device), so no syncable gate is needed.
+     */
+    val mailFolderFilters: Map<String, MailFolderFilter> = emptyMap(),
     // ---- local only
     val dynamicColor: Boolean = true,
     /** Background new-mail notifications (plan §7.3); off until the user opts in. */

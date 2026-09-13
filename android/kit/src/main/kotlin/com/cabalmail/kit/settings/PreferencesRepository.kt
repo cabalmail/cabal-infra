@@ -50,6 +50,7 @@ class PreferencesRepository(
         val SIGNATURE = stringPreferencesKey("signature")
         val FLAG_PALETTE = stringPreferencesKey("flag_palette")
         val FLAG_PALETTE_SYNCABLE = booleanPreferencesKey("flag_palette_syncable")
+        val MAIL_FOLDER_FILTERS = stringPreferencesKey("mail_folder_filters")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         val PUSH_FOLDERS = stringSetPreferencesKey("push_folders")
@@ -123,6 +124,7 @@ class PreferencesRepository(
             signature = store[Keys.SIGNATURE] ?: defaults.signature,
             flagPalette = store[Keys.FLAG_PALETTE]?.let(FlagPalette::decode) ?: defaults.flagPalette,
             flagPaletteSyncable = store[Keys.FLAG_PALETTE_SYNCABLE] ?: defaults.flagPaletteSyncable,
+            mailFolderFilters = MailFolderFilters.decode(store[Keys.MAIL_FOLDER_FILTERS]),
             dynamicColor = store[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
             notificationsEnabled = store[Keys.NOTIFICATIONS_ENABLED] ?: defaults.notificationsEnabled,
             pushFolders = store[Keys.PUSH_FOLDERS] ?: defaults.pushFolders,
@@ -153,6 +155,7 @@ class PreferencesRepository(
         store[Keys.SIGNATURE] = value.signature
         store[Keys.FLAG_PALETTE] = FlagPalette.encode(value.flagPalette)
         store[Keys.FLAG_PALETTE_SYNCABLE] = value.flagPaletteSyncable
+        store[Keys.MAIL_FOLDER_FILTERS] = MailFolderFilters.encode(value.mailFolderFilters)
         store[Keys.DYNAMIC_COLOR] = value.dynamicColor
         store[Keys.NOTIFICATIONS_ENABLED] = value.notificationsEnabled
         store[Keys.PUSH_FOLDERS] = value.pushFolders
