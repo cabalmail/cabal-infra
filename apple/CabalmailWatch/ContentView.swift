@@ -96,7 +96,7 @@ struct ContentView: View {
             }
         }
         .confirmationDialog(
-            "Revoke \(pendingRevoke?.address ?? "address")?",
+            pendingRevoke.map { AddressDisplay.revokeTitle($0.address) } ?? "Revoke address?",
             isPresented: revokeDialogBinding,
             titleVisibility: .visible,
             presenting: pendingRevoke
@@ -109,7 +109,7 @@ struct ContentView: View {
             Text("Mail sent to it will stop being delivered.")
         }
         .confirmationDialog(
-            "Suspend \(pendingSuspend?.address ?? "address")?",
+            pendingSuspend.map { AddressDisplay.suspendTitle($0.address) } ?? "Suspend address?",
             isPresented: suspendDialogBinding,
             titleVisibility: .visible,
             presenting: pendingSuspend

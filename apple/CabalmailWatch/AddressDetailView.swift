@@ -52,12 +52,8 @@ struct LargeTypeAddress: View {
             .accessibilityLabel(address)
     }
 
-    /// The address with a zero-width space after every character, so the
-    /// layout engine can wrap at any point instead of hyphenating a long
-    /// unbreakable token. A soft hyphen at a wrap point is ambiguous —
-    /// addresses can contain real hyphens — so every visible character
-    /// must be one the reader should type.
-    private var wrappableAddress: String {
-        String(address.flatMap { [$0, "\u{200B}"] }.dropLast())
-    }
+    /// The address with break opportunities in place of hyphenation — the
+    /// same routine the confirmation dialogs read from, so the rule has one
+    /// home rather than a copy per surface (#1547).
+    private var wrappableAddress: String { AddressDisplay.wrappable(address) }
 }
