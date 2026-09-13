@@ -11,8 +11,8 @@ also maintains the sparse notify_feed_id attribute that the phase 8
 fan-out queries (present only while notifications are on).
 '''
 from rss_api import (ApiError, ITEM_FILTERS, MAX_TITLE_LENGTH, OPEN_MODES,  # pylint: disable=import-error
-                     ORDERING_MODES, REMOTE_CONTENT_MODES, ROOT_FOLDER, STYLING_MODES, body_of, feeds,
-                     folder_key, folders, get_subscription, guarded, ok,
+                     ORDERING_MODES, REMOTE_CONTENT_MODES, ROOT_FOLDER, STYLING_MODES,
+                     body_of, feeds, folder_key, folders, get_subscription, guarded, ok,
                      serialize_subscription, subscriptions, username)
 
 ENUMS = {
