@@ -102,10 +102,11 @@ final class NavStateCoordinator {
     var positions: ReadingPositionCache
     var sessionSaveTask: Task<Void, Never>?
     var positionsDirty = false
-    /// One-shot guard for the feed reader's launch restore
-    /// (`consumeFeedsLaunchTarget`), so the Feeds tab re-appearing later in
-    /// the process doesn't yank its selection back.
-    var didConsumeFeedsLaunch = false
+    /// Set once any landing has read `launchSession`. After that, a root
+    /// view rebuilt mid-process (a compact/regular size-class flip, #1555)
+    /// lands on the *live* `session` — where the user is now — rather than
+    /// re-landing on where the process started.
+    var didConsumeLaunchSession = false
     /// Debounce for local session writes — short, since it's a local
     /// `UserDefaults` write, and `flushSession` covers the scene going away.
     let sessionSaveDebounce: Duration = .milliseconds(300)

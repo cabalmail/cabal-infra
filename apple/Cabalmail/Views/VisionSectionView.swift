@@ -38,6 +38,10 @@ struct VisionSectionView: View {
     /// True once the launch INBOX landing has run, so nothing re-seeds the
     /// selection out from under the user later.
     @State private var didLand = false
+    /// The folders fetched by the launch landing, so a navigate request can
+    /// select the real `Folder` value the Folders tab tags its rows with
+    /// (#1535; see `MailRootView.loadedFolders`).
+    @State private var loadedFolders: [Folder] = []
 
     enum Section: Hashable { case mail, folders, feeds, addresses, settings, search }
 
@@ -112,7 +116,7 @@ struct VisionSectionView: View {
             coordinator.scheduleRestore(for: request)
             selection = .mail
             if selectedFolder?.path != request.folder {
-                selectedFolder = Folder(path: request.folder)
+                selectedFolder = loadedFolders.first { $0.path == request.folder } ?? Folder(path: request.folder)
             }
         }
     }
@@ -155,6 +159,7 @@ struct VisionSectionView: View {
         await model.loadFolderList()
         let folders = model.folders
         guard !folders.isEmpty else { return }
+        loadedFolders = folders
         let inbox = folders.first { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame } ?? folders.first
         // Swap the fetched folder into the provisional selection so the
         // Folders tab's row highlight matches (`Folder` equality spans

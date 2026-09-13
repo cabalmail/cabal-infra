@@ -102,16 +102,16 @@ additive optional fields.
 
 | Phase | Work item                                                | Status      |
 | ----- | -------------------------------------------------------- | ----------- |
-| A     | Apple: session record, feed-aware launch, position cache | In review: PR #1538 (2026-09-11) |
+| A     | Apple: session record, feed-aware launch, position cache | Shipped 1.17.0 (2026-09-11); follow-ups for #1555, #1535, and the restored-item spinner in review (2026-09-13) |
 | B     | Android: position cache + local session record           | Not started |
-| C     | Cross-device RSS toast (server additive fields)          | Not started |
+| C     | Cross-device RSS toast (server additive fields)          | Not started; follows Phase B, which follows the Android feed reader (RSS plan Phase 6) |
 
 The background-termination investigation that surfaced this work is
 tracked separately in #1537 and is independent of every phase here.
 
 ## Phase A — Apple
 
-**Status:** In review, PR #1538 (2026-09-11). Not yet device-tested.
+**Status:** Shipped 1.17.0 via PR #1538 (2026-09-11); sticky per-feed reader defaults followed in PR #1542 (same release). Device UAT (2026-09-13) confirmed the launch restore, the sticky defaults, and scroll positions surviving a relaunch, and surfaced three defects, all fixed in the follow-up PR: a root view rebuilt by a compact/regular size-class flip re-landed on the launch-time snapshot instead of the live position (#1555; #1557 separately stopped iPhone rotation from causing the flip at all); a navigate request selected a `Folder(path:)` stand-in the sidebar highlight never matched (#1535); and the item pushed by the launch restore could sit on its spinner until reopened, because the reader built its model from `.task`, which an iPhone push cancels (the mail reader's existing `.onAppear` workaround now applies). Scroll positions restored "after a lag", which pointed at the scroll bridge not firing. A web-view test (`ReaderScrollBridgeTests`, a real `WKWebView` with page JavaScript disabled) showed the bridge fires within 0.2 s; the actual defect was the anchor probe: `elementFromPoint(4, 4)` lands in the reader stylesheet's body padding and resolves to `body`, so every capture fell back to the `f<fraction>` form, and a fraction of `scrollHeight` shifts as images load below the fold. The probe now samples the horizontal centre and a few rows down, so captures name an element and restore to it regardless of reflow.
 
 ### Kit (`CabalmailKit`)
 
@@ -182,7 +182,13 @@ tracked separately in #1537 and is independent of every phase here.
 
 ## Phase B — Android
 
-**Status:** Not started.
+**Status:** Not started. Waits on the Android feed reader (RSS plan
+Phase 6) so it can be done whole: the mail half alone would touch the
+same navigation code twice. The Android reader should be built with this
+record in mind — stable identities for the feed scope and item routes,
+and scroll capture through the same anchor script Apple injects (plain
+DOM JavaScript; `i<path>|<delta>`), so Phase C later hands positions
+between platforms without translation.
 
 Android already restores its own server cursor silently and prompts
 for a foreign one, so its launch behaviour is right for mail. It needs:
@@ -198,7 +204,12 @@ for a foreign one, so its launch behaviour is right for mail. It needs:
 
 ## Phase C — Cross-device RSS toast
 
-**Status:** Not started.
+**Status:** Not started. Deliberately sequenced after the Android feed
+reader (RSS plan Phase 6) and this plan's Phase B, in that order: the
+toast's whole value is the cross-platform hand-off, so built earlier it
+would serve only Mac-to-iPhone and be tested with one client. The RSS
+plan records the same ordering from its side; the two documents should
+keep agreeing.
 
 Let the server cursor carry a feed position so a device can offer
 "pick up this article on your Mac". Additive, optional fields on
