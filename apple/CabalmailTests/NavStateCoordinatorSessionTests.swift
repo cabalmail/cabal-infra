@@ -66,17 +66,42 @@ final class NavStateCoordinatorSessionTests: XCTestCase {
     }
 
     /// The test client has no `RssStore`, so a feeds session can't be
-    /// verified and degrades to the feed list — and the second call is a
-    /// no-op regardless.
-    func testFeedsLaunchTargetIsOneShotAndDegradesWithoutAStore() async throws {
+    /// verified and degrades to the feed list.
+    func testFeedsLaunchTargetDegradesWithoutAStore() async throws {
         store.saveSession(ResumeSession(section: .feeds, feedScope: .all, feedItemFeedID: "f", feedItemSortKey: "k"))
         let coordinator = try makeCoordinator()
         let first = await coordinator.consumeFeedsLaunchTarget()
         XCTAssertNil(first)
         XCTAssertNil(coordinator.pendingFeedRestore)
-        XCTAssertTrue(coordinator.didConsumeFeedsLaunch)
-        let second = await coordinator.consumeFeedsLaunchTarget()
-        XCTAssertNil(second)
+        XCTAssertTrue(coordinator.didConsumeLaunchSession)
+    }
+
+    /// #1555: a root view rebuilt mid-process (size-class flip) must land
+    /// where the user is *now*, not where the process started.
+    func testRebuiltViewLandsOnTheLiveSessionNotTheLaunchSnapshot() throws {
+        store.saveSession(ResumeSession(section: .mail, folder: "INBOX", uid: 316, messageID: "<316>"))
+        let coordinator = try makeCoordinator()
+        // First landing: the launch snapshot.
+        XCTAssertEqual(coordinator.mailLaunchTarget().folderPath, "INBOX")
+        XCTAssertEqual(coordinator.mailLaunchTarget().messageRestore?.uid, 316)
+        // The user moves on.
+        coordinator.recordFolder("Archive")
+        // A rebuilt view lands on Archive with no message, not INBOX/316.
+        let again = coordinator.mailLaunchTarget()
+        XCTAssertEqual(again.folderPath, "Archive")
+        XCTAssertNil(again.messageRestore)
+        XCTAssertEqual(coordinator.launchSection, .mail)
+    }
+
+    func testRebuiltFeedsViewReadsTheLiveSection() async throws {
+        store.saveSession(ResumeSession(section: .mail, folder: "INBOX"))
+        let coordinator = try makeCoordinator()
+        _ = coordinator.mailLaunchTarget()
+        coordinator.recordFeedScope(.all)
+        XCTAssertEqual(coordinator.launchSection, .feeds, "a flip while in feeds should reopen feeds")
+        // No store on the test client, so the scope itself degrades to nil.
+        let scope = await coordinator.consumeFeedsLaunchTarget()
+        XCTAssertNil(scope)
     }
 
     func testFeedItemRestoreIsConsumedOnlyForItsScope() throws {

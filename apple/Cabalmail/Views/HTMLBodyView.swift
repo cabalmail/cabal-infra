@@ -617,12 +617,30 @@ extension HTMLBodyCoordinator {
     /// `"f<fraction>"` fallback when the top of the viewport isn't over a
     /// concrete element. Shared by the fallback poll (`captureScript`) and the
     /// scroll bridge's user script. Reads geometry only.
+    ///
+    /// The element is probed at several points, not just the top-left
+    /// corner: the reader stylesheet pads the body, so (4,4) sits in that
+    /// padding and resolves to `body` — which made every capture fall back
+    /// to the fraction form, and a fraction shifts as images load below the
+    /// fold (the "restored, but not quite where I was" lag). Horizontal
+    /// centre first, since left gutters are the common case; then a few
+    /// rows down for a page whose first visible element starts below a
+    /// margin.
     static let anchorFunctionSource = """
     function __cabalAnchor(){
       var se=document.scrollingElement||document.documentElement;
       if(!se){return "";}
-      var el=document.elementFromPoint(4,4);
-      if(!el||el===document.documentElement||el===document.body){
+      var w=window.innerWidth||se.clientWidth||0;
+      var xs=[Math.floor(w/2),16,Math.max(4,Math.floor(w/4))];
+      var ys=[1,8,24,48];
+      var el=null;
+      for(var yi=0;yi<ys.length&&!el;yi++){
+        for(var xi=0;xi<xs.length&&!el;xi++){
+          var c=document.elementFromPoint(xs[xi],ys[yi]);
+          if(c&&c!==document.documentElement&&c!==document.body){el=c;}
+        }
+      }
+      if(!el){
         var h=se.scrollHeight-se.clientHeight;
         return "f"+(h>0?(se.scrollTop/h).toFixed(4):"0");
       }

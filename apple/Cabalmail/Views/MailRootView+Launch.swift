@@ -20,7 +20,7 @@ extension MailRootView {
             coordinator.navigateRequest = nil
             coordinator.scheduleRestore(for: request)
             if selectedFolder?.path != request.folder {
-                selectedFolder = Folder(path: request.folder)
+                selectedFolder = resolvedFolder(path: request.folder)
             }
             // This *is* the landing: a later re-appearance with a cleared
             // selection must not run the session landing on top of it.
@@ -121,6 +121,12 @@ extension MailRootView {
                 coordinator?.materializeLanding()
             }
         }
+    }
+
+    /// The fetched `Folder` for `path` when the sidebar has loaded it, else a
+    /// stand-in that the next `onFoldersLoaded` swaps out (#1535).
+    func resolvedFolder(path: String) -> Folder {
+        loadedFolders.first { $0.path == path } ?? Folder(path: path)
     }
 
     /// The launch-time cross-device probe on its own, for launches that had

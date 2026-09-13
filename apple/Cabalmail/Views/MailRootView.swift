@@ -33,6 +33,12 @@ struct MailRootView: View {
     /// first `onFoldersLoaded`, which swaps the fetched folder into the
     /// selection and probes the cross-device cursor (`finishLaunchLanding`).
     @State var awaitingLaunchReconcile = false
+    /// The sidebar's fetched folders, kept so a navigate request (resume
+    /// toast, push, Spotlight, Siri) can select the real `Folder` value
+    /// rather than a `Folder(path:)` stand-in. The sidebar's `List` tags its
+    /// rows with the fetched value and `Folder` equality spans attributes and
+    /// subscription, so a stand-in never earns the row highlight (#1535).
+    @State var loadedFolders: [Folder] = []
     /// Override for the message detail's folder context when the selected
     /// envelope is a cross-folder search result. `MessageListView` reports
     /// the source folder via `onSearchResultSelected`; we wrap it in a
@@ -416,7 +422,7 @@ struct MailRootView: View {
             coordinator.navigateRequest = nil
             coordinator.scheduleRestore(for: request)
             if selectedFolder?.path != request.folder {
-                selectedFolder = Folder(path: request.folder)
+                selectedFolder = resolvedFolder(path: request.folder)
             }
         }
         .task {
@@ -542,6 +548,7 @@ extension MailRootView {
                 externalFilter: isWideSidebar ? $folderListFilter : nil,
                 feedSelection: isWideSidebar ? feedSidebarSelection : nil,
                 onFoldersLoaded: { folders in
+                    loadedFolders = folders
                     // First load: swap the fetched folder into the launch
                     // task's provisional landing and probe the cross-device
                     // cursor (see `finishLaunchLanding`). Guarded so a later
@@ -556,8 +563,17 @@ extension MailRootView {
                     if awaitingLaunchReconcile || (!didProvisionalLand && selectedFolder == nil) {
                         awaitingLaunchReconcile = false
                         finishLaunchLanding(from: folders)
-                    } else if let coordinator = appState.navCoordinator, !coordinator.hasLoadedInitial {
-                        offerForeignCursorAtLaunch(from: folders)
+                    } else {
+                        // A navigate request may have selected a stand-in
+                        // before the list arrived; swap the fetched value in
+                        // (same path, so the mounted list survives — #1535).
+                        if let current = selectedFolder,
+                           let fetched = folders.first(where: { $0.path == current.path }), fetched != current {
+                            selectedFolder = fetched
+                        }
+                        if let coordinator = appState.navCoordinator, !coordinator.hasLoadedInitial {
+                            offerForeignCursorAtLaunch(from: folders)
+                        }
                     }
                 }
             )

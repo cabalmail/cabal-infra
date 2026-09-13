@@ -16,14 +16,24 @@ extension NavStateCoordinator {
         let messageRestore: NavState?
     }
 
+    /// The record a landing restores from: the launch snapshot for the first
+    /// landing in the process, the live session for any root view rebuilt
+    /// after it (a size-class flip, #1555). The live record is by
+    /// construction "where the user is now", so a rebuilt view lands there
+    /// rather than back where the process started.
+    var restoreSource: ResumeSession? {
+        didConsumeLaunchSession ? session : launchSession
+    }
+
     /// The section the app was last in — what the compact tab bar and the
     /// wide layout's launch task branch on. Mail when nothing is stored.
     var launchSection: ResumeSession.Section {
-        launchSession?.section ?? .mail
+        restoreSource?.section ?? .mail
     }
 
     func mailLaunchTarget() -> MailLaunchTarget {
-        guard let saved = launchSession, let folder = saved.folder, !folder.isEmpty else {
+        defer { didConsumeLaunchSession = true }
+        guard let saved = restoreSource, let folder = saved.folder, !folder.isEmpty else {
             return MailLaunchTarget(folderPath: "INBOX", messageRestore: nil)
         }
         var restore: NavState?
@@ -33,16 +43,18 @@ extension NavStateCoordinator {
         return MailLaunchTarget(folderPath: folder, messageRestore: restore)
     }
 
-    /// The feed scope the feed reader should open at launch, once per
-    /// process, or nil to stay at the feed list. Checks the scope against the
-    /// local `RssStore` (a departed subscription or folder degrades to the
-    /// list) and, if an item was open and is still in the store, parks it as
-    /// `pendingFeedRestore` for the scope's `onChange` to select. Local SQLite
-    /// reads only — no network at launch.
+    /// The feed scope the feed reader should open when it mounts, or nil to
+    /// stay at the feed list. Checks the scope against the local `RssStore`
+    /// (a departed subscription or folder degrades to the list) and, if an
+    /// item was open and is still in the store, parks it as
+    /// `pendingFeedRestore` for the scope's `onChange` to select. Local
+    /// SQLite reads only — no network at launch. Reads `restoreSource`, so a
+    /// Feeds view rebuilt mid-process reopens the live position; a view that
+    /// merely re-appears keeps its own state and never asks.
     func consumeFeedsLaunchTarget() async -> RssItemScope? {
-        guard !didConsumeFeedsLaunch else { return nil }
-        didConsumeFeedsLaunch = true
-        guard let saved = launchSession, let scope = saved.feedScope, let store = client.rssStore else {
+        let source = restoreSource
+        didConsumeLaunchSession = true
+        guard let saved = source, let scope = saved.feedScope, let store = client.rssStore else {
             return nil
         }
         let scopeExists: Bool

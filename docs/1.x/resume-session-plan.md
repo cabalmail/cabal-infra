@@ -102,7 +102,7 @@ additive optional fields.
 
 | Phase | Work item                                                | Status      |
 | ----- | -------------------------------------------------------- | ----------- |
-| A     | Apple: session record, feed-aware launch, position cache | In review: PR #1538 (2026-09-11) |
+| A     | Apple: session record, feed-aware launch, position cache | Shipped 1.17.0 (2026-09-11); follow-ups for #1555, #1535, and the restored-item spinner in review (2026-09-13) |
 | B     | Android: position cache + local session record           | Not started |
 | C     | Cross-device RSS toast (server additive fields)          | Not started |
 
@@ -111,7 +111,7 @@ tracked separately in #1537 and is independent of every phase here.
 
 ## Phase A — Apple
 
-**Status:** In review, PR #1538 (2026-09-11). Not yet device-tested.
+**Status:** Shipped 1.17.0 via PR #1538 (2026-09-11); sticky per-feed reader defaults followed in PR #1542 (same release). Device UAT (2026-09-13) confirmed the launch restore, the sticky defaults, and scroll positions surviving a relaunch, and surfaced three defects, all fixed in the follow-up PR: a root view rebuilt by a compact/regular size-class flip re-landed on the launch-time snapshot instead of the live position (#1555; #1557 separately stopped iPhone rotation from causing the flip at all); a navigate request selected a `Folder(path:)` stand-in the sidebar highlight never matched (#1535); and the item pushed by the launch restore could sit on its spinner until reopened, because the reader built its model from `.task`, which an iPhone push cancels (the mail reader's existing `.onAppear` workaround now applies). Scroll positions restored "after a lag", which pointed at the scroll bridge not firing. A web-view test (`ReaderScrollBridgeTests`, a real `WKWebView` with page JavaScript disabled) showed the bridge fires within 0.2 s; the actual defect was the anchor probe: `elementFromPoint(4, 4)` lands in the reader stylesheet's body padding and resolves to `body`, so every capture fell back to the `f<fraction>` form, and a fraction of `scrollHeight` shifts as images load below the fold. The probe now samples the horizontal centre and a few rows down, so captures name an element and restore to it regardless of reflow.
 
 ### Kit (`CabalmailKit`)
 
