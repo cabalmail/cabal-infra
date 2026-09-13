@@ -82,9 +82,11 @@ final class MessageListViewModel {
     /// wire sort the Lambda applies. Mutated via `setSort(_:)`.
     var sortCriterion: SortCriterion = .default
 
-    /// Active filter tab. A client-side filter over the loaded envelopes,
-    /// not a wire predicate — purely a display narrowing. Resets to
-    /// `.all` when the view-model is rebuilt (folder switch).
+    /// Active filter tab. Narrows the loaded envelopes client-side and, for
+    /// Unread / Flagged, drives the folder-scoped server search that loads
+    /// them (`selectFilter`). Sticky per folder: a rebuilt view-model
+    /// (folder switch, relaunch) opens on the pill the user last chose for
+    /// this folder (`Preferences.mailFolderFilters`), All until then.
     var filterTab: MessageFilter = .all
 
     /// True when the user has tapped Select; rows render checkboxes and
@@ -269,21 +271,6 @@ final class MessageListViewModel {
         self.client = client
         self.preferences = preferences
         self.appState = appState
-    }
-
-    func loadInitial() async {
-        guard envelopes.isEmpty else { return }
-        // Unstructured, model-owned task, so a cancellation of the view's
-        // `.task` (SwiftUI fires it mid-push transition — same class as the
-        // detail view's #403) can't propagate into the first fetch. The view
-        // only runs this once per model, so a cancelled first load would
-        // paint `network("cancelled")` over an empty list with nothing left
-        // to retry it. Mirrors `refreshFromPull`.
-        await Task {
-            await self.hydrateFromCache()
-            await self.refresh()
-        }.value
-        scheduleBottomPrefetch()
     }
 
     /// Start the IDLE-backed auto-refresh loop. Called from the view's
@@ -707,7 +694,8 @@ extension MessageListViewModel {
     // -- the "smoothness gets worse as the list gets longer" complaint.
     func nowMs() -> Double { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000 }
 
-    private func hydrateFromCache() async {
+    // Internal so `loadInitial` in the `+Refresh` sibling can reach it.
+    func hydrateFromCache() async {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             uidValidity = snapshot.uidValidity
             envelopes = snapshot.envelopes.values.sorted(by: envelopeOrder)

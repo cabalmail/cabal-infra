@@ -102,6 +102,26 @@ class PreferencesWireTest {
     }
 
     @Test
+    fun `mail folder pills ride as their own keys and merge per folder on the way back`() {
+        val current = AppPreferences(mailFolderFilters = mapOf("INBOX" to MailFolderFilter.UNREAD))
+        val app = PreferencesWire.toUpdate(current).app!!
+        assertEquals("unread", app["filter:mail:INBOX"])
+        // No map key of its own: the flat-key set the first test pins is unchanged.
+        assertNull(app["mail_folder_filters"])
+        val merged =
+            PreferencesWire.applyRemote(
+                current,
+                Preferences(app = mapOf("filter:mail:Archive" to "flagged", "filter:mail:INBOX" to "all")),
+            )
+        assertEquals(
+            mapOf("INBOX" to MailFolderFilter.ALL, "Archive" to MailFolderFilter.FLAGGED),
+            merged.mailFolderFilters,
+        )
+        // A pull with no entries leaves the local map alone.
+        assertEquals(current.mailFolderFilters, PreferencesWire.applyRemote(current, Preferences()).mailFolderFilters)
+    }
+
+    @Test
     fun `signature seeding matches the Apple layout`() {
         assertEquals("", SignatureFormatter.seedBody("", ""))
         assertEquals("\n\n-- \nsig", SignatureFormatter.seedBody("", "sig"))

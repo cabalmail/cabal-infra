@@ -44,11 +44,19 @@ public enum RssRemoteContentMode: String, Codable, Sendable, CaseIterable, Ident
     public var id: String { rawValue }
 }
 
-/// `filter=` on `/rss_list_items`.
-public enum RssItemFilter: String, Sendable, CaseIterable {
+/// `filter=` on `/rss_list_items`, and the sticky pill a feed's, folder's,
+/// or the all-feeds list opens on (`default_filter` on the subscription and
+/// folder rows; the `filter:feeds:all` preference for the all-feeds
+/// scope). Unread by default: a feed is read for what is new.
+public enum RssItemFilter: String, Codable, Sendable, CaseIterable, Identifiable {
     case all
     case unread
     case favorite
+
+    public var id: String { rawValue }
+
+    /// The pill a feed or folder list opens on until the user picks another.
+    public static let defaultForFeeds: RssItemFilter = .unread
 }
 
 /// `order=` on `/rss_list_items`.
@@ -198,6 +206,9 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
     public var defaultOpenMode: RssOpenMode
     public var defaultStyling: RssStyling
     public var defaultRemoteContent: RssRemoteContentMode
+    /// The filter pill this feed's list opens on (sticky: the list writes
+    /// the pill back here when the user changes it).
+    public var defaultFilter: RssItemFilter
     public var notificationsEnabled: Bool
     public var credentialsScheme: String
     public var readWatermark: String
@@ -218,7 +229,7 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
         subscriptionId: String, feedId: String, folderId: String = "", customTitle: String = "",
         orderingMode: RssOrderingMode = .newestFirst, defaultOpenMode: RssOpenMode = .summary,
         defaultStyling: RssStyling = .reader, defaultRemoteContent: RssRemoteContentMode = .inherit,
-        notificationsEnabled: Bool = false,
+        defaultFilter: RssItemFilter = .defaultForFeeds, notificationsEnabled: Bool = false,
         credentialsScheme: String = "", readWatermark: String = "", dataStoreUuid: String = "",
         createdAt: String = "", feed: RssFeedSummary? = nil
     ) {
@@ -230,6 +241,7 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
         self.defaultOpenMode = defaultOpenMode
         self.defaultStyling = defaultStyling
         self.defaultRemoteContent = defaultRemoteContent
+        self.defaultFilter = defaultFilter
         self.notificationsEnabled = notificationsEnabled
         self.credentialsScheme = credentialsScheme
         self.readWatermark = readWatermark
@@ -242,7 +254,7 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
         case subscriptionId = "subscription_id", feedId = "feed_id", folderId = "folder_id"
         case customTitle = "custom_title", orderingMode = "ordering_mode"
         case defaultOpenMode = "default_open_mode", defaultStyling = "default_styling"
-        case defaultRemoteContent = "default_remote_content"
+        case defaultRemoteContent = "default_remote_content", defaultFilter = "default_filter"
         case notificationsEnabled = "notifications_enabled", credentialsScheme = "credentials_scheme"
         case readWatermark = "read_watermark", dataStoreUuid = "data_store_uuid"
         case createdAt = "created_at", feed
@@ -264,6 +276,8 @@ public struct RssSubscription: Sendable, Codable, Hashable, Identifiable {
         defaultStyling = RssStyling(rawValue: stylingRaw) ?? .reader
         let remoteRaw = try container.decodeIfPresent(String.self, forKey: .defaultRemoteContent) ?? ""
         defaultRemoteContent = RssRemoteContentMode(rawValue: remoteRaw) ?? .inherit
+        let filterRaw = try container.decodeIfPresent(String.self, forKey: .defaultFilter) ?? ""
+        defaultFilter = RssItemFilter(rawValue: filterRaw) ?? .defaultForFeeds
         notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? false
         credentialsScheme = try container.decodeIfPresent(String.self, forKey: .credentialsScheme) ?? ""
         readWatermark = try container.decodeIfPresent(String.self, forKey: .readWatermark) ?? ""
@@ -279,18 +293,26 @@ public struct RssFolder: Sendable, Codable, Hashable, Identifiable {
     public var parentFolderId: String
     public var name: String
     public var displayOrder: Int
+    /// The filter pill this folder's list opens on (sticky, like a
+    /// subscription's `defaultFilter`).
+    public var defaultFilter: RssItemFilter
 
     public var id: String { folderId }
 
-    public init(folderId: String, parentFolderId: String = "", name: String, displayOrder: Int = 0) {
+    public init(
+        folderId: String, parentFolderId: String = "", name: String, displayOrder: Int = 0,
+        defaultFilter: RssItemFilter = .defaultForFeeds
+    ) {
         self.folderId = folderId
         self.parentFolderId = parentFolderId
         self.name = name
         self.displayOrder = displayOrder
+        self.defaultFilter = defaultFilter
     }
 
     private enum CodingKeys: String, CodingKey {
         case folderId = "folder_id", parentFolderId = "parent_folder_id", name, displayOrder = "display_order"
+        case defaultFilter = "default_filter"
     }
 
     public init(from decoder: Decoder) throws {
@@ -299,6 +321,8 @@ public struct RssFolder: Sendable, Codable, Hashable, Identifiable {
         parentFolderId = try container.decodeIfPresent(String.self, forKey: .parentFolderId) ?? ""
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         displayOrder = try container.decodeIfPresent(Int.self, forKey: .displayOrder) ?? 0
+        let filterRaw = try container.decodeIfPresent(String.self, forKey: .defaultFilter) ?? ""
+        defaultFilter = RssItemFilter(rawValue: filterRaw) ?? .defaultForFeeds
     }
 }
 

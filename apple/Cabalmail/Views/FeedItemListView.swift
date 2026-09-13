@@ -106,28 +106,32 @@ struct FeedItemListView: View {
     private func start() async {
         guard let client = appState.client else { return }
         var subscription: RssSubscription?
-        if case .subscription(let id) = scope {
+        var folder: RssFolder?
+        switch scope {
+        case .subscription(let id):
             subscription = try? await client.rssStore?.subscription(id: id)
+        case .folder(let id):
+            folder = try? await client.rssStore?.folder(id: id)
+        case .all:
+            break
         }
-        title = await scopeTitle(client: client, subscription: subscription)
+        title = scopeTitle(subscription: subscription, folder: folder)
         if subscription != nil {
             management = FeedManagementViewModel(client: client)
             folders = (try? await client.rssStore?.folders()) ?? []
         }
-        let model = FeedItemListViewModel(scope: scope, subscription: subscription, client: client,
-                                          preferences: preferences)
+        let model = FeedItemListViewModel(scope: scope, subscription: subscription, folder: folder,
+                                          client: client, preferences: preferences)
         self.model = model
         await model.reload()
         await model.sync()
     }
 
-    private func scopeTitle(client: CabalmailClient, subscription: RssSubscription?) async -> String {
+    private func scopeTitle(subscription: RssSubscription?, folder: RssFolder?) -> String {
         switch scope {
         case .all: return "All Feeds"
         case .subscription: return subscription?.displayTitle ?? "Feed"
-        case .folder(let id):
-            let folders = (try? await client.rssStore?.folders()) ?? []
-            return folders.first { $0.folderId == id }?.name ?? "Folder"
+        case .folder: return folder?.name ?? "Folder"
         }
     }
 
@@ -136,9 +140,9 @@ struct FeedItemListView: View {
         @Bindable var model = model
         VStack(spacing: 6) {
             HStack(spacing: 6) {
-                ForEach(RssItemFilter.allCases, id: \.self) { filter in
+                ForEach(RssItemFilter.allCases) { filter in
                     Button {
-                        model.filter = filter
+                        model.selectFilter(filter)
                     } label: {
                         Text(filterLabel(filter))
                             .font(.subheadline.weight(model.filter == filter ? .semibold : .regular))

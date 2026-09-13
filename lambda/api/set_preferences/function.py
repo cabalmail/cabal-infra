@@ -48,6 +48,24 @@ APP_ALLOWED = {
     'rss_mark_as_read':         {'manual', 'on_open'},
 }
 
+# Sticky list filter pills, one key per list under the `filter:` prefix:
+#   filter:mail:<folder path> -> all | unread | flagged   (a mail folder)
+#   filter:feeds:all          -> all | unread | favorite  (the all-feeds list)
+# A single feed's or feed folder's pill sticks on its own row instead
+# (`default_filter`, rss_api.py); the all-feeds scope has no row. One key
+# per list (rather than one JSON map under a single key, the flag_palette
+# shape) so the server's per-key merge applies: two devices changing two
+# folders' pills never clobber each other, and a stale device can only
+# overwrite the lists it knows. The mail folder path is the IMAP path as
+# the clients address it (`/`-delimited); it is opaque here beyond the
+# length and control-character bounds.
+FILTER_PREFIX = 'filter:'
+MAIL_FILTER_PREFIX = 'filter:mail:'
+MAIL_FILTER_VALUES = {'all', 'unread', 'flagged'}
+ALL_FEEDS_FILTER_KEY = 'filter:feeds:all'
+ALL_FEEDS_FILTER_VALUES = {'all', 'unread', 'favorite'}
+MAX_MAIL_FILTER_FOLDER_LENGTH = 512
+
 # The signature lands in the outgoing message body (not a header), so newlines
 # and tabs are legitimate; only other control characters are rejected. Capped
 # so a runaway value can't bloat every row.
@@ -138,7 +156,7 @@ def _validate_flag_palette(value):
     return json.dumps(entries, separators=(',', ':'), sort_keys=True)
 
 
-# pylint: disable-next=too-many-return-statements
+# pylint: disable-next=too-many-return-statements,too-many-branches
 def _validate_app(value):
     '''Returns the validated `app` preference map, or None if it is invalid.
 
@@ -168,9 +186,28 @@ def _validate_app(value):
             if palette is None:
                 return None
             cleaned[key] = palette
+        elif key.startswith(FILTER_PREFIX):
+            if not _valid_list_filter(key, val):
+                return None
+            cleaned[key] = val
         else:
             return None
     return cleaned
+
+
+def _valid_list_filter(key, value):
+    '''Whether a `filter:` key names a known list and one of its pills: the
+    all-feeds list, or a mail folder with a bounded, control-free path.'''
+    if key == ALL_FEEDS_FILTER_KEY:
+        return value in ALL_FEEDS_FILTER_VALUES
+    if not key.startswith(MAIL_FILTER_PREFIX):
+        return False
+    folder = key[len(MAIL_FILTER_PREFIX):]
+    if not folder or len(folder) > MAX_MAIL_FILTER_FOLDER_LENGTH:
+        return False
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in folder):
+        return False
+    return value in MAIL_FILTER_VALUES
 
 
 def _build_updates(body):

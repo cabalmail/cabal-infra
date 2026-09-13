@@ -42,6 +42,11 @@ STYLING_MODES = ('reader', 'native')
 # Per-feed remote-content default: 'inherit' defers to the client's global
 # remote-content preference; 'show' / 'hide' override it for this feed.
 REMOTE_CONTENT_MODES = ('inherit', 'show', 'hide')
+# The list's filter pill (`filter=` on /rss_list_items). Also the per-feed
+# and per-folder sticky default: the pill a list opens on. Unread by default
+# for feeds - a feed is read for what is new, unlike a mail folder.
+ITEM_FILTERS = ('all', 'unread', 'favorite')
+DEFAULT_ITEM_FILTER = 'unread'
 MAX_TITLE_LENGTH = 256
 MAX_PAGE = 100
 DEFAULT_PAGE = 50
@@ -356,6 +361,7 @@ def serialize_subscription(row, feed_row=None):
         'default_open_mode': row.get('default_open_mode', OPEN_MODES[0]),
         'default_styling': row.get('default_styling', STYLING_MODES[0]),
         'default_remote_content': row.get('default_remote_content', REMOTE_CONTENT_MODES[0]),
+        'default_filter': row.get('default_filter', DEFAULT_ITEM_FILTER),
         'notifications_enabled': bool(row.get('notifications_enabled', False)),
         'credentials_scheme': row.get('credentials_scheme') or '',
         'read_watermark': row.get('read_watermark', ''),
@@ -377,4 +383,5 @@ def serialize_folder(row):
         'parent_folder_id': row.get('parent_folder_id') or '',
         'name': row.get('name', ''),
         'display_order': row.get('display_order', 0),
+        'default_filter': row.get('default_filter', DEFAULT_ITEM_FILTER),
     }

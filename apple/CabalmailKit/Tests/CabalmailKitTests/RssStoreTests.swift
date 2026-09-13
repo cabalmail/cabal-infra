@@ -52,6 +52,24 @@ final class RssStoreTests: XCTestCase {
         XCTAssertEqual(observed2, 0)
     }
 
+    /// The sticky filter pill round-trips through both rows (schema
+    /// version 4), a folder update lands like a subscription update does,
+    /// and a row that never set it reads as Unread.
+    func testStickyFilterRoundTripsOnSubscriptionsAndFolders() async throws {
+        var one = sub("s1", feed: "f1", folder: "fo")
+        one.defaultFilter = .favorite
+        let folder = RssFolder(folderId: "fo", name: "Tech", defaultFilter: .all)
+        _ = try await store.replaceCatalog(RssCatalog(folders: [folder], subscriptions: [one, sub("s2", feed: "f2")]))
+        let subs = try await store.subscriptions()
+        XCTAssertEqual(subs.map(\.defaultFilter), [.favorite, .unread])
+        let stored = try await store.folder(id: "fo")
+        XCTAssertEqual(stored?.defaultFilter, .all)
+        try await store.upsertFolder(folder.applying(RssFolderUpdate(defaultFilter: .unread)))
+        let updated = try await store.folders()
+        XCTAssertEqual(updated.map(\.defaultFilter), [.unread])
+        XCTAssertEqual(updated.map(\.name), ["Tech"], "the other columns survive the upsert")
+    }
+
     /// The per-feed defaults round-trip through the row, including the
     /// remote-content column added in schema version 3.
     func testSubscriptionDefaultsRoundTrip() async throws {

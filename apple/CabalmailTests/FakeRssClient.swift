@@ -65,6 +65,7 @@ actor FakeRssClient: RssClient {
         if let value = update.defaultOpenMode { sub.defaultOpenMode = value }
         if let value = update.defaultStyling { sub.defaultStyling = value }
         if let value = update.defaultRemoteContent { sub.defaultRemoteContent = value }
+        if let value = update.defaultFilter { sub.defaultFilter = value }
         catalog.subscriptions = catalog.subscriptions.map { $0.subscriptionId == subscriptionId ? sub : $0 }
         return sub
     }
@@ -86,6 +87,7 @@ actor FakeRssClient: RssClient {
         }
         if let value = update.name { folder.name = value }
         if let value = update.parentFolderId { folder.parentFolderId = value }
+        if let value = update.defaultFilter { folder.defaultFilter = value }
         catalog.folders = catalog.folders.map { $0.folderId == folderId ? folder : $0 }
         return folder
     }
