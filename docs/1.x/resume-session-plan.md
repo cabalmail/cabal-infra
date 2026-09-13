@@ -104,7 +104,8 @@ additive optional fields.
 | ----- | -------------------------------------------------------- | ----------- |
 | A     | Apple: session record, feed-aware launch, position cache | Shipped 1.17.0 (2026-09-11); follow-ups for #1555, #1535, and the restored-item spinner in review (2026-09-13) |
 | B     | Android: position cache + local session record           | Ready to start (2026-09-13): the Android feed reader shipped in 1.19.0 (RSS plan 6a–6d) and landed the feed half of the position cache and the route identities with it; the session record, launch restore, watermark, and mail positions remain |
-| C     | Cross-device RSS toast (server additive fields)          | Not started; follows Phase B. New prerequisite: a dual-form anchor (element + fraction), because Android can only apply the fraction form (see Phase C) |
+| C     | Cross-device RSS toast (server additive fields)          | Not started; follows Phase B. Prerequisite: a dual-form anchor (element + fraction) on Apple; best after Phase D so the hand-off is element-level both ways |
+| D     | Element anchors on Android (CSP hash-source boundary)    | Not started; briefed for a separate session (2026-09-13); covers the mail reader too |
 
 The background-termination investigation that surfaced this work is
 tracked separately in #1537 and is independent of every phase here.
@@ -258,9 +259,70 @@ in the same script — and the cursor should carry both (`msg_anchor`
 plus a sibling `msg_fraction`, additive and optional, with the
 element anchor preferred by a reader that can apply it). The same
 dual capture belongs in Apple's local position cache so its own
-fraction is available for the hand-off. Enabling JavaScript in the
-Android body view to gain element anchors is a security-posture change
-outside this plan and is not assumed.
+fraction is available for the hand-off. The dual form ships regardless
+of Phase D below: it costs almost nothing and covers Android builds
+that predate it.
+
+### Phase D — Element anchors on Android (separate session)
+
+**Status:** Not started (2026-09-13). Decided worth doing: element
+anchors are superior wherever a document reflows after load, and the
+cross-device hand-off is the case where the two clients most need to
+agree. Scoped for its own session, since it is an Android web-view
+posture change that also covers the mail reader (the feed reader shares
+`HtmlBody`), with its own CI gate and device pass.
+
+The constraint: Android's `javaScriptEnabled` is one switch for the
+whole web view. Apple's `allowsContentJavaScript = false` disables the
+page's scripts while app-injected scripts still run, enforced by WebKit;
+Android has no such split, so the app's anchor script cannot run unless
+the page's could too. The boundary therefore has to be built and
+proven by us. Subresource integrity is not the primitive: it verifies
+fetched scripts against a hash but gates nothing about inline scripts,
+event-handler attributes, or `javascript:` links, and `require-sri-for`
+is gone from browsers. The SRI-shaped primitive that *does* gate
+execution is a Content-Security-Policy hash-source.
+
+Design to build and prove, in this order:
+
+1. **Policy.** `javaScriptEnabled = true` on the body view with a
+   `Content-Security-Policy` meta first in the generated head:
+   `script-src 'sha256-<hash of the anchor script>'`, no
+   `'unsafe-inline'`, so inline scripts, `on*` attributes,
+   `javascript:` URLs, and every external script are refused; a
+   sender's own CSP meta can only intersect with ours. A hash rather
+   than a nonce, since the script is static and nothing needs minting
+   per document.
+2. **Exemption for the app's own calls, verified.** Chromium's
+   `evaluateJavascript` and androidx's `addDocumentStartJavaScript` are
+   believed not to be subject to page CSP; a real-WebView test must
+   show it (as `ReaderScrollBridgeTests` did for the Apple bridge). If
+   they are subject to it, the anchor script goes in the head as the
+   hashed inline script and reports through `WebMessageListener`, the
+   Android analogue of the script message handler, origin-restricted.
+3. **Belt and braces.** Strip script elements and `on*` attributes at
+   render time regardless, so the policy is the second wall.
+   `blockNetworkLoads` stays as it is: with remote content off, a
+   script that somehow ran has nowhere to send anything; the residual
+   exposure is DOM tricks and CPU, and grows only when the user taps
+   "load remote content".
+4. **The CI gate.** A fixture with an inline script, an event-handler
+   attribute, a `javascript:` link, and an external script; a test that
+   loads it in the reader's configuration and asserts none executed
+   while the anchor script did and reported. This test is the boundary;
+   without it the policy is a comment. It should run on the mail
+   reader's configuration too, since that is the larger surface.
+5. **Anchor parity.** Port the Apple anchor function (plain DOM
+   JavaScript; probes the horizontal centre and a few rows down; emits
+   `i<path>|<delta>` with `f<fraction>` as the fallback) and the
+   settle-debounced scroll bridge. `FeedReadingPositions` then stores
+   whichever form was captured, and restore applies `i` when present
+   and `f` otherwise, matching Apple's `restoreScript`.
+
+Out of scope for that session: the session record and launch restore
+(Phase B) and the cursor fields (Phase C). It should land before Phase
+C so the hand-off is element-level in both directions; it does not
+block Phase B.
 
 Let the server cursor carry a feed position so a device can offer
 "pick up this article on your Mac". Additive, optional fields on
