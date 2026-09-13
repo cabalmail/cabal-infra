@@ -7,6 +7,7 @@ from helper import ( # pylint: disable=import-error
     folder_message_count,
     get_imap_client,
     log_folder_size_bucket,
+    query_params,
     validate_folder_name,
     validate_uid_list,
 )
@@ -18,9 +19,9 @@ from helper import maintenance_guard # pylint: disable=import-error
 def handler(event, _context):
     '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
     start = time.monotonic()
-    query_string = event.get('queryStringParameters') or {}
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     try:
+        query_string = query_params(event, 'host')
         folder = validate_folder_name(query_string.get('folder'))
         ids = validate_uid_list(_parse_ids(query_string.get('ids')))
     except ValueError as err:

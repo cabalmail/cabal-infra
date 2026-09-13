@@ -134,12 +134,17 @@ struct FeedSidebarList: View {
                     }
                     .listRowSeparator(.hidden)
                 } else {
-                    Label("All Feeds", systemImage: "tray.full")
-                        .badge(FeedSidebarRows.totalUnread(model.unreadCounts))
-                        .tag(RssItemScope.all)
-                        .contextMenu {
-                            FeedSidebarContextMenu(scope: .all, row: nil, actions: actions, management: management)
-                        }
+                    FeedSidebarRowLabel(
+                        row: FeedSidebarRows.allFeedsRow(
+                            unread: FeedSidebarRows.totalUnread(model.unreadCounts)
+                        ),
+                        isSelected: selection == .all,
+                        isCollapsed: { _ in true }, toggleCollapse: { _ in }
+                    )
+                    .tag(RssItemScope.all)
+                    .contextMenu {
+                        FeedSidebarContextMenu(scope: .all, row: nil, actions: actions, management: management)
+                    }
                     ForEach(model.rows(collapsed: collapsed, filter: filter)) { row in
                         FeedSidebarRowLabel(row: row, isSelected: selection == row.scope,
                                             isCollapsed: { collapsed.contains($0) },

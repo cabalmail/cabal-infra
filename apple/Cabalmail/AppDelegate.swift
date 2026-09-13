@@ -124,6 +124,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 #endif
 
+/// Where a `UNUserNotificationCenterDelegate` action completion has to run.
+///
+/// UIKit answers `didReceive`'s completion by refreshing the window scene's
+/// snapshot and state-restoration archive, and that work asserts it is on the
+/// main thread. The delegate method itself is `nonisolated` (see the extension
+/// comment below), so nothing about the call site puts us there, and calling
+/// the completion from the global executor aborted the app with
+/// `NSInternalInconsistencyException: Call must be made on main thread` on
+/// every notification tap (#1534).
+///
+/// A named seam rather than a bare `await MainActor.run` at the call site, so
+/// the rule is stated once and a test can drive it from a background task.
+/// It lives in this file rather than its own because the macOS target lists
+/// its sources file by file, and a new file is silently left out of it.
+enum PushActionCompletion {
+    /// Runs the system's completion handler on the main actor.
+    static func finish(_ completionHandler: @escaping @Sendable () -> Void) async {
+        await MainActor.run { completionHandler() }
+    }
+}
+
 extension AppDelegate {
     /// Hex-encodes the raw APNs token, the wire format `/push_register`
     /// stores. Shared by both platform delegates above.
@@ -165,17 +186,32 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         #endif
     }
 
-    /// Action dispatch (notification buttons and the default tap). The async
-    /// variant's return *is* the completion handler, so returning only after
-    /// `handleNotificationAction` resolves keeps the system's background
-    /// budget honest for MARK_READ / ARCHIVE.
+    /// Action dispatch (notification buttons and the default tap). The
+    /// completion handler is called only after `handleNotificationAction`
+    /// resolves, which keeps the system's background budget honest for the
+    /// `MARK_READ` and `ARCHIVE` actions.
+    ///
+    /// The completion-handler variant rather than the `async` one, and this is
+    /// the whole of #1534: UIKit turns the async witness's *return* into the
+    /// completion call and runs it wherever the function happens to return.
+    /// This method is `nonisolated` (see the extension comment above), so that
+    /// is the global executor — and UIKit answers the completion by refreshing
+    /// the scene snapshot and the state-restoration archive, which asserts it
+    /// is on the main thread. Tapping any notification aborted the app with
+    /// `NSInternalInconsistencyException: Call must be made on main thread`.
+    /// Taking the handler explicitly puts the hop where it can be stated and
+    /// tested instead of leaving it to the bridge.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
         let identifier = response.actionIdentifier
         let ref = PushMessageRef(userInfo: response.notification.request.content.userInfo)
-        await PushRegistrar.shared.handleNotificationAction(identifier: identifier, ref: ref)
+        Task {
+            await PushRegistrar.shared.handleNotificationAction(identifier: identifier, ref: ref)
+            await PushActionCompletion.finish(completionHandler)
+        }
     }
 }
 #endif
