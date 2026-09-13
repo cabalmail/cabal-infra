@@ -33,25 +33,41 @@ struct FeedItemDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task(id: item.id) {
+        // Build the model from `.onAppear`, not `.task`: on an iPhone-compact
+        // NavigationStack push, `.task` can fire twice for the same identity
+        // and cancel both at entry (see `MessageDetailView`'s note). The
+        // launch restore pushes the list *and* the reader in one go, which
+        // is exactly the case that left this view on its spinner until the
+        // user backed out and reopened the item. The resolution below awaits
+        // a store read, so it runs on an unstructured Task the modifier
+        // can't cancel; `onAppear` re-firing is harmless (idempotent guard).
+        .onAppear {
+            guard model == nil else { return }
             restoreAnchor = appState.navCoordinator?.readingPosition(key: positionKey)?.anchor
-            // Resolve the subscription here rather than trusting the parent's
-            // copy. The parent looks it up asynchronously *after* the
-            // selection changes, so on a first open — or any open after the
-            // reader was popped — `subscription` is still nil at this point,
-            // and a model built from it would silently fall back to the
-            // default open mode, styling, and remote-content policy instead
-            // of the feed's own. The store read is local and fast.
-            let resolved: RssSubscription?
-            if let subscription {
-                resolved = subscription
-            } else if let store = appState.client?.rssStore {
-                resolved = (try? await store.subscription(id: item.subscriptionId)) ?? nil
-            } else {
-                resolved = nil
+            let client = appState.client
+            let preferences = preferences
+            let item = item
+            let parentSubscription = subscription
+            Task { @MainActor in
+                // Resolve the subscription here rather than trusting the
+                // parent's copy. The parent looks it up asynchronously
+                // *after* the selection changes, so on a first open — or any
+                // open after the reader was popped — it is still nil at this
+                // point, and a model built from it would silently fall back
+                // to the default open mode, styling, and remote-content
+                // policy instead of the feed's own. Local, fast.
+                let resolved: RssSubscription?
+                if let parentSubscription {
+                    resolved = parentSubscription
+                } else if let store = client?.rssStore {
+                    resolved = (try? await store.subscription(id: item.subscriptionId)) ?? nil
+                } else {
+                    resolved = nil
+                }
+                guard model == nil else { return }
+                model = FeedItemDetailViewModel(item: item, subscription: resolved,
+                                                engine: client?.rssSync, preferences: preferences)
             }
-            model = FeedItemDetailViewModel(item: item, subscription: resolved,
-                                            engine: appState.client?.rssSync, preferences: preferences)
         }
         .task { await observeReachability() }
     }
