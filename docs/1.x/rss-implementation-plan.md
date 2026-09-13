@@ -1685,7 +1685,12 @@ reader's JavaScript posture changes, which is not a decision for this
 plan. Feed rows carry the Apple rows' combined accessibility label
 ("Unread, title, date"). Not in 6d: the local session record and launch
 restore, which are the resume-session plan's Phase B and belong with its
-mail half.
+mail half. Driven on the Pixel 8 API 35 emulator (2026-09-13): a Daring
+Fireball item opened into the article view with reader mode on by the
+feed's default, and the page came back as the extracted story in the
+app's styling; a long AWS post scrolled, left, and reopened at the same
+place, the position file holding `f0.111` under the item's
+`feedId#sortKey`; no crashes.
 
 6c as built, in `ui/feeds/`:
 `FeedManagementViewModel` (the Apple `FeedManagementViewModel`'s effect
