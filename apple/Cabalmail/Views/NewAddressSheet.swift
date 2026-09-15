@@ -122,10 +122,7 @@ struct NewAddressSheet: View {
                 addressRow
                     .textFieldStyle(.roundedBorder)
                 if let preview = composedAddress {
-                    Text(preview)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                    addressPreview(preview)
                 }
             }
             MacSheetSection(caption: "Comment") {
@@ -150,10 +147,7 @@ struct NewAddressSheet: View {
             Section("New address") {
                 addressRow
                 if let preview = composedAddress {
-                    Text(preview)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                    addressPreview(preview)
                 }
             }
             Section("Comment") {
@@ -173,6 +167,39 @@ struct NewAddressSheet: View {
         }
     }
     #endif
+
+    /// The address being composed, drawn for a reader to check against what
+    /// they are about to hand out.
+    ///
+    /// An address is one unbreakable token, so when it is long enough to wrap
+    /// the layout engine hyphenates it and draws a hyphen the address does not
+    /// contain — measured on iPhone as `…xyza.ca-` / `bal-mail.com` (#1589).
+    /// `AddressDisplay.wrappable` is #1547's answer: zero-width spaces give
+    /// the line breaker a legal break so it wraps instead. The break then
+    /// falls wherever the line fills rather than on the address's own hyphen,
+    /// which is the trade-off that routine documents.
+    ///
+    /// Those zero-width spaces are part of the string, so `.textSelection`
+    /// would copy them: measured, selecting this row and hitting Copy put 60
+    /// of them on the pasteboard, i.e. an address that pastes broken. The row
+    /// carries the address list's "Copy Address" action instead, which copies
+    /// the raw string. No toast confirms it — the root banner lives behind
+    /// this sheet (`ComposeView` keeps its own `toastOverlay` for the same
+    /// reason), and a banner nobody sees is worse than none.
+    @ViewBuilder
+    private func addressPreview(_ preview: String) -> some View {
+        Text(AddressDisplay.wrappable(preview))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(preview)
+            .contextMenu {
+                Button {
+                    copyToPasteboard(preview)
+                } label: {
+                    Label("Copy Address", systemImage: "doc.on.doc")
+                }
+            }
+    }
 
     /// The email-shaped input row shared by both layouts: `username @
     /// subdomain . domain`, with the domain drawn from the deployment's
