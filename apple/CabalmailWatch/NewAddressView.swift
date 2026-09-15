@@ -71,10 +71,11 @@ struct NewAddressView: View {
                 }
 
                 HStack(alignment: .firstTextBaseline) {
-                    Text(preview)
+                    Text(AddressDisplay.wrappable(preview))
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
+                        .accessibilityLabel(preview)
                     Spacer(minLength: 4)
                     Button {
                         username = Self.randomToken()
