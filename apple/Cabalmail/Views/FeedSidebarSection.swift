@@ -161,6 +161,12 @@ struct FeedSidebarList: View {
             }
         }
         .navigationTitle("Feeds")
+        #if !os(macOS)
+        // In the compact Feeds tab the Cabalmail mark stands in for the
+        // title, as on the Mail tab; the string stays for VoiceOver and the
+        // back button (see `SidebarBranding.swift`).
+        .compactBrandMarkTitle(accessibilityTitle: "Feeds")
+        #endif
         .searchable(text: $filter, prompt: "Filter feeds")
         .toolbar {
             ToolbarItem {

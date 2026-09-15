@@ -48,6 +48,14 @@ struct SearchView: View {
                     )
                 }
             }
+            // On iPhone the Cabalmail mark heads the tab like every other
+            // compact tab (see `SidebarBranding.swift`); the title string is
+            // for VoiceOver and the reader's back button. visionOS keeps its
+            // untitled search tab.
+            #if os(iOS)
+            .navigationTitle("Search")
+            .compactBrandMarkTitle(accessibilityTitle: "Search")
+            #endif
         }
         .task {
             if model == nil, let client = appState.client {
