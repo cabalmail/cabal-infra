@@ -858,6 +858,8 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                         onOpenScope = openScope,
                         onPoll = feedsViewModel::poll,
                         management = management,
+                        scroll = feedsViewModel.treeScroll,
+                        onScrollChange = { feedsViewModel.treeScroll = it },
                     )
                 },
             )

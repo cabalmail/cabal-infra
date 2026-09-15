@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -39,10 +41,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -124,7 +129,9 @@ fun FeedListScreen(
 /**
  * The leading pane of the wide-window feeds layout: the same rows as
  * [FeedListScreen] without its chrome, with the open scope highlighted.
- * The sheets are hosted by the layout around it.
+ * The sheets are hosted by the layout around it. The pane is recreated
+ * whenever the open scope changes, so it starts its list at [scroll] and
+ * reports every move through [onScrollChange] for the caller to keep.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -137,8 +144,16 @@ fun FeedPane(
     onPoll: () -> Unit,
     modifier: Modifier = Modifier,
     management: FeedManagementViewModel? = null,
+    scroll: FeedTreeScroll = FeedTreeScroll(),
+    onScrollChange: (FeedTreeScroll) -> Unit = {},
 ) {
     ForegroundPolling(onPoll, FEED_POLL_MS)
+    val listState = rememberLazyListState(scroll.index, scroll.offset)
+    val latestOnScrollChange by rememberUpdatedState(onScrollChange)
+    LaunchedEffect(listState) {
+        snapshotFlow { FeedTreeScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
+            .collect { latestOnScrollChange(it) }
+    }
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(R.string.feeds_title)) },
@@ -151,6 +166,7 @@ fun FeedPane(
             onOpenScope = onOpenScope,
             selectedScope = selectedScope,
             management = management,
+            listState = listState,
         )
     }
 }
@@ -206,12 +222,13 @@ private fun FeedTreeContent(
     modifier: Modifier = Modifier,
     selectedScope: RssItemScope? = null,
     management: FeedManagementViewModel? = null,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val rows = FeedTree.rows(state.folders, state.subscriptions, state.unreadCounts, collapsed)
     // The row whose long-press menu is open, by row id; one at a time.
     var menuFor by remember { mutableStateOf<String?>(null) }
     val allFeedsTitle = stringResource(R.string.feeds_all)
-    LazyColumn(modifier = modifier.fillMaxSize()) {
+    LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
         state.error?.let { message ->
             item(key = "error") {
                 Text(
