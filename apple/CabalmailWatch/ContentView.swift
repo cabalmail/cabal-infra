@@ -193,10 +193,14 @@ struct ContentView: View {
                             .font(.caption2)
                             .foregroundStyle(ColorTokens.warningFg)
                     }
-                    Text(address.address)
+                    // Break opportunities rather than hyphenation: a raw
+                    // address that wraps here draws a hyphen it does not
+                    // contain (#1578, same rule as the detail view).
+                    Text(AddressDisplay.wrappable(address.address))
                         .font(.footnote)
                         .lineLimit(2)
                         .foregroundStyle(address.suspended ? .secondary : .primary)
+                        .accessibilityLabel(address.address)
                 }
                 if let comment = address.comment, !comment.isEmpty {
                     Text(comment)

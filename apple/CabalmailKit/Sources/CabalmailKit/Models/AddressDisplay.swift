@@ -1,7 +1,8 @@
 import Foundation
 
 /// How an address is drawn in text the user has to read back: the revoke and
-/// suspend confirmations, and the watch's large-type display.
+/// suspend confirmations, and on the watch the large-type display, the address
+/// list rows and the new-address preview.
 ///
 /// An address is a single unbreakable token, and SwiftUI exposes no
 /// hyphenation control — there is no `hyphenationFactor` on `Text` and no
