@@ -139,4 +139,42 @@ class ComposeHelpersTest {
             HtmlText.toPlainText("<style>p{}</style><div>One</div><p>Two &amp; three</p><br><br>four"),
         )
     }
+
+    @Test
+    fun `first line is the first block with prose`() {
+        val lead = "<figure><img src=\"x.jpg\"></figure><p>Lead <em>paragraph</em> &amp; more.</p><p>Second.</p>"
+        assertEquals("Lead paragraph & more.", HtmlText.firstLine(lead))
+        assertEquals("one", HtmlText.firstLine("one<br>two"))
+        assertEquals("one", HtmlText.firstLine("one<BR />two"))
+        assertEquals("Name", HtmlText.firstLine("<table><tr><td>Name</td><td>Value</td></tr></table>"))
+        assertEquals("Heading", HtmlText.firstLine("<h1>Heading</h1><p>Body</p>"))
+        assertEquals("words and links", HtmlText.firstLine("<p>wor<b>d</b>s and <a href=\"u\">links</a></p>"))
+        assertEquals("Fish & chips \u2013 \u00a312", HtmlText.firstLine("<p>Fish &amp; chips &ndash; &#163;12</p>"))
+    }
+
+    @Test
+    fun `first line skips script style head comments and blank blocks`() {
+        val html =
+            """
+            <html><head><title>Page</title></head><body>
+            <style>p { color: red; }</style><SCRIPT>track()</SCRIPT><!-- <p>hidden</p> -->
+            <p>&nbsp;</p><div>
+              real
+              text </div><p>next</p>
+            """.trimIndent()
+        assertEquals("real text", HtmlText.firstLine(html))
+        assertEquals("", HtmlText.firstLine(""))
+        assertEquals("", HtmlText.firstLine("<img src=\"x\">"))
+        assertEquals("", HtmlText.firstLine("<p>  </p><p>&nbsp;</p>"))
+    }
+
+    @Test
+    fun `first line is cut with an ellipsis and keeps stray angle brackets`() {
+        val long = "<p>" + "word ".repeat(200) + "</p>"
+        assertEquals("word word word word\u2026", HtmlText.firstLine(long, maxLength = 20))
+        assertEquals("aaaaa\u2026", HtmlText.firstLine("a".repeat(10_000), maxLength = 5))
+        assertEquals("Short.", HtmlText.firstLine("<p>Short.</p>", maxLength = 20))
+        assertEquals("5 > 4 and a < b", HtmlText.firstLine("5 > 4 and a < b"))
+        assertEquals("I <3 feeds", HtmlText.firstLine("<p>I <3 feeds</p>"))
+    }
 }
