@@ -85,7 +85,11 @@ fun readerModeHtml(
             .replace(AUTHOR_STYLE_BLOCK, "")
             .replace(AUTHOR_STYLESHEET_LINK, "")
     val foreground = if (darkMode) "#e4e2dd" else "#1a1c1a"
-    val background = if (darkMode) "#121412" else "#fdfcf8"
+    // Warm neutrals in both schemes: the light page is a cream, the dark one a
+    // dark brown at the lightness of the Apple reader's system grey (#1c1c1e).
+    // The earlier dark value (#121412) sat green of neutral and read as a tint
+    // on tablet-sized panes.
+    val background = if (darkMode) "#1c1714" else "#fdfcf8"
     val link = if (darkMode) ColorTokenHex.ACCENT_FOREST_FG_DARK else ColorTokenHex.ACCENT_FOREST_FG_LIGHT
     return """
         <meta name="viewport" content="width=device-width, initial-scale=1">
