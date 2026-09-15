@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.4] - 2026-09-15
+
+### Changed
+- Apple: **Cabalmail mark heads every iPhone tab.** The Feeds, Addresses,
+  Settings, and Search tabs now open under the Cabalmail mark in place of a
+  large text title, matching the Mail tab's folder list. Only each tab's
+  outermost screen changes; pushed screens (a settings category, a feed's
+  item list or reader, a message) keep their own titles, as do the iPad
+  settings sheet and the wide sidebar's address inspector.
+
+### Fixed
+- Android: **Feed list opens at the top.** Drilling into a feed landed
+  the list at the bottom, most visibly on a feed sorted oldest first: the
+  lazy list anchored on its footer, the only row before the first page
+  arrived, and followed it down once the rows filled in above. The list
+  now opens at the top, returns there on an ordering, filter, or search
+  change, and holds the top through a sync that adds newer rows above it;
+  a sync or poll while scrolled keeps the reader's place.
+
 ## [1.19.3] - 2026-09-15
 
 ### Changed
