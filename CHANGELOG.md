@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.5] - 2026-09-15
+
+### Added
+- Android: **Feed rows preview the body.** Each item in a feed's list now
+  shows the first line of text from the item's body under the title, on
+  one line and cut with an ellipsis where it outruns the column, so the
+  title alone no longer has to say whether an item is worth opening. An
+  item whose body has no text (an image-only post) keeps the shorter row.
+- Apple: **Feed rows preview the body.** Each item in a feed's list now
+  shows the first line of text from the item's body under the title, on
+  one line and cut with an ellipsis where it outruns the column, so the
+  title alone no longer has to say whether an item is worth opening. An
+  item whose body has no text (an image-only post) keeps the shorter row.
+
 ## [1.19.4] - 2026-09-15
 
 ### Changed
