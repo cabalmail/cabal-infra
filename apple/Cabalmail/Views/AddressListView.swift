@@ -84,6 +84,12 @@ struct AddressListView: View {
             }
         }
         .navigationTitle("Addresses")
+        #if !os(macOS)
+        // In the compact Addresses tab the Cabalmail mark stands in for the
+        // title, as on the Mail tab; the wide sidebar's inspector keeps the
+        // text (see `SidebarBranding.swift`).
+        .compactBrandMarkTitle(accessibilityTitle: "Addresses")
+        #endif
         .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter addresses")
         .toolbar {
             // Compact keeps New / Reload in the toolbar; the wide sidebar moves

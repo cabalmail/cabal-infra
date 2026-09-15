@@ -98,11 +98,16 @@ struct SidebarWash: View {
 /// via the `LogoTint` colorset. The size is the mark's square bounding
 /// box — 132 pt iPhone / 102 pt iPad / 90 pt macOS, three times the
 /// handoff's original values (the asset's built-in padding left the ink
-/// too small at the handoff sizes). Decorative — it stands in for the
-/// sidebar's "Folders" title, so it carries that accessibility label
-/// rather than being hidden.
+/// too small at the handoff sizes). Decorative — it stands in for a
+/// screen's navigation title (the sidebar's "Folders", or each compact
+/// tab's own), so it carries that accessibility label rather than being
+/// hidden.
 struct CabalmailMark: View {
     let size: CGFloat
+    /// The title the mark stands in for. Defaults to the Mail sidebar's
+    /// "Folders"; the other compact tabs pass their own so VoiceOver still
+    /// hears which screen it is on.
+    var accessibilityTitle: String = "Folders"
 
     var body: some View {
         Image("CabalmailMark")
@@ -110,6 +115,111 @@ struct CabalmailMark: View {
             .scaledToFit()
             .frame(width: size, height: size)
             .foregroundStyle(ColorTokens.brandForest)
-            .accessibilityLabel("Folders")
+            .accessibilityLabel(accessibilityTitle)
     }
 }
+
+#if !os(macOS)
+// MARK: - Mark as navigation title
+
+/// The mark size the compact iPhone tabs and the iPad floating folder panel
+/// use; `MailRootView` passes 102 for the wide iPad sidebar.
+let compactBrandMarkSize: CGFloat = 132
+
+/// Puts the Cabalmail mark where a screen's navigation title would go
+/// (iOS / iPadOS / visionOS; macOS hosts the mark in its sidebar directly).
+///
+/// Inline display mode suppresses the large title, the clear principal item
+/// suppresses the inline text, and the screen's own `.navigationTitle` string
+/// stays for VoiceOver and the back button. The mark rides the leading
+/// toolbar slot — the system sidebar toggle and the compact New / Reload
+/// buttons keep their own slots.
+private struct BrandMarkTitle: ViewModifier {
+    let size: CGFloat
+    let accessibilityTitle: String
+
+    func body(content: Content) -> some View {
+        content
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Color.clear.frame(width: 1, height: 1)
+                }
+                // On OS 26's liquid glass, a bare toolbar item gets wrapped
+                // in a glass capsule, which makes the decorative mark read as
+                // a button. Detach it from the shared glass background where
+                // the API exists; earlier systems render toolbar images plain
+                // anyway. The SDK marks `sharedBackgroundVisibility`
+                // explicitly unavailable on visionOS (a runtime `#available`
+                // check can't gate a symbol the compiler rejects), so the
+                // visionOS build takes the plain path.
+                #if os(visionOS)
+                ToolbarItem(placement: .topBarLeading) {
+                    CabalmailMark(size: size, accessibilityTitle: accessibilityTitle)
+                }
+                #else
+                if #available(iOS 26.0, *) {
+                    ToolbarItem(placement: .topBarLeading) {
+                        CabalmailMark(size: size, accessibilityTitle: accessibilityTitle)
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem(placement: .topBarLeading) {
+                        CabalmailMark(size: size, accessibilityTitle: accessibilityTitle)
+                    }
+                }
+                #endif
+            }
+    }
+}
+
+/// True inside the compact iPhone section tab bar (`SignedInRootView`'s
+/// `compactTabs`), where every tab's root screen heads itself with the
+/// Cabalmail mark instead of a text title. False everywhere else, so the
+/// same `SettingsView` / `AddressListView` bodies keep their text titles in
+/// the iPad settings sheet and the wide sidebar's inspector, where the mark
+/// would crowd a Done button or repeat the one already in the sidebar.
+///
+/// An environment flag rather than a size-class check, for the same reason
+/// as `inSettingsSheet`: sheet content reports a compact size class too.
+private struct ShowsCompactBrandMarkKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var showsCompactBrandMark: Bool {
+        get { self[ShowsCompactBrandMarkKey.self] }
+        set { self[ShowsCompactBrandMarkKey.self] = newValue }
+    }
+}
+
+/// `brandMarkTitle` gated on `showsCompactBrandMark`, for the tab roots
+/// that also render outside the compact tab bar.
+private struct CompactBrandMarkTitle: ViewModifier {
+    let accessibilityTitle: String
+    @Environment(\.showsCompactBrandMark) private var showsCompactBrandMark
+
+    func body(content: Content) -> some View {
+        if showsCompactBrandMark {
+            content.brandMarkTitle(size: compactBrandMarkSize, accessibilityTitle: accessibilityTitle)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// Replaces this screen's visible navigation title with the Cabalmail
+    /// mark, unconditionally. `accessibilityTitle` is what VoiceOver reads in
+    /// its place — pass the same string as the `.navigationTitle`.
+    func brandMarkTitle(size: CGFloat, accessibilityTitle: String = "Folders") -> some View {
+        modifier(BrandMarkTitle(size: size, accessibilityTitle: accessibilityTitle))
+    }
+
+    /// Replaces this screen's visible navigation title with the Cabalmail
+    /// mark when hosted in the compact iPhone tab bar; a no-op elsewhere.
+    func compactBrandMarkTitle(accessibilityTitle: String) -> some View {
+        modifier(CompactBrandMarkTitle(accessibilityTitle: accessibilityTitle))
+    }
+}
+#endif

@@ -45,6 +45,13 @@ data class FeedItemListUiState(
     /** Feed titles by subscription id, for rows in multi-feed scopes. */
     val subscriptionTitles: Map<String, String> = emptyMap(),
     val hasLoaded: Boolean = false,
+    /**
+     * Counts the lists that began from a new starting point — the open, an
+     * ordering, filter, or search change — updated together with [items], so
+     * the screen scrolls to the top when it changes. A sync, a poll, or
+     * "Load older" reads the same list again and leaves it alone.
+     */
+    val listEpoch: Int = 0,
 ) {
     val canSearch: Boolean get() = subscription != null
     val canLoadOlder: Boolean get() = subscription != null && !olderExhausted
@@ -118,12 +125,16 @@ class FeedItemListViewModel(
                 ordering = subscription?.orderingMode ?: RssOrderingMode.NEWEST_FIRST,
             )
         }
-        reload()
+        reload(restart = true)
         sync()
     }
 
-    /** The first page from the store (or the search results), no network. */
-    suspend fun reload() {
+    /**
+     * The first page from the store (or the search results), no network.
+     * [restart] marks a list that begins from a new starting point (bumping
+     * [FeedItemListUiState.listEpoch]) rather than a re-read of the same one.
+     */
+    suspend fun reload(restart: Boolean = false) {
         val current = mutableState.value
         try {
             val feedId = current.subscription?.feedId
@@ -149,6 +160,7 @@ class FeedItemListViewModel(
                     olderExhausted = olderExhausted,
                     subscriptionTitles = titles,
                     hasLoaded = true,
+                    listEpoch = if (restart) it.listEpoch + 1 else it.listEpoch,
                 )
             }
             refreshPendingMarks()
@@ -243,7 +255,7 @@ class FeedItemListViewModel(
         if (current.filter == filter) return
         mutableState.update { it.copy(filter = filter) }
         viewModelScope.launch {
-            reload()
+            reload(restart = true)
             when (val scope = current.scope) {
                 RssItemScope.All ->
                     runCatching { updatePreferences { it.copy(feedsAllFilter = filter) } }
@@ -270,7 +282,7 @@ class FeedItemListViewModel(
         if (current.ordering == ordering) return
         mutableState.update { it.copy(ordering = ordering) }
         viewModelScope.launch {
-            reload()
+            reload(restart = true)
             val sub = current.subscription ?: return@launch
             if (sub.orderingMode != ordering) persistSubscription(sub, RssSubscriptionUpdate(orderingMode = ordering))
         }
@@ -279,7 +291,7 @@ class FeedItemListViewModel(
     fun setSearchQuery(query: String) {
         if (mutableState.value.searchQuery == query) return
         mutableState.update { it.copy(searchQuery = query) }
-        viewModelScope.launch { reload() }
+        viewModelScope.launch { reload(restart = true) }
     }
 
     fun setRead(
