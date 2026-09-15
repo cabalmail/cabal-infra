@@ -123,6 +123,12 @@ struct SignedInRootView: View {
     /// only draws the capsules, so without it, touches in the tray's margins
     /// fall through to the rows visible behind the bar (see
     /// `TabBarTrayShield.swift`).
+    ///
+    /// Every tab's root screen heads itself with the Cabalmail mark in place
+    /// of its text title, the way the Mail tab's folder list always has:
+    /// `showsCompactBrandMark` turns on the `compactBrandMarkTitle()` each
+    /// root applies (see `SidebarBranding.swift`). Set on the `TabView` so a
+    /// tab added later inherits it.
     private var compactTabs: some View {
         TabView(selection: $compactTab) {
             Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
@@ -151,6 +157,7 @@ struct SignedInRootView: View {
                     .tabBarTrayShield()
             }
         }
+        .environment(\.showsCompactBrandMark, true)
         // The resume session remembers which section the user was in; the
         // Mail and Feeds tabs each keep their own position, so only the
         // section moves here. Other tabs leave it alone.

@@ -587,42 +587,12 @@ extension MailRootView {
         .scrollContentBackground(.hidden)
         .background { SidebarWash().ignoresSafeArea() }
         #if !os(macOS)
-        // The Cabalmail mark stands in for the sidebar's "Folders" title:
-        // inline display mode suppresses the large title, the clear principal
-        // item suppresses the inline text, and `FolderListView`'s
-        // `.navigationTitle("Folders")` string stays for VoiceOver and the
-        // back button. The mark itself rides the leading toolbar slot — the
-        // system sidebar toggle and the compact New / Reload buttons keep
-        // their own slots.
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Color.clear.frame(width: 1, height: 1)
-            }
-            // On OS 26's liquid glass, a bare toolbar item gets wrapped in a
-            // glass capsule, which makes the decorative mark read as a button.
-            // Detach it from the shared glass background where the API exists;
-            // earlier systems render toolbar images plain anyway. The SDK
-            // marks `sharedBackgroundVisibility` explicitly unavailable on
-            // visionOS (a runtime `#available` check can't gate a symbol the
-            // compiler rejects), so the visionOS build takes the plain path.
-            #if os(visionOS)
-            ToolbarItem(placement: .topBarLeading) {
-                CabalmailMark(size: isWideSidebar ? 102 : 132)
-            }
-            #else
-            if #available(iOS 26.0, *) {
-                ToolbarItem(placement: .topBarLeading) {
-                    CabalmailMark(size: isWideSidebar ? 102 : 132)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            } else {
-                ToolbarItem(placement: .topBarLeading) {
-                    CabalmailMark(size: isWideSidebar ? 102 : 132)
-                }
-            }
-            #endif
-        }
+        // The Cabalmail mark stands in for the sidebar's "Folders" title
+        // (`FolderListView`'s `.navigationTitle("Folders")` string stays for
+        // VoiceOver and the back button) — see `brandMarkTitle` in
+        // `SidebarBranding.swift`. Unconditional here, on every non-macOS
+        // layout; the other compact tabs opt in through the environment.
+        .brandMarkTitle(size: isWideSidebar ? 102 : compactBrandMarkSize)
         #endif
     }
 
