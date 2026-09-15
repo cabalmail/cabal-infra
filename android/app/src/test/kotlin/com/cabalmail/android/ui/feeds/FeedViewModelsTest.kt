@@ -247,6 +247,35 @@ class FeedViewModelsTest {
         }
 
     @Test
+    fun `the list epoch advances with the open and each fresh start, never with a re-read`() =
+        runTest(dispatcher) {
+            store.upsertSubscription(subscription)
+            store.upsertItems(listOf(item(1), item(2, isFavorite = true)))
+
+            val model = listModel(RssItemScope.Subscription("s1"))
+            advanceUntilIdle()
+            assertEquals(1, model.state.value.listEpoch, "the open (its sync re-reads the same list)")
+
+            model.setOrdering(RssOrderingMode.NEWEST_FIRST)
+            advanceUntilIdle()
+            assertEquals(2, model.state.value.listEpoch, "an ordering change")
+
+            model.setFilter(RssItemFilter.ALL)
+            advanceUntilIdle()
+            assertEquals(3, model.state.value.listEpoch, "a filter change")
+
+            model.setSearchQuery("Item")
+            advanceUntilIdle()
+            assertEquals(4, model.state.value.listEpoch, "a search")
+
+            model.sync()
+            advanceUntilIdle()
+            model.reload()
+            advanceUntilIdle()
+            assertEquals(4, model.state.value.listEpoch, "a sync and a plain re-read keep the reader's place")
+        }
+
+    @Test
     fun `a folder list writes its pill to the folder row and All Feeds to the preference`() =
         runTest(dispatcher) {
             store.upsertFolder(RssFolder("d1", name = "News"))
