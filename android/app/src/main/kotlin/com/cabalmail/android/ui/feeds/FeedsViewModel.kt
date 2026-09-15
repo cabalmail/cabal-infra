@@ -39,6 +39,12 @@ data class FeedsUiState(
         }
 }
 
+/** Where the feed tree is scrolled to: the first visible row and its offset in pixels. */
+data class FeedTreeScroll(
+    val index: Int = 0,
+    val offset: Int = 0,
+)
+
 /**
  * The feed list (folders with feeds as leaves), the Apple
  * `FeedSidebarViewModel`: [load] is a pure store read so the tree renders
@@ -56,6 +62,14 @@ class FeedsViewModel(
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(FeedsUiState())
     val state: StateFlow<FeedsUiState> = mutableState.asStateFlow()
+
+    /**
+     * The wide-window pane's scroll position. Opening a scope replaces the
+     * items entry, and the pane inside it, so the position lives here with
+     * the tree rather than in the pane's own list state, which starts over
+     * at the top on each switch.
+     */
+    var treeScroll: FeedTreeScroll = FeedTreeScroll()
 
     init {
         viewModelScope.launch {
