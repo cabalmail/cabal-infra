@@ -1,6 +1,7 @@
 '''Retrieves list of attachments from a message given a folder and ID'''
 import json
 from helper import get_message # pylint: disable=import-error
+from helper import query_params # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
 from helper import message_gone_guard # pylint: disable=import-error
@@ -10,7 +11,13 @@ from helper import message_gone_guard # pylint: disable=import-error
 @message_gone_guard
 def handler(event, _context):
     '''Retrieves list of attachments from a message given a folder and ID'''
-    query_string = event['queryStringParameters']
+    # Check every parameter this handler indexes before anything reads one, so
+    # a request missing (say) `folder` or `host` gets a named 400 rather than a
+    # bodiless 502 (#1410, the query-string half of #895).
+    try:
+        query_string = query_params(event, 'host', 'folder', 'id')
+    except ValueError as err:
+        return _invalid(err)
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     message = get_message(query_string['host'], user,
                           query_string['folder'].replace("/","."), int(query_string['id']))
@@ -32,4 +39,11 @@ def handler(event, _context):
         "body": json.dumps({
             "attachments": attachments
         })
+    }
+
+def _invalid(err):
+    '''Builds the 400 returned when a required parameter is missing.'''
+    return {
+        "statusCode": 400,
+        "body": json.dumps({"status": f"Invalid input: {err}"})
     }

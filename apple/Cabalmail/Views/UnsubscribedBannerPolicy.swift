@@ -28,4 +28,24 @@ enum UnsubscribedBannerPolicy {
         guard let subscribedPaths else { return !folder.isSubscribed }
         return !subscribedPaths.contains(folder.path)
     }
+
+    /// Lines the banner's sentence may wrap to.
+    ///
+    /// The banner lives in a `safeAreaInset`, so its *ideal* height is part of
+    /// the hosting window's minimum content height — and an unbounded
+    /// `.fixedSize(horizontal: false, vertical: true)` label has no ideal
+    /// height until it is given a width. AppKit computes a window minimum by
+    /// proposing a width near zero, where the sentence wraps to roughly one
+    /// word per line: measured 731 pt, which is where #1355's 973 pt minimum
+    /// window height came from. Three lines caps that at 54 pt.
+    ///
+    /// Three, not two, because the narrowest width the banner is ever laid out
+    /// at for real is `ListColumnWidth.squeezedMinimum` (220 pt, the macOS
+    /// message-list column in a window too narrow to seat all three at their
+    /// preferred widths; iPad and visionOS floor the column at
+    /// `ListColumnWidth.minimum`, and compact iPhone gives it the screen).
+    /// The sentence needs three lines there — measured 55 pt unbounded, 55 pt
+    /// at this limit, 41 pt at two — so this is the tightest bound that never
+    /// truncates on any surface that can draw it.
+    static let messageLineLimit = 3
 }

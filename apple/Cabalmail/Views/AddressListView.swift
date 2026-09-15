@@ -178,7 +178,7 @@ extension AddressListView {
 
     private var revokeDialogTitle: String {
         if let address = pendingRevoke {
-            return "Revoke \(address.address)?"
+            return AddressDisplay.revokeTitle(address.address)
         }
         return "Revoke address?"
     }
@@ -215,14 +215,15 @@ extension AddressListView {
 
     @ViewBuilder
     private func revokeDialogMessage(for address: Address) -> some View {
-        Text("Mail sent to \(address.address) will be rejected. This can't be undone.")
+        Text(AddressDisplay.revokeMessage(address.address))
+            .accessibilityLabel("Mail sent to \(address.address) will be rejected. This can't be undone.")
     }
 
     // MARK: - Suspend confirmation plumbing
 
     private var suspendDialogTitle: String {
         if let address = pendingSuspend {
-            return "Suspend \(address.address)?"
+            return AddressDisplay.suspendTitle(address.address)
         }
         return "Suspend address?"
     }
@@ -250,11 +251,12 @@ extension AddressListView {
 
     @ViewBuilder
     private func suspendDialogMessage(for address: Address) -> some View {
-        Text("""
-        The DNS records for \(address.address) will be removed and inbound mail \
-        will stop being deliverable. The address is kept and can be reinstated \
-        at any time.
-        """)
+        Text(AddressDisplay.suspendMessage(address.address))
+            .accessibilityLabel("""
+            The DNS records for \(address.address) will be removed and inbound mail \
+            will stop being deliverable. The address is kept and can be reinstated \
+            at any time.
+            """)
     }
 
     @ViewBuilder

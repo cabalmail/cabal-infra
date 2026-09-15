@@ -343,15 +343,19 @@ struct FeedItemRow: View {
 
 /// Date rendering for item rows and the reader header.
 enum FeedItemDate {
-    private static let iso = ISO8601DateFormatter()
-    private static let isoFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
+    // `Date.ISO8601FormatStyle` rather than `ISO8601DateFormatter`: these are
+    // hoisted to statics so a list full of rows does not build a parser per
+    // row, and a static non-Sendable reference type is a concurrency-safety
+    // error in the Swift 6 language mode (#1507). Foundation marks
+    // `NSDateFormatter` `NS_SWIFT_SENDABLE` and pointedly does not mark
+    // `NSISO8601DateFormatter`, so `nonisolated(unsafe)` here would assert
+    // exactly what Apple declined to; the format style is a Sendable value
+    // type, so the hoisting stays and the unsafety goes.
+    private static let iso = Date.ISO8601FormatStyle()
+    private static let isoFractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
     static func date(_ iso8601: String) -> Date? {
-        iso.date(from: iso8601) ?? isoFractional.date(from: iso8601)
+        (try? iso.parse(iso8601)) ?? (try? isoFractional.parse(iso8601))
     }
 
     static func relative(_ iso8601: String) -> String {
