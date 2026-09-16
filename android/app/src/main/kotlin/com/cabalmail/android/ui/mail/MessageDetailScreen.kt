@@ -387,6 +387,11 @@ fun MessageDetailScreen(
                         allowRemoteContent = state.loadRemoteContent,
                         onLinkTap = { url -> LinkMenuTarget.from(url)?.let { linkTarget = it } },
                         modifier = Modifier.fillMaxSize(),
+                        // Reading position: restored from and streamed back
+                        // to the per-install cache so a half-read message
+                        // reopens where it was (resume-session plan, Phase B).
+                        restoreFraction = state.restoreFraction,
+                        onScrollFraction = viewModel::recordScroll,
                     )
                 } else {
                     PlainTextBody(

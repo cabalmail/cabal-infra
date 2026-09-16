@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.navigation.ResumeSessionStore
+import com.cabalmail.android.reading.ReadingPositionKey
+import com.cabalmail.android.reading.ReadingPositions
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssSubscription
 import com.cabalmail.kit.models.RssSubscriptionUpdate
@@ -56,8 +59,11 @@ class FeedItemDetailViewModel(
     private val engine: suspend () -> RssSyncEngine,
     private val events: FeedEventBus,
     private val preferences: StateFlow<AppPreferences>,
-    private val positions: FeedReadingPositions? = null,
+    private val positions: ReadingPositions? = null,
+    private val session: ResumeSessionStore? = null,
 ) : ViewModel() {
+    private val itemId = "$feedId#$sortKey"
+    private val positionKey = ReadingPositionKey.feed(itemId)
     private var latestFraction: Float? = null
     private var recordJob: kotlinx.coroutines.Job? = null
     private val mutableState = MutableStateFlow(FeedItemDetailUiState())
@@ -88,7 +94,9 @@ class FeedItemDetailViewModel(
                     hasArticleUrl = FeedItemDetailUiState(item = item).articleUrl != null,
                     globalRemoteContent = preferences.value.loadRemoteContent,
                 )
-            val restore = item?.let { positions?.fraction(it.id) }
+            val restore = item?.let { positions?.fraction(positionKey) }
+            // Where the user is now, for the next cold launch.
+            if (item != null) session?.recordFeedItem(itemId)
             mutableState.update {
                 it.copy(
                     item = item,
@@ -123,7 +131,7 @@ class FeedItemDetailViewModel(
         recordJob =
             viewModelScope.launch {
                 kotlinx.coroutines.delay(SCROLL_SETTLE_MS)
-                latestFraction?.let { runCatching { positions.record(item.id, it) } }
+                latestFraction?.let { runCatching { positions.record(positionKey, it) } }
             }
     }
 
@@ -189,6 +197,14 @@ class FeedItemDetailViewModel(
         }
     }
 
+    /**
+     * The reader closed (or, on a wide window, the next item's model already
+     * took over — the guard inside keeps that case from clearing it).
+     */
+    override fun onCleared() {
+        session?.recordNoFeedItem(itemId)
+    }
+
     companion object {
         const val SCROLL_SETTLE_MS = 800L
 
@@ -206,7 +222,8 @@ class FeedItemDetailViewModel(
                         engine = { container.requireRssSync() },
                         events = container.feedEvents,
                         preferences = container.preferences.preferences,
-                        positions = container.feedReadingPositions,
+                        positions = container.readingPositions,
+                        session = container.resumeSession,
                     )
                 }
             }

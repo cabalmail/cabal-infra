@@ -235,6 +235,9 @@ class MessageListViewModel(
     val isTrashFolder: Boolean = folder == "Trash"
 
     init {
+        // Where the user is now, for the next cold launch (resume-session
+        // plan, Phase B). The reader, when a message opens, records itself.
+        container.resumeSession.recordFolder(folder)
         // Default sort (plan §6.3): a local preference seeds the first load;
         // the folder's sticky pill (synced) does too, and `refresh` runs the
         // pill's search when it is not All.

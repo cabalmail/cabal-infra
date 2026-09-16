@@ -103,7 +103,7 @@ additive optional fields.
 | Phase | Work item                                                | Status      |
 | ----- | -------------------------------------------------------- | ----------- |
 | A     | Apple: session record, feed-aware launch, position cache | Shipped 1.17.0 (2026-09-11); follow-ups for #1555, #1535, and the restored-item spinner in review (2026-09-13) |
-| B     | Android: position cache + local session record           | Ready to start (2026-09-13): the Android feed reader shipped in 1.19.0 (RSS plan 6a–6d) and landed the feed half of the position cache and the route identities with it; the session record, launch restore, watermark, and mail positions remain |
+| B     | Android: position cache + local session record           | In review (2026-09-15): session record + silent launch restore, mail reading positions, foreign-cursor watermark and same-place check |
 | C     | Cross-device RSS toast (server additive fields)          | Not started; follows Phase B. Prerequisite: a dual-form anchor (element + fraction) on Apple; best after Phase D so the hand-off is element-level both ways |
 | D     | Element anchors on Android (CSP hash-source boundary)    | Not started; briefed for a separate session (2026-09-13); covers the mail reader too |
 
@@ -183,10 +183,16 @@ tracked separately in #1537 and is independent of every phase here.
 
 ## Phase B — Android
 
-**Status:** Ready to start (2026-09-13). The Android feed reader shipped
-in 1.19.0 (RSS plan 6a–6d), and that work landed part of this phase
-ahead of it. Re-read of what is in place, and what is left, before the
-phase begins; the user chose to let the reader bake first.
+**Status:** In review (2026-09-15). The Android feed reader shipped in
+1.19.0 (RSS plan 6a–6d), and that work landed part of this phase ahead
+of it; the remainder below is implemented: `ResumeSessionStore` (a JSON
+file, launch snapshot frozen against the live record, identity-guarded
+clears), `LaunchDestination` (the pure launch ladder) and
+`ForeignCursorPolicy` (foreign + newer than the DataStore watermark +
+not the same place), `ReadingPositions` generalised from the feed-only
+cache to Apple's `mail:` / `feed:` key scheme (adopting the old file
+once) and wired into the mail reader through `HtmlBody`'s existing
+hooks, sign-out clears. Not device-tested at the time of writing.
 
 **Already in place from the Android reader (RSS plan 6a–6d):**
 

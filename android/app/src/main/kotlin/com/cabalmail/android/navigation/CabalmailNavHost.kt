@@ -98,6 +98,7 @@ import com.cabalmail.android.ui.settings.SettingsViewModel
 import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.kit.models.NavState
 import com.cabalmail.kit.models.RssItemScope
+import com.cabalmail.kit.rss.RssStore
 import kotlinx.coroutines.launch
 
 /**
@@ -122,9 +123,6 @@ enum class TopLevel(
 /** Routes that belong to the Mail tab even though they are nested. */
 private val MAIL_ROUTES =
     setOf("folders", "messages/{folder}?uid={uid}", "search?folder={folder}", "message/{folder}/{uid}")
-
-/** The folder phone-width and three-pane-width launches open into. */
-private const val INBOX = "INBOX"
 
 /**
  * Navigation shell: the suite (bar / rail), the graph, and the app-wide
@@ -303,31 +301,45 @@ fun CabalmailNavHost(
                     // copy onto the restored stack, and consumed even when
                     // staying on the hub so a later resize doesn't yank
                     // mid-session.
+                    // Launch landing (resume-session plan, Phase B): where
+                    // this install left off, restored silently from the
+                    // local session record — the Feeds destination and the
+                    // saved scope and item, or the saved mail folder and
+                    // message — with INBOX as the mail default. Reachability
+                    // is local: the feed scope and item against the store,
+                    // the message against the envelope cache. Process-scoped
+                    // like the one-shots above so an activity recreation
+                    // does not re-land.
                     val launchIntoInbox = compactWidth || fitsThreePanes(maxWidth)
                     LaunchedEffect(Unit) {
                         if (!container.launchDestinationDone) {
                             container.launchDestinationDone = true
-                            if (launchIntoInbox) {
-                                navController.navigate("messages/${Uri.encode(INBOX)}")
-                            }
+                            navController.restoreLaunchSession(container, compactWidth, launchIntoInbox)
                         }
                     }
 
-                    // Resume cursor (plan §4.5): a cursor this install wrote
-                    // restores silently; one from another device only offers
-                    // a prompt — hosted on the app-wide snackbar (like the
-                    // unsent-draft prompt) so it shows over the INBOX launch
-                    // view too — and launch never yanks the user unbidden.
+                    // Cross-device cursor (plan §4.5): only a cursor written
+                    // by ANOTHER install, newer than the last one offered
+                    // here, and not the place this install is already at,
+                    // earns a prompt — hosted on the app-wide snackbar (like
+                    // the unsent-draft prompt) so it shows over the launch
+                    // view too. This install's own cursor is never applied:
+                    // the local session above has already restored it.
                     // Composed after the launch destination so its navigation
-                    // lands on top of the INBOX launch view, not under it.
+                    // lands on top of the launch view, not under it.
                     val resumeMessage = stringResource(R.string.resume_prompt)
                     val resumeAction = stringResource(R.string.resume_action)
                     LaunchedEffect(Unit) {
                         val cursor = container.navCursor.restoreOnce() ?: return@LaunchedEffect
-                        if (cursor.local) {
-                            navController.openCursor(cursor.state, compactWidth)
-                            return@LaunchedEffect
-                        }
+                        val offer =
+                            ForeignCursorPolicy.shouldOffer(
+                                cursor = cursor.state,
+                                localClientId = container.navCursor.localClientId(),
+                                offeredWatermark = container.navCursor.offeredWatermark(),
+                                session = container.resumeSession.launchSnapshot(),
+                            )
+                        if (!offer) return@LaunchedEffect
+                        cursor.state.updatedAt?.let { container.navCursor.markOffered(it) }
                         val result =
                             snackbarHostState.showSnackbar(
                                 message = resumeMessage,
@@ -337,6 +349,17 @@ fun CabalmailNavHost(
                             )
                         if (result == SnackbarResult.ActionPerformed) {
                             navController.openCursor(cursor.state, compactWidth)
+                        }
+                    }
+
+                    // The section the user is in, for the next cold launch.
+                    // Mail and Feeds each record their own position from
+                    // their view models; only the section moves here.
+                    LaunchedEffect(currentRoute) {
+                        when (currentRoute) {
+                            in FeedRoutes.ALL -> container.resumeSession.noteSection(ResumeSection.FEEDS)
+                            in MAIL_ROUTES -> container.resumeSession.noteSection(ResumeSection.MAIL)
+                            else -> Unit
                         }
                     }
 
@@ -703,6 +726,71 @@ private fun MailNavGraph(
 }
 
 /**
+ * The launch restore (resume-session plan, Phase B). Reads the session
+ * snapshot, verifies the saved position against the local caches, and
+ * navigates the ladder `LaunchDestination` lays out: a feeds session
+ * switches to the Feeds destination then opens the scope (and item); a mail
+ * session opens the folder (and message); nothing saved lands on INBOX
+ * where a launch used to.
+ */
+private suspend fun NavHostController.restoreLaunchSession(
+    container: AppContainer,
+    compactWidth: Boolean,
+    launchIntoInbox: Boolean,
+) {
+    val session = container.resumeSession.launchSnapshot()
+    if (session?.section == ResumeSection.FEEDS) {
+        navigate(TopLevel.FEEDS.route) {
+            popUpTo(graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+        val scope = session.feedScope?.let(RssItemScope::fromToken)
+        val scopeExists = scope != null && container.rssStore.scopeExists(scope)
+        val item =
+            session.feedItemId
+                ?.let(FeedRoutes::splitItemId)
+                ?.let { (feedId, sortKey) -> runCatching { container.rssStore.item(feedId, sortKey) }.getOrNull() }
+        LaunchDestination.feedRoutes(scope.takeIf { scopeExists }, item, compactWidth).forEach { step ->
+            navigate(step.route) {
+                step.popUpTo?.let { popUpTo(it) }
+                launchSingleTop = true
+            }
+        }
+        return
+    }
+    val folder = session?.folder
+    val uid = session?.uid
+    val messageReachable =
+        folder != null &&
+            uid != null &&
+            runCatching { container.envelopeCache.read(folder, listOf(uid))[uid] }.getOrNull() != null
+    LaunchDestination.mailRoutes(session, compactWidth, launchIntoInbox, messageReachable).forEach { step ->
+        navigate(step.route) {
+            step.popUpTo?.let { popUpTo(it) }
+            launchSingleTop = true
+        }
+    }
+}
+
+/**
+ * Whether a saved scope still names something in the local catalog; a
+ * departed one degrades to the feed tree.
+ */
+private suspend fun RssStore.scopeExists(scope: RssItemScope): Boolean =
+    when (scope) {
+        RssItemScope.All -> true
+        is RssItemScope.Subscription -> {
+            val row = runCatching { subscription(scope.subscriptionId) }.getOrNull()
+            row != null
+        }
+        is RssItemScope.Folder -> {
+            val folders = runCatching { folders() }.getOrDefault(emptyList())
+            folders.any { it.folderId == scope.folderId }
+        }
+    }
+
+/**
  * Builds the back stack a stored cursor points at: folder → message on a
  * phone; on wide windows the list-detail view with the message selected.
  */
@@ -744,6 +832,9 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
     }
 
     composable(FeedRoutes.HUB) {
+        // Back at the feed tree: the next cold launch opens here, not the
+        // list that was popped (the section itself is recorded above).
+        LaunchedEffect(Unit) { container.resumeSession.recordFeedScope(null) }
         val viewModel: FeedsViewModel = viewModel(factory = FeedsViewModel.factory(container))
         val management: FeedManagementViewModel = viewModel(factory = FeedManagementViewModel.factory(container))
         val state by viewModel.state.collectAsState()

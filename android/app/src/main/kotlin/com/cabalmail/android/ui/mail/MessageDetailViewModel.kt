@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.MailEvent
+import com.cabalmail.android.reading.ReadingPositionKey
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.compose.DraftResume
@@ -69,6 +70,12 @@ data class MessageDetailUiState(
     val composeReplacesMessage: Boolean = false,
     /** A reply / edit-draft seed is being built. */
     val seedingCompose: Boolean = false,
+    /**
+     * Where the reader left off in this message last time, as a fraction of
+     * the scrollable height; reapplied once the body lays out. Null on a
+     * message never scrolled.
+     */
+    val restoreFraction: Float? = null,
 )
 
 class MessageDetailViewModel(
@@ -80,6 +87,11 @@ class MessageDetailViewModel(
     val state: StateFlow<MessageDetailUiState> = mutableState.asStateFlow()
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    /** Reading-position capture: the last reported fraction and the settle job. */
+    private var latestFraction: Float? = null
+    private var recordJob: kotlinx.coroutines.Job? = null
+    private var positionKey: String = ReadingPositionKey.mail(null, folder, uid)
 
     val isTrashFolder: Boolean = folder == "Trash"
 
@@ -105,6 +117,25 @@ class MessageDetailViewModel(
             )
         }
         load()
+    }
+
+    /** The body's scroll position, written after the scrolling settles. */
+    fun recordScroll(fraction: Float) {
+        latestFraction = fraction
+        if (recordJob?.isActive == true) return
+        recordJob =
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(SCROLL_SETTLE_MS)
+                latestFraction?.let { runCatching { container.readingPositions.record(positionKey, it) } }
+            }
+    }
+
+    /**
+     * The reader closed (or, on a wide window, the next message's model
+     * already took over — the guard inside keeps that case from clearing it).
+     */
+    override fun onCleared() {
+        container.resumeSession.recordNoMessage(folder, uid)
     }
 
     /** Re-runs the initial envelope/body fetch after a failure (the reader's Retry button). */
@@ -134,14 +165,21 @@ class MessageDetailViewModel(
                             json.encodeToString(MessageContent.serializer(), fetched),
                         )
                     }
+                val messageId = envelope?.messageId?.firstOrNull()
+                // Keyed by Message-ID when known (it survives a move), else
+                // folder + UID — the same scheme as the feed reader and Apple.
+                positionKey = ReadingPositionKey.mail(messageId, folder, uid)
+                val restore = container.readingPositions.fraction(positionKey)
                 mutableState.update {
-                    it.copy(envelope = envelope, content = content, busy = false)
+                    it.copy(envelope = envelope, content = content, busy = false, restoreFraction = restore)
                 }
                 container.navCursor.record(
                     folder = folder,
                     uid = uid,
-                    messageId = envelope?.messageId?.firstOrNull(),
+                    messageId = messageId,
                 )
+                // Where the user is now, for the next cold launch.
+                container.resumeSession.recordMessage(folder, uid, messageId)
                 // "Mark as read: On open" (default Manual never touches \Seen).
                 if (container.preferences.preferences.value.markAsRead == MarkAsRead.ON_OPEN &&
                     envelope != null &&
@@ -487,5 +525,8 @@ class MessageDetailViewModel(
             viewModelFactory {
                 initializer { MessageDetailViewModel(container, folder, uid) }
             }
+
+        /** Settle delay after the last scroll report before the position is written. */
+        private const val SCROLL_SETTLE_MS = 250L
     }
 }

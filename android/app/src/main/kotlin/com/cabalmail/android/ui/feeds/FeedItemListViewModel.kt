@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.navigation.ResumeSessionStore
 import com.cabalmail.kit.models.RssFolder
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemFilter
@@ -71,6 +72,7 @@ class FeedItemListViewModel(
     private val events: FeedEventBus,
     private val preferences: StateFlow<AppPreferences>,
     private val updatePreferences: suspend ((AppPreferences) -> AppPreferences) -> Unit,
+    session: ResumeSessionStore? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(FeedItemListUiState(scope = scope))
     val state: StateFlow<FeedItemListUiState> = mutableState.asStateFlow()
@@ -79,6 +81,9 @@ class FeedItemListViewModel(
     private var postingSelf = false
 
     init {
+        // Where the user is now, for the next cold launch (resume-session
+        // plan, Phase B). The item, when one opens, records itself.
+        session?.recordFeedScope(scope.token)
         viewModelScope.launch {
             events.events.collect { event ->
                 when (event) {
@@ -389,6 +394,7 @@ class FeedItemListViewModel(
                         events = container.feedEvents,
                         preferences = container.preferences.preferences,
                         updatePreferences = { transform -> container.preferences.update(transform) },
+                        session = container.resumeSession,
                     )
                 }
             }
