@@ -261,22 +261,10 @@ struct FeedItemListView: View {
                         if item.id == model.items.last?.id { Task { await model.loadMore() } }
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button {
-                            Task { await model.setRead(item, !item.isRead) }
-                        } label: {
-                            Label(item.isRead ? "Mark unread" : "Mark read",
-                                  systemImage: item.isRead ? "envelope.badge" : "envelope.open")
-                        }
-                        .tint(ColorTokens.accentForestFg)
+                        feedSwipeButton(model.swipeLeading, item: item, model: model)
                     }
                     .swipeActions(edge: .trailing) {
-                        Button {
-                            Task { await model.setFavorite(item, !item.isFavorite) }
-                        } label: {
-                            Label(item.isFavorite ? "Unfavorite" : "Favorite",
-                                  systemImage: item.isFavorite ? "star.slash" : "star")
-                        }
-                        .tint(ColorTokens.flaggedFill)
+                        feedSwipeButton(model.swipeTrailing, item: item, model: model)
                     }
                     .contextMenu {
                         Button(item.isRead ? "Mark as unread" : "Mark as read") {
@@ -289,6 +277,37 @@ struct FeedItemListView: View {
                             Link("Open in browser", destination: url)
                         }
                     }
+    }
+}
+
+extension FeedItemListView {
+    /// The button a swipe edge bound to `action` reveals for `item`; nothing
+    /// for a disabled edge. Read on every row build, so a change under
+    /// Settings › Feeds takes effect at once.
+    @ViewBuilder
+    func feedSwipeButton(_ action: FeedSwipeAction, item: RssItem, model: FeedItemListViewModel) -> some View {
+        switch action {
+        case .toggleRead:
+            Button {
+                Task { await model.setRead(item, !item.isRead) }
+            } label: {
+                Label(item.isRead ? "Mark unread" : "Mark read",
+                      systemImage: item.isRead ? "envelope.badge" : "envelope.open")
+            }
+            .tint(ColorTokens.accentForestFg)
+            .accessibilityIdentifier("feed.swipe.toggleRead")
+        case .toggleFavorite:
+            Button {
+                Task { await model.setFavorite(item, !item.isFavorite) }
+            } label: {
+                Label(item.isFavorite ? "Unfavorite" : "Favorite",
+                      systemImage: item.isFavorite ? "star.slash" : "star")
+            }
+            .tint(ColorTokens.flaggedFill)
+            .accessibilityIdentifier("feed.swipe.toggleFavorite")
+        case .disabled:
+            EmptyView()
+        }
     }
 }
 

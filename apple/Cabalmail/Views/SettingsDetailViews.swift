@@ -177,8 +177,34 @@ struct ActionsSettingsView: View {
                 Text("Which message the reading pane opens after you archive, delete, or mark read from it.")
                     .sectionFooter()
             }
+            Section {
+                Picker("Leading swipe", selection: $preferences.swipeLeading) {
+                    mailSwipeOptions
+                }
+                Picker("Trailing swipe", selection: $preferences.swipeTrailing) {
+                    mailSwipeOptions
+                }
+            } footer: {
+                Text(Self.swipeFooter)
+                    .sectionFooter()
+            }
         }
     }
+
+    /// The same option list for both edges; the same action may be bound
+    /// to both.
+    @ViewBuilder
+    private var mailSwipeOptions: some View {
+        Text("Toggle read").tag(MailSwipeAction.toggleRead)
+        Text("Toggle flag").tag(MailSwipeAction.toggleFlag)
+        Text("Dispose (per Dispose action)").tag(MailSwipeAction.dispose)
+        Text("None").tag(MailSwipeAction.disabled)
+    }
+
+    /// Shared with Settings › Feeds, whose two pickers bind the feed rows.
+    static let swipeFooter = "Leading is a swipe that starts at the leading edge of the row "
+        + "(the left in left-to-right languages); trailing starts at the other edge. "
+        + "The same action may be bound to both."
 }
 
 // MARK: - About
