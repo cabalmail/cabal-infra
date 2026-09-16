@@ -41,7 +41,7 @@ struct FromPicker: View {
             }
         } label: {
             HStack {
-                Text(model.fromAddress ?? "Select an address…")
+                fromLabel
                     .foregroundStyle(model.fromAddress == nil ? .secondary : .primary)
                 Spacer()
                 if FromPickerChevronPolicy.labelDrawsChevron(on: .current) {
@@ -55,14 +55,34 @@ struct FromPicker: View {
         .accessibilityIdentifier("compose.from")
     }
 
+    /// The field's own label: the address mail will be sent from.
+    ///
+    /// Addresses here are drawn through `AddressDisplay.wrappable`, like every
+    /// other surface that shows a whole address: the token has no legal break,
+    /// so a row narrow enough to wrap it hyphenates and draws a character the
+    /// address does not contain (#1597 — `…@longsubdomain-` / `probe0916…` in
+    /// this label on iPhone, `pouls-f0k` for `poulsf0k` in the menu rows). The
+    /// raw address stays what VoiceOver reads.
+    @ViewBuilder
+    private var fromLabel: some View {
+        if let fromAddress = model.fromAddress {
+            Text(AddressDisplay.wrappable(fromAddress))
+                .accessibilityLabel(fromAddress)
+        } else {
+            Text("Select an address…")
+        }
+    }
+
     private func addressButton(_ address: Address) -> some View {
         Button {
             model.fromAddress = address.address
         } label: {
             if address.address == model.fromAddress {
-                Label(address.address, systemImage: "checkmark")
+                Label(AddressDisplay.wrappable(address.address), systemImage: "checkmark")
+                    .accessibilityLabel(address.address)
             } else {
-                Text(address.address)
+                Text(AddressDisplay.wrappable(address.address))
+                    .accessibilityLabel(address.address)
             }
         }
     }

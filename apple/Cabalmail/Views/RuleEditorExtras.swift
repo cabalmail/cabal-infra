@@ -120,7 +120,9 @@ private struct ForwardAddressList: View {
     var body: some View {
         ForEach(addresses, id: \.self) { address in
             HStack {
-                Text(address)
+                // Wrappable for the reason `FromPicker.fromLabel` gives (#1597).
+                Text(AddressDisplay.wrappable(address))
+                    .accessibilityLabel(address)
                 Spacer()
                 Button(role: .destructive) {
                     addresses.removeAll { $0 == address }

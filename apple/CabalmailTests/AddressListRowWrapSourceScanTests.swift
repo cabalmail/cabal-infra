@@ -27,11 +27,10 @@ import XCTest
 // defect. `AddressListView.swift` compiles into the iOS and macOS targets
 // both, so one read covers every platform that draws the row.
 //
-// Deliberately out of scope, and left raw: `FromPicker`'s menu rows,
-// `RuleEditorExtras`' forward-address list and the Settings From-address
-// picker. Each draws an address in a `Text` and none has been measured to
-// wrap — a scan asserting a rule nobody has shown applies there would be a
-// claim, not a test.
+// `FromPicker`, `RuleEditorExtras`' forward-address list and the Settings
+// From-address picker were left out of this scan as unmeasured; #1597
+// measured all of them hyphenating, and `AddressPickerWrapSourceScanTests`
+// covers them now.
 final class AddressListRowWrapSourceScanTests: XCTestCase {
 
     private static let path = "Cabalmail/Views/AddressListView.swift"

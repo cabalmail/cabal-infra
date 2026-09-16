@@ -45,7 +45,10 @@ struct ComposingSettingsView: View {
                         Text("Loading…").tag(Optional<String>.none)
                     } else {
                         ForEach(availableAddresses) { address in
-                            Text(address.address).tag(Optional(address.address))
+                            // Wrappable for the reason `FromPicker.fromLabel` gives (#1597).
+                            Text(AddressDisplay.wrappable(address.address))
+                                .accessibilityLabel(address.address)
+                                .tag(Optional(address.address))
                         }
                     }
                 }
