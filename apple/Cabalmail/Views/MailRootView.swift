@@ -129,6 +129,15 @@ struct MailRootView: View {
     /// the field is focused (or holds a query / active search) the content
     /// column shows results instead of the selected folder.
     @FocusState var searchFieldFocused: Bool
+    /// Measured width of the folder-switch menu at the leading edge of the
+    /// message-list column's toolbar section (macOS; see
+    /// `MessageListView+FolderSwitch`). The toolbar search field is sized
+    /// against it (`ToolbarSearchFieldWidth`), so the two can share the
+    /// section instead of the field being drawn over the menu. The menu
+    /// reports on every mount — the list is re-keyed per folder — and the
+    /// last report stands while the search surface (whose leading item is a
+    /// plain title of similar size) has the column. Zero until measured.
+    @State private var listLeadingToolbarWidth: CGFloat = 0
     /// Per-context list-filter text for the wide sidebar. On macOS / iPad-regular
     /// this view renders the "Filter folders" / "Filter addresses" field itself
     /// (below the section tabs) so it sits under the global search rather than
@@ -254,7 +263,8 @@ struct MailRootView: View {
                     // A pick from the list's folder-switch menu goes through
                     // the same binding as a sidebar tap, so it ends a global
                     // search and dismisses the iPad folder panel the same way.
-                    onSwitchFolder: { sidebarSelection.wrappedValue = $0 }
+                    onSwitchFolder: { sidebarSelection.wrappedValue = $0 },
+                    onFolderMenuWidthChanged: { listLeadingToolbarWidth = $0 }
                 )
                 .id(selectedFolder.path)
             }
@@ -491,14 +501,16 @@ extension MailRootView {
 
     /// Toolbar host for the search field (macOS / visionOS): a stated width so
     /// it right-aligns cleanly above the message-list column rather than
-    /// stretching, capped to the column — less its fixed sibling buttons — so
-    /// it can't overhang into the neighbouring one
+    /// stretching, capped to the column — less its fixed sibling buttons and
+    /// the folder-switch menu at the section's leading edge — so it can't
+    /// overhang into the neighbouring column or cover the menu
     /// (`ToolbarSearchFieldWidth`).
     private var toolbarSearchField: some View {
         searchFieldCore
             .frame(width: ToolbarSearchFieldWidth.width(
                 columnWidth: contentColumnWidth,
-                inspectorPresented: addressInspectorPresented
+                inspectorPresented: addressInspectorPresented,
+                leadingWidth: listLeadingToolbarWidth
             ))
     }
 

@@ -65,6 +65,16 @@ extension MessageListView {
         .accessibilityLabel("Folder, \(folder.name)")
         .accessibilityHint("Switch folder")
         .accessibilityIdentifier("list.folderSwitch")
+        // The global search field shares this toolbar section and is sized
+        // to what the menu leaves it (`ToolbarSearchFieldWidth`). The menu's
+        // width is the folder name's, so it is measured here rather than
+        // assumed: a toolbar item can measure itself, and this is the only
+        // place that knows how wide the name came out.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            onFolderMenuWidthChanged(width)
+        }
         // macOS keeps the AppKit menu it built the first time this `Menu`
         // was opened — checkmarks and row titles included — so the identity
         // carries what the rows draw (#1337, same mechanism as #1329).

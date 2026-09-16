@@ -29,7 +29,8 @@ final class ToolbarSearchFieldWidthTests: XCTestCase {
         for column in stride(from: 100.0, through: 1_000.0, by: 5.0) {
             let width = ToolbarSearchFieldWidth.width(
                 columnWidth: CGFloat(column),
-                inspectorPresented: false
+                inspectorPresented: false,
+                leadingWidth: 0
             )
             XCTAssertLessThanOrEqual(
                 width,
@@ -94,11 +95,11 @@ final class ToolbarSearchFieldWidthTests: XCTestCase {
         // launching at the floor and snapping wider a frame later is its own
         // defect.
         XCTAssertEqual(
-            ToolbarSearchFieldWidth.width(columnWidth: 0, inspectorPresented: false),
+            ToolbarSearchFieldWidth.width(columnWidth: 0, inspectorPresented: false, leadingWidth: 0),
             ToolbarSearchFieldWidth.preferred
         )
         XCTAssertEqual(
-            ToolbarSearchFieldWidth.width(columnWidth: -1, inspectorPresented: true),
+            ToolbarSearchFieldWidth.width(columnWidth: -1, inspectorPresented: true, leadingWidth: 90),
             ToolbarSearchFieldWidth.preferred
         )
     }
@@ -109,6 +110,90 @@ final class ToolbarSearchFieldWidthTests: XCTestCase {
         // hang under the neighbouring column.
         XCTAssertEqual(ToolbarSearchFieldWidth.width(availableWidth: 0), 0)
         XCTAssertEqual(ToolbarSearchFieldWidth.width(availableWidth: -40), 0)
+    }
+
+    // MARK: - The folder-switch menu at the section's leading edge
+
+    /// The macOS section's leading edge carries the folder-switch menu, whose
+    /// width is the folder name's. Sized without it, the field claimed the
+    /// menu's share too and was drawn over it — and widening the column
+    /// didn't help, because the field grew point-for-point with the column.
+    /// Charged, field + siblings + menu stay inside the column wherever the
+    /// column can seat all three beside a usable field.
+    func testTheFieldLeavesRoomForTheFolderMenu() {
+        for column in stride(from: 200.0, through: 1_000.0, by: 5.0) {
+            for menu in stride(from: 36.0, through: 160.0, by: 4.0) {
+                let width = ToolbarSearchFieldWidth.width(
+                    columnWidth: CGFloat(column),
+                    inspectorPresented: false,
+                    leadingWidth: CGFloat(menu)
+                )
+                let seatsAll = CGFloat(column) - ToolbarSearchFieldWidth.siblingReserve - CGFloat(menu)
+                    >= ToolbarSearchFieldWidth.minimum + ToolbarSearchFieldWidth.margin
+                guard seatsAll else { continue }
+                XCTAssertLessThanOrEqual(
+                    width,
+                    CGFloat(column) - ToolbarSearchFieldWidth.siblingReserve - CGFloat(menu),
+                    "a \(column)pt column with a \(menu)pt menu got a \(width)pt field"
+                )
+            }
+        }
+    }
+
+    /// Widening the column now widens the gap between the menu and the
+    /// field, not just the field: with the menu charged, the field's share
+    /// grows with the column and stops at `preferred`, exactly as it does
+    /// with no menu at all.
+    func testTheMenuIsChargedOffTheFieldsShare() {
+        let bare = ToolbarSearchFieldWidth.width(columnWidth: 420, inspectorPresented: false, leadingWidth: 0)
+        let charged = ToolbarSearchFieldWidth.width(columnWidth: 420, inspectorPresented: false, leadingWidth: 36)
+        XCTAssertEqual(bare - charged, 36)
+        XCTAssertEqual(
+            ToolbarSearchFieldWidth.width(columnWidth: 1_000, inspectorPresented: false, leadingWidth: 120),
+            ToolbarSearchFieldWidth.preferred
+        )
+    }
+
+    /// The field yields to the menu only down to its own floor. A folder
+    /// name wider than the section can seat beside a usable field leaves the
+    /// field at `minimum` over the menu's tail — cramped, but present: this
+    /// field is the only way into search on the layout, so "no field" is
+    /// never the answer to a long folder name.
+    func testAWideFolderMenuCannotPushTheFieldUnderItsFloor() {
+        let reserved = ToolbarSearchFieldWidth.siblingReserve
+        // 300 - 140 - 88 - 24 = 48pt beside the floor: a 36pt menu is charged
+        // whole, a 95pt one only as far as the floor allows.
+        XCTAssertEqual(
+            ToolbarSearchFieldWidth.leadingCharge(columnWidth: 300, reserved: reserved, leadingWidth: 36), 36
+        )
+        XCTAssertEqual(
+            ToolbarSearchFieldWidth.leadingCharge(columnWidth: 300, reserved: reserved, leadingWidth: 95), 48
+        )
+        XCTAssertEqual(
+            ToolbarSearchFieldWidth.width(columnWidth: 300, inspectorPresented: false, leadingWidth: 95),
+            ToolbarSearchFieldWidth.minimum
+        )
+        XCTAssertEqual(
+            ToolbarSearchFieldWidth.width(columnWidth: 300, inspectorPresented: false, leadingWidth: 400),
+            ToolbarSearchFieldWidth.minimum
+        )
+        // A column too narrow to seat even the floor beside the siblings
+        // charges nothing for the menu; the field is whatever it was before
+        // the menu existed rather than less.
+        XCTAssertEqual(
+            ToolbarSearchFieldWidth.leadingCharge(columnWidth: 220, reserved: reserved, leadingWidth: 36), 0
+        )
+        XCTAssertEqual(
+            ToolbarSearchFieldWidth.width(columnWidth: 220, inspectorPresented: false, leadingWidth: 36),
+            ToolbarSearchFieldWidth.width(columnWidth: 220, inspectorPresented: false, leadingWidth: 0)
+        )
+    }
+
+    /// An unmeasured menu — the pre-layout zero, or the search surface that
+    /// has none — charges nothing rather than reading as a negative item.
+    func testAnUnmeasuredMenuChargesNothing() {
+        XCTAssertEqual(ToolbarSearchFieldWidth.leadingCharge(columnWidth: 420, reserved: 140, leadingWidth: 0), 0)
+        XCTAssertEqual(ToolbarSearchFieldWidth.leadingCharge(columnWidth: 420, reserved: 140, leadingWidth: -5), 0)
     }
 
     /// The iPad inspector can reach `AddressInspectorWidth.maximum` over a
