@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.6] - 2026-09-16
+
+### Fixed
+- Apple: **Address rows no longer invent a hyphen.** A long address wrapping in
+  an address list row was hyphenated mid-token, drawing a character the address
+  does not contain (`b2f6s4mx@r8g3h5ne.ca-` / `bal-mail.net`). Rows now wrap
+  without one; copying a row still copies the address exactly as minted.
+- Android: **Folder list keeps its scroll position.** On a tablet, choosing a
+  folder in the Mail tab's leading pane no longer scrolls that pane back to the
+  top; it stays where it was until scrolled deliberately.
+- Apple: **macOS search field no longer covers the folder menu.** The global
+  search field in the message-list column's toolbar was sized as if the
+  section's leading edge were free, so it was drawn over the folder-switch
+  menu that stands in for the column's title, and widening the column only
+  widened the field. The menu now measures itself and the field is sized to
+  what the menu and the column's buttons leave it, down to its own floor.
+- Apple: **New Address preview no longer invents a hyphen.** A long address
+  wrapping in the sheet's preview line was hyphenated mid-token, drawing a
+  character the address does not contain (`…xyza.ca-` / `bal-mail.com`). It now
+  wraps without one, and a "Copy Address" action on the line copies the address
+  exactly as typed.
+
 ## [1.19.5] - 2026-09-15
 
 ### Added
