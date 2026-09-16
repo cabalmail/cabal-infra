@@ -42,7 +42,20 @@ extension MessageListView {
             content
                 .toolbar(removing: .title)
                 .toolbar {
-                    ToolbarItem(placement: .navigation) { folderSwitchMenu }
+                    // On macOS 26's liquid glass the toolbar wraps the item
+                    // in a glass capsule, so the folder name reads as a
+                    // bordered control with the name flush against the
+                    // capsule's edge. The title it stands in for is bare
+                    // text, so detach the item from the shared background
+                    // where the API exists (same treatment as the brand
+                    // mark in `SidebarBranding`); earlier systems draw a
+                    // borderless menu plain anyway.
+                    if #available(macOS 26.0, *) {
+                        ToolbarItem(placement: .navigation) { folderSwitchMenu }
+                            .sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .navigation) { folderSwitchMenu }
+                    }
                 }
             #else
             content.toolbarTitleMenu { folderSwitchMenuItems }
