@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -105,13 +106,33 @@ fun SearchScreen(
                     )
                 }
             }
+            val scope = searchScope(state.foldersSearched, state.searchedFolderOnly, viewModel.scopeFolder)
             if (state.searched && !state.searching && state.results.isEmpty() && state.error == null) {
                 item {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(R.string.search_no_results),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                        scope?.let {
+                            Text(
+                                text = searchScopeEmptyNote(it),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            if (state.searched && state.results.isNotEmpty() && scope != null) {
+                item(key = "search-scope") {
                     Text(
-                        text = stringResource(R.string.search_no_results),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(16.dp),
+                        text = searchScopeLabel(scope),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
             }
@@ -174,6 +195,42 @@ fun SearchScreen(
         )
     }
 }
+
+/** "INBOX", "INBOX and Archive", "INBOX, Archive and Sent", "INBOX, Archive, Sent and 2 more". */
+@Composable
+private fun searchScopePhrase(scope: SearchScope.Folders): String =
+    when {
+        scope.more > 0 ->
+            pluralStringResource(
+                R.plurals.search_scope_and_more,
+                scope.more,
+                scope.named.joinToString(", "),
+                scope.more,
+            )
+        scope.named.size == 1 -> scope.named.first()
+        else ->
+            stringResource(
+                R.string.search_scope_and,
+                scope.named.dropLast(1).joinToString(", "),
+                scope.named.last(),
+            )
+    }
+
+/** The line above the results; leads with the verb so it reads as what was searched, not a property of a row. */
+@Composable
+private fun searchScopeLabel(scope: SearchScope): String =
+    when (scope) {
+        is SearchScope.FolderOnly -> stringResource(R.string.search_scope_folder_only, scope.folder)
+        is SearchScope.Folders -> stringResource(R.string.search_scope_searched, searchScopePhrase(scope))
+    }
+
+/** What the empty state adds, so an exhausted search reads differently from an unasked one. */
+@Composable
+private fun searchScopeEmptyNote(scope: SearchScope): String =
+    when (scope) {
+        is SearchScope.FolderOnly -> stringResource(R.string.search_scope_empty_folder_only, scope.folder)
+        is SearchScope.Folders -> stringResource(R.string.search_scope_empty, searchScopePhrase(scope))
+    }
 
 /** The structured predicates `/search_envelopes` accepts (plan §4.2a). */
 @OptIn(ExperimentalMaterial3Api::class)
