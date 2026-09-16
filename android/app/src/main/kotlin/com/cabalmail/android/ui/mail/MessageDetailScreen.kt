@@ -5,6 +5,7 @@ import android.content.Intent
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -223,16 +224,20 @@ fun MessageDetailScreen(
                         onClick = { viewModel.setFlag("\\Flagged", state.envelope?.isFlagged != true) },
                         enabled = !state.busy,
                     ) {
-                        Icon(
-                            Icons.Default.Star,
-                            contentDescription = stringResource(R.string.flagged),
-                            tint =
-                                if (state.envelope?.isFlagged == true) {
-                                    ColorTokens.flaggedFg()
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                        )
+                        val flagToggle = readerFlagToggle(state.envelope?.isFlagged == true)
+                        if (flagToggle.filledStar) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = stringResource(flagToggle.label),
+                                tint = ColorTokens.flaggedFg(),
+                            )
+                        } else {
+                            Icon(
+                                painterResource(R.drawable.ic_star_border),
+                                contentDescription = stringResource(flagToggle.label),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     DisposeSplitButton(
                         folder = viewModel.folderName,
@@ -387,6 +392,11 @@ fun MessageDetailScreen(
                         allowRemoteContent = state.loadRemoteContent,
                         onLinkTap = { url -> LinkMenuTarget.from(url)?.let { linkTarget = it } },
                         modifier = Modifier.fillMaxSize(),
+                        // Reading position: restored from and streamed back
+                        // to the per-install cache so a half-read message
+                        // reopens where it was (resume-session plan, Phase B).
+                        restoreFraction = state.restoreFraction,
+                        onScrollFraction = viewModel::recordScroll,
                     )
                 } else {
                     PlainTextBody(
@@ -584,6 +594,27 @@ internal fun readerFlagSlots(
             Triple(slot, palette.firstOrNull { it.slot == slot }?.label ?: slot, true)
         }
 }
+
+/**
+ * What the reader's flag toggle says and draws for the message's state
+ * (#1607). It was labelled "Flagged" and drew the same solid star either
+ * way, so TalkBack announced "Flagged" on an unflagged message and sighted
+ * users had only a 1.47:1 tint difference to go on. The label now names what
+ * a tap does, as the message list's own menu item does (`add_flag` /
+ * `remove_flag`), and the unflagged state draws a hollow star. Pure, so it
+ * unit-tests without Compose.
+ */
+internal data class ReaderFlagToggle(
+    @StringRes val label: Int,
+    val filledStar: Boolean,
+)
+
+internal fun readerFlagToggle(isFlagged: Boolean): ReaderFlagToggle =
+    if (isFlagged) {
+        ReaderFlagToggle(label = R.string.remove_flag, filledStar = true)
+    } else {
+        ReaderFlagToggle(label = R.string.add_flag, filledStar = false)
+    }
 
 /** SPF/DKIM/DMARC verdicts and the priority marker (plan §4.3). */
 @Composable

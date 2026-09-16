@@ -132,6 +132,10 @@ class SignInViewModel(
             // the token wipe; it is best-effort and never blocks sign-out.
             PushRegistrar.deregister(container)
             container.requireAuth().signOut()
+            // The next account on this device must not inherit where this
+            // one was reading (resume-session plan, Phase B).
+            container.resumeSession.clear()
+            container.readingPositions.clear()
             AuthPhase.SignedOut
         }
     }

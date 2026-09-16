@@ -1,6 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    // For the app-layer `@Serializable` records (the resume session); the
+    // kit module applies the same plugin for its models.
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.triplet.play)
 }

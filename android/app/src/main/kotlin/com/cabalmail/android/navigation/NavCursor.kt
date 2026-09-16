@@ -3,6 +3,7 @@ package com.cabalmail.android.navigation
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.models.NavState
@@ -80,6 +81,22 @@ class NavCursor(
         return RestoredCursor(state = state, local = state.clientId == clientId())
     }
 
+    /** This install's client id, for the foreign-cursor check. */
+    suspend fun localClientId(): String = clientId()
+
+    /**
+     * Server `updated_at` of the newest foreign cursor already offered to
+     * the user (0 when none), persisted so an ignored "pick up where you
+     * left off" prompt is not repeated on the next launch.
+     */
+    suspend fun offeredWatermark(): Long = dataStore.data.first()[OFFERED_KEY] ?: 0L
+
+    suspend fun markOffered(updatedAt: Long) {
+        dataStore.edit { prefs ->
+            if ((prefs[OFFERED_KEY] ?: 0L) < updatedAt) prefs[OFFERED_KEY] = updatedAt
+        }
+    }
+
     private suspend fun clientId(): String {
         val existing = dataStore.data.first()[CLIENT_ID_KEY]
         if (existing != null) {
@@ -98,5 +115,6 @@ class NavCursor(
     companion object {
         private const val WRITE_DEBOUNCE_MS = 1_500L
         private val CLIENT_ID_KEY = stringPreferencesKey("nav_client_id")
+        private val OFFERED_KEY = longPreferencesKey("nav_offered_updated_at")
     }
 }

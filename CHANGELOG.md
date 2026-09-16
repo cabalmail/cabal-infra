@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.7] - 2026-09-16
+
+### Added
+- Android: **Resume where you left off.** A cold launch reopens what the
+  device last had on screen instead of always landing on INBOX: the feed
+  tree, a feed's item list, or the item itself, or the mail folder and
+  message that were open. Half-read messages reopen at the same scroll
+  position, as feed items already did. The "pick up where you left off"
+  prompt is now reserved for a position recorded on another device, is not
+  repeated after being ignored, and stays quiet when that device is at the
+  same place. Per device; nothing about it is synced.
+
+### Changed
+- Android: **Search says which folders it covered.** A search now heads its
+  results with the folders it looked in ("Searched INBOX and Archive"), and
+  when nothing matches it says so too, explaining that unsubscribed folders
+  and Trash are not searched, or, for a single-folder search, how to widen
+  it. Before, mail that was only in Sent simply came back "No messages found".
+
+### Fixed
+- Android: **Reader flag button shows its state.** The star in the reader's
+  top bar looked the same and was announced as "Flagged" whether or not the
+  message was flagged. It now draws a hollow star with the label "Flag" on
+  an unflagged message and a filled star labelled "Remove flag" on a flagged
+  one.
+- Apple: **From addresses no longer invent a hyphen.** The composer's From
+  field, its address menu and the Default From picker in Settings, plus the
+  forward-to list in the rule editor, hyphenated a long address mid-token when
+  it wrapped (`7.te876d@pouls-` / `f0k.cabal-mail.io`). They now wrap without
+  one; the address you pick and send from is unchanged.
+- Apple: **The message list shows its folder name again on macOS 27.** The
+  folder-switch menu at the top of the message list drew as a bare chevron
+  in a circle, so the current folder's name appeared nowhere above the list.
+  It now reads as the bold folder name with its chevron, and opens the same
+  menu. The name is drawn as plain toolbar text, not inside the toolbar's
+  glass capsule, so it stands in for the title it replaced.
+- Apple: **macOS search field stays in its column after a divider drag.**
+  Widening the message list by dragging its divider grew the global search
+  field leftward, over the folder-switch menu and past the column's own edge,
+  while the width the drag added sat empty: macOS lays the toolbar section
+  out before the field's new size lands and does not revisit it while the
+  mouse is down. The field now holds its size during the drag and takes the
+  new one when the mouse is released, with the column's buttons moving over
+  to make room.
+- **Reader toolbar fits a narrow reader pane.** With the addresses sidebar
+  open at common laptop widths, the reader's More actions and Close buttons
+  were pushed off the toolbar and could not be clicked, and the icon buttons
+  were squeezed to half width. The toolbar now drops its button labels when
+  the pane (not the window) is too narrow for them, keeps every button full
+  size, and wraps onto a second row if even the icons don't fit.
+
 ## [1.19.6] - 2026-09-16
 
 ### Fixed

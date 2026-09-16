@@ -3,11 +3,12 @@ package com.cabalmail.android
 import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
 import com.cabalmail.android.navigation.NavCursor
+import com.cabalmail.android.navigation.ResumeSessionStore
+import com.cabalmail.android.reading.ReadingPositions
 import com.cabalmail.android.ui.compose.OpenIntake
 import com.cabalmail.android.ui.compose.SendQueue
 import com.cabalmail.android.ui.compose.ShareIntake
 import com.cabalmail.android.ui.feeds.FeedEventBus
-import com.cabalmail.android.ui.feeds.FeedReadingPositions
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.CognitoAuthService
@@ -123,9 +124,25 @@ class AppContainer(
     /** The on-device mirror of the feed catalog and cached items (rss plan, phase 6). */
     val rssStore: RssStore by lazy { RoomRssStore.open(appContext) }
 
-    /** Where the feed reader left off in each item, per install (resume-session plan, Phase B's feed half). */
-    val feedReadingPositions: FeedReadingPositions by lazy {
-        FeedReadingPositions(File(appContext.filesDir, "feed-positions.json"))
+    /**
+     * Where the reader left off in each mail message and feed item, per
+     * install (resume-session plan, Phase B). Adopts the feed-only file the
+     * reader shipped with on first use.
+     */
+    val readingPositions: ReadingPositions by lazy {
+        ReadingPositions(
+            File(appContext.filesDir, "reading-positions.json"),
+            legacyFeedFile = File(appContext.filesDir, "feed-positions.json"),
+        )
+    }
+
+    /**
+     * What this install last had on screen — section, mail folder and
+     * message, feed scope and item — restored silently on the next cold
+     * launch (resume-session plan, Phase B). Per install, never synced.
+     */
+    val resumeSession: ResumeSessionStore by lazy {
+        ResumeSessionStore(File(appContext.filesDir, "resume-session.json"), appScope)
     }
 
     /** Connectivity for the offline banner and the send queue. */

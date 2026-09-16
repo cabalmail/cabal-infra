@@ -72,15 +72,25 @@
 
 /* --- Action bar -------------------------------------------------------- */
 
+/* The bar sizes itself against its own width, not the viewport's: the
+   reader shares the window with the folder list, the message list and the
+   addresses sidebar, so a wide window can still leave it a narrow pane.
+   Keyed to the viewport, the labels stayed on while the pane shrank and the
+   trailing buttons were pushed past `.reader { overflow: hidden }`, where
+   they could not be clicked (#1606). So the bar is a container (labels go at
+   the width below), its buttons never shrink, and a pane too narrow even for
+   the icons wraps the row rather than clipping it. */
 .reader-actions {
   position: sticky;
   top: 0;
   z-index: 1000;
+  container-type: inline-size;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  height: 48px;
-  padding: 0 12px;
+  min-height: 48px;
+  padding: 7px 12px;
   box-sizing: border-box;
   background: var(--pane-bg);
   border-bottom: 1px solid var(--border);
@@ -103,6 +113,7 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  flex-shrink: 0;
   transition: background 80ms ease, color 80ms ease;
 }
 
@@ -179,6 +190,10 @@
 
 .reader-overflow {
   position: relative;
+  /* Keeps More actions and Close at the right edge when the bar wraps and
+     the spacer stays behind on the first row; unwrapped, the spacer takes
+     the free space first and this resolves to 0. */
+  margin-left: auto;
 }
 
 .reader-menu {
@@ -1024,6 +1039,30 @@
 
 @media (min-width: 768px) {
   .reader-actions .reader-btn .reader-btn-label { display: inline; }
+}
+
+/* After the viewport rules, so a narrow bar in a wide window wins (#1606).
+   With every label shown the bar's content measured 538px in Chromium; the
+   query sits a little above that so a wider UI font drops the labels rather
+   than wrapping the row. */
+@container (max-width: 560px) {
+  .reader-actions .reader-btn .reader-btn-label { display: none; }
+  .reader-actions .reader-btn:not(.icon-only) {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+  /* A button-anchored popup opens leftwards and, this close to the pane's
+     left edge (Move) or at the start of a wrapped second row (More actions),
+     runs past it into `.reader`'s clip. Anchor both to the bar instead. */
+  .reader-actions .reader-move,
+  .reader-actions .reader-overflow {
+    position: static;
+  }
+  .reader-actions .reader-move-picker,
+  .reader-actions .reader-menu {
+    right: 12px;
+  }
 }
 
 @media (min-width: 1200px) {
