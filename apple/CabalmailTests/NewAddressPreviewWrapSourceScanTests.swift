@@ -1,0 +1,106 @@
+import XCTest
+
+// Regression coverage for #1589.
+//
+// The New Address sheet's preview line drew the composed address raw in both
+// platform branches, so a long address wrapping on iPhone hyphenated the
+// unbreakable token: `…probe0915xyza.ca-` / `bal-mail.com`, and one character
+// later `….-` / `cabal-mail.com` — a hyphen straight after the dot. The tester
+// reproduced the same sequence on iPad, about 88 characters in against the
+// iPhone's 63. `AddressDisplay.wrappable` is the fix #1547 established.
+//
+// The two things this scan pins, because both were measured on the sheet and
+// neither has a unit-test seam:
+//
+// 1. The preview goes through `wrappable`. A raw `Text(preview)` coming back
+//    is the reported defect.
+// 2. The wrappable string is never offered to `.textSelection`. Its
+//    zero-width spaces are real characters: with selection enabled, Copy put
+//    60 of them on the simulator pasteboard, which is a broken paste — a
+//    worse bug than the drawn hyphen. The row carries a `Copy Address` action
+//    over the raw string instead.
+//
+// `NewAddressSheet` is a `View` with no seam for either rule — the layout
+// engine decides where the hyphen lands, and the pasteboard is UIKit's — so
+// this reads the source, in the shape `WatchAddressWrapSourceScanTests` set
+// for the watch's copies of this defect.
+//
+// The iOS/macOS address *rows* stay outside this scan, as they are outside
+// the watch one: #1587 has them reproducing without an inserted hyphen, and
+// the fix there is not decided.
+final class NewAddressPreviewWrapSourceScanTests: XCTestCase {
+
+    private static let path = "Cabalmail/Views/NewAddressSheet.swift"
+
+    /// Rule 1: both branches draw the preview through `wrappable`.
+    func testThePreviewDrawsTheWrappableAddress() throws {
+        let code = Self.code(in: try Self.sheetSource())
+        XCTAssertTrue(
+            code.contains("Text(AddressDisplay.wrappable(preview))"),
+            "draw the preview through AddressDisplay.wrappable (#1589)"
+        )
+        XCTAssertEqual(
+            try Self.rawPreviewHits(in: code), 0,
+            "a raw preview Text hyphenates when it wraps (#1589)"
+        )
+        // Both platform branches reach the same drawing, so a later edit to
+        // one of them can't quietly reinstate the raw Text in the other.
+        XCTAssertEqual(
+            code.ranges(of: "addressPreview(preview)").count, 2,
+            "macContent and formContent should share one preview row"
+        )
+    }
+
+    /// Rule 2: the zero-width spaces stay off the pasteboard.
+    func testThePreviewIsNotSelectableAndCopiesTheRawAddress() throws {
+        let code = Self.code(in: try Self.sheetSource())
+        XCTAssertFalse(
+            code.contains(".textSelection"),
+            "selecting wrappable text copies its zero-width spaces (#1589)"
+        )
+        XCTAssertTrue(
+            code.contains("copyToPasteboard(preview)"),
+            "the copy action must hand over the raw address, not the wrappable one (#1589)"
+        )
+    }
+
+    /// The detector on synthetic snippets, so a rewrite of the view can't
+    /// make the scan above vacuous.
+    func testDetectorCatchesTheReportedShape() throws {
+        XCTAssertEqual(try Self.rawPreviewHits(in: "Text(preview)"), 1)
+        XCTAssertEqual(try Self.rawPreviewHits(in: "Text( preview )\n    .font(.caption)"), 1)
+        XCTAssertEqual(try Self.rawPreviewHits(in: "Text(AddressDisplay.wrappable(preview))"), 0)
+        XCTAssertEqual(try Self.rawPreviewHits(in: "Text(errorMessage)"), 0)
+        XCTAssertEqual(try Self.rawPreviewHits(in: Self.code(in: "/// was Text(preview)")), 0)
+    }
+
+    /// Floor: a mis-rooted read finds nothing and passes everything above.
+    func testTheSourceIsReadable() throws {
+        let source = try Self.sheetSource()
+        XCTAssertTrue(
+            source.contains("struct NewAddressSheet: View"),
+            "\(Self.path) did not load"
+        )
+    }
+
+    // MARK: - Corpus
+
+    /// `Text(preview)`: the expression the sheet holds a whole address in.
+    private static func rawPreviewHits(in body: String) throws -> Int {
+        try body.ranges(of: Regex(#"\bText\(\s*preview\s*\)"#)).count
+    }
+
+    /// `body` with line comments cut.
+    private static func code(in body: String) -> String {
+        body.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.split(separator: "//", maxSplits: 1, omittingEmptySubsequences: false)[0] }
+            .joined(separator: "\n")
+    }
+
+    private static func sheetSource() throws -> String {
+        let apple = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // CabalmailTests
+            .deletingLastPathComponent()   // apple
+        return try String(contentsOf: apple.appendingPathComponent(path), encoding: .utf8)
+    }
+}
