@@ -158,4 +158,51 @@ class PreferencesWireTest {
         assertEquals(RssItemFilter.FAVORITE, kept.feedsAllFilter)
         assertNull(PreferencesWire.applyRemote(AppPreferences(), junk).rssMarkAsRead)
     }
+
+    @Test
+    fun `swipe bindings stay off the wire until set, default to the historical arrangement, and round-trip`() {
+        val untouched = AppPreferences()
+        assertTrue(
+            PreferencesWire
+                .toUpdate(untouched)
+                .app!!
+                .keys
+                .none { it.contains("swipe") },
+        )
+        assertEquals(MailSwipeAction.TOGGLE_READ, untouched.effectiveSwipeLeading)
+        assertEquals(MailSwipeAction.DISPOSE, untouched.effectiveSwipeTrailing)
+        assertEquals(FeedSwipeAction.TOGGLE_READ, untouched.effectiveRssSwipeLeading)
+        assertEquals(FeedSwipeAction.TOGGLE_FAVORITE, untouched.effectiveRssSwipeTrailing)
+
+        // Any edge can carry any of its actions, the same one on both edges included.
+        val chosen =
+            untouched.copy(
+                swipeLeading = MailSwipeAction.TOGGLE_FLAG,
+                swipeTrailing = MailSwipeAction.TOGGLE_FLAG,
+                rssSwipeLeading = FeedSwipeAction.NONE,
+                rssSwipeTrailing = FeedSwipeAction.TOGGLE_READ,
+            )
+        val app = PreferencesWire.toUpdate(chosen).app!!
+        assertEquals("toggle_flag", app["swipe_leading"])
+        assertEquals("toggle_flag", app["swipe_trailing"])
+        assertEquals("none", app["rss_swipe_leading"])
+        assertEquals("toggle_read", app["rss_swipe_trailing"])
+
+        // A fetched map applies; a value from the other list's vocabulary leaves the current one.
+        val remote =
+            Preferences(
+                app =
+                    mapOf(
+                        "swipe_leading" to "dispose",
+                        "swipe_trailing" to "none",
+                        "rss_swipe_leading" to "toggle_favorite",
+                        "rss_swipe_trailing" to "dispose",
+                    ),
+            )
+        val merged = PreferencesWire.applyRemote(untouched, remote)
+        assertEquals(MailSwipeAction.DISPOSE, merged.swipeLeading)
+        assertEquals(MailSwipeAction.NONE, merged.swipeTrailing)
+        assertEquals(FeedSwipeAction.TOGGLE_FAVORITE, merged.rssSwipeLeading)
+        assertNull(merged.rssSwipeTrailing)
+    }
 }

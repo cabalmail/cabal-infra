@@ -404,6 +404,14 @@
     <string name="opt_sort_subject">Subject</string>
     <string name="opt_dispose_trash">Trash</string>
     <string name="settings_dispose_advance">After disposing</string>
+    <string name="settings_swipe_leading">Leading swipe</string>
+    <string name="settings_swipe_trailing">Trailing swipe</string>
+    <string name="settings_swipe_footer">Leading is a swipe that starts at the leading edge (the left in left-to-right languages); trailing starts at the other edge. The same action may be bound to both.</string>
+    <string name="opt_swipe_toggle_read">Toggle read</string>
+    <string name="opt_swipe_toggle_flag">Toggle flag</string>
+    <string name="opt_swipe_toggle_favorite">Toggle favorite</string>
+    <string name="opt_swipe_dispose">Dispose (per Dispose action)</string>
+    <string name="opt_swipe_none">None</string>
     <string name="opt_advance_next">Next message</string>
     <string name="opt_advance_next_unread">Next unread</string>
     <string name="opt_advance_previous_unread">Previous unread</string>
