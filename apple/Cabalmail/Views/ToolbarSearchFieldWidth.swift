@@ -32,6 +32,15 @@ enum AddressInspectorWidth {
 /// column before the field takes its share — otherwise a full-width field
 /// plus the siblings would overflow the section and re-crowd the window
 /// toolbar the #1047 rework just decongested.
+///
+/// On macOS the section's leading edge also carries the folder-switch menu
+/// (`MessageListView+FolderSwitch`), which stands in for the column's title.
+/// Its width is the folder name's, so it can't be a constant here: the menu
+/// measures itself and the host passes the result in as `leadingWidth`.
+/// Before it was charged, the field was sized as if the section's leading
+/// edge were free, and a section that couldn't seat both drew the field over
+/// the menu — widening the column didn't help, because the field grew
+/// point-for-point with it and its leading edge never moved off the menu.
 enum ToolbarSearchFieldWidth {
     /// The width the field wants: enough for the placeholder and a typical
     /// query without stretching across a wide pane.
@@ -81,25 +90,48 @@ enum ToolbarSearchFieldWidth {
         return min(preferred, max(floor, availableWidth - margin))
     }
 
+    /// How much of a measured leading item (the folder-switch menu, at
+    /// `leadingWidth`) is charged against the field over a column of
+    /// `columnWidth` whose fixed siblings already take `reserved`.
+    ///
+    /// The whole width, until charging it would push the field under its
+    /// `minimum`. The field never yields past that floor: a folder whose
+    /// name is wider than the section can seat beside a usable field gets a
+    /// field at its floor over the menu's tail — cramped, but the only way
+    /// into search this layout has — rather than no field at all. An
+    /// unmeasured (non-positive) leading width charges nothing.
+    static func leadingCharge(columnWidth: CGFloat, reserved: CGFloat, leadingWidth: CGFloat) -> CGFloat {
+        guard leadingWidth > 0 else { return 0 }
+        let roomBesideTheFloor = columnWidth - reserved - minimum - margin
+        return min(leadingWidth, max(0, roomBesideTheFloor))
+    }
+
     /// Width for the field over a list column of `columnWidth`, with the
-    /// addresses inspector open or closed. The overlap is charged only on
-    /// iOS, where the inspector floats over the columns instead of resizing
-    /// them (see `inspectorOverlap`).
+    /// addresses inspector open or closed and a leading toolbar item of
+    /// `leadingWidth` (the folder-switch menu; zero when there is none or
+    /// it hasn't measured yet). The overlap is charged only on iOS, where
+    /// the inspector floats over the columns instead of resizing them (see
+    /// `inspectorOverlap`); the leading item is charged per `leadingCharge`.
     ///
     /// A non-positive `columnWidth` is the pre-layout measurement, not a
     /// zero-width pane: it resolves to `preferred` so the field doesn't
     /// launch collapsed and snap wider a frame later.
-    static func width(columnWidth: CGFloat, inspectorPresented: Bool) -> CGFloat {
+    static func width(columnWidth: CGFloat, inspectorPresented: Bool, leadingWidth: CGFloat) -> CGFloat {
         guard columnWidth > 0 else { return preferred }
         #if os(iOS)
         let overlap: CGFloat = inspectorPresented ? inspectorOverlap : 0
         #else
         let overlap: CGFloat = 0
         #endif
+        let reserved = siblingReserve + overlap
         return width(
             availableWidth: availableWidth(
                 columnWidth: columnWidth,
-                reserved: siblingReserve + overlap
+                reserved: reserved + leadingCharge(
+                    columnWidth: columnWidth,
+                    reserved: reserved,
+                    leadingWidth: leadingWidth
+                )
             )
         )
     }
