@@ -37,6 +37,13 @@ struct MessageListView: View {
     /// selection, so it applies the pick exactly as a sidebar tap would.
     /// Defaults to a no-op for hosts with no folder selection (search).
     var onSwitchFolder: (Folder) -> Void = { _ in }
+    /// Reports the measured width of the macOS folder-switch menu in the
+    /// column's toolbar section (see `+FolderSwitch`), so the host can size
+    /// the global search field that shares the section around it
+    /// (`ToolbarSearchFieldWidth`). Never fires on the other platforms,
+    /// where the menu is the system title menu and takes no toolbar width.
+    /// Defaults to a no-op for hosts that don't seat a field there.
+    var onFolderMenuWidthChanged: (CGFloat) -> Void = { _ in }
 
     // `appState` is not private so the +Bulk sibling can reach it for
     // the move-destination sheet's `client` lookup; matches the pattern
