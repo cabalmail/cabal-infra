@@ -26,8 +26,9 @@ import XCTest
 // for the watch's copies of this defect.
 //
 // The iOS/macOS address *rows* stay outside this scan, as they are outside
-// the watch one: #1587 has them reproducing without an inserted hyphen, and
-// the fix there is not decided.
+// the watch one: they are a different view, pinned by
+// `AddressListRowWrapSourceScanTests` since #1587 measured them inserting a
+// hyphen too (on iPhone and in the iPad inspector, though not on macOS 27).
 final class NewAddressPreviewWrapSourceScanTests: XCTestCase {
 
     private static let path = "Cabalmail/Views/NewAddressSheet.swift"

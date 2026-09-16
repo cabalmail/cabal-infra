@@ -14,9 +14,10 @@ import XCTest
 // "an address drawn in a watch `Text` goes through `wrappable`", and a raw
 // `Text(address.address)` coming back is the failure the report took.
 //
-// The iOS/macOS address rows are outside this scan on purpose: they are not
-// measured to hyphenate, and a scan asserting a rule nobody has shown applies
-// there would be a claim, not a test.
+// The iOS/macOS address rows are outside this scan because they are a
+// different target: they were measured hyphenating too (#1587, on iPhone and
+// in the iPad inspector, though not on macOS 27) and are pinned by
+// `AddressListRowWrapSourceScanTests`.
 final class WatchAddressWrapSourceScanTests: XCTestCase {
 
     /// The two sites #1578 fixed, each asked for by name so a rewrite that
