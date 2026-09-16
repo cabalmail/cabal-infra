@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Create
@@ -32,10 +34,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -109,7 +114,9 @@ fun FolderListScreen(
  * The leading pane of the wide-window three-pane mail layout (plan §7.2):
  * the same folder rows as [FolderListScreen] without its chrome — the
  * adjacent message list owns search and compose — and with the open
- * folder highlighted.
+ * folder highlighted. The pane is recreated whenever the open folder
+ * changes, so it starts its list at [scroll] and reports every move through
+ * [onScrollChange] for the caller to keep.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,8 +132,16 @@ fun FolderPane(
     subscribedExpanded: Boolean = true,
     allExpanded: Boolean = false,
     onToggleSection: (FolderSection) -> Unit = {},
+    scroll: FolderPaneScroll = FolderPaneScroll(),
+    onScrollChange: (FolderPaneScroll) -> Unit = {},
 ) {
     ForegroundPolling(onPoll)
+    val listState = rememberLazyListState(scroll.index, scroll.offset)
+    val latestOnScrollChange by rememberUpdatedState(onScrollChange)
+    LaunchedEffect(listState) {
+        snapshotFlow { FolderPaneScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
+            .collect { latestOnScrollChange(it) }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         // A bar of its own keeps the rows aligned with the neighbouring
@@ -141,6 +156,7 @@ fun FolderPane(
             subscribedExpanded = subscribedExpanded,
             allExpanded = allExpanded,
             onToggleSection = onToggleSection,
+            listState = listState,
         )
     }
 }
@@ -166,6 +182,7 @@ private fun FolderListContent(
     subscribedExpanded: Boolean = true,
     allExpanded: Boolean = false,
     onToggleSection: (FolderSection) -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
 
@@ -180,7 +197,7 @@ private fun FolderListContent(
             onConfirmEmptyTrash = { confirmingEmptyTrash = true },
         )
     }
-    LazyColumn(modifier = modifier.fillMaxSize()) {
+    LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
         state.error?.let { message ->
             item {
                 Text(

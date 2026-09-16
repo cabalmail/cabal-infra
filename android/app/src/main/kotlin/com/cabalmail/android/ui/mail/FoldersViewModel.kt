@@ -26,11 +26,26 @@ data class FoldersUiState(
     val error: String? = null,
 )
 
+/** Where the folder pane is scrolled to: the first visible row and its offset in pixels. */
+data class FolderPaneScroll(
+    val index: Int = 0,
+    val offset: Int = 0,
+)
+
 class FoldersViewModel(
     private val container: AppContainer,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(FoldersUiState())
     val state: StateFlow<FoldersUiState> = mutableState.asStateFlow()
+
+    /**
+     * The wide-window pane's scroll position. Opening a folder replaces the
+     * messages entry, and the pane inside it, so the position lives here with
+     * the folder list rather than in the pane's own list state, which starts
+     * over at the top on each switch — the same shape as the feeds tab's
+     * [com.cabalmail.android.ui.feeds.FeedTreeScroll].
+     */
+    var paneScroll: FolderPaneScroll = FolderPaneScroll()
 
     init {
         refresh()
