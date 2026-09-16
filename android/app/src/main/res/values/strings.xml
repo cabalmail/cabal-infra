@@ -70,6 +70,15 @@
     <string name="search_has_attachment">Has attachment</string>
     <string name="search_this_folder_only">Only in %1$s</string>
     <string name="search_no_results">No messages found</string>
+    <string name="search_scope_searched">Searched %1$s</string>
+    <string name="search_scope_folder_only">Searched %1$s only</string>
+    <string name="search_scope_and">%1$s and %2$s</string>
+    <plurals name="search_scope_and_more">
+        <item quantity="one">%1$s and %2$d more</item>
+        <item quantity="other">%1$s and %2$d more</item>
+    </plurals>
+    <string name="search_scope_empty">Searched %1$s. Folders you aren’t subscribed to aren’t searched, and Trash never is. Subscribe to a folder in Folders to include it.</string>
+    <string name="search_scope_empty_folder_only">Only %1$s was searched. Turn off “Only in %1$s” in Search filters to search the rest of your mail.</string>
     <string name="search_loading_more">Loading more…</string>
 
     <!-- Reader -->

@@ -32,7 +32,62 @@ data class SearchUiState(
     val truncated: Boolean = false,
     val showFilters: Boolean = false,
     val error: String? = null,
+    /** Folders the last completed search covered, as the server reported them. */
+    val foldersSearched: List<String> = emptyList(),
+    /** Whether the last completed search was restricted to [SearchViewModel.scopeFolder]. */
+    val searchedFolderOnly: Boolean = false,
 )
+
+/**
+ * Where a completed search looked (#1608, parity with the Apple clients'
+ * #1433). Cross-folder search covers the subscribed folders except Trash, and
+ * "No messages found" alone read as "that mail does not exist" when it only
+ * meant "not in the folders searched". The server names those folders on
+ * every result; this states them.
+ */
+internal sealed interface SearchScope {
+    /** Restricted to one folder by the filters sheet's toggle. */
+    data class FolderOnly(
+        val folder: String,
+    ) : SearchScope
+
+    /** Cross-folder: the first [named] folders by name, then a count of the rest. */
+    data class Folders(
+        val named: List<String>,
+        val more: Int,
+    ) : SearchScope
+
+    companion object {
+        /** Past this many names the line costs more width than the names buy. */
+        const val NAMED_FOLDER_LIMIT = 3
+    }
+}
+
+/**
+ * The scope of the last completed search, or null when nothing honest can be
+ * said (before a search reports, or a cross-folder one reported no folders).
+ */
+internal fun searchScope(
+    foldersSearched: List<String>,
+    folderOnly: Boolean,
+    anchorFolder: String?,
+): SearchScope? {
+    if (folderOnly) {
+        val folder = foldersSearched.firstOrNull() ?: anchorFolder ?: return null
+        return SearchScope.FolderOnly(folder)
+    }
+    if (foldersSearched.isEmpty()) {
+        return null
+    }
+    return if (foldersSearched.size <= SearchScope.NAMED_FOLDER_LIMIT) {
+        SearchScope.Folders(foldersSearched, more = 0)
+    } else {
+        SearchScope.Folders(
+            foldersSearched.take(SearchScope.NAMED_FOLDER_LIMIT),
+            more = foldersSearched.size - SearchScope.NAMED_FOLDER_LIMIT,
+        )
+    }
+}
 
 /**
  * The plan's first-class search scope: structured predicates over
@@ -80,7 +135,13 @@ class SearchViewModel(
             return
         }
         mutableState.update {
-            it.copy(results = emptyList(), cursor = null, showFilters = false, error = null)
+            it.copy(
+                results = emptyList(),
+                cursor = null,
+                showFilters = false,
+                error = null,
+                foldersSearched = emptyList(),
+            )
         }
         fetchPage(reset = true)
     }
@@ -113,6 +174,8 @@ class SearchViewModel(
                         truncated = result.truncated,
                         searching = false,
                         searched = true,
+                        foldersSearched = if (reset) result.foldersSearched else state.foldersSearched,
+                        searchedFolderOnly = if (reset) current.folderOnly else state.searchedFolderOnly,
                     )
                 }
             } catch (exception: Exception) {
