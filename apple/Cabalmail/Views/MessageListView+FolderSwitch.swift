@@ -14,7 +14,8 @@ import CabalmailKit
 // title menu for it (probed on macOS 26: neither the column's nor the
 // window's `toolbarTitleMenu` adds a chevron or opens on click), so the Mac
 // removes the toolbar's title text and puts a `Menu` in the same slot — a
-// `.navigation` toolbar item with the bold name and a chevron. The window
+// `.navigation` toolbar item with the bold name and a chevron (still true on
+// macOS 27, re-probed for #1601). The window
 // keeps its title for the Window menu and Mission Control. Nothing is drawn
 // in the list's own action bar: a second copy of the folder name a row
 // below the title read as a redundancy on the Mac.
@@ -62,6 +63,15 @@ extension MessageListView {
                 .font(.headline)
                 .lineLimit(1)
         }
+        // Borderless, or macOS 27 drops the label: the toolbar's default
+        // bordered style draws a `Menu` as a 36x36 circle holding only the
+        // chevron, whatever the label is (#1601; measured with a `Text`, a
+        // `Label`, an `HStack` with its own chevron, the title initializer,
+        // `.fixedSize()` and `.menuIndicator(.visible)`, all 36-44pt wide
+        // with no name). The borderless button style is the one that lays
+        // the label out: `INBOX` plus the chevron at 62x16.
+        .menuStyle(.button)
+        .buttonStyle(.borderless)
         .accessibilityLabel("Folder, \(folder.name)")
         .accessibilityHint("Switch folder")
         .accessibilityIdentifier("list.folderSwitch")
