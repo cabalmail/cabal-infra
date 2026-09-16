@@ -46,6 +46,16 @@ APP_ALLOWED = {
     # mark-as-read key rather than the mail one, so mail and feed habits can
     # differ. Same two modes as mail (operator decision 2026-09-09).
     'rss_mark_as_read':         {'manual', 'on_open'},
+    # Configurable list-row swipes (Apple + Android). One key per edge, named
+    # for layout direction (leading / trailing) rather than left / right so
+    # the same value means the same gesture under RTL. The mail keys follow
+    # the unprefixed mail convention; the feed keys carry the `rss_` prefix
+    # like `rss_mark_as_read`. `dispose` follows `dispose_action` (and the
+    # in-Trash / in-Archive overrides); `none` disables that edge.
+    'swipe_leading':            {'toggle_read', 'toggle_flag', 'dispose', 'none'},
+    'swipe_trailing':           {'toggle_read', 'toggle_flag', 'dispose', 'none'},
+    'rss_swipe_leading':        {'toggle_read', 'toggle_favorite', 'none'},
+    'rss_swipe_trailing':       {'toggle_read', 'toggle_favorite', 'none'},
 }
 
 # Sticky list filter pills, one key per list under the `filter:` prefix:

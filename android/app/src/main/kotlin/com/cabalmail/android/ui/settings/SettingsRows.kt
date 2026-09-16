@@ -33,8 +33,10 @@ import com.cabalmail.kit.settings.DefaultSort
 import com.cabalmail.kit.settings.Density
 import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.DisposeAdvance
+import com.cabalmail.kit.settings.FeedSwipeAction
 import com.cabalmail.kit.settings.FolderCountDisplay
 import com.cabalmail.kit.settings.LoadRemoteContent
+import com.cabalmail.kit.settings.MailSwipeAction
 import com.cabalmail.kit.settings.MarkAsRead
 
 // The settings row primitives and enum label mappers, shared by the
@@ -225,6 +227,27 @@ internal fun DefaultSort.label(): String =
             DefaultSort.SENT -> R.string.opt_sort_sent
             DefaultSort.FROM -> R.string.opt_sort_from
             DefaultSort.SUBJECT -> R.string.opt_sort_subject
+        },
+    )
+
+@Composable
+internal fun MailSwipeAction.label(): String =
+    stringResource(
+        when (this) {
+            MailSwipeAction.TOGGLE_READ -> R.string.opt_swipe_toggle_read
+            MailSwipeAction.TOGGLE_FLAG -> R.string.opt_swipe_toggle_flag
+            MailSwipeAction.DISPOSE -> R.string.opt_swipe_dispose
+            MailSwipeAction.NONE -> R.string.opt_swipe_none
+        },
+    )
+
+@Composable
+internal fun FeedSwipeAction.label(): String =
+    stringResource(
+        when (this) {
+            FeedSwipeAction.TOGGLE_READ -> R.string.opt_swipe_toggle_read
+            FeedSwipeAction.TOGGLE_FAVORITE -> R.string.opt_swipe_toggle_favorite
+            FeedSwipeAction.NONE -> R.string.opt_swipe_none
         },
     )
 

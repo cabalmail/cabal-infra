@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Checkbox
@@ -38,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -52,9 +50,12 @@ import coil3.compose.AsyncImage
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.LocalDisposeToTrash
 import com.cabalmail.android.ui.theme.LocalRowPadding
-import com.cabalmail.android.ui.theme.disposeIconPainter
-import com.cabalmail.android.ui.theme.disposeLabelRes
+import com.cabalmail.android.ui.theme.LocalSwipeBindings
+import com.cabalmail.android.ui.theme.color
+import com.cabalmail.android.ui.theme.mailSwipeReveal
+import com.cabalmail.android.ui.theme.painter
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.deliveredToAddress
 import com.cabalmail.kit.models.hasAuthFailure
@@ -63,6 +64,7 @@ import com.cabalmail.kit.models.mailboxDisplayName
 import com.cabalmail.kit.models.sentInstant
 import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
+import com.cabalmail.kit.settings.MailSwipeAction
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -323,15 +325,20 @@ internal fun Modifier.animateRowRemoval(scope: LazyItemScope): Modifier =
     }
 
 /**
- * Swipe surface per the plan: start-to-end toggles read, end-to-start
- * disposes (archive, or purge-with-confirmation in Trash). Both actions
- * settle the row back rather than dismissing it — a successful dispose
- * removes the row from its list instead.
+ * Swipe surface: each edge performs the action the synced swipe
+ * preference binds to it ([LocalSwipeBindings]; by default start-to-end
+ * toggles read and end-to-start disposes — archive, or
+ * purge-with-confirmation in Trash). An edge bound to
+ * [MailSwipeAction.NONE] does not drag. Every action settles the row back
+ * rather than dismissing it — a successful dispose removes the row from
+ * its list instead.
  */
 @Composable
 internal fun SwipeRow(
     isSeen: Boolean,
+    isFlagged: Boolean,
     onToggleSeen: () -> Unit,
+    onToggleFlag: () -> Unit,
     onDispose: () -> Unit,
     /** Inside Trash the dispose swipe purges; the label says so. */
     isTrashFolder: Boolean = false,
@@ -339,8 +346,19 @@ internal fun SwipeRow(
     containerColor: Color = MaterialTheme.colorScheme.surface,
     content: @Composable () -> Unit,
 ) {
+    val bindings = LocalSwipeBindings.current
+    val disposeToTrash = LocalDisposeToTrash.current
     val currentToggleSeen by rememberUpdatedState(onToggleSeen)
+    val currentToggleFlag by rememberUpdatedState(onToggleFlag)
     val currentDispose by rememberUpdatedState(onDispose)
+    val perform: (MailSwipeAction) -> Unit = { action ->
+        when (action) {
+            MailSwipeAction.TOGGLE_READ -> currentToggleSeen()
+            MailSwipeAction.TOGGLE_FLAG -> currentToggleFlag()
+            MailSwipeAction.DISPOSE -> currentDispose()
+            MailSwipeAction.NONE -> Unit
+        }
+    }
     // confirmValueChange is not once-per-gesture: when a row is dragged all
     // the way to its anchor, foundation's AnchoredDraggableState invokes it
     // both as the drag ends (offset sitting on the anchor) and again from
@@ -356,8 +374,8 @@ internal fun SwipeRow(
                 if (value != SwipeToDismissBoxValue.Settled && !fired.value) {
                     fired.value = true
                     when (value) {
-                        SwipeToDismissBoxValue.StartToEnd -> currentToggleSeen()
-                        SwipeToDismissBoxValue.EndToStart -> currentDispose()
+                        SwipeToDismissBoxValue.StartToEnd -> perform(bindings.mailLeading)
+                        SwipeToDismissBoxValue.EndToStart -> perform(bindings.mailTrailing)
                         SwipeToDismissBoxValue.Settled -> Unit
                     }
                 }
@@ -375,37 +393,25 @@ internal fun SwipeRow(
     }
     SwipeToDismissBox(
         state = swipeState,
+        enableDismissFromStartToEnd = bindings.mailLeading != MailSwipeAction.NONE,
+        enableDismissFromEndToStart = bindings.mailTrailing != MailSwipeAction.NONE,
         backgroundContent = {
-            val (color, icon, alignment) =
-                when (swipeState.dismissDirection) {
-                    SwipeToDismissBoxValue.StartToEnd ->
-                        Triple(
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            rememberVectorPainter(Icons.Default.Email),
-                            Alignment.CenterStart,
-                        )
-                    else ->
-                        Triple(
-                            MaterialTheme.colorScheme.errorContainer,
-                            disposeIconPainter(isTrashFolder),
-                            Alignment.CenterEnd,
-                        )
-                }
-            Box(
-                contentAlignment = alignment,
-                modifier = Modifier.fillMaxSize().background(color).padding(horizontal = 24.dp),
-            ) {
-                Icon(
-                    icon,
-                    contentDescription =
-                        stringResource(
-                            if (swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
-                                if (isSeen) R.string.mark_unread else R.string.mark_read
-                            } else {
-                                disposeLabelRes(isTrashFolder)
-                            },
-                        ),
+            val leading = swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            val reveal =
+                mailSwipeReveal(
+                    action = if (leading) bindings.mailLeading else bindings.mailTrailing,
+                    isSeen = isSeen,
+                    isFlagged = isFlagged,
+                    isTrashFolder = isTrashFolder,
+                    disposeToTrash = disposeToTrash,
                 )
+            if (reveal != null) {
+                Box(
+                    contentAlignment = if (leading) Alignment.CenterStart else Alignment.CenterEnd,
+                    modifier = Modifier.fillMaxSize().background(reveal.color()).padding(horizontal = 24.dp),
+                ) {
+                    Icon(reveal.painter(), contentDescription = stringResource(reveal.label))
+                }
             }
         },
     ) {

@@ -206,6 +206,10 @@ public final class Preferences {
         case rssMarkAsRead = "cabalmail.prefs.rss_mark_as_read"
         case rssAllFeedsFilter = "cabalmail.prefs.rss_all_feeds_filter"
         case mailFolderFilters = "cabalmail.prefs.mail_folder_filters"
+        case swipeLeading = "cabalmail.prefs.swipe_leading"
+        case swipeTrailing = "cabalmail.prefs.swipe_trailing"
+        case rssSwipeLeading = "cabalmail.prefs.rss_swipe_leading"
+        case rssSwipeTrailing = "cabalmail.prefs.rss_swipe_trailing"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -294,6 +298,21 @@ public final class Preferences {
     public var mailFolderFilters: [String: MessageFilter] {
         didSet { persist(.mailFolderFilters, Self.encodeFolderFilters(mailFolderFilters)) }
     }
+    /// The list rows' swipe bindings, one per edge for mail and for feeds
+    /// (wire handling in `Preferences+Swipe.swift`). A user edit to any of
+    /// the four makes all four ride, the same gate as `rssMarkAsRead`.
+    public var swipeLeading: MailSwipeAction {
+        didSet { persistSwipe(.swipeLeading, swipeLeading.rawValue) }
+    }
+    public var swipeTrailing: MailSwipeAction {
+        didSet { persistSwipe(.swipeTrailing, swipeTrailing.rawValue) }
+    }
+    public var rssSwipeLeading: FeedSwipeAction {
+        didSet { persistSwipe(.rssSwipeLeading, rssSwipeLeading.rawValue) }
+    }
+    public var rssSwipeTrailing: FeedSwipeAction {
+        didSet { persistSwipe(.rssSwipeTrailing, rssSwipeTrailing.rawValue) }
+    }
 
     private let store: PreferenceStore
     private var isReloading = false
@@ -312,6 +331,8 @@ public final class Preferences {
     private var rssMarkAsReadSyncable = false
     /// Same gate for the all-feeds pill (`filter:feeds:all`).
     private var rssAllFeedsFilterSyncable = false
+    /// Same gate for the four swipe bindings, which ride as a set.
+    var swipeBindingsSyncable = false
 
     /// Scope hash of the account whose settings are currently loaded, or
     /// `nil` before the first `activate` (fresh install, first launch
@@ -347,6 +368,10 @@ public final class Preferences {
         self.rssMarkAsRead = .manual
         self.rssAllFeedsFilter = .defaultForFeeds
         self.mailFolderFilters = [:]
+        self.swipeLeading = .toggleRead
+        self.swipeTrailing = .dispose
+        self.rssSwipeLeading = .toggleRead
+        self.rssSwipeTrailing = .toggleFavorite
         store.startObserving { [weak self] in
             self?.reload()
         }
@@ -413,6 +438,18 @@ public final class Preferences {
         rssMarkAsRead = readEnum(.rssMarkAsRead, default: .manual)
         rssAllFeedsFilter = readEnum(.rssAllFeedsFilter, default: .defaultForFeeds)
         mailFolderFilters = Self.decodeFolderFilters(readString(.mailFolderFilters))
+        swipeLeading = readEnum(.swipeLeading, default: .toggleRead)
+        swipeTrailing = readEnum(.swipeTrailing, default: .dispose)
+        rssSwipeLeading = readEnum(.rssSwipeLeading, default: .toggleRead)
+        rssSwipeTrailing = readEnum(.rssSwipeTrailing, default: .toggleFavorite)
+    }
+
+    /// `persist` for a swipe binding: a genuine user edit also makes the
+    /// four keys ride; a reload or a server apply must not (the latter sets
+    /// the flag itself, in `applyRemoteSwipe`).
+    private func persistSwipe(_ key: Key, _ value: String) {
+        persist(key, value)
+        if !isReloading && !isApplyingRemote { swipeBindingsSyncable = true }
     }
 
     private func persist(_ key: Key, _ value: String?) {
@@ -459,9 +496,13 @@ public final class Preferences {
         guard !available.contains(current) else { return }
         defaultFromAddress = nil
     }
+}
 
-    // MARK: - Server sync marshalling
+// MARK: - Server sync
 
+// A same-file extension so the class body stays under SwiftLint's
+// `type_body_length` cap; `private` members stay reachable from here.
+extension Preferences {
     /// Wire keys for the server-synced `app` map (the `set_preferences` Lambda
     /// validates against these exact names). Distinct from `Key`, whose dotted
     /// raw values are the local UserDefaults keys; these short snake_case
@@ -521,6 +562,8 @@ public final class Preferences {
         // another device), so a present entry is its own proof the server
         // knows the key shape.
         payload.merge(folderFilterWireEntries()) { _, folder in folder }
+        // And for the swipe bindings (`Preferences+Swipe.swift`).
+        payload.merge(swipeWireEntries()) { _, swipe in swipe }
         return payload
     }
 
@@ -558,6 +601,7 @@ public final class Preferences {
             applyEnum(remote[AppWireKey.rssAllFeedsFilter], to: \.rssAllFeedsFilter)
         }
         applyRemoteFolderFilters(remote)
+        applyRemoteSwipe(remote)
         if let raw = remote[AppWireKey.flagPalette] {
             flagPaletteSyncable = true
             // An unparseable value leaves the current palette untouched,

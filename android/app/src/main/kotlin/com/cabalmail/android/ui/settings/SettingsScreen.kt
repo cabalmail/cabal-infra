@@ -45,8 +45,10 @@ import com.cabalmail.kit.settings.DefaultSort
 import com.cabalmail.kit.settings.Density
 import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.DisposeAdvance
+import com.cabalmail.kit.settings.FeedSwipeAction
 import com.cabalmail.kit.settings.FolderCountDisplay
 import com.cabalmail.kit.settings.LoadRemoteContent
+import com.cabalmail.kit.settings.MailSwipeAction
 import com.cabalmail.kit.settings.MarkAsRead
 import kotlinx.coroutines.launch
 
@@ -321,6 +323,26 @@ private fun FeedsSettings(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
+    EnumRow(
+        title = stringResource(R.string.settings_swipe_leading),
+        value = preferences.effectiveRssSwipeLeading,
+        options = FeedSwipeAction.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(rssSwipeLeading = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_swipe_trailing),
+        value = preferences.effectiveRssSwipeTrailing,
+        options = FeedSwipeAction.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(rssSwipeTrailing = value) } },
+    )
+    Text(
+        text = stringResource(R.string.settings_swipe_footer),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
     if (onImportOpml != null && onExportOpml != null) {
         Text(
             text = stringResource(R.string.settings_feeds_subscriptions),
@@ -424,6 +446,26 @@ private fun ActionsSettings(
         options = DisposeAdvance.entries,
         label = { it.label() },
         onSelect = { value -> onUpdate { it.copy(disposeAdvance = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_swipe_leading),
+        value = preferences.effectiveSwipeLeading,
+        options = MailSwipeAction.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(swipeLeading = value) } },
+    )
+    EnumRow(
+        title = stringResource(R.string.settings_swipe_trailing),
+        value = preferences.effectiveSwipeTrailing,
+        options = MailSwipeAction.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(swipeTrailing = value) } },
+    )
+    Text(
+        text = stringResource(R.string.settings_swipe_footer),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
 

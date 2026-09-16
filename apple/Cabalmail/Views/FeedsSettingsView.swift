@@ -21,6 +21,16 @@ struct FeedsSettingsView: View {
             } footer: {
                 Text("Applies to feed items only; mail has its own setting under Reading.")
             }
+            Section {
+                Picker("Leading swipe", selection: $preferences.rssSwipeLeading) {
+                    feedSwipeOptions
+                }
+                Picker("Trailing swipe", selection: $preferences.rssSwipeTrailing) {
+                    feedSwipeOptions
+                }
+            } footer: {
+                Text(ActionsSettingsView.swipeFooter)
+            }
             Section("Subscriptions") {
                 Button {
                     opml.beginImport()
@@ -44,5 +54,14 @@ struct FeedsSettingsView: View {
             guard management == nil, let client = appState.client else { return }
             management = FeedManagementViewModel(client: client)
         }
+    }
+
+    /// The same option list for both edges; the same action may be bound
+    /// to both.
+    @ViewBuilder
+    private var feedSwipeOptions: some View {
+        Text("Toggle read").tag(FeedSwipeAction.toggleRead)
+        Text("Toggle favorite").tag(FeedSwipeAction.toggleFavorite)
+        Text("None").tag(FeedSwipeAction.disabled)
     }
 }

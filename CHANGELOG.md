@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0] - 2026-09-16
+
+### Added
+- Android: **Configurable swipe actions.** Settings › Actions binds each
+  edge of a message row — leading and trailing, named for layout
+  direction rather than left and right — to Toggle read, Toggle flag,
+  Dispose (which follows the Dispose action), or None. Settings › Feeds
+  does the same for feed item rows with Toggle read, Toggle favorite, or
+  None. The same action may be bound to both edges; an edge bound to
+  None does not drag. The bindings sync across devices.
+- Apple: **Configurable swipe actions.** Settings › Actions binds each
+  edge of a message row — leading and trailing, named for layout
+  direction rather than left and right — to Toggle read, Toggle flag,
+  Dispose (which follows the Dispose action and the in-Trash / in-Archive
+  overrides), or None. Settings › Feeds does the same for feed item rows
+  with Toggle read, Toggle favorite, or None. The same action may be
+  bound to both edges. The bindings sync across devices.
+
 ## [1.19.7] - 2026-09-16
 
 ### Added
