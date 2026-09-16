@@ -242,7 +242,10 @@ extension RssItemScope {
 }
 
 /// The `+` menu beside the Feeds header (wide sidebar) and in the Feeds
-/// tab's toolbar (compact): the four ways a subscription list changes.
+/// tab's toolbar (compact): the three ways something gets added to the
+/// subscription list. Export is the one collection action that takes
+/// something out, so it sits beside the menu as `FeedExportButton`
+/// under the share glyph instead of hiding among the add items.
 struct FeedAddMenu: View {
     let actions: FeedManagementActions
     let management: FeedManagementViewModel?
@@ -265,17 +268,32 @@ struct FeedAddMenu: View {
             } label: {
                 Label("Import OPML…", systemImage: "square.and.arrow.down")
             }
-            Button {
-                guard let management else { return }
-                Task { await actions.opml.beginExport(management: management) }
-            } label: {
-                Label("Export OPML…", systemImage: "square.and.arrow.up")
-            }
         } label: {
             Image(systemName: "plus")
                 .accessibilityLabel("Add feed or folder")
         }
         .disabled(management == nil)
         .accessibilityIdentifier("feeds.add")
+    }
+}
+
+/// Export OPML, beside `FeedAddMenu`: a plain button under the share
+/// glyph that starts the export directly (the macOS Feeds menu keeps its
+/// own item). A single-item menu would be an odd tap; if a second
+/// export-shaped action ever appears this becomes a menu.
+struct FeedExportButton: View {
+    let actions: FeedManagementActions
+    let management: FeedManagementViewModel?
+
+    var body: some View {
+        Button {
+            guard let management else { return }
+            Task { await actions.opml.beginExport(management: management) }
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .accessibilityLabel("Export OPML")
+        }
+        .disabled(management == nil)
+        .accessibilityIdentifier("feeds.export")
     }
 }
