@@ -109,7 +109,8 @@ struct MailRootView: View {
     /// Live width of the content (message list) column, read the same way. The
     /// toolbar search field is sized against it — a toolbar item is laid out
     /// outside its column's clip, so an item wider than the column overhangs
-    /// into the neighbouring one instead of being cut.
+    /// into the neighbouring one instead of being cut. Written through
+    /// `recordContentColumnWidth`, which on macOS waits out a divider drag.
     @State private var contentColumnWidth: CGFloat = 0
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
@@ -731,7 +732,7 @@ extension MailRootView {
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { newWidth in
-            contentColumnWidth = newWidth
+            recordContentColumnWidth(newWidth)
         }
         // Global search rides the message-list column on wide layouts
         // (moved from above the reading pane in the #1047 toolbar rework —
@@ -787,6 +788,38 @@ extension MailRootView {
             }
         }
             #endif
+    }
+
+    /// Records the measured content-column width the toolbar search field is
+    /// sized against.
+    ///
+    /// On macOS the write waits for the main run loop's default mode. The
+    /// column is widened by dragging the split view's divider, which AppKit
+    /// runs as a mouse-tracking loop, and NSToolbar loses the section
+    /// re-layout that a toolbar item's size change asks for while that loop
+    /// is running: the field's hosting view took its new width, but the
+    /// item's frame — and the Addresses / Compose / Reload frames after it —
+    /// stayed where the launch layout put them, so a field that grew with
+    /// the column grew *leftward*, centred on its old frame and over the
+    /// folder-switch menu, while the width the drag added sat empty.
+    /// Measured on macOS 27.0: at a 300pt column the field was 88pt at
+    /// x=549 with the last button ending at x=749; after a drag to 500pt
+    /// the field was 260pt at x=471 and no button had moved. The same size
+    /// change made once the loop has ended re-lays the section out normally
+    /// (field at x=549, buttons following it, all inside the column), so
+    /// the width is applied then: the field holds its size during the drag
+    /// and takes the new one on mouse-up. A `.default`-mode block also waits
+    /// out a live window resize, which is the other tracking loop that can
+    /// change this width, and that is the right moment for it too.
+    private func recordContentColumnWidth(_ width: CGFloat) {
+        #if os(macOS)
+        RunLoop.main.perform(inModes: [.default]) {
+            guard contentColumnWidth != width else { return }
+            contentColumnWidth = width
+        }
+        #else
+        contentColumnWidth = width
+        #endif
     }
 
     /// Pins the content column to the persisted width and overlays the drag
