@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -43,6 +44,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.mail.ForegroundPolling
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.kit.compose.HtmlText
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemFilter
 import com.cabalmail.kit.models.RssOrderingMode
@@ -218,7 +221,32 @@ private fun FeedItemRows(
     onOpenItem: (RssItem) -> Unit,
     highlightedId: String?,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    val listState = rememberLazyListState()
+    val anchor = remember { ListAnchor(epoch = state.listEpoch) }
+    // Compose anchors a lazy list on the key of its first visible row and
+    // follows that key when the rows change. Left alone, the list opens on
+    // the footer — the only row until the first page arrives — and lands at
+    // the bottom once the rows fill in above it (visible on an oldest-first
+    // feed, where the newest rows are at the bottom); an ordering change
+    // likewise follows the old top row to wherever it sorts. So a list that
+    // begins from a new starting point (the epoch) opens at the top, and a
+    // re-read of the same list (a sync, a poll) keeps the reader's place
+    // except at the very top, which stays the top rather than sliding down
+    // under the rows a newest-first sync puts above the previous first row.
+    // A SideEffect runs as the composition applies, before the frame's
+    // measure, and requestScrollToItem takes effect in that measure, so the
+    // rows never paint at the wrong place first; the scroll position is read
+    // there rather than in composition, which would recompose every row on
+    // each scrolled pixel.
+    val firstId = state.items.firstOrNull()?.id
+    SideEffect {
+        val restarted = state.listEpoch != anchor.epoch
+        val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+        if (restarted || (firstId != anchor.firstId && atTop)) listState.requestScrollToItem(0)
+        anchor.epoch = state.listEpoch
+        anchor.firstId = firstId
+    }
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         state.error?.let { message ->
             item(key = "error") {
                 Text(
@@ -281,6 +309,12 @@ private fun FeedItemRows(
         }
     }
 }
+
+/** What the rows' SideEffect last saw: the list epoch and the first row's id. */
+private class ListAnchor(
+    var epoch: Int,
+    var firstId: String? = null,
+)
 
 @Composable
 private fun EmptyState(state: FeedItemListUiState) {
@@ -399,7 +433,10 @@ private fun FeedSwipeRow(
     }
 }
 
-/** Unread dot, title, feed name in multi-feed scopes, relative date, queued mark, favorite star. */
+/**
+ * Unread dot, title, the first line of the body (when it has one), feed
+ * name in multi-feed scopes, relative date, queued mark, favorite star.
+ */
 @Composable
 internal fun FeedItemRow(
     item: RssItem,
@@ -409,15 +446,19 @@ internal fun FeedItemRow(
 ) {
     val title = item.title.ifBlank { stringResource(R.string.feed_untitled) }
     val date = FeedItemDate.relative(item.publishedAt)
+    // Cheap to derive: the scan stops at the first line of prose, not the
+    // end of the body (see HtmlText.firstLine); remembered per body anyway.
+    val snippet = remember(item.bodyHtml) { HtmlText.firstLine(item.bodyHtml) }
     val unreadText = stringResource(R.string.unread)
     val queuedText = stringResource(R.string.feed_change_queued)
     val favoriteText = stringResource(R.string.feed_favorite)
     // The row reads as one thing to a screen reader (and the tester's UI
-    // dump), in the Apple rows' form: "Unread, <title>, <date>".
+    // dump), in the Apple rows' form: "Unread, <title>, <snippet>, <date>".
     val rowDescription =
         listOfNotNull(
             unreadText.takeIf { !item.isRead },
             title,
+            snippet.ifEmpty { null },
             date.ifEmpty { null },
         ).joinToString(", ")
     Row(
@@ -445,6 +486,17 @@ internal fun FeedItemRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (snippet.isNotEmpty()) {
+                // One line, cut with an ellipsis where it outruns the
+                // column; an item with no prose keeps the two-line row.
+                Text(
+                    snippet,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val caption = listOfNotNull(feedName?.takeIf { it.isNotEmpty() }, date.takeIf { it.isNotEmpty() })
                 Text(

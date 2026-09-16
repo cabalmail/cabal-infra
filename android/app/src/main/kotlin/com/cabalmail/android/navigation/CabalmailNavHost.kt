@@ -524,6 +524,8 @@ private fun MailNavGraph(
                             onOpenFolder = switchFolder,
                             onEmptyTrash = foldersViewModel::emptyTrash,
                             onPoll = foldersViewModel::poll,
+                            scroll = foldersViewModel.paneScroll,
+                            onScrollChange = { foldersViewModel.paneScroll = it },
                         )
                     },
                 )

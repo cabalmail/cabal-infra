@@ -292,9 +292,9 @@ struct FeedItemListView: View {
     }
 }
 
-/// One item row: unread dot, title, feed name (in multi-feed scopes),
-/// relative date, favorite star, and a "queued" mark while a state change
-/// waits for the network.
+/// One item row: unread dot, title, the first line of the body (when it
+/// has one), feed name (in multi-feed scopes), relative date, favorite
+/// star, and a "queued" mark while a state change waits for the network.
 struct FeedItemRow: View {
     let item: RssItem
     /// The feed's name, in multi-feed scopes; nil in a single feed's list.
@@ -302,6 +302,10 @@ struct FeedItemRow: View {
     let isPending: Bool
 
     var body: some View {
+        // Cheap enough to derive per render: the scan stops at the first
+        // line of prose, not the end of the body (see `HTMLText.firstLine`).
+        let snippet = HTMLText.firstLine(from: item.bodyHtml)
+        let title = item.title.isEmpty ? "Untitled" : item.title
         HStack(alignment: .top, spacing: 10) {
             Circle()
                 .fill(item.isRead ? Color.clear : ColorTokens.accentForestFg)
@@ -309,9 +313,18 @@ struct FeedItemRow: View {
                 .padding(.top, 6)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.title.isEmpty ? "Untitled" : item.title)
+                Text(title)
                     .font(.body.weight(item.isRead ? .regular : .semibold))
                     .lineLimit(2)
+                if !snippet.isEmpty {
+                    // One line, cut with an ellipsis where it outruns the
+                    // column; an item with no prose keeps the two-line row.
+                    Text(snippet)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 HStack(spacing: 6) {
                     if let feedName, !feedName.isEmpty {
                         Text(feedName)
@@ -336,7 +349,9 @@ struct FeedItemRow: View {
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(item.isRead ? "" : "Unread, ")\(item.title), \(FeedItemDate.relative(item.publishedAt))"
+            [item.isRead ? "" : "Unread", title, snippet, FeedItemDate.relative(item.publishedAt)]
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
         )
     }
 }

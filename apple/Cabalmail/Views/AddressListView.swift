@@ -84,6 +84,12 @@ struct AddressListView: View {
             }
         }
         .navigationTitle("Addresses")
+        #if !os(macOS)
+        // In the compact Addresses tab the Cabalmail mark stands in for the
+        // title, as on the Mail tab; the wide sidebar's inspector keeps the
+        // text (see `SidebarBranding.swift`).
+        .compactBrandMarkTitle(accessibilityTitle: "Addresses")
+        #endif
         .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter addresses")
         .toolbar {
             // Compact keeps New / Reload in the toolbar; the wide sidebar moves
@@ -350,6 +356,23 @@ extension AddressListView {
         appState.showToast(.addressCopied(address.address), duration: 7)
     }
 
+    /// One address row.
+    ///
+    /// The address is drawn through `AddressDisplay.wrappable`: an address is
+    /// one unbreakable token, so a row narrow enough to wrap one has no legal
+    /// break and the layout engine hyphenates, drawing a character the address
+    /// does not contain — measured as `…@longsubdomain-` / `probe0915…` on
+    /// iPhone and `b2f6s4mx@r8g3h5ne.ca-` / `bal-mail.net` in the iPad
+    /// inspector (#1587), the same mechanism #1547 fixed on the watch's
+    /// confirmations. The zero-width spaces move breaks that are correct
+    /// today as well — an address whose own hyphen the breaker could reach now
+    /// fills the line instead — which is the trade-off that routine documents;
+    /// a drawn character the reader would have to know to discard is the worse
+    /// of the two.
+    ///
+    /// The raw address is what the row hands on: the button's
+    /// `accessibilityLabel` and both Copy paths read `address.address`, and
+    /// the label here pins it for the `children: .contain` subtree.
     @ViewBuilder
     private func row(for address: Address) -> some View {
         HStack {
@@ -360,8 +383,9 @@ extension AddressListView {
                 // that isn't "multicolor", leaving the icons off-brand.
                 .foregroundStyle(address.favorite ? ColorTokens.flaggedFg : ColorTokens.accentForestFg)
             VStack(alignment: .leading, spacing: 2) {
-                Text(address.address)
+                Text(AddressDisplay.wrappable(address.address))
                     .foregroundStyle(address.suspended ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                    .accessibilityLabel(address.address)
                 if address.suspended {
                     Text("Suspended")
                         .font(.caption2)

@@ -42,6 +42,10 @@ struct SettingsView: View {
         .navigationSplitViewColumnWidth(min: 190, ideal: 200)
         #else
         .settingsSheetDoneButton()
+        // In the compact Settings tab the Cabalmail mark stands in for the
+        // title, as on the Mail tab; the iPad sheet keeps the text (see
+        // `SidebarBranding.swift`).
+        .compactBrandMarkTitle(accessibilityTitle: "Settings")
         #endif
     }
 
