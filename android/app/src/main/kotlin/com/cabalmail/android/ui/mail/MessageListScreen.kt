@@ -699,7 +699,9 @@ private fun InteractiveRow(
         } else {
             SwipeRow(
                 isSeen = envelope.isSeen,
+                isFlagged = envelope.isFlagged,
                 onToggleSeen = { viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen) },
+                onToggleFlag = { viewModel.setFlag(setOf(envelope.id), "\\Flagged", !envelope.isFlagged) },
                 onDispose = onDispose,
                 isTrashFolder = viewModel.isTrashFolder,
                 containerColor = rowColor,

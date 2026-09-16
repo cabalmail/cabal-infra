@@ -7,7 +7,8 @@ import CabalmailKit
 //   - `row(for:model:orderedVisible:)` — list-row content (drag + tag)
 //   - `rowContextMenu` — the per-row long-press / right-click menu
 //   - `disposeSwipe` / `toggleReadSwipe` — `SwipeActionSpec`s the
-//     `SwipeActionRow` wrapper reveals on a trailing / leading swipe
+//     `SwipeActionRow` wrapper reveals on a swipe (which edge reveals
+//     which is the user's, see `MessageListView+Swipe.swift`)
 //   - `filteredEnvelopes` — applies the All/Unread/Flagged tab filter.
 extension MessageListView {
     /// True on layouts where the sidebar and the message list are visible at

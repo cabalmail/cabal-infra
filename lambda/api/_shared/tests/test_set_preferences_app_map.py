@@ -96,6 +96,19 @@ class AppMap(unittest.TestCase):
         self.assertEqual(call({'filter:mail:IN\nBOX': 'all'})[0], 400)
         self.assertEqual(call({'filter:mail:' + 'x' * 512: 'all'})[0], 200)
 
+    def test_swipe_keys_take_their_own_action_sets(self):
+        status, body = call({'swipe_leading': 'toggle_flag', 'swipe_trailing': 'none',
+                             'rss_swipe_leading': 'none', 'rss_swipe_trailing': 'toggle_read'})
+        self.assertEqual(status, 200)
+        self.assertEqual(body['app'],
+                         {'swipe_leading': 'toggle_flag', 'swipe_trailing': 'none',
+                          'rss_swipe_leading': 'none', 'rss_swipe_trailing': 'toggle_read'})
+        # Feeds have no flag and mail has no favorite; neither has a dispose
+        # on the feed side.
+        self.assertEqual(call({'swipe_leading': 'toggle_favorite'})[0], 400)
+        self.assertEqual(call({'rss_swipe_trailing': 'toggle_flag'})[0], 400)
+        self.assertEqual(call({'rss_swipe_leading': 'dispose'})[0], 400)
+
     def test_unknown_key_rejects_the_whole_map(self):
         status, body = call({'theme': 'dark', 'mail_filters': '{}'})
         self.assertEqual(status, 400)

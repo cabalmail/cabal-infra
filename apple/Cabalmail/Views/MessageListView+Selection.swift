@@ -289,8 +289,8 @@ extension MessageListView {
                     SwipeActionRow(
                         height: rowHeight,
                         rowBackground: background,
-                        leading: toggleReadSwipe(for: envelope, model: model),
-                        trailing: disposeSwipe(for: envelope, model: model),
+                        leading: swipeSpec(for: model.swipeLeading, envelope: envelope, model: model),
+                        trailing: swipeSpec(for: model.swipeTrailing, envelope: envelope, model: model),
                         onSelect: { selectRow(envelope, model: model, ordered: visible) },
                         content: {
                             row(for: envelope, model: model, orderedVisible: visible)

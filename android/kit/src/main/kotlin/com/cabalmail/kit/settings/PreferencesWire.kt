@@ -23,6 +23,10 @@ object PreferencesWire {
         const val FOLDER_COUNT_DISPLAY = "folder_count_display"
         const val FLAG_PALETTE = "flag_palette"
         const val RSS_MARK_AS_READ = "rss_mark_as_read"
+        const val SWIPE_LEADING = "swipe_leading"
+        const val SWIPE_TRAILING = "swipe_trailing"
+        const val RSS_SWIPE_LEADING = "rss_swipe_leading"
+        const val RSS_SWIPE_TRAILING = "rss_swipe_trailing"
 
         /** The All Feeds list's sticky pill; validated by the server's `filter:` prefix arm. */
         const val FILTER_FEEDS_ALL = "filter:feeds:all"
@@ -66,6 +70,11 @@ object PreferencesWire {
                     // set (see [AppPreferences.rssMarkAsRead]).
                     preferences.rssMarkAsRead?.let { put(AppKey.RSS_MARK_AS_READ, it.wire) }
                     preferences.feedsAllFilter?.let { put(AppKey.FILTER_FEEDS_ALL, it.wire) }
+                    // Likewise the swipe bindings (see [AppPreferences.swipeLeading]).
+                    preferences.swipeLeading?.let { put(AppKey.SWIPE_LEADING, it.wire) }
+                    preferences.swipeTrailing?.let { put(AppKey.SWIPE_TRAILING, it.wire) }
+                    preferences.rssSwipeLeading?.let { put(AppKey.RSS_SWIPE_LEADING, it.wire) }
+                    preferences.rssSwipeTrailing?.let { put(AppKey.RSS_SWIPE_TRAILING, it.wire) }
                 },
         )
 
@@ -113,6 +122,10 @@ object PreferencesWire {
             mailFolderFilters = MailFolderFilters.mergeRemote(current.mailFolderFilters, app),
             rssMarkAsRead = wireEnum<MarkAsRead>(app[AppKey.RSS_MARK_AS_READ]) ?: current.rssMarkAsRead,
             feedsAllFilter = wireEnum<RssItemFilter>(app[AppKey.FILTER_FEEDS_ALL]) ?: current.feedsAllFilter,
+            swipeLeading = wireEnum<MailSwipeAction>(app[AppKey.SWIPE_LEADING]) ?: current.swipeLeading,
+            swipeTrailing = wireEnum<MailSwipeAction>(app[AppKey.SWIPE_TRAILING]) ?: current.swipeTrailing,
+            rssSwipeLeading = wireEnum<FeedSwipeAction>(app[AppKey.RSS_SWIPE_LEADING]) ?: current.rssSwipeLeading,
+            rssSwipeTrailing = wireEnum<FeedSwipeAction>(app[AppKey.RSS_SWIPE_TRAILING]) ?: current.rssSwipeTrailing,
         )
     }
 }

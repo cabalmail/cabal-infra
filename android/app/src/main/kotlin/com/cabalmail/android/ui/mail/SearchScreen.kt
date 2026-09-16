@@ -140,7 +140,9 @@ fun SearchScreen(
                 Column(modifier = Modifier.animateRowRemoval(this)) {
                     SwipeRow(
                         isSeen = envelope.isSeen,
+                        isFlagged = envelope.isFlagged,
                         onToggleSeen = { viewModel.toggleSeen(envelope) },
+                        onToggleFlag = { viewModel.toggleFlag(envelope) },
                         onDispose = {
                             if (envelope.folder == "Trash") {
                                 pendingPurge = envelope

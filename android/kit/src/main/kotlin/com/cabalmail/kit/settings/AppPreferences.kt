@@ -34,6 +34,30 @@ enum class DisposeAction(
     TRASH("trash"),
 }
 
+/**
+ * What a mail list row's swipe does (`swipe_leading` / `swipe_trailing`).
+ * Named for layout direction, not left / right, so the same value means
+ * the same gesture under RTL. [DISPOSE] follows [DisposeAction] and the
+ * in-Trash purge override; [NONE] disables that edge.
+ */
+enum class MailSwipeAction(
+    override val wire: String,
+) : WireEnum {
+    TOGGLE_READ("toggle_read"),
+    TOGGLE_FLAG("toggle_flag"),
+    DISPOSE("dispose"),
+    NONE("none"),
+}
+
+/** What a feed item row's swipe does (`rss_swipe_leading` / `rss_swipe_trailing`). */
+enum class FeedSwipeAction(
+    override val wire: String,
+) : WireEnum {
+    TOGGLE_READ("toggle_read"),
+    TOGGLE_FAVORITE("toggle_favorite"),
+    NONE("none"),
+}
+
 /** Which message the reader opens after a dispose; falls back to the list when none fits. */
 enum class DisposeAdvance(
     override val wire: String,
@@ -168,6 +192,17 @@ data class AppPreferences(
      * off the wire, with the same reasoning as [rssMarkAsRead].
      */
     val feedsAllFilter: RssItemFilter? = null,
+    /**
+     * The mail list's swipe bindings (`swipe_leading` / `swipe_trailing`)
+     * and the feed list's (`rss_swipe_leading` / `rss_swipe_trailing`).
+     * Null = never set, which reads as the historical arrangement (leading
+     * toggles read, trailing disposes / favorites) and stays off the wire,
+     * with the same reasoning as [rssMarkAsRead].
+     */
+    val swipeLeading: MailSwipeAction? = null,
+    val swipeTrailing: MailSwipeAction? = null,
+    val rssSwipeLeading: FeedSwipeAction? = null,
+    val rssSwipeTrailing: FeedSwipeAction? = null,
     // ---- local only
     val dynamicColor: Boolean = true,
     /** Background new-mail notifications (plan §7.3); off until the user opts in. */
@@ -198,4 +233,16 @@ data class AppPreferences(
 
     val effectiveFeedsAllFilter: RssItemFilter
         get() = feedsAllFilter ?: RssItemFilter.DEFAULT_FOR_FEEDS
+
+    val effectiveSwipeLeading: MailSwipeAction
+        get() = swipeLeading ?: MailSwipeAction.TOGGLE_READ
+
+    val effectiveSwipeTrailing: MailSwipeAction
+        get() = swipeTrailing ?: MailSwipeAction.DISPOSE
+
+    val effectiveRssSwipeLeading: FeedSwipeAction
+        get() = rssSwipeLeading ?: FeedSwipeAction.TOGGLE_READ
+
+    val effectiveRssSwipeTrailing: FeedSwipeAction
+        get() = rssSwipeTrailing ?: FeedSwipeAction.TOGGLE_FAVORITE
 }

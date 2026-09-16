@@ -1201,6 +1201,15 @@ spinning up the full view model.
 - **Actions.** `Dispose action` (Archive / Trash). `MessageListViewModel`
   reads this on every swipe so a change mid-session takes effect
   immediately; the swipe label + icon follow the preference too.
+  `Leading swipe` / `Trailing swipe` bind each edge of a message row to
+  Toggle read, Toggle flag, Dispose (which follows `Dispose action` and
+  the in-Trash / in-Archive overrides), or None; the same action may be
+  bound to both edges. The edges are named for layout direction, not
+  left / right, so a binding means the same gesture under RTL. Synced as
+  `swipe_leading` / `swipe_trailing`; Settings › Feeds carries the feed
+  rows' pair (`rss_swipe_leading` / `rss_swipe_trailing`: Toggle read,
+  Toggle favorite, None). The four ride the `app` map as a set, gated
+  off the wire until the user sets one or a fetched map carries one.
 - **Appearance.** `Theme` (System / Light / Dark) applied via
   `.preferredColorScheme` at the App level so the whole app flips
   instantly. `CabalmailApp` and `CabalmailMacApp` own the `AppState` and

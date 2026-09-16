@@ -629,6 +629,11 @@ extension MessageListViewModel {
     /// the preferences environment itself.
     var disposeAction: DisposeAction { preferences.disposeAction }
 
+    /// The swipe bindings, exposed for the same reason: the row picks the
+    /// spec each edge reveals from these.
+    var swipeLeading: MailSwipeAction { preferences.swipeLeading }
+    var swipeTrailing: MailSwipeAction { preferences.swipeTrailing }
+
     /// The user's custom-flag palette, exposed for the row chips and the
     /// Flags picker menu (same narrow-accessor rationale as
     /// `disposeAction`).

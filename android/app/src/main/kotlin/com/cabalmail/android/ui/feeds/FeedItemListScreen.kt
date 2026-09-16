@@ -64,10 +64,15 @@ import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.mail.ForegroundPolling
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.LocalSwipeBindings
+import com.cabalmail.android.ui.theme.color
+import com.cabalmail.android.ui.theme.feedSwipeReveal
+import com.cabalmail.android.ui.theme.painter
 import com.cabalmail.kit.compose.HtmlText
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemFilter
 import com.cabalmail.kit.models.RssOrderingMode
+import com.cabalmail.kit.settings.FeedSwipeAction
 
 /**
  * One feed list: sticky filter pills, the orderings in the overflow menu
@@ -360,7 +365,12 @@ private fun OlderFooter(
     }
 }
 
-/** Start-to-end toggles read, end-to-start toggles favorite; both settle the row back. */
+/**
+ * Each edge performs the action the synced feed swipe preference binds to
+ * it ([LocalSwipeBindings]; by default start-to-end toggles read and
+ * end-to-start toggles favorite). An edge bound to [FeedSwipeAction.NONE]
+ * does not drag. Both actions settle the row back.
+ */
 @Composable
 private fun FeedSwipeRow(
     isRead: Boolean,
@@ -370,8 +380,16 @@ private fun FeedSwipeRow(
     highlighted: Boolean,
     content: @Composable () -> Unit,
 ) {
+    val bindings = LocalSwipeBindings.current
     val currentToggleRead by rememberUpdatedState(onToggleRead)
     val currentToggleFavorite by rememberUpdatedState(onToggleFavorite)
+    val perform: (FeedSwipeAction) -> Unit = { action ->
+        when (action) {
+            FeedSwipeAction.TOGGLE_READ -> currentToggleRead()
+            FeedSwipeAction.TOGGLE_FAVORITE -> currentToggleFavorite()
+            FeedSwipeAction.NONE -> Unit
+        }
+    }
     // Same once-per-gesture latch as the mail rows (EnvelopeRow.SwipeRow).
     val fired = remember { mutableStateOf(false) }
     val swipeState =
@@ -380,8 +398,8 @@ private fun FeedSwipeRow(
                 if (value != SwipeToDismissBoxValue.Settled && !fired.value) {
                     fired.value = true
                     when (value) {
-                        SwipeToDismissBoxValue.StartToEnd -> currentToggleRead()
-                        SwipeToDismissBoxValue.EndToStart -> currentToggleFavorite()
+                        SwipeToDismissBoxValue.StartToEnd -> perform(bindings.feedLeading)
+                        SwipeToDismissBoxValue.EndToStart -> perform(bindings.feedTrailing)
                         SwipeToDismissBoxValue.Settled -> Unit
                     }
                 }
@@ -403,29 +421,23 @@ private fun FeedSwipeRow(
         }
     SwipeToDismissBox(
         state = swipeState,
+        enableDismissFromStartToEnd = bindings.feedLeading != FeedSwipeAction.NONE,
+        enableDismissFromEndToStart = bindings.feedTrailing != FeedSwipeAction.NONE,
         backgroundContent = {
-            val toRead = swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-            Box(
-                contentAlignment = if (toRead) Alignment.CenterStart else Alignment.CenterEnd,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            if (toRead) MaterialTheme.colorScheme.secondaryContainer else ColorTokens.flaggedWash(),
-                        ).padding(horizontal = 24.dp),
-            ) {
-                Icon(
-                    if (toRead) Icons.Default.Email else Icons.Default.Star,
-                    contentDescription =
-                        stringResource(
-                            when {
-                                toRead && isRead -> R.string.mark_unread
-                                toRead -> R.string.mark_read
-                                isFavorite -> R.string.feed_unfavorite
-                                else -> R.string.feed_favorite
-                            },
-                        ),
+            val leading = swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            val reveal =
+                feedSwipeReveal(
+                    action = if (leading) bindings.feedLeading else bindings.feedTrailing,
+                    isRead = isRead,
+                    isFavorite = isFavorite,
                 )
+            if (reveal != null) {
+                Box(
+                    contentAlignment = if (leading) Alignment.CenterStart else Alignment.CenterEnd,
+                    modifier = Modifier.fillMaxSize().background(reveal.color()).padding(horizontal = 24.dp),
+                ) {
+                    Icon(reveal.painter(), contentDescription = stringResource(reveal.label))
+                }
             }
         },
     ) {

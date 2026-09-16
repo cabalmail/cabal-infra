@@ -241,6 +241,11 @@ final class FeedItemListViewModel {
         await refreshPendingMarks()
     }
 
+    /// The swipe bindings, exposed so the row picks the button each edge
+    /// reveals without reaching into the preferences environment itself.
+    var swipeLeading: FeedSwipeAction { preferences.rssSwipeLeading }
+    var swipeTrailing: FeedSwipeAction { preferences.rssSwipeTrailing }
+
     /// Applies the user's mark-as-read preference when an item opens.
     func didOpen(_ item: RssItem) async {
         guard preferences.rssMarkAsRead == .onOpen, !item.isRead else { return }

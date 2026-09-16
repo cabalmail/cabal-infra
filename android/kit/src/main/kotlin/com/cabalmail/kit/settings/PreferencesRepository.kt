@@ -54,6 +54,10 @@ class PreferencesRepository(
         val MAIL_FOLDER_FILTERS = stringPreferencesKey("mail_folder_filters")
         val RSS_MARK_AS_READ = stringPreferencesKey("rss_mark_as_read")
         val FEEDS_ALL_FILTER = stringPreferencesKey("feeds_all_filter")
+        val SWIPE_LEADING = stringPreferencesKey("swipe_leading")
+        val SWIPE_TRAILING = stringPreferencesKey("swipe_trailing")
+        val RSS_SWIPE_LEADING = stringPreferencesKey("rss_swipe_leading")
+        val RSS_SWIPE_TRAILING = stringPreferencesKey("rss_swipe_trailing")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         val PUSH_FOLDERS = stringSetPreferencesKey("push_folders")
@@ -131,6 +135,10 @@ class PreferencesRepository(
             mailFolderFilters = MailFolderFilters.decode(store[Keys.MAIL_FOLDER_FILTERS]),
             rssMarkAsRead = wireEnum<MarkAsRead>(store[Keys.RSS_MARK_AS_READ]),
             feedsAllFilter = wireEnum<RssItemFilter>(store[Keys.FEEDS_ALL_FILTER]),
+            swipeLeading = wireEnum<MailSwipeAction>(store[Keys.SWIPE_LEADING]),
+            swipeTrailing = wireEnum<MailSwipeAction>(store[Keys.SWIPE_TRAILING]),
+            rssSwipeLeading = wireEnum<FeedSwipeAction>(store[Keys.RSS_SWIPE_LEADING]),
+            rssSwipeTrailing = wireEnum<FeedSwipeAction>(store[Keys.RSS_SWIPE_TRAILING]),
             dynamicColor = store[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
             notificationsEnabled = store[Keys.NOTIFICATIONS_ENABLED] ?: defaults.notificationsEnabled,
             pushFolders = store[Keys.PUSH_FOLDERS] ?: defaults.pushFolders,
@@ -166,6 +174,12 @@ class PreferencesRepository(
         // Absent, not defaulted: null means "never set", which keeps the key off the wire.
         value.rssMarkAsRead?.let { store[Keys.RSS_MARK_AS_READ] = it.wire } ?: store.remove(Keys.RSS_MARK_AS_READ)
         value.feedsAllFilter?.let { store[Keys.FEEDS_ALL_FILTER] = it.wire } ?: store.remove(Keys.FEEDS_ALL_FILTER)
+        value.swipeLeading?.let { store[Keys.SWIPE_LEADING] = it.wire } ?: store.remove(Keys.SWIPE_LEADING)
+        value.swipeTrailing?.let { store[Keys.SWIPE_TRAILING] = it.wire } ?: store.remove(Keys.SWIPE_TRAILING)
+        value.rssSwipeLeading?.let { store[Keys.RSS_SWIPE_LEADING] = it.wire }
+            ?: store.remove(Keys.RSS_SWIPE_LEADING)
+        value.rssSwipeTrailing?.let { store[Keys.RSS_SWIPE_TRAILING] = it.wire }
+            ?: store.remove(Keys.RSS_SWIPE_TRAILING)
         store[Keys.DYNAMIC_COLOR] = value.dynamicColor
         store[Keys.NOTIFICATIONS_ENABLED] = value.notificationsEnabled
         store[Keys.PUSH_FOLDERS] = value.pushFolders
