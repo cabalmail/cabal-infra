@@ -22,15 +22,17 @@ object FeedRoutes {
     fun items(
         scope: RssItemScope,
         item: RssItem? = null,
+        encode: (String) -> String = Uri::encode,
     ): String {
-        val base = "feeds/items/${Uri.encode(scope.token)}"
-        return if (item == null) base else "$base?item=${Uri.encode(item.id)}"
+        val base = "feeds/items/${encode(scope.token)}"
+        return if (item == null) base else "$base?item=${encode(item.id)}"
     }
 
     fun item(
         feedId: String,
         sortKey: String,
-    ): String = "feeds/item/${Uri.encode(feedId)}/${Uri.encode(sortKey)}"
+        encode: (String) -> String = Uri::encode,
+    ): String = "feeds/item/${encode(feedId)}/${encode(sortKey)}"
 
     /** `feedId#sortKey` (an item's `id`) split back into its parts; null for junk. */
     fun splitItemId(id: String): Pair<String, String>? {
