@@ -41,12 +41,21 @@ use cabalmail_kit::config::{Key, Kind, Scope, Wire};
 /// (docs/1.x/rss-implementation-plan.md, phase 5), which this client does
 /// not have yet: the Linux client waits until its mail client has caught
 /// up with Apple and Android (operator decision 2026-09-09).
+///
+/// `swipe_leading` / `swipe_trailing` / `rss_swipe_leading` /
+/// `rss_swipe_trailing` bind the touch clients' list-row swipe gestures
+/// (Apple + Android, 2026-09-16). This client's rows have no swipe gesture
+/// to configure, so it neither reads nor sends them.
 const DELIBERATELY_UNSUPPORTED: &[&str] = &[
     "crash_reporting_enabled",
     "dispose_advance",
     "flag_palette",
     "mark_read_advance",
     "rss_mark_as_read",
+    "rss_swipe_leading",
+    "rss_swipe_trailing",
+    "swipe_leading",
+    "swipe_trailing",
 ];
 
 /// What the Lambda accepts, read out of its source.
