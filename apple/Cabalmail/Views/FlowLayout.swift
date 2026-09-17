@@ -11,13 +11,17 @@ import SwiftUI
 struct FlowLayout: Layout {
     var horizontalSpacing: CGFloat = 6
     var verticalSpacing: CGFloat = 4
+    /// Wraps at this width even when more is proposed, while still hugging
+    /// narrower content. A `.frame(maxWidth:)` can't say that: a flexible
+    /// frame grows to its maximum whenever the space is on offer.
+    var maxLineWidth: CGFloat = .infinity
 
     func sizeThatFits(
         proposal: ProposedViewSize,
         subviews: Subviews,
         cache: inout Void
     ) -> CGSize {
-        solve(subviews: subviews, lineWidth: proposal.width ?? .infinity).size
+        solve(subviews: subviews, lineWidth: min(proposal.width ?? .infinity, maxLineWidth)).size
     }
 
     func placeSubviews(
@@ -26,7 +30,7 @@ struct FlowLayout: Layout {
         subviews: Subviews,
         cache: inout Void
     ) {
-        let solution = solve(subviews: subviews, lineWidth: bounds.width)
+        let solution = solve(subviews: subviews, lineWidth: min(bounds.width, maxLineWidth))
         for (subview, frame) in zip(subviews, solution.frames) {
             subview.place(
                 at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
