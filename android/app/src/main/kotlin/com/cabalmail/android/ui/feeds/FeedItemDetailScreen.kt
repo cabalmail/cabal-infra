@@ -12,7 +12,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -44,6 +43,7 @@ import com.cabalmail.android.ui.mail.HtmlBody
 import com.cabalmail.android.ui.mail.LinkMenuSheet
 import com.cabalmail.android.ui.mail.LinkMenuTarget
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.starTogglePainter
 import com.cabalmail.kit.models.readerModeHtml
 import com.cabalmail.kit.models.upgradeInsecureRequests
 
@@ -101,7 +101,7 @@ fun FeedItemDetailScreen(
                         }
                         IconButton(onClick = { viewModel.setFavorite(!item.isFavorite) }) {
                             Icon(
-                                Icons.Default.Star,
+                                starTogglePainter(item.isFavorite),
                                 contentDescription =
                                     stringResource(
                                         if (item.isFavorite) R.string.feed_remove_favorite else R.string.feed_favorite,
