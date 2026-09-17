@@ -65,6 +65,23 @@ final class NewAddressPreviewWrapSourceScanTests: XCTestCase {
         )
     }
 
+    /// Rule 3 (#1605): on macOS the preview reports the height its lines
+    /// need. Without it the `MacSheetForm` row proposed one line's height and
+    /// an 82-character address drew `…probe0915.cabal-…` at 406x12, the whole
+    /// mail domain past the ellipsis; with it the same address drew 412x26
+    /// across two lines.
+    func testThePreviewWrapsOnMacOSInsteadOfTruncating() throws {
+        let code = Self.code(in: try Self.sheetSource())
+        let preview = try XCTUnwrap(
+            Self.functionBody(named: "addressPreview", in: code),
+            "addressPreview(_:) not found in \(Self.path)"
+        )
+        XCTAssertTrue(
+            preview.contains(".fixedSize(horizontal: false, vertical: true)"),
+            "the macOS preview row proposes one line's height and truncates the address (#1605)"
+        )
+    }
+
     /// The detector on synthetic snippets, so a rewrite of the view can't
     /// make the scan above vacuous.
     func testDetectorCatchesTheReportedShape() throws {
@@ -73,6 +90,17 @@ final class NewAddressPreviewWrapSourceScanTests: XCTestCase {
         XCTAssertEqual(try Self.rawPreviewHits(in: "Text(AddressDisplay.wrappable(preview))"), 0)
         XCTAssertEqual(try Self.rawPreviewHits(in: "Text(errorMessage)"), 0)
         XCTAssertEqual(try Self.rawPreviewHits(in: Self.code(in: "/// was Text(preview)")), 0)
+        let twoFunctions = """
+        private func addressPreview(_ preview: String) -> some View {
+            Text(preview)
+        }
+        @ViewBuilder
+        private var addressRow: some View {
+            Text("x").fixedSize(horizontal: false, vertical: true)
+        }
+        """
+        let body = try XCTUnwrap(Self.functionBody(named: "addressPreview", in: twoFunctions))
+        XCTAssertFalse(body.contains(".fixedSize"), "the body must stop at the next declaration")
     }
 
     /// Floor: a mis-rooted read finds nothing and passes everything above.
@@ -85,6 +113,14 @@ final class NewAddressPreviewWrapSourceScanTests: XCTestCase {
     }
 
     // MARK: - Corpus
+
+    /// The text of `func <name>(` up to the next `func ` or `var ` declaration.
+    private static func functionBody(named name: String, in code: String) -> String? {
+        guard let start = code.range(of: "func \(name)(") else { return nil }
+        let rest = code[start.upperBound...]
+        let end = rest.range(of: #"\n\s*(private |fileprivate )?(func|var) "#, options: .regularExpression)
+        return String(rest[..<(end?.lowerBound ?? rest.endIndex)])
+    }
 
     /// `Text(preview)`: the expression the sheet holds a whole address in.
     private static func rawPreviewHits(in body: String) throws -> Int {
