@@ -18,7 +18,7 @@ import CabalmailKit
 /// Lives in `safeAreaInset(edge: .bottom)`, which extends the list's
 /// scroll inset rather than overlaying the bottom row — so the last
 /// envelope still scrolls above the banner and the row-level
-/// `loadMoreIfNeeded(currentItem:)` paging hook still fires.
+/// `ensureLoaded(around:)` paging hook still fires.
 ///
 /// That inset also puts the banner's *ideal* height into the window's
 /// minimum content height, which is why the sentence carries a line

@@ -177,7 +177,7 @@ final class MessageListViewModel {
     // offsets are absolute, not `envelopes.count`. `hasTrimmedFront` records
     // that the window no longer starts at the top, which gates the top-page
     // refresh and the snapshot persist (both assume a top-anchored window).
-    // `loadPreviousIfNeeded` reloads the front as the user scrolls back up,
+    // `performLoadPrevious` reloads the front as the user scrolls back up,
     // clearing `hasTrimmedFront` once the window reaches the top again. Reset
     // via `resetWindow()` on every path that wipes `envelopes`. Internal so
     // the `+Refresh` sibling (loadPrevious) can reach them.
@@ -191,7 +191,7 @@ final class MessageListViewModel {
     private var watcher: MailboxWatcher?
     private var watcherTask: Task<Void, Never>?
     /// In-flight pagination fetch, owned by the model so it survives the
-    /// triggering row's `.task` cancellation (see `loadMoreIfNeeded`).
+    /// triggering row's `.task` cancellation (see `ensureLoaded(around:)`).
     /// Cancelled in `stopWatching()` when the list goes away.
     var loadMoreTask: Task<Void, Never>?
     /// In-flight front reload (loadPrevious), owned by the model like
@@ -373,7 +373,7 @@ final class MessageListViewModel {
             }
             let uidValidity = self.uidValidity ?? 0
             // Top page uses sequence-number FETCH via `topEnvelopes` (robust on
-            // sparse folders); `loadMoreIfNeeded` loads older pages positionally
+            // sparse folders); `performLoadMore` loads older pages positionally
             // by offset. `totalMessages` from STATUS gates pagination.
             // STATUS drives the All/Unread/Flagged pill counts and the
             // pagination gate; helper lives in +Refresh to keep this body lean.
@@ -443,9 +443,9 @@ final class MessageListViewModel {
     }
 
     /// Fetches and merges the next positional page. Always invoked from
-    /// `loadMoreTask` (see `loadMoreIfNeeded`) so it outlives the triggering
-    /// row's `.task` cancellation. Resets `isLoadingMore` on every exit,
-    /// including cancellation, via `defer`.
+    /// `loadMoreTask` (see `ensureLoaded(around:)`) so it outlives the
+    /// triggering row's `.task` cancellation. Resets `isLoadingMore` on every
+    /// exit, including cancellation, via `defer`.
     private func performLoadMore() async {
         defer { isLoadingMore = false }
         do {
@@ -499,10 +499,10 @@ final class MessageListViewModel {
         }
     }
 
-    // `loadPreviousIfNeeded` / `performLoadPrevious` -- the upward counterpart
-    // of `loadMoreIfNeeded` that reloads the trimmed front as the user scrolls
-    // back up -- live in `MessageListViewModel+Refresh.swift` alongside
-    // `mergeFetched`, to keep this type body under SwiftLint's length cap.
+    // `performLoadPrevious` -- the upward counterpart of `performLoadMore`
+    // that reloads the trimmed front as the user scrolls back up -- lives in
+    // `MessageListViewModel+Refresh.swift` alongside `mergeFetched`, to keep
+    // this type body under SwiftLint's length cap.
 
     // Structured search (`runSearch`, `clearSearch`, `sourceFolder(for:)`,
     // and the query builder) lives in `MessageListViewModel+Search.swift`
