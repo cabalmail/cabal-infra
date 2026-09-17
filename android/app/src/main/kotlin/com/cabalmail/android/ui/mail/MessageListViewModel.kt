@@ -234,6 +234,9 @@ class MessageListViewModel(
 
     val isTrashFolder: Boolean = folder == "Trash"
 
+    /** The folder this list shows, for surfaces that resolve a [DisposeIntent]. */
+    internal val folderName: String = folder
+
     init {
         // Where the user is now, for the next cold launch (resume-session
         // plan, Phase B). The reader, when a message opens, records itself.
@@ -270,9 +273,6 @@ class MessageListViewModel(
             }
         }
     }
-
-    /** The "Dispose action" preference's target folder (plan §6.3). */
-    private fun disposeFolder(): String = disposeTarget(container.preferences.preferences.value)
 
     fun refresh() {
         viewModelScope.launch {
@@ -588,16 +588,23 @@ class MessageListViewModel(
     }
 
     /**
-     * The dispose action: archive, or (from Trash, post-confirmation) purge.
-     * A disposed message is also marked read — archived == read, matching the
-     * Apple and React clients — in the same server call, so the flag lands
-     * before the MOVE takes the UID out of the source folder.
+     * The dispose action, resolved through the same [DisposeIntent] the
+     * reader uses: archive/trash move, restore to the inbox from Archive
+     * (archiving there would move each message onto its own folder), or
+     * (from Trash, post-confirmation) purge. A moved message is also marked
+     * read — archived == read, matching the Apple and React clients — in the
+     * same server call, so the flag lands before the MOVE takes the UID out
+     * of the source folder; a restore keeps the read state as-is.
      */
     fun dispose(uids: Set<Long>) {
-        if (!isTrashFolder) {
-            move(uids, disposeFolder(), markSeen = true)
-            return
+        when (val intent = DisposeIntent.standard(container.preferences.preferences.value.disposeAction, folder)) {
+            is DisposeIntent.Move -> move(uids, intent.destination, markSeen = true)
+            DisposeIntent.Restore -> move(uids, DisposeIntent.INBOX_FOLDER)
+            DisposeIntent.Purge -> purge(uids)
         }
+    }
+
+    private fun purge(uids: Set<Long>) {
         val fresh = claimForRemoval(uids) ?: return
         removeFromWindow(fresh)
         container.mailEvents.beginWrite()

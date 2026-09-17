@@ -14,7 +14,11 @@ import CabalmailKit
 ///   — the Mail tab's sidebar `FolderListView` already browses and manages
 ///   folders. The idiom check matters: a Plus / Max iPhone reports a regular
 ///   size class in landscape, and branching on size class alone rebuilt the
-///   whole tree on rotation, dropping the reader (see the policy's doc).
+///   whole tree on rotation, dropping the reader (see the policy's doc). On a
+///   phone the tab tree also pins the environment size class to compact, so
+///   the split view inside it never expands in landscape and collapses back
+///   (the cycle that left the reader unpushed and the addresses inspector
+///   stranded as a sheet over the tab bar).
 /// - Regular iPad: just `MailRootView` — a single show/hide sidebar owns the
 ///   left edge, matching the macOS main window. Addresses / Folders / Settings
 ///   move into a modal `SettingsSheet`, opened by the sidebar gear button or
@@ -80,6 +84,14 @@ struct SignedInRootView: View {
         switch layoutChoice {
         case .compactTabs:
             compactTabs
+                // A phone is compact in every orientation, whatever the raw
+                // size class says in landscape on a Plus / Max: the Mail
+                // tab's split view must never expand into columns and
+                // collapse back, and the addresses inspector must never
+                // change presentation. See `SectionLayoutPolicy`.
+                .transformEnvironment(\.horizontalSizeClass) { sizeClass in
+                    if pinsCompactWidth { sizeClass = .compact }
+                }
         case .regularSplit:
             MailRootView()
                 .environment(\.showsSettingsGear, true)
@@ -104,6 +116,12 @@ struct SignedInRootView: View {
             isPhone: UIDevice.current.userInterfaceIdiom == .phone,
             isCompactWidth: horizontalSizeClass == .compact
         )
+    }
+
+    /// Whether the tab tree overrides the size class to compact for its
+    /// descendants — a phone, see `SectionLayoutPolicy.pinsCompactWidth`.
+    private var pinsCompactWidth: Bool {
+        SectionLayoutPolicy.pinsCompactWidth(isPhone: UIDevice.current.userInterfaceIdiom == .phone)
     }
 
     /// Compact-width section switcher: a plain bottom tab bar. No

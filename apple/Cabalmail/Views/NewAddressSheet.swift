@@ -179,6 +179,14 @@ struct NewAddressSheet: View {
     /// falls wherever the line fills rather than on the address's own hyphen,
     /// which is the trade-off that routine documents.
     ///
+    /// On macOS the line never got to wrap: inside `MacSheetForm` the row
+    /// proposed a single line's height, so a composed address wider than the
+    /// sheet's 412 pt line was tail-truncated instead, cutting off the mail
+    /// domain first (#1605). `fixedSize` makes the text report the height its
+    /// lines need rather than accept that proposal — the same single-line
+    /// height clamp `View.sectionFooter()` opts out of (#1300). iOS and
+    /// visionOS mount the row in a `Form`, which already wraps it.
+    ///
     /// Those zero-width spaces are part of the string, so `.textSelection`
     /// would copy them: measured, selecting this row and hitting Copy put 60
     /// of them on the pasteboard, i.e. an address that pastes broken. The row
@@ -191,6 +199,9 @@ struct NewAddressSheet: View {
         Text(AddressDisplay.wrappable(preview))
             .font(.caption)
             .foregroundStyle(.secondary)
+            #if os(macOS)
+            .fixedSize(horizontal: false, vertical: true)
+            #endif
             .accessibilityLabel(preview)
             .contextMenu {
                 Button {

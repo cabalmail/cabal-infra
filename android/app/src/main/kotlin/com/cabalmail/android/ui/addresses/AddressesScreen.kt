@@ -12,8 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.compose.NewAddressSheet
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.starTogglePainter
 import com.cabalmail.kit.models.Address
 
 /**
@@ -245,7 +244,7 @@ private fun AddressRow(
                 trailingContent = {
                     IconButton(onClick = onToggleFavorite, enabled = !busy) {
                         Icon(
-                            if (address.favorite) Icons.Filled.Star else Icons.Outlined.Star,
+                            starTogglePainter(address.favorite),
                             contentDescription = stringResource(favoriteLabel(address.favorite)),
                             tint =
                                 if (address.favorite) {

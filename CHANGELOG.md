@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.2] - 2026-09-17
+
+### Fixed
+- Android: **Favorite stars show their state by shape.** The Addresses
+  screen's favorite star and the feed reader's Favorite button drew the
+  same solid star whether or not the item was a favorite, so the state
+  showed only as a tint change. The off state now draws a hollow star, as
+  the mail reader's flag button does.
+- Android: **Restore from Archive in the message list.** With the
+  Dispose action set to Archive, a trailing swipe, the long-press menu or
+  the selection bar inside Archive moved the message onto Archive itself
+  (marking it read, and the row reappearing on the next refresh) while
+  labelled Archive. They now say Restore and put the message back in the
+  inbox with its read state unchanged, as the reader's button already did.
+- Apple: **iPhone stays compact in landscape.** On a Plus / Max iPhone,
+  landscape reports a regular horizontal size class, and the Mail tab's
+  split view expanded into tiled columns and collapsed again on the way
+  back. After that cycle a tapped message could load into a reading pane
+  that wasn't on screen (rotating to landscape revealed it), and the
+  addresses inspector could surface as a full-height sheet over the tab
+  bar with no way back but a force quit. The signed-in tab tree now pins
+  the size class to compact on a phone, so the split view never expands
+  and the inspector never changes presentation. Landscape on a Max shows
+  the list or the reader full-width rather than side by side.
+- Apple: **New Address preview wraps on macOS.** A composed address longer
+  than the sheet's line was cut off with an ellipsis, losing the mail domain
+  first. The preview now wraps onto a second line, as on iPhone and iPad.
+
 ## [1.20.1] - 2026-09-17
 
 ### Changed

@@ -62,6 +62,7 @@ import com.cabalmail.kit.models.hasAuthFailure
 import com.cabalmail.kit.models.mailboxAddress
 import com.cabalmail.kit.models.mailboxDisplayName
 import com.cabalmail.kit.models.sentInstant
+import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import com.cabalmail.kit.settings.MailSwipeAction
@@ -340,14 +341,19 @@ internal fun SwipeRow(
     onToggleSeen: () -> Unit,
     onToggleFlag: () -> Unit,
     onDispose: () -> Unit,
-    /** Inside Trash the dispose swipe purges; the label says so. */
-    isTrashFolder: Boolean = false,
+    /**
+     * What the dispose swipe does in the row's folder (purge inside Trash,
+     * restore inside Archive); null = the preference's plain move.
+     */
+    disposeIntent: DisposeIntent? = null,
     /** Opaque backing so the swipe reveal never bleeds through; the list tints it for a highlighted row. */
     containerColor: Color = MaterialTheme.colorScheme.surface,
     content: @Composable () -> Unit,
 ) {
     val bindings = LocalSwipeBindings.current
-    val disposeToTrash = LocalDisposeToTrash.current
+    val dispose =
+        disposeIntent
+            ?: DisposeIntent.Move(if (LocalDisposeToTrash.current) DisposeAction.TRASH else DisposeAction.ARCHIVE)
     val currentToggleSeen by rememberUpdatedState(onToggleSeen)
     val currentToggleFlag by rememberUpdatedState(onToggleFlag)
     val currentDispose by rememberUpdatedState(onDispose)
@@ -402,8 +408,7 @@ internal fun SwipeRow(
                     action = if (leading) bindings.mailLeading else bindings.mailTrailing,
                     isSeen = isSeen,
                     isFlagged = isFlagged,
-                    isTrashFolder = isTrashFolder,
-                    disposeToTrash = disposeToTrash,
+                    dispose = dispose,
                 )
             if (reveal != null) {
                 Box(
