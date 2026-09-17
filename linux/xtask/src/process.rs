@@ -46,15 +46,13 @@ impl Step {
 /// refuses to run as root, and installing a package needs it. Asking here
 /// rather than in each of them keeps one answer to the question.
 ///
-/// `/proc/self` is owned by the process's own uid, which is the cheapest way
-/// to ask without taking a dependency for one call.
-pub fn running_as_root() -> Result<bool, String> {
-    use std::os::unix::fs::MetadataExt as _;
-
-    Ok(std::fs::metadata("/proc/self")
-        .map_err(|e| format!("reading /proc/self: {e}"))?
-        .uid()
-        == 0)
+/// `geteuid` is POSIX and in the C library std already links, so it answers
+/// the same way on Linux and macOS without taking a dependency for one call.
+pub fn running_as_root() -> bool {
+    unsafe extern "C" {
+        safe fn geteuid() -> u32;
+    }
+    geteuid() == 0
 }
 
 /// Runs `step` in `dir`, inheriting its output.
@@ -112,7 +110,7 @@ mod tests {
             .trim()
             .parse()
             .expect("a numeric uid");
-        assert_eq!(running_as_root(), Ok(uid == 0));
+        assert_eq!(running_as_root(), uid == 0);
     }
 
     #[test]

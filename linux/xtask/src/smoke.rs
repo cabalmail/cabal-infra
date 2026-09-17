@@ -119,7 +119,7 @@ fn has_display() -> bool {
 /// refuses root for the opposite reason; saying which way round each one goes
 /// is cheaper than reading pacman's message and guessing.
 fn require_root() -> Result<(), String> {
-    if process::running_as_root()? {
+    if process::running_as_root() {
         return Ok(());
     }
     Err(

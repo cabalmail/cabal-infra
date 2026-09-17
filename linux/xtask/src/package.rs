@@ -178,7 +178,7 @@ fn check_publishable(srcinfo: &str) -> Result<(), String> {
 /// work is already done. Saying so first — and saying what to do instead — is
 /// the difference between a readable CI log and a puzzle.
 fn refuse_to_run_as_root() -> Result<(), String> {
-    if !process::running_as_root()? {
+    if !process::running_as_root() {
         return Ok(());
     }
     Err(
