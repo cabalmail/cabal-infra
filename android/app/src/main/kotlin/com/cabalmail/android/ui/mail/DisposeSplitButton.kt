@@ -30,6 +30,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.LocalDisposeToTrash
 import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.DisposeAdvance
 
@@ -118,8 +119,20 @@ internal fun DisposeSplitButton(
     }
 }
 
+/**
+ * [DisposeIntent.standard] in [folder] under the live "Dispose action"
+ * preference, for the list surfaces (swipe, long-press menu, selection bar)
+ * so they say what the dispose will do there.
+ */
 @Composable
-private fun disposeIcon(intent: DisposeIntent): Painter =
+internal fun standardDisposeIntent(folder: String): DisposeIntent =
+    DisposeIntent.standard(
+        if (LocalDisposeToTrash.current) DisposeAction.TRASH else DisposeAction.ARCHIVE,
+        folder,
+    )
+
+@Composable
+internal fun disposeIcon(intent: DisposeIntent): Painter =
     when (intent) {
         DisposeIntent.Purge -> rememberVectorPainter(Icons.Default.Delete)
         DisposeIntent.Restore -> painterResource(R.drawable.ic_unarchive)

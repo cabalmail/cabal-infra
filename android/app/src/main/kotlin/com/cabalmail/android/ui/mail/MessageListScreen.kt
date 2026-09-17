@@ -71,8 +71,6 @@ import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
 import com.cabalmail.android.ui.settings.flagColor
-import com.cabalmail.android.ui.theme.disposeIconPainter
-import com.cabalmail.android.ui.theme.disposeLabelRes
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -485,12 +483,10 @@ private fun SelectionTopBar(
                 onClick = onDispose,
                 enabled = state.selected.isNotEmpty(),
             ) {
+                val disposeIntent = standardDisposeIntent(viewModel.folderName)
                 Icon(
-                    disposeIconPainter(viewModel.isTrashFolder),
-                    contentDescription =
-                        stringResource(
-                            disposeLabelRes(viewModel.isTrashFolder),
-                        ),
+                    disposeIcon(disposeIntent),
+                    contentDescription = stringResource(disposeVerbRes(disposeIntent)),
                 )
             }
             IconButton(onClick = { menuOpen = true }, enabled = state.selected.isNotEmpty()) {
@@ -676,6 +672,7 @@ private fun InteractiveRow(
     onMove: () -> Unit,
     palette: List<FlagPaletteEntry> = emptyList(),
 ) {
+    val disposeIntent = standardDisposeIntent(viewModel.folderName)
     // A keyboard-cursor or open-in-pane row gets a primary state layer over
     // the surface, composited here so the swipe backing stays opaque.
     val rowColor =
@@ -703,7 +700,7 @@ private fun InteractiveRow(
                 onToggleSeen = { viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen) },
                 onToggleFlag = { viewModel.setFlag(setOf(envelope.id), "\\Flagged", !envelope.isFlagged) },
                 onDispose = onDispose,
-                isTrashFolder = viewModel.isTrashFolder,
+                disposeIntent = disposeIntent,
                 containerColor = rowColor,
             ) {
                 EnvelopeRow(
@@ -777,13 +774,7 @@ private fun InteractiveRow(
                 },
             )
             DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            disposeLabelRes(viewModel.isTrashFolder),
-                        ),
-                    )
-                },
+                text = { Text(stringResource(disposeVerbRes(disposeIntent))) },
                 onClick = {
                     onMenuChange(false)
                     onDispose()
