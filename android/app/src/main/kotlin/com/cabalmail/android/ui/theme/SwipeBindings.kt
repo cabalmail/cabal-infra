@@ -13,7 +13,10 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.mail.DisposeIntent
+import com.cabalmail.android.ui.mail.disposeVerbRes
 import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.FeedSwipeAction
 import com.cabalmail.kit.settings.MailSwipeAction
 
@@ -44,10 +47,10 @@ data class SwipeBindings(
 val LocalSwipeBindings = staticCompositionLocalOf { SwipeBindings.of(AppPreferences()) }
 
 /** The glyph a revealed swipe edge draws. */
-internal enum class SwipeGlyph { EMAIL, STAR_FILLED, STAR_HOLLOW, ARCHIVE, TRASH }
+internal enum class SwipeGlyph { EMAIL, STAR_FILLED, STAR_HOLLOW, ARCHIVE, UNARCHIVE, TRASH }
 
 /** The wash behind a revealed swipe edge, by what the action does. */
-internal enum class SwipeTone { READ, FLAG, DISPOSE }
+internal enum class SwipeTone { READ, FLAG, DISPOSE, RESTORE }
 
 /**
  * What a swipe edge shows once revealed: the label (also the icon's
@@ -66,10 +69,8 @@ internal fun mailSwipeReveal(
     action: MailSwipeAction,
     isSeen: Boolean,
     isFlagged: Boolean,
-    /** Inside Trash the dispose purges; the label says so. */
-    isTrashFolder: Boolean,
-    /** The "Dispose action" preference targets Trash. */
-    disposeToTrash: Boolean,
+    /** What the dispose does in this row's folder: move, restore, or purge. */
+    dispose: DisposeIntent,
 ): SwipeReveal? =
     when (action) {
         MailSwipeAction.TOGGLE_READ ->
@@ -86,14 +87,16 @@ internal fun mailSwipeReveal(
             )
         MailSwipeAction.DISPOSE ->
             SwipeReveal(
-                label =
+                label = disposeVerbRes(dispose),
+                glyph =
                     when {
-                        isTrashFolder -> R.string.purge
-                        disposeToTrash -> R.string.dispose_to_trash
-                        else -> R.string.archive
+                        dispose == DisposeIntent.Restore -> SwipeGlyph.UNARCHIVE
+                        dispose == DisposeIntent.Move(DisposeAction.ARCHIVE) -> SwipeGlyph.ARCHIVE
+                        else -> SwipeGlyph.TRASH
                     },
-                glyph = if (isTrashFolder || disposeToTrash) SwipeGlyph.TRASH else SwipeGlyph.ARCHIVE,
-                tone = SwipeTone.DISPOSE,
+                // A restore puts the message back in the inbox rather than
+                // removing it, so it drops the dispose wash (as on Apple).
+                tone = if (dispose == DisposeIntent.Restore) SwipeTone.RESTORE else SwipeTone.DISPOSE,
             )
         MailSwipeAction.NONE -> null
     }
@@ -127,6 +130,7 @@ internal fun SwipeReveal.painter(): Painter =
         SwipeGlyph.STAR_FILLED -> rememberVectorPainter(Icons.Default.Star)
         SwipeGlyph.STAR_HOLLOW -> painterResource(R.drawable.ic_star_border)
         SwipeGlyph.ARCHIVE -> painterResource(R.drawable.ic_archive)
+        SwipeGlyph.UNARCHIVE -> painterResource(R.drawable.ic_unarchive)
         SwipeGlyph.TRASH -> rememberVectorPainter(Icons.Default.Delete)
     }
 
@@ -136,4 +140,5 @@ internal fun SwipeReveal.color(): Color =
         SwipeTone.READ -> MaterialTheme.colorScheme.secondaryContainer
         SwipeTone.FLAG -> ColorTokens.flaggedWash()
         SwipeTone.DISPOSE -> MaterialTheme.colorScheme.errorContainer
+        SwipeTone.RESTORE -> MaterialTheme.colorScheme.tertiaryContainer
     }
