@@ -39,6 +39,19 @@ final class SectionLayoutPolicyTests: XCTestCase {
         )
     }
 
+    func testPhonePinsCompactWidth() {
+        // The tab tree overrides the size class on a phone so the Mail tab's
+        // split view never expands in landscape and collapses back — the
+        // cycle behind the unpushed reader and the stranded inspector sheet.
+        XCTAssertTrue(SectionLayoutPolicy.pinsCompactWidth(isPhone: true))
+    }
+
+    func testPadKeepsItsOwnSizeClass() {
+        // An iPad that widens out of multitasking must be allowed to see the
+        // regular size class, or it could never switch to the split layout.
+        XCTAssertFalse(SectionLayoutPolicy.pinsCompactWidth(isPhone: false))
+    }
+
     func testCompactMultitaskingPadUsesTabs() {
         XCTAssertEqual(
             SectionLayoutPolicy.layout(isPhone: false, isCompactWidth: true),
