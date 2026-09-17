@@ -179,6 +179,28 @@ internal fun DefaultFromRow(
     )
 }
 
+/** A group heading inside a category (the flag palette titles its groups the same way). */
+@Composable
+internal fun SettingsSectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+/** Explanatory text under a group of rows. */
+@Composable
+internal fun SettingsSectionFooter(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
 // ------------------------------------------------------------- labels
 
 @Composable

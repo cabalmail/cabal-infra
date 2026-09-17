@@ -173,6 +173,9 @@ struct FeedSidebarList: View {
                 FeedAddMenu(actions: actions, management: management)
             }
             ToolbarItem {
+                FeedExportButton(actions: actions, management: management)
+            }
+            ToolbarItem {
                 Button {
                     Task { await model?.refresh() }
                 } label: {

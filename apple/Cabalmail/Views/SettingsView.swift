@@ -77,7 +77,7 @@ struct SettingsView: View {
 
 /// The selectable settings categories, in presentation order.
 enum SettingsCategory: CaseIterable, Identifiable, Hashable {
-    case account, reading, feeds, composing, rules, flags, actions, notifications
+    case account, reading, composing, rules, flags, actions, notifications
     case appearance, diagnostics, about
 
     var id: Self { self }
@@ -98,7 +98,6 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         switch self {
         case .account: "Account"
         case .reading: "Reading"
-        case .feeds: "Feeds"
         case .composing: "Composing"
         case .rules: "Rules"
         case .flags: "Flags"
@@ -114,7 +113,6 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         switch self {
         case .account: "person.crop.circle"
         case .reading: "envelope.open"
-        case .feeds: "dot.radiowaves.up.forward"
         case .composing: "square.and.pencil"
         case .rules: "list.bullet.rectangle"
         case .flags: "flag"
@@ -138,7 +136,6 @@ private struct SettingsCategoryDetail: View {
         switch category {
         case .account: AccountSettingsView()
         case .reading: ReadingSettingsView()
-        case .feeds: FeedsSettingsView()
         case .composing: ComposingSettingsView()
         case .rules: RulesView()
         case .flags: FlagPaletteSettingsView()
@@ -220,7 +217,10 @@ private struct ReadingSettingsView: View {
     var body: some View {
         @Bindable var preferences = preferences
         SettingsForm(title: "Reading") {
-            Section {
+            // Mail and feeds side by side: the feed reader is part of the
+            // app, not a bolt-on with its own category. Each surface keeps
+            // its own mark-as-read key so the two habits can differ.
+            Section("Email messages") {
                 Picker("Mark as read", selection: $preferences.markAsRead) {
                     Text("Manual").tag(MarkAsReadBehavior.manual)
                     Text("On open").tag(MarkAsReadBehavior.onOpen)
@@ -238,6 +238,12 @@ private struct ReadingSettingsView: View {
                     Text("Unread").tag(FolderCountDisplay.unread)
                     Text("Total").tag(FolderCountDisplay.total)
                     Text("Unread / total").tag(FolderCountDisplay.both)
+                }
+            }
+            Section("Feed items") {
+                Picker("Mark as read", selection: $preferences.rssMarkAsRead) {
+                    Text("Manual").tag(MarkAsReadBehavior.manual)
+                    Text("On open").tag(MarkAsReadBehavior.onOpen)
                 }
             }
         }

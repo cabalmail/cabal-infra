@@ -309,7 +309,7 @@
     <string name="feeds_open_site">Open Site</string>
     <string name="feeds_unsubscribe">Unsubscribe…</string>
     <string name="feeds_import_opml">Import OPML…</string>
-    <string name="feeds_export_opml">Export OPML…</string>
+    <string name="feeds_export_opml">Export OPML</string>
     <string name="feeds_row_menu">More options for %1$s</string>
     <string name="feed_subscribe_title">Subscribe to Feed</string>
     <string name="feed_subscribe_address">Address</string>
@@ -354,7 +354,6 @@
     <string name="feed_remote_inherit">App setting</string>
     <string name="feed_remote_show">Show</string>
     <string name="feed_remote_hide">Hide</string>
-    <string name="settings_feeds_subscriptions">Subscriptions</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -364,8 +363,6 @@
     <string name="settings_display_name">Display name</string>
     <string name="settings_display_name_empty">None — messages show only the address</string>
     <string name="settings_reading">Reading</string>
-    <string name="settings_feeds">Feeds</string>
-    <string name="settings_feeds_mark_as_read_footer">Applies to feed items only; mail has its own setting under Reading.</string>
     <string name="settings_mark_as_read">Mark as read</string>
     <string name="settings_load_remote_content">Load remote content</string>
     <string name="settings_render_mode">Body render mode</string>
@@ -404,6 +401,8 @@
     <string name="opt_sort_subject">Subject</string>
     <string name="opt_dispose_trash">Trash</string>
     <string name="settings_dispose_advance">After disposing</string>
+    <string name="settings_section_email_messages">Email messages</string>
+    <string name="settings_section_feed_items">Feed items</string>
     <string name="settings_swipe_leading">Leading swipe</string>
     <string name="settings_swipe_trailing">Trailing swipe</string>
     <string name="settings_swipe_footer">Leading is a swipe that starts at the leading edge (the left in left-to-right languages); trailing starts at the other edge. The same action may be bound to both.</string>
