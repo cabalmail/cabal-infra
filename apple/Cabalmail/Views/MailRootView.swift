@@ -93,7 +93,10 @@ struct MailRootView: View {
     /// Whether the right-hand addresses inspector is showing. Hidden by default
     /// (on every launch) — it's an occasional reference/management panel reached
     /// from the toolbar, so it doesn't persist open. Wide layouts only; compact
-    /// iPhone reaches addresses through its own bottom tab, never this inspector.
+    /// iPhone reaches addresses through its own bottom tab, never this inspector
+    /// — and `SignedInRootView` pins a phone to compact width so the inspector
+    /// can't flip presentation (column <-> sheet) across a rotation, which is
+    /// how it once surfaced as a dead-end sheet over the tab bar.
     @State private var addressInspectorPresented = false
     /// Persisted width of the message-list (content) column in the wide
     /// (regular-width iPad / visionOS) three-column layout. `NavigationSplitView`
