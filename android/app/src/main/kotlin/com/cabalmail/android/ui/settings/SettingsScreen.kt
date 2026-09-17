@@ -17,8 +17,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -33,7 +31,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.cabalmail.android.BuildConfig
 import com.cabalmail.android.R
@@ -60,7 +57,6 @@ enum class SettingsCategory(
 ) {
     ACCOUNT(R.string.settings_account),
     READING(R.string.settings_reading),
-    FEEDS(R.string.settings_feeds),
     COMPOSING(R.string.settings_composing),
     RULES(R.string.rules_title),
     FLAGS(R.string.settings_flags),
@@ -100,11 +96,6 @@ fun SettingsScreen(
     rulesPane: @Composable (onBack: (() -> Unit)?) -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
-    /** Settings › Feeds OPML actions; null hides the rows. */
-    onImportOpml: (() -> Unit)? = null,
-    onExportOpml: (() -> Unit)? = null,
-    /** Where the feeds actions' notices land, when the host provides one. */
-    feedSnackbarHostState: SnackbarHostState? = null,
 ) {
     val scope = rememberCoroutineScope()
     val navigator = rememberListDetailPaneScaffoldNavigator<SettingsCategory>()
@@ -155,9 +146,6 @@ fun SettingsScreen(
                             onPushFoldersChange = onPushFoldersChange,
                             onSignOut = onSignOut,
                             onBack = onBack,
-                            snackbarHostState = feedSnackbarHostState,
-                            onImportOpml = onImportOpml,
-                            onExportOpml = onExportOpml,
                         )
                 }
             }
@@ -217,13 +205,9 @@ private fun SettingsCategoryDetail(
     onPushFoldersChange: (Set<String>) -> Unit,
     onSignOut: () -> Unit,
     onBack: (() -> Unit)?,
-    snackbarHostState: SnackbarHostState? = null,
-    onImportOpml: (() -> Unit)? = null,
-    onExportOpml: (() -> Unit)? = null,
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(category.titleRes)) },
@@ -250,7 +234,6 @@ private fun SettingsCategoryDetail(
             when (category) {
                 SettingsCategory.ACCOUNT -> AccountSettings(state, preferences, onUpdate, onSignOut)
                 SettingsCategory.READING -> ReadingSettings(preferences, onUpdate)
-                SettingsCategory.FEEDS -> FeedsSettings(preferences, onUpdate, onImportOpml, onExportOpml)
                 SettingsCategory.COMPOSING -> ComposingSettings(state, preferences, onUpdate)
                 // Handled by the caller (the pane comes from the nav host).
                 SettingsCategory.RULES -> Unit
@@ -302,70 +285,15 @@ private fun AccountSettings(
     )
 }
 
-/** The feed reader's own mark-as-read mode (rss plan, phase 5/6); OPML and more arrive with 6c. */
-@Composable
-private fun FeedsSettings(
-    preferences: AppPreferences,
-    onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
-    onImportOpml: (() -> Unit)?,
-    onExportOpml: (() -> Unit)?,
-) {
-    EnumRow(
-        title = stringResource(R.string.settings_mark_as_read),
-        value = preferences.effectiveRssMarkAsRead,
-        options = MarkAsRead.entries,
-        label = { it.label() },
-        onSelect = { value -> onUpdate { it.copy(rssMarkAsRead = value) } },
-    )
-    Text(
-        text = stringResource(R.string.settings_feeds_mark_as_read_footer),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-    )
-    EnumRow(
-        title = stringResource(R.string.settings_swipe_leading),
-        value = preferences.effectiveRssSwipeLeading,
-        options = FeedSwipeAction.entries,
-        label = { it.label() },
-        onSelect = { value -> onUpdate { it.copy(rssSwipeLeading = value) } },
-    )
-    EnumRow(
-        title = stringResource(R.string.settings_swipe_trailing),
-        value = preferences.effectiveRssSwipeTrailing,
-        options = FeedSwipeAction.entries,
-        label = { it.label() },
-        onSelect = { value -> onUpdate { it.copy(rssSwipeTrailing = value) } },
-    )
-    Text(
-        text = stringResource(R.string.settings_swipe_footer),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-    )
-    if (onImportOpml != null && onExportOpml != null) {
-        Text(
-            text = stringResource(R.string.settings_feeds_subscriptions),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.feeds_import_opml)) },
-            modifier = Modifier.clickable(onClick = onImportOpml),
-        )
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.feeds_export_opml)) },
-            modifier = Modifier.clickable(onClick = onExportOpml),
-        )
-    }
-}
-
 @Composable
 private fun ReadingSettings(
     preferences: AppPreferences,
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
 ) {
+    // Mail and feeds side by side: the feed reader is part of the app, not
+    // a bolt-on with its own category. Each keeps its own mark-as-read key
+    // so the two habits can differ.
+    SettingsSectionHeader(stringResource(R.string.settings_section_email_messages))
     EnumRow(
         title = stringResource(R.string.settings_mark_as_read),
         value = preferences.markAsRead,
@@ -393,6 +321,14 @@ private fun ReadingSettings(
         options = FolderCountDisplay.entries,
         label = { it.label() },
         onSelect = { value -> onUpdate { it.copy(folderCountDisplay = value) } },
+    )
+    SettingsSectionHeader(stringResource(R.string.settings_section_feed_items))
+    EnumRow(
+        title = stringResource(R.string.settings_mark_as_read),
+        value = preferences.effectiveRssMarkAsRead,
+        options = MarkAsRead.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(rssMarkAsRead = value) } },
     )
     EnumRow(
         title = stringResource(R.string.settings_default_sort),
@@ -433,6 +369,8 @@ private fun ActionsSettings(
     preferences: AppPreferences,
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
 ) {
+    // Mail and feeds side by side (see ReadingSettings).
+    SettingsSectionHeader(stringResource(R.string.settings_section_email_messages))
     EnumRow(
         title = stringResource(R.string.settings_dispose_action),
         value = preferences.disposeAction,
@@ -461,12 +399,22 @@ private fun ActionsSettings(
         label = { it.label() },
         onSelect = { value -> onUpdate { it.copy(swipeTrailing = value) } },
     )
-    Text(
-        text = stringResource(R.string.settings_swipe_footer),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    SettingsSectionHeader(stringResource(R.string.settings_section_feed_items))
+    EnumRow(
+        title = stringResource(R.string.settings_swipe_leading),
+        value = preferences.effectiveRssSwipeLeading,
+        options = FeedSwipeAction.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(rssSwipeLeading = value) } },
     )
+    EnumRow(
+        title = stringResource(R.string.settings_swipe_trailing),
+        value = preferences.effectiveRssSwipeTrailing,
+        options = FeedSwipeAction.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(rssSwipeTrailing = value) } },
+    )
+    SettingsSectionFooter(stringResource(R.string.settings_swipe_footer))
 }
 
 @Composable

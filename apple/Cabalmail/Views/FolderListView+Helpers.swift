@@ -110,6 +110,9 @@ extension FolderListView {
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
                     .fixedSize()
+                FeedExportButton(actions: feedActions, management: feedManagement)
+                    .buttonStyle(.borderless)
+                    .fixedSize()
             }
         }
     }

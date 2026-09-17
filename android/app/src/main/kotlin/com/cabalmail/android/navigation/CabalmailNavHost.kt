@@ -641,16 +641,7 @@ private fun MailNavGraph(
             val state by viewModel.state.collectAsState()
             val preferences by viewModel.preferences.collectAsState()
             val folderChoices by viewModel.folderChoices.collectAsState()
-            // Settings › Feeds OPML actions ride a management model of their
-            // own; its sheets and notices overlay the settings screen.
-            val feedManagement: FeedManagementViewModel =
-                viewModel(factory = FeedManagementViewModel.factory(container))
-            val feedSnackbar = remember { androidx.compose.material3.SnackbarHostState() }
-            FeedManagementSheets(viewModel = feedManagement, snackbarHostState = feedSnackbar)
             SettingsScreen(
-                onImportOpml = { feedManagement.requestImport() },
-                onExportOpml = { feedManagement.exportOpml() },
-                feedSnackbarHostState = feedSnackbar,
                 state = state,
                 preferences = preferences,
                 onUpdate = viewModel::update,

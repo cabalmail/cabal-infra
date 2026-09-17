@@ -1188,28 +1188,36 @@ spinning up the full view model.
 - **Account.** Signed-in username + control domain (both read-only), plus
   the single sign-out button. Account is the canonical place for
   sign-out.
-- **Reading.** `Mark as read` (manual / on open) and
-  `Load remote content` (off / ask / always). The manual default matches
+- **Reading.** Two sections, Email messages and Feed items — the feed
+  reader is part of the app, not a category of its own. Email messages:
+  `Mark as read` (manual / on open), `Load remote content` (off / ask /
+  always), `Default view`, `Folder counts`. The manual default matches
   the React app, where the user always explicitly marks messages read
-  via the swipe action, toolbar button, or context menu.
+  via the swipe action, toolbar button, or context menu. Feed items:
+  its own `Mark as read` (`rss_mark_as_read`), so the two habits can
+  differ.
 - **Composing.** `Default From address` (None / one of the user's
   addresses — revoked addresses fall back to None so a stale preference
   can't persist an address that doesn't exist any more) and a plain-text
   `Signature`. Reply / forward flows default From to the original's
   addressee, so the default-From preference only applies to new
   messages.
-- **Actions.** `Dispose action` (Archive / Trash). `MessageListViewModel`
-  reads this on every swipe so a change mid-session takes effect
-  immediately; the swipe label + icon follow the preference too.
-  `Leading swipe` / `Trailing swipe` bind each edge of a message row to
-  Toggle read, Toggle flag, Dispose (which follows `Dispose action` and
-  the in-Trash / in-Archive overrides), or None; the same action may be
-  bound to both edges. The edges are named for layout direction, not
-  left / right, so a binding means the same gesture under RTL. Synced as
-  `swipe_leading` / `swipe_trailing`; Settings › Feeds carries the feed
-  rows' pair (`rss_swipe_leading` / `rss_swipe_trailing`: Toggle read,
-  Toggle favorite, None). The four ride the `app` map as a set, gated
-  off the wire until the user sets one or a fetched map carries one.
+- **Actions.** The same two sections. Email messages: `Dispose action`
+  (Archive / Trash) — `MessageListViewModel` reads this on every swipe so
+  a change mid-session takes effect immediately, and the swipe label +
+  icon follow the preference too — the two advance pickers, and
+  `Leading swipe` / `Trailing swipe`, which bind each edge of a message
+  row to Toggle read, Toggle flag, Dispose (which follows `Dispose
+  action` and the in-Trash / in-Archive overrides), or None. Feed items:
+  `Leading swipe` / `Trailing swipe` for feed item rows (Toggle read,
+  Toggle favorite, None). The same action may be bound to both edges.
+  The edges are named for layout direction, not left / right, so a
+  binding means the same gesture under RTL. Synced as `swipe_leading` /
+  `swipe_trailing` and `rss_swipe_leading` / `rss_swipe_trailing`; the
+  four ride the `app` map as a set, gated off the wire until the user
+  sets one or a fetched map carries one. OPML import lives in the feeds
+  sidebar's `+` menu and export under the share button beside it (both
+  also in the macOS Feeds menu); neither is a setting.
 - **Appearance.** `Theme` (System / Light / Dark) applied via
   `.preferredColorScheme` at the App level so the whole app flips
   instantly. `CabalmailApp` and `CabalmailMacApp` own the `AppState` and

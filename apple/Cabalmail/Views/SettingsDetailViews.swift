@@ -144,6 +144,7 @@ struct ActionsSettingsView: View {
     var body: some View {
         @Bindable var preferences = preferences
         SettingsForm(title: "Actions") {
+            // Mail and feeds side by side (see `ReadingSettingsView`).
             Section {
                 // A segmented picker drops its own title on iOS/iPadOS, so
                 // the row that names the setting has to supply it — the two
@@ -173,22 +174,41 @@ struct ActionsSettingsView: View {
                     Text("Go to previous unread").tag(MarkReadAdvance.previousUnread)
                     Text("Go to first unread").tag(MarkReadAdvance.firstUnread)
                 }
-            } footer: {
-                Text("Which message the reading pane opens after you archive, delete, or mark read from it.")
-                    .sectionFooter()
-            }
-            Section {
                 Picker("Leading swipe", selection: $preferences.swipeLeading) {
                     mailSwipeOptions
                 }
                 Picker("Trailing swipe", selection: $preferences.swipeTrailing) {
                     mailSwipeOptions
                 }
+            } header: {
+                Text("Email messages")
+            } footer: {
+                Text("The advance settings choose which message the reading pane opens after you "
+                     + "archive, delete, or mark read from it.")
+                    .sectionFooter()
+            }
+            Section {
+                Picker("Leading swipe", selection: $preferences.rssSwipeLeading) {
+                    feedSwipeOptions
+                }
+                Picker("Trailing swipe", selection: $preferences.rssSwipeTrailing) {
+                    feedSwipeOptions
+                }
+            } header: {
+                Text("Feed items")
             } footer: {
                 Text(Self.swipeFooter)
                     .sectionFooter()
             }
         }
+    }
+
+    /// The feed rows' option list; the same action may be bound to both edges.
+    @ViewBuilder
+    private var feedSwipeOptions: some View {
+        Text("Toggle read").tag(FeedSwipeAction.toggleRead)
+        Text("Toggle favorite").tag(FeedSwipeAction.toggleFavorite)
+        Text("None").tag(FeedSwipeAction.disabled)
     }
 
     /// The same option list for both edges; the same action may be bound
@@ -201,8 +221,8 @@ struct ActionsSettingsView: View {
         Text("None").tag(MailSwipeAction.disabled)
     }
 
-    /// Shared with Settings › Feeds, whose two pickers bind the feed rows.
-    static let swipeFooter = "Leading is a swipe that starts at the leading edge of the row "
+    /// Under the last swipe section, so it reads for both lists.
+    private static let swipeFooter = "Leading is a swipe that starts at the leading edge of the row "
         + "(the left in left-to-right languages); trailing starts at the other edge. "
         + "The same action may be bound to both."
 }

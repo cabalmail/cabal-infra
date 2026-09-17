@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
@@ -95,7 +96,10 @@ fun FeedListScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.feeds_title)) },
                 actions = {
-                    if (management != null) FeedAddMenu(management)
+                    if (management != null) {
+                        FeedAddMenu(management)
+                        FeedExportButton(management)
+                    }
                     IconButton(onClick = onRefresh, enabled = !state.refreshing) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.feeds_refresh))
                     }
@@ -157,7 +161,12 @@ fun FeedPane(
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(R.string.feeds_title)) },
-            actions = { if (management != null) FeedAddMenu(management) },
+            actions = {
+                if (management != null) {
+                    FeedAddMenu(management)
+                    FeedExportButton(management)
+                }
+            },
         )
         FeedTreeContent(
             state = state,
@@ -202,14 +211,19 @@ private fun FeedAddMenu(management: FeedManagementViewModel) {
                     management.requestImport()
                 },
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feeds_export_opml)) },
-                onClick = {
-                    open = false
-                    management.exportOpml()
-                },
-            )
         }
+    }
+}
+
+/**
+ * Export OPML beside the `+` menu: the one collection action that takes
+ * something out, so it gets the share glyph rather than a place among the
+ * add items. A plain button, not a one-item menu.
+ */
+@Composable
+private fun FeedExportButton(management: FeedManagementViewModel) {
+    IconButton(onClick = { management.exportOpml() }) {
+        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.feeds_export_opml))
     }
 }
 

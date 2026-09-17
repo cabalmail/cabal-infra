@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.1] - 2026-09-17
+
+### Changed
+- Android: **Feed settings folded into Reading and Actions.** The Feeds
+  settings category is gone: Reading and Actions each carry an Email
+  messages section and a Feed items section, so the feed reader's
+  mark-as-read and swipe settings sit beside mail's rather than in a
+  bolt-on group. OPML export moves out of Settings and out of the feeds
+  `+` menu to a share button beside it; the `+` menu keeps Subscribe,
+  New Folder, and Import OPML.
+- Apple: **Feed settings folded into Reading and Actions.** The Feeds
+  settings category is gone: Reading and Actions each carry an Email
+  messages section and a Feed items section, so the feed reader's
+  mark-as-read and swipe settings sit beside mail's rather than in a
+  bolt-on group. OPML export moves out of Settings and out of the feeds
+  `+` menu to a share button beside it; the `+` menu keeps Subscribe,
+  New Folder, and Import OPML.
+
 ## [1.20.0] - 2026-09-16
 
 ### Added

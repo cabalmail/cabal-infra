@@ -40,7 +40,7 @@ Every address lives on its own subdomain (`foo@bar.example.com`) and delivers to
 
   <img src="./app_screens/ios_reader.png" alt="Reading a message on iPhone: SPF, DKIM, and DMARC verdicts under the sender" width="300" />
 - **Search** is full-text across folders (Trash excluded). Text inside attachments is not indexed.
-- **Triage.** By default, swipe right to toggle read/unread and swipe left to archive (inside Archive, the same gesture restores). Settings → Actions lets you bind either edge to toggle read, toggle flag, dispose, or nothing; the feed list has its own pair under Settings → Feeds. Multi-select for bulk move, flag, read/unread, and delete. Filter the list (All / Unread / Flagged) and change the sort order from the toolbar.
+- **Triage.** By default, swipe right to toggle read/unread and swipe left to archive (inside Archive, the same gesture restores). Settings → Actions lets you bind either edge to toggle read, toggle flag, dispose, or nothing, with a separate pair for feed items. Multi-select for bulk move, flag, read/unread, and delete. Filter the list (All / Unread / Flagged) and change the sort order from the toolbar.
 
   <img src="./app_screens/ios_swipe.png" alt="Swiping a message row left on iPhone reveals the Archive action" width="300" />
 - **Rules.** Settings → Mail rules: ordered rules applied to every arriving message — file into a folder, flag, mark read, forward, auto-reply, or delete, with conditions on From / To / Cc / Subject / Body. Edits auto-save and follow your account across devices. See [Mail rules](./mail-rules.md) for the full behavior, limits, and the "why didn't my rule fire" checklist.
