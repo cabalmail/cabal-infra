@@ -11,6 +11,10 @@ import CabalmailKit
 /// per `project.yml`); the bucketing itself lives in CabalmailKit.
 struct AuthResultsLine: View {
     let results: AuthResults?
+    /// False when the header sets the chips in its trailing column: the
+    /// warning sentence would wrap to several lines there, so the header
+    /// draws `AuthWarningLabel` at full width under both columns instead.
+    var showsWarning = true
 
     var body: some View {
         if let results, !results.isEmpty {
@@ -20,13 +24,8 @@ struct AuthResultsLine: View {
                     chip(method: "DKIM", token: results.dkim)
                     chip(method: "DMARC", token: results.dmarc)
                 }
-                if AuthVerificationState(results) == .warning {
-                    // Deliberately "could not be authenticated", not
-                    // "dangerous" — forwarding legitimately breaks these
-                    // checks.
-                    Label(Self.warningCopy, systemImage: "exclamationmark.shield.fill")
-                        .font(.caption)
-                        .foregroundStyle(ColorTokens.warningFg)
+                if showsWarning {
+                    AuthWarningLabel(results: results)
                 }
             }
         } else {
@@ -80,6 +79,23 @@ struct AuthResultsLine: View {
         case .ok: return ColorTokens.successWash
         case .bad: return ColorTokens.warningWash
         case .neutral: return Color.secondary.opacity(0.12)
+        }
+    }
+}
+
+/// The warning sentence under the chips, shown only when the message failed
+/// authentication. Its own view so the header can place it apart from the
+/// chips (see `AuthResultsLine.showsWarning`).
+struct AuthWarningLabel: View {
+    let results: AuthResults?
+
+    var body: some View {
+        if let results, !results.isEmpty, AuthVerificationState(results) == .warning {
+            // Deliberately "could not be authenticated", not "dangerous" —
+            // forwarding legitimately breaks these checks.
+            Label(AuthResultsLine.warningCopy, systemImage: "exclamationmark.shield.fill")
+                .font(.caption)
+                .foregroundStyle(ColorTokens.warningFg)
         }
     }
 }

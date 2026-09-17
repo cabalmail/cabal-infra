@@ -62,6 +62,11 @@ struct MessageDetailView: View {
     // instead of to a fixed slice of the pane. See
     // `ReaderHeaderHeightPolicy`.
     @State var headerContentHeight: CGFloat = 0
+    // The pane width at which the header grows its trailing column, scaled
+    // with Dynamic Type so larger text needs a proportionally wider pane.
+    // See `ReaderHeaderColumnPolicy` and `MessageDetailView+Header.swift`.
+    @ScaledMetric(relativeTo: .caption2)
+    var headerTrailingColumnMinWidth = ReaderHeaderColumnPolicy.baseMinPaneWidth
     #if os(iOS)
     // Drives `drawsOwnActionBar`: at regular width the reader shares the
     // window with the message list, and on iOS 27 a `.bottomBar` group
@@ -106,7 +111,7 @@ struct MessageDetailView: View {
                 // makes the block exactly that tall whatever it holds, which
                 // is what pushed the authentication line out of view.
                 ScrollView(.vertical) {
-                    headerBlock
+                    headerBlock(paneWidth: proxy.size.width)
                         .padding(.horizontal)
                         .padding(.vertical, 8)
                         .onGeometryChange(for: CGFloat.self) { headerProxy in
@@ -278,80 +283,6 @@ struct MessageDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private var headerBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Subject appears in full here because the list truncates it;
-            // the surrounding ScrollView in `body` lets the header wrap
-            // freely and scroll when needed.
-            Text(envelope.subject ?? "(no subject)")
-                .font(.title3)
-                .fontWeight(.semibold)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(alignment: .top, spacing: 12) {
-                if let apiClient = appState.client?.apiClient {
-                    AvatarView(sender: envelope.from.first, apiClient: apiClient)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    if let from = envelope.from.first {
-                        Text(headerFromLabel(for: from))
-                            .font(.headline)
-                            .task(id: "\(from.mailbox.lowercased())@\(from.host.lowercased())") {
-                                await hydrateSenderContactName(for: from)
-                            }
-                            .contextMenu { addressMenu(for: from) }
-                    }
-                    if !envelope.to.isEmpty {
-                        recipientFlow(label: "To:", addresses: envelope.to)
-                    }
-                    if !envelope.cc.isEmpty {
-                        recipientFlow(label: "Cc:", addresses: envelope.cc)
-                    }
-                    if let date = envelope.date ?? envelope.internalDate {
-                        Text(date.formatted(date: .abbreviated, time: .shortened))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    // Sender-authentication verdicts, rendered in all three
-                    // states ("Not verified" muted). Bucketing lives in
-                    // CabalmailKit; see `AuthResultsLine`.
-                    AuthResultsLine(results: envelope.authResults)
-                    // Custom-flag chips (Phase 4): color dot + label per
-                    // tagged palette slot, live off the view model's
-                    // optimistic set so the flag menu's toggles reflect
-                    // here instantly. A deleted slot's surviving tag shows
-                    // its slot id in gray, per the palette editor's
-                    // delete-confirmation copy.
-                    if let model, !model.keywordSlots.isEmpty {
-                        keywordChips(model: model)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-        }
-    }
-
-    private func keywordChips(model: MessageDetailViewModel) -> some View {
-        HStack(spacing: 6) {
-            ForEach(FlagPalette.slots.filter { model.keywordSlots.contains($0) },
-                    id: \.self) { slot in
-                let entry = preferences.flagPalette.first { $0.slot == slot }
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(FlagPaletteColor.color(for: entry?.color ?? ""))
-                        .frame(width: 8, height: 8)
-                    Text(entry?.label ?? slot)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.quaternary, in: Capsule())
-            }
-        }
-    }
-
     // The reader's action set, routed per platform. macOS draws every action
     // as its own top-toolbar button — eleven of them, ordered by reverse
     // demotion priority so that when the window gets too narrow AppKit's
@@ -390,5 +321,6 @@ struct MessageDetailView: View {
 }
 
 // Toolbar-button builders and dispose helpers live in
-// `MessageDetailView+Toolbar.swift` so this file stays under SwiftLint's
+// `MessageDetailView+Toolbar.swift`, and the header block in
+// `MessageDetailView+Header.swift`, so this file stays under SwiftLint's
 // 400-line file_length cap.
