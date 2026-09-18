@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.4] - 2026-09-18
+
+### Fixed
+- Apple: **visionOS section tabs survive opening a message.** The reader hid the
+  window's leading tab ornament along with the compact iPhone tab bar, so once a
+  message was open, Folders, Feeds, Addresses, Settings and Search had no entry
+  point — and because the resume restore re-opens the last message, a relaunch
+  came back with the tabs still gone.
+
 ## [1.20.3] - 2026-09-18
 
 ### Changed
