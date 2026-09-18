@@ -24,6 +24,8 @@ struct CabalmailCommands: Commands {
     let appState: AppState
     @Environment(\.openWindow) private var openWindow
 
+    private var signedIn: Bool { appState.status == .signedIn }
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Message") {
@@ -65,6 +67,15 @@ struct CabalmailCommands: Commands {
             // dead command — the rule `MessageMenuAvailability` already
             // applies to the Message menu (#985, #1162).
             .disabled(!appState.mailboxMenuAvailability.canRefresh)
+            Divider()
+            // The sidebar's Expand all / Collapse all buttons, as menu items
+            // so they work whichever pane has focus. No chords: nothing
+            // conventional is free (Cmd+Option+arrows are the outline
+            // view's own), and the buttons are one click away.
+            Button("Expand All Folders") { appState.requestSidebarTree(.expandAllFolders) }
+                .disabled(!signedIn)
+            Button("Collapse All Folders") { appState.requestSidebarTree(.collapseAllFolders) }
+                .disabled(!signedIn)
         }
     }
 }

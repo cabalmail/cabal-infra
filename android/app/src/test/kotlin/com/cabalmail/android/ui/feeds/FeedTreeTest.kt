@@ -2,6 +2,7 @@ package com.cabalmail.android.ui.feeds
 
 import com.cabalmail.kit.models.RssFeedSummary
 import com.cabalmail.kit.models.RssFolder
+import com.cabalmail.kit.models.RssItemScope
 import com.cabalmail.kit.models.RssSubscription
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -61,5 +62,67 @@ class FeedTreeTest {
         assertEquals("s-root", root.subscription?.subscriptionId)
         assertEquals(0, root.unread)
         assertEquals("Paint", rows.first { it.id == "sub:s-art" }.title)
+    }
+
+    @Test
+    fun `unread only hides read feeds and folders with a zero roll-up, subtree included`() {
+        val counts = mapOf("s-tech" to 4)
+        val rows = FeedTree.rows(folders, subs, counts, unreadOnly = true)
+        assertEquals(listOf("folder:news", "folder:tech", "sub:s-tech"), rows.map { it.id })
+    }
+
+    @Test
+    fun `unread only with nothing unread leaves only the All Feeds item, which the screen adds`() {
+        assertEquals(emptyList<String>(), FeedTree.rows(folders, subs, emptyMap(), unreadOnly = true).map { it.id })
+    }
+
+    @Test
+    fun `unread only and the text filter combine`() {
+        val rows = FeedTree.rows(folders, subs, counts, filter = "d", unreadOnly = true)
+        // "Daily" and "Zed root" match the text; both have unread. "bits" does not match.
+        assertEquals(listOf("folder:news", "sub:s-news", "sub:s-root"), rows.map { it.id })
+        assertEquals(
+            listOf("folder:news", "sub:s-news"),
+            FeedTree.rows(folders, subs, mapOf("s-news" to 1), filter = "d", unreadOnly = true).map { it.id },
+        )
+    }
+
+    @Test
+    fun `the kept feed stays with its ancestors when it has no unread`() {
+        val counts = mapOf("s-art" to 8)
+        val rows = FeedTree.rows(folders, subs, counts, unreadOnly = true, keep = RssItemScope.Subscription("s-tech"))
+        assertEquals(listOf("folder:art", "sub:s-art", "folder:news", "folder:tech", "sub:s-tech"), rows.map { it.id })
+        assertEquals(0, rows.first { it.id == "sub:s-tech" }.unread)
+    }
+
+    @Test
+    fun `the kept folder stays when its roll-up is zero`() {
+        val rows = FeedTree.rows(folders, subs, emptyMap(), unreadOnly = true, keep = RssItemScope.Folder("tech"))
+        assertEquals(listOf("folder:news", "folder:tech"), rows.map { it.id })
+    }
+
+    @Test
+    fun `keeping All Feeds pins nothing in the tree`() {
+        assertEquals(
+            emptyList<String>(),
+            FeedTree.rows(folders, subs, emptyMap(), unreadOnly = true, keep = RssItemScope.All).map { it.id },
+        )
+    }
+
+    @Test
+    fun `keep changes nothing without a filter`() {
+        assertEquals(
+            FeedTree.rows(folders, subs, counts).map { it.id },
+            FeedTree.rows(folders, subs, counts, keep = RssItemScope.Subscription("s-tech")).map { it.id },
+        )
+    }
+
+    @Test
+    fun `collapsible folders are those with a child folder or a feed`() {
+        assertEquals(setOf("news", "tech", "art"), FeedTree.collapsibleFolderIds(folders, subs))
+        val empty = folders + RssFolder("void", name = "Void")
+        assertEquals(setOf("news", "tech", "art"), FeedTree.collapsibleFolderIds(empty, subs))
+        assertEquals(setOf("news"), FeedTree.collapsibleFolderIds(folders, emptyList()))
+        assertEquals(emptySet<String>(), FeedTree.collapsibleFolderIds(emptyList(), subs))
     }
 }

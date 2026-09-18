@@ -122,6 +122,13 @@ final class AppState {
     /// and bumps the tick; the mounted feed sidebar answers through
     /// `FeedManagementSheets`. See `requestFeedCommand` in `AppState+Feeds`.
     var feedCommandTick = 0
+    /// Expand all / Collapse all for the sidebar trees, from the Mailbox and
+    /// Feeds menus. The mounted sidebar that owns the named tree applies it
+    /// (`FolderListView` for mail and, on the wide layouts, feeds;
+    /// `FeedSidebarList` for the compact Feeds tab). See
+    /// `requestSidebarTree(_:)`.
+    var sidebarTreeCommandTick = 0
+    var pendingSidebarTreeCommand: SidebarTreeCommand?
     var pendingFeedCommand: FeedCommand?
 
     /// A Spotlight result tapped before sign-in / restore completed; routed

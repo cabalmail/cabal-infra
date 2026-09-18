@@ -90,6 +90,7 @@ import com.cabalmail.android.ui.mail.SearchScreen
 import com.cabalmail.android.ui.mail.SearchViewModel
 import com.cabalmail.android.ui.mail.disposeAdvanceTarget
 import com.cabalmail.android.ui.mail.fitsThreePanes
+import com.cabalmail.android.ui.mail.folderListFilter
 import com.cabalmail.android.ui.rules.RuleEditorScreen
 import com.cabalmail.android.ui.rules.RulesScreen
 import com.cabalmail.android.ui.rules.RulesViewModel
@@ -420,9 +421,8 @@ private fun MailNavGraph(
             FolderListScreen(
                 state = state,
                 countDisplay = preferences.folderCountDisplay,
-                subscribedExpanded = preferences.folderSectionSubscribedExpanded,
-                allExpanded = preferences.folderSectionAllExpanded,
-                onToggleSection = viewModel::toggleSection,
+                filter = preferences.folderListFilter,
+                onFilter = viewModel::setFilter,
                 onRefresh = viewModel::refresh,
                 onPoll = viewModel::poll,
                 onOpenFolder = { folder ->
@@ -517,9 +517,8 @@ private fun MailNavGraph(
                         FolderPane(
                             state = foldersState,
                             countDisplay = preferences.folderCountDisplay,
-                            subscribedExpanded = preferences.folderSectionSubscribedExpanded,
-                            allExpanded = preferences.folderSectionAllExpanded,
-                            onToggleSection = foldersViewModel::toggleSection,
+                            filter = preferences.folderListFilter,
+                            onFilter = foldersViewModel::setFilter,
                             selectedFolder = folder,
                             onOpenFolder = switchFolder,
                             onEmptyTrash = foldersViewModel::emptyTrash,
@@ -845,6 +844,13 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                     }
                 }
             },
+            onSetCollapsed = { set ->
+                scope.launch { container.preferences.update { it.copy(feedCollapsedFolders = set) } }
+            },
+            unreadOnly = preferences.feedFilterUnread,
+            onUnreadOnly = { unreadOnly ->
+                scope.launch { container.preferences.update { it.copy(feedFilterUnread = unreadOnly) } }
+            },
             onRefresh = viewModel::refresh,
             onPoll = viewModel::poll,
             onOpenScope = openScope,
@@ -938,6 +944,13 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                                     )
                                 }
                             }
+                        },
+                        onSetCollapsed = { set ->
+                            scope.launch { container.preferences.update { it.copy(feedCollapsedFolders = set) } }
+                        },
+                        unreadOnly = preferences.feedFilterUnread,
+                        onUnreadOnly = { unreadOnly ->
+                            scope.launch { container.preferences.update { it.copy(feedFilterUnread = unreadOnly) } }
                         },
                         onOpenScope = openScope,
                         onPoll = feedsViewModel::poll,

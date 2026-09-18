@@ -28,6 +28,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,6 +87,11 @@ fun FeedListScreen(
     modifier: Modifier = Modifier,
     /** Null until the management model exists; the add menu and row menus are hidden without it. */
     management: FeedManagementViewModel? = null,
+    /** Replaces the collapsed set wholesale (expand all / collapse all). */
+    onSetCollapsed: (Set<String>) -> Unit = {},
+    /** The Unread pill (versus All), persisted per device. */
+    unreadOnly: Boolean = true,
+    onUnreadOnly: (Boolean) -> Unit = {},
 ) {
     ForegroundPolling(onPoll, FEED_POLL_MS)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -107,18 +113,27 @@ fun FeedListScreen(
             )
         },
     ) { innerPadding ->
-        PullToRefreshBox(
-            isRefreshing = state.refreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.padding(innerPadding).fillMaxSize(),
-        ) {
-            FeedTreeContent(
+        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            FeedFilterPills(
                 state = state,
-                collapsed = collapsed,
-                onToggleCollapsed = onToggleCollapsed,
-                onOpenScope = onOpenScope,
-                management = management,
+                unreadOnly = unreadOnly,
+                onUnreadOnly = onUnreadOnly,
+                onSetCollapsed = onSetCollapsed,
             )
+            PullToRefreshBox(
+                isRefreshing = state.refreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                FeedTreeContent(
+                    state = state,
+                    collapsed = collapsed,
+                    unreadOnly = unreadOnly,
+                    onToggleCollapsed = onToggleCollapsed,
+                    onOpenScope = onOpenScope,
+                    management = management,
+                )
+            }
         }
     }
     if (management != null) {
@@ -150,6 +165,9 @@ fun FeedPane(
     management: FeedManagementViewModel? = null,
     scroll: FeedTreeScroll = FeedTreeScroll(),
     onScrollChange: (FeedTreeScroll) -> Unit = {},
+    onSetCollapsed: (Set<String>) -> Unit = {},
+    unreadOnly: Boolean = true,
+    onUnreadOnly: (Boolean) -> Unit = {},
 ) {
     ForegroundPolling(onPoll, FEED_POLL_MS)
     val listState = rememberLazyListState(scroll.index, scroll.offset)
@@ -168,15 +186,67 @@ fun FeedPane(
                 }
             },
         )
+        FeedFilterPills(
+            state = state,
+            unreadOnly = unreadOnly,
+            onUnreadOnly = onUnreadOnly,
+            onSetCollapsed = onSetCollapsed,
+        )
         FeedTreeContent(
             state = state,
             collapsed = collapsed,
+            unreadOnly = unreadOnly,
             onToggleCollapsed = onToggleCollapsed,
             onOpenScope = onOpenScope,
             selectedScope = selectedScope,
             management = management,
             listState = listState,
         )
+    }
+}
+
+/**
+ * The filter row under the top bar, styled like the message list's pills:
+ * All and Unread as a radio, with expand-all / collapse-all at the
+ * trailing edge. Both buttons disable when no folder has anything to fold.
+ */
+@Composable
+private fun FeedFilterPills(
+    state: FeedsUiState,
+    unreadOnly: Boolean,
+    onUnreadOnly: (Boolean) -> Unit,
+    onSetCollapsed: (Set<String>) -> Unit,
+) {
+    val collapsible = FeedTree.collapsibleFolderIds(state.folders, state.subscriptions)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+    ) {
+        FilterChip(
+            selected = !unreadOnly,
+            onClick = { onUnreadOnly(false) },
+            label = { Text(stringResource(R.string.filter_all)) },
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        FilterChip(
+            selected = unreadOnly,
+            onClick = { onUnreadOnly(true) },
+            label = { Text(stringResource(R.string.filter_unread)) },
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(onClick = { onSetCollapsed(emptySet()) }, enabled = collapsible.isNotEmpty()) {
+            Icon(
+                painterResource(R.drawable.ic_unfold_more),
+                contentDescription = stringResource(R.string.feeds_expand_all),
+            )
+        }
+        IconButton(onClick = { onSetCollapsed(collapsible) }, enabled = collapsible.isNotEmpty()) {
+            Icon(
+                painterResource(R.drawable.ic_unfold_less),
+                contentDescription = stringResource(R.string.feeds_collapse_all),
+            )
+        }
     }
 }
 
@@ -231,6 +301,7 @@ private fun FeedExportButton(management: FeedManagementViewModel) {
 private fun FeedTreeContent(
     state: FeedsUiState,
     collapsed: Set<String>,
+    unreadOnly: Boolean,
     onToggleCollapsed: (String) -> Unit,
     onOpenScope: (RssItemScope) -> Unit,
     modifier: Modifier = Modifier,
@@ -238,7 +309,15 @@ private fun FeedTreeContent(
     management: FeedManagementViewModel? = null,
     listState: LazyListState = rememberLazyListState(),
 ) {
-    val rows = FeedTree.rows(state.folders, state.subscriptions, state.unreadCounts, collapsed)
+    val rows =
+        FeedTree.rows(
+            state.folders,
+            state.subscriptions,
+            state.unreadCounts,
+            collapsed,
+            unreadOnly = unreadOnly,
+            keep = selectedScope,
+        )
     // The row whose long-press menu is open, by row id; one at a time.
     var menuFor by remember { mutableStateOf<String?>(null) }
     val allFeedsTitle = stringResource(R.string.feeds_all)

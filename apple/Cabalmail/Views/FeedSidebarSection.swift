@@ -113,9 +113,86 @@ struct FeedSidebarList: View {
     @State private var management: FeedManagementViewModel?
     @State private var actions = FeedManagementActions()
     @AppStorage("cabalmail.feeds.collapsedFolders") private var collapsedRaw = ""
+    /// The All / Unread pill (`FeedListFilter`): sticky per device, never
+    /// synced; the wide sidebar's Feeds section reads the same key.
+    @AppStorage("cabalmail.feeds.filter") private var filterRaw = FeedListFilter.defaultForFeeds.rawValue
     @State private var filter = ""
 
+    private var listFilter: FeedListFilter {
+        FeedListFilter(rawValue: filterRaw) ?? FeedListFilter.defaultForFeeds
+    }
+
     var body: some View {
+        VStack(spacing: 0) {
+            pillRow
+            list
+        }
+        .navigationTitle("Feeds")
+        #if !os(macOS)
+        // In the compact Feeds tab the Cabalmail mark stands in for the
+        // title, as on the Mail tab; the string stays for VoiceOver and the
+        // back button (see `SidebarBranding.swift`).
+        .compactBrandMarkTitle(accessibilityTitle: "Feeds")
+        #endif
+        .searchable(text: $filter, prompt: "Filter feeds")
+        .toolbar {
+            ToolbarItem {
+                FeedAddMenu(actions: actions, management: management)
+            }
+            ToolbarItem {
+                FeedExportButton(actions: actions, management: management)
+            }
+            ToolbarItem {
+                Button {
+                    Task { await model?.refresh() }
+                } label: {
+                    RefreshActivityIcon(isLoading: model?.isRefreshing ?? false)
+                        .accessibilityLabel("Refresh feeds")
+                }
+                .disabled(model == nil || model?.isRefreshing == true)
+                .accessibilityIdentifier("feeds.refresh")
+            }
+        }
+        .feedManagementSheets(actions, management: management, folders: model?.folders ?? [],
+                              subscriptions: model?.subscriptions ?? [], selection: $selection,
+                              handlesCommands: true, onRefresh: { Task { await model?.refresh() } })
+        .onChange(of: appState.sidebarTreeCommandTick) { _, _ in
+            // The Feeds menu's Expand all / Collapse all; the mail pair is
+            // the Mail tab's to answer.
+            guard let command = appState.pendingSidebarTreeCommand, !command.isMail else { return }
+            setAllCollapsed(command.collapses)
+        }
+        .task {
+            guard model == nil, let client = appState.client else { return }
+            management = FeedManagementViewModel(client: client)
+            let model = FeedSidebarViewModel(client: client)
+            self.model = model
+            await model.load()
+            await model.refresh()
+        }
+    }
+
+    /// All / Unread, plus the tree's Expand all / Collapse all — the same
+    /// row the wide sidebar's Feeds section draws.
+    private var pillRow: some View {
+        SidebarFilterPillRow(
+            pills: FeedListFilter.allCases.map { candidate in
+                SidebarFilterPill(id: candidate.rawValue, label: candidate.label, isOn: listFilter == candidate) {
+                    filterRaw = candidate.rawValue
+                }
+            },
+            identifierPrefix: "feed.filter",
+            expansion: SidebarFilterPillRow.Expansion(
+                hasCollapsible: !collapsible.isEmpty,
+                expandAll: { setAllCollapsed(false) },
+                collapseAll: { setAllCollapsed(true) }
+            )
+        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    private var list: some View {
         List(selection: $selection) {
             if let model {
                 if let error = model.errorMessage {
@@ -145,7 +222,8 @@ struct FeedSidebarList: View {
                     .contextMenu {
                         FeedSidebarContextMenu(scope: .all, row: nil, actions: actions, management: management)
                     }
-                    ForEach(model.rows(collapsed: collapsed, filter: filter)) { row in
+                    ForEach(model.rows(collapsed: collapsed, filter: filter,
+                                       unreadOnly: listFilter.unreadOnly, keep: selection)) { row in
                         FeedSidebarRowLabel(row: row, isSelected: selection == row.scope,
                                             isCollapsed: { collapsed.contains($0) },
                                             toggleCollapse: toggleCollapse)
@@ -160,44 +238,20 @@ struct FeedSidebarList: View {
                 ProgressView("Loading feeds…")
             }
         }
-        .navigationTitle("Feeds")
-        #if !os(macOS)
-        // In the compact Feeds tab the Cabalmail mark stands in for the
-        // title, as on the Mail tab; the string stays for VoiceOver and the
-        // back button (see `SidebarBranding.swift`).
-        .compactBrandMarkTitle(accessibilityTitle: "Feeds")
-        #endif
-        .searchable(text: $filter, prompt: "Filter feeds")
-        .toolbar {
-            ToolbarItem {
-                FeedAddMenu(actions: actions, management: management)
-            }
-            ToolbarItem {
-                FeedExportButton(actions: actions, management: management)
-            }
-            ToolbarItem {
-                Button {
-                    Task { await model?.refresh() }
-                } label: {
-                    RefreshActivityIcon(isLoading: model?.isRefreshing ?? false)
-                        .accessibilityLabel("Refresh feeds")
-                }
-                .disabled(model == nil || model?.isRefreshing == true)
-                .accessibilityIdentifier("feeds.refresh")
-            }
-        }
         .refreshable { await model?.refresh() }
-        .feedManagementSheets(actions, management: management, folders: model?.folders ?? [],
-                              subscriptions: model?.subscriptions ?? [], selection: $selection,
-                              handlesCommands: true, onRefresh: { Task { await model?.refresh() } })
-        .task {
-            guard model == nil, let client = appState.client else { return }
-            management = FeedManagementViewModel(client: client)
-            let model = FeedSidebarViewModel(client: client)
-            self.model = model
-            await model.load()
-            await model.refresh()
-        }
+    }
+
+    private var collapsible: Set<String> {
+        SidebarTreeExpansion.collapsibleFeedFolderIds(
+            folders: model?.folders ?? [],
+            subscriptions: model?.subscriptions ?? []
+        )
+    }
+
+    private func setAllCollapsed(_ collapse: Bool) {
+        collapsedRaw = SidebarTreeExpansion.collapsed(all: collapsible, collapse: collapse)
+            .sorted()
+            .joined(separator: "\n")
     }
 
     private var collapsed: Set<String> {

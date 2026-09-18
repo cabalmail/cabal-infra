@@ -48,6 +48,40 @@ final class FeedSidebarRowsTests: XCTestCase {
                                             collapsed: [], filter: "zzz"), [])
     }
 
+    /// The sidebar's Unread pill: feeds with unread, folders with unread
+    /// under them, nothing else — and the open scope stays regardless.
+    func testUnreadOnlyKeepsOnlyRowsWithUnreadUnderThem() {
+        let rows = FeedSidebarRows.rows(folders: folders, subscriptions: subs,
+                                        unreadCounts: ["s-df": 5], collapsed: [], unreadOnly: true)
+        XCTAssertEqual(rows.map(\.title), ["Tech", "Apple", "Daring Fireball"],
+                       "Art, Rust Blog and Comics! have nothing unread; Tech shows only because Apple does")
+    }
+
+    func testUnreadOnlyExemptsTheOpenScopeAndItsAncestors() {
+        let rows = FeedSidebarRows.rows(folders: folders, subscriptions: subs, unreadCounts: [:],
+                                        collapsed: [], unreadOnly: true, keep: .subscription("s-df"))
+        XCTAssertEqual(rows.map(\.title), ["Tech", "Apple", "Daring Fireball"],
+                       "reading the last unread item must not pull the open feed out of the sidebar")
+        let folderRows = FeedSidebarRows.rows(folders: folders, subscriptions: subs, unreadCounts: [:],
+                                              collapsed: [], unreadOnly: true, keep: .folder("apple"))
+        XCTAssertEqual(folderRows.map(\.title), ["Tech", "Apple"],
+                       "a kept folder brings its ancestors, not its caught-up contents")
+    }
+
+    func testUnreadOnlyStillHonoursCollapse() {
+        let rows = FeedSidebarRows.rows(folders: folders, subscriptions: subs,
+                                        unreadCounts: ["s-df": 5], collapsed: ["tech"], unreadOnly: true)
+        XCTAssertEqual(rows.map(\.title), ["Tech"],
+                       "the pill is a standing mode, not a search — a collapsed folder stays collapsed")
+    }
+
+    func testUnreadOnlyAndTextFilterCombine() {
+        let rows = FeedSidebarRows.rows(folders: folders, subscriptions: subs,
+                                        unreadCounts: ["s-df": 5, "s-rust": 1], collapsed: [],
+                                        filter: "rust", unreadOnly: true)
+        XCTAssertEqual(rows.map(\.title), ["Tech", "Rust Blog"])
+    }
+
     func testTotalUnread() {
         XCTAssertEqual(FeedSidebarRows.totalUnread(["a": 2, "b": 3]), 5)
         XCTAssertEqual(FeedSidebarRows.totalUnread([:]), 0)

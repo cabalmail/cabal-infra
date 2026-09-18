@@ -219,14 +219,17 @@ data class AppPreferences(
     val defaultSort: DefaultSort = DefaultSort.RECEIVED,
     val defaultSortDescending: Boolean = true,
     /**
-     * Mail-tab folder section disclosure, per device like the Apple clients'
-     * `@AppStorage` keys. All folders starts collapsed: it is mostly folders
-     * the user has explicitly opted out of proactive tracking on.
+     * Mail-tab folder list pills, per device like the Apple clients'
+     * `@AppStorage` keys: Subscribed and Unread are independent toggles,
+     * "All" is both off. Subscribed starts on: unsubscribed folders are
+     * mostly ones the user has opted out of proactive tracking on.
      */
-    val folderSectionSubscribedExpanded: Boolean = true,
-    val folderSectionAllExpanded: Boolean = false,
+    val folderFilterSubscribed: Boolean = true,
+    val folderFilterUnread: Boolean = false,
     /** Feed folders the user has collapsed in the feed list, per device like the Apple clients. */
     val feedCollapsedFolders: Set<String> = emptySet(),
+    /** The feed list's Unread pill (versus All), per device; starts on Unread. */
+    val feedFilterUnread: Boolean = true,
 ) {
     val effectiveRssMarkAsRead: MarkAsRead
         get() = rssMarkAsRead ?: MarkAsRead.MANUAL

@@ -1,9 +1,49 @@
 package com.cabalmail.android.ui.mail
 
 import com.cabalmail.kit.models.FolderStatus
+import com.cabalmail.kit.settings.AppPreferences
 
-/** The two collapsible sections of the mail tab's folder list. */
-enum class FolderSection { SUBSCRIBED, ALL }
+/** The pills above the mail tab's folder list, in display order. */
+enum class FolderFilterPill { ALL, SUBSCRIBED, UNREAD }
+
+/**
+ * The folder list's filter: [subscribed] and [unread] are independent
+ * toggles; "All" is the state with both off. Persisted per device (not
+ * synced), defaulting to Subscribed on, Unread off.
+ */
+data class FolderListFilter(
+    val subscribed: Boolean = true,
+    val unread: Boolean = false,
+) {
+    val isAll: Boolean get() = !subscribed && !unread
+
+    /** Whether [pill] draws selected. */
+    fun isOn(pill: FolderFilterPill): Boolean =
+        when (pill) {
+            FolderFilterPill.ALL -> isAll
+            FolderFilterPill.SUBSCRIBED -> subscribed
+            FolderFilterPill.UNREAD -> unread
+        }
+
+    /** The filter after a tap on [pill]: All clears both, the others flip themselves. */
+    fun toggled(pill: FolderFilterPill): FolderListFilter =
+        when (pill) {
+            FolderFilterPill.ALL -> FolderListFilter(subscribed = false, unread = false)
+            FolderFilterPill.SUBSCRIBED -> copy(subscribed = !subscribed)
+            FolderFilterPill.UNREAD -> copy(unread = !unread)
+        }
+
+    /**
+     * Whether the list needs every folder's STATUS to be honest: Unread
+     * without Subscribed shows unsubscribed folders too, and only their
+     * unseen counts say whether they belong.
+     */
+    val needsAllStatuses: Boolean get() = unread && !subscribed
+}
+
+/** The persisted (per-device) folder filter. */
+val AppPreferences.folderListFilter: FolderListFilter
+    get() = FolderListFilter(subscribed = folderFilterSubscribed, unread = folderFilterUnread)
 
 /**
  * The folder-switch menu's two groups (see [FolderSections.switchMenu]):
@@ -16,57 +56,52 @@ data class FolderSwitchMenu(
 )
 
 /**
- * The folder list's sectioning rules (parity with the Apple clients'
- * `FolderSectionDisclosure`): Subscribed expanded by default, All folders —
- * the full list, subscribed included — collapsed by default. Pure so the
- * rules are testable without Compose, the same reason Apple extracted its
- * copy out of the `List`.
+ * The folder list's filtering rules (parity with the Apple clients' folder
+ * pills). Pure so the rules are testable without Compose.
  */
 object FolderSections {
     /**
-     * Whether to draw the two sections at all. With nothing subscribed the
-     * split would leave the Subscribed section empty and everything a tap
-     * away, so the list falls back to the flat, unsectioned form.
+     * The rows the list draws, in server order: a folder passes when it is
+     * subscribed (if [FolderListFilter.subscribed]) and has unread mail (if
+     * [FolderListFilter.unread]). The [selected] folder is always kept, so
+     * the folder being read never vanishes when its last unread is read.
      */
-    fun sectioned(subscribed: Set<String>): Boolean = subscribed.isNotEmpty()
-
-    /** The Subscribed section's rows: the server-ordered list, filtered. */
-    fun subscribedRows(
+    fun rows(
         folders: List<String>,
         subscribed: Set<String>,
-    ): List<String> = folders.filter { it in subscribed }
-
-    /** The rows a section actually draws; collapsed means none. */
-    fun visibleRows(
-        rows: List<String>,
-        isExpanded: Boolean,
-    ): List<String> = if (isExpanded) rows else emptyList()
-
-    /**
-     * Rotation for the header chevron, in degrees: one glyph rotated
-     * (0° collapsed, 90° expanded), as in the Apple sidebar.
-     */
-    fun chevronRotation(isExpanded: Boolean): Float = if (isExpanded) 90f else 0f
+        statuses: Map<String, FolderStatus>,
+        filter: FolderListFilter,
+        selected: String?,
+    ): List<String> =
+        folders.filter { folder ->
+            folder == selected ||
+                (
+                    (!filter.subscribed || folder in subscribed) &&
+                        (!filter.unread || hasUnread(statuses[folder]))
+                )
+        }
 
     /**
      * The folders whose STATUS is fetched proactively on refresh:
      * subscription is the user's signal about attention, so unsubscribed
      * folders are strictly on-demand — matching the Apple clients. Without
      * subscription data (older responses, nothing subscribed) every folder
-     * keeps its badge, as before the sections existed.
+     * keeps its badge. [includeAll] widens the walk to every folder, for
+     * the one filter state that cannot be honest without it (see
+     * [FolderListFilter.needsAllStatuses]).
      */
     fun statusTargets(
         folders: List<String>,
         subscribed: Set<String>,
-    ): List<String> = if (subscribed.isEmpty()) folders else folders.filter { it in subscribed }
+        includeAll: Boolean = false,
+    ): List<String> = if (includeAll || subscribed.isEmpty()) folders else folders.filter { it in subscribed }
 
     /**
      * The folder-switch menu behind the message list's title: subscribed
      * folders at the top level, the rest one tap further under an "Other
-     * folders" submenu — the same split as the two sections here, with the
-     * same fallback: with nothing subscribed everything is top-level. Server
-     * order throughout, INBOX pinned first. Parity with the Apple clients'
-     * `FolderSwitchMenuPolicy`.
+     * folders" submenu, with the fallback that with nothing subscribed
+     * everything is top-level. Server order throughout, INBOX pinned
+     * first. Parity with the Apple clients' `FolderSwitchMenuPolicy`.
      */
     fun switchMenu(
         folders: List<String>,

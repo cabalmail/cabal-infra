@@ -12,6 +12,12 @@ extension FolderListView {
         isRefreshing = true
         defer { isRefreshing = false }
         await model.refresh()
+        // `refresh` walks the subscribed subset; the Unread pill without
+        // Subscribed is the one state that asked for every folder.
+        if folderFilter.needsEveryCount {
+            await model.refreshAllCounts()
+            didWalkAllCounts = true
+        }
     }
 
     /// Wide-sidebar header row (New / filter / Reload), shown below the
@@ -90,9 +96,15 @@ extension FolderListView {
                         .disabled(feedManagement == nil)
                         .accessibilityIdentifier("feeds.subscribe.empty")
                 } else {
+                    feedFilterPillRow(feedModel)
                     allFeedsRow(selection: selection, unread: FeedSidebarRows.totalUnread(feedModel.unreadCounts))
                     FeedSidebarRowsView(
-                        rows: feedModel.rows(collapsed: feedsCollapsed, filter: activeFilterText),
+                        rows: feedModel.rows(
+                            collapsed: feedsCollapsed,
+                            filter: activeFilterText,
+                            unreadOnly: feedListFilter.unreadOnly,
+                            keep: selection.wrappedValue
+                        ),
                         selection: selection,
                         toggleCollapse: toggleFeedCollapse,
                         isCollapsed: { feedsCollapsed.contains($0) },
@@ -178,15 +190,6 @@ extension FolderListView {
     func presentNewFolderSheet() {
         newFolderForm.reset()
         showNewFolderSheet = true
-    }
-
-    func filteredFolders(_ folders: [Folder]) -> [Folder] {
-        let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return folders }
-        return folders.filter { folder in
-            folder.path.lowercased().contains(needle)
-                || folder.name.lowercased().contains(needle)
-        }
     }
 
     func decodeCollapsed() -> Set<String> {

@@ -96,10 +96,7 @@
     <!-- Folders -->
     <string name="empty_trash">Empty Trash</string>
     <string name="empty_trash_confirm">This permanently deletes every message in Trash. It cannot be undone.</string>
-    <string name="folder_section_subscribed">Subscribed</string>
-    <string name="folder_section_all">All folders</string>
-    <string name="folder_section_expand">Expand %1$s</string>
-    <string name="folder_section_collapse">Collapse %1$s</string>
+    <string name="folder_filter_subscribed">Subscribed</string>
     <string name="switch_folder">Switch folder</string>
     <string name="other_folders">Other folders</string>
 
@@ -234,6 +231,8 @@
     <string name="feeds_empty_body">Subscribe to a feed to start reading here.</string>
     <string name="feeds_expand">Expand %1$s</string>
     <string name="feeds_collapse">Collapse %1$s</string>
+    <string name="feeds_expand_all">Expand all folders</string>
+    <string name="feeds_collapse_all">Collapse all folders</string>
     <plurals name="feeds_unread_count">
         <item quantity="one">%d unread</item>
         <item quantity="other">%d unread</item>
