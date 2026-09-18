@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.3] - 2026-09-18
+
+### Changed
+- Apple: **More of the message in a wide reading pane.** When the reading pane
+  is wide enough — an iPhone in landscape, a roomy macOS or iPad window — the
+  header sets the date, the sender-authentication chips, and any custom flags
+  in a column beside the From / To / Cc lines rather than stacked under them,
+  handing the rows it saves to the message body. The choice follows the pane's
+  width alone (scaled with Dynamic Type), not the device or orientation, and an
+  authentication warning still spans the full width. A message carrying many
+  custom flags now wraps its chips instead of squeezing them onto one line.
+
 ## [1.20.2] - 2026-09-17
 
 ### Fixed
