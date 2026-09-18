@@ -63,4 +63,36 @@ enum SectionLayoutPolicy {
     static func pinsCompactWidth(isPhone: Bool) -> Bool {
         isPhone
     }
+
+    /// Whether the reader should hide the section `TabView`'s bar while a
+    /// message is open.
+    ///
+    /// True on iOS: the reader uses the full bottom edge for its action
+    /// toolbar, which the compact tab bar would otherwise occlude, and a swipe
+    /// back to the message list brings the bar straight back. At regular width
+    /// there is no section tab bar at all (those sections live in the Settings
+    /// sheet), so hiding it is a no-op.
+    ///
+    /// False on visionOS, where the same `TabView` is drawn as the window's
+    /// leading *ornament* (`VisionSectionView`) rather than a bottom bar: it
+    /// competes with nothing, and it is the only route to Folders, Feeds,
+    /// Addresses, Settings and Search. Hiding it strands the user in the
+    /// reader — the regular-width split always has a reader, there is no
+    /// in-app way to get back to "No message selected", and the resume
+    /// restore re-opens the message on the next launch, so the tabs stay gone
+    /// across a relaunch too.
+    ///
+    /// - Parameter isVisionOS: whether the host is visionOS
+    ///   (`SectionLayoutPolicy.isVisionOS`).
+    static func readerHidesSectionTabBar(isVisionOS: Bool) -> Bool {
+        !isVisionOS
+    }
+
+    /// The host platform, as a value rather than a `#if`, so the rules above
+    /// can be exercised for both answers on whichever platform the tests run.
+    #if os(visionOS)
+    static let isVisionOS = true
+    #else
+    static let isVisionOS = false
+    #endif
 }
