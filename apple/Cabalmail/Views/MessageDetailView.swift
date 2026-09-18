@@ -98,6 +98,20 @@ struct MessageDetailView: View {
         #endif
     }
 
+    #if !os(macOS)
+    /// Visibility the reader asks for on the section `TabView`'s bar: `.hidden`
+    /// where that bar is the compact bottom one the action toolbar would
+    /// collide with, `.automatic` on visionOS, where the same `TabView` is the
+    /// leading ornament carrying the only entry points to Folders, Feeds,
+    /// Addresses, Settings and Search. Rule in
+    /// `SectionLayoutPolicy.readerHidesSectionTabBar`.
+    var sectionTabBarVisibility: Visibility {
+        SectionLayoutPolicy.readerHidesSectionTabBar(
+            isVisionOS: SectionLayoutPolicy.isVisionOS
+        ) ? .hidden : .automatic
+    }
+    #endif
+
     var body: some View {
         GeometryReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
@@ -152,10 +166,10 @@ struct MessageDetailView: View {
         // Reading a message uses the full bottom edge for the action toolbar;
         // the compact-width section `TabView`'s bottom tab bar would otherwise
         // occlude it. The tab bar reappears automatically when the user swipes
-        // back to the message list. At regular width (iPad / visionOS) there's
-        // no section tab bar - those sections live in the Settings sheet now -
-        // so this is a no-op there.
-        .toolbar(.hidden, for: .tabBar)
+        // back to the message list. Not on visionOS, whose section `TabView` is
+        // the window's leading ornament and the only route to the other five
+        // sections - see `SectionLayoutPolicy.readerHidesSectionTabBar`.
+        .toolbar(sectionTabBarVisibility, for: .tabBar)
         #endif
         .toolbar { toolbarContent }
         // Window-scoped keyboard equivalents, hosted where the toolbar can't

@@ -58,4 +58,20 @@ final class SectionLayoutPolicyTests: XCTestCase {
             .compactTabs
         )
     }
+
+    func testIOSReaderHidesTheSectionTabBar() {
+        // The compact bottom tab bar occludes the reader's action toolbar, and
+        // a swipe back to the list restores it — so hiding it stays correct.
+        XCTAssertTrue(SectionLayoutPolicy.readerHidesSectionTabBar(isVisionOS: false))
+    }
+
+    func testVisionOSReaderKeepsTheSectionOrnament() {
+        // visionOS draws the section `TabView` as the window's leading
+        // ornament, which the reader does not compete with and which carries
+        // the only entry points to Folders, Feeds, Addresses, Settings and
+        // Search. Hiding it left an open message with no way back to any of
+        // them, and the resume restore re-opened that message on the next
+        // launch (#1627).
+        XCTAssertFalse(SectionLayoutPolicy.readerHidesSectionTabBar(isVisionOS: true))
+    }
 }
