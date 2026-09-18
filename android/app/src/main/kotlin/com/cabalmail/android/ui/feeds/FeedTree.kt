@@ -24,8 +24,12 @@ data class FeedTreeRow(
  * feeds by title; root-level feeds after the whole folder tree. A
  * collapsed folder hides its contents unless a filter is active, when the
  * tree auto-expands; a folder is shown only if a feed under it matches.
- * Unread counts roll up over the unfiltered tree. Pure, so it unit-tests
- * without Compose.
+ * With [rows]' `unreadOnly`, a feed is shown only with unread items and a
+ * folder only with a positive roll-up (a folder with none hides its whole
+ * subtree); the text filter and the unread filter combine. The row whose
+ * scope is `keep` — the open one — is always shown, with its ancestors, so
+ * the selection never disappears from under the reader. Unread counts roll
+ * up over the unfiltered tree. Pure, so it unit-tests without Compose.
  */
 object FeedTree {
     fun rows(
@@ -34,26 +38,48 @@ object FeedTree {
         unreadCounts: Map<String, Int>,
         collapsed: Set<String> = emptySet(),
         filter: String = "",
+        unreadOnly: Boolean = false,
+        keep: RssItemScope? = null,
     ): List<FeedTreeRow> {
         val needle = filter.trim().lowercase()
         val foldersByParent = folders.groupBy { it.parentFolderId }
         val subsByFolder = subscriptions.groupBy { it.folderId }
+        val keptFolder = (keep as? RssItemScope.Folder)?.folderId
+        val keptSubscription = (keep as? RssItemScope.Subscription)?.subscriptionId
 
         fun childFolders(parent: String) =
             foldersByParent[parent].orEmpty().sortedWith(compareBy({ it.displayOrder }, { it.name.lowercase() }))
+
+        fun unreadUnder(folderId: String): Int =
+            subsByFolder[folderId].orEmpty().sumOf { unreadCounts[it.subscriptionId] ?: 0 } +
+                childFolders(folderId).sumOf { unreadUnder(it.folderId) }
 
         fun feedsIn(folderId: String) =
             subsByFolder[folderId]
                 .orEmpty()
                 .filter { needle.isEmpty() || it.displayTitle.lowercase().contains(needle) }
-                .sortedBy { it.displayTitle.lowercase() }
+                .filter {
+                    !unreadOnly || (unreadCounts[it.subscriptionId] ?: 0) > 0 || it.subscriptionId == keptSubscription
+                }.sortedBy { it.displayTitle.lowercase() }
+
+        /** Whether the kept scope lives at or under this folder, which pins the folder's whole ancestry. */
+        fun holdsKept(folderId: String): Boolean =
+            folderId == keptFolder ||
+                (
+                    keptSubscription != null &&
+                        subsByFolder[folderId].orEmpty().any { it.subscriptionId == keptSubscription }
+                ) ||
+                childFolders(folderId).any { holdsKept(it.folderId) }
 
         fun hasMatch(folderId: String): Boolean =
             feedsIn(folderId).isNotEmpty() || childFolders(folderId).any { hasMatch(it.folderId) }
 
-        fun unreadUnder(folderId: String): Int =
-            subsByFolder[folderId].orEmpty().sumOf { unreadCounts[it.subscriptionId] ?: 0 } +
-                childFolders(folderId).sumOf { unreadUnder(it.folderId) }
+        fun shown(folderId: String): Boolean =
+            holdsKept(folderId) ||
+                (
+                    (needle.isEmpty() || hasMatch(folderId)) &&
+                        (!unreadOnly || unreadUnder(folderId) > 0)
+                )
 
         val rows = ArrayList<FeedTreeRow>()
 
@@ -76,7 +102,7 @@ object FeedTree {
             depth: Int,
         ) {
             for (folder in childFolders(parent)) {
-                if (needle.isNotEmpty() && !hasMatch(folder.folderId)) continue
+                if (!shown(folder.folderId)) continue
                 val children = childFolders(folder.folderId)
                 val feeds = feedsIn(folder.folderId)
                 rows +=
@@ -101,4 +127,17 @@ object FeedTree {
 
     /** The All Feeds badge: every subscription's unread count summed. */
     fun totalUnread(unreadCounts: Map<String, Int>): Int = unreadCounts.values.sum()
+
+    /**
+     * The folders "collapse all" folds: those with a child folder or a feed
+     * inside. An empty folder has nothing to hide, so it is left alone and
+     * the expand/collapse-all buttons disable when this is empty.
+     */
+    fun collapsibleFolderIds(
+        folders: List<RssFolder>,
+        subscriptions: List<RssSubscription>,
+    ): Set<String> {
+        val parents = folders.map { it.parentFolderId }.toSet() + subscriptions.map { it.folderId }.toSet()
+        return folders.map { it.folderId }.filter { it in parents }.toSet()
+    }
 }

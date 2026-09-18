@@ -33,9 +33,9 @@ Every address lives on its own subdomain (`foo@bar.example.com`) and delivers to
 
 <img src="./app_screens/ios_inbox.png" alt="Inbox on iPhone: filter pills, sender avatars, sort and select controls" width="300" />
 
-- **Folders.** Create, delete, and subscribe to folders; favorites sort to the top of pickers. Subscribed folders are refreshed proactively; unsubscribed folders load only when you open them. The folder name at the top of the message list is a menu: tap it to jump to another subscribed folder, or to any other folder under "Other folders".
+- **Folders.** Create, delete, and subscribe to folders; favorites sort to the top of pickers. Subscribed folders are refreshed proactively; unsubscribed folders load only when you open them. The folder name at the top of the message list is a menu: tap it to jump to another subscribed folder, or to any other folder under "Other folders". Pills above the folder list narrow it: **All**, or any combination of **Subscribed** and **Unread** (the folder you are reading always stays listed). Choosing Unread on its own fetches a count for every folder, since unsubscribed folders are not tracked otherwise. The pill choice is remembered on each device. Nested folders can be expanded or collapsed at once from the buttons beside the pills (and, on the Mac, from the Mailbox menu).
 
-  <img src="./app_screens/ios_folders.png" alt="Folder list on iPhone: Subscribed and All folders sections" width="300" />
+  <img src="./app_screens/ios_folders.png" alt="Folder list on iPhone: All, Subscribed, and Unread pills above the folder tree" width="300" />
 - **Reading.** Remote images are blocked by default (load them per message; loading can let a sender track you). A sender-authentication line shows the SPF/DKIM/DMARC verdicts stamped by your own relay, or "not verified" when there are none. Sender avatars come from your Contacts, the sender's published BIMI logo, or initials.
 
   <img src="./app_screens/ios_reader.png" alt="Reading a message on iPhone: SPF, DKIM, and DMARC verdicts under the sender" width="300" />

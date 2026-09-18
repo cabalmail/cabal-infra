@@ -36,6 +36,14 @@ extension AppState {
         feedCommandTick += 1
     }
 
+    /// Names the sidebar-tree command (Expand all / Collapse all on the mail
+    /// or feed tree) and bumps the tick both sidebars observe; each applies
+    /// the commands for the tree it owns.
+    func requestSidebarTree(_ command: SidebarTreeCommand) {
+        pendingSidebarTreeCommand = command
+        sidebarTreeCommandTick += 1
+    }
+
     /// Tear down the feed poller. Called on sign-out; safe if it never ran.
     func stopFeedRefreshPolling() {
         feedRefreshTask?.cancel()

@@ -1,7 +1,5 @@
 package com.cabalmail.android.ui.mail
 
-import androidx.annotation.StringRes
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,18 +7,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -66,9 +62,8 @@ fun FolderListScreen(
     onPoll: () -> Unit = {},
     /** What the per-folder badge shows (plan §6.3 "Folder count display"). */
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
-    subscribedExpanded: Boolean = true,
-    allExpanded: Boolean = false,
-    onToggleSection: (FolderSection) -> Unit = {},
+    filter: FolderListFilter = FolderListFilter(),
+    onFilter: (FolderFilterPill) -> Unit = {},
 ) {
     ForegroundPolling(onPoll)
 
@@ -92,20 +87,21 @@ fun FolderListScreen(
             )
         },
     ) { innerPadding ->
-        PullToRefreshBox(
-            isRefreshing = state.refreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.padding(innerPadding).fillMaxSize(),
-        ) {
-            FolderListContent(
-                state = state,
-                countDisplay = countDisplay,
-                onOpenFolder = onOpenFolder,
-                onEmptyTrash = onEmptyTrash,
-                subscribedExpanded = subscribedExpanded,
-                allExpanded = allExpanded,
-                onToggleSection = onToggleSection,
-            )
+        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            FolderFilterPills(filter = filter, onFilter = onFilter)
+            PullToRefreshBox(
+                isRefreshing = state.refreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                FolderListContent(
+                    state = state,
+                    countDisplay = countDisplay,
+                    filter = filter,
+                    onOpenFolder = onOpenFolder,
+                    onEmptyTrash = onEmptyTrash,
+                )
+            }
         }
     }
 }
@@ -129,9 +125,8 @@ fun FolderPane(
     /** Silent refresh, driven every minute while resumed (plan §7.3). */
     onPoll: () -> Unit = {},
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
-    subscribedExpanded: Boolean = true,
-    allExpanded: Boolean = false,
-    onToggleSection: (FolderSection) -> Unit = {},
+    filter: FolderListFilter = FolderListFilter(),
+    onFilter: (FolderFilterPill) -> Unit = {},
     scroll: FolderPaneScroll = FolderPaneScroll(),
     onScrollChange: (FolderPaneScroll) -> Unit = {},
 ) {
@@ -147,15 +142,14 @@ fun FolderPane(
         // A bar of its own keeps the rows aligned with the neighbouring
         // panes' content, under their top bars.
         TopAppBar(title = { BrandMark() })
+        FolderFilterPills(filter = filter, onFilter = onFilter)
         FolderListContent(
             state = state,
             countDisplay = countDisplay,
+            filter = filter,
             onOpenFolder = onOpenFolder,
             onEmptyTrash = onEmptyTrash,
             selectedFolder = selectedFolder,
-            subscribedExpanded = subscribedExpanded,
-            allExpanded = allExpanded,
-            onToggleSection = onToggleSection,
             listState = listState,
         )
     }
@@ -170,33 +164,57 @@ private fun BrandMark() {
     )
 }
 
+/**
+ * The filter row under the top bar, styled like the message list's pills.
+ * Subscribed and Unread are independent toggles; All is the state with
+ * both off (see [FolderListFilter]).
+ */
+@Composable
+private fun FolderFilterPills(
+    filter: FolderListFilter,
+    onFilter: (FolderFilterPill) -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        FolderFilterPill.entries.forEach { pill ->
+            FilterChip(
+                selected = filter.isOn(pill),
+                onClick = { onFilter(pill) },
+                label = { Text(stringResource(pill.labelRes())) },
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+    }
+}
+
+private fun FolderFilterPill.labelRes(): Int =
+    when (this) {
+        FolderFilterPill.ALL -> R.string.filter_all
+        FolderFilterPill.SUBSCRIBED -> R.string.folder_filter_subscribed
+        FolderFilterPill.UNREAD -> R.string.filter_unread
+    }
+
 /** The folder rows shared by the full-screen list and the wide-window pane. */
 @Composable
 private fun FolderListContent(
     state: FoldersUiState,
     countDisplay: FolderCountDisplay,
+    filter: FolderListFilter,
     onOpenFolder: (String) -> Unit,
     onEmptyTrash: () -> Unit,
     modifier: Modifier = Modifier,
     selectedFolder: String? = null,
-    subscribedExpanded: Boolean = true,
-    allExpanded: Boolean = false,
-    onToggleSection: (FolderSection) -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
 
-    val folders = state.folders.orEmpty()
-    val folderRow: @Composable (String) -> Unit = { folder ->
-        FolderRow(
-            folder = folder,
-            status = state.statuses[folder],
-            countDisplay = countDisplay,
-            selected = folder == selectedFolder,
-            onOpenFolder = onOpenFolder,
-            onConfirmEmptyTrash = { confirmingEmptyTrash = true },
+    val rows =
+        FolderSections.rows(
+            folders = state.folders.orEmpty(),
+            subscribed = state.subscribed,
+            statuses = state.statuses,
+            filter = filter,
+            selected = selectedFolder,
         )
-    }
     LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
         state.error?.let { message ->
             item {
@@ -208,32 +226,16 @@ private fun FolderListContent(
                 )
             }
         }
-        if (FolderSections.sectioned(state.subscribed)) {
-            // Two sections, as in the Apple sidebar: Subscribed, then the
-            // full list. A folder can appear in both, so row keys carry the
-            // section.
-            folderSection(
-                section = FolderSection.SUBSCRIBED,
-                title = R.string.folder_section_subscribed,
-                rows = FolderSections.subscribedRows(folders, state.subscribed),
-                expanded = subscribedExpanded,
-                onToggleSection = onToggleSection,
-                folderRow = folderRow,
+        items(rows, key = { it }) { folder ->
+            FolderRow(
+                folder = folder,
+                status = state.statuses[folder],
+                countDisplay = countDisplay,
+                selected = folder == selectedFolder,
+                onOpenFolder = onOpenFolder,
+                onConfirmEmptyTrash = { confirmingEmptyTrash = true },
             )
-            folderSection(
-                section = FolderSection.ALL,
-                title = R.string.folder_section_all,
-                rows = folders,
-                expanded = allExpanded,
-                onToggleSection = onToggleSection,
-                folderRow = folderRow,
-            )
-        } else {
-            // Nothing subscribed (or an older server): the flat list.
-            items(folders, key = { it }) { folder ->
-                folderRow(folder)
-                HorizontalDivider()
-            }
+            HorizontalDivider()
         }
     }
 
@@ -257,66 +259,6 @@ private fun FolderListContent(
                     Text(stringResource(R.string.cancel))
                 }
             },
-        )
-    }
-}
-
-/** One collapsible section: a header item plus the rows it discloses. */
-private fun LazyListScope.folderSection(
-    section: FolderSection,
-    @StringRes title: Int,
-    rows: List<String>,
-    expanded: Boolean,
-    onToggleSection: (FolderSection) -> Unit,
-    folderRow: @Composable (String) -> Unit,
-) {
-    item(key = "header:${section.name}") {
-        SectionHeader(
-            title = stringResource(title),
-            expanded = expanded,
-            onToggle = { onToggleSection(section) },
-        )
-    }
-    items(
-        FolderSections.visibleRows(rows, expanded),
-        key = { "${section.name}:$it" },
-    ) { folder ->
-        folderRow(folder)
-        HorizontalDivider()
-    }
-}
-
-@Composable
-private fun SectionHeader(
-    title: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
-    val rotation by animateFloatAsState(FolderSections.chevronRotation(expanded), label = "chevron")
-    val actionLabel =
-        stringResource(
-            if (expanded) R.string.folder_section_collapse else R.string.folder_section_expand,
-            title,
-        )
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClickLabel = actionLabel, onClick = onToggle)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-    ) {
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.rotate(rotation),
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 4.dp),
         )
     }
 }

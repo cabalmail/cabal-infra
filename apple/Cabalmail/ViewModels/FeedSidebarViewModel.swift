@@ -101,9 +101,14 @@ final class FeedSidebarViewModel {
         }
     }
 
-    func rows(collapsed: Set<String>, filter: String) -> [FeedSidebarRow] {
+    func rows(
+        collapsed: Set<String>,
+        filter: String,
+        unreadOnly: Bool = false,
+        keep: RssItemScope? = nil
+    ) -> [FeedSidebarRow] {
         FeedSidebarRows.rows(folders: folders, subscriptions: subscriptions, unreadCounts: unreadCounts,
-                             collapsed: collapsed, filter: filter)
+                             collapsed: collapsed, filter: filter, unreadOnly: unreadOnly, keep: keep)
     }
 
 }

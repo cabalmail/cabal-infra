@@ -2,12 +2,12 @@ import XCTest
 import CabalmailKit
 @testable import Cabalmail
 
-// The sidebar's two sections used to leave both the expand/collapse control
-// and the row gating to `Section(_:isExpanded:)`. macOS and visionOS honoured
-// the binding and drew no control, so "All folders" — collapsed by default —
-// could never be opened and Sent/Trash/Drafts were unreachable (#1184);
-// iPadOS drew every row whatever the binding said. These pin the rule now
-// that it is ours.
+// The sidebar's sections used to leave both the expand/collapse control and
+// the row gating to `Section(_:isExpanded:)`. macOS and visionOS honoured the
+// binding and drew no control, so a section collapsed by default could never
+// be opened and Sent/Trash/Drafts were unreachable (#1184); iPadOS drew every
+// row whatever the binding said. These pin the rule now that it is ours. The
+// wide sidebar's Mail and Feeds sections still ride on it.
 final class FolderSectionDisclosureTests: XCTestCase {
 
     private func folder(_ path: String, subscribed: Bool = true) -> Folder {
@@ -53,13 +53,13 @@ final class FolderSectionDisclosureTests: XCTestCase {
 
     func testTheHeaderControlNamesTheActionItWillTake() {
         XCTAssertEqual(
-            FolderSectionDisclosure.accessibilityLabel(title: "All folders", isExpanded: false),
-            "Expand All folders",
+            FolderSectionDisclosure.accessibilityLabel(title: "Mail", isExpanded: false),
+            "Expand Mail",
             "a collapsed section's control offers to open it — the whole defect was that there was nothing to say this"
         )
         XCTAssertEqual(
-            FolderSectionDisclosure.accessibilityLabel(title: "All folders", isExpanded: true),
-            "Collapse All folders"
+            FolderSectionDisclosure.accessibilityLabel(title: "Mail", isExpanded: true),
+            "Collapse Mail"
         )
     }
 }

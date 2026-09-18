@@ -239,7 +239,22 @@ final class FolderListViewModel {
     /// subscribed folders fills in noticeably faster than the previous
     /// sequential walk.
     func refreshSubscribedCounts() async {
-        let targets = subscribedFolders
+        await refreshCounts(of: subscribedFolders)
+    }
+
+    /// Walk *every* folder's STATUS. The one deliberate exception to
+    /// "unsubscribed folders are on-demand": the sidebar's Unread pill,
+    /// chosen without Subscribed, can't be honest without a count for each
+    /// folder, so choosing it is the demand. `FolderListView` calls this
+    /// when the pill enters that state and on each manual refresh while it
+    /// stays there; the proactive paths (`refresh`, `createFolder`) keep
+    /// walking the subscribed subset only.
+    func refreshAllCounts() async {
+        await refreshCounts(of: folders)
+    }
+
+    private func refreshCounts(of targets: [Folder]) async {
+        let targets = targets
             .map(\.path)
             .filter { $0.caseInsensitiveCompare("INBOX") != .orderedSame }
         guard !targets.isEmpty else { return }
@@ -290,7 +305,7 @@ final class FolderListViewModel {
         FolderTree.sidebarOrder(input, dropNoselectUserFolders: true)
     }
 
-    // Per-row indentation and the collapse chevron are section-scoped
-    // (Subscribed and All folders draw different lists), so they're
-    // computed in `FolderSectionRows` rather than here.
+    // Per-row indentation and the collapse chevron depend on which folders
+    // the filter pills leave in the tree, so they're computed in
+    // `FolderSectionRows` against that list rather than here.
 }

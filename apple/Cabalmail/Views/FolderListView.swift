@@ -58,15 +58,27 @@ struct FolderListView: View {
     /// this fetch), and the saved-position resume probe runs.
     var onFoldersLoaded: ([Folder]) -> Void = { _ in }
 
-    // Section expand/collapse state - persisted so the sidebar comes up the
-    // way the user left it. Subscribed defaults open (that's where the
-    // user's attention lives); "All folders" defaults collapsed because
-    // it's a long list of folders the user has explicitly opted out of
-    // proactive tracking on.
-    @AppStorage("cabalmail.folder.section.subscribed.expanded")
-    private var subscribedExpanded: Bool = true
-    @AppStorage("cabalmail.folder.section.all.expanded")
-    private var allExpanded: Bool = false
+    // The wide sidebar's Mail section disclosure — persisted so the sidebar
+    // comes up the way the user left it. Defaults open: the mail tree is the
+    // column's reason to exist. (The old Subscribed / All folders sections
+    // and their keys are gone; the filter pills below replaced them.)
+    @AppStorage("cabalmail.folder.section.mail.expanded")
+    private var mailExpanded: Bool = true
+    // The filter pills (`FolderListFilter`), one key per toggle. Sticky per
+    // device across relaunches and never synced — which folders a sidebar
+    // shows is a property of the screen it is on, not of the account.
+    @AppStorage("cabalmail.folder.filter.subscribed")
+    var filterSubscribed: Bool = FolderListFilter.defaultForMail.subscribed
+    @AppStorage("cabalmail.folder.filter.unread")
+    var filterUnread: Bool = FolderListFilter.defaultForMail.unread
+    // The Feeds section's pill (`FeedListFilter`), wide layouts only; the
+    // compact Feeds tab's `FeedSidebarList` reads the same key.
+    @AppStorage("cabalmail.feeds.filter")
+    var feedFilterRaw: String = FeedListFilter.defaultForFeeds.rawValue
+    /// Whether this session has already walked every folder's STATUS for
+    /// the Unread pill (see `FolderListFilter.needsEveryCount`). Toggling
+    /// the pill again does not walk again; a manual refresh does, by itself.
+    @State var didWalkAllCounts = false
     // Per-folder collapse state. Stored as a newline-joined string because
     // @AppStorage doesn't natively support Set; folder paths cannot contain
     // newlines so this is unambiguous.
@@ -102,6 +114,9 @@ struct FolderListView: View {
             if let externalFilter {
                 wideSidebarHeader(filter: externalFilter)
             }
+            // The filter pills sit above the tree on every layout, where the
+            // message list keeps its own row of pills.
+            mailFilterPillRow
             feedManagementHost(folderList)
         }
     }
@@ -117,56 +132,40 @@ struct FolderListView: View {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
-                // Each section is a tree over its own folder list — Subscribed
-                // is a subset of All folders, and the filter narrows both — so
-                // both go through `FolderSectionRows`, which computes depth,
-                // chevron and collapse against the list it's handed.
-                let subscribedRows = FolderSectionRows.rows(
-                    for: filteredFolders(model.subscribedFolders),
-                    collapsed: collapsedSet,
-                    activeSelection: selection?.path
-                )
-                let allRows = FolderSectionRows.rows(
+                // One tree over whatever the pills and the text filter leave
+                // in; `FolderSectionRows` computes depth, chevron and collapse
+                // against that list, so a folder whose parent is filtered out
+                // draws flush rather than orphaned.
+                let rows = FolderSectionRows.rows(
                     for: filteredFolders(model.folders),
                     collapsed: collapsedSet,
                     activeSelection: selection?.path
                 )
-                if !model.subscribedFolders.isEmpty {
-                    // A plain `Section` with the expansion applied by us, not
-                    // `Section(_:isExpanded:)`: that hands the list style both
-                    // the gating and the control, and no two platforms decide
-                    // them alike — macOS and visionOS honoured the binding and
-                    // drew no control, stranding the user in a section that
-                    // defaults collapsed, while iPadOS drew the rows whatever
-                    // the binding said (#1184). `FolderSectionDisclosure` holds
-                    // the rule; `sectionHeader` draws the chevron.
-                    //
-                    // Still not a `DisclosureGroup` holding the rows: that is
-                    // itself a row of the enclosing `List`, so its header shares
-                    // the row-view recycling pool with the folder rows, and on
-                    // macOS the header slot inherits a stale row image when a
-                    // section's content count changes (#1070 — the "All folders"
-                    // header drawn as a ghost of the selected folder after a
-                    // create or delete). A `Section` header is list chrome
-                    // instead, so it is not a recycling candidate.
+                if feedSelection != nil {
+                    // Wide sidebar: the tree shares the column with the Feeds
+                    // section, so it gets a header of its own to sit beside
+                    // that one. A plain `Section` with the expansion applied
+                    // by us, not `Section(_:isExpanded:)`: that hands the list
+                    // style both the gating and the control, and no two
+                    // platforms decide them alike (#1184).
+                    // `FolderSectionDisclosure` holds the rule; `sectionHeader`
+                    // draws the chevron. Still not a `DisclosureGroup` holding
+                    // the rows: that is itself a row of the enclosing `List`,
+                    // so its header shares the row-view recycling pool with
+                    // the folder rows and on macOS inherits a stale row image
+                    // when the section's content count changes (#1070). A
+                    // `Section` header is list chrome instead.
                     Section {
-                        ForEach(
-                            FolderSectionDisclosure.visibleRows(subscribedRows, isExpanded: subscribedExpanded)
-                        ) { row in
+                        ForEach(FolderSectionDisclosure.visibleRows(rows, isExpanded: mailExpanded)) { row in
                             folderRow(row, model: model, collapsed: collapsedSet)
                         }
                     } header: {
-                        sectionHeader("Subscribed", key: "subscribed", isExpanded: $subscribedExpanded)
-                    }
-                    Section {
-                        ForEach(FolderSectionDisclosure.visibleRows(allRows, isExpanded: allExpanded)) { row in
-                            folderRow(row, model: model, collapsed: collapsedSet)
-                        }
-                    } header: {
-                        sectionHeader("All folders", key: "all", isExpanded: $allExpanded)
+                        sectionHeader("Mail", key: "mail", isExpanded: $mailExpanded)
                     }
                 } else {
-                    ForEach(allRows) { row in
+                    // Compact and visionOS: the tree is the whole list, and a
+                    // header naming it would only say what the tab already says.
+                    ForEach(rows) { row in
                         folderRow(row, model: model, collapsed: collapsedSet)
                     }
                 }
@@ -213,7 +212,7 @@ struct FolderListView: View {
             }
         }
         .refreshable {
-            await model?.refresh()
+            await manualRefresh()
         }
         .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
         .confirmationDialog(
@@ -253,6 +252,18 @@ struct FolderListView: View {
         .onChange(of: selection?.path) { _, newPath in
             autoExpandAncestors(of: newPath)
             lazyFetchCountIfNeeded(path: newPath)
+        }
+        // The Unread pill without Subscribed needs every folder's count;
+        // walk them once per session the moment it is chosen (a manual
+        // refresh walks again). The key also carries the folder count, so a
+        // relaunch that restores the pill from `@AppStorage` walks once the
+        // list has loaded rather than against the empty one.
+        .onChange(of: allCountsWalkKey, initial: true) { _, _ in
+            walkAllCountsIfNeeded()
+        }
+        .onChange(of: appState.sidebarTreeCommandTick) { _, _ in
+            guard let command = appState.pendingSidebarTreeCommand else { return }
+            applySidebarTreeCommand(command)
         }
         .confirmationDialog(
             "Empty Trash?",

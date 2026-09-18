@@ -7,9 +7,11 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.userMessage
+import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.models.FolderStatus
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -69,20 +71,7 @@ class FoldersViewModel(
                 mutableState.update {
                     it.copy(folders = folders, subscribed = subscribed, refreshing = false, error = null)
                 }
-                // Unread badges arrive as their STATUS calls land; a folder
-                // whose STATUS fails just shows no badge. Proactive STATUS
-                // is scoped to subscribed folders (see FolderSections).
-                val statuses =
-                    FolderSections
-                        .statusTargets(folders, subscribed)
-                        .map { folder ->
-                            async {
-                                folder to runCatching { api.folderStatus(folder) }.getOrNull()
-                            }
-                        }.awaitAll()
-                        .mapNotNull { (folder, status) -> status?.let { folder to it } }
-                        .toMap()
-                mutableState.update { it.copy(statuses = statuses) }
+                loadStatuses(api, folders, subscribed, includeAll = currentFilter().needsAllStatuses)
             } catch (exception: Exception) {
                 if (!quiet) {
                     mutableState.update {
@@ -93,15 +82,56 @@ class FoldersViewModel(
         }
     }
 
-    /** Flips a section's disclosure; persisted on the device via preferences. */
-    fun toggleSection(section: FolderSection) {
+    /**
+     * Unread badges arrive as their STATUS calls land; a folder whose
+     * STATUS fails just keeps whatever it showed. Proactive STATUS is
+     * scoped to subscribed folders (see [FolderSections.statusTargets])
+     * unless the filter needs every folder's count. Results merge into the
+     * map already held, so a subscribed-only pass never discards counts an
+     * all-folder pass fetched earlier; folders no longer listed drop out.
+     */
+    private suspend fun loadStatuses(
+        api: ApiClient,
+        folders: List<String>,
+        subscribed: Set<String>,
+        includeAll: Boolean,
+    ) = coroutineScope {
+        val statuses =
+            FolderSections
+                .statusTargets(folders, subscribed, includeAll)
+                .map { folder ->
+                    async {
+                        folder to runCatching { api.folderStatus(folder) }.getOrNull()
+                    }
+                }.awaitAll()
+                .mapNotNull { (folder, status) -> status?.let { folder to it } }
+                .toMap()
+        mutableState.update { it.copy(statuses = (it.statuses + statuses).filterKeys { key -> key in folders }) }
+    }
+
+    private fun currentFilter(): FolderListFilter = container.preferences.preferences.value.folderListFilter
+
+    /**
+     * Applies a tap on a pill (see [FolderListFilter.toggled]); persisted
+     * on the device via preferences. Flipping into Unread-without-Subscribed
+     * walks STATUS for every folder, since the list cannot be honest about
+     * unsubscribed folders with only the subscribed counts in hand.
+     */
+    fun setFilter(pill: FolderFilterPill) {
         viewModelScope.launch {
+            val before = currentFilter()
+            val after = before.toggled(pill)
             container.preferences.update { prefs ->
-                when (section) {
-                    FolderSection.SUBSCRIBED ->
-                        prefs.copy(folderSectionSubscribedExpanded = !prefs.folderSectionSubscribedExpanded)
-                    FolderSection.ALL ->
-                        prefs.copy(folderSectionAllExpanded = !prefs.folderSectionAllExpanded)
+                prefs.copy(folderFilterSubscribed = after.subscribed, folderFilterUnread = after.unread)
+            }
+            if (after.needsAllStatuses && !before.needsAllStatuses) {
+                val snapshot = mutableState.value
+                val folders = snapshot.folders ?: return@launch
+                try {
+                    loadStatuses(container.requireApi(), folders, snapshot.subscribed, includeAll = true)
+                } catch (_: Exception) {
+                    // No API yet (signed out, config not loaded): the list
+                    // shows the counts it has; the next refresh fills in.
                 }
             }
         }
