@@ -12,7 +12,6 @@ import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.SearchFilters
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.DefaultSort
-import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.MailFolderFilter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -597,10 +596,12 @@ class MessageListViewModel(
      * of the source folder; a restore keeps the read state as-is.
      */
     fun dispose(uids: Set<Long>) {
-        when (val intent = DisposeIntent.standard(container.preferences.preferences.value.disposeAction, folder)) {
-            is DisposeIntent.Move -> move(uids, intent.destination, markSeen = true)
-            DisposeIntent.Restore -> move(uids, DisposeIntent.INBOX_FOLDER)
-            DisposeIntent.Purge -> purge(uids)
+        val intent = DisposeIntent.standard(container.preferences.preferences.value.disposeAction, folder)
+        val target = intent.moveTarget
+        if (target == null) {
+            purge(uids)
+        } else {
+            move(uids, target.destination, markSeen = target.markSeen)
         }
     }
 
@@ -739,13 +740,6 @@ class MessageListViewModel(
         const val BAND_SIZE = 50
         const val ARCHIVE_FOLDER = "Archive"
         const val TRASH_FOLDER = "Trash"
-
-        /** The dispose target for a non-Trash folder under [prefs]. */
-        fun disposeTarget(prefs: AppPreferences): String =
-            when (prefs.disposeAction) {
-                DisposeAction.ARCHIVE -> ARCHIVE_FOLDER
-                DisposeAction.TRASH -> TRASH_FOLDER
-            }
 
         fun factory(
             container: AppContainer,
