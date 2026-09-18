@@ -1,62 +1,74 @@
 import XCTest
 @testable import Cabalmail
 
-/// Pins the rule behind the iOS section layout. The regression this guards:
-/// rotating a Plus / Max iPhone to landscape flips its horizontal size class
-/// to regular, and a layout keyed on size class alone swapped the compact tab
-/// tree for the iPad split — dropping the open feed item (and the Feeds tab
-/// with it) and landing on the mail INBOX. Rotating back rebuilt the tabs at
-/// the launch landing, not where the user had been.
+/// Pins the rule behind the iOS section layout. Two regressions live here:
+///
+/// - Rotating a Plus / Max iPhone to landscape flips its horizontal size
+///   class to regular, and a layout keyed on width alone swapped the compact
+///   tab tree for the iPad split — dropping the open feed item (and the Feeds
+///   tab with it) and landing on the mail INBOX. Rotating back rebuilt the
+///   tabs at the launch landing, not where the user had been.
+/// - The idiom check that fixed that pinned every phone to the tabs, and
+///   iPhone Duo's inner display is a phone with a regular/regular size class.
+///   It must get the split, or the 7.6-inch display draws a phone layout.
 final class SectionLayoutPolicyTests: XCTestCase {
 
     func testPhonePortraitUsesTabs() {
         XCTAssertEqual(
-            SectionLayoutPolicy.layout(isPhone: true, isCompactWidth: true),
+            SectionLayoutPolicy.layout(isCompactWidth: true, isCompactHeight: false),
             .compactTabs
         )
     }
 
     func testPhoneStaysOnTabsWhenLandscapeReportsRegularWidth() {
-        // Plus / Max in landscape: regular horizontal size class, still a
-        // phone. The layout must not change across the rotation, or the tab
-        // tree — and everything selected inside it — is discarded.
+        // Plus / Max in landscape: regular horizontal size class, compact
+        // vertical. The layout must not change across the rotation, or the
+        // tab tree — and everything selected inside it — is discarded.
         XCTAssertEqual(
-            SectionLayoutPolicy.layout(isPhone: true, isCompactWidth: false),
+            SectionLayoutPolicy.layout(isCompactWidth: false, isCompactHeight: true),
             .compactTabs
         )
     }
 
     func testRotationNeverChangesThePhoneLayout() {
-        let portrait = SectionLayoutPolicy.layout(isPhone: true, isCompactWidth: true)
-        let landscape = SectionLayoutPolicy.layout(isPhone: true, isCompactWidth: false)
+        let portrait = SectionLayoutPolicy.layout(isCompactWidth: true, isCompactHeight: false)
+        let landscape = SectionLayoutPolicy.layout(isCompactWidth: false, isCompactHeight: true)
         XCTAssertEqual(portrait, landscape)
     }
 
-    func testRegularWidthPadUsesTheSplit() {
+    func testCompactInBothDimensionsUsesTabs() {
+        // A non-Plus iPhone in landscape, or iPhone Duo's outer display in
+        // landscape ("tent" pose).
         XCTAssertEqual(
-            SectionLayoutPolicy.layout(isPhone: false, isCompactWidth: false),
+            SectionLayoutPolicy.layout(isCompactWidth: true, isCompactHeight: true),
+            .compactTabs
+        )
+    }
+
+    func testRegularInBothDimensionsUsesTheSplit() {
+        // A regular-width iPad, or iPhone Duo's inner display. The idiom must
+        // not take part: Duo reports the phone idiom.
+        XCTAssertEqual(
+            SectionLayoutPolicy.layout(isCompactWidth: false, isCompactHeight: false),
             .regularSplit
         )
     }
 
-    func testPhonePinsCompactWidth() {
-        // The tab tree overrides the size class on a phone so the Mail tab's
-        // split view never expands in landscape and collapses back — the
-        // cycle behind the unpushed reader and the stranded inspector sheet.
-        XCTAssertTrue(SectionLayoutPolicy.pinsCompactWidth(isPhone: true))
-    }
-
-    func testPadKeepsItsOwnSizeClass() {
-        // An iPad that widens out of multitasking must be allowed to see the
-        // regular size class, or it could never switch to the split layout.
-        XCTAssertFalse(SectionLayoutPolicy.pinsCompactWidth(isPhone: false))
-    }
-
     func testCompactMultitaskingPadUsesTabs() {
         XCTAssertEqual(
-            SectionLayoutPolicy.layout(isPhone: false, isCompactWidth: true),
+            SectionLayoutPolicy.layout(isCompactWidth: true, isCompactHeight: false),
             .compactTabs
         )
+    }
+
+    func testClosingADuoCollapsesToTabs() {
+        // Inner display open: regular/regular. Closed onto the outer display:
+        // compact width, regular height. The tree changes — documented and
+        // intended; the selection hand-off between the trees is separate work.
+        let open = SectionLayoutPolicy.layout(isCompactWidth: false, isCompactHeight: false)
+        let closed = SectionLayoutPolicy.layout(isCompactWidth: true, isCompactHeight: false)
+        XCTAssertEqual(open, .regularSplit)
+        XCTAssertEqual(closed, .compactTabs)
     }
 
     func testIOSReaderHidesTheSectionTabBar() {
