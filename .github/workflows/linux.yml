@@ -34,6 +34,7 @@ on:
       # a test there fails if one is missing from this list.
       - 'react/admin/package-lock.json'
       - 'LICENSE.md'
+      - 'design/color-tokens.json'
       # The PR-time gate runs the same `cargo xtask ci`, so the contract test
       # reads its path filter as well as this one.
       - '.github/workflows/lint.yml'
@@ -61,15 +62,13 @@ env:
   # artifacts are written and never read - they only make the cache bigger.
   CARGO_INCREMENTAL: '0'
 
-# Every job but `package-arch` runs exactly one step of `cargo xtask ci`,
-# selected by name. The
-# list of steps lives in linux/xtask/src/ci.rs and nowhere else; a job that
-# named a step that does not exist, or a step no job runs, fails the drift test
-# in linux/xtask/tests/workflow_contract.rs rather than passing quietly.
-#
-# Still to come, each with the work item that owns it:
-#   smoke         Phase 2, work item 3 - install the package, launch it headless
-#   coverage      Phase 2, work item 3 - cargo-llvm-cov on the kit, with a floor
+# Every job but `package-arch` and `smoke` runs exactly one step of
+# `cargo xtask ci`, selected by name. The list of steps lives in
+# linux/xtask/src/ci.rs and nowhere else; a job that named a step that does not
+# exist, or a step no job runs, fails the drift test in
+# linux/xtask/tests/workflow_contract.rs rather than passing quietly. Those two
+# run their own `cargo xtask` subcommand instead: both act on the installable
+# package, which is not work a developer should do on a pre-push gate.
 jobs:
   # -----------------------------------------------------------------------
   # Formatting only. No system libraries, because `cargo fmt` parses rather
@@ -306,6 +305,38 @@ jobs:
         run: cargo xtask ci --step supply-chain
 
   # -----------------------------------------------------------------------
+  # The kit's coverage floor, measured over the same tests kit-test runs.
+  # Its own job rather than a second command inside kit-test: a suite that
+  # went red and a floor that was breached are different problems, and an
+  # instrumented build is slow enough that the plain test result should not
+  # wait behind it.
+  # -----------------------------------------------------------------------
+  coverage:
+    name: Kit coverage floor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-linux-rust
+        with:
+          cache-key: coverage
+
+      - name: Install cargo-llvm-cov
+        # Prebuilt and pinned, for the reasons cargo-deny is: a from-source
+        # build costs minutes on every run, and a tool that moved under the
+        # floor would change the number without anything in this repository
+        # changing.
+        uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b  # v2.87.4
+        with:
+          tool: cargo-llvm-cov@0.9.1
+
+      - name: Measure the kit's coverage
+        working-directory: linux
+        run: cargo xtask ci --step coverage
+
+  # -----------------------------------------------------------------------
   # The package. This is the only job that builds what a user installs rather
   # than what a developer builds: makepkg clones the checkout, builds it
   # offline against the committed lock, runs the kit tests inside the build,
@@ -318,6 +349,9 @@ jobs:
   package-arch:
     name: Package for Arch
     runs-on: ubuntu-latest
+    # Both drive a GUI process or a full package build; a hang would
+    # otherwise sit until the runner's own six-hour ceiling.
+    timeout-minutes: 45
     container:
       image: archlinux:base-devel
     steps:
@@ -350,3 +384,82 @@ jobs:
       - name: Build and lint the package
         working-directory: linux
         run: su builder --command 'cargo xtask package arch'
+
+      - name: Check both artifacts were produced
+        # `if-no-files-found: error` fires only when *no* pattern matches, and
+        # the package glob always does - so a regression that stopped the
+        # .SRCINFO being written would upload green carrying the package
+        # alone. Naming each file is what makes that red.
+        run: |
+          set -euo pipefail
+          cd linux/target/package/arch
+          test -s .SRCINFO
+          ls -1 *.pkg.tar.zst >/dev/null
+
+      - name: Upload the package
+        # What `smoke` installs, and what a user can install from a run of
+        # this workflow without waiting for a release. The .SRCINFO rides
+        # along because it is the metadata the AUR reads - publication there
+        # is still a manual step, and still blocked on an account.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: arch-package
+          path: |
+            linux/target/package/arch/*.pkg.tar.zst
+            linux/target/package/arch/.SRCINFO
+          # .SRCINFO is a dotfile, and the action drops hidden files by
+          # default even when a path names one outright - so without this the
+          # artifact would upload green and carry the package alone.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  # -----------------------------------------------------------------------
+  # The one assertion about the packaged artifact rather than the source
+  # tree. It installs what `package-arch` built into a clean container and
+  # runs the installed binary, so a GResource that never got bundled, a data
+  # file the package forgot to install, or a shared library missing from the
+  # dependency array fails here and nowhere else.
+  #
+  # `cargo xtask smoke` rather than a `ci` step: it installs a package into
+  # the root filesystem, which is not something a developer should have
+  # happen on a pre-push gate.
+  # -----------------------------------------------------------------------
+  smoke:
+    name: Smoke-test the package
+    runs-on: ubuntu-latest
+    # Both drive a GUI process or a full package build; a hang would
+    # otherwise sit until the runner's own six-hour ceiling.
+    timeout-minutes: 20
+    needs: package-arch
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Bootstrap the container
+        # git for the checkout; Xvfb because the client opens a window and
+        # this container has no session. xorg-xauth is separate on Arch, and
+        # xvfb-run exits before it starts a server without it.
+        run: pacman -Syu --needed --noconfirm git xorg-server-xvfb xorg-xauth
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-linux-rust
+        with:
+          cache-key: smoke
+
+      - name: Download the package
+        # Outside linux/target, which the toolchain step caches: a downloaded
+        # artifact has no business in a build cache, and restoring one over
+        # the other is a class of confusion worth not having. `smoke` takes a
+        # directory and finds the installable package in it, skipping the
+        # debug-symbol package makepkg writes alongside.
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: arch-package
+          path: ${{ runner.temp }}/arch-package
+
+      - name: Install the package and launch it
+        working-directory: linux
+        run: cargo xtask smoke "${RUNNER_TEMP:?}/arch-package"

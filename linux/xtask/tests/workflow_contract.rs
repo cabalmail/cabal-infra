@@ -29,15 +29,44 @@ const FLOOR_IMAGE: &str = "image: ubuntu:24.04";
 /// quietly stop enforcing the floor the first time GitHub rolls the label.
 const STEPS_ON_THE_FLOOR: &[&str] = &["clippy", "app-tests"];
 
-/// How a job installs the one binary the gate runs that is not part of the
-/// toolchain. Both workflows install it, and they have to install the same one.
-const DENY_TOOL: &str = "tool: cargo-deny@";
+/// A binary the gate runs that `rustup` does not install, and the four places
+/// its version is written: both workflows install it, `xtask/src/ci.rs` tells
+/// a developer which one to install, and `linux/README.md` spells the same
+/// instruction. None of the four can see the others.
+struct PinnedTool {
+    /// The `cargo xtask ci` step that runs it.
+    step: &'static str,
+    /// The binary, as `cargo install` spells it.
+    binary: &'static str,
+    /// The constant in `xtask/src/ci.rs` that carries the version.
+    constant: &'static str,
+}
 
-/// How `xtask/src/ci.rs` names the version it tells a developer to install,
-/// and how `linux/README.md` spells the same instruction. Four files carry
-/// that version and none can see the others.
-const DENY_PIN_CONST: &str = "const CARGO_DENY_PIN: &str = \"";
-const DENY_INSTALL: &str = "cargo install --locked cargo-deny@";
+const PINNED_TOOLS: &[PinnedTool] = &[
+    PinnedTool {
+        step: "supply-chain",
+        binary: "cargo-deny",
+        constant: "const CARGO_DENY_PIN: &str = \"",
+    },
+    PinnedTool {
+        step: "coverage",
+        binary: "cargo-llvm-cov",
+        constant: "const CARGO_LLVM_COV_PIN: &str = \"",
+    },
+];
+
+/// `cargo xtask` subcommands that a job runs instead of a `ci` step, and what
+/// each job must depend on to have anything to act on.
+///
+/// The `ci` steps are held to their jobs by `every_ci_step_has_a_job_that_runs
+/// _it`; these are not steps, so nothing else covers them. Deleting the one
+/// line that runs the subcommand would leave a job that checks out, installs,
+/// and reports success having done nothing — the exact failure the rest of
+/// this file exists to prevent.
+const SUBCOMMAND_JOBS: &[(&str, &str, Option<&str>)] = &[
+    ("package-arch", "cargo xtask package arch", None),
+    ("smoke", "cargo xtask smoke", Some("package-arch")),
+];
 
 /// What a widget test prints when it has nothing to draw on, and what the
 /// app-test job greps its log for. It is written in two places that cannot see
@@ -204,6 +233,67 @@ fn no_job_names_a_step_that_does_not_exist() {
             );
         }
     }
+}
+
+/// Every job that runs a `cargo xtask` subcommand rather than a `ci` step
+/// still runs something, and has what it needs to run it against.
+#[test]
+fn every_subcommand_job_runs_its_subcommand_and_waits_for_its_input() {
+    let workflow = workflow();
+    let jobs = jobs(&workflow);
+
+    for (name, subcommand, needs) in SUBCOMMAND_JOBS {
+        let job = jobs
+            .iter()
+            .find(|job| job.name == *name)
+            .unwrap_or_else(|| panic!("linux.yml has no `{name}` job"));
+        assert!(
+            job.body.lines().any(|line| line.contains(subcommand)),
+            "job `{name}` no longer runs `{subcommand}`, so it reports success \
+             having checked nothing"
+        );
+        if let Some(required) = needs {
+            assert!(
+                job.body
+                    .lines()
+                    .any(|line| line.trim() == format!("needs: {required}")),
+                "job `{name}` does not wait for `{required}`, so it runs against \
+                 whatever happens to be there"
+            );
+        }
+    }
+}
+
+/// The artifact `package-arch` uploads is the one `smoke` installs. Two names
+/// that drifted apart would fail the download rather than pass quietly, but
+/// only after a full package build — and a job that uploads what nothing
+/// consumes is worth knowing about either way.
+#[test]
+fn the_package_artifact_is_uploaded_under_the_name_the_smoke_job_downloads() {
+    let workflow = workflow();
+    let jobs = jobs(&workflow);
+
+    let artifact_name = |job_name: &str, action: &str| -> String {
+        let job = jobs
+            .iter()
+            .find(|job| job.name == job_name)
+            .unwrap_or_else(|| panic!("linux.yml has no `{job_name}` job"));
+        let (_, after) = job
+            .body
+            .split_once(action)
+            .unwrap_or_else(|| panic!("job `{job_name}` does not use `{action}`"));
+        after
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("name: "))
+            .unwrap_or_else(|| panic!("job `{job_name}`'s `{action}` names no artifact"))
+            .to_owned()
+    };
+
+    assert_eq!(
+        artifact_name("package-arch", "actions/upload-artifact@"),
+        artifact_name("smoke", "actions/download-artifact@"),
+        "the package is uploaded under one name and downloaded under another"
+    );
 }
 
 /// The point of the whole arrangement: CI runs the commands the pre-push gate
@@ -479,45 +569,35 @@ fn workspace_file(relative: &str) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
 }
 
-/// The version each workflow installs `cargo-deny` at, by job.
-fn cargo_deny_versions(workflow: &str) -> Vec<(String, String)> {
+/// The version `workflow` installs `binary` at, by job.
+fn installed_versions(workflow: &str, binary: &str) -> Vec<(String, String)> {
+    let marker = format!("tool: {binary}@");
     jobs(workflow)
         .into_iter()
         .filter_map(|job| {
             job.body
                 .lines()
-                .find_map(|line| line.trim().split_once(DENY_TOOL))
+                .find_map(|line| line.trim().split_once(marker.as_str()))
                 .map(|(_, version)| (job.name.clone(), version.trim().to_owned()))
         })
         .collect()
 }
 
-/// The gate's `supply-chain` step runs `cargo deny`, which is a separate
-/// binary: a job that runs the step without installing it fails with "not on
-/// PATH" rather than reporting a licence result. Two workflows run that step -
-/// `linux.yml` by name on a push, `lint.yml` as part of the whole gate on a
-/// pull request - and neither can see what the other installs.
+/// Two of the gate's steps run a separate binary: a job that runs one without
+/// installing it fails with "not on PATH" rather than reporting a result. Two
+/// workflows run those steps - `linux.yml` by name on a push, `lint.yml` as
+/// part of the whole gate on a pull request - and neither can see what the
+/// other installs.
 ///
 /// Both are asserted, and asserted to agree with the version `xtask/src/ci.rs`
 /// and the README tell a developer to install. A pull request checked against
-/// one version of the advisory rules and merged against another is a
-/// difference nobody would think to look for, and a developer sent to a fifth
-/// version reproduces neither.
+/// one version of the rules and merged against another is a difference nobody
+/// would think to look for, and a developer sent to a fifth version reproduces
+/// neither.
 #[test]
-fn every_copy_of_the_cargo_deny_pin_agrees() {
+fn every_copy_of_every_tool_pin_agrees() {
     let push_gate = workflow();
     let pull_request_gate = lint_workflow();
-
-    let running_the_step: Vec<String> = jobs(&push_gate)
-        .into_iter()
-        .filter(|job| job.steps().iter().any(|step| step == "supply-chain"))
-        .map(|job| job.name)
-        .collect();
-    assert_eq!(
-        running_the_step.len(),
-        1,
-        "expected exactly one job in linux.yml to run the supply-chain step, found {running_the_step:?}"
-    );
 
     let whole_gate: Vec<String> = jobs(&pull_request_gate)
         .into_iter()
@@ -534,67 +614,88 @@ fn every_copy_of_the_cargo_deny_pin_agrees() {
         "expected exactly one job in lint.yml to run the whole gate, found {whole_gate:?}"
     );
 
-    let installed = |name: &str, workflow: &str, job: &str| -> String {
-        let found = cargo_deny_versions(workflow);
-        let (_, version) = found
-            .iter()
-            .find(|(installed_in, _)| installed_in == job)
-            .unwrap_or_else(|| {
-                panic!(
-                    "job `{job}` in {name} runs the gate's supply-chain step but \
-                     installs no cargo-deny, so it will fail with `not on PATH` \
-                     instead of checking anything. Add a `{DENY_TOOL}<version>` step."
-                )
-            });
-        version.clone()
-    };
-
-    let on_push = installed("linux.yml", &push_gate, &running_the_step[0]);
-    let on_pull_request = installed("lint.yml", &pull_request_gate, &whole_gate[0]);
-    assert_eq!(
-        on_push, on_pull_request,
-        "the two gates check the dependency graph with different cargo-deny versions"
-    );
-    assert!(
-        on_push.split('.').count() == 3,
-        "cargo-deny is pinned to `{on_push}`, which is not an exact x.y.z version"
-    );
-
-    for (file, found) in [
-        ("xtask/src/ci.rs", pin_in_source()),
-        ("README.md", pin_in_readme()),
-    ] {
+    assert!(!PINNED_TOOLS.is_empty(), "no tool pins are asserted");
+    for tool in PINNED_TOOLS {
+        let running_the_step: Vec<String> = jobs(&push_gate)
+            .into_iter()
+            .filter(|job| job.steps().iter().any(|step| step == tool.step))
+            .map(|job| job.name)
+            .collect();
         assert_eq!(
-            found, on_push,
-            "{file} names cargo-deny {found}, the workflows install {on_push}. A \
-             developer following that instruction checks the dependency graph \
-             against different rules than the gate that has to pass."
+            running_the_step.len(),
+            1,
+            "expected exactly one job in linux.yml to run the {} step, found {running_the_step:?}",
+            tool.step
         );
+
+        let installed = |name: &str, workflow: &str, job: &str| -> String {
+            let found = installed_versions(workflow, tool.binary);
+            let (_, version) = found
+                .iter()
+                .find(|(installed_in, _)| installed_in == job)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "job `{job}` in {name} runs the gate's {} step but installs no {}, \
+                         so it will fail with `not on PATH` instead of checking anything. \
+                         Add a `tool: {}@<version>` step.",
+                        tool.step, tool.binary, tool.binary
+                    )
+                });
+            version.clone()
+        };
+
+        let on_push = installed("linux.yml", &push_gate, &running_the_step[0]);
+        let on_pull_request = installed("lint.yml", &pull_request_gate, &whole_gate[0]);
+        assert_eq!(
+            on_push, on_pull_request,
+            "the two gates run {} at different versions",
+            tool.binary
+        );
+        assert_eq!(
+            on_push.split('.').count(),
+            3,
+            "{} is pinned to `{on_push}`, which is not an exact x.y.z version",
+            tool.binary
+        );
+
+        for (file, found) in [
+            ("xtask/src/ci.rs", pin_in_source(tool.constant)),
+            ("README.md", pin_in_readme(tool.binary)),
+        ] {
+            assert_eq!(
+                found, on_push,
+                "{file} names {} {found}, the workflows install {on_push}. A developer \
+                 following that instruction checks against different rules than the gate \
+                 that has to pass.",
+                tool.binary
+            );
+        }
     }
 }
 
-/// The version `cargo xtask ci` prints when the binary is missing, taken from
+/// The version `cargo xtask ci` prints when a binary is missing, taken from
 /// the constant rather than from the message, so a reworded message still
 /// points at one place.
-fn pin_in_source() -> String {
+fn pin_in_source(constant: &str) -> String {
     let source = workspace_file("xtask/src/ci.rs");
     let (_, after) = source
-        .split_once(DENY_PIN_CONST)
-        .expect("ci.rs declares CARGO_DENY_PIN");
+        .split_once(constant)
+        .unwrap_or_else(|| panic!("ci.rs declares `{constant}…`"));
     after
         .split_once('"')
-        .expect("CARGO_DENY_PIN is a string literal")
+        .expect("the pin is a string literal")
         .0
         .to_owned()
 }
 
 /// The version the README tells a developer to install.
-fn pin_in_readme() -> String {
+fn pin_in_readme(binary: &str) -> String {
     let readme = workspace_file("README.md");
-    let (_, after) = readme.split_once(DENY_INSTALL).unwrap_or_else(|| {
+    let install = format!("cargo install --locked {binary}@");
+    let (_, after) = readme.split_once(install.as_str()).unwrap_or_else(|| {
         panic!(
-            "linux/README.md does not spell the install as `{DENY_INSTALL}<version>`, \
-             so nothing holds it to the version CI uses"
+            "linux/README.md does not spell the install as `{install}<version>`, so \
+             nothing holds it to the version CI uses"
         )
     });
     after
