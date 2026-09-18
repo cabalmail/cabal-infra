@@ -30,6 +30,28 @@ internal sealed interface DisposeIntent {
     val isDestructive: Boolean
         get() = this == Purge || (this as? Move)?.action == DisposeAction.TRASH
 
+    /**
+     * The server move this dispose makes, or null for [Purge], which deletes
+     * rather than moves. Every surface that disposes reads the destination
+     * and the read flag from here, so the two cannot drift apart: a move
+     * archives or trashes and is marked read in the same call (archived ==
+     * read, matching the Apple and React clients), while a restore puts the
+     * message back in the inbox and leaves the read state alone.
+     */
+    val moveTarget: MoveTarget?
+        get() =
+            when (this) {
+                is Move -> MoveTarget(destination, markSeen = true)
+                Restore -> MoveTarget(INBOX_FOLDER, markSeen = false)
+                Purge -> null
+            }
+
+    /** Where a dispose sends the message, and whether the same call marks it read. */
+    data class MoveTarget(
+        val destination: String,
+        val markSeen: Boolean,
+    )
+
     companion object {
         const val INBOX_FOLDER = "INBOX"
 
