@@ -4,25 +4,28 @@ import CabalmailKit
 /// Signed-in root.
 ///
 /// The section layout (Mail / Feeds / Addresses / Settings, plus a Search tab)
-/// branches on device idiom and then horizontal size class
-/// (`SectionLayoutPolicy`):
+/// branches on the horizontal *and* vertical size classes
+/// (`SectionLayoutPolicy`), never on device idiom or orientation:
 ///
-/// - iPhone (any orientation) and iPad in narrow multitasking: a bottom
-///   `TabView`, one tab per section. This is the natural compact idiom and the
-///   inner `MailRootView` `NavigationSplitView` collapses to a stack here, so
-///   the two never compete for the left edge. There's no dedicated Folders tab
+/// - Compact in either dimension — every iPhone in every orientation, iPhone
+///   Duo's outer display, iPad in narrow multitasking: a bottom `TabView`, one
+///   tab per section. This is the natural compact idiom and the inner
+///   `MailRootView` `NavigationSplitView` collapses to a stack here, so the
+///   two never compete for the left edge. There's no dedicated Folders tab
 ///   — the Mail tab's sidebar `FolderListView` already browses and manages
-///   folders. The idiom check matters: a Plus / Max iPhone reports a regular
-///   size class in landscape, and branching on size class alone rebuilt the
-///   whole tree on rotation, dropping the reader (see the policy's doc). On a
-///   phone the tab tree also pins the environment size class to compact, so
-///   the split view inside it never expands in landscape and collapses back
-///   (the cycle that left the reader unpushed and the addresses inspector
-///   stranded as a sheet over the tab bar).
-/// - Regular iPad: just `MailRootView` — a single show/hide sidebar owns the
-///   left edge, matching the macOS main window. Addresses / Folders / Settings
-///   move into a modal `SettingsSheet`, opened by the sidebar gear button or
-///   the ⌘, app command via `AppState.settingsRequestTick`.
+///   folders. Requiring a regular height too is what keeps a Plus / Max
+///   iPhone here in landscape, where its width alone reads as regular;
+///   branching on width alone rebuilt the whole tree on rotation, dropping
+///   the reader (see the policy's doc). The tab tree also pins the
+///   environment size class to compact, so the split view inside it never
+///   expands in landscape and collapses back (the cycle that left the reader
+///   unpushed and the addresses inspector stranded as a sheet over the tab
+///   bar).
+/// - Regular in both — an iPad, iPhone Duo's inner display: just
+///   `MailRootView` — a single show/hide sidebar owns the left edge, matching
+///   the macOS main window. Addresses / Folders / Settings move into a modal
+///   `SettingsSheet`, opened by the sidebar gear button or the ⌘, app command
+///   via `AppState.settingsRequestTick`.
 /// - visionOS: `VisionSectionView` — a floating leading tab bar (the visionOS
 ///   `TabView` ornament), one tab per section. The iPad single-sidebar layout
 ///   hid the folder list behind a reveal toggle visionOS never surfaced, so it
@@ -45,6 +48,7 @@ struct SignedInRootView: View {
     // this state — guarding it to `os(iOS)` keeps them warning-clean.
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var settingsPresented = false
     /// The compact tab bar's selection. Seeded synchronously from the stored
     /// resume session so a launch that ended in the feed reader opens on
@@ -84,13 +88,13 @@ struct SignedInRootView: View {
         switch layoutChoice {
         case .compactTabs:
             compactTabs
-                // A phone is compact in every orientation, whatever the raw
+                // The tab tree is compact width throughout, whatever the raw
                 // size class says in landscape on a Plus / Max: the Mail
                 // tab's split view must never expand into columns and
                 // collapse back, and the addresses inspector must never
                 // change presentation. See `SectionLayoutPolicy`.
                 .transformEnvironment(\.horizontalSizeClass) { sizeClass in
-                    if pinsCompactWidth { sizeClass = .compact }
+                    sizeClass = .compact
                 }
         case .regularSplit:
             MailRootView()
@@ -109,19 +113,14 @@ struct SignedInRootView: View {
     }
 
     #if os(iOS)
-    /// Idiom first, then size class — see `SectionLayoutPolicy` for why the
-    /// size class alone is not enough on an iPhone.
+    /// Both size classes, no idiom — see `SectionLayoutPolicy` for why the
+    /// width alone is not enough on an iPhone and why the idiom is too much
+    /// on an iPhone Duo.
     private var layoutChoice: SectionLayoutPolicy.Layout {
         SectionLayoutPolicy.layout(
-            isPhone: UIDevice.current.userInterfaceIdiom == .phone,
-            isCompactWidth: horizontalSizeClass == .compact
+            isCompactWidth: horizontalSizeClass == .compact,
+            isCompactHeight: verticalSizeClass == .compact
         )
-    }
-
-    /// Whether the tab tree overrides the size class to compact for its
-    /// descendants — a phone, see `SectionLayoutPolicy.pinsCompactWidth`.
-    private var pinsCompactWidth: Bool {
-        SectionLayoutPolicy.pinsCompactWidth(isPhone: UIDevice.current.userInterfaceIdiom == .phone)
     }
 
     /// Compact-width section switcher: a plain bottom tab bar. No
