@@ -7,12 +7,16 @@ import CabalmailKit
 /// inside the new window and dismiss the window when the model fires
 /// its `onClose` callback (Send / Save Draft / Discard).
 ///
-/// iPhone keeps the sheet path because iOS phones run a single scene
-/// at a time — calling `openWindow` would tear the user away from the
-/// mailbox they were just reading instead of layering a new window on
-/// top. `composeOpensInWindow` is the single source of truth every
-/// entry point consults so the New-Message / Reply / Reply-All /
-/// Forward buttons all branch the same way.
+/// A host that runs a single scene at a time keeps the sheet path —
+/// calling `openWindow` there would tear the user away from the mailbox
+/// they were just reading instead of layering a new window on top.
+/// `ComposeSurfacePolicy` is the single source of truth every entry point
+/// consults so the New-Message / Reply / Reply-All / Forward buttons all
+/// branch the same way, and it decides by the environment's
+/// `supportsMultipleWindows`, not by device idiom: an iPhone Duo is a
+/// phone whose inner display hosts multiple windows and whose outer
+/// display does not, so a reply opens beside the message when the device
+/// is open and as a sheet when it is closed.
 ///
 /// `WindowGroup(for: ComposeSlot.self)` keys each compose scene by a
 /// recycled slot index, so the user can have a reply and a forward open
@@ -27,17 +31,32 @@ import CabalmailKit
 /// menu.
 let composeWindowID = "compose"
 
-/// Whether this platform should open compose as its own window. macOS,
-/// iPadOS, and visionOS get real windows; iPhone falls back to the
-/// modal sheet path.
-@MainActor
-var composeOpensInWindow: Bool {
+/// Whether compose opens as its own window or as the modal sheet. A pure
+/// rule so it can be tested for both answers on whichever platform the
+/// tests run — the caller (`ComposeRequestRouter`) reads the environment.
+enum ComposeSurfacePolicy {
+    /// - Parameters:
+    ///   - supportsMultipleWindows: the SwiftUI environment's
+    ///     `supportsMultipleWindows` — true on iPad, on iPhone Duo's inner
+    ///     display, and on the window platforms; false on every other
+    ///     iPhone and on Duo's outer display, where Apple states new windows
+    ///     cannot be created. Measured on the iOS 27.1 simulator: the closed
+    ///     Duo reports false with a compact/regular size class.
+    ///   - alwaysWindows: `platformAlwaysWindows` — macOS and visionOS open
+    ///     a window regardless, since they never present the sheet.
+    static func opensInWindow(
+        supportsMultipleWindows: Bool,
+        alwaysWindows: Bool = platformAlwaysWindows
+    ) -> Bool {
+        alwaysWindows || supportsMultipleWindows
+    }
+
+    /// The host platform, as a value rather than a `#if`, so the rule above
+    /// can be exercised for both answers on whichever platform the tests run.
     #if os(macOS) || os(visionOS)
-    return true
-    #elseif os(iOS)
-    return UIDevice.current.userInterfaceIdiom == .pad
+    static let platformAlwaysWindows = true
     #else
-    return false
+    static let platformAlwaysWindows = false
     #endif
 }
 
