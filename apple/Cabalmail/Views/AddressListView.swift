@@ -6,8 +6,8 @@ import CabalmailKit
 /// Mirrors `FolderListView`'s shape: two sections (Favorites on top when
 /// non-empty, then All addresses inclusive), per-row swipe + context-menu
 /// affordances to toggle the favorite flag. Tapping an address copies it
-/// to the pasteboard — the list is a management/grab surface, not a
-/// message-list filter.
+/// to the pasteboard, and a row drags as plain text — the list is a
+/// management/grab surface, not a message-list filter.
 struct AddressListView: View {
     @Environment(AppState.self) private var appState
     @State private var model: AddressesViewModel?
@@ -292,6 +292,13 @@ extension AddressListView {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // The address as plain text, for a drop into another app: on an open
+        // iPhone Duo (and an iPad) Safari can sit beside this list, so a
+        // freshly minted address goes straight into a signup form without
+        // the copy / switch / paste round trip. `.draggable` coexists with
+        // the row's tap (see `MessageDrag.swift`); the swipe actions are
+        // horizontal pans, a drag starts from a press-and-hold.
+        .draggable(address.address)
         .accessibilityLabel("Copy \(address.address)")
             // Two edges so neither side outgrows a narrow sidebar pane, and
             // the full-swipe default is the reversible action (suspend /
