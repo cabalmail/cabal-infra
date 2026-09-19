@@ -174,7 +174,7 @@ extension MessageListView {
         if isWideLayout, !items.isEmpty {
             content()
                 .contentShape(Rectangle())
-                .draggable(dragPayload(items)) {
+                .draggable(dragPayload(items, envelope: envelope, model: model)) {
                     MessageDragPreview(count: items.count, subject: envelope.subject)
                         .onAppear { appState.beginMessageDrag() }
                 }
@@ -186,9 +186,28 @@ extension MessageListView {
     /// Builds the drag payload and flips the sidebar's drag flag. Called from
     /// `.draggable`'s `@autoclosure` payload, so the side effect lands exactly
     /// when the drag begins.
-    private func dragPayload(_ items: [MessageDragItem]) -> MessageDragPayload {
+    /// The drag payload: the move items, plus — for a single message — the
+    /// subject and a lazy raw-source fetch so the drag can also land outside
+    /// the app as an `.eml` (see `MessageDragPayload`). The fetch captures
+    /// the client, not the model, so it stays valid however long the drag
+    /// hovers over another app.
+    private func dragPayload(
+        _ items: [MessageDragItem],
+        envelope: Envelope,
+        model: MessageListViewModel
+    ) -> MessageDragPayload {
         appState.beginMessageDrag()
-        return MessageDragPayload(items: items)
+        guard items.count == 1, let item = items.first else {
+            return MessageDragPayload(items: items)
+        }
+        let client = model.client
+        return MessageDragPayload(
+            items: items,
+            subject: envelope.subject,
+            rawSource: {
+                try await MessageRawSource.bytes(client: client, folder: item.sourceFolder, uid: item.uid)
+            }
+        )
     }
 
     @ViewBuilder
