@@ -350,6 +350,9 @@ extension MessageListView {
                 }
                 .disabled(model == nil || model?.isLoading == true)
             }
+            // Never the pair the » popup takes (see above); on 26.1+ the
+            // system honours that as a priority rather than by our ordering.
+            .keepsInBar()
             #else
             ToolbarItem {
                 Button {
@@ -360,6 +363,10 @@ extension MessageListView {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            // Compose is the list's one frequent action: on an iPhone Duo's
+            // vertical bar it must survive the overflow that the outer
+            // display's short strip forces (#1647).
+            .keepsInBar()
             #endif
         }
     }
