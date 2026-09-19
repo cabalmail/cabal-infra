@@ -93,9 +93,22 @@ struct AuthWarningLabel: View {
         if let results, !results.isEmpty, AuthVerificationState(results) == .warning {
             // Deliberately "could not be authenticated", not "dangerous" —
             // forwarding legitimately breaks these checks.
+            //
+            // The sentence needs about 480 pt to set on one line, so every
+            // reader pane narrower than that has to wrap it. Without the
+            // vertical `fixedSize` UIKit sized this label from the text's
+            // *unwrapped* ideal — one line's height, stretched to whatever
+            // width was going — and then truncated the overflow with an
+            // ellipsis rather than wrapping. Measured on an iPhone 17 at a
+            // 402 pt pane: 295.7 x 14.3 (one line, truncated) before,
+            // 272.0 x 30.3 (two lines) after. Guarded by
+            // `AuthWarningWrapSourceScanTests`, because neither AppKit nor
+            // UIKit reproduces this through a hosting controller: the defect
+            // only appears in the real header's layout.
             Label(AuthResultsLine.warningCopy, systemImage: "exclamationmark.shield.fill")
                 .font(.caption)
                 .foregroundStyle(ColorTokens.warningFg)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
