@@ -24,7 +24,10 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         let body = try Self.source("Cabalmail/Views/ToolbarVisibility.swift")
         XCTAssertTrue(body.contains("if #available(iOS 27.0, macOS 26.1, *)"))
         XCTAssertTrue(body.contains("visibilityPriority(.high)"))
-        XCTAssertTrue(body.contains("#if os(iOS) || os(macOS)"))
+        // Both guards: the runtime `#available` and the toolchain `#if`,
+        // because CI's release legs compile with the stable Xcode (26.6 at
+        // the time), whose SDK has no `visibilityPriority` at all.
+        XCTAssertTrue(body.contains("#if (os(iOS) || os(macOS)) && compiler(>=6.4)"))
     }
 
     private static let apple = URL(fileURLWithPath: #filePath)
