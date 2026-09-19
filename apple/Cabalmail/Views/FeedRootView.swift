@@ -24,6 +24,10 @@ struct FeedRootView: View {
             if let selectedScope {
                 FeedItemListView(scope: selectedScope, selection: $selectedItem)
                     .id(selectedScope)
+                    // The launch restore's parked item is applied by the list
+                    // itself, once it is on screen and loaded — not from the
+                    // scope's `onChange` below. See `FeedItemListView` and
+                    // #1664.
             } else {
                 ContentUnavailableView("Select a feed", systemImage: "sidebar.left",
                                        description: Text("Pick a feed or folder from the sidebar."))
@@ -38,18 +42,12 @@ struct FeedRootView: View {
             }
         }
         .onChange(of: selectedScope) { _, scope in
-            // A launch restore parks the item to reopen under this scope;
-            // consuming it here — after the scope change landed — is what
-            // keeps this very handler from clearing it. Jump straight to
-            // `.detail` in that case so the column handler below never sees
-            // an intermediate `.content` and drops the item again.
-            let restored = scope.flatMap { appState.navCoordinator?.consumeFeedItemRestore(for: $0) }
-            selectedItem = restored
-            if scope == nil {
-                compactColumn = .sidebar
-            } else {
-                compactColumn = restored == nil ? .content : .detail
-            }
+            // A launch restore's parked item is NOT consumed here: the item
+            // list applies it once it is on screen and loaded, so the reader
+            // is pushed in its own update (#1664). This handler only moves to
+            // the list; the item's own `onChange` below moves on to
+            // `.detail` when the list selects it.
+            compactColumn = scope == nil ? .sidebar : .content
             appState.navCoordinator?.recordFeedScope(scope)
         }
         .onChange(of: selectedItem) { _, item in
