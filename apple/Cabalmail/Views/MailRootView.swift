@@ -98,6 +98,10 @@ struct MailRootView: View {
     /// can't flip presentation (column <-> sheet) across a rotation, which is
     /// how it once surfaced as a dead-end sheet over the tab bar.
     @State private var addressInspectorPresented = false
+    /// Whether the `@` button asked for the current presentation — the
+    /// framework may only close the inspector, never open it. See
+    /// `InspectorPresentationPolicy` for the iPhone Duo case this guards.
+    @State private var addressInspectorRequested = false
     /// Persisted width of the message-list (content) column in the wide
     /// (regular-width iPad / visionOS) three-column layout. `NavigationSplitView`
     /// doesn't report where a user drags the native list-reader divider, so the
@@ -465,7 +469,7 @@ struct MailRootView: View {
                 .environment(appState)
         }
         #else
-        .inspector(isPresented: $addressInspectorPresented) {
+        .inspector(isPresented: addressInspectorBinding) {
             AddressListView(externalFilter: $addressListFilter)
                 .addressInspectorWidth()
         }
@@ -754,7 +758,7 @@ extension MailRootView {
             if isWideSidebar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        addressInspectorPresented.toggle()
+                        applyInspectorState(InspectorPresentationPolicy.toggled(inspectorState))
                     } label: {
                         Image(systemName: "at")
                             .accessibilityLabel("Addresses")
@@ -845,5 +849,32 @@ extension MailRootView {
         } else {
             column.listColumnWidthPolicy(splitWidth: splitWidth)
         }
+    }
+}
+
+// MARK: - Addresses inspector presentation
+
+// Same-file extension so the primary struct body stays under SwiftLint's
+// `type_body_length` cap; `private` state stays reachable from here.
+extension MailRootView {
+    /// The binding `.inspector(isPresented:)` drives, filtered through
+    /// `InspectorPresentationPolicy` so a framework-initiated present (the
+    /// iPhone Duo unfold, #1663) is dropped while a dismiss is honoured.
+    private var addressInspectorBinding: Binding<Bool> {
+        Binding(
+            get: { addressInspectorPresented },
+            set: { incoming in
+                applyInspectorState(InspectorPresentationPolicy.framework(wrote: incoming, to: inspectorState))
+            }
+        )
+    }
+
+    private var inspectorState: InspectorPresentationPolicy.State {
+        .init(presented: addressInspectorPresented, requested: addressInspectorRequested)
+    }
+
+    private func applyInspectorState(_ state: InspectorPresentationPolicy.State) {
+        if addressInspectorPresented != state.presented { addressInspectorPresented = state.presented }
+        if addressInspectorRequested != state.requested { addressInspectorRequested = state.requested }
     }
 }
