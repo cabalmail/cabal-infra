@@ -56,7 +56,7 @@ import Foundation
 /// orientation.
 enum SectionLayoutPolicy {
     enum Layout: Equatable {
-        /// `SignedInRootView.compactTabs`: the bottom tab bar.
+        /// `CompactSectionTabs`: the bottom tab bar.
         case compactTabs
         /// `MailRootView` alone, with the settings gear and sheet.
         case regularSplit

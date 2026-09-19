@@ -50,12 +50,6 @@ struct SignedInRootView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var settingsPresented = false
-    /// The compact tab bar's selection. Seeded synchronously from the stored
-    /// resume session so a launch that ended in the feed reader opens on
-    /// Feeds without first drawing Mail for a frame (a `@State` default can't
-    /// reach the environment, hence the direct store read — see
-    /// `ResumeSessionStore.storedSection`).
-    @State private var compactTab: CompactTab = ResumeSessionStore.storedSection() == .feeds ? .feeds : .mail
     #endif
 
     var body: some View {
@@ -87,7 +81,14 @@ struct SignedInRootView: View {
         #else
         switch layoutChoice {
         case .compactTabs:
-            compactTabs
+            // Seeded from the live coordinator so a tree rebuilt mid-process
+            // (a fold, an iPad window narrowing) opens on the section the
+            // split was showing; the stored session covers a cold launch,
+            // before the coordinator exists. See `CompactSectionTabs` for why
+            // the selection lives on that view and not here.
+            CompactSectionTabs(
+                initialSection: appState.navCoordinator?.launchSection ?? ResumeSessionStore.storedSection()
+            )
                 // The tab tree is compact width throughout, whatever the raw
                 // size class says in landscape on a Plus / Max: the Mail
                 // tab's split view must never expand into columns and
@@ -123,81 +124,6 @@ struct SignedInRootView: View {
         )
     }
 
-    /// Compact-width section switcher: a plain bottom tab bar. No
-    /// `.sidebarAdaptable` - at compact width there's no sidebar to adapt to,
-    /// and the regular-width path never renders this, so the adaptive style's
-    /// collision with the inner split view can't recur.
-    ///
-    /// The Addresses tab hosts the same `AddressListView` the Mail sidebar uses
-    /// (wrapped in `AddressManagementTab` for its own `NavigationStack` +
-    /// selection). That list carries the full request/revoke affordances, so
-    /// there's a single list implementation per data type - the old dedicated
-    /// management views were retired. Folders have no dedicated tab: the Mail
-    /// tab's sidebar `FolderListView` already browses and manages them
-    /// (create/delete/subscribe live on its rows and toolbar).
-    ///
-    /// Every tab wraps its content in `tabBarTrayShield()`: the floating bar
-    /// only draws the capsules, so without it, touches in the tray's margins
-    /// fall through to the rows visible behind the bar (see
-    /// `TabBarTrayShield.swift`).
-    ///
-    /// Every tab's root screen heads itself with the Cabalmail mark in place
-    /// of its text title, the way the Mail tab's folder list always has:
-    /// `showsCompactBrandMark` turns on the `compactBrandMarkTitle()` each
-    /// root applies (see `SidebarBranding.swift`). Set on the `TabView` so a
-    /// tab added later inherits it.
-    private var compactTabs: some View {
-        TabView(selection: $compactTab) {
-            Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
-                MailRootView()
-                    .tabBarTrayShield()
-            }
-            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: CompactTab.feeds) {
-                FeedRootView()
-                    .tabBarTrayShield()
-            }
-            Tab("Addresses", systemImage: "at", value: CompactTab.addresses) {
-                AddressManagementTab()
-                    .tabBarTrayShield()
-            }
-            Tab("Settings", systemImage: "gear", value: CompactTab.settings) {
-                SettingsView()
-                    .tabBarTrayShield()
-            }
-            // The search role detaches to the bottom-right, next to the tab bar.
-            // On iOS 26 it adopts the morph (tab bar collapses to a dismiss
-            // button, the button expands into a focused field); on iOS 18–25
-            // it's a plain search tab. The morph itself comes from the
-            // `.searchable` inside `SearchView`.
-            Tab(value: CompactTab.search, role: .search) {
-                SearchView()
-                    .tabBarTrayShield()
-            }
-        }
-        .environment(\.showsCompactBrandMark, true)
-        // The resume session remembers which section the user was in; the
-        // Mail and Feeds tabs each keep their own position, so only the
-        // section moves here. Other tabs leave it alone.
-        .onChange(of: compactTab) { _, tab in
-            if let section = tab.resumeSection {
-                appState.navCoordinator?.noteSection(section)
-            }
-        }
-    }
-
-    /// Compact tab identities. `resumeSection` maps the two content tabs onto
-    /// the resume session's sections; the utility tabs have none.
-    enum CompactTab: Hashable {
-        case mail, feeds, addresses, settings, search
-
-        var resumeSection: ResumeSession.Section? {
-            switch self {
-            case .mail: return .mail
-            case .feeds: return .feeds
-            case .addresses, .settings, .search: return nil
-            }
-        }
-    }
     #endif
 
     @ViewBuilder
