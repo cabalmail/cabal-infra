@@ -93,24 +93,6 @@ struct FeedItemListView: View {
         }
     }
 
-    /// Selects the item the resume session parked for this scope — once this
-    /// list is on screen and has loaded. Selecting it any earlier pushes the
-    /// reader in the same update as the list, and on a compact stack the
-    /// reader UIKit then shows is not the one SwiftUI runs `onAppear` / `task`
-    /// for: it never builds its model and sits on a spinner until backed out
-    /// of (#1664, reproduced on the iOS 27.1 simulator — the instance that
-    /// logged its hooks was never the visible one). Selecting before the rows
-    /// exist loses the selection instead. Whichever gate closes last applies
-    /// it; `consumeFeedItemRestore` makes the two call sites idempotent. The
-    /// loaded row is preferred so the highlight matches; an item outside the
-    /// loaded window still opens, as it always has.
-    private func applyLaunchRestoreWhenReady() {
-        guard hasAppeared, initialLoadComplete, selection == nil,
-              let restored = appState.navCoordinator?.consumeFeedItemRestore(for: scope)
-        else { return }
-        selection = model?.items.first { $0.id == restored.id } ?? restored
-    }
-
     private var composeButton: some View {
         Button {
             appState.requestCompose(seed: ReplyBuilder.newDraft())
@@ -436,4 +418,28 @@ enum FeedItemDate {
     /// The feed's name for a multi-feed list. The item itself only carries
     /// ids; the row shows the host of the item URL as the cheap, always-
     /// available stand-in until the list model resolves titles (5d).
+}
+
+// MARK: - Launch restore
+
+// Same-file extension so the primary struct body stays under SwiftLint's
+// `type_body_length` cap; `private` state stays reachable from here.
+extension FeedItemListView {
+    /// Selects the item the resume session parked for this scope — once this
+    /// list is on screen and has loaded. Selecting it any earlier pushes the
+    /// reader in the same update as the list, and on a compact stack the
+    /// reader UIKit then shows is not the one SwiftUI runs `onAppear` / `task`
+    /// for: it never builds its model and sits on a spinner until backed out
+    /// of (#1664, reproduced on the iOS 27.1 simulator — the instance that
+    /// logged its hooks was never the visible one). Selecting before the rows
+    /// exist loses the selection instead. Whichever gate closes last applies
+    /// it; `consumeFeedItemRestore` makes the two call sites idempotent. The
+    /// loaded row is preferred so the highlight matches; an item outside the
+    /// loaded window still opens, as it always has.
+    private func applyLaunchRestoreWhenReady() {
+        guard hasAppeared, initialLoadComplete, selection == nil,
+              let restored = appState.navCoordinator?.consumeFeedItemRestore(for: scope)
+        else { return }
+        selection = model?.items.first { $0.id == restored.id } ?? restored
+    }
 }
