@@ -13,10 +13,13 @@ import AppKit
 /// optional seed and bump `composeRequestTick`; this modifier — installed
 /// once on `SignedInRootView` — is the single consumer.
 ///
-/// Window platforms (macOS, iPadOS, visionOS) hand off to the compose
-/// `WindowGroup`, which layers a new scene regardless of what the main
-/// window is showing. iPhone presents the compose sheet from here, the
-/// signed-in root.
+/// Hosts with multiple windows (macOS, iPadOS, visionOS, an open iPhone
+/// Duo) hand off to the compose `WindowGroup`, which layers a new scene
+/// regardless of what the main window is showing. A single-window host
+/// (any other iPhone, a closed Duo) presents the compose sheet from here,
+/// the signed-in root — see `ComposeSurfacePolicy`. The environment value
+/// is read at request time, so a Duo that was folded between two requests
+/// gets the right surface for each.
 ///
 /// History: the sheet used to live on `MessageListView`. SwiftUI cannot
 /// present a sheet from a view in a background tab, so a `mailto:` that
@@ -30,7 +33,12 @@ struct ComposeRequestRouter: ViewModifier {
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     @State private var composeSeed: Draft?
+
+    private var opensInWindow: Bool {
+        ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: supportsMultipleWindows)
+    }
 
     func body(content: Content) -> some View {
         content
@@ -48,12 +56,12 @@ struct ComposeRequestRouter: ViewModifier {
                 // Menu shortcuts and toolbar buttons pass no seed; the
                 // mailto: handler parks one. Fall back to a fresh draft
                 // for the former.
-                if composeOpensInWindow || composeSeed == nil {
+                if opensInWindow || composeSeed == nil {
                     let seed = appState.consumePendingComposeSeed()
                         ?? ReplyBuilder.newDraft()
                     present(seed: seed)
                 }
-                // else: the iPhone sheet is already showing a compose.
+                // else: the sheet is already showing a compose.
                 // Leave the seed parked — `drainParkedSeed` picks it up
                 // when the current sheet closes — so an incoming mailto:
                 // never replaces a draft the user is typing.
@@ -63,10 +71,10 @@ struct ComposeRequestRouter: ViewModifier {
             }
     }
 
-    /// Window platforms open a compose scene; iPhone presents the sheet
-    /// hosted by this modifier.
+    /// Multi-window hosts open a compose scene; single-window hosts present
+    /// the sheet hosted by this modifier.
     private func present(seed: Draft) {
-        if composeOpensInWindow {
+        if opensInWindow {
             // Recycled slot, not the seed itself: keying the group by the
             // seed leaks one retained presentation per session (#1084).
             openWindow(id: composeWindowID, value: appState.composeSlots.acquire(seed: seed))

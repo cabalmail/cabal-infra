@@ -8,10 +8,11 @@ import UIKit
 #endif
 import UniformTypeIdentifiers
 
-/// Compose scene. macOS, iPadOS, and visionOS host this in a standalone
-/// `WindowGroup` opened via `openWindow` (see `ComposeWindowScene`); iPhone
-/// keeps it as a modal sheet so the user doesn't get torn away from the
-/// mailbox they were just reading on a single-scene device.
+/// Compose scene. macOS, iPadOS, visionOS, and an open iPhone Duo host
+/// this in a standalone `WindowGroup` opened via `openWindow` (see
+/// `ComposeWindowScene`); a single-window host keeps it as a modal sheet
+/// so the user doesn't get torn away from the mailbox they were just
+/// reading.
 ///
 /// The form is four labeled fields (From picker, To/Cc/Bcc tokens, subject,
 /// dual-mode rich-text + Markdown body) plus an attachment strip and a Send
