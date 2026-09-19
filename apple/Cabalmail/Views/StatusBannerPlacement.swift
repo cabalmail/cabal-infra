@@ -30,7 +30,7 @@ enum StatusBannerPlacement {
     /// band, so the banner takes the plain gap above the safe area.
     static let defaultBottomInset: CGFloat = 6
 
-    /// Compact width (iPhone portrait), where `compactTabs` draws the tab bar
+    /// Compact width (iPhone portrait), where `CompactSectionTabs` draws the tab bar
     /// across the bottom of the window. Measured live on an iPhone 17 (window
     /// 874pt tall): the tab bar occupies {{0, 791}, {402, 83}}, and with this
     /// inset applied the banner's own close button lands at
