@@ -168,27 +168,6 @@ struct MailRootView: View {
         return showsSettingsGear
         #endif
     }
-    /// The binding `.inspector(isPresented:)` drives, filtered through
-    /// `InspectorPresentationPolicy` so a framework-initiated present (the
-    /// iPhone Duo unfold, #1663) is dropped while a dismiss is honoured.
-    private var addressInspectorBinding: Binding<Bool> {
-        Binding(
-            get: { addressInspectorPresented },
-            set: { incoming in
-                applyInspectorState(InspectorPresentationPolicy.framework(wrote: incoming, to: inspectorState))
-            }
-        )
-    }
-
-    private var inspectorState: InspectorPresentationPolicy.State {
-        .init(presented: addressInspectorPresented, requested: addressInspectorRequested)
-    }
-
-    private func applyInspectorState(_ state: InspectorPresentationPolicy.State) {
-        if addressInspectorPresented != state.presented { addressInspectorPresented = state.presented }
-        if addressInspectorRequested != state.requested { addressInspectorRequested = state.requested }
-    }
-
     /// Where the global search field is drawn on this layout: the column's
     /// toolbar, a header row inside the column, or nowhere at all. See
     /// `GlobalSearchFieldPlacement` for why iPadOS can't use its bar.
@@ -870,5 +849,32 @@ extension MailRootView {
         } else {
             column.listColumnWidthPolicy(splitWidth: splitWidth)
         }
+    }
+}
+
+// MARK: - Addresses inspector presentation
+
+// Same-file extension so the primary struct body stays under SwiftLint's
+// `type_body_length` cap; `private` state stays reachable from here.
+extension MailRootView {
+    /// The binding `.inspector(isPresented:)` drives, filtered through
+    /// `InspectorPresentationPolicy` so a framework-initiated present (the
+    /// iPhone Duo unfold, #1663) is dropped while a dismiss is honoured.
+    private var addressInspectorBinding: Binding<Bool> {
+        Binding(
+            get: { addressInspectorPresented },
+            set: { incoming in
+                applyInspectorState(InspectorPresentationPolicy.framework(wrote: incoming, to: inspectorState))
+            }
+        )
+    }
+
+    private var inspectorState: InspectorPresentationPolicy.State {
+        .init(presented: addressInspectorPresented, requested: addressInspectorRequested)
+    }
+
+    private func applyInspectorState(_ state: InspectorPresentationPolicy.State) {
+        if addressInspectorPresented != state.presented { addressInspectorPresented = state.presented }
+        if addressInspectorRequested != state.requested { addressInspectorRequested = state.requested }
     }
 }
