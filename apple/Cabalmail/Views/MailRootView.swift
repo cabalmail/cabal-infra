@@ -351,6 +351,8 @@ struct MailRootView: View {
             splitWidth = geometry.width
             creaseX = geometry.crease
         }
+        // The reader picks its bar from the same measurement (#1667).
+        .environment(\.hostHasFold, creaseX != nil)
         // Clearing the envelope selection when the folder changes keeps the
         // detail column from briefly rendering an old message against the
         // new mailbox.

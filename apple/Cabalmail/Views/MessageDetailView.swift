@@ -72,6 +72,9 @@ struct MessageDetailView: View {
     // window with the message list, and on iOS 27 a `.bottomBar` group
     // spreads across both columns. See `ReaderToolbarLayout`.
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    /// Set by `MailRootView` on an iPhone Duo's inner display; see
+    /// `ReaderToolbarLayout.usesOwnActionBar` and `toolbarContent`.
+    @Environment(\.hostHasFold) var hostHasFold
     // Measured width of the pane-scoped action bar, fed to
     // `ReaderToolbarLayout.ownBar` so the item set tracks the pane as the
     // user drags the split divider. Starts at 0, which draws the compact
@@ -91,7 +94,8 @@ struct MessageDetailView: View {
         if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
         return ReaderToolbarLayout.usesOwnActionBar(
             isRegularWidth: horizontalSizeClass == .regular,
-            isOS27OrLater: isOS27OrLater
+            isOS27OrLater: isOS27OrLater,
+            hostHasFold: hostHasFold
         )
         #else
         return false
@@ -312,16 +316,30 @@ struct MessageDetailView: View {
         // where a `.bottomBar` group would span the whole window rather than
         // the reading pane (see `readerActionBar`).
         if !drawsOwnActionBar {
-            ToolbarItemGroup(placement: .bottomBar) {
-                let actions = ReaderToolbarLayout.bottomBar(
-                    leading: model?.leadingToolbarAction ?? .reply
-                )
-                ForEach(Array(actions.enumerated()), id: \.element) { index, action in
-                    if index > 0 { Spacer() }
-                    toolbarButton(for: action)
-                        // The faces are `Label`s for the macOS » popup's
-                        // sake; this bar draws them icon-only, as before.
-                        .labelStyle(.iconOnly)
+            let actions = ReaderToolbarLayout.bottomBar(
+                leading: model?.leadingToolbarAction ?? .reply
+            )
+            if hostHasFold, horizontalSizeClass == .regular {
+                // iPhone Duo's inner display: top-placed items, the placement
+                // the feed reader's items use, which the system lays out in
+                // the vertical strip along the display edge (#1667). No
+                // spacers — the strip is fixed-width and the system spaces
+                // the items itself.
+                ToolbarItemGroup {
+                    ForEach(actions, id: \.self) { action in
+                        toolbarButton(for: action)
+                            .labelStyle(.iconOnly)
+                    }
+                }
+            } else {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    ForEach(Array(actions.enumerated()), id: \.element) { index, action in
+                        if index > 0 { Spacer() }
+                        toolbarButton(for: action)
+                            // The faces are `Label`s for the macOS » popup's
+                            // sake; this bar draws them icon-only, as before.
+                            .labelStyle(.iconOnly)
+                    }
                 }
             }
         }

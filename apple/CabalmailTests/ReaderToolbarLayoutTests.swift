@@ -66,6 +66,17 @@ final class ReaderToolbarLayoutTests: XCTestCase {
         )
     }
 
+    func testAFoldingHostKeepsTheSystemBarAtRegularWidth() {
+        // iPhone Duo's inner display: regular width on iOS 27, but the
+        // system puts the detail column's items in the vertical strip, which
+        // the pane-scoped bar can never be (#1667).
+        XCTAssertFalse(
+            ReaderToolbarLayout.usesOwnActionBar(isRegularWidth: true, isOS27OrLater: true, hostHasFold: true)
+        )
+        // The default keeps the iPad answer.
+        XCTAssertTrue(ReaderToolbarLayout.usesOwnActionBar(isRegularWidth: true, isOS27OrLater: true))
+    }
+
     func testSystemBarIsKeptEverywhereElse() {
         for (regular, os27) in [(true, false), (false, true), (false, false)] {
             XCTAssertFalse(
