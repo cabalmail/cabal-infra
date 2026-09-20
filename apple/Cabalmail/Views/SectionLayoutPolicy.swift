@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Which section layout the signed-in root should draw on iOS: the compact
@@ -66,7 +67,30 @@ enum SectionLayoutPolicy {
     ///   - isCompactWidth: `horizontalSizeClass == .compact`.
     ///   - isCompactHeight: `verticalSizeClass == .compact`.
     static func layout(isCompactWidth: Bool, isCompactHeight: Bool) -> Layout {
+        layout(isCompactWidth: isCompactWidth, isCompactHeight: isCompactHeight, measuredWidth: nil)
+    }
+
+    /// No iOS window narrower than this carries the regular width class:
+    /// the widest compact windows are an 11-inch iPad's half-screen Split
+    /// View (507 pt) and iPhone Duo's outer display (466 pt); the narrowest
+    /// regular ones are a 12.9-inch iPad's half (683 pt) and a Max iPhone in
+    /// landscape (926 pt).
+    static let regularWidthFloor: CGFloat = 600
+
+    /// `measuredWidth` is the window width the tree was last laid out at,
+    /// nil (or zero) before the first layout. A regular width class paired
+    /// with a measurement below `regularWidthFloor` means the traits have
+    /// changed before the bounds: iPhone Duo unfolding, or an iPad leaving
+    /// Split View, deliver the new size classes first, and a split view
+    /// built in that gap decides between tiling its columns and floating the
+    /// list over the reader against the old, narrow bounds. UIKit revisits
+    /// that decision only on the next size transition, so the reader stayed
+    /// under the list until the device was folded again (#1679). Holding the
+    /// compact tree for that one layout pass lets the split come up against
+    /// the bounds it will actually have.
+    static func layout(isCompactWidth: Bool, isCompactHeight: Bool, measuredWidth: CGFloat?) -> Layout {
         if isCompactWidth || isCompactHeight { return .compactTabs }
+        if let measuredWidth, measuredWidth > 0, measuredWidth < regularWidthFloor { return .compactTabs }
         return .regularSplit
     }
 
