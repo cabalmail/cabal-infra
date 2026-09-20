@@ -99,8 +99,16 @@ enum ReaderToolbarLayout {
     /// Reply and Mark-as-read render under the message list they don't act
     /// on. Compact width has one column, so the two containers coincide and
     /// the system bar stays correct there.
-    static func usesOwnActionBar(isRegularWidth: Bool, isOS27OrLater: Bool) -> Bool {
-        isRegularWidth && isOS27OrLater
+    ///
+    /// A folding host — iPhone Duo's inner display — keeps the system bar at
+    /// regular width too, because there the system lays the detail column's
+    /// items out in the vertical strip along the display edge, which is what
+    /// the feed reader already gets and what the pane-scoped bar can never
+    /// be (#1667). The reader emits top-placed items in that case
+    /// (`MessageDetailView.toolbarContent`), the placement the feed reader's
+    /// items use and the one measured to go vertical.
+    static func usesOwnActionBar(isRegularWidth: Bool, isOS27OrLater: Bool, hostHasFold: Bool = false) -> Bool {
+        isRegularWidth && isOS27OrLater && !hostHasFold
     }
 
     /// Bottom-bar items, in drawn order.
