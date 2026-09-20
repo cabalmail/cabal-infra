@@ -39,6 +39,10 @@ extension MessageListView {
         let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
         ScrollViewReader { proxy in
             keyboardScoped(
+                // `.swipeActionsContainer()` (27 SDKs) is what lets each
+                // row's `.swipeActions` work outside a `List`, and it is
+                // applied below on the ScrollView, not here: the modifier
+                // marks the scroll container the rows live in.
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         if let errorMessage = model.errorMessage {
@@ -81,7 +85,8 @@ extension MessageListView {
                             }
                         }
                     }
-                },
+                }
+                .swipeActionsContainer(),
                 model: model, visible: visible, proxy: proxy
             )
         }
@@ -220,14 +225,15 @@ extension MessageListView {
     /// One row slot, gated on scene phase. Once the app is actually
     /// `.background` every row collapses to the cheap `placeholderRow`: iOS
     /// renders a synchronous scene update in the background to snapshot the app
-    /// for the switcher, and with the live rows present that means laying out a
-    /// per-row `List` (the `SwipeActionRow` swipe mechanism) for every visible
-    /// message. That relayout -- kicked off by an archive and forced through in
-    /// a single pass on backgrounding -- could exceed the 10-second
-    /// scene-update watchdog (`0x8BADF00D`, which fired with
-    /// `WatchdogVisibility: Background`) even on a folder of fewer than 30
-    /// messages. Placeholders carry no `List`, so the background snapshot is
-    /// cheap; the real row rebuilds on the return to the foreground.
+    /// for the switcher, and with the live rows present that once meant laying
+    /// out a per-row `List` (the swipe mechanism `SwipeActionRow` used before
+    /// the 27 SDKs) for every visible message. That relayout -- kicked off by
+    /// an archive and forced through in a single pass on backgrounding --
+    /// could exceed the 10-second scene-update watchdog (`0x8BADF00D`, which
+    /// fired with `WatchdogVisibility: Background`) even on a folder of fewer
+    /// than 30 messages. The rows carry no `List` any more, so the gate is
+    /// probably no longer load-bearing, but it stays until the archive-then-
+    /// background case has been measured on a device without it.
     ///
     /// Gated on `.background`, not merely `.inactive`, so an inactive-but-
     /// visible scene -- iPad Split View / Stage Manager, or a transient
@@ -262,7 +268,8 @@ extension MessageListView {
 
     /// The live message row. The normal row wraps in `SwipeActionRow` for
     /// native swipe-to-dispose (trailing) / toggle-read (leading) -- on every
-    /// platform, including the macOS two-finger trackpad swipe. Compact edit
+    /// platform, including the macOS two-finger trackpad swipe, hosted by the
+    /// `.swipeActionsContainer()` mark on the list's ScrollView. Compact edit
     /// mode (`bulkMode`) bypasses swipe: the row is a selection-toggle button
     /// there, and swipe in a multi-select edit mode would fight it (matching
     /// Mail, which disables swipe while editing).
@@ -282,9 +289,9 @@ extension MessageListView {
                     .background(background)
             } else {
                 // `draggableRow` (drag-to-folder) wraps OUTSIDE `SwipeActionRow`
-                // so the drag sits on the row container, not inside the embedded
-                // List that owns the swipe -- a `.draggable` within that List row
-                // is swallowed on macOS and never lifts.
+                // so the drag sits on the row container rather than under the
+                // swipe's own gesture; it used to be a hard requirement when
+                // the row embedded a `List` that swallowed the lift on macOS.
                 draggableRow(for: envelope, model: model) {
                     SwipeActionRow(
                         height: rowHeight,
