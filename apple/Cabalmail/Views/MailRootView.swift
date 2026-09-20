@@ -447,14 +447,12 @@ struct MailRootView: View {
             // Launch landing (`MailRootView+Launch`): a parked navigate
             // request, else the resume session's folder / feed scope.
             await landAtLaunch()
+            // Shared with the compact Search tab so a layout swap keeps the
+            // query and results (#1654); this split anchors it to the folder.
             if searchModel == nil, let client = appState.client {
-                searchModel = MessageListViewModel(
-                    scope: .search,
-                    client: client,
-                    preferences: preferences,
-                    appState: appState
-                )
-                searchModel?.searchAnchor = selectedFolder
+                let shared = appState.sharedSearchModel(client: client, preferences: preferences)
+                shared.searchAnchor = selectedFolder
+                searchModel = shared
             }
         }
         // Addresses live in a trailing panel rather than the left sidebar,

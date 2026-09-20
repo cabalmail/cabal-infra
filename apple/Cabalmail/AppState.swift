@@ -255,6 +255,9 @@ final class AppState {
     }
 
     private(set) var client: CabalmailClient?
+    /// The one search model both iOS layout trees share — see
+    /// `sharedSearchModel(client:preferences:)` in `AppState+Search.swift`.
+    var searchModelStore: MessageListViewModel?
 
     /// Cross-client navigation cursor for the current session: remembers and
     /// restores the last folder/message and offers the cross-device jump.
@@ -662,6 +665,7 @@ extension AppState {
         self.navCoordinator?.clearLocalState()
         self.client = nil
         self.navCoordinator = nil
+        self.searchModelStore = nil
         self.prefsCoordinator?.stop()
         self.prefsCoordinator = nil
         self.status = .signedOut
