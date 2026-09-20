@@ -42,6 +42,9 @@ import CabalmailKit
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @State private var isOffline = false
+    /// The window width the section layout was last laid out at; see
+    /// `SectionLayoutPolicy.layout(isCompactWidth:isCompactHeight:measuredWidth:)`.
+    @State private var measuredWidth: CGFloat?
     // iPad only: the regular-width branch below reads the size class and
     // presents the Settings sheet. visionOS uses its own tab bar
     // (`VisionSectionView`) and macOS its Settings scene, so neither compiles
@@ -54,6 +57,11 @@ struct SignedInRootView: View {
 
     var body: some View {
         sectionLayout
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { width in
+                measuredWidth = width
+            }
             // Bottom-anchored since #1426: at the top the banners covered the
             // filter pills and clipped the first message row.
             .overlay(alignment: .bottom) {
@@ -120,7 +128,8 @@ struct SignedInRootView: View {
     private var layoutChoice: SectionLayoutPolicy.Layout {
         SectionLayoutPolicy.layout(
             isCompactWidth: horizontalSizeClass == .compact,
-            isCompactHeight: verticalSizeClass == .compact
+            isCompactHeight: verticalSizeClass == .compact,
+            measuredWidth: measuredWidth
         )
     }
 
