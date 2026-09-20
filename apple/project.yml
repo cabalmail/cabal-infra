@@ -248,6 +248,9 @@ targets:
       # Folder-subscription set mutators, read by the message list's
       # unsubscribed-folder banner gate.
       - path: Cabalmail/AppState+Subscriptions.swift
+      # The search model both iOS layout trees share (#1654); the stored
+      # property is in AppState.swift, the accessor here.
+      - path: Cabalmail/AppState+Search.swift
       # Push notifications (phase 6, macOS parity): one implementation for
       # both platforms — each file carries an `#if os(iOS)` / `#else`
       # (AppKit) branch around the small platform seams.

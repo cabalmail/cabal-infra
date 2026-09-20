@@ -39,3 +39,27 @@ extension ToolbarContent {
         #endif
     }
 }
+
+extension ToolbarContent {
+    /// Like `keepsInBar()`, but ranked above every `keepsInBar()` item: the
+    /// one control the bar must keep even when the frequent actions
+    /// overflow. Used for the addresses inspector's `@` toggle while the
+    /// inspector is open — on an iPhone Duo the column beside an open
+    /// inspector is narrow enough that Compose and `@` both fold into the
+    /// system overflow, which is inert on the 27.1 beta, and the inspector
+    /// then cannot be closed until the device folds (#1670). Same guards as
+    /// `keepsInBar()`, for the same reasons — except that the relative
+    /// initialiser is macOS 27, a release later than the fixed priorities.
+    @ToolbarContentBuilder
+    func keepsInBarFirst() -> some ToolbarContent {
+        #if (os(iOS) || os(macOS)) && compiler(>=6.4)
+        if #available(iOS 27.0, macOS 27.0, *) {
+            self.visibilityPriority(ToolbarItemVisibilityPriority(higherThan: .high))
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
