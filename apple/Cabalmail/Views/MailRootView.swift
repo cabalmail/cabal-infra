@@ -752,6 +752,15 @@ extension MailRootView {
         } action: { newWidth in
             recordContentColumnWidth(newWidth)
         }
+        // The system sidebar toggle is removed on the sidebar column above,
+        // which is where iPadOS 26 hosts it. iOS 27 on a phone-idiom host
+        // (iPhone Duo's inner display) hosts it on this column instead, so
+        // the list's bar carried two sidebar icons: the system one, which
+        // only revealed the zero-width column and its dimming scrim, next
+        // to the folder-panel toggle that stands in for it (#1690).
+        #if os(iOS)
+        .toolbar(removing: isWideSidebar ? .sidebarToggle : nil)
+        #endif
         // Global search rides the message-list column on wide layouts
         // (moved from above the reading pane in the #1047 toolbar rework —
         // the results it drives show in this column, and the reader needs
