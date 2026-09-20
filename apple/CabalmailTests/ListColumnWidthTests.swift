@@ -179,4 +179,25 @@ final class ListColumnWidthTests: XCTestCase {
             min(window * ListColumnWidth.maximumWindowShare,
                 window - SidebarColumnWidth.ideal - ListColumnWidth.readerFloor))
     }
+
+    func testACreasePinsTheDividerToTheHinge() {
+        // iPhone Duo's inner display in portrait: the crease at 313pt is
+        // below the reader's usual floor and the stored width would clamp to
+        // the column's minimum — the fold wins anyway (#1666).
+        XCTAssertEqual(
+            ListColumnWidth.resolved(stored: 360, minimum: 300, maximum: 266, crease: 313),
+            313
+        )
+    }
+
+    func testNoCreaseClampsTheStoredWidth() {
+        XCTAssertEqual(ListColumnWidth.resolved(stored: 360, minimum: 300, maximum: 640, crease: nil), 360)
+        XCTAssertEqual(ListColumnWidth.resolved(stored: 100, minimum: 300, maximum: 640, crease: nil), 300)
+        XCTAssertEqual(ListColumnWidth.resolved(stored: 900, minimum: 300, maximum: 640, crease: nil), 640)
+    }
+
+    func testAnEmptyCreaseIsNoCrease() {
+        // A zero from a not-yet-laid-out region must not collapse the list.
+        XCTAssertEqual(ListColumnWidth.resolved(stored: 360, minimum: 300, maximum: 640, crease: 0), 360)
+    }
 }

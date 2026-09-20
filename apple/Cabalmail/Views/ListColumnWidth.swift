@@ -72,6 +72,24 @@ enum ListColumnWidth {
     ///
     /// Zero, the pre-layout measurement, resolves to `ideal` so the first layout
     /// doesn't pin the column to its floor and flick it wider a frame later.
+    /// The width the list column actually takes: on a host with a fold, the
+    /// crease, so the divider lands on the hinge and the list and the reader
+    /// each get one page — exactly 50/50 whatever the stored width says, and
+    /// regardless of the reader's usual floor, because the fold is the one
+    /// divider position that reads right (#1666). Without a crease, the
+    /// persisted width clamped to the valid range, as before.
+    ///
+    /// - Parameters:
+    ///   - stored: the persisted width the drag handle wrote.
+    ///   - minimum: the column's floor.
+    ///   - maximum: the column's ceiling (what leaves the reader its floor).
+    ///   - crease: the fold's x position in the split's coordinate space, or
+    ///     nil where there is no fold (iPad, or a phone that does not fold).
+    static func resolved(stored: CGFloat, minimum: CGFloat, maximum: CGFloat, crease: CGFloat?) -> CGFloat {
+        if let crease, crease > 0 { return crease }
+        return min(max(stored, minimum), maximum)
+    }
+
     static func bounds(splitWidth: CGFloat,
                        sidebarWidth: CGFloat) -> (minimum: CGFloat, maximum: CGFloat) {
         guard splitWidth > 0 else { return (minimum, ideal) }

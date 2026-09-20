@@ -113,6 +113,9 @@ struct MailRootView: View {
     /// Live width of the whole split view, read via `.onGeometryChange`, used to
     /// clamp the list column so the reading pane always keeps a minimum width.
     @State private var splitWidth: CGFloat = 0
+    /// The fold's x position in the split's coordinate space, on a host that
+    /// has one (iPhone Duo's inner display); nil elsewhere. See `foldCrease`.
+    @State private var creaseX: CGFloat?
     /// Live width of the content (message list) column, read the same way. The
     /// toolbar search field is sized against it — a toolbar item is laid out
     /// outside its column's clip, so an item wider than the column overhangs
@@ -340,11 +343,13 @@ struct MailRootView: View {
             hasOpenMessage: selectedEnvelope != nil
         )
         // Track the split view's overall width so the list column's max can be
-        // clamped to leave the reading pane a floor (see `listColumnMaxWidth`).
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { newWidth in
-            splitWidth = newWidth
+        // clamped to leave the reading pane a floor (see `listColumnMaxWidth`),
+        // and the fold's position so the divider can sit on it (`foldCrease`).
+        .onGeometryChange(for: SplitGeometry.self) { proxy in
+            SplitGeometry(width: proxy.size.width, crease: foldCrease(in: proxy))
+        } action: { geometry in
+            splitWidth = geometry.width
+            creaseX = geometry.crease
         }
         // Clearing the envelope selection when the folder changes keeps the
         // detail column from briefly rendering an old message against the
@@ -706,9 +711,16 @@ extension MailRootView {
         return max(listColumnMinWidth, splitWidth - readerColumnMinWidth)
     }
 
-    /// The persisted list-column width, clamped to the current valid range.
+    /// The list column's width: the fold's position on a folding host, else
+    /// the persisted width clamped to the current valid range
+    /// (`ListColumnWidth.resolved`).
     private var listColumnWidth: CGFloat {
-        min(max(CGFloat(listColumnWidthStored), listColumnMinWidth), listColumnMaxWidth)
+        ListColumnWidth.resolved(
+            stored: CGFloat(listColumnWidthStored),
+            minimum: listColumnMinWidth,
+            maximum: listColumnMaxWidth,
+            crease: creaseX
+        )
     }
 
     /// Binding the drag handle writes: clamps on read, persists on write.
@@ -839,12 +851,17 @@ extension MailRootView {
         if resizableColumns {
             column
                 .navigationSplitViewColumnWidth(listColumnWidth)
+                // No drag handle on a folding host: the divider belongs on the
+                // crease, and a drag would only write a width the fold
+                // overrides (#1666).
                 .overlay(alignment: .trailing) {
-                    ColumnResizeHandle(
-                        width: listColumnWidthBinding,
-                        minWidth: listColumnMinWidth,
-                        maxWidth: listColumnMaxWidth
-                    )
+                    if creaseX == nil {
+                        ColumnResizeHandle(
+                            width: listColumnWidthBinding,
+                            minWidth: listColumnMinWidth,
+                            maxWidth: listColumnMaxWidth
+                        )
+                    }
                 }
         } else {
             column.listColumnWidthPolicy(splitWidth: splitWidth)
@@ -877,4 +894,33 @@ extension MailRootView {
         if addressInspectorPresented != state.presented { addressInspectorPresented = state.presented }
         if addressInspectorRequested != state.requested { addressInspectorRequested = state.requested }
     }
+}
+
+// MARK: - Fold geometry
+
+/// What the split view measures about itself in one geometry read.
+private struct SplitGeometry: Equatable {
+    var width: CGFloat
+    var crease: CGFloat?
+}
+
+/// The x position of the fold's centre line in `proxy`'s coordinate space,
+/// or nil where the host has no fold. iPhone Duo reports the hinge as a
+/// reserved region of kind `.division`; `includeInactive` keeps it in the
+/// answer while the device lies flat (zero width, so the centre line is still
+/// where the crease is), which is what makes the default columns 50/50 on the
+/// inner display and not only in book pose (#1666).
+///
+/// The API is iOS 27.1 (SwiftUICore 8.0.85); older SDKs, including the 27.0
+/// one CI's forward-compat legs and the Studio's default toolchain carry,
+/// compile the fallback.
+private func foldCrease(in proxy: GeometryProxy) -> CGFloat? {
+    #if os(iOS) && canImport(SwiftUICore, _version: 8.0.85)
+    if #available(iOS 27.1, *) {
+        return proxy.reservedRegions(kind: .division, options: .includeInactive)
+            .first
+            .map { $0.frame.midX }
+    }
+    #endif
+    return nil
 }
