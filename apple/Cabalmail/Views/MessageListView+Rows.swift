@@ -140,19 +140,19 @@ extension MessageListView {
         return [MessageDragItem(uid: envelope.uid, sourceFolder: model.sourceFolder(for: envelope))]
     }
 
-    /// Wraps a virtualized row in `.draggable` on wide layouts so it can be
-    /// dragged onto a sidebar folder. On compact iPhone the modifier is
-    /// skipped entirely (see `isWideLayout`): there's nowhere to drop, and the
-    /// long-press drag would fight the row's context menu.
+    /// Wraps a virtualized row in `.draggable`. On wide layouts the drag can
+    /// land on a sidebar folder; on every layout it can leave the app as an
+    /// `.eml` (see `MessageDragPayload`), which is why compact rows carry it
+    /// too since #1681: an iPhone Duo's Split View half is compact width, and
+    /// so is an iPhone next to Files or Notes. The compact row's long-press
+    /// context menu coexists with it, as on any iOS row that has both: a
+    /// held press opens the menu, a held press that moves lifts the drag.
     ///
-    /// Applied by `messageRow` OUTSIDE the per-row `SwipeActionRow` (i.e.
-    /// outside the single-row `List` that wrapper embeds for its native
-    /// `.swipeActions`). A `.draggable` placed inside that List row is
-    /// swallowed on macOS and never lifts, so the drag has to sit on the row
-    /// container instead. Because the wrapper already fills the fixed row
-    /// height, this only adds `.contentShape` (so a drag can start on the row's
-    /// empty space, not just the text) -- no frame expansion, unlike the old
-    /// inner version.
+    /// Applied by `messageRow` OUTSIDE `SwipeActionRow`, on the row container
+    /// rather than under the swipe's own gesture. Because the wrapper already
+    /// fills the fixed row height, this only adds `.contentShape` (so a drag
+    /// can start on the row's empty space, not just the text) -- no frame
+    /// expansion.
     ///
     /// `.draggable` (not `.onDrag`) so a plain click still selects the row.
     /// `.onDrag`'s drag-start closure was where the sidebar got flipped to
@@ -168,10 +168,8 @@ extension MessageListView {
         model: MessageListViewModel,
         @ViewBuilder content: () -> some View
     ) -> some View {
-        // Drag is exonerated for the iPad leading-swipe lag (gating it off iOS
-        // didn't change the lag), so it's back on every wide layout.
         let items = dragItems(for: envelope, model: model)
-        if isWideLayout, !items.isEmpty {
+        if !items.isEmpty {
             content()
                 .contentShape(Rectangle())
                 .draggable(dragPayload(items, envelope: envelope, model: model)) {
