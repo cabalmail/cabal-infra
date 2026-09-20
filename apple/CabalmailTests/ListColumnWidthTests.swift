@@ -200,4 +200,20 @@ final class ListColumnWidthTests: XCTestCase {
         // A zero from a not-yet-laid-out region must not collapse the list.
         XCTAssertEqual(ListColumnWidth.resolved(stored: 360, minimum: 300, maximum: 640, crease: 0), 360)
     }
+
+    // MARK: - Crease orientation (#1686)
+
+    func testAVerticalHingeGivesItsMidpoint() {
+        XCTAssertEqual(ListColumnWidth.crease(dividing: CGRect(x: 455.5, y: 0, width: 40, height: 669)), 475.5)
+    }
+
+    func testAFlatVerticalHingeStillGivesItsMidpoint() {
+        // `includeInactive` reports the flat device's hinge with zero width.
+        XCTAssertEqual(ListColumnWidth.crease(dividing: CGRect(x: 475.5, y: 0, width: 0, height: 669)), 475.5)
+    }
+
+    func testAHorizontalHingeIsNotAColumnDivider() {
+        XCTAssertNil(ListColumnWidth.crease(dividing: CGRect(x: 0, y: 455.5, width: 669, height: 40)))
+        XCTAssertNil(ListColumnWidth.crease(dividing: CGRect(x: 0, y: 475.5, width: 669, height: 0)))
+    }
 }

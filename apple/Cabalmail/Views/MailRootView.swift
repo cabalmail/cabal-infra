@@ -934,11 +934,13 @@ private struct SplitGeometry: Equatable {
 }
 
 /// The x position of the fold's centre line in `proxy`'s coordinate space,
-/// or nil where the host has no fold. iPhone Duo reports the hinge as a
-/// reserved region of kind `.division`; `includeInactive` keeps it in the
-/// answer while the device lies flat (zero width, so the centre line is still
-/// where the crease is), which is what makes the default columns 50/50 on the
-/// inner display and not only in book pose (#1666).
+/// or nil where the host has no fold or the fold runs the other way. iPhone
+/// Duo reports the hinge as a reserved region of kind `.division`;
+/// `includeInactive` keeps it in the answer while the device lies flat (zero
+/// width, so the centre line is still where the crease is), which is what
+/// makes the default columns 50/50 on the inner display and not only in book
+/// pose (#1666). A horizontal hinge (portrait, laptop pose) is not a column
+/// divider and yields nil (`ListColumnWidth.crease(dividing:)`, #1686).
 ///
 /// The API is iOS 27.1 (SwiftUICore 8.0.85); older SDKs, including the 27.0
 /// one CI's forward-compat legs and the Studio's default toolchain carry,
@@ -947,8 +949,9 @@ private func foldCrease(in proxy: GeometryProxy) -> CGFloat? {
     #if os(iOS) && canImport(SwiftUICore, _version: 8.0.85)
     if #available(iOS 27.1, *) {
         return proxy.reservedRegions(kind: .division, options: .includeInactive)
+            .lazy
+            .compactMap { ListColumnWidth.crease(dividing: $0.frame) }
             .first
-            .map { $0.frame.midX }
     }
     #endif
     return nil
