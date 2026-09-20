@@ -45,4 +45,62 @@ enum StatusBannerPlacement {
     static func bottomInset(isRegularWidth: Bool) -> CGFloat {
         isRegularWidth ? defaultBottomInset : compactWidthBottomInset
     }
+
+    // MARK: - Folding hosts
+
+    /// How an iPhone Duo is being held, read off its active fold region.
+    enum FoldPose: Equatable {
+        /// No active fold: flat, closed, or not a folding host. Banners hang
+        /// full-width at the bottom as everywhere else.
+        case none
+        /// Held like a book: the hinge runs top to bottom, the two pages sit
+        /// side by side. Banners belong on the trailing page, where the HIG
+        /// puts alerts — nearer where they will reappear on the outer display.
+        case book
+        /// Propped like a laptop: the hinge runs left to right, the top panel
+        /// is the one seen at a distance. Banners belong there, just above
+        /// the hinge, and off the bottom panel that holds the controls.
+        case laptop
+    }
+
+    /// The pose, from the fold's frame in the window. Only an *active* fold
+    /// counts: `reservedRegions` reports the flat device's hinge as an
+    /// inactive, zero-width region, and a flat device is not a pose.
+    static func pose(fold: CGRect?) -> FoldPose {
+        guard let fold, fold.width > 0 || fold.height > 0 else { return .none }
+        return fold.height >= fold.width ? .book : .laptop
+    }
+
+    /// Extra insets that keep the bottom-anchored banner off the fold
+    /// (#1648): in book pose it is confined to the trailing page, in laptop
+    /// pose it is lifted above the hinge onto the top panel. Zero elsewhere.
+    /// The rest of the banner's placement (its horizontal margin, the
+    /// tab-bar clearance) is unchanged and applies inside these.
+    struct FoldInsets: Equatable {
+        var leading: CGFloat = 0
+        var bottom: CGFloat = 0
+        /// The banner's width cap in book pose: the trailing page less the
+        /// banner's own horizontal margins. Nil keeps the banner's default
+        /// container-relative cap, which measures the whole window and would
+        /// push the capsule back across the fold.
+        var maxWidth: CGFloat?
+    }
+
+    /// The banner's horizontal margin, applied on both sides (`statusBanners`).
+    static let horizontalMargin: CGFloat = 12
+
+    static func foldInsets(fold: CGRect?, windowSize: CGSize) -> FoldInsets {
+        guard let fold else { return FoldInsets() }
+        switch pose(fold: fold) {
+        case .none:
+            return FoldInsets()
+        case .book:
+            return FoldInsets(
+                leading: fold.maxX,
+                maxWidth: max(0, windowSize.width - fold.maxX - 2 * horizontalMargin)
+            )
+        case .laptop:
+            return FoldInsets(bottom: max(0, windowSize.height - fold.minY))
+        }
+    }
 }

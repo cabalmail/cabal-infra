@@ -23,6 +23,7 @@ struct BannerView: View {
     /// event (the offline banner), where dismissing would only hide something
     /// still true.
     var onDismiss: (() -> Void)?
+    @Environment(\.bannerMaxWidth) private var bannerMaxWidth
 
     init(
         icon: String,
@@ -81,7 +82,11 @@ struct BannerView: View {
         // Cap the banner at ~70% of the container width so it clears the
         // toolbar/action buttons it would otherwise overlap. Text wraps within
         // this width (no lineLimit) and the capsule grows vertically to fit.
-        .containerRelativeFrame(.horizontal) { width, _ in width * 0.7 }
+        // A host that has confined the banner to part of the window (a
+        // folded iPhone Duo's trailing page, #1648) supplies its own cap
+        // instead: the container-relative one measures the whole window and
+        // would push the capsule back across the fold.
+        .modifier(BannerWidthCap(explicit: bannerMaxWidth))
         // A plain `.gesture` rather than a high-priority one, so the trailing
         // action and the close button keep winning their own taps.
         .gesture(dismissSwipe)
@@ -201,5 +206,33 @@ private struct ToastOverlayModifier: ViewModifier {
             copyToPasteboard(address)
             self.toast = .addressCopied(address)
         }
+    }
+}
+
+/// The banner's width cap: an explicit width when the host supplies one,
+/// else 70% of the container. See `BannerView`.
+private struct BannerWidthCap: ViewModifier {
+    let explicit: CGFloat?
+
+    func body(content: Content) -> some View {
+        if let explicit {
+            content.frame(maxWidth: explicit)
+        } else {
+            content.containerRelativeFrame(.horizontal) { width, _ in width * 0.7 }
+        }
+    }
+}
+
+private struct BannerMaxWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+extension EnvironmentValues {
+    /// An explicit cap on a `BannerView`'s width, set by a host that has
+    /// confined the banner to part of the window; nil keeps the default
+    /// container-relative cap.
+    var bannerMaxWidth: CGFloat? {
+        get { self[BannerMaxWidthKey.self] }
+        set { self[BannerMaxWidthKey.self] = newValue }
     }
 }

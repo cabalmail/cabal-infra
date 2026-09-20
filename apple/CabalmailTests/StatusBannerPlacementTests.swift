@@ -51,4 +51,39 @@ final class StatusBannerPlacementTests: XCTestCase {
         XCTAssertEqual(StatusBannerPlacement.defaultBottomInset, 6)
         XCTAssertEqual(StatusBannerPlacement.bottomInset(isRegularWidth: true), 6)
     }
+
+    // MARK: - Folding hosts (#1648)
+
+    func testNoFoldIsNoPose() {
+        XCTAssertEqual(StatusBannerPlacement.pose(fold: nil), .none)
+        // The flat device's hinge comes back as an inactive, empty region.
+        XCTAssertEqual(StatusBannerPlacement.pose(fold: CGRect(x: 313, y: 0, width: 0, height: 0)), .none)
+    }
+
+    func testAVerticalHingeIsBookPoseAndConfinesBannersToTheTrailingPage() {
+        // Measured on the 27.1 simulator in landscape book pose: a 951pt
+        // window with the hinge (margins included) at x 455.5 to 495.5.
+        let hinge = CGRect(x: 455.5, y: 0, width: 40, height: 669)
+        XCTAssertEqual(StatusBannerPlacement.pose(fold: hinge), .book)
+        XCTAssertEqual(
+            StatusBannerPlacement.foldInsets(fold: hinge, windowSize: CGSize(width: 951, height: 635)),
+            StatusBannerPlacement.FoldInsets(leading: 495.5, bottom: 0, maxWidth: 951 - 495.5 - 24)
+        )
+    }
+
+    func testAHorizontalHingeIsLaptopPoseAndLiftsBannersOntoTheTopPanel() {
+        let hinge = CGRect(x: 0, y: 440, width: 626, height: 10)
+        XCTAssertEqual(StatusBannerPlacement.pose(fold: hinge), .laptop)
+        XCTAssertEqual(
+            StatusBannerPlacement.foldInsets(fold: hinge, windowSize: CGSize(width: 626, height: 890)),
+            StatusBannerPlacement.FoldInsets(leading: 0, bottom: 450, maxWidth: nil)
+        )
+    }
+
+    func testNoFoldAddsNoInsets() {
+        XCTAssertEqual(
+            StatusBannerPlacement.foldInsets(fold: nil, windowSize: CGSize(width: 626, height: 890)),
+            StatusBannerPlacement.FoldInsets()
+        )
+    }
 }
