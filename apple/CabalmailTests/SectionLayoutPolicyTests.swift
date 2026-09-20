@@ -86,4 +86,46 @@ final class SectionLayoutPolicyTests: XCTestCase {
         // launch (#1627).
         XCTAssertFalse(SectionLayoutPolicy.readerHidesSectionTabBar(isVisionOS: true))
     }
+
+    // MARK: - Measured width (#1679)
+
+    func testRegularClassesWithNarrowStaleBoundsHoldTheTabs() {
+        // iPhone Duo unfolding: traits say regular while the window is still
+        // the outer display's 466 pt.
+        XCTAssertEqual(
+            SectionLayoutPolicy.layout(isCompactWidth: false, isCompactHeight: false, measuredWidth: 466),
+            .compactTabs
+        )
+    }
+
+    func testRegularClassesWithRegularBoundsUseTheSplit() {
+        XCTAssertEqual(
+            SectionLayoutPolicy.layout(isCompactWidth: false, isCompactHeight: false, measuredWidth: 951),
+            .regularSplit
+        )
+    }
+
+    func testAnUnmeasuredWindowTrustsTheSizeClasses() {
+        // Cold launch: nothing has been laid out yet.
+        XCTAssertEqual(
+            SectionLayoutPolicy.layout(isCompactWidth: false, isCompactHeight: false, measuredWidth: nil),
+            .regularSplit
+        )
+        XCTAssertEqual(
+            SectionLayoutPolicy.layout(isCompactWidth: false, isCompactHeight: false, measuredWidth: 0),
+            .regularSplit
+        )
+    }
+
+    func testAWideMeasurementNeverPromotesACompactClass() {
+        XCTAssertEqual(
+            SectionLayoutPolicy.layout(isCompactWidth: true, isCompactHeight: false, measuredWidth: 951),
+            .compactTabs
+        )
+    }
+
+    func testTheFloorSitsBetweenTheWidestCompactAndNarrowestRegularWindows() {
+        XCTAssertGreaterThan(SectionLayoutPolicy.regularWidthFloor, 507)
+        XCTAssertLessThan(SectionLayoutPolicy.regularWidthFloor, 683)
+    }
 }

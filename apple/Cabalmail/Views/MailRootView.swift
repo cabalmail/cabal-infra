@@ -321,7 +321,20 @@ struct MailRootView: View {
             // macOS pass through untouched. See `resizableContentColumn`.
             resizableContentColumn(decoratedContentColumn)
         } detail: {
+            #if os(iOS)
+            // The reader's floor, declared where UIKit reads it. Without it
+            // the split controller applies its own secondary-column minimum
+            // (about 540 pt, measured on iOS 27.1) and, when the list leaves
+            // less than that, gives up tiling and floats the list over a
+            // reader the width of the whole window: on iPhone Duo's 951 pt
+            // inner display a list wider than 410 pt did that, so the
+            // crease-pinned 50/50 split could never tile (#1679). The floor
+            // is the one `listColumnMaxWidth` already keeps for the reader.
             detailColumn
+                .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
+            #else
+            detailColumn
+            #endif
         }
         // Revealing folders floats a panel OVER the message list rather than
         // tiling the split's sidebar column, so the list never shifts and its

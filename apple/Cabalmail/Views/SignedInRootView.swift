@@ -45,6 +45,9 @@ struct SignedInRootView: View {
     /// The window's active fold, if the host is a partially open iPhone Duo;
     /// keeps the banners off the hinge (#1648, `StatusBannerPlacement`).
     @State private var foldGeometry = FoldGeometry()
+    /// The window width the section layout was last laid out at; see
+    /// `SectionLayoutPolicy.layout(isCompactWidth:isCompactHeight:measuredWidth:)`.
+    @State private var measuredWidth: CGFloat?
     // iPad only: the regular-width branch below reads the size class and
     // presents the Settings sheet. visionOS uses its own tab bar
     // (`VisionSectionView`) and macOS its Settings scene, so neither compiles
@@ -57,6 +60,11 @@ struct SignedInRootView: View {
 
     var body: some View {
         sectionLayout
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { width in
+                measuredWidth = width
+            }
             // Bottom-anchored since #1426: at the top the banners covered the
             // filter pills and clipped the first message row.
             // Where the fold is, so the banners can stay off it (#1648).
@@ -133,7 +141,8 @@ struct SignedInRootView: View {
     private var layoutChoice: SectionLayoutPolicy.Layout {
         SectionLayoutPolicy.layout(
             isCompactWidth: horizontalSizeClass == .compact,
-            isCompactHeight: verticalSizeClass == .compact
+            isCompactHeight: verticalSizeClass == .compact,
+            measuredWidth: measuredWidth
         )
     }
 
