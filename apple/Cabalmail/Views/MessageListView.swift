@@ -51,12 +51,13 @@ struct MessageListView: View {
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
     #if !os(macOS)
-    // Wide vs. compact gates whether message rows are draggable. On a
-    // compact iPhone the sidebar and the message list never share the
-    // screen, so there's nowhere to drop a message, and a long-press drag
-    // would only fight each row's context menu. Non-private so the `+Rows`
-    // extension that builds the rows can read it. macOS has no size class
-    // and is always treated as wide (see `isWideLayout`).
+    // Wide vs. compact decides the row's menu shape (a per-row context menu
+    // on compact, the List-level selection menu on wide) and whether a
+    // multi-selection drag is offered. Rows drag on both since #1681, so a
+    // message can leave the app as an `.eml` from a compact window too.
+    // Non-private so the `+Rows` extension that builds the rows can read it.
+    // macOS has no size class and is always treated as wide (see
+    // `isWideLayout`).
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     #endif
     // Drives the background-snapshot optimization: while the scene isn't
