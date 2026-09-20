@@ -36,15 +36,22 @@ enum MainMailScene {
     /// kept alive by this bookkeeping.
     static weak var session: UISceneSession?
 
-    /// Brings the main mail scene to the foreground, if one was recorded.
-    /// No-op otherwise (e.g. a mailto: cold launch straight into compose —
-    /// there is no mail scene to return to).
+    /// Brings the main mail scene to the foreground. With no recorded
+    /// session — a mailto: cold launch straight into compose, or a compose
+    /// window that outlived the mail scene it was opened from — it asks for
+    /// a new application-role scene instead, which SwiftUI serves from the
+    /// first `WindowGroup`, the mail window. The compose window then has
+    /// somewhere to land: `dismissWindow()` cannot dismiss an app's last
+    /// scene on iOS, so without this a lone compose window shrugged off
+    /// Cancel and Send alike (#1688).
     static func activate() {
-        guard let session else { return }
-        UIApplication.shared.activateSceneSession(
-            for: UISceneSessionActivationRequest(session: session),
-            errorHandler: nil
-        )
+        let request: UISceneSessionActivationRequest
+        if let session {
+            request = UISceneSessionActivationRequest(session: session)
+        } else {
+            request = UISceneSessionActivationRequest(role: .windowApplication)
+        }
+        UIApplication.shared.activateSceneSession(for: request, errorHandler: nil)
     }
 }
 
