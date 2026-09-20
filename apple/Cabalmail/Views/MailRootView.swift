@@ -756,13 +756,17 @@ extension MailRootView {
                 }
             }
             if isWideSidebar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        applyInspectorState(InspectorPresentationPolicy.toggled(inspectorState))
-                    } label: {
-                        Image(systemName: "at")
-                            .accessibilityLabel("Addresses")
-                    }
+                // While the inspector is open this is the one item the bar
+                // must keep: on an iPhone Duo the column beside it is narrow
+                // enough that Compose and `@` both fold into the system
+                // overflow, which is inert on the 27.1 beta, and the
+                // inspector then cannot be closed (#1670). Closed, it ranks
+                // like any other item.
+                if addressInspectorPresented {
+                    ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
+                        .keepsInBarFirst()
+                } else {
+                    ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
                 }
             }
         }
@@ -857,6 +861,18 @@ extension MailRootView {
 // Same-file extension so the primary struct body stays under SwiftLint's
 // `type_body_length` cap; `private` state stays reachable from here.
 extension MailRootView {
+    /// The `@` button: opens and closes the addresses inspector through
+    /// `InspectorPresentationPolicy`, so the button's request is what the
+    /// framework's own writes are checked against.
+    var addressInspectorToggle: some View {
+        Button {
+            applyInspectorState(InspectorPresentationPolicy.toggled(inspectorState))
+        } label: {
+            Image(systemName: "at")
+                .accessibilityLabel("Addresses")
+        }
+    }
+
     /// The binding `.inspector(isPresented:)` drives, filtered through
     /// `InspectorPresentationPolicy` so a framework-initiated present (the
     /// iPhone Duo unfold, #1663) is dropped while a dismiss is honoured.
