@@ -42,6 +42,9 @@ import CabalmailKit
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @State private var isOffline = false
+    /// The window's active fold, if the host is a partially open iPhone Duo;
+    /// keeps the banners off the hinge (#1648, `StatusBannerPlacement`).
+    @State private var foldGeometry = FoldGeometry()
     // iPad only: the regular-width branch below reads the size class and
     // presents the Settings sheet. visionOS uses its own tab bar
     // (`VisionSectionView`) and macOS its Settings scene, so neither compiles
@@ -56,10 +59,20 @@ struct SignedInRootView: View {
         sectionLayout
             // Bottom-anchored since #1426: at the top the banners covered the
             // filter pills and clipped the first message row.
+            // Where the fold is, so the banners can stay off it (#1648).
+            .onGeometryChange(for: FoldGeometry.self) { proxy in
+                FoldGeometry(windowSize: proxy.size, fold: activeFoldRegion(in: proxy))
+            } action: { geometry in
+                foldGeometry = geometry
+            }
             .overlay(alignment: .bottom) {
                 statusBanners
+                    .environment(\.bannerMaxWidth, foldInsets.maxWidth)
+                    .padding(.leading, foldInsets.leading)
+                    .padding(.bottom, foldInsets.bottom)
                     .animation(.default, value: isOffline)
                     .animation(.default, value: appState.toast)
+                    .animation(.default, value: foldInsets)
             }
             .task { await observeReachability() }
             // App-wide compose-request receiver (mailto: URLs, menu and
@@ -152,6 +165,12 @@ struct SignedInRootView: View {
         .padding(.horizontal, 12)
     }
 
+    /// Book pose: banners on the trailing page; laptop pose: above the hinge;
+    /// otherwise nothing extra. See `StatusBannerPlacement.foldInsets`.
+    private var foldInsets: StatusBannerPlacement.FoldInsets {
+        StatusBannerPlacement.foldInsets(fold: foldGeometry.fold, windowSize: foldGeometry.windowSize)
+    }
+
     /// Lift the banners above the tab bar wherever one occupies that band —
     /// see `StatusBannerPlacement`. Keyed on the layout actually drawn, not
     /// the raw size class: a Plus / Max iPhone in landscape is regular-width
@@ -213,3 +232,9 @@ struct AddressManagementTab: View {
     }
 }
 #endif
+
+/// What the signed-in root measures about the window for the banners.
+struct FoldGeometry: Equatable {
+    var windowSize: CGSize = .zero
+    var fold: CGRect?
+}
