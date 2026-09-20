@@ -17,6 +17,23 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         )
     }
 
+    func testTheOpenInspectorsToggleOutranksCompose() throws {
+        // With the inspector open, `@` is the one item that can close it, so
+        // it takes the priority above `keepsInBar()`; closed, it is unranked.
+        let body = try Self.source("Cabalmail/Views/MailRootView.swift")
+        let ranked = "if addressInspectorPresented {\n"
+            + "                    ToolbarItem(placement: .primaryAction) { addressInspectorToggle }\n"
+            + "                        .keepsInBarFirst()"
+        XCTAssertTrue(body.contains(ranked))
+        XCTAssertEqual(body.components(separatedBy: ".keepsInBarFirst()").count - 1, 1)
+        let helper = try Self.source("Cabalmail/Views/ToolbarVisibility.swift")
+        XCTAssertTrue(helper.contains("ToolbarItemVisibilityPriority(higherThan: .high)"))
+        XCTAssertEqual(
+            helper.components(separatedBy: "#if (os(iOS) || os(macOS)) && compiler(>=6.4)").count - 1, 2,
+            "both helpers carry the toolchain guard"
+        )
+    }
+
     func testTheHelperIsAvailabilityGuarded() throws {
         // `.high` does not exist before iOS 27 / macOS 26.1 and is
         // unavailable on visionOS; the helper must degrade to the item
