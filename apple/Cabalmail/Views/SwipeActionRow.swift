@@ -1,24 +1,28 @@
 import SwiftUI
 
-// Swipe actions for the virtualized message list, restored after the
-// ScrollView+LazyVStack rework (`project_apple_list_virtualization`)
-// dropped `List`-only `.swipeActions`.
+// Swipe actions for the virtualized message list. `.swipeActions` used to
+// be `List`-only, so after the ScrollView+LazyVStack rework
+// (`project_apple_list_virtualization`) each row embedded a single-row
+// `List` purely to borrow the native gesture -- the only way to keep the
+// macOS two-finger trackpad swipe, which is a horizontal SCROLL a
+// `DragGesture` cannot read. That cost the rows a shared container: SwiftUI
+// scopes swipe bookkeeping to one `List`, so N rows in N lists had no way to
+// retract each other, revealed actions piled up and survived a whole
+// navigation round trip (#901); the per-row List also lost the leading edge
+// to a tiled split view (the iPad leading-swipe saga) and made a background
+// snapshot expensive enough to trip the scene-update watchdog.
 //
-// Rather than hand-roll the gesture (a SwiftUI `DragGesture` can't read the
-// macOS two-finger trackpad swipe -- that's a horizontal SCROLL gesture, not
-// a click-drag), each loaded row embeds a single-row `List` purely to borrow
-// its native `.swipeActions`. That gets the real system swipe on every
-// platform at once: macOS two-finger trackpad, iOS/iPadOS touch, visionOS --
-// identical to the pre-virtualization list and to system Mail.
+// The 27 SDKs end the trade: the virtualized ScrollView is marked
+// `.swipeActionsContainer()` (in `MessageListView+Selection`), and each row
+// attaches `.swipeActions` directly to plain content. One container, so one
+// reveal at a time and tap-elsewhere retracts; the system gesture on every
+// platform, trackpad included (measured in the `swipe-repro` harness,
+// 2026-08-01). The deployment target is 27 for this reason.
 //
 // The index-addressed virtualization REQUIRES every row to occupy exactly
 // `rowHeight` (the scroll extent is `rowCount * rowHeight` and placeholders
-// align to it -- see the `virtualizedList` doc comment). A `List` carries its
-// own insets / min-row-height / chrome, so the wrapper is pinned with
-// `.frame(height:).clipped()`: whatever the List does internally, the row's
-// footprint in the outer `LazyVStack` stays exactly `rowHeight`, matching the
-// placeholder rows. Inset/separator/background are zeroed so the content
-// fills that height rather than sitting inside List padding.
+// align to it -- see the `virtualizedList` doc comment), so the row is
+// pinned with `.frame(height:)` and clipped.
 
 /// One swipe action (leading or trailing). `tint` is the revealed
 /// background; `perform` runs on tap / full-swipe. `identifier` is the
@@ -50,9 +54,10 @@ struct SwipeActionSpec {
     }
 }
 
-/// A fixed-height list row that reveals leading / trailing swipe actions
-/// via a borrowed single-row `List`. Clicking / tapping the row selects it
-/// (`onSelect`).
+/// A fixed-height message row with leading / trailing swipe actions.
+/// Clicking / tapping the row selects it (`onSelect`). Hosted in a
+/// container marked `.swipeActionsContainer()`; on its own it is a plain
+/// row with no swipe.
 struct SwipeActionRow<Content: View>: View {
     let height: CGFloat
     let rowBackground: Color
@@ -62,52 +67,23 @@ struct SwipeActionRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        List {
-            rowContent
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        // Zero the List's own content insets on both axes (they differ by
-        // platform) so the row's geometry is driven solely by `height` + the
-        // explicit row insets below, not by hidden List padding.
-        .contentMargins(.all, 0, for: .scrollContent)
-        // NOT `.scrollDisabled(true)`: on macOS the swipe IS a two-finger
-        // scroll gesture, and disabling scroll suppresses it. Instead the
-        // single row exactly fills the frame, so there's no vertical overflow
-        // to scroll; `.basedOnSize` drops the bounce so a vertical two-finger
-        // pass-through reaches the outer ScrollView while the horizontal swipe
-        // stays live for `.swipeActions`.
-        .scrollBounceBehavior(.basedOnSize)
-        .environment(\.defaultMinListRowHeight, height)
-        // A List is focusable and arrow-navigable; left alone, each per-row
-        // List would compete with the outer ScrollView for keyboard focus and
-        // swallow Up/Down. Drop it from the focus chain so the outer list owns
-        // keyboard navigation.
-        .focusable(false)
-        .frame(height: height)
-        .clipped()
-    }
-
-    private var rowContent: some View {
-        // The row's click target is a `Button`, not a bare `.onTapGesture`.
-        // On macOS 27 a tap gesture inside this list never receives the click
-        // -- a hosted control in the same stack does (#984) -- and a button is
-        // the honest shape anyway: the row answers `AXPress`, so VoiceOver and
-        // automation can activate it, matching the bulk-mode row, which has
-        // always been a `Button`.
+        // The row's click target is a `Button`, not a bare `.onTapGesture`:
+        // the row answers `AXPress`, so VoiceOver and automation can
+        // activate it, matching the bulk-mode row, which has always been a
+        // `Button` (#984).
         Button(action: onSelect) {
             content()
                 .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
+                // Horizontal insets give the row its left/right breathing
+                // room (matching `placeholderRow`); the selection background
+                // below fills the full width, content sits inset.
+                .padding(.horizontal, 16)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Horizontal insets give the row its left/right breathing room
-        // (matching `placeholderRow`); vertical stays 0 so `height` alone
-        // sets the row height. The selection background fills the full
-        // width (it's a separate `listRowBackground`), content sits inset.
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-        .listRowSeparator(.hidden)
-        .listRowBackground(rowBackground)
+        .frame(height: height)
+        .background(rowBackground)
+        .clipped()
         .swipeActions(edge: .trailing) {
             if let trailing { swipeButton(trailing) }
         }

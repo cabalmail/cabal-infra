@@ -26,9 +26,13 @@ options:
   preGenCommand: scripts/sync-vendored.sh
   bundleIdPrefix: com.cabalmail
   deploymentTarget:
-    iOS: "18.0"
-    macOS: "15.0"
-    visionOS: "2.0"
+    # 27 across the board since 2026-09-20: the message list's swipe
+    # actions ride `.swipeActionsContainer()`, a 27.0 API, with no
+    # pre-27 fallback (the embedded-List mechanism it replaced is gone,
+    # see SwipeActionRow.swift). The tester fleet is on 27.
+    iOS: "27.0"
+    macOS: "27.0"
+    visionOS: "27.0"
     watchOS: "11.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
