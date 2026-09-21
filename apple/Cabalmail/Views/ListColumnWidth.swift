@@ -98,6 +98,20 @@ enum ListColumnWidth {
         let floor = min(minimum, max(squeezedMinimum, ceiling - minimumTravel))
         return (floor, max(ceiling, floor + minimumTravel))
     }
+
+    /// The fold's x position for the list column to sit on, given the frame
+    /// of a `.division` reserved region, or nil when that region is not a
+    /// vertical hinge. iPhone Duo reports one division whatever the pose:
+    /// tall and narrow when the hinge is vertical (book pose, flat
+    /// landscape), wide and short when it is horizontal (laptop pose, flat
+    /// portrait). Only the vertical one divides the split's columns; pinning
+    /// the list to the midpoint of a horizontal hinge put it at half the
+    /// window in portrait, which left the reader under its floor and UIKit
+    /// floating the list over it with no way back (#1686).
+    static func crease(dividing region: CGRect) -> CGFloat? {
+        guard region.height > region.width else { return nil }
+        return region.midX
+    }
 }
 
 #if os(macOS)
