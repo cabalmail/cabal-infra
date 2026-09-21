@@ -48,6 +48,28 @@ class DisposeSurfaceScanTest {
                 error("unbalanced SwipeRow( at ${match.range.first}")
             }.toList()
 
+    /**
+     * Whether [arguments] passes `disposeIntent` as a named argument of the
+     * `SwipeRow(` call itself. #1661: a plain `contains("disposeIntent =")`
+     * is satisfied by the *comparison* `disposeIntent == DisposeIntent.Purge`
+     * that Search makes inside its own `onDispose` lambda, so that screen
+     * could drop the wiring entirely and the scan still signed it off. The
+     * name has to sit at the argument list's own nesting depth and be
+     * followed by a single `=`.
+     */
+    private fun passesDisposeIntent(arguments: String): Boolean {
+        var depth = 0
+        val tokens = Regex("""[(){}\[\]]|\bdisposeIntent\s*=(?!=)""")
+        for (token in tokens.findAll(arguments)) {
+            when (token.value.first()) {
+                '(', '{', '[' -> depth++
+                ')', '}', ']' -> depth--
+                else -> if (depth == 0) return true
+            }
+        }
+        return false
+    }
+
     @Test
     fun `every mail swipe row is given its row's dispose intent`() {
         val files = mainSources.walkTopDown().filter { it.extension == "kt" }.toList()
@@ -65,7 +87,7 @@ class DisposeSurfaceScanTest {
         )
         val offenders =
             callers
-                .filterNot { (_, calls) -> calls.all { it.contains("disposeIntent =") } }
+                .filterNot { (_, calls) -> calls.all { passesDisposeIntent(it) } }
                 .map { it.first }
         assertEquals(emptyList<String>(), offenders, "a mail swipe row left to the folder-blind default")
     }
@@ -91,11 +113,56 @@ class DisposeSurfaceScanTest {
             ) { Row() }
             """.trimIndent()
         assertEquals(1, swipeRowCallArguments(nested).size)
-        assertTrue(swipeRowCallArguments(nested).single().contains("disposeIntent ="))
+        assertTrue(passesDisposeIntent(swipeRowCallArguments(nested).single()))
         assertTrue(swipeRowCallArguments("internal fun SwipeRow(\n    isSeen: Boolean,\n)").isEmpty())
         assertTrue(swipeRowCallArguments(code("// SwipeRow(isSeen = true)")).isEmpty())
         assertTrue(swipeRowCallArguments(code("/**\n * [SwipeRow(isSeen)]\n */")).isEmpty())
-        assertFalse(swipeRowCallArguments("SwipeRow(isSeen = true)").single().contains("disposeIntent ="))
+        assertFalse(passesDisposeIntent(swipeRowCallArguments("SwipeRow(isSeen = true)").single()))
         assertTrue(swipeRowCallArguments("FeedSwipeRow(isSeen = true)").isEmpty())
+    }
+
+    @Test
+    fun `a row that only compares or nests the dispose intent has not passed it`() {
+        // #1661: Search's `onDispose` reads `if (disposeIntent ==
+        // DisposeIntent.Purge)`, and `disposeIntent ==` contains
+        // `disposeIntent =` — so the substring the scan used to look for was
+        // still there with the wiring deleted.
+        val comparesOnly =
+            """
+            SwipeRow(
+                isSeen = envelope.isSeen,
+                onDispose = {
+                    if (disposeIntent == DisposeIntent.Purge) {
+                        pendingPurge = envelope
+                    } else {
+                        viewModel.dispose(envelope)
+                    }
+                },
+            ) { Row() }
+            """.trimIndent()
+        assertFalse(passesDisposeIntent(swipeRowCallArguments(comparesOnly).single()))
+        val nestedPass =
+            """
+            SwipeRow(
+                isSeen = envelope.isSeen,
+                onDispose = { confirm(disposeIntent = disposeIntent) },
+            ) { Row() }
+            """.trimIndent()
+        assertFalse(passesDisposeIntent(swipeRowCallArguments(nestedPass).single()))
+        val wired =
+            """
+            SwipeRow(
+                isSeen = envelope.isSeen,
+                onDispose = {
+                    if (disposeIntent == DisposeIntent.Purge) {
+                        pendingPurge = envelope
+                    } else {
+                        viewModel.dispose(envelope)
+                    }
+                },
+                disposeIntent = disposeIntent,
+            ) { Row() }
+            """.trimIndent()
+        assertTrue(passesDisposeIntent(swipeRowCallArguments(wired).single()))
     }
 }
