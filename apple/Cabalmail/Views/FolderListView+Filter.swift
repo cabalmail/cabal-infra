@@ -50,9 +50,29 @@ extension FolderListView {
         )
         let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !needle.isEmpty else { return byPills }
-        return byPills.filter { folder in
-            folder.path.lowercased().contains(needle)
-                || folder.name.lowercased().contains(needle)
+        return byPills.filter { FolderListFilter.matches($0, needle: needle) }
+    }
+
+    /// The tree's last row when the pills are suppressing matches the user
+    /// typed for (#1662): a button that clears the pills to All, so the find
+    /// is one click from its answer. Nothing at all when there is nothing to
+    /// say, or when `shown` is false because the Mail section is collapsed.
+    /// `visible` is `filteredFolders(folders)`, passed in rather than
+    /// recomputed so the row cannot disagree with the tree above it. Not a
+    /// `ContentUnavailableView`: this row also appears *under* a non-empty
+    /// tree, where nothing is unavailable.
+    @ViewBuilder
+    func folderFilterHintRow(_ folders: [Folder], visible: [Folder], shown: Bool = true) -> some View {
+        if shown, let hint = folderFilter.hint(for: folders, visible: visible, needle: activeFilterText) {
+            Button {
+                selectFolderPill(.all)
+            } label: {
+                Label(hint.label, systemImage: "line.3.horizontal.decrease.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("folder.filter.hint")
         }
     }
 
