@@ -366,7 +366,7 @@ jobs:
       # check that quietly did not run is the failure the step exists to
       # prevent. Pinned to the same version linux.yml installs; a test in
       # linux/xtask/tests/workflow_contract.rs fails if the two drift.
-      uses: taiki-e/install-action@9534c84618278caac52cb373bb164ed464dbd8af  # v2.87.11
+      uses: taiki-e/install-action@4076c08d76dba979c11a7285295b0716c1d67908  # v2.87.15
       with:
         tool: cargo-deny@0.20.2
     - name: cache-cargo
