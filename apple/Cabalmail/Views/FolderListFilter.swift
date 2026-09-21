@@ -69,6 +69,52 @@ struct FolderListFilter: Equatable {
         return next
     }
 
+    /// Whether `folder` answers the sidebar's text filter. Lifted out of
+    /// `FolderListView.filteredFolders` so `hint(for:visible:needle:)`
+    /// counts matches by the same rule the tree draws them by; `needle` is
+    /// already trimmed and lowercased.
+    static func matches(_ folder: Folder, needle: String) -> Bool {
+        folder.path.lowercased().contains(needle)
+            || folder.name.lowercased().contains(needle)
+    }
+
+    /// What the sidebar says when a find loses to the pills (#1662).
+    ///
+    /// The pills run before the text filter, so typing the name of a folder
+    /// the current pill excludes drew nothing at all — no row, no empty
+    /// state, no hint that a pill two rows above was the reason. The pills
+    /// stay authoritative over the rows (a pill reading Subscribed must not
+    /// quietly list unsubscribed folders), but the tree owes the user the
+    /// count it is suppressing and one click out to All.
+    struct Hint: Equatable {
+        /// Folders the needle matched and the pills then removed.
+        var suppressed: Int
+        /// Whether the tree drew any row at all under this needle.
+        var anyVisible: Bool
+
+        /// Phrased as the action the row performs, because the row is the
+        /// button that performs it.
+        var label: String {
+            let matches = suppressed == 1 ? "match" : "matches"
+            return anyVisible
+                ? "Show \(suppressed) more \(matches) under All"
+                : "Show \(suppressed) hidden \(matches) under All"
+        }
+    }
+
+    /// The hint for a needle, or `nil` when there is nothing to say: an
+    /// empty needle, the All pill (which suppresses nothing), or a needle
+    /// whose every match is already drawn. `visible` is what the tree drew
+    /// — pills and needle both applied.
+    func hint(for folders: [Folder], visible: [Folder], needle rawNeedle: String) -> Hint? {
+        let needle = rawNeedle.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty, !isAll else { return nil }
+        let matched = folders.filter { FolderListFilter.matches($0, needle: needle) }.count
+        let suppressed = matched - visible.count
+        guard suppressed > 0 else { return nil }
+        return Hint(suppressed: suppressed, anyVisible: !visible.isEmpty)
+    }
+
     /// The folders the tree draws. `selection` is exempt: reading the last
     /// unread message in a folder must not pull that folder out from under
     /// the user, and unsubscribing the open folder shouldn't either.

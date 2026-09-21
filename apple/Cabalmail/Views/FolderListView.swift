@@ -136,8 +136,9 @@ struct FolderListView: View {
                 // in; `FolderSectionRows` computes depth, chevron and collapse
                 // against that list, so a folder whose parent is filtered out
                 // draws flush rather than orphaned.
+                let visible = filteredFolders(model.folders)
                 let rows = FolderSectionRows.rows(
-                    for: filteredFolders(model.folders),
+                    for: visible,
                     collapsed: collapsedSet,
                     activeSelection: selection?.path
                 )
@@ -159,6 +160,11 @@ struct FolderListView: View {
                         ForEach(FolderSectionDisclosure.visibleRows(rows, isExpanded: mailExpanded)) { row in
                             folderRow(row, model: model, collapsed: collapsedSet)
                         }
+                        // #1662: a needle matching only folders the pills
+                        // exclude drew an empty tree and said nothing. The
+                        // rows stay the pills' to decide; this names what
+                        // they took and offers All.
+                        folderFilterHintRow(model.folders, visible: visible, shown: mailExpanded)
                     } header: {
                         sectionHeader("Mail", key: "mail", isExpanded: $mailExpanded)
                     }
@@ -168,6 +174,7 @@ struct FolderListView: View {
                     ForEach(rows) { row in
                         folderRow(row, model: model, collapsed: collapsedSet)
                     }
+                    folderFilterHintRow(model.folders, visible: visible)
                 }
             }
             if let feedSelection {
