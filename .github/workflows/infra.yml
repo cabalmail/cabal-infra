@@ -172,7 +172,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: results.sarif
         category: checkov-dns
@@ -219,7 +219,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: terraform/dns/tflint.sarif
         category: tflint-dns
@@ -251,7 +251,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: trivy-dns.sarif
         category: trivy-dns
@@ -277,7 +277,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -352,7 +352,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -473,7 +473,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: results.sarif
         category: checkov-infra
@@ -524,7 +524,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: terraform/infra/tflint.sarif
         category: tflint-infra
@@ -556,7 +556,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: trivy-infra.sarif
         category: trivy-infra
@@ -590,7 +590,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -756,7 +756,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -856,7 +856,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
