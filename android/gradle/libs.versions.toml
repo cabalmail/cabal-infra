@@ -4,7 +4,7 @@
 # module actually references.
 
 [versions]
-agp = "9.4.0"
+agp = "9.4.1"
 kotlin = "2.4.20"
 # KSP2 (2.3.x+) versions independently of Kotlin; check the KSP release notes for
 # the supported Kotlin range when bumping either.
@@ -16,24 +16,24 @@ activityCompose = "1.13.0"
 composeBom = "2026.09.00"
 coroutines = "1.11.0"
 serialization = "1.11.0"
-ktor = "3.5.2"
+ktor = "3.6.0"
 datastore = "1.1.6"
 room = "2.8.5"
 coil = "3.6.2"
-amplify = "2.41.1"
+amplify = "2.42.0"
 junit = "6.1.3"
 junitPlatform = "6.1.3"
 turbine = "1.2.1"
 # 4.x requires Gradle 9 (this project is on Gradle 9 / AGP 9).
 tripletPlay = "4.1.1"
 # Markdown → HTML for the compose body (Phase 5). Pure Kotlin/JVM, no UI.
-jetbrainsMarkdown = "0.7.12"
+jetbrainsMarkdown = "0.7.14"
 # Background new-mail sync (Phase 7).
 work = "2.10.1"
 # Push (docs/1.x/android-push-notifications.md). No google-services plugin —
 # FirebaseOptions come from gradle properties (app/build.gradle.kts).
 firebaseMessaging = "25.1.3"
-playServicesBase = "18.10.1"
+playServicesBase = "18.11.0"
 
 [libraries]
 # AndroidX + Compose (app module)
