@@ -19,6 +19,9 @@ libadwaita
 # Linked directly, not only through gtk4: the binary calls into GLib, GObject,
 # and GIO, so it is a dependency in its own right rather than a transitive one.
 glib2
+# TLS for every request the client makes: reqwest runs on the system OpenSSL
+# and its trust store.
+openssl
 
 # [makedepends]
 # Compiles resources/*.blp to GtkBuilder XML. Its absence is a hard build

@@ -104,6 +104,7 @@ jobs:
             - 'react/admin/package-lock.json'
             - 'LICENSE.md'
             - 'design/color-tokens.json'
+            - 'terraform/infra/modules/app/templates/config.js.tftpl'
             - '.github/workflows/linux.yml'
             - '.github/workflows/lint.yml'
           kotlin:

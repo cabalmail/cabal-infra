@@ -14,6 +14,8 @@ build-essential
 pkg-config
 libgtk-4-dev
 libadwaita-1-dev
+# TLS for every request the client makes: reqwest runs on the system OpenSSL.
+libssl-dev
 # `glib-compile-resources`, which build.rs runs to bundle the GResource.
 libglib2.0-dev-bin
 # Compiles resources/*.blp to GtkBuilder XML. Its absence is a hard build

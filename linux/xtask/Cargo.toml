@@ -17,4 +17,5 @@ publish.workspace = true
 
 [dev-dependencies]
 cabalmail-kit = { path = "../cabalmail-kit" }
+serde_json = "1"
 toml = "1"

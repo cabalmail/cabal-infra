@@ -170,6 +170,27 @@ impl From<AuthFailure> for CabalmailError {
     }
 }
 
+/// Every `reqwest` failure the kit sees is a transport failure. Status codes
+/// arrive as responses, not errors, since nothing calls `error_for_status`; and
+/// bodies are decoded with `serde_json` after they are read, so `reqwest`'s own
+/// decode errors never arise.
+///
+/// The detail is the whole source chain: `reqwest`'s own message is "error
+/// sending request for url (...)", and the reason — a refused connection, a
+/// failed handshake — is further down.
+impl From<reqwest::Error> for CabalmailError {
+    fn from(error: reqwest::Error) -> Self {
+        let mut detail = error.to_string();
+        let mut source = std::error::Error::source(&error);
+        while let Some(cause) = source {
+            detail.push_str(": ");
+            detail.push_str(&cause.to_string());
+            source = cause.source();
+        }
+        Self::Network(detail)
+    }
+}
+
 /// A plain sentence plus whatever the lower layer had to say. Detail arrives
 /// as a fragment ("connection reset by peer") as often as a sentence, so it
 /// gets a full stop; an empty one is dropped rather than leaving the copy

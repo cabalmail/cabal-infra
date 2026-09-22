@@ -22,8 +22,8 @@ Status tags mirror the **Status:** line on each work item. An item with no tag h
   - [5. Release artifacts](#5-release-artifacts) — **partial**; AUR publication **blocked**
   - [6. Guard rails](#6-guard-rails) — **shipped** (WebView grep moved to Phase 4)
   - [Phase 2 verification](#phase-2-verification)
-- [Phase 3: Configuration, Authentication & API Client](#phase-3-configuration-authentication--api-client)
-  - [1. Runtime configuration](#1-runtime-configuration)
+- [Phase 3: Configuration, Authentication & API Client](#phase-3-configuration-authentication--api-client) — **in progress**
+  - [1. Runtime configuration](#1-runtime-configuration) — **shipped** (kit only; first-launch prompt unowned)
   - [2. Authentication](#2-authentication)
   - [3. Secret storage](#3-secret-storage)
   - [4. API client](#4-api-client)
@@ -403,7 +403,8 @@ Where the work stands, so it does not have to be reverse-engineered from git. Ev
 | --- | --- |
 | 1. Workspace scaffolding | **Complete** (2026-08-08). All five items shipped; `cargo run -p cabalmail-gtk` opens a window. |
 | 2. Build pipeline, packaging & test harness | **In progress.** Items 1, 2, 4, and 6 shipped, and item 5's artifact upload with them. Item 3 shipped layer (c) whole, and the *enforcement* halves of (a) and (d) - the coverage floor and the smoke job. What those two layers test is written with the code they test, so most of (a) and (d) arrives with Phases 3 to 5. Layer (b) moved to Phase 3, where the API client its fixtures decode into lands. Item 5's AUR publication is the one thing still blocked. |
-| 3-8 | Not started. |
+| 3. Configuration, authentication & API client | **In progress.** Item 1 shipped in the kit; nothing in the app calls it yet, and the first-launch prompt for a control domain has no work item - see its status line. |
+| 4-8 | Not started. |
 
 > **Paused (2026-08-24): AUR publication.** The AUR is closed to new account registrations, so the Arch package has no route to publication. Item 4's work is written, tested, and committed on the branch `claude/linux-phase-2-arch-packaging`, which is **not** pushed and has **no PR open** - deliberately, until the AUR question resolves. Item 5's AUR step was already a manual, human-gated act; it is now blocked outright. Nothing else in Phase 2 depends on either, so items 3 and 6 can proceed.
 
@@ -628,6 +629,8 @@ The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow
 ## Phase 3: Configuration, Authentication & API Client
 
 ### 1. Runtime configuration
+
+**Status:** Shipped 2026-09-22 (kit only). `cabalmail_kit::config::deployment` fetches and decodes the descriptor, derives `imap_host`, and caches it at `$XDG_CACHE_HOME/cabalmail/deployment.json`; `resolve` reads the control domain from `Settings`. The cache answers only a transient failure (no answer, or 408/429/502/503/504) and only for the control domain it was fetched from - a 404 or an undecodable body surfaces rather than being papered over with an earlier copy. A descriptor naming a non-HTTPS `invokeUrl` is refused, since the ID token rides on every request to it. The fixture at `cabalmail-kit/tests/fixtures/deployment/descriptor.json` is held to `terraform/infra/modules/app/templates/config.js.tftpl` by `xtask/tests/deployment_descriptor_contract.rs`. This item brought `reqwest` into the kit, on `native-tls` (the system OpenSSL, now in `packaging/deps/`) rather than rustls, whose crypto providers would need `deny.toml`'s licence list widened. Not done: the "entered on first launch" half. Entering a control domain is a sign-in-screen field on every other client, and no work item in this plan owns a sign-in screen - item 2 is the kit's Cognito surface and Phase 4 item 1 starts at the three-pane shell. Until one does, `control_domain` is set with `cabalmail config set control_domain <host>`.
 
 Two distinct things are called "config" in this codebase, and conflating them will cause bugs. Keep the names apart in code and docs:
 
