@@ -13,10 +13,10 @@ publish.workspace = true
 # display server. CI enforces it (Phase 2, work item 6).
 [dependencies]
 directories = "6"
-# TLS through the system OpenSSL rather than rustls: the distributions this
-# client is packaged for patch OpenSSL and ship the trust store it reads, and
-# neither aws-lc-rs nor ring would clear deny.toml's licence list unamended.
-reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
+# rustls on aws-lc-rs, verifying against the system trust store through
+# rustls-platform-verifier. Nothing links the system OpenSSL, so the packages
+# need no TLS library; aws-lc-sys builds with the C compiler alone.
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"

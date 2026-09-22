@@ -23,7 +23,7 @@ pkgdesc='GTK4 desktop client for Cabalmail, a self-hosted mail system'
 arch=('x86_64' 'aarch64')
 url='https://github.com/cabalmail/cabal-infra'
 license=('AGPL-3.0-or-later')
-depends=('glib2' 'gtk4' 'libadwaita' 'openssl')
+depends=('glib2' 'gtk4' 'libadwaita')
 makedepends=('blueprint-compiler' 'git' 'glib2-devel' 'go-md2man' 'rust')
 
 # The composer renders Markdown inside a WebKit view with the same bytes the

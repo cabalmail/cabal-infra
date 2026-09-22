@@ -6,7 +6,7 @@
   `$XDG_CACHE_HOME/cabalmail/deployment.json`, and the cache answers only when
   the deployment cannot be reached or answers with a retryable status - a
   refusal or an undecodable descriptor is reported, and another deployment's
-  cache answers nothing. The kit's HTTP stack is `reqwest` on the system
-  OpenSSL, which joins the Arch package's dependencies. A new workspace check
-  fails if the kit's descriptor fixture drifts from the keys Terraform's
-  `config.json` template writes.
+  cache answers nothing. The kit's HTTP stack is `reqwest` on rustls, verifying
+  against the system trust store. A new workspace check fails if the kit's
+  descriptor fixture drifts from the keys Terraform's `config.json` template
+  writes.
