@@ -1,11 +1,11 @@
 //! `cargo xtask` — one deterministic spelling per build operation, shared by
 //! humans and CI.
 //!
-//! Three of the five subcommands run today. The other two are declared rather
-//! than omitted: the vocabulary is fixed here so the workflow, the README, and
-//! the packaging notes can name the operation before the phase that implements
-//! it lands, and so asking for one gets an answer about which work item owns
-//! it instead of "unknown subcommand".
+//! Four of the five subcommands run today. The last is declared rather than
+//! omitted: the vocabulary is fixed here so the workflow, the README, and the
+//! packaging notes can name the operation before the phase that implements it
+//! lands, and so asking for one gets an answer about which work item owns it
+//! instead of "unknown subcommand".
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -13,6 +13,7 @@ use std::process::ExitCode;
 mod ci;
 mod package;
 mod process;
+mod smoke;
 mod sync_vendored;
 
 /// Every subcommand `cargo xtask` answers to.
@@ -35,12 +36,15 @@ const SUBCOMMANDS: &[Subcommand] = &[
     Subcommand {
         name: "smoke",
         purpose: "install the built package, launch it headless, assert startup",
-        status: Status::Pending("Phase 2, work item 3"),
+        status: Status::Live,
     },
     Subcommand {
         name: "fixtures",
         purpose: "regenerate golden API fixtures from a live stage deployment",
-        status: Status::Pending("Phase 2, work item 3"),
+        // Declared in Phase 2's test-harness item and moved by its erratum:
+        // there is no API client to decode a captured response into until
+        // Phase 3, so a fixture corpus written now would assert nothing.
+        status: Status::Pending("Phase 3, work item 4"),
     },
 ];
 
@@ -74,6 +78,11 @@ enum Action {
     /// `package <distro>`, for a distribution that is packaged today.
     Package {
         distro: String,
+    },
+    /// `smoke [<package>]`: the package to install, or the one the last
+    /// `package arch` left behind.
+    Smoke {
+        package: Option<String>,
     },
     Pending {
         name: &'static str,
@@ -139,6 +148,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
             "arch" => Ok(package::arch(&workspace_dir())?),
             other => unreachable!("`{other}` parsed as packaged but has no builder"),
         },
+        Action::Smoke { package } => Ok(smoke::run(&workspace_dir(), package.as_deref())?),
         Action::Pending { name, work_item } => Err(Failure {
             message: format!(
                 "`{name}` is declared but not implemented yet — it lands in {work_item}."
@@ -172,6 +182,7 @@ fn parse(args: &[String]) -> Result<Action, Failure> {
         Status::Live => match subcommand.name {
             "ci" => parse_ci(&args[1..]),
             "package" => parse_package(&args[1..]),
+            "smoke" => parse_smoke(&args[1..]),
             "sync-vendored" => {
                 if let Some(extra) = args.get(1) {
                     return Err(Failure::usage(format!(
@@ -236,6 +247,21 @@ fn parse_package(rest: &[String]) -> Result<Action, Failure> {
             ),
             usage: false,
         }),
+    }
+}
+
+/// `smoke` takes an optional package path. Without one it installs whatever
+/// the last `package arch` left in the staging directory, which is what the
+/// developer flow wants; the workflow names a downloaded artifact instead.
+fn parse_smoke(rest: &[String]) -> Result<Action, Failure> {
+    match rest {
+        [] => Ok(Action::Smoke { package: None }),
+        [package] => Ok(Action::Smoke {
+            package: Some(package.clone()),
+        }),
+        [_, extra, ..] => Err(Failure::usage(format!(
+            "`smoke` takes at most one package, got `{extra}` as well"
+        ))),
     }
 }
 
@@ -306,20 +332,51 @@ mod tests {
         assert!(failure.usage);
     }
 
-    /// The point of declaring the three that have not landed: the reply names
-    /// the work item, so the reader goes to the plan rather than to their
-    /// shell history.
+    /// The point of declaring the one that has not landed: the reply names the
+    /// work item, so the reader goes to the plan rather than to their shell
+    /// history.
     #[test]
     fn a_pending_subcommand_names_the_work_item_that_implements_it() {
-        for (name, work_item) in [
-            ("smoke", "Phase 2, work item 3"),
-            ("fixtures", "Phase 2, work item 3"),
-        ] {
-            assert_eq!(
-                parse_args(&[name]).ok(),
-                Some(Action::Pending { name, work_item })
-            );
-        }
+        assert_eq!(
+            parse_args(&["fixtures"]).ok(),
+            Some(Action::Pending {
+                name: "fixtures",
+                work_item: "Phase 3, work item 4"
+            })
+        );
+    }
+
+    /// The developer spelling. Without a package it installs whatever the last
+    /// `package arch` built, which is the thing they just ran.
+    #[test]
+    fn smoke_installs_the_last_built_package_by_default() {
+        assert_eq!(
+            parse_args(&["smoke"]).ok(),
+            Some(Action::Smoke { package: None })
+        );
+    }
+
+    /// The workflow spelling: the smoke job downloads the artifact
+    /// `package-arch` uploaded and names it, since it never built one itself.
+    #[test]
+    fn smoke_takes_the_package_to_install() {
+        assert_eq!(
+            parse_args(&["smoke", "cabalmail.pkg.tar.zst"]).ok(),
+            Some(Action::Smoke {
+                package: Some("cabalmail.pkg.tar.zst".to_owned())
+            })
+        );
+    }
+
+    #[test]
+    fn smoke_rejects_a_second_package() {
+        let failure = parse_args(&["smoke", "one.pkg.tar.zst", "two.pkg.tar.zst"])
+            .expect_err("only one package is installed");
+        assert!(
+            failure.message.contains("two.pkg.tar.zst"),
+            "{}",
+            failure.message
+        );
     }
 
     #[test]

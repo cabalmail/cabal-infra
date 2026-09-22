@@ -27,6 +27,16 @@ pub mod policy;
 pub mod prefs;
 pub mod secret;
 
+/// What `cabalmail --self-test` prints on the run that reached a main window,
+/// and the only thing `cargo xtask smoke` accepts as proof that it did.
+///
+/// It lives here rather than in either of them because neither can see the
+/// other: the app crate prints it and the build tooling greps for it, and a
+/// reworded message on one side would leave the other matching nothing and
+/// reporting success forever after. Both read this constant, so there is one
+/// string and it cannot be edited from one end.
+pub const SELF_TEST_MARKER: &str = "cabalmail: self-test reached a main window";
+
 // The error taxonomy is the one type every other module returns, so it is
 // re-exported at the root: `cabalmail_kit::CabalmailError`, matching how the
 // Apple client's `CabalmailError` reads at call sites.

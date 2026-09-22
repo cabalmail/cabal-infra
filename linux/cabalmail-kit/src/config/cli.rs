@@ -38,6 +38,14 @@ pub enum Invocation {
     Help,
     /// Print the version and exit.
     Version,
+    /// Start the client, assert it reaches a main window, and exit without
+    /// waiting for the user.
+    ///
+    /// The packaged-artifact check: an installed binary that cannot open a
+    /// window is a break no test over the source tree can see. Undocumented in
+    /// the usage text and in the manual on purpose — it is a CI entry point,
+    /// not something a user has any reason to run.
+    SelfTest { overrides: Vec<Override> },
 }
 
 impl Invocation {
@@ -58,6 +66,7 @@ impl Invocation {
             .collect();
         let mut overrides: Vec<Override> = Vec::new();
         let mut print_config = false;
+        let mut self_test = false;
         let mut index = 0;
 
         while index < args.len() {
@@ -69,6 +78,10 @@ impl Invocation {
                 "-V" | "--version" => return Ok(Self::Version),
                 "--print-config" => {
                     print_config = true;
+                    continue;
+                }
+                "--self-test" => {
+                    self_test = true;
                     continue;
                 }
                 "config" => {
@@ -114,8 +127,13 @@ impl Invocation {
             overrides.push((key, value, Source::Flag(name)));
         }
 
+        // `--print-config` first: asking what the configuration resolves to
+        // is answerable without a display, and a run that was given both
+        // wants the cheaper answer.
         Ok(if print_config {
             Self::PrintConfig { overrides }
+        } else if self_test {
+            Self::SelfTest { overrides }
         } else {
             Self::Run { overrides }
         })
@@ -182,7 +200,9 @@ mod tests {
 
     fn overrides(invocation: &Invocation) -> &[Override] {
         match invocation {
-            Invocation::Run { overrides } | Invocation::PrintConfig { overrides } => overrides,
+            Invocation::Run { overrides }
+            | Invocation::PrintConfig { overrides }
+            | Invocation::SelfTest { overrides } => overrides,
             other => panic!("{other:?} carries no overrides"),
         }
     }
@@ -299,6 +319,36 @@ mod tests {
         let error = fail(&["--dispose-actions=trash"]);
         assert!(error.to_string().contains("--dispose-action"), "{error}");
         assert!(fail(&["--wat"]).to_string().starts_with("unknown option"));
+    }
+
+    /// The smoke job runs the installed binary with this and nothing else. A
+    /// spelling that parsed as an unknown option would fail the job with a
+    /// usage error rather than a startup result.
+    #[test]
+    fn the_self_test_is_its_own_invocation() {
+        assert_eq!(
+            run(&["--self-test"]),
+            Invocation::SelfTest { overrides: vec![] }
+        );
+    }
+
+    /// The smoke job points the client at a throwaway configuration, so the
+    /// self-test has to carry flags the same way a run does.
+    #[test]
+    fn the_self_test_still_collects_overrides() {
+        let invocation = run(&["--self-test", "--theme", "dark"]);
+        assert!(matches!(invocation, Invocation::SelfTest { .. }));
+        assert_eq!(overrides(&invocation)[0].0, Key::Theme);
+    }
+
+    /// Both ask a question and exit; the one that needs no display wins, so a
+    /// run given both still answers on a machine with nothing to draw on.
+    #[test]
+    fn printing_the_configuration_beats_the_self_test() {
+        assert!(matches!(
+            run(&["--self-test", "--print-config"]),
+            Invocation::PrintConfig { .. }
+        ));
     }
 
     #[test]
