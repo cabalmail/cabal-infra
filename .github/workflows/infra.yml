@@ -293,6 +293,13 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
+        # Pinned to a minor line, not `latest`. With no pin the action installs
+        # whatever HashiCorp shipped most recently, so every new minor lands in
+        # the apply path with no rehearsal. `~1.16` keeps patch releases flowing
+        # and makes a minor bump a deliberate PR: change it here and in the other
+        # setup-terraform steps (infra.yml, quiesce.yml, destroy_terraform.yml,
+        # lint.yml) together.
+        terraform_version: "~1.16"
         terraform_wrapper: false
     - name: tfvars-terraform
       run: |
@@ -368,6 +375,8 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
+        # Same minor pin as infra.yml's bootstrap plan step; bump them together.
+        terraform_version: "~1.16"
         # The wrapper interleaves its own bookkeeping lines into
         # terraform's stdout, which would corrupt the command
         # substitution in annotate-terraform-outputs.sh. Nothing in
@@ -606,6 +615,8 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
+        # Same minor pin as infra.yml's bootstrap plan step; bump them together.
+        terraform_version: "~1.16"
         terraform_wrapper: false
     - name: wait-for-app-deploy
       # Cross-workflow ordering. If this same push also triggered app.yml
@@ -772,6 +783,8 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
+        # Same minor pin as infra.yml's bootstrap plan step; bump them together.
+        terraform_version: "~1.16"
         # The wrapper interleaves its own bookkeeping lines into
         # terraform's stdout, which would corrupt the command
         # substitution in annotate-terraform-outputs.sh. Nothing in

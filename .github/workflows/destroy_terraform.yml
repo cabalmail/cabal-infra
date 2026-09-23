@@ -101,6 +101,9 @@ jobs:
         done
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+      with:
+        # Same minor pin as infra.yml's bootstrap plan step; bump them together.
+        terraform_version: "~1.16"
     - name: tfvars-terraform
       run: |
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" > terraform.tfvars

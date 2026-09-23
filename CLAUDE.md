@@ -122,8 +122,10 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 
 ### Terraform
 - Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)
+- CI installs Terraform via `hashicorp/setup-terraform` pinned to a minor line (`terraform_version: "~1.16"`) in every workflow that runs it (`infra.yml`, `quiesce.yml`, `destroy_terraform.yml`, `lint.yml`); bump all of them together in one PR
 - Two stacks: `terraform/dns` (bootstrap) and `terraform/infra` (main), both owned by `infra.yml`
 - Backend: S3 (`cabal-tf-backend` bucket), key pattern `{environment}-{module}`, state lock via `use_lockfile` (S3 conditional write of `<key>.tflock`; no DynamoDB table; Terraform floor is 1.10)
+- Provider versions are locked by a committed `.terraform.lock.hcl` per stack; Dependabot (`terraform` ecosystem) bumps them. After changing a `required_providers` constraint, regenerate with `terraform providers lock -platform=linux_amd64 -platform=darwin_arm64` in that stack directory, or CI's `terraform init` fails on the mismatch
 - Environment determined by branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys.
 - Backend config is generated at CI time by `.github/scripts/make-terraform.sh`
 - Security scanning: Checkov, tflint, tfsec all run in the terraform workflow
