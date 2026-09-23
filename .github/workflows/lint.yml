@@ -105,6 +105,7 @@ jobs:
             - 'LICENSE.md'
             - 'design/color-tokens.json'
             - 'terraform/infra/modules/app/templates/config.js.tftpl'
+            - 'terraform/infra/modules/domains/outputs.tf'
             - '.github/workflows/linux.yml'
             - '.github/workflows/lint.yml'
           kotlin:

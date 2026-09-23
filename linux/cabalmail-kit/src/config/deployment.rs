@@ -166,6 +166,10 @@ pub fn normalize_control_domain(raw: &str) -> Option<String> {
     (!domain.is_empty()).then(|| domain.to_owned())
 }
 
+/// The largest `config.json` the client reads. A real one is a kilobyte or two;
+/// anything near this is not a descriptor.
+pub const MAX_DESCRIPTOR_BYTES: usize = 1024 * 1024;
+
 /// `https://{control_domain}/config.json`.
 ///
 /// Always HTTPS, whatever scheme the user typed: the descriptor names the user
@@ -192,11 +196,16 @@ pub fn descriptor_url(control_domain: &str) -> Result<Url> {
 ///
 /// [`AuthFailure::NotConfigured`] for a control domain that is not a host,
 /// [`CabalmailError::Network`] if the request gets no answer,
-/// [`CabalmailError::Http`] for a non-success status, and whatever
-/// [`Deployment::decode`] reports for the body.
+/// [`CabalmailError::Http`] for a non-success status, whatever
+/// [`Deployment::decode`] reports for the body, and
+/// [`CabalmailError::Protocol`] for a body over [`MAX_DESCRIPTOR_BYTES`] or a
+/// descriptor describing some other control domain.
+///
+/// Build `client` with [`crate::http::client`], which is what holds every
+/// redirect to HTTPS and bounds the request in time.
 pub async fn fetch(client: &Client, control_domain: &str) -> Result<Deployment> {
     let url = descriptor_url(control_domain)?;
-    let (deployment, _body) = fetch_from(client, url).await?;
+    let (deployment, _body) = fetch_from(client, url, control_domain).await?;
     Ok(deployment)
 }
 
@@ -229,7 +238,7 @@ async fn resolve_from(
     control_domain: &str,
     cache: Option<&Path>,
 ) -> Result<Resolution> {
-    match fetch_from(client, url).await {
+    match fetch_from(client, url, control_domain).await {
         Ok((deployment, body)) => {
             let mut warnings = Vec::new();
             if let Some(path) = cache
@@ -258,10 +267,27 @@ async fn resolve_from(
 
 /// GETs `url` and decodes the body, returning it alongside the descriptor so
 /// the cache holds exactly what the deployment served.
-async fn fetch_from(client: &Client, url: Url) -> Result<(Deployment, String)> {
-    let response = client.get(url).send().await?;
+///
+/// The descriptor has to describe `control_domain`. One that names another
+/// deployment is refused rather than cached: the cache is matched on the
+/// descriptor's own `control_domain`, so accepting it would let this host
+/// answer, offline, for the one it names.
+async fn fetch_from(
+    client: &Client,
+    url: Url,
+    control_domain: &str,
+) -> Result<(Deployment, String)> {
+    let mut response = client.get(url).send().await?;
     let status = response.status();
-    let body = response.bytes().await?;
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await? {
+        if body.len() + chunk.len() > MAX_DESCRIPTOR_BYTES {
+            return Err(CabalmailError::Protocol(format!(
+                "config.json is larger than {MAX_DESCRIPTOR_BYTES} bytes"
+            )));
+        }
+        body.extend_from_slice(&chunk);
+    }
     let body = String::from_utf8_lossy(&body).into_owned();
     if !status.is_success() {
         return Err(CabalmailError::Http {
@@ -270,6 +296,12 @@ async fn fetch_from(client: &Client, url: Url) -> Result<(Deployment, String)> {
         });
     }
     let deployment = Deployment::decode(body.as_bytes())?;
+    if !same_host(&deployment.control_domain, control_domain) {
+        return Err(CabalmailError::Protocol(format!(
+            "{control_domain} serves the config.json of {}",
+            deployment.control_domain
+        )));
+    }
     Ok((deployment, body))
 }
 
@@ -278,11 +310,27 @@ async fn fetch_from(client: &Client, url: Url) -> Result<(Deployment, String)> {
 /// has since pointed the client elsewhere — is no answer for this one.
 fn read_cached(path: &Path, control_domain: &str) -> Option<Deployment> {
     let body = std::fs::read(path).ok()?;
-    Deployment::decode(&body).ok().filter(|deployment| {
-        deployment
-            .control_domain
-            .eq_ignore_ascii_case(control_domain)
-    })
+    Deployment::decode(&body)
+        .ok()
+        .filter(|deployment| same_host(&deployment.control_domain, control_domain))
+}
+
+/// Whether two spellings of a control domain name one host. Both go through
+/// the URL parser, so case, a trailing dot, a port, and a Unicode name against
+/// its punycode form all compare equal.
+fn same_host(first: &str, second: &str) -> bool {
+    match (canonical_host(first), canonical_host(second)) {
+        (Some(first), Some(second)) => first == second,
+        _ => false,
+    }
+}
+
+/// The host a control domain names, as the URL parser spells it, without a
+/// trailing dot.
+fn canonical_host(control_domain: &str) -> Option<String> {
+    let url = Url::parse(&format!("https://{control_domain}/")).ok()?;
+    let host = url.host_str()?.trim_end_matches('.');
+    Some(host.to_owned())
 }
 
 #[cfg(test)]
@@ -294,6 +342,14 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     const DESCRIPTOR: &str = include_str!("../../tests/fixtures/deployment/descriptor.json");
+
+    /// The kit's client configuration without `https_only`, since the mock
+    /// server speaks plain HTTP.
+    fn client() -> Client {
+        crate::http::configured()
+            .build()
+            .expect("the client builds")
+    }
 
     fn served(server: &MockServer) -> Url {
         Url::parse(&format!("{}/config.json", server.uri())).expect("the mock URL parses")
@@ -467,7 +523,7 @@ mod tests {
     #[tokio::test]
     async fn a_served_descriptor_is_fetched_and_decoded() {
         let server = serving(200, DESCRIPTOR).await;
-        let (deployment, body) = fetch_from(&Client::new(), served(&server))
+        let (deployment, body) = fetch_from(&client(), served(&server), "admin.example.com")
             .await
             .expect("the fetch succeeds");
         assert_eq!(deployment.control_domain, "admin.example.com");
@@ -477,7 +533,7 @@ mod tests {
     #[tokio::test]
     async fn a_refusal_is_an_http_error_that_is_not_retried() {
         let server = serving(404, "no such key").await;
-        let error = fetch_from(&Client::new(), served(&server))
+        let error = fetch_from(&client(), served(&server), "admin.example.com")
             .await
             .expect_err("the fetch fails");
         assert_eq!(
@@ -492,7 +548,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_answer_is_a_network_error() {
-        let error = fetch_from(&Client::new(), unreachable())
+        let error = fetch_from(&client(), unreachable(), "admin.example.com")
             .await
             .expect_err("the fetch fails");
         assert!(matches!(error, CabalmailError::Network(_)), "{error:?}");
@@ -502,7 +558,7 @@ mod tests {
     /// request.
     #[tokio::test]
     async fn fetch_refuses_a_control_domain_that_is_not_a_host() {
-        let error = fetch(&Client::new(), "user@admin.example.com")
+        let error = fetch(&client(), "user@admin.example.com")
             .await
             .expect_err("the fetch is refused");
         assert_eq!(error, CabalmailError::Auth(AuthFailure::NotConfigured));
@@ -518,7 +574,7 @@ mod tests {
         let server = serving(200, DESCRIPTOR).await;
 
         let resolution = resolve_from(
-            &Client::new(),
+            &client(),
             served(&server),
             "admin.example.com",
             Some(&cache),
@@ -542,14 +598,9 @@ mod tests {
         let cache = cache_root.path().join("deployment.json");
         std::fs::write(&cache, DESCRIPTOR).expect("the cache writes");
 
-        let resolution = resolve_from(
-            &Client::new(),
-            unreachable(),
-            "admin.example.com",
-            Some(&cache),
-        )
-        .await
-        .expect("the cache answers");
+        let resolution = resolve_from(&client(), unreachable(), "admin.example.com", Some(&cache))
+            .await
+            .expect("the cache answers");
 
         assert_eq!(resolution.origin, Origin::Cache(cache));
         assert_eq!(resolution.deployment.control_domain, "admin.example.com");
@@ -564,7 +615,7 @@ mod tests {
         let server = serving(503, "").await;
 
         let resolution = resolve_from(
-            &Client::new(),
+            &client(),
             served(&server),
             "admin.example.com",
             Some(&cache),
@@ -585,7 +636,7 @@ mod tests {
 
         let not_found = serving(404, "").await;
         let error = resolve_from(
-            &Client::new(),
+            &client(),
             served(&not_found),
             "admin.example.com",
             Some(&cache),
@@ -596,7 +647,7 @@ mod tests {
 
         let garbled = serving(200, "<html></html>").await;
         let error = resolve_from(
-            &Client::new(),
+            &client(),
             served(&garbled),
             "admin.example.com",
             Some(&cache),
@@ -614,14 +665,9 @@ mod tests {
         let cache = cache_root.path().join("deployment.json");
         std::fs::write(&cache, DESCRIPTOR).expect("the cache writes");
 
-        let error = resolve_from(
-            &Client::new(),
-            unreachable(),
-            "stage.example.com",
-            Some(&cache),
-        )
-        .await
-        .expect_err("the fetch error surfaces");
+        let error = resolve_from(&client(), unreachable(), "stage.example.com", Some(&cache))
+            .await
+            .expect_err("the fetch error surfaces");
         assert!(matches!(error, CabalmailError::Network(_)), "{error:?}");
     }
 
@@ -633,7 +679,7 @@ mod tests {
         let missing = cache_root.path().join("missing.json");
 
         for cache in [Some(corrupt.as_path()), Some(missing.as_path()), None] {
-            let error = resolve_from(&Client::new(), unreachable(), "admin.example.com", cache)
+            let error = resolve_from(&client(), unreachable(), "admin.example.com", cache)
                 .await
                 .expect_err("the fetch error surfaces");
             assert!(matches!(error, CabalmailError::Network(_)), "{error:?}");
@@ -650,7 +696,7 @@ mod tests {
         let server = serving(200, DESCRIPTOR).await;
 
         let resolution = resolve_from(
-            &Client::new(),
+            &client(),
             served(&server),
             "admin.example.com",
             Some(&blocker.join("deployment.json")),
@@ -667,12 +713,125 @@ mod tests {
         );
     }
 
+    #[test]
+    fn spellings_of_one_host_compare_equal() {
+        for (first, second) in [
+            ("admin.example.com", "ADMIN.example.com"),
+            ("admin.example.com", "admin.example.com."),
+            ("admin.example.com", "admin.example.com:8443"),
+            ("bücher.example", "xn--bcher-kva.example"),
+        ] {
+            assert!(same_host(first, second), "{first} and {second}");
+        }
+        for (first, second) in [
+            ("admin.example.com", "stage.example.com"),
+            ("admin.example.com", "example.com"),
+            ("admin.example.com", "admin example.com"),
+        ] {
+            assert!(!same_host(first, second), "{first} and {second}");
+        }
+    }
+
+    /// A host serving another deployment's descriptor is refused, and what it
+    /// served never reaches the cache, where it would answer for the host it
+    /// names.
+    #[tokio::test]
+    async fn a_descriptor_for_another_deployment_is_refused_and_not_cached() {
+        let cache_root = tempfile::tempdir().expect("a temp directory");
+        let cache = cache_root.path().join("deployment.json");
+        let server = serving(200, DESCRIPTOR).await;
+
+        let error = resolve_from(
+            &client(),
+            served(&server),
+            "stage.example.com",
+            Some(&cache),
+        )
+        .await
+        .expect_err("the descriptor is refused");
+
+        assert!(
+            matches!(&error, CabalmailError::Protocol(detail)
+                if detail == "stage.example.com serves the config.json of admin.example.com"),
+            "{error:?}"
+        );
+        assert!(!cache.exists(), "a refused descriptor was cached");
+    }
+
+    /// The typed domain and the one the descriptor declares need only name the
+    /// same host; otherwise the cache would never answer a user who typed a
+    /// trailing dot.
+    #[tokio::test]
+    async fn the_cache_answers_another_spelling_of_the_same_host() {
+        let cache_root = tempfile::tempdir().expect("a temp directory");
+        let cache = cache_root.path().join("deployment.json");
+        let server = serving(200, DESCRIPTOR).await;
+        resolve_from(
+            &client(),
+            served(&server),
+            "admin.example.com.",
+            Some(&cache),
+        )
+        .await
+        .expect("the fetch succeeds");
+
+        let resolution = resolve_from(&client(), unreachable(), "Admin.Example.com.", Some(&cache))
+            .await
+            .expect("the cache answers");
+        assert_eq!(resolution.origin, Origin::Cache(cache));
+    }
+
+    #[tokio::test]
+    async fn an_oversized_body_is_refused() {
+        let server = serving(200, &" ".repeat(MAX_DESCRIPTOR_BYTES + 1)).await;
+        let error = fetch_from(&client(), served(&server), "admin.example.com")
+            .await
+            .expect_err("the body is refused");
+        assert!(
+            matches!(&error, CabalmailError::Protocol(detail) if detail.contains("larger than")),
+            "{error:?}"
+        );
+    }
+
+    /// A server that accepts the connection and never answers is the case a
+    /// timeout exists for: without one the request hangs and the cache is
+    /// never consulted.
+    #[tokio::test]
+    async fn a_request_that_times_out_is_answered_from_the_cache() {
+        let cache_root = tempfile::tempdir().expect("a temp directory");
+        let cache = cache_root.path().join("deployment.json");
+        std::fs::write(&cache, DESCRIPTOR).expect("the cache writes");
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(DESCRIPTOR)
+                    .set_delay(std::time::Duration::from_secs(5)),
+            )
+            .mount(&server)
+            .await;
+        let impatient = crate::http::configured()
+            .timeout(std::time::Duration::from_millis(100))
+            .build()
+            .expect("the client builds");
+
+        let resolution = resolve_from(
+            &impatient,
+            served(&server),
+            "admin.example.com",
+            Some(&cache),
+        )
+        .await
+        .expect("the cache answers");
+        assert_eq!(resolution.origin, Origin::Cache(cache));
+    }
+
     #[tokio::test]
     async fn resolving_with_no_control_domain_is_not_configured() {
         let environment = Environment::from_pairs([("XDG_CACHE_HOME", "/nonexistent")]);
         let mut settings = Settings::defaults();
 
-        let error = resolve(&Client::new(), &environment, &settings)
+        let error = resolve(&client(), &environment, &settings)
             .await
             .expect_err("nothing is configured");
         assert_eq!(error, CabalmailError::Auth(AuthFailure::NotConfigured));
@@ -682,7 +841,7 @@ mod tests {
             Value::Text("user@admin.example.com".to_owned()),
             Source::Default,
         );
-        let error = resolve(&Client::new(), &environment, &settings)
+        let error = resolve(&client(), &environment, &settings)
             .await
             .expect_err("the domain is refused");
         assert_eq!(error, CabalmailError::Auth(AuthFailure::NotConfigured));

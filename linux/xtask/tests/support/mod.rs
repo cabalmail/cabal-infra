@@ -33,8 +33,10 @@ pub const REPO_INPUTS: &[&str] = &[
     // client injects into every received message.
     "design/color-tokens.json",
     // The template Terraform renders `config.json` from, which the kit's
-    // deployment-descriptor fixture is held to.
+    // deployment-descriptor fixture is held to, and the module output that
+    // shapes each entry of its `domains` array.
     "terraform/infra/modules/app/templates/config.js.tftpl",
+    "terraform/infra/modules/domains/outputs.tf",
     // The two workflows the contract test reads: the one that runs these
     // checks on a push, and the one that runs them on a pull request.
     ".github/workflows/linux.yml",

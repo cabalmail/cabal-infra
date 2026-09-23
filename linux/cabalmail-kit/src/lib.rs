@@ -20,6 +20,7 @@ pub mod cache;
 pub mod compose;
 pub mod config;
 pub mod error;
+pub mod http;
 pub mod mime;
 pub mod models;
 pub mod outbox;
