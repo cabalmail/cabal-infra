@@ -1,6 +1,7 @@
 # Dependabot version updates.
 #
-# Scope: the Docker base images only. Every Dockerfile FROM line is pinned
+# Scope: GitHub Actions digests, the Android version catalog, Terraform
+# providers, and the Docker base images. Every Dockerfile FROM line is pinned
 # to a tag + SHA256 digest (Phase 3 of
 # docs/0.10.x/container-runtime-hardening-plan.md); this config keeps those
 # digests current by opening PRs when an upstream tag advances or its digest
@@ -59,6 +60,33 @@ updates:
       prefix: "deps(android)"
     groups:
       android-gradle:
+        patterns:
+          - "*"
+
+  # Terraform providers. Each stack commits its `.terraform.lock.hcl`, so
+  # `terraform init` in CI installs exactly the locked provider builds
+  # instead of the newest release inside the constraint at plan time. This
+  # updater bumps the lockfile (and the `required_providers` constraint when
+  # a new major needs it) as a reviewable PR; because the lockfile lives
+  # under `terraform/<stack>/**`, the merge runs that stack's plan and gated
+  # apply in infra.yml like any other Terraform change. One grouped PR per
+  # run keeps the two stacks' `hashicorp/aws` bumps together.
+  - package-ecosystem: "terraform"
+    directories:
+      - "/terraform/dns"
+      - "/terraform/infra"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "stage"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "terraform"
+    commit-message:
+      prefix: "deps(terraform)"
+    groups:
+      terraform-providers:
         patterns:
           - "*"
 
