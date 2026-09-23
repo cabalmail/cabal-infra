@@ -76,7 +76,7 @@ These are the model to copy, not work items:
   the same name, colour, and gesture, from the same menu.
 - Every list-level action that makes sense for both media exists for
   both: mark all read, bulk selection, per-flag filtering, the macOS
-  menu chords.
+  menu chords, and the title-as-switcher above the list.
 - Rules exist for both media, edited in one place, with the conditions
   and actions each medium supports.
 - A feed item can leave the reader as an email.
@@ -243,6 +243,23 @@ the one Lambda in item 1c. Ship as one release.
    as the Message menu's; the menu that is enabled follows the active
    section, so a chord never fires on both. Shortcuts stay
    window-scoped and focus-independent, as the mail ones are.
+1. **The scope title is a switcher.** The folder name above the mail
+   list is a menu: on iOS, iPadOS, and visionOS the system title menu
+   (`toolbarTitleMenu`), on macOS a bold `Menu` in the `.navigation`
+   toolbar slot standing in for the removed title, on Android a
+   `FolderTitle` with a dropdown in the `TopAppBar`. The rows are
+   grouped by `FolderSwitchMenuPolicy` (Apple) and `FolderSwitchMenu`
+   (Android): subscribed folders at the top level, the rest under
+   "Other folders", the current one checked. The feed item list's
+   title is plain text on both platforms (`FeedItemListView`,
+   `FeedItemListScreen`). It adopts the same affordance over the feed
+   scopes: "All Feeds" first, then the folder tree flattened with
+   indentation for depth, each folder's subscriptions beneath it, the
+   current scope checked. The grouping is a sibling policy
+   (`FeedScopeSwitchMenuPolicy`) built on the same `ReaderMenuRow`
+   rows so the two menus share their assistive-technology behaviour
+   (#1367) and the macOS materialize-once handling (#1329, #1337).
+   A search scope keeps its plain title, as the mail one does.
 1. **Android settings section fix.** Issue #1706: "Default sort" and
    "Sort descending" sit under "Feed items" but drive the mail list.
    Move them back under "Email messages". Independent of the rest but
@@ -251,7 +268,9 @@ the one Lambda in item 1c. Ship as one release.
 Acceptance: a tester who reads a feed item, flags it, filters the feed
 to Flagged, and then does the same in INBOX sees the same word, glyph,
 and chord on both; marking INBOX all read from the sidebar flips every
-unseen message in one call.
+unseen message in one call; tapping the feed list's title opens a
+menu that switches to another feed or folder without leaving the
+list, exactly as tapping the folder name does in mail.
 
 ## Phase 2 -- Custom flags on feed items
 
