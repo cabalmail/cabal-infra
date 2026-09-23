@@ -4,6 +4,8 @@ You do not need to install Terraform locally, and you do not need a HashiCorp ac
 
 The one Terraform-specific resource you must create by hand is the S3 bucket that stores remote state.
 
+CI installs Terraform with `hashicorp/setup-terraform`, pinned to a minor line (`~1.16`) in every workflow that runs it, so patch releases arrive on their own while a new minor is a deliberate PR that bumps all of those steps together.
+
 ## State backend
 
 The backend configuration is not committed. At CI time, [`make-terraform.sh`](../.github/scripts/make-terraform.sh) writes a `backend.tf` into the stack being deployed:

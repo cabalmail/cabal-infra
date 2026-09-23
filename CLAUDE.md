@@ -122,6 +122,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 
 ### Terraform
 - Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)
+- CI installs Terraform via `hashicorp/setup-terraform` pinned to a minor line (`terraform_version: "~1.16"`) in every workflow that runs it (`infra.yml`, `quiesce.yml`, `destroy_terraform.yml`, `lint.yml`); bump all of them together in one PR
 - Two stacks: `terraform/dns` (bootstrap) and `terraform/infra` (main), both owned by `infra.yml`
 - Backend: S3 (`cabal-tf-backend` bucket), key pattern `{environment}-{module}`
 - Environment determined by branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys.
