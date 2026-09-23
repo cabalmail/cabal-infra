@@ -123,7 +123,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 ### Terraform
 - Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)
 - Two stacks: `terraform/dns` (bootstrap) and `terraform/infra` (main), both owned by `infra.yml`
-- Backend: S3 (`cabal-tf-backend` bucket), key pattern `{environment}-{module}`
+- Backend: S3 (`cabal-tf-backend` bucket), key pattern `{environment}-{module}`, state lock via `use_lockfile` (S3 conditional write of `<key>.tflock`; no DynamoDB table; Terraform floor is 1.10)
 - Environment determined by branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys.
 - Backend config is generated at CI time by `.github/scripts/make-terraform.sh`
 - Security scanning: Checkov, tflint, tfsec all run in the terraform workflow

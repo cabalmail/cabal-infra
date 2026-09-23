@@ -82,6 +82,9 @@ permissions:
 # race for the state lock. cancel-in-progress: false because we never
 # want to cancel an in-flight apply: a half-applied state is worse
 # than a queued plan.
+# This group only sees this workflow; the S3 backend's use_lockfile lock
+# (make-terraform.sh) is what guards against quiesce.yml or
+# destroy_terraform.yml applying over an in-flight run on the same state.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false

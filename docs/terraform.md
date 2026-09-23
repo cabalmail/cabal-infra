@@ -14,12 +14,13 @@ The backend configuration is not committed. At CI time, [`make-terraform.sh`](..
 | Key, `terraform/infra` stack | The environment's `TF_VAR_ENVIRONMENT` value, e.g. `production` |
 | Key, `terraform/dns` stack | `TF_VAR_ENVIRONMENT` plus `-bootstrap`, e.g. `production-bootstrap` |
 | Region | The environment's `TF_VAR_AWS_REGION` value |
+| Locking | `use_lockfile = true`: an S3 conditional write of `<key>.tflock` |
 
 One bucket serves every environment; each environment-stack pair gets its own key.
 
 By default state objects use SSE-S3, which any principal with `s3:GetObject` can read back decrypted. An environment can be upgraded to SSE-KMS under a per-environment customer-managed key -- so that reading state also requires `kms:Decrypt` -- by setting the `STATE_KMS_KEY_ID` GitHub variable for that environment. See [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md).
 
-There is no DynamoDB lock table. Concurrent runs are prevented in the workflow instead: a GitHub Actions concurrency group serializes runs per branch and never cancels an in-flight apply.
+State locking uses the S3 backend's `use_lockfile` (Terraform 1.10 and later): a run takes the lock as a conditional write of `<key>.tflock` beside the state object and deletes it when done, so there is no DynamoDB lock table. The `infra.yml` concurrency group still serializes that workflow's runs per branch and never cancels an in-flight apply; the S3 lock is the backstop for overlap the group cannot see, such as `quiesce.yml` or `destroy_terraform.yml` running against the same state. The deploy principal needs `s3:PutObject` and `s3:DeleteObject` on the lock key, which the `bucket/*` grants below already cover.
 
 ### Creating the bucket
 
