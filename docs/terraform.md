@@ -19,6 +19,8 @@ One bucket serves every environment; each environment-stack pair gets its own ke
 
 By default state objects use SSE-S3, which any principal with `s3:GetObject` can read back decrypted. An environment can be upgraded to SSE-KMS under a per-environment customer-managed key -- so that reading state also requires `kms:Decrypt` -- by setting the `STATE_KMS_KEY_ID` GitHub variable for that environment. See [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md).
 
+Each stack commits a `.terraform.lock.hcl`, so `terraform init` installs exactly the locked provider builds rather than the newest release that satisfies the constraint. Dependabot (`.github/dependabot.yml`, `terraform` ecosystem) opens the bump PRs; because the lockfile sits under the stack's path filter, a merged bump runs the stack's plan and gated apply like any other change. After editing a `required_providers` constraint by hand, regenerate the lockfile with `terraform providers lock -platform=linux_amd64 -platform=darwin_arm64` in the stack directory, or `terraform init` will refuse the mismatch.
+
 There is no DynamoDB lock table. Concurrent runs are prevented in the workflow instead: a GitHub Actions concurrency group serializes runs per branch and never cancels an in-flight apply.
 
 ### Creating the bucket
