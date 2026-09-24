@@ -272,6 +272,11 @@ jobs:
       # Same invocation as the docstring in each test file; suites are
       # import-order independent since #863.
       run: python3 -m unittest discover -s lambda/api/_shared/tests -p "test_*.py"
+    - name: unittest-check-invite
+      # The pre-sign-up invitation gate: self-service signups need the code,
+      # AdminCreateUser (Terraform's aws_cognito_user) is exempt. Pure stdlib;
+      # kept under scripts/tests so build-counter.sh does not ship it.
+      run: python3 -m unittest discover -s scripts/tests -p "test_check_invite.py"
     - name: unittest-rules-compiler
       # Golden-file + injection-corpus tests for the procmail rule compiler
       # (docs/1.x/user-mail-rules-plan.md, Phase 2). Pure stdlib; the same
