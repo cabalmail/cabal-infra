@@ -182,11 +182,23 @@ def api_request(method, path, token_factory, body=None, idempotent=False):
 
 
 def find_app_id(bundle_id, token_factory):
-    """Return the ASC app id for `bundle_id`, or None if not found."""
-    query = urllib.parse.urlencode({"filter[bundleId]": bundle_id, "limit": 1})
+    """Return the ASC app id whose bundleId is exactly `bundle_id`, or None.
+
+    App Store Connect prefix-matches `filter[bundleId]`: a query for
+    `com.cabalmail.Cabalmail` also returns `com.cabalmail.CabalmailMac`, in
+    no stable order. Taking the first row with `limit=1` therefore handed
+    the iOS and visionOS upload legs the macOS app record on roughly half
+    their runs, after which every `/v1/builds` lookup for their build
+    number came back empty and the attach step polled its full timeout
+    before warning that the build "never surfaced" (it had - on the other
+    app). Match the bundle id exactly, client-side, over the whole result.
+    """
+    query = urllib.parse.urlencode({"filter[bundleId]": bundle_id, "limit": 200})
     result = api_request("GET", f"/v1/apps?{query}", token_factory)
-    data = result.get("data") or []
-    return data[0]["id"] if data else None
+    for app in result.get("data") or []:
+        if app.get("attributes", {}).get("bundleId") == bundle_id:
+            return app["id"]
+    return None
 
 
 def find_build(app_id, build_number, token_factory):
