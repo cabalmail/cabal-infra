@@ -13,6 +13,12 @@
 # every container (9999 master, 9998 dmarc, 9997 ci-probe), and an address
 # row. The password is published to SSM for the CI deploy role, whose
 # reference policy (docs/aws.md) already covers ssm:GetParameter.
+#
+# The containers learn about the user on their own schedule: sync-users.sh
+# runs only at container start, so the imap tier has to roll once after the
+# apply before the probe's api leg can pass, and smtp-in adds the address to
+# its access map on its next reconfigure event or roll. docs/mail-probe.md
+# lists the failure signatures of a probe that ran before that.
 
 resource "random_password" "ci_probe_password" {
   length           = 24
@@ -34,6 +40,20 @@ resource "aws_cognito_user" "ci_probe" {
   password     = random_password.ci_probe_password.result
   attributes = {
     osid = 9997
+  }
+
+  # The pool's pre-sign-up trigger (check_invite) fires for AdminCreateUser
+  # too, and rejects a creation that does not carry the invitation code as
+  # validation data - without this the apply fails wherever the gate is
+  # armed. Harmless when the code is empty: the trigger then skips the
+  # comparison. Validation data only matters at creation, so a later
+  # rotation of the code must not replace the user.
+  validation_data = {
+    invitationCode = var.invitation_code
+  }
+
+  lifecycle {
+    ignore_changes = [validation_data]
   }
 }
 
