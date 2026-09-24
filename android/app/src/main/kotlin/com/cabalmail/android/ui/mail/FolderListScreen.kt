@@ -166,8 +166,8 @@ private fun BrandMark() {
 
 /**
  * The filter row under the top bar, styled like the message list's pills.
- * Subscribed and Unread are independent toggles; All is the state with
- * both off (see [FolderListFilter]).
+ * Subscribed and Unread are independent toggles; both off is every folder
+ * (see [FolderListFilter]).
  */
 @Composable
 private fun FolderFilterPills(
@@ -188,7 +188,6 @@ private fun FolderFilterPills(
 
 private fun FolderFilterPill.labelRes(): Int =
     when (this) {
-        FolderFilterPill.ALL -> R.string.filter_all
         FolderFilterPill.SUBSCRIBED -> R.string.folder_filter_subscribed
         FolderFilterPill.UNREAD -> R.string.filter_unread
     }

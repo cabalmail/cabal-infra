@@ -25,14 +25,13 @@ class FolderSectionsTest {
         assertFalse(filter.isAll)
         assertTrue(filter.isOn(FolderFilterPill.SUBSCRIBED))
         assertFalse(filter.isOn(FolderFilterPill.UNREAD))
-        assertFalse(filter.isOn(FolderFilterPill.ALL))
     }
 
     @Test
-    fun `All is on exactly when both toggles are off`() {
+    fun `every folder is the state with both toggles off, and there is no All pill`() {
         val all = FolderListFilter(subscribed = false, unread = false)
         assertTrue(all.isAll)
-        assertTrue(all.isOn(FolderFilterPill.ALL))
+        assertEquals(listOf(FolderFilterPill.SUBSCRIBED, FolderFilterPill.UNREAD), FolderFilterPill.entries)
         assertFalse(FolderListFilter(subscribed = false, unread = true).isAll)
         assertFalse(FolderListFilter(subscribed = true, unread = true).isAll)
     }
@@ -46,10 +45,9 @@ class FolderSectionsTest {
     }
 
     @Test
-    fun `tapping All clears both toggles`() {
+    fun `turning both toggles off reaches every folder`() {
         val filter = FolderListFilter(subscribed = true, unread = true)
-        assertEquals(FolderListFilter(subscribed = false, unread = false), filter.toggled(FolderFilterPill.ALL))
-        assertTrue(FolderListFilter().toggled(FolderFilterPill.ALL).isAll)
+        assertTrue(filter.toggled(FolderFilterPill.SUBSCRIBED).toggled(FolderFilterPill.UNREAD).isAll)
     }
 
     @Test
@@ -70,7 +68,7 @@ class FolderSectionsTest {
     }
 
     @Test
-    fun `All shows every folder in server order`() {
+    fun `no pill shows every folder in server order`() {
         assertEquals(
             folders,
             FolderSections.rows(folders, subscribed, statuses, FolderListFilter(false, false), selected = null),

@@ -70,6 +70,19 @@ landed **2025-09-15**, within days of Apple's GM. Expect the 27.0 release
 build on the image around mid-September 2026, tracking Apple. Treat that
 as inference, not a commitment.
 
+> **Erratum (2026-09-24):** the precedent did not carry over. With the
+> `xcode-27` preview GitHub moved to a new support model, one major Xcode
+> version per macOS image, so `macos-26` stays on Xcode 26.6 for good and
+> no `macos-27` label was ever created (actions/runner-images#14519 was
+> closed with "xcode-27 is the macOS 27 image"). Xcode 27.0 GA arrived on
+> `xcode-27` itself with the 2026-09-12 image (RC and GA share the build,
+> #14709), alongside the 27.1 and 27.2 betas, on a macOS 27.0 host. The
+> image also grew more than one Xcode, so the "exactly one Xcode / skip
+> setup-xcode" bullet above is stale too: `latest-stable` now resolves to
+> 27.0 GA there. The route to Xcode 27 in CI was therefore a label change,
+> made the same day: every macOS job in `apple.yml` runs on `xcode-27`,
+> and the advisory `kit-test-next` / `app-test-next` jobs were removed.
+
 ### Forward-compatibility check (already in place)
 
 [apple.yml](../../.github/workflows/apple.yml) carries temporary
@@ -81,6 +94,12 @@ promoted to `main`. They are deliberately **advisory**:
 block promotion, and absent from `approval`'s `needs` so the TestFlight
 upload jobs can never depend on a preview runner. A failure raises a
 warning annotation rather than a red run.
+
+> **Erratum (2026-09-24):** these jobs are gone. The stable jobs moved to
+> `runs-on: xcode-27` (see the erratum above), which made the mirrors
+> redundant; their visionOS-wide `RichTextEditorBridgeHealthTests` skip
+> moved into `kit-test`'s visionOS leg, still to be re-tested on each new
+> visionOS runtime.
 
 One containment subtlety, learned the hard way (2026-08-01, run
 30715777188, a visionOS-27 simulator hang): `continue-on-error` absorbs
@@ -272,3 +291,8 @@ Merge to `stage` once the `xcode-27` image is GA (estimated mid-September
 toolchain first. Merging earlier is possible but puts the release path on
 a preview runner — see
 [What still gates the merge](#what-still-gates-the-merge).
+
+> **Erratum (2026-09-24):** the GA condition was met on the wrong image
+> (see the erratum under "CI can build it today"). CI moved to `xcode-27`
+> on 2026-09-24, which is the toolchain gate this row was waiting for; the
+> re-validation against the GA toolchain still applies.

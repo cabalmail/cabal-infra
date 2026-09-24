@@ -4,26 +4,25 @@ import Foundation
 /// unread items. Sticky per device (`@AppStorage`), never synced — the same
 /// reasoning as `FolderListFilter`.
 ///
-/// A radio rather than `FolderListFilter`'s toggles: feeds have no
+/// One Unread pill that toggles, not an All / Unread pair: feeds have no
 /// subscription axis (every feed in the list is one), so there is nothing to
-/// combine Unread with. The rows themselves come from `FeedSidebarRows`,
-/// which takes the filter's `unreadOnly` and the open scope to keep.
-enum FeedListFilter: String, CaseIterable, Identifiable {
+/// combine Unread with, and an All pill only restated "Unread off". The two
+/// cases stay as the stored form (`cabalmail.feeds.filter`). The rows
+/// themselves come from `FeedSidebarRows`, which takes `unreadOnly` and the
+/// open scope to keep.
+enum FeedListFilter: String {
     case all, unread
-
-    var id: String { rawValue }
 
     /// A fresh install opens on Unread: the feed reader's job is to show
     /// what is new, and the `All Feeds` row keeps the whole catalog one tap
     /// away.
     static let defaultForFeeds: FeedListFilter = .unread
 
-    var label: String {
-        switch self {
-        case .all:    return "All"
-        case .unread: return "Unread"
-        }
-    }
+    /// The one pill's label.
+    static let pillLabel = "Unread"
 
     var unreadOnly: Bool { self == .unread }
+
+    /// The state after tapping the pill.
+    var toggled: FeedListFilter { unreadOnly ? .all : .unread }
 }

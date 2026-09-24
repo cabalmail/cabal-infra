@@ -113,8 +113,8 @@ struct FeedSidebarList: View {
     @State private var management: FeedManagementViewModel?
     @State private var actions = FeedManagementActions()
     @AppStorage("cabalmail.feeds.collapsedFolders") private var collapsedRaw = ""
-    /// The All / Unread pill (`FeedListFilter`): sticky per device, never
-    /// synced; the wide sidebar's Feeds section reads the same key.
+    /// The Unread pill (`FeedListFilter`): sticky per device, never synced;
+    /// the wide sidebar's Feeds section reads the same key.
     @AppStorage("cabalmail.feeds.filter") private var filterRaw = FeedListFilter.defaultForFeeds.rawValue
     @State private var filter = ""
 
@@ -172,15 +172,16 @@ struct FeedSidebarList: View {
         }
     }
 
-    /// All / Unread, plus the tree's Expand all / Collapse all — the same
-    /// row the wide sidebar's Feeds section draws.
+    /// The Unread toggle, plus the tree's Expand all / Collapse all — the
+    /// same row the wide sidebar's Feeds section draws.
     private var pillRow: some View {
         SidebarFilterPillRow(
-            pills: FeedListFilter.allCases.map { candidate in
-                SidebarFilterPill(id: candidate.rawValue, label: candidate.label, isOn: listFilter == candidate) {
-                    filterRaw = candidate.rawValue
-                }
-            },
+            pills: [
+                SidebarFilterPill(id: FeedListFilter.unread.rawValue, label: FeedListFilter.pillLabel,
+                                  isOn: listFilter.unreadOnly) {
+                    filterRaw = listFilter.toggled.rawValue
+                },
+            ],
             identifierPrefix: "feed.filter",
             expansion: SidebarFilterPillRow.Expansion(
                 hasCollapsible: !collapsible.isEmpty,

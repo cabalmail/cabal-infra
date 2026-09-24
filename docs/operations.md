@@ -78,6 +78,10 @@ Both SMTP tiers keep sendmail's deferred-mail queue on shared EFS, so a task rep
 
 Every IMAP image roll has a deliberate zero-task window (the service is capped at one task). Deploys pre-flight the new image before touching the serving task, raise a planned-maintenance flag that turns Lambda errors into a friendly 503 for the ~1–2 minutes of the roll, and fail back with the old task still serving if the new image is bad. Sends are unaffected. See [IMAP deploys](./imap-deploys.md) for what operators and users see and how to distinguish the window from a real outage.
 
+# Post-deploy mail probe
+
+After `app.yml` rolls a core mail tier or deploys the API Lambdas, its `mail-probe` job signs in as a dedicated `ci-probe` user, sends it one message through `/send` and one straight at the public MX, and fails the run unless both land in its INBOX carrying the headers smtp-out and smtp-in are expected to add. The rollout wait only proves the new container is healthy; the probe proves the mail path behind it. It is a detector, not a gate. See [Post-deploy mail probe](./mail-probe.md) for what each leg proves, how to read a failure, and how to run it by hand.
+
 # IMAP full-text search index
 
 The `imap` container ships [dovecot-fts-flatcurve](https://github.com/slusarz/dovecot-fts-flatcurve) (pinned upstream tag and commit baked into `docker/imap/Dockerfile`, licence preserved at `/usr/share/doc/fts-flatcurve/` inside the image). The plugin gives `/search_envelopes` an inverted index instead of a sequential body scan; configuration lives in `docker/imap/configs/dovecot/90-fts.conf`.

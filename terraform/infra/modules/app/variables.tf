@@ -145,6 +145,13 @@ variable "invitation_required" {
   default     = false
 }
 
+variable "invitation_code" {
+  type        = string
+  description = "The check_invite pre-sign-up gate's shared secret, passed as validation data when this module creates Cognito users (ci_probe_user.tf) so AdminCreateUser is not rejected the way a signup without the code would be. Empty when the gate is disabled."
+  sensitive   = true
+  default     = ""
+}
+
 variable "sms_enabled" {
   type        = bool
   description = "Mirror of the user_pool module's sms_enabled output (true iff a 10DLC campaign registration id is configured). Plumbed into /config.js so the React signup form can hide the phone-number field and consent checkbox when the pool is not wired for SMS. See docs/sms-10dlc.md and issue #712."

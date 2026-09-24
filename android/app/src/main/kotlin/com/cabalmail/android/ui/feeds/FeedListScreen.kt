@@ -207,8 +207,9 @@ fun FeedPane(
 
 /**
  * The filter row under the top bar, styled like the message list's pills:
- * All and Unread as a radio, with expand-all / collapse-all at the
- * trailing edge. Both buttons disable when no folder has anything to fold.
+ * one Unread toggle (off is every feed; an All pill only restated that),
+ * with expand-all / collapse-all at the trailing edge. Both buttons disable
+ * when no folder has anything to fold.
  */
 @Composable
 private fun FeedFilterPills(
@@ -223,14 +224,8 @@ private fun FeedFilterPills(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
     ) {
         FilterChip(
-            selected = !unreadOnly,
-            onClick = { onUnreadOnly(false) },
-            label = { Text(stringResource(R.string.filter_all)) },
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
-        FilterChip(
             selected = unreadOnly,
-            onClick = { onUnreadOnly(true) },
+            onClick = { onUnreadOnly(!unreadOnly) },
             label = { Text(stringResource(R.string.filter_unread)) },
             modifier = Modifier.padding(horizontal = 4.dp),
         )
