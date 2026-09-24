@@ -6,4 +6,5 @@
   exempts the `PreSignUp_AdminCreateUser` source: that caller is already
   IAM-authorized, and the gate exists to stop self-service signups. The
   same failure would have blocked the `master` and `dmarc` users in any
-  environment brought up with the code set.
+  bring-up where the real trigger shipped before they were created (the
+  bootstrap placeholder is a no-op, but bring-ups are rarely one-shot).

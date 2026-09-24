@@ -10,8 +10,10 @@ trigger for that path too (triggerSource PreSignUp_AdminCreateUser), but
 the caller has already been authorized by IAM. Terraform cannot satisfy the
 check anyway: the AWS provider normalizes aws_cognito_user validation_data
 keys the way it normalizes user attributes, so `invitationCode` arrives here
-as `custom:invitationCode`. Without the exemption no system user (master,
-dmarc, ci-probe) can be created by Terraform while the code is set.
+as `custom:invitationCode`. Without the exemption Terraform cannot create a
+system user (master, dmarc, ci-probe) once this code is deployed with the
+code set. The bootstrap placeholder (check_invite.tf) is a no-op, so a
+one-shot fresh apply gets past it; bring-ups are rarely one-shot.
 
 When SMS_ENABLED is not "true", the pool has no SMS delivery path
 configured (see issue #712 and terraform/infra/modules/user_pool/main.tf),
