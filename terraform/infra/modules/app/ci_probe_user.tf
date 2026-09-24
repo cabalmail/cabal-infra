@@ -14,6 +14,13 @@
 # row. The password is published to SSM for the CI deploy role, whose
 # reference policy (docs/aws.md) already covers ssm:GetParameter.
 #
+# The pool's pre-sign-up trigger (check_invite) fires for AdminCreateUser
+# too; it exempts that trigger source, since the caller is already
+# IAM-authorized, which is what lets this apply succeed while the invitation
+# code is set. Passing the code as validation_data does not work: the
+# provider normalizes those keys like user attributes, so the trigger sees
+# custom:invitationCode.
+#
 # The containers learn about the user on their own schedule: sync-users.sh
 # runs only at container start, so the imap tier has to roll once after the
 # apply before the probe's api leg can pass, and smtp-in adds the address to
@@ -40,20 +47,6 @@ resource "aws_cognito_user" "ci_probe" {
   password     = random_password.ci_probe_password.result
   attributes = {
     osid = 9997
-  }
-
-  # The pool's pre-sign-up trigger (check_invite) fires for AdminCreateUser
-  # too, and rejects a creation that does not carry the invitation code as
-  # validation data - without this the apply fails wherever the gate is
-  # armed. Harmless when the code is empty: the trigger then skips the
-  # comparison. Validation data only matters at creation, so a later
-  # rotation of the code must not replace the user.
-  validation_data = {
-    invitationCode = var.invitation_code
-  }
-
-  lifecycle {
-    ignore_changes = [validation_data]
   }
 }
 
