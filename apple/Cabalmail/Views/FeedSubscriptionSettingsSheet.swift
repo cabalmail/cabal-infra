@@ -41,7 +41,7 @@ struct FeedSubscriptionSettingsSheet: View {
                                     isPresented: $confirmUnsubscribe, titleVisibility: .visible) {
                     Button("Unsubscribe", role: .destructive) { Task { await unsubscribe() } }
                 } message: {
-                    Text("Its items and your read and favorite marks for it are removed from this account.")
+                    Text("Its items and your read and flag marks for it are removed from this account.")
                 }
         }
     }

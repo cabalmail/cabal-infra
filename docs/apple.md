@@ -1188,10 +1188,12 @@ spinning up the full view model.
 - **Account.** Signed-in username + control domain (both read-only), plus
   the single sign-out button. Account is the canonical place for
   sign-out.
-- **Reading.** Two sections, Email messages and Feed items — the feed
-  reader is part of the app, not a category of its own. Email messages:
-  `Mark as read` (manual / on open), `Load remote content` (off / ask /
-  always), `Default view`, `Folder counts`. The manual default matches
+- **Reading.** `Folder counts` first, on its own: it governs the badges
+  on mail folders and feeds alike (unread / total / both). Then two
+  sections, Email messages and Feed items — the feed reader is part of
+  the app, not a category of its own. Email messages: `Mark as read`
+  (manual / on open), `Load remote content` (off / ask / always),
+  `Default view`. The manual default matches
   the React app, where the user always explicitly marks messages read
   via the swipe action, toolbar button, or context menu. Feed items:
   its own `Mark as read` (`rss_mark_as_read`), so the two habits can
@@ -1210,7 +1212,7 @@ spinning up the full view model.
   row to Toggle read, Toggle flag, Dispose (which follows `Dispose
   action` and the in-Trash / in-Archive overrides), or None. Feed items:
   `Leading swipe` / `Trailing swipe` for feed item rows (Toggle read,
-  Toggle favorite, None). The same action may be bound to both edges.
+  Toggle flag, None). The same action may be bound to both edges.
   The edges are named for layout direction, not left / right, so a
   binding means the same gesture under RTL. Synced as `swipe_leading` /
   `swipe_trailing` and `rss_swipe_leading` / `rss_swipe_trailing`; the

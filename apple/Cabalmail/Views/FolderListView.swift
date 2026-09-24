@@ -93,6 +93,10 @@ struct FolderListView: View {
     // context-menu item. Non-private so `folderContextMenu` in the `+Helpers`
     // extension (another file) can stage it.
     @State var emptyTrashConfirmPresented = false
+    // The folder whose "Mark all messages in … as read?" confirmation is up,
+    // staged by every folder row's context-menu item (same pattern as
+    // `pendingDelete`). Non-private for `folderContextMenu` in `+Helpers`.
+    @State var pendingMarkAllRead: Folder?
     // Drives the "New folder" sheet from the `+` button. Non-private so the
     // `+Helpers` extension's `wideSidebarHeader` can raise it too.
     @State var showNewFolderSheet = false
@@ -272,18 +276,9 @@ struct FolderListView: View {
             guard let command = appState.pendingSidebarTreeCommand else { return }
             applySidebarTreeCommand(command)
         }
-        .confirmationDialog(
-            "Empty Trash?",
-            isPresented: $emptyTrashConfirmPresented,
-            titleVisibility: .visible
-        ) {
-            Button("Empty Trash", role: .destructive) {
-                Task { await model?.emptyTrash() }
-            }
-            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
-        } message: {
-            Text("All messages in Trash will be permanently deleted. This can't be undone.")
-        }
+        // Empty Trash and Mark All as Read, staged by the row context menus;
+        // one modifier (`+Helpers`) so the body stays under the type-body cap.
+        .modifier(folderConfirmationDialogs)
     }
 
     @ViewBuilder

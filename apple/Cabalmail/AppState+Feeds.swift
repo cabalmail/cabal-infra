@@ -1,9 +1,18 @@
 import Foundation
 import CabalmailKit
 
-/// What the Feeds menu can ask the feed sidebar to do.
+/// What the Feeds menu can ask the feed surfaces to do. The catalog commands
+/// are the feed sidebar's to answer (`FeedManagementSheets`); the item
+/// commands — the mail Message menu's chords, applied to a feed item — are
+/// the mounted `FeedItemListView`'s (`handleFeedCommand`).
 enum FeedCommand: Equatable {
     case subscribe, newFolder, importOpml, exportOpml, refresh
+    /// ⌘T on the selected (open) item.
+    case toggleRead
+    /// ⌘⇧8 on the selected (open) item.
+    case toggleFlag
+    /// ⌥⌘T on the list's scope, through its confirmation.
+    case markAllRead
 }
 
 // Feed reader (RSS plan, phase 5) session flows: the periodic refresh that

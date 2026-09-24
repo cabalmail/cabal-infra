@@ -67,6 +67,18 @@ struct CabalmailCommands: Commands {
             // dead command — the rule `MessageMenuAvailability` already
             // applies to the Message menu (#985, #1162).
             .disabled(!appState.mailboxMenuAvailability.canRefresh)
+            // ⌥⌘T: the Option variant of the Message menu's per-message ⌘T,
+            // acting on the whole folder the list is showing. The Feeds menu
+            // carries the same chord for a feed scope; `SharedChordPolicy`
+            // enables whichever section is in front, never both. Confirmed
+            // by the list before anything happens (`+MarkAllRead`).
+            Button("Mark All as Read") {
+                appState.requestMarkFolderRead()
+            }
+            .keyboardShortcut("t", modifiers: [.command, .option])
+            .disabled(!SharedChordPolicy.mailMarkAllReadLive(
+                appState.mailboxMenuAvailability, activeSection: appState.activeSection
+            ))
             Divider()
             // The sidebar's Expand all / Collapse all buttons, as menu items
             // so they work whichever pane has focus. No chords: nothing

@@ -220,6 +220,19 @@ private struct ReadingSettingsView: View {
             // Mail and feeds side by side: the feed reader is part of the
             // app, not a bolt-on with its own category. Each surface keeps
             // its own mark-as-read key so the two habits can differ.
+            // Folder counts governs both media's badges (cross-media plan,
+            // Phase 1), so it sits above the two sections rather than
+            // under one of them.
+            Section {
+                Picker("Folder counts", selection: $preferences.folderCountDisplay) {
+                    Text("Unread").tag(FolderCountDisplay.unread)
+                    Text("Total").tag(FolderCountDisplay.total)
+                    Text("Unread / total").tag(FolderCountDisplay.both)
+                }
+            } footer: {
+                Text("Badges on mail folders and feeds alike.")
+                    .sectionFooter()
+            }
             Section("Email messages") {
                 Picker("Mark as read", selection: $preferences.markAsRead) {
                     Text("Manual").tag(MarkAsReadBehavior.manual)
@@ -233,11 +246,6 @@ private struct ReadingSettingsView: View {
                 Picker("Default view", selection: $preferences.defaultBodyRenderMode) {
                     Text("Original").tag(BodyRenderMode.original)
                     Text("Reader").tag(BodyRenderMode.reader)
-                }
-                Picker("Folder counts", selection: $preferences.folderCountDisplay) {
-                    Text("Unread").tag(FolderCountDisplay.unread)
-                    Text("Total").tag(FolderCountDisplay.total)
-                    Text("Unread / total").tag(FolderCountDisplay.both)
                 }
             }
             Section("Feed items") {

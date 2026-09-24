@@ -8,33 +8,50 @@ import CabalmailKit
 struct FeedItemListView: View {
     let scope: RssItemScope
     @Binding var selection: RssItem?
+    /// Fires when the user picks another scope from the scope-switch menu
+    /// behind the list's title (see `+ScopeSwitch`). The parent owns the
+    /// selection, so it applies the pick exactly as a sidebar tap would.
+    var onSwitchScope: (RssItemScope) -> Void = { _ in }
+    /// Reports the measured width of the macOS scope-switch menu in the
+    /// column's toolbar section, for the host that sizes the global search
+    /// field around it — the mail list's `onFolderMenuWidthChanged` twin.
+    var onScopeMenuWidthChanged: (CGFloat) -> Void = { _ in }
 
-    @Environment(AppState.self) private var appState
+    // `appState`, `title`, `folders`, `switchSubscriptions` and
+    // `confirmMarkAllRead` are module-internal so the `+ScopeSwitch` and
+    // `+Commands` siblings can reach them.
+    @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
-    @State private var model: FeedItemListViewModel?
+    @State var model: FeedItemListViewModel?
     /// Gates for the launch restore — see `applyLaunchRestoreWhenReady`.
     @State private var hasAppeared = false
     @State private var initialLoadComplete = false
-    @State private var title = "Feeds"
+    @State var title = "Feeds"
     // Feed Settings (RSS plan, phase 5c) for a single-feed list: the most
     // discoverable path to a feed's settings on iPhone, where the sidebar
     // row's context menu is a long-press away.
     @State private var management: FeedManagementViewModel?
     @State private var actions = FeedManagementActions()
-    @State private var folders: [RssFolder] = []
-    @State private var confirmMarkAllRead = false
+    /// The catalog, for the settings sheet's folder picker and the
+    /// scope-switch menu's rows; read once per mount, like the mail list's
+    /// `switchFolders` (the view is re-keyed per scope).
+    @State var folders: [RssFolder] = []
+    @State var switchSubscriptions: [RssSubscription] = []
+    @State var confirmMarkAllRead = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let model {
-                filterBar(model)
-                itemList(model)
-            } else {
-                ProgressView("Loading feed…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        feedScopeSwitchTitle(
+            VStack(spacing: 0) {
+                if let model {
+                    filterBar(model)
+                    itemList(model)
+                } else {
+                    ProgressView("Loading feed…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-        }
-        .navigationTitle(title)
+            .navigationTitle(title)
+        )
         .toolbar {
             // New Message stays in the toolbar in feed scope, in the same
             // slot the mail list gives it, so switching between mail and
@@ -91,6 +108,12 @@ struct FeedItemListView: View {
             hasAppeared = true
             applyLaunchRestoreWhenReady()
         }
+        // The Feeds menu's item chords (`+Commands`); the catalog commands
+        // on the same tick are the sidebar's and are ignored here.
+        .onChange(of: appState.feedCommandTick) { _, _ in
+            guard let model, let command = appState.pendingFeedCommand else { return }
+            handleFeedCommand(command, model: model)
+        }
     }
 
     private var composeButton: some View {
@@ -129,8 +152,9 @@ struct FeedItemListView: View {
         title = scopeTitle(subscription: subscription, folder: folder)
         if subscription != nil {
             management = FeedManagementViewModel(client: client)
-            folders = (try? await client.rssStore?.folders()) ?? []
         }
+        folders = (try? await client.rssStore?.folders()) ?? []
+        switchSubscriptions = (try? await client.rssStore?.subscriptions()) ?? []
         let model = FeedItemListViewModel(scope: scope, subscription: subscription, folder: folder,
                                           client: client, preferences: preferences)
         self.model = model
@@ -143,94 +167,6 @@ struct FeedItemListView: View {
         case .all: return "All Feeds"
         case .subscription: return subscription?.displayTitle ?? "Feed"
         case .folder: return folder?.name ?? "Folder"
-        }
-    }
-
-    @ViewBuilder
-    private func filterBar(_ model: FeedItemListViewModel) -> some View {
-        @Bindable var model = model
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                ForEach(RssItemFilter.allCases) { filter in
-                    Button {
-                        model.selectFilter(filter)
-                    } label: {
-                        Text(filterLabel(filter))
-                            .font(.subheadline.weight(model.filter == filter ? .semibold : .regular))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(
-                                model.filter == filter ? ColorTokens.accentForestFg.opacity(0.18) : Color.clear,
-                                in: Capsule()
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("feed.filter.\(filter.rawValue)")
-                }
-                Spacer()
-                if model.canSearch {
-                    Menu {
-                        // A `Picker` inside a `Menu` renders as a submenu on
-                        // macOS, which put all four orderings one level down
-                        // behind an "Order" row (#1508). Inline, they are the
-                        // menu's own rows, the way the Sort menu reads. An
-                        // inline picker still draws its title as a section
-                        // header, repeating the word on the button just
-                        // pressed, so the label is hidden (VoiceOver keeps it).
-                        Picker("Order", selection: $model.ordering) {
-                            Text("Newest first").tag(RssOrderingMode.newestFirst)
-                            Text("Oldest first").tag(RssOrderingMode.oldestFirst)
-                            Text("Newest day, oldest first within").tag(RssOrderingMode.newestDayOldestWithin)
-                            Text("Oldest day, newest first within").tag(RssOrderingMode.oldestDayNewestWithin)
-                        }
-                        .pickerStyle(.inline)
-                        .labelsHidden()
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                            .accessibilityLabel("Order")
-                    }
-                    .accessibilityIdentifier("feed.order")
-                    .onChange(of: model.ordering) { _, _ in Task { await model.reload() } }
-                }
-            }
-            if model.canSearch {
-                TextField("Search this feed", text: $model.searchQuery)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityIdentifier("feed.search")
-            }
-            statusLines(model)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.bar)
-    }
-
-    /// The sync error, then the fetcher's health for a single feed in its
-    /// own words, so an empty or stale list is explained where the user is
-    /// looking.
-    @ViewBuilder
-    private func statusLines(_ model: FeedItemListViewModel) -> some View {
-        if let errorMessage = model.errorMessage {
-            Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .font(.footnote)
-                .foregroundStyle(ColorTokens.dangerFg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        if let subscription = model.subscription, let headline = FeedHealth.headline(for: subscription.feed) {
-            let stopped = FeedHealth.level(for: subscription.feed) == .stopped
-            Label(headline, systemImage: stopped ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
-                .font(.footnote)
-                .foregroundStyle(stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("feed.health.headline")
-        }
-    }
-
-    private func filterLabel(_ filter: RssItemFilter) -> String {
-        switch filter {
-        case .all: return "All"
-        case .unread: return "Unread"
-        case .favorite: return "Favorites"
         }
     }
 
@@ -281,7 +217,7 @@ struct FeedItemListView: View {
                         Button(item.isRead ? "Mark as unread" : "Mark as read") {
                             Task { await model.setRead(item, !item.isRead) }
                         }
-                        Button(item.isFavorite ? "Remove favorite" : "Favorite") {
+                        Button(item.isFavorite ? "Unflag" : "Flag") {
                             Task { await model.setFavorite(item, !item.isFavorite) }
                         }
                         if let url = URL(string: item.url) {
@@ -308,11 +244,14 @@ extension FeedItemListView {
             .tint(ColorTokens.accentForestFg)
             .accessibilityIdentifier("feed.swipe.toggleRead")
         case .toggleFavorite:
+            // Same words, glyphs and tint as the mail list's flag swipe
+            // (`toggleFlagSwipe`): one mark, one vocabulary across media.
+            // The identifier keeps the wire name for the probes.
             Button {
                 Task { await model.setFavorite(item, !item.isFavorite) }
             } label: {
-                Label(item.isFavorite ? "Unfavorite" : "Favorite",
-                      systemImage: item.isFavorite ? "star.slash" : "star")
+                Label(item.isFavorite ? "Unflag" : "Flag",
+                      systemImage: item.isFavorite ? "flag.slash" : "flag")
             }
             .tint(ColorTokens.flaggedFill)
             .accessibilityIdentifier("feed.swipe.toggleFavorite")
@@ -323,8 +262,8 @@ extension FeedItemListView {
 }
 
 /// One item row: unread dot, title, the first line of the body (when it
-/// has one), feed name (in multi-feed scopes), relative date, favorite
-/// star, and a "queued" mark while a state change waits for the network.
+/// has one), feed name (in multi-feed scopes), relative date, the flag
+/// mark, and a "queued" mark while a state change waits for the network.
 struct FeedItemRow: View {
     let item: RssItem
     /// The feed's name, in multi-feed scopes; nil in a single feed's list.
@@ -371,9 +310,10 @@ struct FeedItemRow: View {
             }
             Spacer(minLength: 0)
             if item.isFavorite {
-                Image(systemName: "star.fill")
+                // The mail row's `\Flagged` indicator, glyph and tint.
+                Image(systemName: "flag.fill")
                     .foregroundStyle(ColorTokens.flaggedFg)
-                    .accessibilityLabel("Favorite")
+                    .accessibilityLabel("Flagged")
             }
         }
         .padding(.vertical, 2)

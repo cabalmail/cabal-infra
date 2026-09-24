@@ -109,6 +109,19 @@ extension RssStore {
         return Dictionary(uniqueKeysWithValues: rows.map { ($0.string(0), $0.int(1)) })
     }
 
+    /// Cached item counts keyed by subscription id (absent = zero): the
+    /// "total" a feed badge shows under the `total` / `both` folder-count
+    /// modes. The cache window is what the client holds, not the feed's
+    /// whole history, which is the same thing the item list can scroll.
+    public func totalCounts() throws -> [String: Int] {
+        let rows = try database.rows("""
+            SELECT s.subscription_id, COUNT(*) FROM items i
+            JOIN subscriptions s ON s.feed_id = i.feed_id
+            GROUP BY s.subscription_id
+            """)
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.string(0), $0.int(1)) })
+    }
+
     /// Per-feed full-text search over cached items, best match first.
     public func search(feedId: String, query: String, limit: Int = 100) throws -> [RssItem] {
         guard let match = Self.ftsQuery(query) else { return [] }

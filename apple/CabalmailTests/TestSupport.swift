@@ -35,11 +35,20 @@ actor FakeImapClient: ImapClient {
     private(set) var flagCalls: [FlagCall] = []
     private(set) var moveCalls: [MoveCall] = []
     private(set) var purgeCalls: [PurgeCall] = []
+    /// Folders handed to `markFolderRead(folder:)`, in order.
+    private(set) var markFolderReadCalls: [String] = []
     // FIFO scripts; an empty queue means "succeed". Seeded via the
     // scriptFlagResults / scriptMoveResults helpers below.
     private var flagResults: [Result<Void, Error>] = []
     private var moveResults: [Result<Void, Error>] = []
     private var purgeResults: [Result<Void, Error>] = []
+    /// Scripted `flipped` counts (or failures) for `markFolderRead`; an
+    /// empty queue reports zero flipped.
+    private var markFolderReadResults: [Result<Int, Error>] = []
+
+    func scriptMarkFolderReadResults(_ results: [Result<Int, Error>]) {
+        markFolderReadResults = results
+    }
 
     func scriptFlagResults(_ results: [Result<Void, Error>]) {
         flagResults = results
@@ -149,6 +158,14 @@ actor FakeImapClient: ImapClient {
         if !purgeResults.isEmpty {
             try purgeResults.removeFirst().get()
         }
+    }
+
+    func markFolderRead(folder: String) async throws -> Int {
+        markFolderReadCalls.append(folder)
+        if !markFolderReadResults.isEmpty {
+            return try markFolderReadResults.removeFirst().get()
+        }
+        return 0
     }
 
     // Lifecycle no-ops — the view model may touch these harmlessly.

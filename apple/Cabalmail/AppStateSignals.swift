@@ -141,3 +141,16 @@ struct MessageMoveRequest: Equatable, Sendable {
     let items: [MessageDragItem]
     let tick: Int
 }
+
+// MARK: - Message-menu selection intents
+
+// Bumpers for the selection-scoped tick counters declared on the main
+// type (stored properties can't live in an extension under @Observable).
+// Here rather than in `AppState.swift` so that file stays under SwiftLint's
+// `file_length` cap.
+extension AppState {
+    func requestToggleSeen() { toggleSeenRequestTick += 1 }
+    func requestToggleFlagged() { toggleFlaggedRequestTick += 1 }
+    func requestMarkFolderRead() { markFolderReadRequestTick += 1 }
+    func requestMoveSelection() { moveSelectionRequestTick += 1 }
+}

@@ -97,7 +97,9 @@ extension FolderListView {
                         .accessibilityIdentifier("feeds.subscribe.empty")
                 } else {
                     feedFilterPillRow(feedModel)
-                    allFeedsRow(selection: selection, unread: FeedSidebarRows.totalUnread(feedModel.unreadCounts))
+                    allFeedsRow(selection: selection,
+                                unread: FeedSidebarRows.totalUnread(feedModel.unreadCounts),
+                                total: FeedSidebarRows.grandTotal(feedModel.totalCounts))
                     FeedSidebarRowsView(
                         rows: feedModel.rows(
                             collapsed: feedsCollapsed,
@@ -130,13 +132,13 @@ extension FolderListView {
     }
 
     /// The "All Feeds" row at the top of the section: every subscription's
-    /// items in one list, with the total unread as its badge.
-    private func allFeedsRow(selection: Binding<RssItemScope?>, unread: Int) -> some View {
+    /// items in one list, with the catalog's roll-up as its badge.
+    private func allFeedsRow(selection: Binding<RssItemScope?>, unread: Int, total: Int) -> some View {
         Button {
             selection.wrappedValue = .all
         } label: {
             FeedSidebarRowLabel(
-                row: FeedSidebarRows.allFeedsRow(unread: unread),
+                row: FeedSidebarRows.allFeedsRow(unread: unread, total: total),
                 isSelected: selection.wrappedValue == .all,
                 isCollapsed: { _ in true }, toggleCollapse: { _ in }
             )
@@ -255,22 +257,10 @@ extension FolderListView {
     /// Render the count badge text honoring the user's
     /// `folderCountDisplay` preference. Returns `nil` when nothing
     /// should be shown so the badge capsule collapses entirely (no
-    /// stray "0" badges on read folders).
+    /// stray "0" badges on read folders). The rule itself lives in
+    /// `FolderCountBadge`, which the feed rows share.
     func countBadgeText(unread: Int?, total: Int?) -> String? {
-        switch preferences.folderCountDisplay {
-        case .unread:
-            guard let unread, unread > 0 else { return nil }
-            return "\(unread)"
-        case .total:
-            guard let total, total > 0 else { return nil }
-            return "\(total)"
-        case .both:
-            // For folders whose counts haven't been fetched yet we
-            // suppress the badge entirely rather than render `0/0`,
-            // which looks like a real (and confusing) zero-mailbox.
-            guard let total else { return nil }
-            return "\(unread ?? 0)/\(total)"
-        }
+        FolderCountBadge.text(display: preferences.folderCountDisplay, unread: unread, total: total)
     }
 
     /// Fire a one-shot STATUS for an unsubscribed folder the user just
@@ -377,6 +367,18 @@ extension FolderListView {
                 systemImage: folder.isSubscribed ? "bell.slash" : "bell"
             )
         }
+        // Every folder, `\Noselect` containers aside (nothing in them to
+        // mark). Confirmed first, naming the folder — see the dialog in
+        // `FolderListView`. Dimmed when the badge already says zero; a folder
+        // with no STATUS yet stays live, since the server knows better.
+        if !folder.attributes.contains("\\Noselect") {
+            Button {
+                pendingMarkAllRead = folder
+            } label: {
+                Label("Mark All as Read", systemImage: "envelope.open")
+            }
+            .disabled(appState.folderUnreadCounts[folder.path] == 0)
+        }
         if folder.path == FolderTree.trashPath {
             Button(role: .destructive) {
                 emptyTrashConfirmPresented = true
@@ -409,6 +411,15 @@ extension FolderListView {
             return "Delete \(folder.path)?"
         }
         return "Delete folder?"
+    }
+
+    /// The folder-level confirmations the row context menus stage.
+    var folderConfirmationDialogs: FolderConfirmationDialogs {
+        FolderConfirmationDialogs(
+            emptyTrashPresented: $emptyTrashConfirmPresented,
+            pendingMarkAllRead: $pendingMarkAllRead,
+            model: model
+        )
     }
 
     var deleteDialogBinding: Binding<Bool> {
@@ -445,5 +456,56 @@ extension FolderListView {
     @ViewBuilder
     func deleteDialogMessage(for folder: Folder) -> some View {
         Text("Messages inside \(folder.path) will be deleted by the server. This can't be undone.")
+    }
+}
+
+/// "Empty Trash?" and "Mark all messages in … as read?", hung on the folder
+/// list as one modifier so `FolderListView`'s body stays under SwiftLint's
+/// `type_body_length` cap. Both are staged by `folderContextMenu` and act on
+/// the sidebar's own view model.
+struct FolderConfirmationDialogs: ViewModifier {
+    @Binding var emptyTrashPresented: Bool
+    @Binding var pendingMarkAllRead: Folder?
+    let model: FolderListViewModel?
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                "Empty Trash?",
+                isPresented: $emptyTrashPresented,
+                titleVisibility: .visible
+            ) {
+                Button("Empty Trash", role: .destructive) {
+                    Task { await model?.emptyTrash() }
+                }
+                Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
+            } message: {
+                Text("All messages in Trash will be permanently deleted. This can't be undone.")
+            }
+            // Names the folder, like the feed side's `FeedManagementActions`
+            // confirmation does for a feed or folder scope. Not destructive:
+            // a read mark is reversible, so the button keeps the default role.
+            .confirmationDialog(markAllReadTitle, isPresented: markAllReadBinding, titleVisibility: .visible) {
+                Button("Mark All as Read") {
+                    if let folder = pendingMarkAllRead {
+                        Task { await model?.markAllRead(folderPath: folder.path) }
+                    }
+                    pendingMarkAllRead = nil
+                }
+                Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) { pendingMarkAllRead = nil }
+            } message: {
+                Text("Every unread message in the folder is marked read, in one step.")
+            }
+    }
+
+    private var markAllReadTitle: String {
+        "Mark all messages in \(pendingMarkAllRead?.name ?? "this folder") as read?"
+    }
+
+    private var markAllReadBinding: Binding<Bool> {
+        Binding(
+            get: { pendingMarkAllRead != nil },
+            set: { if !$0 { pendingMarkAllRead = nil } }
+        )
     }
 }
