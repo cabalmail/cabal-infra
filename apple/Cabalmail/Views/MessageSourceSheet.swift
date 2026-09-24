@@ -179,11 +179,3 @@ private struct MessageSourceFile: Transferable {
         .suggestedFileName { item in emlFilename(for: item.subject) }
     }
 }
-
-private func emlFilename(for subject: String?) -> String {
-    let base = (subject ?? "message")
-        .replacingOccurrences(of: "/", with: "_")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-    let safe = base.isEmpty ? "message" : base
-    return "\(safe).eml"
-}

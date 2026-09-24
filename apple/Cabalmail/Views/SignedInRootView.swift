@@ -4,25 +4,28 @@ import CabalmailKit
 /// Signed-in root.
 ///
 /// The section layout (Mail / Feeds / Addresses / Settings, plus a Search tab)
-/// branches on device idiom and then horizontal size class
-/// (`SectionLayoutPolicy`):
+/// branches on the horizontal *and* vertical size classes
+/// (`SectionLayoutPolicy`), never on device idiom or orientation:
 ///
-/// - iPhone (any orientation) and iPad in narrow multitasking: a bottom
-///   `TabView`, one tab per section. This is the natural compact idiom and the
-///   inner `MailRootView` `NavigationSplitView` collapses to a stack here, so
-///   the two never compete for the left edge. There's no dedicated Folders tab
+/// - Compact in either dimension — every iPhone in every orientation, iPhone
+///   Duo's outer display, iPad in narrow multitasking: a bottom `TabView`, one
+///   tab per section. This is the natural compact idiom and the inner
+///   `MailRootView` `NavigationSplitView` collapses to a stack here, so the
+///   two never compete for the left edge. There's no dedicated Folders tab
 ///   — the Mail tab's sidebar `FolderListView` already browses and manages
-///   folders. The idiom check matters: a Plus / Max iPhone reports a regular
-///   size class in landscape, and branching on size class alone rebuilt the
-///   whole tree on rotation, dropping the reader (see the policy's doc). On a
-///   phone the tab tree also pins the environment size class to compact, so
-///   the split view inside it never expands in landscape and collapses back
-///   (the cycle that left the reader unpushed and the addresses inspector
-///   stranded as a sheet over the tab bar).
-/// - Regular iPad: just `MailRootView` — a single show/hide sidebar owns the
-///   left edge, matching the macOS main window. Addresses / Folders / Settings
-///   move into a modal `SettingsSheet`, opened by the sidebar gear button or
-///   the ⌘, app command via `AppState.settingsRequestTick`.
+///   folders. Requiring a regular height too is what keeps a Plus / Max
+///   iPhone here in landscape, where its width alone reads as regular;
+///   branching on width alone rebuilt the whole tree on rotation, dropping
+///   the reader (see the policy's doc). The tab tree also pins the
+///   environment size class to compact, so the split view inside it never
+///   expands in landscape and collapses back (the cycle that left the reader
+///   unpushed and the addresses inspector stranded as a sheet over the tab
+///   bar).
+/// - Regular in both — an iPad, iPhone Duo's inner display: just
+///   `MailRootView` — a single show/hide sidebar owns the left edge, matching
+///   the macOS main window. Addresses / Folders / Settings move into a modal
+///   `SettingsSheet`, opened by the sidebar gear button or the ⌘, app command
+///   via `AppState.settingsRequestTick`.
 /// - visionOS: `VisionSectionView` — a floating leading tab bar (the visionOS
 ///   `TabView` ornament), one tab per section. The iPad single-sidebar layout
 ///   hid the folder list behind a reveal toggle visionOS never surfaced, so it
@@ -39,23 +42,26 @@ import CabalmailKit
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @State private var isOffline = false
+    /// The window width the section layout was last laid out at; see
+    /// `SectionLayoutPolicy.layout(isCompactWidth:isCompactHeight:measuredWidth:)`.
+    @State private var measuredWidth: CGFloat?
     // iPad only: the regular-width branch below reads the size class and
     // presents the Settings sheet. visionOS uses its own tab bar
     // (`VisionSectionView`) and macOS its Settings scene, so neither compiles
     // this state — guarding it to `os(iOS)` keeps them warning-clean.
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var settingsPresented = false
-    /// The compact tab bar's selection. Seeded synchronously from the stored
-    /// resume session so a launch that ended in the feed reader opens on
-    /// Feeds without first drawing Mail for a frame (a `@State` default can't
-    /// reach the environment, hence the direct store read — see
-    /// `ResumeSessionStore.storedSection`).
-    @State private var compactTab: CompactTab = ResumeSessionStore.storedSection() == .feeds ? .feeds : .mail
     #endif
 
     var body: some View {
         sectionLayout
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { width in
+                measuredWidth = width
+            }
             // Bottom-anchored since #1426: at the top the banners covered the
             // filter pills and clipped the first message row.
             .overlay(alignment: .bottom) {
@@ -83,14 +89,21 @@ struct SignedInRootView: View {
         #else
         switch layoutChoice {
         case .compactTabs:
-            compactTabs
-                // A phone is compact in every orientation, whatever the raw
+            // Seeded from the live coordinator so a tree rebuilt mid-process
+            // (a fold, an iPad window narrowing) opens on the section the
+            // split was showing; the stored session covers a cold launch,
+            // before the coordinator exists. See `CompactSectionTabs` for why
+            // the selection lives on that view and not here.
+            CompactSectionTabs(
+                initialSection: appState.navCoordinator?.launchSection ?? ResumeSessionStore.storedSection()
+            )
+                // The tab tree is compact width throughout, whatever the raw
                 // size class says in landscape on a Plus / Max: the Mail
                 // tab's split view must never expand into columns and
                 // collapse back, and the addresses inspector must never
                 // change presentation. See `SectionLayoutPolicy`.
                 .transformEnvironment(\.horizontalSizeClass) { sizeClass in
-                    if pinsCompactWidth { sizeClass = .compact }
+                    sizeClass = .compact
                 }
         case .regularSplit:
             MailRootView()
@@ -109,96 +122,17 @@ struct SignedInRootView: View {
     }
 
     #if os(iOS)
-    /// Idiom first, then size class — see `SectionLayoutPolicy` for why the
-    /// size class alone is not enough on an iPhone.
+    /// Both size classes, no idiom — see `SectionLayoutPolicy` for why the
+    /// width alone is not enough on an iPhone and why the idiom is too much
+    /// on an iPhone Duo.
     private var layoutChoice: SectionLayoutPolicy.Layout {
         SectionLayoutPolicy.layout(
-            isPhone: UIDevice.current.userInterfaceIdiom == .phone,
-            isCompactWidth: horizontalSizeClass == .compact
+            isCompactWidth: horizontalSizeClass == .compact,
+            isCompactHeight: verticalSizeClass == .compact,
+            measuredWidth: measuredWidth
         )
     }
 
-    /// Whether the tab tree overrides the size class to compact for its
-    /// descendants — a phone, see `SectionLayoutPolicy.pinsCompactWidth`.
-    private var pinsCompactWidth: Bool {
-        SectionLayoutPolicy.pinsCompactWidth(isPhone: UIDevice.current.userInterfaceIdiom == .phone)
-    }
-
-    /// Compact-width section switcher: a plain bottom tab bar. No
-    /// `.sidebarAdaptable` - at compact width there's no sidebar to adapt to,
-    /// and the regular-width path never renders this, so the adaptive style's
-    /// collision with the inner split view can't recur.
-    ///
-    /// The Addresses tab hosts the same `AddressListView` the Mail sidebar uses
-    /// (wrapped in `AddressManagementTab` for its own `NavigationStack` +
-    /// selection). That list carries the full request/revoke affordances, so
-    /// there's a single list implementation per data type - the old dedicated
-    /// management views were retired. Folders have no dedicated tab: the Mail
-    /// tab's sidebar `FolderListView` already browses and manages them
-    /// (create/delete/subscribe live on its rows and toolbar).
-    ///
-    /// Every tab wraps its content in `tabBarTrayShield()`: the floating bar
-    /// only draws the capsules, so without it, touches in the tray's margins
-    /// fall through to the rows visible behind the bar (see
-    /// `TabBarTrayShield.swift`).
-    ///
-    /// Every tab's root screen heads itself with the Cabalmail mark in place
-    /// of its text title, the way the Mail tab's folder list always has:
-    /// `showsCompactBrandMark` turns on the `compactBrandMarkTitle()` each
-    /// root applies (see `SidebarBranding.swift`). Set on the `TabView` so a
-    /// tab added later inherits it.
-    private var compactTabs: some View {
-        TabView(selection: $compactTab) {
-            Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
-                MailRootView()
-                    .tabBarTrayShield()
-            }
-            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: CompactTab.feeds) {
-                FeedRootView()
-                    .tabBarTrayShield()
-            }
-            Tab("Addresses", systemImage: "at", value: CompactTab.addresses) {
-                AddressManagementTab()
-                    .tabBarTrayShield()
-            }
-            Tab("Settings", systemImage: "gear", value: CompactTab.settings) {
-                SettingsView()
-                    .tabBarTrayShield()
-            }
-            // The search role detaches to the bottom-right, next to the tab bar.
-            // On iOS 26 it adopts the morph (tab bar collapses to a dismiss
-            // button, the button expands into a focused field); on iOS 18–25
-            // it's a plain search tab. The morph itself comes from the
-            // `.searchable` inside `SearchView`.
-            Tab(value: CompactTab.search, role: .search) {
-                SearchView()
-                    .tabBarTrayShield()
-            }
-        }
-        .environment(\.showsCompactBrandMark, true)
-        // The resume session remembers which section the user was in; the
-        // Mail and Feeds tabs each keep their own position, so only the
-        // section moves here. Other tabs leave it alone.
-        .onChange(of: compactTab) { _, tab in
-            if let section = tab.resumeSection {
-                appState.navCoordinator?.noteSection(section)
-            }
-        }
-    }
-
-    /// Compact tab identities. `resumeSection` maps the two content tabs onto
-    /// the resume session's sections; the utility tabs have none.
-    enum CompactTab: Hashable {
-        case mail, feeds, addresses, settings, search
-
-        var resumeSection: ResumeSession.Section? {
-            switch self {
-            case .mail: return .mail
-            case .feeds: return .feeds
-            case .addresses, .settings, .search: return nil
-            }
-        }
-    }
     #endif
 
     @ViewBuilder

@@ -137,6 +137,9 @@ fun SearchScreen(
                 }
             }
             items(state.results, key = { "${it.folder}/${it.id}" }) { envelope ->
+                // Results span folders, so the dispose resolves against this
+                // row's own source folder rather than the screen's.
+                val disposeIntent = standardDisposeIntent(envelope.folder.orEmpty())
                 Column(modifier = Modifier.animateRowRemoval(this)) {
                     SwipeRow(
                         isSeen = envelope.isSeen,
@@ -144,12 +147,13 @@ fun SearchScreen(
                         onToggleSeen = { viewModel.toggleSeen(envelope) },
                         onToggleFlag = { viewModel.toggleFlag(envelope) },
                         onDispose = {
-                            if (envelope.folder == "Trash") {
+                            if (disposeIntent == DisposeIntent.Purge) {
                                 pendingPurge = envelope
                             } else {
                                 viewModel.dispose(envelope)
                             }
                         },
+                        disposeIntent = disposeIntent,
                     ) {
                         EnvelopeRow(
                             envelope = envelope,

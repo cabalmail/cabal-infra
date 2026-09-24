@@ -71,6 +71,9 @@ struct MessageListView: View {
     // modifier) so the same-module extensions in `+Search` and `+macOS`
     // can read them without round-tripping through accessors.
     @State var model: MessageListViewModel?
+    /// Gates for the launch restore — see `applyPendingRestoreWhenReady`.
+    @State private var hasAppeared = false
+    @State private var initialLoadComplete = false
     /// The folder list the folder-switch menu offers, loaded once per mount
     /// by `loadFolderSwitchChoices()` (`+FolderSwitch`). Empty until then.
     @State var switchFolders: [Folder] = []
@@ -350,6 +353,9 @@ extension MessageListView {
                 }
                 .disabled(model == nil || model?.isLoading == true)
             }
+            // Never the pair the » popup takes (see above); on 26.1+ the
+            // system honours that as a priority rather than by our ordering.
+            .keepsInBar()
             #else
             ToolbarItem {
                 Button {
@@ -360,6 +366,10 @@ extension MessageListView {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            // Compose is the list's one frequent action: on an iPhone Duo's
+            // vertical bar it must survive the overflow that the outer
+            // display's short strip forces (#1647).
+            .keepsInBar()
             #endif
         }
     }
@@ -455,10 +465,17 @@ extension MessageListView {
                     await model?.startWatching()
                     // Cross-client restore: if this folder is the saved
                     // cursor's target, select the remembered message now that
-                    // its envelope is loaded.
-                    if let model { applyPendingRestore(model: model) }
+                    // its envelope is loaded — but only once the list is on
+                    // screen (`applyPendingRestoreWhenReady`), so the reader
+                    // is pushed in a later update than the list (#1664).
+                    initialLoadComplete = true
+                    applyPendingRestoreWhenReady()
                 }
             }
+        }
+        .onAppear {
+            hasAppeared = true
+            applyPendingRestoreWhenReady()
         }
         // Wall-clock fallback refresh. IDLE usually pushes new mail within
         // seconds, but long-lived IDLE sockets can stall silently (iOS
@@ -619,6 +636,19 @@ extension MessageListView {
         .onChange(of: appState.navCoordinator?.pendingRestore) { _, _ in
             if let model { applyPendingRestore(model: model) }
         }
+    }
+
+    /// The launch restore's two gates: the list has appeared, and its initial
+    /// load has run. Selecting the remembered message before both hold either
+    /// finds no envelopes to match (too early) or pushes the reader in the
+    /// same update as the list — and on a compact stack the reader UIKit then
+    /// shows is not the one SwiftUI runs `onAppear` for, so it never loads
+    /// (#1664; see `FeedRootView` for the measured case). Whichever gate
+    /// closes last applies the restore; `consumePendingRestore` keeps the
+    /// two call sites idempotent.
+    private func applyPendingRestoreWhenReady() {
+        guard hasAppeared, initialLoadComplete, let model else { return }
+        applyPendingRestore(model: model)
     }
 
     /// Selects the message named by a pending cross-client restore, if it

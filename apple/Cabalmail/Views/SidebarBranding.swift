@@ -173,8 +173,8 @@ private struct BrandMarkTitle: ViewModifier {
     }
 }
 
-/// True inside the compact iPhone section tab bar (`SignedInRootView`'s
-/// `compactTabs`), where every tab's root screen heads itself with the
+/// True inside the compact iPhone section tab bar (see
+/// `CompactSectionTabs`), where every tab's root screen heads itself with the
 /// Cabalmail mark instead of a text title. False everywhere else, so the
 /// same `SettingsView` / `AddressListView` bodies keep their text titles in
 /// the iPad settings sheet and the wide sidebar's inspector, where the mark

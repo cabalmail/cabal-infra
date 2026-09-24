@@ -208,12 +208,15 @@ class SearchViewModel(
     }
 
     /**
-     * Archive, or (post-confirmation) purge when the source is Trash. An
-     * archived message is also marked read (archived == read), in the same
-     * server call so the flag is set before the MOVE drops the source UID.
+     * The dispose action for one result, resolved through the same
+     * [DisposeIntent] the message list and the reader use, against the
+     * result's own source folder: archive/trash move, restore to the inbox
+     * from Archive (archiving there would move the message onto its own
+     * folder), or (post-confirmation) purge from Trash.
      */
     fun dispose(envelope: Envelope) {
         val folder = envelope.folder ?: return
+        val target = DisposeIntent.standard(container.preferences.preferences.value.disposeAction, folder).moveTarget
         if (!disposing.add(folder to envelope.id)) {
             return
         }
@@ -227,15 +230,15 @@ class SearchViewModel(
         viewModelScope.launch {
             try {
                 val api = container.requireApi()
-                if (folder == "Trash") {
+                if (target == null) {
                     api.purgeMessages(folder, listOf(envelope.id))
                     container.bodyCache.remove(folder, envelope.id)
                 } else {
                     api.moveMessages(
                         folder,
-                        MessageListViewModel.disposeTarget(container.preferences.preferences.value),
+                        target.destination,
                         listOf(envelope.id),
-                        markSeen = true,
+                        markSeen = target.markSeen,
                     )
                 }
                 container.envelopeCache.invalidateFolder(folder)

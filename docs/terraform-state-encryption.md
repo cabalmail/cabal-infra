@@ -17,9 +17,10 @@ ships the mechanism; the steps below create the key and turn it on.
 
 - **Set** to a KMS key ARN: the generated `backend.tf` gets `encrypt = true` and
   `kms_key_id = <that ARN>`. State objects are written with SSE-KMS.
-- **Unset/empty** (the default): the backend is the historical plaintext-SSE-S3
-  block, byte-for-byte. An environment you have not activated, or one you roll
-  back, behaves exactly as before.
+- **Unset/empty** (the default): the backend is the SSE-S3 block with no KMS
+  settings. An environment you have not activated, or one you roll back,
+  behaves exactly as before. (Both forms carry `use_lockfile = true`; the lock
+  object is written with the same encryption as the state.)
 
 The presence of the ARN is the on switch -- there is no separate mode flag. Every
 Terraform entry point for an environment (the `infra` and `dns` builds in

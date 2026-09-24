@@ -58,13 +58,13 @@ struct SearchView: View {
             #endif
         }
         .task {
+            // Shared with the regular split's search so a layout swap keeps
+            // the query and results (#1654). This tab searches everywhere, so
+            // the anchor the split may have set is cleared here.
             if model == nil, let client = appState.client {
-                model = MessageListViewModel(
-                    scope: .search,
-                    client: client,
-                    preferences: preferences,
-                    appState: appState
-                )
+                let shared = appState.sharedSearchModel(client: client, preferences: preferences)
+                shared.searchAnchor = nil
+                model = shared
             }
         }
     }

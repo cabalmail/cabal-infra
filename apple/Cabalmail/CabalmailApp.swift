@@ -110,11 +110,12 @@ struct CabalmailApp: App {
                 .keyboardShortcut(",", modifiers: .command)
             }
         }
-        // iPadOS and visionOS open compose as a real scene; iPhone
-        // ignores the group because `composeOpensInWindow` keeps it on
-        // the sheet path. Installing the WindowGroup on every iOS
-        // build keeps the scene available the moment a user moves to a
-        // multi-scene device (Stage Manager, iPad).
+        // iPadOS, visionOS, and an open iPhone Duo open compose as a real
+        // scene; a single-window host ignores the group because
+        // `ComposeSurfacePolicy` keeps it on the sheet path. Installing the
+        // WindowGroup on every iOS build keeps the scene available the
+        // moment the host gains windows (Stage Manager, iPad, unfolding a
+        // Duo).
         ComposeWindowScene(appState: appState, preferences: preferences)
     }
 }

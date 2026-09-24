@@ -16,13 +16,12 @@ struct FolderSectionRow: Identifiable, Equatable {
 /// Turns a section's folder list into its rows. Pure, so the sidebar's
 /// tree rules are testable without standing up a `List`.
 ///
-/// The sidebar draws the same folders through two sections over two
-/// different lists — Subscribed is a subset of All folders, and the
-/// filter field narrows both — so depth, the chevron, and the
-/// collapse all have to be computed against the section's own list.
-/// Reading any of them off the full folder set is what let Subscribed
-/// draw a nested folder flat and hand it a chevron whose collapse only
-/// took effect in the section below it.
+/// The sidebar draws whatever list the filter pills and the filter field
+/// leave in (`FolderListFilter`), so depth, the chevron, and the collapse
+/// all have to be computed against that list rather than the full folder
+/// set. Reading any of them off the full set is what once let the old
+/// Subscribed section draw a nested folder flat and hand it a chevron
+/// whose collapse only took effect in another section.
 enum FolderSectionRows {
     static func rows(
         for folders: [Folder],

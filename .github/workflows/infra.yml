@@ -82,6 +82,9 @@ permissions:
 # race for the state lock. cancel-in-progress: false because we never
 # want to cancel an in-flight apply: a half-applied state is worse
 # than a queued plan.
+# This group only sees this workflow; the S3 backend's use_lockfile lock
+# (make-terraform.sh) is what guards against quiesce.yml or
+# destroy_terraform.yml applying over an in-flight run on the same state.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -172,7 +175,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: results.sarif
         category: checkov-dns
@@ -219,7 +222,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: terraform/dns/tflint.sarif
         category: tflint-dns
@@ -251,7 +254,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: trivy-dns.sarif
         category: trivy-dns
@@ -277,7 +280,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -290,6 +293,13 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
+        # Pinned to a minor line, not `latest`. With no pin the action installs
+        # whatever HashiCorp shipped most recently, so every new minor lands in
+        # the apply path with no rehearsal. `~1.16` keeps patch releases flowing
+        # and makes a minor bump a deliberate PR: change it here and in the other
+        # setup-terraform steps (infra.yml, quiesce.yml, destroy_terraform.yml,
+        # lint.yml) together.
+        terraform_version: "~1.16"
         terraform_wrapper: false
     - name: tfvars-terraform
       run: |
@@ -352,7 +362,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -365,6 +375,8 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
+        # Same minor pin as infra.yml's bootstrap plan step; bump them together.
+        terraform_version: "~1.16"
         # The wrapper interleaves its own bookkeeping lines into
         # terraform's stdout, which would corrupt the command
         # substitution in annotate-terraform-outputs.sh. Nothing in
@@ -473,7 +485,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: results.sarif
         category: checkov-infra
@@ -524,7 +536,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: terraform/infra/tflint.sarif
         category: tflint-infra
@@ -556,7 +568,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63  # v4.38.0
+      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
       with:
         sarif_file: trivy-infra.sarif
         category: trivy-infra
@@ -590,7 +602,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -603,6 +615,8 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
+        # Same minor pin as infra.yml's bootstrap plan step; bump them together.
+        terraform_version: "~1.16"
         terraform_wrapper: false
     - name: wait-for-app-deploy
       # Cross-workflow ordering. If this same push also triggered app.yml
@@ -756,7 +770,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -769,6 +783,8 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
+        # Same minor pin as infra.yml's bootstrap plan step; bump them together.
+        terraform_version: "~1.16"
         # The wrapper interleaves its own bookkeeping lines into
         # terraform's stdout, which would corrupt the command
         # substitution in annotate-terraform-outputs.sh. Nothing in
@@ -856,7 +872,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}

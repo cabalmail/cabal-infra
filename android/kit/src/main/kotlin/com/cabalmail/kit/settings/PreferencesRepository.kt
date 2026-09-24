@@ -63,9 +63,10 @@ class PreferencesRepository(
         val PUSH_FOLDERS = stringSetPreferencesKey("push_folders")
         val DEFAULT_SORT = stringPreferencesKey("default_sort")
         val DEFAULT_SORT_DESCENDING = booleanPreferencesKey("default_sort_descending")
-        val FOLDER_SECTION_SUBSCRIBED_EXPANDED = booleanPreferencesKey("folder_section_subscribed_expanded")
-        val FOLDER_SECTION_ALL_EXPANDED = booleanPreferencesKey("folder_section_all_expanded")
+        val FOLDER_FILTER_SUBSCRIBED = booleanPreferencesKey("folder_filter_subscribed")
+        val FOLDER_FILTER_UNREAD = booleanPreferencesKey("folder_filter_unread")
         val FEED_COLLAPSED_FOLDERS = stringSetPreferencesKey("feed_collapsed_folders")
+        val FEED_FILTER_UNREAD = booleanPreferencesKey("feed_filter_unread")
     }
 
     private val pushRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -144,11 +145,10 @@ class PreferencesRepository(
             pushFolders = store[Keys.PUSH_FOLDERS] ?: defaults.pushFolders,
             defaultSort = wireEnum<DefaultSort>(store[Keys.DEFAULT_SORT]) ?: defaults.defaultSort,
             defaultSortDescending = store[Keys.DEFAULT_SORT_DESCENDING] ?: defaults.defaultSortDescending,
-            folderSectionSubscribedExpanded =
-                store[Keys.FOLDER_SECTION_SUBSCRIBED_EXPANDED] ?: defaults.folderSectionSubscribedExpanded,
-            folderSectionAllExpanded =
-                store[Keys.FOLDER_SECTION_ALL_EXPANDED] ?: defaults.folderSectionAllExpanded,
+            folderFilterSubscribed = store[Keys.FOLDER_FILTER_SUBSCRIBED] ?: defaults.folderFilterSubscribed,
+            folderFilterUnread = store[Keys.FOLDER_FILTER_UNREAD] ?: defaults.folderFilterUnread,
             feedCollapsedFolders = store[Keys.FEED_COLLAPSED_FOLDERS] ?: defaults.feedCollapsedFolders,
+            feedFilterUnread = store[Keys.FEED_FILTER_UNREAD] ?: defaults.feedFilterUnread,
         )
     }
 
@@ -185,9 +185,10 @@ class PreferencesRepository(
         store[Keys.PUSH_FOLDERS] = value.pushFolders
         store[Keys.DEFAULT_SORT] = value.defaultSort.wire
         store[Keys.DEFAULT_SORT_DESCENDING] = value.defaultSortDescending
-        store[Keys.FOLDER_SECTION_SUBSCRIBED_EXPANDED] = value.folderSectionSubscribedExpanded
-        store[Keys.FOLDER_SECTION_ALL_EXPANDED] = value.folderSectionAllExpanded
+        store[Keys.FOLDER_FILTER_SUBSCRIBED] = value.folderFilterSubscribed
+        store[Keys.FOLDER_FILTER_UNREAD] = value.folderFilterUnread
         store[Keys.FEED_COLLAPSED_FOLDERS] = value.feedCollapsedFolders
+        store[Keys.FEED_FILTER_UNREAD] = value.feedFilterUnread
     }
 
     companion object {

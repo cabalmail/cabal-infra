@@ -23,6 +23,14 @@ struct FeedsMenuCommands: Commands {
             Divider()
             Button("Refresh Feeds") { appState.requestFeedCommand(.refresh) }
                 .disabled(!available)
+            Divider()
+            // The feed tree's Expand all / Collapse all, reachable from the
+            // menu bar whichever pane has focus (the Mailbox menu carries the
+            // mail tree's pair).
+            Button("Expand All Folders") { appState.requestSidebarTree(.expandAllFeedFolders) }
+                .disabled(!available)
+            Button("Collapse All Folders") { appState.requestSidebarTree(.collapseAllFeedFolders) }
+                .disabled(!available)
         }
     }
 

@@ -58,19 +58,32 @@ enum FeedSidebarRows {
                        depth: 0, hasChildren: false, unread: unread)
     }
 
+    /// `unreadOnly` is the sidebar's Unread pill (`FeedListFilter`): a
+    /// subscription shows only with unread items, a folder only with unread
+    /// somewhere under it. `keep` is the open scope, exempt from both the
+    /// pill and the text filter along with its ancestors, so reading a
+    /// feed's last unread item never pulls the feed out from under the
+    /// user. The text filter auto-expands collapsed folders (a match under
+    /// one would otherwise be invisible); the Unread pill does not — it is a
+    /// standing mode, and the chevrons keep meaning what they say.
     static func rows(
         folders: [RssFolder],
         subscriptions: [RssSubscription],
         unreadCounts: [String: Int],
         collapsed: Set<String>,
-        filter: String = ""
+        filter: String = "",
+        unreadOnly: Bool = false,
+        keep: RssItemScope? = nil
     ) -> [FeedSidebarRow] {
         let needle = filter.trimmingCharacters(in: .whitespaces).lowercased()
+        let narrowing = !needle.isEmpty || unreadOnly
         let foldersByParent = Dictionary(grouping: folders, by: \.parentFolderId)
         let subsByFolder = Dictionary(grouping: subscriptions, by: \.folderId)
         var out: [FeedSidebarRow] = []
         func matches(_ sub: RssSubscription) -> Bool {
-            needle.isEmpty || sub.displayTitle.lowercased().contains(needle)
+            if keep == .subscription(sub.subscriptionId) { return true }
+            if !needle.isEmpty && !sub.displayTitle.lowercased().contains(needle) { return false }
+            return !unreadOnly || (unreadCounts[sub.subscriptionId] ?? 0) > 0
         }
         func unreadUnder(_ folderId: String) -> Int {
             let own = (subsByFolder[folderId] ?? []).reduce(0) { $0 + (unreadCounts[$1.subscriptionId] ?? 0) }
@@ -83,8 +96,9 @@ enum FeedSidebarRows {
             for folder in children {
                 let subs = (subsByFolder[folder.folderId] ?? []).filter(matches)
                 let hasChildren = !(foldersByParent[folder.folderId] ?? []).isEmpty || !subs.isEmpty
-                // While filtering, a folder shows only if something under it matches.
-                if !needle.isEmpty && !hasMatch(under: folder.folderId) { continue }
+                // While narrowing, a folder shows only if something under it
+                // matches (or it is, or holds, the kept scope).
+                if narrowing && !hasMatch(under: folder.folderId) { continue }
                 out.append(FeedSidebarRow(kind: .folder(folder), depth: depth, hasChildren: hasChildren,
                                           unread: unreadUnder(folder.folderId)))
                 if collapsed.contains(folder.folderId) && needle.isEmpty { continue }
@@ -96,6 +110,7 @@ enum FeedSidebarRows {
             }
         }
         func hasMatch(under folderId: String) -> Bool {
+            if keep == .folder(folderId) { return true }
             if (subsByFolder[folderId] ?? []).contains(where: matches) { return true }
             return (foldersByParent[folderId] ?? []).contains { hasMatch(under: $0.folderId) }
         }

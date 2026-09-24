@@ -98,6 +98,10 @@ struct MailRootView: View {
     /// can't flip presentation (column <-> sheet) across a rotation, which is
     /// how it once surfaced as a dead-end sheet over the tab bar.
     @State private var addressInspectorPresented = false
+    /// Whether the `@` button asked for the current presentation — the
+    /// framework may only close the inspector, never open it. See
+    /// `InspectorPresentationPolicy` for the iPhone Duo case this guards.
+    @State private var addressInspectorRequested = false
     /// Persisted width of the message-list (content) column in the wide
     /// (regular-width iPad / visionOS) three-column layout. `NavigationSplitView`
     /// doesn't report where a user drags the native list-reader divider, so the
@@ -314,7 +318,20 @@ struct MailRootView: View {
             // macOS pass through untouched. See `resizableContentColumn`.
             resizableContentColumn(decoratedContentColumn)
         } detail: {
+            #if os(iOS)
+            // The reader's floor, declared where UIKit reads it. Without it
+            // the split controller applies its own secondary-column minimum
+            // (about 540 pt, measured on iOS 27.1) and, when the list leaves
+            // less than that, gives up tiling and floats the list over a
+            // reader the width of the whole window: on iPhone Duo's 951 pt
+            // inner display a list wider than 410 pt did that, so the
+            // crease-pinned 50/50 split could never tile (#1679). The floor
+            // is the one `listColumnMaxWidth` already keeps for the reader.
             detailColumn
+                .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
+            #else
+            detailColumn
+            #endif
         }
         // Revealing folders floats a panel OVER the message list rather than
         // tiling the split's sidebar column, so the list never shifts and its
@@ -443,14 +460,12 @@ struct MailRootView: View {
             // Launch landing (`MailRootView+Launch`): a parked navigate
             // request, else the resume session's folder / feed scope.
             await landAtLaunch()
+            // Shared with the compact Search tab so a layout swap keeps the
+            // query and results (#1654); this split anchors it to the folder.
             if searchModel == nil, let client = appState.client {
-                searchModel = MessageListViewModel(
-                    scope: .search,
-                    client: client,
-                    preferences: preferences,
-                    appState: appState
-                )
-                searchModel?.searchAnchor = selectedFolder
+                let shared = appState.sharedSearchModel(client: client, preferences: preferences)
+                shared.searchAnchor = selectedFolder
+                searchModel = shared
             }
         }
         // Addresses live in a trailing panel rather than the left sidebar,
@@ -465,7 +480,7 @@ struct MailRootView: View {
                 .environment(appState)
         }
         #else
-        .inspector(isPresented: $addressInspectorPresented) {
+        .inspector(isPresented: addressInspectorBinding) {
             AddressListView(externalFilter: $addressListFilter)
                 .addressInspectorWidth()
         }
@@ -737,6 +752,15 @@ extension MailRootView {
         } action: { newWidth in
             recordContentColumnWidth(newWidth)
         }
+        // The system sidebar toggle is removed on the sidebar column above,
+        // which is where iPadOS 26 hosts it. iOS 27 on a phone-idiom host
+        // (iPhone Duo's inner display) hosts it on this column instead, so
+        // the list's bar carried two sidebar icons: the system one, which
+        // only revealed the zero-width column and its dimming scrim, next
+        // to the folder-panel toggle that stands in for it (#1690).
+        #if os(iOS)
+        .toolbar(removing: isWideSidebar ? .sidebarToggle : nil)
+        #endif
         // Global search rides the message-list column on wide layouts
         // (moved from above the reading pane in the #1047 toolbar rework —
         // the results it drives show in this column, and the reader needs
@@ -752,13 +776,17 @@ extension MailRootView {
                 }
             }
             if isWideSidebar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        addressInspectorPresented.toggle()
-                    } label: {
-                        Image(systemName: "at")
-                            .accessibilityLabel("Addresses")
-                    }
+                // While the inspector is open this is the one item the bar
+                // must keep: on an iPhone Duo the column beside it is narrow
+                // enough that Compose and `@` both fold into the system
+                // overflow, which is inert on the 27.1 beta, and the
+                // inspector then cannot be closed (#1670). Closed, it ranks
+                // like any other item.
+                if addressInspectorPresented {
+                    ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
+                        .keepsInBarFirst()
+                } else {
+                    ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
                 }
             }
         }
@@ -845,5 +873,44 @@ extension MailRootView {
         } else {
             column.listColumnWidthPolicy(splitWidth: splitWidth)
         }
+    }
+}
+
+// MARK: - Addresses inspector presentation
+
+// Same-file extension so the primary struct body stays under SwiftLint's
+// `type_body_length` cap; `private` state stays reachable from here.
+extension MailRootView {
+    /// The `@` button: opens and closes the addresses inspector through
+    /// `InspectorPresentationPolicy`, so the button's request is what the
+    /// framework's own writes are checked against.
+    var addressInspectorToggle: some View {
+        Button {
+            applyInspectorState(InspectorPresentationPolicy.toggled(inspectorState))
+        } label: {
+            Image(systemName: "at")
+                .accessibilityLabel("Addresses")
+        }
+    }
+
+    /// The binding `.inspector(isPresented:)` drives, filtered through
+    /// `InspectorPresentationPolicy` so a framework-initiated present (the
+    /// iPhone Duo unfold, #1663) is dropped while a dismiss is honoured.
+    private var addressInspectorBinding: Binding<Bool> {
+        Binding(
+            get: { addressInspectorPresented },
+            set: { incoming in
+                applyInspectorState(InspectorPresentationPolicy.framework(wrote: incoming, to: inspectorState))
+            }
+        )
+    }
+
+    private var inspectorState: InspectorPresentationPolicy.State {
+        .init(presented: addressInspectorPresented, requested: addressInspectorRequested)
+    }
+
+    private func applyInspectorState(_ state: InspectorPresentationPolicy.State) {
+        if addressInspectorPresented != state.presented { addressInspectorPresented = state.presented }
+        if addressInspectorRequested != state.requested { addressInspectorRequested = state.requested }
     }
 }

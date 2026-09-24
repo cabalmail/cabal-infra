@@ -3,6 +3,7 @@ package com.cabalmail.android.ui.mail
 import com.cabalmail.kit.settings.DisposeAction
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -73,6 +74,38 @@ class DisposeIntentTest {
             listOf("INBOX", "Archive", "Trash", "Drafts").forEach { folder ->
                 val intent = DisposeIntent.standard(preference, folder)
                 assertTrue((intent as? DisposeIntent.Move)?.destination != folder) {
+                    "$preference in $folder resolved to a same-folder move"
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `the move target carries the destination and the read flag together`() {
+        // #1628: Search composed its own destination from the preference and
+        // always marked the message read, so a result in Archive moved onto
+        // Archive and came back marked read. Both halves live on the intent.
+        assertEquals(
+            DisposeIntent.MoveTarget("Archive", markSeen = true),
+            DisposeIntent.Move(DisposeAction.ARCHIVE).moveTarget,
+        )
+        assertEquals(
+            DisposeIntent.MoveTarget("Trash", markSeen = true),
+            DisposeIntent.Move(DisposeAction.TRASH).moveTarget,
+        )
+        assertEquals(
+            DisposeIntent.MoveTarget("INBOX", markSeen = false),
+            DisposeIntent.Restore.moveTarget,
+        )
+        assertNull(DisposeIntent.Purge.moveTarget)
+    }
+
+    @Test
+    fun `a standard dispose never moves a message onto the folder it is in`() {
+        DisposeAction.entries.forEach { preference ->
+            listOf("INBOX", "Archive", "Trash", "Drafts", "Sent").forEach { folder ->
+                val target = DisposeIntent.standard(preference, folder).moveTarget
+                assertTrue(target == null || target.destination != folder) {
                     "$preference in $folder resolved to a same-folder move"
                 }
             }

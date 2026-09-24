@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+# Deliberately nothing. The build tooling has to run in containers that carry
+# no more than a toolchain — the smoke job installs no build dependencies at
+# all — so a dependency here becomes a system library every one of them needs.
+# The kit is a dev-dependency instead, which is enough to hold the one string
+# this crate and the client share.
 [dependencies]
 
 [dev-dependencies]
