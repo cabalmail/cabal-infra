@@ -22,6 +22,9 @@
 #   AWS_REGION            required by the aws CLI
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR source=spool-drain-lib.sh
+. "$(dirname "$0")/spool-drain-lib.sh"
+
 SPOOL_DIR=/var/spool/cabal-confirm
 POLL_SECONDS=5
 # A confirmation older than the reaper's TTL floor is moot; shed it.
@@ -30,19 +33,13 @@ TABLE_NAME="${ADDRESSES_TABLE_NAME:-cabal-addresses}"
 
 echo "[confirm-spool-drain] Starting..."
 
-mkdir -p "$SPOOL_DIR"
-chmod 1777 "$SPOOL_DIR"
+drain_init_spool "$SPOOL_DIR"
 
 process_one() {
   local file="$1"
 
   # Age out stale signals (drain was down / DynamoDB unreachable for long).
-  local now file_mtime
-  now=$(date +%s)
-  file_mtime=$(stat -c %Y "$file" 2>/dev/null || echo 0)
-  if [ $((now - file_mtime)) -gt "$MAX_AGE_SECONDS" ]; then
-    echo "[confirm-spool-drain] dropping stale signal $(basename "$file")"
-    rm -f "$file"
+  if drain_shed_if_stale confirm-spool-drain "$file" "$MAX_AGE_SECONDS" signal; then
     return 0
   fi
 
@@ -119,10 +116,4 @@ process_one() {
 }
 
 echo "[confirm-spool-drain] Draining $SPOOL_DIR to $TABLE_NAME"
-while true; do
-  for file in "$SPOOL_DIR"/sig.*; do
-    [ -e "$file" ] || continue
-    process_one "$file" || break
-  done
-  sleep "$POLL_SECONDS"
-done
+drain_poll_forever "$SPOOL_DIR" 'sig.*' "$POLL_SECONDS" process_one
