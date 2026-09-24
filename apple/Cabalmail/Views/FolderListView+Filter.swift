@@ -19,9 +19,10 @@ extension FolderListView {
         filterUnread = next.unread
     }
 
-    /// The pill row above the mail tree: All / Subscribed / Unread, and the
-    /// Expand all / Collapse all buttons on the trailing edge. Same chrome
-    /// as the message list's row of pills.
+    /// The pill row above the mail tree: the Subscribed and Unread toggles
+    /// (both off draws every folder), and the Expand all / Collapse all
+    /// buttons on the trailing edge. Same chrome as the message list's row
+    /// of pills.
     var mailFilterPillRow: some View {
         SidebarFilterPillRow(
             pills: FolderListFilter.Pill.allCases.map { pill in
@@ -54,7 +55,7 @@ extension FolderListView {
     }
 
     /// The tree's last row when the pills are suppressing matches the user
-    /// typed for (#1662): a button that clears the pills to All, so the find
+    /// typed for (#1662): a button that turns both pills off, so the find
     /// is one click from its answer. Nothing at all when there is nothing to
     /// say, or when `shown` is false because the Mail section is collapsed.
     /// `visible` is `filteredFolders(folders)`, passed in rather than
@@ -65,7 +66,8 @@ extension FolderListView {
     func folderFilterHintRow(_ folders: [Folder], visible: [Folder], shown: Bool = true) -> some View {
         if shown, let hint = folderFilter.hint(for: folders, visible: visible, needle: activeFilterText) {
             Button {
-                selectFolderPill(.all)
+                filterSubscribed = FolderListFilter.unfiltered.subscribed
+                filterUnread = FolderListFilter.unfiltered.unread
             } label: {
                 Label(hint.label, systemImage: "line.3.horizontal.decrease.circle")
                     .font(.footnote)
@@ -122,15 +124,16 @@ extension FolderListView {
         FeedListFilter(rawValue: feedFilterRaw) ?? FeedListFilter.defaultForFeeds
     }
 
-    /// The Feeds section's pill row: All / Unread, plus the feed tree's
+    /// The Feeds section's pill row: the Unread toggle, plus the feed tree's
     /// Expand all / Collapse all. Drawn as the section's first row.
     func feedFilterPillRow(_ feedModel: FeedSidebarViewModel) -> some View {
         SidebarFilterPillRow(
-            pills: FeedListFilter.allCases.map { filter in
-                SidebarFilterPill(id: filter.rawValue, label: filter.label, isOn: feedListFilter == filter) {
-                    feedFilterRaw = filter.rawValue
-                }
-            },
+            pills: [
+                SidebarFilterPill(id: FeedListFilter.unread.rawValue, label: FeedListFilter.pillLabel,
+                                  isOn: feedListFilter.unreadOnly) {
+                    feedFilterRaw = feedListFilter.toggled.rawValue
+                },
+            ],
             identifierPrefix: "feed.filter",
             expansion: SidebarFilterPillRow.Expansion(
                 hasCollapsible: !collapsibleFeedFolderIds.isEmpty,

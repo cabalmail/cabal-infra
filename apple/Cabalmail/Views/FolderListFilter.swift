@@ -5,8 +5,10 @@ import CabalmailKit
 ///
 /// Replaces the old Subscribed / All folders sections with pills above the
 /// tree. `subscribed` and `unread` are independent toggles — both on means
-/// "subscribed folders with unread mail" — and the All pill is the state
-/// with neither on. The value is sticky per device (`@AppStorage` in
+/// "subscribed folders with unread mail", both off means every folder.
+/// There is deliberately no All pill: turning both toggles off is the same
+/// act, and a third pill only restated it. The value is sticky per device
+/// (`@AppStorage` in
 /// `FolderListView`), never synced: which folders a sidebar shows is a
 /// property of the screen it is on, not of the account.
 ///
@@ -27,6 +29,9 @@ struct FolderListFilter: Equatable {
     /// Neither toggle on: every folder.
     var isAll: Bool { !subscribed && !unread }
 
+    /// Both toggles off — what the text-filter hint row applies.
+    static let unfiltered = FolderListFilter(subscribed: false, unread: false)
+
     /// The filter needs a count for *every* folder, not just the subscribed
     /// ones the sidebar fetches proactively. `FolderListView` answers by
     /// walking STATUS across the whole list once when this becomes true
@@ -36,13 +41,12 @@ struct FolderListFilter: Equatable {
     var needsEveryCount: Bool { unread && !subscribed }
 
     enum Pill: String, CaseIterable, Identifiable {
-        case all, subscribed, unread
+        case subscribed, unread
 
         var id: String { rawValue }
 
         var label: String {
             switch self {
-            case .all:        return "All"
             case .subscribed: return "Subscribed"
             case .unread:     return "Unread"
             }
@@ -51,18 +55,15 @@ struct FolderListFilter: Equatable {
 
     func isOn(_ pill: Pill) -> Bool {
         switch pill {
-        case .all:        return isAll
         case .subscribed: return subscribed
         case .unread:     return unread
         }
     }
 
-    /// The state after tapping a pill: All clears both toggles; the other
-    /// two flip themselves. Tapping All while already on All is a no-op.
+    /// The state after tapping a pill: that toggle flips, the other stays.
     func toggled(_ pill: Pill) -> FolderListFilter {
         var next = self
         switch pill {
-        case .all:        next = FolderListFilter(subscribed: false, unread: false)
         case .subscribed: next.subscribed.toggle()
         case .unread:     next.unread.toggle()
         }
@@ -85,7 +86,7 @@ struct FolderListFilter: Equatable {
     /// state, no hint that a pill two rows above was the reason. The pills
     /// stay authoritative over the rows (a pill reading Subscribed must not
     /// quietly list unsubscribed folders), but the tree owes the user the
-    /// count it is suppressing and one click out to All.
+    /// count it is suppressing and one click that turns the pills off.
     struct Hint: Equatable {
         /// Folders the needle matched and the pills then removed.
         var suppressed: Int
@@ -97,13 +98,13 @@ struct FolderListFilter: Equatable {
         var label: String {
             let matches = suppressed == 1 ? "match" : "matches"
             return anyVisible
-                ? "Show \(suppressed) more \(matches) under All"
-                : "Show \(suppressed) hidden \(matches) under All"
+                ? "Show \(suppressed) more \(matches) in all folders"
+                : "Show \(suppressed) hidden \(matches) in all folders"
         }
     }
 
     /// The hint for a needle, or `nil` when there is nothing to say: an
-    /// empty needle, the All pill (which suppresses nothing), or a needle
+    /// empty needle, no pill on (which suppresses nothing), or a needle
     /// whose every match is already drawn. `visible` is what the tree drew
     /// — pills and needle both applied.
     func hint(for folders: [Folder], visible: [Folder], needle rawNeedle: String) -> Hint? {
