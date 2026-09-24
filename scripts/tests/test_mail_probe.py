@@ -99,6 +99,20 @@ class DkimDomainTests(unittest.TestCase):
             "DKIM-Signature: v=1; a=rsa-sha256\n\n")), "?")
 
 
+class ExistingFoldersTests(unittest.TestCase):
+    def test_reads_the_folders_list(self):
+        payload = {"folders": ["INBOX", "Sent", "Trash", "Work/Receipts"],
+                   "sub_folders": ["INBOX"]}
+        self.assertEqual(probe.existing_folders(payload),
+                         {"INBOX", "Sent", "Trash", "Work/Receipts"})
+
+    def test_fresh_mailbox_and_odd_payloads(self):
+        self.assertEqual(probe.existing_folders({"folders": ["INBOX"]}), {"INBOX"})
+        self.assertEqual(probe.existing_folders({}), set())
+        self.assertEqual(probe.existing_folders({"folders": None}), set())
+        self.assertEqual(probe.existing_folders({"folders": ["INBOX", 7, None]}), {"INBOX"})
+
+
 class SquashTests(unittest.TestCase):
     def test_collapses_and_truncates(self):
         self.assertEqual(probe.squash("a \n\t b"), "a b")

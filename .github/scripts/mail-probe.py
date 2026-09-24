@@ -83,7 +83,10 @@ POLL_INTERVAL = 10
 LIST_WINDOW = 50        # newest messages per folder the probe inspects
 SWEEP_WINDOW = 100      # newest messages per folder the sweep inspects
 SENT_COPY_GRACE = 30    # seconds to wait for /send's queued Sent copy before cleanup
-RETRYABLE_STATUSES = {502, 503, 504}
+# 503 is the planned-maintenance answer during an IMAP roll and 504 is a
+# Lambda timeout; both clear on their own. A bodiless 502 is what API Gateway
+# returns when a handler crashes, which no amount of waiting fixes.
+RETRYABLE_STATUSES = {503, 504}
 BODY_TEXT = ("Automated post-deploy probe message from Cabalmail CI.\n"
              "It is deleted by the probe once verified; safe to delete by hand.\n")
 BODY_HTML = ("<p>Automated post-deploy probe message from Cabalmail CI.</p>"
@@ -95,7 +98,7 @@ class ProbeError(Exception):
 
 
 class Retryable(Exception):
-    """A transient API failure: maintenance 503, gateway 502/504, or a socket error."""
+    """A transient API failure: maintenance 503, Lambda timeout 504, or a socket error."""
 
 
 def log(message):
@@ -175,6 +178,13 @@ def squash(value, limit=160):
     """One line, whitespace collapsed, truncated for logs and summaries."""
     text = " ".join(str(value).split())
     return text if len(text) <= limit else text[:limit - 3] + "..."
+
+
+def existing_folders(payload):
+    """The folder names in a /list_folders response. A fresh mailbox has no
+    Sent until the first /send lands its copy, and listing a folder that does
+    not exist is a handler crash (bodiless 502), not something to wait out."""
+    return {name for name in (payload.get("folders") or []) if isinstance(name, str)}
 
 
 # -- credentials and configuration -------------------------------------------
@@ -340,12 +350,21 @@ def newest_envelopes(api, folder, limit):
     return {int(uid): envelope for uid, envelope in (envelopes.get("envelopes") or {}).items()}
 
 
-def sweep(api, deadline):
+def folder_names(api, deadline):
+    """The mailbox's folder names, via /list_folders."""
+    return existing_folders(with_retry(
+        "GET /list_folders", deadline, lambda: api.call("GET", "list_folders")))
+
+
+def sweep(api, folders, deadline):
     """Moves every probe message in INBOX and Sent to Trash, then purges every
-    probe message in Trash. Returns (moved, purged). A folder that cannot be
-    listed (Sent does not exist until the first /send) is skipped."""
+    probe message in Trash. Returns (moved, purged). Only folders in `folders`
+    (the mailbox's current folder list) are touched: a fresh mailbox has no
+    Sent until the first /send, and Trash only once Dovecot auto-creates it."""
     moved = 0
     for folder in ("INBOX", "Sent"):
+        if folder not in folders:
+            continue
         try:
             found = probe_uids(with_retry(
                 f"list {folder}", deadline,
@@ -363,6 +382,10 @@ def sweep(api, deadline):
         if failed:
             log(f"sweep: {len(failed)} message(s) in {folder} could not be moved: {failed}")
         moved += len(found) - len(failed)
+    if "Trash" not in folders and moved:
+        folders = folder_names(api, deadline)    # the move just created it
+    if "Trash" not in folders:
+        return moved, 0
     trash = probe_uids(with_retry(
         "list Trash", deadline, lambda: newest_envelopes(api, "Trash", SWEEP_WINDOW)))
     if trash:
@@ -481,12 +504,16 @@ def wait_for_delivery(api, expected, deadline):
 
 
 def wait_for_sent_copy(api, subject, deadline):
-    """Gives /send's queued Sent copy a moment to land so the sweep catches it."""
+    """Gives /send's queued Sent copy a moment to land so the sweep catches it.
+    Sent itself may not exist yet (append_sent creates it on first use), so
+    the folder list is re-read on every poll rather than listing blind."""
     while time.monotonic() < deadline:
+        envelopes = {}
         try:
-            envelopes = newest_envelopes(api, "Sent", LIST_WINDOW)
+            if "Sent" in existing_folders(api.call("GET", "list_folders")):
+                envelopes = newest_envelopes(api, "Sent", LIST_WINDOW)
         except (Retryable, ProbeError):
-            envelopes = {}
+            pass
         if probe_uids(envelopes, {subject}):
             return True
         time.sleep(5)
@@ -563,7 +590,8 @@ def run(args):  # pylint: disable=too-many-locals,too-many-branches,too-many-sta
                        lambda: api.call("GET", "list")).get("Items") or []
     address = choose_address(items, args.address)
     log(f"probe address: {address}")
-    moved, purged = sweep(api, setup_deadline)
+    folders = folder_names(api, setup_deadline)
+    moved, purged = sweep(api, folders, setup_deadline)
     if moved or purged:
         log(f"pre-sweep: moved {moved} leftover probe message(s) to Trash, purged {purged}")
 
@@ -618,7 +646,8 @@ def run(args):  # pylint: disable=too-many-locals,too-many-branches,too-many-sta
                     api, by_leg["api"], time.monotonic() + SENT_COPY_GRACE):
                 log("cleanup: the Sent copy has not landed yet; "
                     "the next run's pre-sweep will remove it")
-            moved, purged = sweep(api, time.monotonic() + 60)
+            cleanup_deadline = time.monotonic() + 60
+            moved, purged = sweep(api, folder_names(api, cleanup_deadline), cleanup_deadline)
             log(f"cleanup: moved {moved} to Trash, purged {purged}")
         except ProbeError as err:
             annotate("warning", f"mail probe: cleanup did not finish ({err}); "
