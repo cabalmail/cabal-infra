@@ -4,12 +4,14 @@ import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.settings.AppPreferences
 
 /** The pills above the mail tab's folder list, in display order. */
-enum class FolderFilterPill { ALL, SUBSCRIBED, UNREAD }
+enum class FolderFilterPill { SUBSCRIBED, UNREAD }
 
 /**
  * The folder list's filter: [subscribed] and [unread] are independent
- * toggles; "All" is the state with both off. Persisted per device (not
- * synced), defaulting to Subscribed on, Unread off.
+ * toggles; both off is every folder, and there is deliberately no All
+ * pill — turning both off is the same act, and a third pill only restated
+ * it. Persisted per device (not synced), defaulting to Subscribed on,
+ * Unread off.
  */
 data class FolderListFilter(
     val subscribed: Boolean = true,
@@ -20,15 +22,13 @@ data class FolderListFilter(
     /** Whether [pill] draws selected. */
     fun isOn(pill: FolderFilterPill): Boolean =
         when (pill) {
-            FolderFilterPill.ALL -> isAll
             FolderFilterPill.SUBSCRIBED -> subscribed
             FolderFilterPill.UNREAD -> unread
         }
 
-    /** The filter after a tap on [pill]: All clears both, the others flip themselves. */
+    /** The filter after a tap on [pill]: that toggle flips, the other stays. */
     fun toggled(pill: FolderFilterPill): FolderListFilter =
         when (pill) {
-            FolderFilterPill.ALL -> FolderListFilter(subscribed = false, unread = false)
             FolderFilterPill.SUBSCRIBED -> copy(subscribed = !subscribed)
             FolderFilterPill.UNREAD -> copy(unread = !unread)
         }
