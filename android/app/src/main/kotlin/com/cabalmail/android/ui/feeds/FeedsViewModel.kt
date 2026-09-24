@@ -23,6 +23,8 @@ data class FeedsUiState(
     val subscriptions: List<RssSubscription> = emptyList(),
     /** Keyed by subscription id; absent = zero. */
     val unreadCounts: Map<String, Int> = emptyMap(),
+    /** Cached items per subscription id; absent = zero. The Total badge modes read this. */
+    val totalCounts: Map<String, Int> = emptyMap(),
     val refreshing: Boolean = false,
     val error: String? = null,
     /** Distinguishes an empty catalog from one not read yet. */
@@ -92,8 +94,15 @@ class FeedsViewModel(
             val folders = store.folders()
             val subscriptions = store.subscriptions()
             val counts = store.unreadCounts()
+            val totals = store.totalCounts()
             mutableState.update {
-                it.copy(folders = folders, subscriptions = subscriptions, unreadCounts = counts, hasLoaded = true)
+                it.copy(
+                    folders = folders,
+                    subscriptions = subscriptions,
+                    unreadCounts = counts,
+                    totalCounts = totals,
+                    hasLoaded = true,
+                )
             }
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
@@ -103,7 +112,8 @@ class FeedsViewModel(
 
     suspend fun reloadCounts() {
         val counts = runCatching { store.unreadCounts() }.getOrNull() ?: return
-        mutableState.update { it.copy(unreadCounts = counts) }
+        val totals = runCatching { store.totalCounts() }.getOrNull() ?: return
+        mutableState.update { it.copy(unreadCounts = counts, totalCounts = totals) }
     }
 
     /** Catalog, then every feed; coalesced while one is running. */

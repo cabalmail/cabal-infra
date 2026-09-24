@@ -10,6 +10,7 @@ import com.cabalmail.kit.models.RssOpenMode
 import com.cabalmail.kit.models.RssOrderingMode
 import com.cabalmail.kit.models.RssRemoteContentMode
 import com.cabalmail.kit.models.RssStyling
+import com.cabalmail.kit.settings.FolderCountDisplay
 
 @Composable
 internal fun RssItemFilter.label(): String =
@@ -44,6 +45,21 @@ internal fun FeedHealthLevel.summary(): String? =
 
 @Composable
 internal fun unreadLabel(count: Int): String = pluralStringResource(R.plurals.feeds_unread_count, count, count)
+
+/** What a count badge says under each "Folder counts" mode: "3 unread", "40 items", or both. */
+@Composable
+internal fun countLabel(
+    display: FolderCountDisplay,
+    unread: Int,
+    total: Int,
+): String {
+    val items = pluralStringResource(R.plurals.feeds_item_count, total, total)
+    return when (display) {
+        FolderCountDisplay.UNREAD -> unreadLabel(unread)
+        FolderCountDisplay.TOTAL -> items
+        FolderCountDisplay.BOTH -> "${unreadLabel(unread)}, $items"
+    }
+}
 
 /** A scope's title from the loaded catalog, with the Apple fallbacks. */
 @Composable

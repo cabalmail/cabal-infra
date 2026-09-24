@@ -1,6 +1,8 @@
 package com.cabalmail.android.ui.mail
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +18,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -64,6 +68,8 @@ fun FolderListScreen(
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
     filter: FolderListFilter = FolderListFilter(),
     onFilter: (FolderFilterPill) -> Unit = {},
+    /** Marks every message in the folder read, after the row's confirmation. */
+    onMarkAllRead: (String) -> Unit = {},
 ) {
     ForegroundPolling(onPoll)
 
@@ -100,6 +106,7 @@ fun FolderListScreen(
                     filter = filter,
                     onOpenFolder = onOpenFolder,
                     onEmptyTrash = onEmptyTrash,
+                    onMarkAllRead = onMarkAllRead,
                 )
             }
         }
@@ -129,6 +136,7 @@ fun FolderPane(
     onFilter: (FolderFilterPill) -> Unit = {},
     scroll: FolderPaneScroll = FolderPaneScroll(),
     onScrollChange: (FolderPaneScroll) -> Unit = {},
+    onMarkAllRead: (String) -> Unit = {},
 ) {
     ForegroundPolling(onPoll)
     val listState = rememberLazyListState(scroll.index, scroll.offset)
@@ -149,6 +157,7 @@ fun FolderPane(
             filter = filter,
             onOpenFolder = onOpenFolder,
             onEmptyTrash = onEmptyTrash,
+            onMarkAllRead = onMarkAllRead,
             selectedFolder = selectedFolder,
             listState = listState,
         )
@@ -201,11 +210,16 @@ private fun FolderListContent(
     filter: FolderListFilter,
     onOpenFolder: (String) -> Unit,
     onEmptyTrash: () -> Unit,
+    onMarkAllRead: (String) -> Unit,
     modifier: Modifier = Modifier,
     selectedFolder: String? = null,
     listState: LazyListState = rememberLazyListState(),
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
+    // The folder whose mark-all-read confirmation is up, if any.
+    var confirmingMarkAllRead by remember { mutableStateOf<String?>(null) }
+    // The row whose long-press menu is open, by path; one at a time.
+    var menuFor by remember { mutableStateOf<String?>(null) }
 
     val rows =
         FolderSections.rows(
@@ -234,9 +248,23 @@ private fun FolderListContent(
                 selected = folder == selectedFolder,
                 onOpenFolder = onOpenFolder,
                 onConfirmEmptyTrash = { confirmingEmptyTrash = true },
+                onConfirmMarkAllRead = { confirmingMarkAllRead = folder },
+                menuOpen = menuFor == folder,
+                onMenuChange = { menuFor = if (it) folder else null },
             )
             HorizontalDivider()
         }
+    }
+
+    confirmingMarkAllRead?.let { folder ->
+        MarkAllReadDialog(
+            folder = folder,
+            onDismiss = { confirmingMarkAllRead = null },
+            onConfirm = {
+                confirmingMarkAllRead = null
+                onMarkAllRead(folder)
+            },
+        )
     }
 
     if (confirmingEmptyTrash) {
@@ -263,6 +291,12 @@ private fun FolderListContent(
     }
 }
 
+/**
+ * One folder row: tap opens it, long-press opens its menu — Mark all as
+ * read for every folder, plus Empty Trash on the Trash row, whose inline
+ * button stays where it was so the row's footprint does not move.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FolderRow(
     folder: String,
@@ -271,6 +305,55 @@ private fun FolderRow(
     selected: Boolean,
     onOpenFolder: (String) -> Unit,
     onConfirmEmptyTrash: () -> Unit,
+    onConfirmMarkAllRead: () -> Unit,
+    menuOpen: Boolean,
+    onMenuChange: (Boolean) -> Unit,
+) {
+    val menuLabel = stringResource(R.string.folder_row_menu, folder)
+    Box {
+        FolderListItem(
+            folder = folder,
+            status = status,
+            countDisplay = countDisplay,
+            selected = selected,
+            onConfirmEmptyTrash = onConfirmEmptyTrash,
+            modifier =
+                Modifier.combinedClickable(
+                    onClick = { onOpenFolder(folder) },
+                    onLongClick = { onMenuChange(true) },
+                    onLongClickLabel = menuLabel,
+                ),
+        )
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { onMenuChange(false) }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.mark_all_read)) },
+                onClick = {
+                    onMenuChange(false)
+                    onConfirmMarkAllRead()
+                },
+            )
+            if (folder == FoldersViewModel.TRASH_FOLDER) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.empty_trash), color = MaterialTheme.colorScheme.error) },
+                    onClick = {
+                        onMenuChange(false)
+                        onConfirmEmptyTrash()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FolderListItem(
+    folder: String,
+    status: FolderStatus?,
+    countDisplay: FolderCountDisplay,
+    selected: Boolean,
+    onConfirmEmptyTrash: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     ListItem(
         headlineContent = {
@@ -292,15 +375,7 @@ private fun FolderRow(
             },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val unseen = status?.unseen ?: 0
-                val total = status?.messages ?: 0
-                val badge =
-                    when (countDisplay) {
-                        FolderCountDisplay.UNREAD -> unseen.takeIf { it > 0 }?.toString()
-                        FolderCountDisplay.TOTAL -> total.takeIf { it > 0 }?.toString()
-                        FolderCountDisplay.BOTH ->
-                            if (total > 0) "$unseen / $total" else null
-                    }
+                val badge = FolderSections.badge(countDisplay, status?.unseen ?: 0, status?.messages ?: 0)
                 if (badge != null) {
                     Badge { Text(badge) }
                 }
@@ -315,6 +390,29 @@ private fun FolderRow(
                 }
             }
         },
-        modifier = Modifier.clickable { onOpenFolder(folder) },
+        modifier = modifier,
+    )
+}
+
+/**
+ * The confirmation before a folder is marked read, naming the folder, as
+ * the feed side's does for a feed or folder scope.
+ */
+@Composable
+internal fun MarkAllReadDialog(
+    folder: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.mark_all_read_title, folder)) },
+        text = { Text(stringResource(R.string.mark_all_read_body)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.mark_all_read_confirm)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
     )
 }

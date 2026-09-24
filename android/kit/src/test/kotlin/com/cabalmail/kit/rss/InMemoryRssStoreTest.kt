@@ -191,6 +191,25 @@ class InMemoryRssStoreTest {
         }
 
     @Test
+    fun `total counts are the cached items per subscription, read or not`() =
+        runTest {
+            val store = InMemoryRssStore()
+            store.upsertSubscription(sub("s1", "f1", watermark = "2026-01-03T23:59:59+00:00"))
+            store.upsertSubscription(sub("s2", "f2"))
+            store.upsertSubscription(sub("s3", "f3"))
+            store.upsertItems((1..5).map { item("f1", it) } + listOf(item("f2", 1, isRead = true)))
+
+            // Three of f1's five are read by the watermark; the total does not care.
+            assertEquals(mapOf("s1" to 2), store.unreadCounts())
+            assertEquals(mapOf("s1" to 5, "s2" to 1), store.totalCounts())
+
+            store.markAllRead("s1")
+            assertEquals(emptyMap<String, Int>(), store.unreadCounts())
+            assertEquals(mapOf("s1" to 5, "s2" to 1), store.totalCounts(), "reading changes no total")
+            assertNull(store.totalCounts()["s3"], "a feed with nothing cached is absent, not zero")
+        }
+
+    @Test
     fun `mark all read flips explicit unread items and queues a fence`() =
         runTest {
             val store = InMemoryRssStore()

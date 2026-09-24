@@ -78,6 +78,8 @@ fun MailListDetailScreen(
     /** The list title's folder-switch menu and what a pick does. */
     folderMenu: FolderSwitchMenu? = null,
     onSwitchFolder: (String) -> Unit = {},
+    /** Marks every message in [folder] read, after the list's confirmation. */
+    onMarkAllRead: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val config by container.configService.config.collectAsState()
@@ -141,6 +143,7 @@ fun MailListDetailScreen(
                             showBack = !threePane,
                             folderMenu = folderMenu,
                             onSwitchFolder = onSwitchFolder,
+                            onMarkAllRead = onMarkAllRead,
                         )
                     }
                 },

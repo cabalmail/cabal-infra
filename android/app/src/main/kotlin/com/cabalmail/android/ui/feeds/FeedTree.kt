@@ -15,6 +15,8 @@ data class FeedTreeRow(
     val unread: Int,
     /** The subscription behind a feed row (its health rides on `feed`); null for folders. */
     val subscription: RssSubscription? = null,
+    /** Cached items under the row, rolled up for a folder; what the Total count modes show. */
+    val total: Int = 0,
 )
 
 /**
@@ -28,8 +30,10 @@ data class FeedTreeRow(
  * folder only with a positive roll-up (a folder with none hides its whole
  * subtree); the text filter and the unread filter combine. The row whose
  * scope is `keep` — the open one — is always shown, with its ancestors, so
- * the selection never disappears from under the reader. Unread counts roll
- * up over the unfiltered tree. Pure, so it unit-tests without Compose.
+ * the selection never disappears from under the reader. Unread and total
+ * counts roll up over the unfiltered tree; [totalCounts] (cached items per
+ * subscription) feeds the Total and Both badge modes and never filters.
+ * Pure, so it unit-tests without Compose.
  */
 object FeedTree {
     fun rows(
@@ -40,6 +44,7 @@ object FeedTree {
         filter: String = "",
         unreadOnly: Boolean = false,
         keep: RssItemScope? = null,
+        totalCounts: Map<String, Int> = emptyMap(),
     ): List<FeedTreeRow> {
         val needle = filter.trim().lowercase()
         val foldersByParent = folders.groupBy { it.parentFolderId }
@@ -53,6 +58,10 @@ object FeedTree {
         fun unreadUnder(folderId: String): Int =
             subsByFolder[folderId].orEmpty().sumOf { unreadCounts[it.subscriptionId] ?: 0 } +
                 childFolders(folderId).sumOf { unreadUnder(it.folderId) }
+
+        fun totalUnder(folderId: String): Int =
+            subsByFolder[folderId].orEmpty().sumOf { totalCounts[it.subscriptionId] ?: 0 } +
+                childFolders(folderId).sumOf { totalUnder(it.folderId) }
 
         fun feedsIn(folderId: String) =
             subsByFolder[folderId]
@@ -95,6 +104,7 @@ object FeedTree {
             hasChildren = false,
             unread = unreadCounts[sub.subscriptionId] ?: 0,
             subscription = sub,
+            total = totalCounts[sub.subscriptionId] ?: 0,
         )
 
         fun visit(
@@ -114,6 +124,7 @@ object FeedTree {
                         isFolder = true,
                         hasChildren = children.isNotEmpty() || feeds.isNotEmpty(),
                         unread = unreadUnder(folder.folderId),
+                        total = totalUnder(folder.folderId),
                     )
                 if (folder.folderId in collapsed && needle.isEmpty()) continue
                 visit(folder.folderId, depth + 1)
@@ -127,6 +138,9 @@ object FeedTree {
 
     /** The All Feeds badge: every subscription's unread count summed. */
     fun totalUnread(unreadCounts: Map<String, Int>): Int = unreadCounts.values.sum()
+
+    /** The All Feeds total: every subscription's cached item count summed. */
+    fun totalItems(totalCounts: Map<String, Int>): Int = totalCounts.values.sum()
 
     /**
      * The folders "collapse all" folds: those with a child folder or a feed
