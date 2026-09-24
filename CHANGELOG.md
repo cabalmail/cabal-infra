@@ -5,6 +5,160 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.0] - 2026-09-24
+
+### Added
+- Apple: **Reply beside the message on iPhone Duo.** Compose opens as its
+  own window wherever the system supports multiple windows - iPad as
+  before, and now an open iPhone Duo, so a reply sits next to the message
+  it answers - and as the familiar sheet where it does not (every other
+  iPhone, and a Duo that is closed). The decision reads the live
+  environment, so it follows the fold.
+- Apple: **Drag an address into another app.** Rows in the Addresses list
+  now drag as plain text, so with Safari beside Cabalmail - Split View on
+  an open iPhone Duo, or on an iPad - a freshly created address drops
+  straight into a signup form. Tapping a row still copies it.
+- Apple: **Drag a message out as an .eml file.** On the wide layouts
+  (iPad, Mac, and an open iPhone Duo) a single message dragged from the
+  list can now be dropped into Files, Mail, or Notes in the other pane as
+  a standard .eml document, alongside the existing drop onto a sidebar
+  folder. The source is fetched only when a receiver asks for it, through
+  the reader's cache; a multi-message drag stays a folder move.
+- **Test harness for the Linux client.** `cabalmail-kit` gained eight pure
+  policy modules — split-view collapse, reader toolbar and header sizing, list
+  row identity, compose-cancel resolution, Archive/Trash/Restore per folder,
+  received-HTML rewriting, filter-pill counts, and cross-folder search source
+  — each taking the fields it decides on rather than a model, so the UI
+  decisions are testable with no display server. `cargo xtask ci` gained a
+  `coverage` step enforcing a line floor over the kit with `cargo-llvm-cov`,
+  and `cargo xtask smoke` installs the built Arch package into a clean
+  container and launches it, asserting the installed binary reaches a main
+  window via a new `cabalmail --self-test`. `package-arch` now uploads the
+  package and a generated `.SRCINFO` as workflow artifacts, which is what
+  `smoke` installs.
+- **S3-native Terraform state locking.** The generated backend now sets
+  `use_lockfile = true`, so every plan, apply, quiesce, and destroy takes
+  the state lock as a conditional write of `<key>.tflock` beside the
+  state object. Previously nothing held a lock: the `-lock-timeout` on
+  apply was inert and only the `infra.yml` concurrency group stood
+  between overlapping runs, which could not see `quiesce.yml` or
+  `destroy_terraform.yml`. Both stacks' Terraform floor rises to 1.10,
+  the first release with `use_lockfile`.
+
+### Changed
+- **Terraform provider versions locked and Dependabot-managed.** The
+  `terraform/infra` stack now commits its `.terraform.lock.hcl`, so CI
+  installs exactly the locked provider builds instead of whatever
+  release satisfied the constraint at plan time, and a new `terraform`
+  entry in `dependabot.yml` opens the bump PRs for both stacks, each of
+  which runs the stack's plan and gated apply on merge.
+- **dns bootstrap stack on the aws provider 6.x line.** `terraform/dns`
+  pinned `hashicorp/aws ~> 4.0.0`, two majors behind the infra stack; it
+  now shares infra's `>= 6.0.0, < 7.0.0` constraint and commits its
+  provider lockfile.
+- Apple: **Compose stays in the bar when it overflows.** The message list's
+  New Message button now tells the toolbar to give it up last, so on an
+  iPhone Duo's vertical bar (and a crowded Mac window on macOS 26.1 or
+  later) it is not the action that folds into the overflow menu.
+- Apple: **iPhone Duo's inner display gets the split layout.** The iOS
+  section layout now picks the sidebar-plus-list-plus-reader split whenever
+  both size classes are regular, and the compact tab bar otherwise, instead
+  of keying on the device idiom. iPhone Duo reports the phone idiom with a
+  regular/regular inner display, so the old rule would have drawn a phone
+  layout across its 7.6-inch panel. No other device changes: a Plus / Max
+  iPhone in landscape is regular width with a compact height and stays on
+  the tabs, and iPads already branched on width alone.
+- Android: **Folder and feed list filters.** The folder list's Subscribed
+  and All folders sections are replaced by filter pills styled like the
+  message list's: All, or Subscribed and Unread in any combination
+  (default Subscribed). The open folder always stays listed, and Unread on
+  its own fetches a count for every folder. The feed list gets All /
+  Unread pills (default Unread) and Expand all / Collapse all buttons for
+  its folders. Both choices are remembered per device and never synced.
+- Apple: **Folder and feed list filters.** The sidebar's Subscribed and
+  All folders sections are gone; the folder tree is one list under filter
+  pills styled like the message list's: All, or Subscribed and Unread in
+  any combination (default Subscribed). The folder being read always
+  stays listed, and Unread on its own fetches a count for every folder,
+  the one time unsubscribed folders are walked proactively. The Feeds
+  list gets All / Unread pills (default Unread) with the same open-scope
+  exemption. Both choices are remembered per device and never synced.
+  The tree is expanded by default; Expand all / Collapse all buttons sit
+  beside each pill row, and the Mailbox and Feeds menus carry the same
+  commands. On the Mac and regular iPad the mail tree is headed "Mail"
+  beside the Feeds section; the compact lists have no header.
+- **CI Terraform pinned to a minor line.** Every workflow that runs
+  Terraform (`infra.yml`, `quiesce.yml`, `destroy_terraform.yml`,
+  `lint.yml`) now installs `~1.16` instead of `latest`. Patch releases
+  still flow automatically; a new minor reaches the apply path only
+  through a deliberate PR that bumps all of the setup steps together.
+
+### Fixed
+- Android: **Restore from Archive in Search.** A search result that lives in
+  Archive had the defect the message list shed last release: with the Dispose
+  action set to Archive its swipe was labelled Archive and moved the message
+  onto Archive itself, marking it read, so the row vanished and the same
+  search brought it straight back with its unread dot gone. Search results
+  now resolve the dispose against each result's own folder, so the one in
+  Archive says Restore and goes back to the inbox unread, and one in Trash
+  still asks before purging.
+- Apple: **Folder filter says what a pill is hiding.** Typing a folder name
+  the sidebar's Subscribed or Unread pill excludes used to draw nothing at
+  all — no row, no empty state, no sign that a pill was the reason. The tree
+  now ends with a row naming how many matches the pill suppressed, which
+  switches to All when clicked.
+- Apple: **Authentication warning wraps instead of truncating.** On any reader
+  pane narrower than about 480 pt — an iPhone in portrait, an iPad's portrait
+  reader column — the sentence warning that a message could not be
+  authenticated as coming from its claimed sender was cut off with an ellipsis
+  after one line instead of wrapping. It is the one line in the header that
+  says a message may not be from who it claims, so it now takes the height its
+  wrapped text needs and is readable in full at every pane width.
+- Apple: **A compose window can always be closed on iPad and iPhone Duo.**
+  A compose window whose mail scene had gone away (closed from the app
+  switcher, or discarded by the system) shrugged off Cancel and Send and
+  came back on every launch as an empty New Message. Closing it now brings
+  up a mail scene to land on.
+- Apple: **Fold or resize keeps the section.** When the layout switches
+  from the split view back to the compact tab bar - closing an iPhone Duo,
+  or narrowing an iPad window - the tab bar now opens on the section the
+  split was showing (Mail or Feeds), read from the live resume session,
+  instead of whichever tab it had last displayed.
+- Apple: **Addresses inspector no longer appears on its own when an iPhone
+  Duo unfolds.** Unfolding with a message open let the framework mark the
+  addresses inspector as presented with no tap, so the address list took
+  the right-hand page and could not be dismissed, or the message list
+  overlapped the reading pane. Only the `@` button can open the inspector
+  now; the system can still close it.
+- Apple: **Addresses inspector can always be closed.** While the
+  inspector is open, its `@` toggle now outranks every other item in the
+  list's toolbar, so on an iPhone Duo - where the column beside an open
+  inspector is narrow enough to overflow the bar - the one button that
+  closes it no longer folds into an overflow menu.
+- Apple: **One sidebar button on iPhone Duo's inner display.** The message
+  list's bar showed the system sidebar toggle beside the app's own folder
+  button; the system one only dimmed the screen, since the folder list lives
+  in the floating panel. It is gone on every host now.
+- Apple: **Reader beside the list on iPhone Duo's inner display.** Opening
+  the device, or leaving Split View, could bring the mail split up with the
+  list floating over a reader the width of the whole window, so only the
+  reader header's date showed beside the list until the device was folded
+  again. The reader column now declares its own minimum width to the split,
+  and the regular-width layout waits for the window to reach its new bounds
+  before it is built.
+- Apple: **Reader no longer stuck on a spinner after a relaunch.** Quitting
+  with a message or feed item open and relaunching could leave the reader
+  on a spinner until it was backed out of and reopened: the resume pushed
+  the list and the reader in one step, and the reader on screen was not
+  the one that loaded. The reader is now pushed only once its list is on
+  screen.
+- Apple: **Search survives a fold or resize.** Closing an iPhone Duo, or
+  narrowing an iPad window, no longer drops the search query and its
+  results: the compact Search tab and the split view's search now share
+  one model for the life of the session, so the search is where it was
+  when the layout swaps back. It is still forgotten at sign-out and at
+  relaunch, as before.
+
 ## [1.20.4] - 2026-09-18
 
 ### Fixed
