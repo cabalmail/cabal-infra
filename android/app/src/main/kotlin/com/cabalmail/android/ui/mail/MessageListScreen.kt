@@ -102,6 +102,8 @@ fun MessageListScreen(
      */
     folderMenu: FolderSwitchMenu? = null,
     onSwitchFolder: (String) -> Unit = {},
+    /** Marks every message in this folder read, after the overflow entry's confirmation. */
+    onMarkAllRead: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     // The custom-flag palette (Phase 4), for the row dots and the
@@ -183,6 +185,9 @@ fun MessageListScreen(
     // UID whose long-press context menu is open.
     var menuUid by remember { mutableStateOf<Long?>(null) }
 
+    // Whether the overflow's mark-all-read confirmation is up.
+    var confirmingMarkAllRead by remember { mutableStateOf(false) }
+
     val disposeOrConfirm: (Set<Long>) -> Unit = { uids ->
         if (viewModel.isTrashFolder) {
             pendingPurge = uids
@@ -244,6 +249,7 @@ fun MessageListScreen(
                     showBack = showBack,
                     folderMenu = folderMenu,
                     onSwitchFolder = onSwitchFolder,
+                    onMarkAllRead = { confirmingMarkAllRead = true },
                 )
             }
         },
@@ -354,6 +360,17 @@ fun MessageListScreen(
         }
     }
 
+    if (confirmingMarkAllRead) {
+        MarkAllReadDialog(
+            folder = folder,
+            onDismiss = { confirmingMarkAllRead = false },
+            onConfirm = {
+                confirmingMarkAllRead = false
+                onMarkAllRead()
+            },
+        )
+    }
+
     pendingPurge?.let { uids ->
         PurgeConfirmDialog(
             count = uids.size,
@@ -392,6 +409,7 @@ private fun DefaultTopBar(
     showBack: Boolean,
     folderMenu: FolderSwitchMenu?,
     onSwitchFolder: (String) -> Unit,
+    onMarkAllRead: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     TopAppBar(
@@ -419,6 +437,13 @@ private fun DefaultTopBar(
                     onClick = {
                         menuOpen = false
                         viewModel.startSelecting()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.mark_all_read)) },
+                    onClick = {
+                        menuOpen = false
+                        onMarkAllRead()
                     },
                 )
                 HorizontalDivider()

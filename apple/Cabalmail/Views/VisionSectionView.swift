@@ -45,6 +45,16 @@ struct VisionSectionView: View {
 
     enum Section: Hashable { case mail, folders, feeds, addresses, settings, search }
 
+    /// The resume-session section the selected tab belongs to; nil for the
+    /// utility tabs, which decide nothing about mail versus feeds.
+    private var activeSection: ResumeSession.Section? {
+        switch selection {
+        case .mail, .folders: return .mail
+        case .feeds: return .feeds
+        case .addresses, .settings, .search: return nil
+        }
+    }
+
     var body: some View {
         TabView(selection: $selection) {
             Tab("Mail", systemImage: "tray", value: Section.mail) {
@@ -92,6 +102,9 @@ struct VisionSectionView: View {
             case .addresses, .settings, .search: break
             }
         }
+        // The same mapping, for the menus that share a chord across mail and
+        // feeds (`SharedChordPolicy`).
+        .reportsActiveSection(activeSection)
         // Foreground reconcile: if another client moved the cursor on, offer the
         // jump. Mirrors `MailRootView`'s handler; `hasLoadedInitial` gates out
         // the cold-launch path (which offers its own resume toast from

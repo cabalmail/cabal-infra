@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.MailEvent
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.models.FolderStatus
@@ -147,6 +148,32 @@ class FoldersViewModel(
             } catch (exception: Exception) {
                 mutableState.update {
                     it.copy(error = userMessage(exception, "Could not empty Trash"))
+                }
+            }
+        }
+    }
+
+    /**
+     * Marks every message in [folder] read in one server call
+     * (`/mark_folder_read`; cross-media plan, Decision 6). On success the
+     * folder's badge drops to zero unread at once, keeping its total, and
+     * any open list of the folder refetches: its cached envelopes are
+     * dropped and it is told to reconcile, since a poll cannot see a
+     * flags-only change (UIDNEXT and the message count do not move).
+     */
+    fun markAllRead(folder: String) {
+        viewModelScope.launch {
+            try {
+                container.requireApi().markFolderRead(folder)
+                mutableState.update { state ->
+                    val status = state.statuses[folder] ?: return@update state
+                    state.copy(statuses = state.statuses + (folder to status.copy(unseen = 0)))
+                }
+                container.envelopeCache.invalidateFolder(folder)
+                container.mailEvents.emit(MailEvent.Reconcile(folder))
+            } catch (exception: Exception) {
+                mutableState.update {
+                    it.copy(error = userMessage(exception, "Could not mark $folder read"))
                 }
             }
         }

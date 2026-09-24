@@ -17,6 +17,9 @@ final class FeedSidebarViewModel {
     var folders: [RssFolder] = []
     var subscriptions: [RssSubscription] = []
     var unreadCounts: [String: Int] = [:]
+    /// Cached items per subscription, for the badge's total under the
+    /// `total` / `both` folder-count modes (`FolderCountBadge`).
+    var totalCounts: [String: Int] = [:]
     var isRefreshing = false
     var errorMessage: String?
     /// True once the first `load()` has read the store, so an empty catalog
@@ -49,6 +52,7 @@ final class FeedSidebarViewModel {
             folders = try await store.folders()
             subscriptions = try await store.subscriptions()
             unreadCounts = try await store.unreadCounts()
+            totalCounts = try await store.totalCounts()
             hasLoaded = true
         } catch {
             errorMessage = error.localizedDescription
@@ -78,10 +82,12 @@ final class FeedSidebarViewModel {
         await load()
     }
 
-    /// Reloads counts only (after a read-state change elsewhere).
+    /// Reloads counts only (after a read-state change elsewhere). Totals
+    /// are re-read too: a load-older or a sync lands in the same bus post.
     func reloadCounts() async {
         guard let store = client.rssStore else { return }
         unreadCounts = (try? await store.unreadCounts()) ?? unreadCounts
+        totalCounts = (try? await store.totalCounts()) ?? totalCounts
     }
 
     func subscription(id: String) -> RssSubscription? {
@@ -108,7 +114,8 @@ final class FeedSidebarViewModel {
         keep: RssItemScope? = nil
     ) -> [FeedSidebarRow] {
         FeedSidebarRows.rows(folders: folders, subscriptions: subscriptions, unreadCounts: unreadCounts,
-                             collapsed: collapsed, filter: filter, unreadOnly: unreadOnly, keep: keep)
+                             totalCounts: totalCounts, collapsed: collapsed, filter: filter,
+                             unreadOnly: unreadOnly, keep: keep)
     }
 
 }

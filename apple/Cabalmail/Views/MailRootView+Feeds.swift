@@ -30,8 +30,16 @@ extension MailRootView {
     @ViewBuilder
     var contentColumn: some View {
         if let selectedFeedScope, !isSearching {
-            FeedItemListView(scope: selectedFeedScope, selection: $selectedFeedItem)
-                .id(selectedFeedScope)
+            FeedItemListView(
+                scope: selectedFeedScope,
+                selection: $selectedFeedItem,
+                // A pick from the list's scope-switch menu goes through the
+                // same binding as a sidebar tap, so it clears the mail
+                // selection and records the resume session the same way.
+                onSwitchScope: { feedSidebarSelection.wrappedValue = $0 },
+                onScopeMenuWidthChanged: { listLeadingToolbarWidth = $0 }
+            )
+            .id(selectedFeedScope)
         } else {
             mailContentColumn
         }

@@ -110,6 +110,10 @@ struct CompactSectionTabs: View {
                 appState.navCoordinator?.noteSection(section)
             }
         }
+        // The same section, for the menus that share a chord across mail and
+        // feeds (`SharedChordPolicy`): each tab keeps its selection while the
+        // other is in front, so the section is what decides between them.
+        .reportsActiveSection(tab.resumeSection)
     }
 }
 #endif

@@ -65,6 +65,9 @@ final class FeedManagementActions {
             guard let management else { return true }
             Task { await opml.beginExport(management: management) }
         case .refresh: return false
+        // The item list answers these (`FeedItemListView.handleFeedCommand`);
+        // the sidebar has no item and must not refresh in their place.
+        case .toggleRead, .toggleFlag, .markAllRead: break
         }
         return true
     }
@@ -99,7 +102,7 @@ struct FeedManagementSheets: ViewModifier {
             .confirmationDialog(unsubscribeTitle, isPresented: unsubscribeBinding, titleVisibility: .visible) {
                 Button("Unsubscribe", role: .destructive) { unsubscribePending() }
             } message: {
-                Text("Its items and your read and favorite marks for it are removed from this account.")
+                Text("Its items and your read and flag marks for it are removed from this account.")
             }
             .confirmationDialog(markAllReadTitle, isPresented: markAllReadBinding, titleVisibility: .visible) {
                 Button("Mark All as Read") { markAllReadPending() }

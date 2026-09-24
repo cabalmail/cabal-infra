@@ -77,6 +77,13 @@ interface RssStore {
     /** Unread counts keyed by subscription id (absent = zero). */
     suspend fun unreadCounts(): Map<String, Int>
 
+    /**
+     * Cached item counts keyed by subscription id (absent = zero): the
+     * "total" the folder-count preference shows for a feed, which is what
+     * this device holds rather than what the server has ever fetched.
+     */
+    suspend fun totalCounts(): Map<String, Int>
+
     /** Per-feed full-text search over cached items, newest first. */
     suspend fun search(
         feedId: String,

@@ -32,6 +32,9 @@ struct MessageMenuCommands: Commands {
         // dimmed until it has a target — see `MessageMenuAvailability`, which
         // mirrors the two target rules the handlers themselves use.
         let availability = appState.messageMenuAvailability
+        // ⌘T and ⌘⇧8 are also the Feeds menu's chords; only the section in
+        // front may hold them live (`SharedChordPolicy`).
+        let itemsLive = SharedChordPolicy.mailItemsLive(availability, activeSection: appState.activeSection)
         CommandMenu("Message") {
             Button("Reply") { appState.requestReply() }
                 .keyboardShortcut("r", modifiers: .command)
@@ -45,10 +48,10 @@ struct MessageMenuCommands: Commands {
             Divider()
             Button("Mark as Read/Unread") { appState.requestToggleSeen() }
                 .keyboardShortcut("t", modifiers: .command)
-                .disabled(!availability.canActOnSelection)
+                .disabled(!itemsLive)
             Button("Flag/Unflag") { appState.requestToggleFlagged() }
                 .keyboardShortcut("8", modifiers: [.command, .shift])
-                .disabled(!availability.canActOnSelection)
+                .disabled(!itemsLive)
             Button("Move to Folder…") { appState.requestMoveSelection() }
                 .keyboardShortcut("m", modifiers: .command)
                 .disabled(!availability.canActOnSelection)

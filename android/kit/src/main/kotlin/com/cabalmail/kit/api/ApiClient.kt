@@ -70,6 +70,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -576,6 +577,29 @@ class ApiClient(
                     put("folder", folder)
                 },
         )
+    }
+
+    /**
+     * Sets `\Seen` on every unseen message in [folder] in one server-side
+     * pass (the mail twin of `/rss_mark_all_read`); returns how many the
+     * server flipped. [folder] is the display path, `/`-separated.
+     */
+    suspend fun markFolderRead(folder: String): Int {
+        val text =
+            call(
+                HttpMethod.Put,
+                "mark_folder_read",
+                body =
+                    buildJsonObject {
+                        put("host", host)
+                        put("folder", folder)
+                    },
+            )
+        return json
+            .parseToJsonElement(text)
+            .jsonObject["flipped"]
+            ?.jsonPrimitive
+            ?.intOrNull ?: 0
     }
 
     private fun kotlinx.serialization.json.JsonObjectBuilder.putIds(ids: List<Long>) {

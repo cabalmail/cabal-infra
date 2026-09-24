@@ -25,12 +25,28 @@ struct MailboxMenuAvailability: Equatable {
     /// several mail windows open — the last one closing is what dims the menu,
     /// not the first.
     private(set) var mountedMailSurfaces = 0
+    /// The folder whose message list is on screen, reported by the
+    /// folder-scoped `MessageListView` (never the search surface). What
+    /// Mailbox ▸ Mark All as Read acts on: the command reaches that list
+    /// through `markFolderReadRequestTick`, so with no folder list mounted it
+    /// has no consumer and dims, the same answer Refresh gives (#1162).
+    private(set) var frontFolderPath: String?
 
     /// No window showing mail: the launch, signed-out and all-windows-closed
     /// state.
     static let none = MailboxMenuAvailability()
 
     var mailSurfaceIsMounted: Bool { mountedMailSurfaces > 0 }
+
+    /// A folder's message list came on screen.
+    mutating func folderListAppeared(_ path: String) { frontFolderPath = path }
+
+    /// That list went away. Guarded on the path because SwiftUI re-keys the
+    /// list per folder and delivers the new list's appear before the old
+    /// list's disappear — an unguarded clear would wipe the fresh report.
+    mutating func folderListDisappeared(_ path: String) {
+        if frontFolderPath == path { frontFolderPath = nil }
+    }
 
     /// A mail surface came on screen.
     mutating func surfaceAppeared() { mountedMailSurfaces += 1 }
@@ -52,4 +68,8 @@ struct MailboxMenuAvailability: Equatable {
 
     /// Refresh needs a list to reload.
     var canRefresh: Bool { mailSurfaceIsMounted }
+
+    /// Mark All as Read needs a folder's list to name and to answer the
+    /// command; the search surface has neither.
+    var canMarkAllRead: Bool { frontFolderPath != nil }
 }

@@ -8,7 +8,7 @@ instead of reconstructing it from the git log.
 
 | Phase | Status |
 | --- | --- |
-| 1 -- Shared vocabulary and small parities | Not started |
+| 1 -- Shared vocabulary and small parities | In review (2026-09-24) |
 | 2 -- Custom flags on feed items | Not started |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started |
 | 4 -- Feed rules | Not started |
@@ -212,7 +212,15 @@ cannot promise.
 The cheap changes that make the rest coherent. Client-only except for
 the one Lambda in item 1c. Ship as one release.
 
-**Status:** Not started.
+**Status:** In review (2026-09-24), all six items on both clients plus
+the `mark_folder_read` Lambda. Two details settled in implementation:
+the mail chord for Mark All as Read is ⌥⌘T (the Option variant of the
+per-message ⌘T), used by the Mailbox and Feeds menus alike and gated on
+the section in front; and the "Folder counts" preference moved above the
+Email messages section on both platforms, since it now governs feed
+badges too. On Android the flag glyph was already the star mail uses,
+so item 1 there changed words only. Not yet verified on a device or
+simulator; stage verification owed after merge.
 
 1. **Favorite becomes Flag** (Decision 3). Apple: `FeedItemListView`
    (row indicator, swipe label, filter pill title), `FeedItemDetailView`

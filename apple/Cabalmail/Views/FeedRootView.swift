@@ -22,7 +22,11 @@ struct FeedRootView: View {
             FeedSidebarList(selection: $selectedScope)
         } content: {
             if let selectedScope {
-                FeedItemListView(scope: selectedScope, selection: $selectedItem)
+                // A pick from the list's scope-switch menu lands on the same
+                // state a sidebar tap does, so the sidebar highlight and the
+                // resume record follow it.
+                FeedItemListView(scope: selectedScope, selection: $selectedItem,
+                                 onSwitchScope: { self.selectedScope = $0 })
                     .id(selectedScope)
                     // The launch restore's parked item is applied by the list
                     // itself, once it is on screen and loaded — not from the
@@ -57,6 +61,14 @@ struct FeedRootView: View {
         .onChange(of: compactColumn) { _, column in
             if column != .detail, selectedItem != nil { selectedItem = nil }
         }
+        // What the Feeds menu's item commands can act on (the iPadOS
+        // hardware-keyboard menu reaches this tab); the section itself is
+        // the tab bar's to report.
+        .reportsFeedMenuAvailability(
+            selectedCount: selectedItem == nil ? 0 : 1,
+            hasOpenItem: selectedItem != nil,
+            hasScope: selectedScope != nil
+        )
         .task(id: selectedItem?.subscriptionId) { await resolveSubscription() }
         .task {
             // Once per process (the coordinator guards it): reopen the scope

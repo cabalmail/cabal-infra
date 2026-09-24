@@ -12,8 +12,8 @@ import XCTest
 //
 // Nothing tied the rule to the call site, so this suite walks the app
 // sources and requires every `Picker` inside a `Menu` to ask for the inline
-// style. Deleting `.pickerStyle(.inline)` from FeedItemListView.swift fails
-// `testEveryMenuPickerIsInline` by path.
+// style. Deleting `.pickerStyle(.inline)` from FeedItemListView+FilterBar.swift
+// fails `testEveryMenuPickerIsInline` by path.
 final class MenuPickerSourceScanTests: XCTestCase {
 
     func testEveryMenuPickerIsInline() throws {
@@ -41,7 +41,7 @@ final class MenuPickerSourceScanTests: XCTestCase {
         // The menus that hold a picker today. A new one appearing here is
         // not a failure; a new one appearing in `submenus` is.
         XCTAssertEqual(
-            inventory, ["Cabalmail/Views/FeedItemListView.swift": 1],
+            inventory, ["Cabalmail/Views/FeedItemListView+FilterBar.swift": 1],
             "menu-picker inventory moved — check the new one is inline (#1508)"
         )
         XCTAssertEqual(

@@ -35,6 +35,7 @@ import com.cabalmail.android.R
 import com.cabalmail.android.ui.mail.FOLDER_PANE_WIDTH
 import com.cabalmail.android.ui.mail.fitsThreePanes
 import com.cabalmail.android.ui.mail.threePaneListWidth
+import com.cabalmail.kit.models.RssItemScope
 import com.cabalmail.kit.models.RssSubscription
 import kotlinx.coroutines.launch
 
@@ -58,6 +59,9 @@ fun FeedListDetailScreen(
     management: FeedManagementViewModel? = null,
     onSubscribed: (RssSubscription) -> Unit = {},
     onUnsubscribed: () -> Unit = {},
+    /** The list title's scope-switch menu and what a pick does. */
+    scopeMenu: List<FeedScopeMenuRow>? = null,
+    onSwitchScope: (RssItemScope) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val online by container.connectivity.online.collectAsState()
@@ -110,6 +114,8 @@ fun FeedListDetailScreen(
                                 listState.subscription?.let { sub ->
                                     management?.let { { it.openSettings(sub) } }
                                 },
+                            scopeMenu = scopeMenu,
+                            onSwitchScope = onSwitchScope,
                         )
                     }
                 },

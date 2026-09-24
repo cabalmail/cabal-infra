@@ -62,18 +62,21 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.mail.FolderSections
 import com.cabalmail.android.ui.mail.ForegroundPolling
 import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.kit.models.RssItemScope
 import com.cabalmail.kit.models.RssSubscription
+import com.cabalmail.kit.settings.FolderCountDisplay
 
 /** The feeds refresh while the app is open, as on Apple; background refresh waits for phase 8. */
 const val FEED_POLL_MS = 15 * 60_000L
 
 /**
  * The Feeds destination on a phone: the folder tree with feeds as leaves,
- * unread badges rolled up per folder, health marks, an All Feeds row, the
- * add menu, and long-press management menus on the rows.
+ * count badges rolled up per folder (unread, total, or both, under the
+ * same "Folder counts" preference as the mail folders), health marks, an
+ * All Feeds row, the add menu, and long-press management menus on the rows.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,6 +95,8 @@ fun FeedListScreen(
     /** The Unread pill (versus All), persisted per device. */
     unreadOnly: Boolean = true,
     onUnreadOnly: (Boolean) -> Unit = {},
+    /** What the row badges show, shared with the mail folder list. */
+    countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
 ) {
     ForegroundPolling(onPoll, FEED_POLL_MS)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -129,6 +134,7 @@ fun FeedListScreen(
                     state = state,
                     collapsed = collapsed,
                     unreadOnly = unreadOnly,
+                    countDisplay = countDisplay,
                     onToggleCollapsed = onToggleCollapsed,
                     onOpenScope = onOpenScope,
                     management = management,
@@ -168,6 +174,7 @@ fun FeedPane(
     onSetCollapsed: (Set<String>) -> Unit = {},
     unreadOnly: Boolean = true,
     onUnreadOnly: (Boolean) -> Unit = {},
+    countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
 ) {
     ForegroundPolling(onPoll, FEED_POLL_MS)
     val listState = rememberLazyListState(scroll.index, scroll.offset)
@@ -196,6 +203,7 @@ fun FeedPane(
             state = state,
             collapsed = collapsed,
             unreadOnly = unreadOnly,
+            countDisplay = countDisplay,
             onToggleCollapsed = onToggleCollapsed,
             onOpenScope = onOpenScope,
             selectedScope = selectedScope,
@@ -297,6 +305,7 @@ private fun FeedTreeContent(
     state: FeedsUiState,
     collapsed: Set<String>,
     unreadOnly: Boolean,
+    countDisplay: FolderCountDisplay,
     onToggleCollapsed: (String) -> Unit,
     onOpenScope: (RssItemScope) -> Unit,
     modifier: Modifier = Modifier,
@@ -312,6 +321,7 @@ private fun FeedTreeContent(
             collapsed,
             unreadOnly = unreadOnly,
             keep = selectedScope,
+            totalCounts = state.totalCounts,
         )
     // The row whose long-press menu is open, by row id; one at a time.
     var menuFor by remember { mutableStateOf<String?>(null) }
@@ -337,9 +347,11 @@ private fun FeedTreeContent(
                     isFolder = false,
                     hasChildren = false,
                     unread = FeedTree.totalUnread(state.unreadCounts),
+                    total = FeedTree.totalItems(state.totalCounts),
                 )
             FeedTreeRowItem(
                 row = row,
+                countDisplay = countDisplay,
                 selected = selectedScope == RssItemScope.All,
                 collapsed = false,
                 onToggleCollapsed = {},
@@ -380,6 +392,7 @@ private fun FeedTreeContent(
             val folderId = (row.scope as? RssItemScope.Folder)?.folderId
             FeedTreeRowItem(
                 row = row,
+                countDisplay = countDisplay,
                 selected = selectedScope == row.scope,
                 collapsed = folderId != null && folderId in collapsed,
                 onToggleCollapsed = { folderId?.let(onToggleCollapsed) },
@@ -397,6 +410,7 @@ private fun FeedTreeContent(
 @Composable
 private fun FeedTreeRowItem(
     row: FeedTreeRow,
+    countDisplay: FolderCountDisplay,
     selected: Boolean,
     collapsed: Boolean,
     onToggleCollapsed: () -> Unit,
@@ -407,7 +421,10 @@ private fun FeedTreeRowItem(
 ) {
     val level = FeedHealth.level(row.subscription?.feed)
     val healthSummary = level.summary()
-    val unreadText = unreadLabel(row.unread)
+    // The badge follows the mail folder rows' rule (FolderSections.badge);
+    // the name's highlight stays keyed on unread, as the mail rows' does.
+    val badge = FolderSections.badge(countDisplay, row.unread, row.total)
+    val badgeText = countLabel(countDisplay, row.unread, row.total)
     val menuLabel = stringResource(R.string.feeds_row_menu, row.title)
     Box {
         ListItem(
@@ -471,9 +488,9 @@ private fun FeedTreeRowItem(
                             modifier = Modifier.padding(end = 8.dp).size(18.dp),
                         )
                     }
-                    if (row.unread > 0) {
-                        Badge(modifier = Modifier.semantics { contentDescription = unreadText }) {
-                            Text(row.unread.toString())
+                    if (badge != null) {
+                        Badge(modifier = Modifier.semantics { contentDescription = badgeText }) {
+                            Text(badge)
                         }
                     }
                 }

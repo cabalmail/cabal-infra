@@ -223,6 +223,19 @@ final class FolderListViewModel {
         }
     }
 
+    /// Marks every unseen message in `folderPath` read, in one server call.
+    /// Called only after the sidebar's confirmation dialog names the folder.
+    /// The after-effects (cache drop, badge, list reload) are
+    /// `FolderMarkAllRead`'s, shared with the message list's own entry.
+    func markAllRead(folderPath: String) async {
+        do {
+            try await FolderMarkAllRead.perform(folderPath: folderPath, client: client, appState: appState)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     /// Fetch the INBOX STATUS and publish it. Called as early as
     /// possible at launch so the inbox badge is correct by the time the
     /// user's eyes reach it. Safe to fire in parallel with

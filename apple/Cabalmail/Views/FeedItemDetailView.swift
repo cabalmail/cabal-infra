@@ -172,11 +172,14 @@ struct FeedItemDetailView: View {
             .accessibilityIdentifier("feed.reader.read")
         }
         ToolbarItem {
+            // The mail reader's flag control, word for word and glyph for
+            // glyph (`MessageDetailView+FlagOptions`); the identifier keeps
+            // the wire name for the probes.
             Button {
                 Task { await model.setFavorite(!model.item.isFavorite) }
             } label: {
-                Label(model.item.isFavorite ? "Remove favorite" : "Favorite",
-                      systemImage: model.item.isFavorite ? "star.fill" : "star")
+                Label(model.item.isFavorite ? "Unflag" : "Flag",
+                      systemImage: model.item.isFavorite ? "flag.slash" : "flag")
             }
             .accessibilityIdentifier("feed.reader.favorite")
         }

@@ -96,9 +96,15 @@
     <!-- Folders -->
     <string name="empty_trash">Empty Trash</string>
     <string name="empty_trash_confirm">This permanently deletes every message in Trash. It cannot be undone.</string>
+    <string name="mark_all_read">Mark all as read</string>
+    <string name="mark_all_read_title">Mark all messages in %1$s as read?</string>
+    <string name="mark_all_read_body">Messages you have not opened will be marked read too.</string>
+    <string name="mark_all_read_confirm">Mark All as Read</string>
+    <string name="folder_row_menu">More options for %1$s</string>
     <string name="folder_filter_subscribed">Subscribed</string>
     <string name="switch_folder">Switch folder</string>
     <string name="other_folders">Other folders</string>
+    <string name="feed_switch_scope">Switch feed or folder</string>
 
     <!-- Resume cursor -->
     <string name="resume_prompt">Pick up where you left off?</string>
@@ -237,6 +243,10 @@
         <item quantity="one">%d unread</item>
         <item quantity="other">%d unread</item>
     </plurals>
+    <plurals name="feeds_item_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
     <plurals name="feeds_health_failing">
         <item quantity="one">Failing: %d fetch in a row</item>
         <item quantity="other">Failing: %d fetches in a row</item>
@@ -245,7 +255,7 @@
     <string name="feeds_select_item">No item selected</string>
     <string name="feed_title_fallback">Feed</string>
     <string name="feed_folder_fallback">Folder</string>
-    <string name="feed_filter_favorites">Favorites</string>
+    <string name="feed_filter_favorites">Flagged</string>
     <string name="feed_search_hint">Search this feed</string>
     <string name="feed_order">Order</string>
     <string name="feed_order_newest_first">Newest first</string>
@@ -257,9 +267,9 @@
     <string name="feed_mark_all_read_title">Mark all items in %1$s as read?</string>
     <string name="feed_mark_all_read_body">Items you have not opened will be marked read too.</string>
     <string name="feed_mark_all_read_confirm">Mark All as Read</string>
-    <string name="feed_favorite">Favorite</string>
-    <string name="feed_unfavorite">Unfavorite</string>
-    <string name="feed_remove_favorite">Remove favorite</string>
+    <string name="feed_favorite">Flag</string>
+    <string name="feed_unfavorite">Remove flag</string>
+    <string name="feed_remove_favorite">Remove flag</string>
     <string name="feed_mark_as_read">Mark as read</string>
     <string name="feed_mark_as_unread">Mark as unread</string>
     <string name="feed_open_in_browser">Open in browser</string>
@@ -274,8 +284,8 @@
     <string name="feed_empty_all_body">New items appear here as the feed is fetched.</string>
     <string name="feed_empty_unread_title">All caught up</string>
     <string name="feed_empty_unread_body">Every item here has been read.</string>
-    <string name="feed_empty_favorite_title">No favorites</string>
-    <string name="feed_empty_favorite_body">Swipe an item or use its menu to favorite it.</string>
+    <string name="feed_empty_favorite_title">No flagged items</string>
+    <string name="feed_empty_favorite_body">Swipe an item or use its menu to flag it.</string>
     <string name="feed_open_on">Open on %1$s</string>
     <string name="feed_open_on_web">Open on the web</string>
     <string name="feed_open_article">Open article</string>
@@ -337,7 +347,7 @@
     <string name="feed_settings_no_details">Feed details arrive with the next refresh.</string>
     <string name="feed_settings_unsubscribe">Unsubscribe</string>
     <string name="feed_unsubscribe_title">Unsubscribe from %1$s?</string>
-    <string name="feed_unsubscribe_body">Its items and your read and favorite marks for it are removed from this account.</string>
+    <string name="feed_unsubscribe_body">Its items and your read and flag marks for it are removed from this account.</string>
     <string name="feed_delete_folder_title">Delete %1$s?</string>
     <string name="feed_delete_folder_body">Feeds and folders inside it move up one level; nothing is unsubscribed.</string>
     <string name="feed_delete_folder_confirm">Delete Folder</string>
@@ -402,12 +412,13 @@
     <string name="settings_dispose_advance">After disposing</string>
     <string name="settings_section_email_messages">Email messages</string>
     <string name="settings_section_feed_items">Feed items</string>
+    <string name="settings_folder_count_footer">Badges on mail folders and feeds alike.</string>
     <string name="settings_swipe_leading">Leading swipe</string>
     <string name="settings_swipe_trailing">Trailing swipe</string>
     <string name="settings_swipe_footer">Leading is a swipe that starts at the leading edge (the left in left-to-right languages); trailing starts at the other edge. The same action may be bound to both.</string>
     <string name="opt_swipe_toggle_read">Toggle read</string>
     <string name="opt_swipe_toggle_flag">Toggle flag</string>
-    <string name="opt_swipe_toggle_favorite">Toggle favorite</string>
+    <string name="opt_swipe_toggle_favorite">Toggle flag</string>
     <string name="opt_swipe_dispose">Dispose (per Dispose action)</string>
     <string name="opt_swipe_none">None</string>
     <string name="opt_advance_next">Next message</string>

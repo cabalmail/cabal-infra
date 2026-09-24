@@ -77,6 +77,9 @@ struct MessageListView: View {
     /// The folder list the folder-switch menu offers, loaded once per mount
     /// by `loadFolderSwitchChoices()` (`+FolderSwitch`). Empty until then.
     @State var switchFolders: [Folder] = []
+    /// The "Mark all messages in … as read?" confirmation (`+MarkAllRead`),
+    /// staged by the toolbar's More menu and the Mailbox menu's ⌥⌘T.
+    @State var markAllReadConfirmPresented = false
     /// List-row height. Rows are pinned to this so the virtualized list
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
@@ -289,7 +292,7 @@ struct MessageListView: View {
 extension MessageListView {
     /// The list itself with its navigation chrome (title + toolbar).
     private var chromeLayer: some View {
-        folderSwitchTitle(
+        markAllReadChrome(folderSwitchTitle(
             Group {
                 if let model {
                     content(for: model)
@@ -298,7 +301,7 @@ extension MessageListView {
                 }
             }
             .navigationTitle(isSearchScope ? "Search" : folder.name)
-        )
+        ))
         // The folder-switch menu's rows (`+FolderSwitch`); a no-op on the
         // search surface.
         .task { await loadFolderSwitchChoices() }

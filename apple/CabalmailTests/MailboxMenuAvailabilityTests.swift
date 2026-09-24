@@ -82,4 +82,39 @@ final class MailboxMenuAvailabilityTests: XCTestCase {
 
         XCTAssertTrue(appState.mailboxMenuAvailability.canRefresh)
     }
+
+    // MARK: - Mark All as Read (cross-media plan, Phase 1)
+
+    // ⌥⌘T reaches the folder-scoped message list through a tick, so with no
+    // folder list mounted — the search surface, or no window — it has no
+    // consumer and dims, the same answer Refresh gives.
+
+    func testMarkAllReadDimsWithNoFolderListOnScreen() {
+        var availability = MailboxMenuAvailability.none
+        availability.surfaceAppeared()
+        XCTAssertFalse(availability.canMarkAllRead, "a mounted surface alone is not a folder list")
+    }
+
+    func testMarkAllReadIsLiveWhileAFolderListIsOnScreen() {
+        var availability = MailboxMenuAvailability.none
+        availability.surfaceAppeared()
+        availability.folderListAppeared("INBOX")
+        XCTAssertTrue(availability.canMarkAllRead)
+
+        availability.folderListDisappeared("INBOX")
+        XCTAssertFalse(availability.canMarkAllRead)
+    }
+
+    /// The list is re-keyed per folder, and SwiftUI delivers the new list's
+    /// appear before the old list's disappear: the stale disappear must not
+    /// wipe the fresh report.
+    func testAStaleDisappearFromThePreviousFolderIsIgnored() {
+        var availability = MailboxMenuAvailability.none
+        availability.folderListAppeared("INBOX")
+        availability.folderListAppeared("Sent")
+
+        availability.folderListDisappeared("INBOX")
+
+        XCTAssertTrue(availability.canMarkAllRead)
+    }
 }

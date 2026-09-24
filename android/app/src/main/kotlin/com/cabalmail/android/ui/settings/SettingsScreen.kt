@@ -292,7 +292,19 @@ private fun ReadingSettings(
 ) {
     // Mail and feeds side by side: the feed reader is part of the app, not
     // a bolt-on with its own category. Each keeps its own mark-as-read key
-    // so the two habits can differ.
+    // so the two habits can differ. Default sort and its direction are mail
+    // rows (only the message list reads them; a feed's ordering lives on
+    // its own row), so they sit under Email messages (#1706).
+    // Folder counts governs both media's badges (cross-media plan,
+    // Phase 1), so it sits above the two sections rather than under one.
+    EnumRow(
+        title = stringResource(R.string.settings_folder_count),
+        value = preferences.folderCountDisplay,
+        options = FolderCountDisplay.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(folderCountDisplay = value) } },
+    )
+    SettingsSectionFooter(stringResource(R.string.settings_folder_count_footer))
     SettingsSectionHeader(stringResource(R.string.settings_section_email_messages))
     EnumRow(
         title = stringResource(R.string.settings_mark_as_read),
@@ -316,21 +328,6 @@ private fun ReadingSettings(
         onSelect = { value -> onUpdate { it.copy(bodyRenderMode = value) } },
     )
     EnumRow(
-        title = stringResource(R.string.settings_folder_count),
-        value = preferences.folderCountDisplay,
-        options = FolderCountDisplay.entries,
-        label = { it.label() },
-        onSelect = { value -> onUpdate { it.copy(folderCountDisplay = value) } },
-    )
-    SettingsSectionHeader(stringResource(R.string.settings_section_feed_items))
-    EnumRow(
-        title = stringResource(R.string.settings_mark_as_read),
-        value = preferences.effectiveRssMarkAsRead,
-        options = MarkAsRead.entries,
-        label = { it.label() },
-        onSelect = { value -> onUpdate { it.copy(rssMarkAsRead = value) } },
-    )
-    EnumRow(
         title = stringResource(R.string.settings_default_sort),
         value = preferences.defaultSort,
         options = DefaultSort.entries,
@@ -341,6 +338,14 @@ private fun ReadingSettings(
         title = stringResource(R.string.sort_descending),
         checked = preferences.defaultSortDescending,
         onChange = { value -> onUpdate { it.copy(defaultSortDescending = value) } },
+    )
+    SettingsSectionHeader(stringResource(R.string.settings_section_feed_items))
+    EnumRow(
+        title = stringResource(R.string.settings_mark_as_read),
+        value = preferences.effectiveRssMarkAsRead,
+        options = MarkAsRead.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(rssMarkAsRead = value) } },
     )
 }
 

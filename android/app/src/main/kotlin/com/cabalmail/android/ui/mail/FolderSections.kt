@@ -2,6 +2,7 @@ package com.cabalmail.android.ui.mail
 
 import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.FolderCountDisplay
 
 /** The pills above the mail tab's folder list, in display order. */
 enum class FolderFilterPill { SUBSCRIBED, UNREAD }
@@ -124,4 +125,23 @@ object FolderSections {
      * guessing.
      */
     fun hasUnread(status: FolderStatus?): Boolean = (status?.unseen ?: 0) > 0
+
+    /**
+     * The badge text for a row under the "Folder counts" preference, or
+     * null for no badge: the unread count, the total, or "unread / total".
+     * A zero hides the badge in the single-count modes, and Both hides it
+     * only when there is nothing at all, so an all-read folder still shows
+     * its size. Shared by the mail folder rows and the feed tree, which
+     * read the same preference (cross-media plan, Phase 1).
+     */
+    fun badge(
+        display: FolderCountDisplay,
+        unread: Int,
+        total: Int,
+    ): String? =
+        when (display) {
+            FolderCountDisplay.UNREAD -> unread.takeIf { it > 0 }?.toString()
+            FolderCountDisplay.TOTAL -> total.takeIf { it > 0 }?.toString()
+            FolderCountDisplay.BOTH -> if (total > 0) "$unread / $total" else null
+        }
 }

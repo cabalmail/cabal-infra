@@ -81,6 +81,11 @@ public protocol ImapClient: Sendable {
     /// `/empty_trash`, same trash-only restriction and default).
     func emptyTrash(folder: String) async throws
 
+    /// Marks every unseen message in `folder` as `\Seen` in one server-side
+    /// pass (backed by `/mark_folder_read`; same API-only default as
+    /// `purge`). Returns how many messages were flipped.
+    func markFolderRead(folder: String) async throws -> Int
+
     /// Structured search across one folder (`query.folder` set) or every
     /// subscribed folder (`query.folder == nil`). Returns envelopes with
     /// their source folder attached, plus the pagination cursor required
@@ -256,6 +261,13 @@ public extension ImapClient {
     func emptyTrash(folder: String) async throws {
         throw CabalmailError.protocolError(
             "emptyTrash is not implemented by this ImapClient"
+        )
+    }
+
+    /// Default implementation — see `purge(folder:uids:)` above.
+    func markFolderRead(folder: String) async throws -> Int {
+        throw CabalmailError.protocolError(
+            "markFolderRead is not implemented by this ImapClient"
         )
     }
 }

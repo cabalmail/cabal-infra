@@ -2,6 +2,7 @@ package com.cabalmail.android.ui.mail
 
 import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.FolderCountDisplay
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -153,6 +154,17 @@ class FolderSectionsTest {
     fun `an unknown status rests dim, not highlighted`() {
         assertFalse(FolderSections.hasUnread(null))
         assertFalse(FolderSections.hasUnread(FolderStatus(messages = 40)))
+    }
+
+    @Test
+    fun `the badge shows unread, total, or both, and hides a zero`() {
+        assertEquals("3", FolderSections.badge(FolderCountDisplay.UNREAD, unread = 3, total = 40))
+        assertEquals(null, FolderSections.badge(FolderCountDisplay.UNREAD, unread = 0, total = 40))
+        assertEquals("40", FolderSections.badge(FolderCountDisplay.TOTAL, unread = 3, total = 40))
+        assertEquals(null, FolderSections.badge(FolderCountDisplay.TOTAL, unread = 3, total = 0))
+        assertEquals("3 / 40", FolderSections.badge(FolderCountDisplay.BOTH, unread = 3, total = 40))
+        assertEquals("0 / 40", FolderSections.badge(FolderCountDisplay.BOTH, unread = 0, total = 40))
+        assertEquals(null, FolderSections.badge(FolderCountDisplay.BOTH, unread = 0, total = 0))
     }
 
     @Test
