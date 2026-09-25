@@ -5,6 +5,124 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0] - 2026-09-25
+
+### Added
+- Android: **Feed list title switches scope.** The title above the feed
+  item list is now a scope switcher, like the mail folder title: tap it
+  for All Feeds, then the whole folder tree indented by depth with each
+  folder's feeds beneath it, the current scope checked, and pick a row to
+  switch the list in place. (Cross-media UX plan, Phase 1.)
+- Android: **Mark all as read for a mail folder.** Long-press a folder
+  in the folder list (or open the message list's overflow menu) for
+  "Mark all as read"; after a confirmation naming the folder, one
+  `/mark_folder_read` call marks every unseen message read, the badge
+  drops to zero at once, and an open list of the folder refetches.
+  (Cross-media UX plan, Phase 1.)
+- Apple: **Mail and feeds share their small parities.** Mark All as
+  Read reaches mail folders: every folder's sidebar context menu, the
+  message list's More menu, and a Mailbox menu item on ⌥⌘T, each
+  confirmed first naming the folder, flip the whole folder in one
+  server call and zero its badge. The macOS Feeds menu gains Mark as
+  Read/Unread (⌘T), Flag/Unflag (⌘⇧8) and Mark All as Read (⌥⌘T) on the
+  chords mail already uses, live only for the section in front so a
+  chord never fires on both. Feed badges follow the "Folder counts"
+  reading preference (unread, total, or unread / total) exactly as mail
+  folders do, the total being the items cached for the feed; the
+  preference moves above the Email messages section to say so. The feed
+  list's title is a scope switcher: tap it (or click it on macOS) for a
+  menu of All Feeds, the folder tree flattened with indentation, and
+  each folder's feeds, the current scope checked, like the folder name
+  above the mail list.
+- **Post-deploy mail probe.** After `app.yml` rolls a core mail tier or
+  deploys the API Lambdas, a new `mail-probe` job signs in as a dedicated
+  `ci-probe` Cognito user, sends it one message through `/send` and one
+  straight at the public MX on port 25, and fails the run unless both
+  reach its INBOX carrying smtp-out's `DKIM-Signature` and smtp-in's
+  `Authentication-Results` respectively. The rollout wait only proved the
+  new container was healthy; this proves the mail path behind it,
+  including smtp-in, which same-environment sends never touch. Terraform
+  provisions the user, its `ci-probe@mail-admin.<domain>` address and the
+  SSM password the deploy role reads. See `docs/mail-probe.md`.
+
+### Changed
+- Apple: **Built with Xcode 27 and the 27.0 SDKs.** CI moved every
+  macOS job, including the TestFlight archives, from GitHub's `macos-26`
+  image (Xcode 26.6) to `xcode-27` (Xcode 27.0 GA on a macOS 27 host),
+  so the shipped apps now link against the 27.0 SDKs and pick up the
+  SDK-gated behaviours of iOS 27, macOS 27, and visionOS 27. The
+  advisory Xcode 27 forward-compatibility jobs, redundant once the real
+  legs run there, were removed. Tests run on the 27.x simulator runtimes
+  only; older runtimes are no longer exercised in CI.
+- Android: **Feed badges follow the Folder counts setting.** Each feed,
+  each folder roll-up, and All Feeds now honour the "Folder counts"
+  reading preference — unread, total, or both — where they always showed
+  unread; a feed's total is the number of items cached on the device,
+  and the preference moves above the Email messages section to say so.
+  (Cross-media UX plan, Phase 1.)
+- Android: **Feed favorites are now flags.** The feed reader uses the
+  mail vocabulary for its standard mark: the row indicator, the reader
+  button, the swipe action, the filter pill ("Flagged"), the empty state,
+  and the Actions settings picker all say Flag / Remove flag / Flagged
+  rather than Favorite, drawn with the same star and tint the mail list
+  uses for a flagged message. Nothing on the wire changed; existing
+  favorites are simply shown as flags. (Cross-media UX plan, Phase 1.)
+- Apple: **Feed "Favorite" is now "Flag".** The feed reader's star
+  becomes the flag mail uses for the same mark: the row indicator, the
+  reader button, the swipe action, the row menu, the filter pill (now
+  "Flagged"), the empty state, and the swipe binding in Settings ("Toggle
+  flag") all use mail's word and glyph. Nothing about the mark itself
+  changes; items you starred are flagged.
+- **DynamoDB index keys declared as `key_schema`.** The four RSS tables'
+  eight `global_secondary_index` blocks moved off the `hash_key` /
+  `range_key` arguments, which the AWS provider deprecated in favour of
+  nested `key_schema` blocks, and the `aws_s3_object` lifecycle blocks in
+  the user-pool module stopped listing the provider-decided `version_id`
+  in `ignore_changes`. Together those were the 20 warnings every infra
+  plan and validate emitted (#1711); the declared keys, and the indexes
+  themselves, are unchanged.
+- Android: **No All pill on the folder and feed lists.** The folder list's
+  pills are just Subscribed and Unread; turning both off shows every
+  folder, which is what All did. The feed list's pill is a single Unread
+  toggle.
+- Apple: **No All pill on the folder and feed lists.** The folder list's
+  pills are just Subscribed and Unread; turning both off shows every
+  folder, which is what All did. The feed list's pill is a single Unread
+  toggle. The find hint that offered "under All" now offers "in all
+  folders" and turns both pills off.
+
+### Fixed
+- **TestFlight attach no longer stalls 40 minutes on the iOS and visionOS
+  legs.** App Store Connect prefix-matches its bundle-id filter, so the
+  upload job's app lookup for `com.cabalmail.Cabalmail` sometimes resolved
+  the macOS app record instead, polled that app for a build it would never
+  hold, and ended green with a "never surfaced" warning while the build sat
+  unattached. The lookup now matches the bundle id exactly; the notes step
+  shares the fix.
+- **Terraform can create system users while the invitation gate is set.**
+  The `check_invite` pre-sign-up trigger fires for `AdminCreateUser` too,
+  and rejected the `ci-probe` user: the AWS provider normalizes
+  `aws_cognito_user` validation-data keys like user attributes, so the
+  invitation code arrived as `custom:invitationCode`. The trigger now
+  exempts the `PreSignUp_AdminCreateUser` source: that caller is already
+  IAM-authorized, and the gate exists to stop self-service signups. The
+  same failure would have blocked the `master` and `dmarc` users in any
+  bring-up where the real trigger shipped before they were created (the
+  bootstrap placeholder is a no-op, but bring-ups are rarely one-shot).
+- Android: **Sort rows back under Email messages.** "Default sort" and
+  "Sort descending" in Reading settings sat under the "Feed items"
+  header after the settings fold, but only the mail list reads them; they
+  are back under "Email messages" (#1706).
+- Apple: **Type-to-select picks the address you typed again.** On macOS,
+  typing more than one character in Settings ▸ Composing ▸ Default From, or
+  in the compose From menu, moved the highlight to a *different* address —
+  and Return committed it, so typing an address in full could set Default
+  From to another one or send from it. The zero-width breaks that keep a
+  wrapped address from sprouting a hyphen it does not contain are also what
+  AppKit compares typed characters against, and they sort below every
+  letter. AppKit menu rows never wrap, so they draw the plain address now;
+  iPhone, iPad and Vision Pro rows, which do wrap, keep the breaks.
+
 ## [1.21.0] - 2026-09-24
 
 ### Added
