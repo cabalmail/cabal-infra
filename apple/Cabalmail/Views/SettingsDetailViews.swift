@@ -45,8 +45,10 @@ struct ComposingSettingsView: View {
                         Text("Loading…").tag(Optional<String>.none)
                     } else {
                         ForEach(availableAddresses) { address in
-                            // Wrappable for the reason `FromPicker.fromLabel` gives (#1597).
-                            Text(AddressDisplay.wrappable(address.address))
+                            // Wrappable for the reason `FromPicker.fromLabel` gives
+                            // (#1597), except on macOS, where the breaks defeat the
+                            // menu's type-to-select — see `AddressMenuTitlePolicy` (#1702).
+                            Text(AddressMenuTitlePolicy.rowTitle(address.address, on: .current))
                                 .accessibilityLabel(address.address)
                                 .tag(Optional(address.address))
                         }
