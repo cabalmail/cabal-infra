@@ -193,6 +193,17 @@ class InMemoryRssStore(
             counts
         }
 
+    override suspend fun totalCounts(): Map<String, Int> =
+        mutex.withLock {
+            val counts = HashMap<String, Int>()
+            for (stored in items.values) {
+                subscriptionsLocked().filter { it.feedId == stored.item.feedId }.forEach {
+                    counts[it.subscriptionId] = (counts[it.subscriptionId] ?: 0) + 1
+                }
+            }
+            counts
+        }
+
     override suspend fun search(
         feedId: String,
         query: String,

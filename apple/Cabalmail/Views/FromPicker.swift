@@ -77,14 +77,21 @@ struct FromPicker: View {
         Button {
             model.fromAddress = address.address
         } label: {
+            // Menu rows go through `AddressMenuTitlePolicy`, not `wrappable`
+            // directly: on macOS the zero-width spaces defeat the menu's
+            // type-to-select and highlight the wrong address (#1702).
             if address.address == model.fromAddress {
-                Label(AddressDisplay.wrappable(address.address), systemImage: "checkmark")
+                Label(menuTitle(address), systemImage: "checkmark")
                     .accessibilityLabel(address.address)
             } else {
-                Text(AddressDisplay.wrappable(address.address))
+                Text(menuTitle(address))
                     .accessibilityLabel(address.address)
             }
         }
+    }
+
+    private func menuTitle(_ address: Address) -> String {
+        AddressMenuTitlePolicy.rowTitle(address.address, on: .current)
     }
 
     private var favoriteAddresses: [Address] {

@@ -21,7 +21,13 @@ import XCTest
 // things, because none of these views has a seam for either rule:
 //
 // 1. No raw address reaches a `Text` or `Label` in these files, and each site
-//    draws the wrappable one.
+//    draws either the wrappable address or — for the three *menu rows*, since
+//    #1702 — `AddressMenuTitlePolicy`'s title, which is the wrappable one
+//    everywhere except macOS. The zero-width spaces are what AppKit compares
+//    typed characters against, so in an `NSMenuItem` title they defeated
+//    type-to-select and highlighted a different address; an AppKit menu row
+//    never wraps, so it has nothing to spend them on. `AddressMenuTitlePolicyTests`
+//    owns that rule; the counts below are what it left of this one.
 // 2. Every wrappable draw carries a raw `accessibilityLabel`. Measured on
 //    iPhone 17 it holds for the From field and both kinds of From menu row
 //    (0 zero-width spaces in the AX label); the menu-style Settings `Picker`
@@ -33,17 +39,33 @@ import XCTest
 // Shape copied from `AddressListRowWrapSourceScanTests`, keyed by path.
 final class AddressPickerWrapSourceScanTests: XCTestCase {
 
-    /// Each file, with the wrappable draws and raw labels it must carry.
-    private static let expected: [String: (wrappable: Int, rawLabels: [String])] = [
-        "Cabalmail/Views/FromPicker.swift": (
-            3, [".accessibilityLabel(fromAddress)", ".accessibilityLabel(address.address)"]
+    /// Each file, with the wrappable draws and raw labels it must carry. The
+    /// two menu-holding files draw fewer than they did before #1702: the From
+    /// menu's two rows and the Default From picker's row take their title from
+    /// `AddressMenuTitlePolicy` instead, which is the wrappable string on every
+    /// platform whose rows wrap.
+    private struct Expectation {
+        let wrappable: Int
+        let menuTitles: Int
+        let rawLabels: [String]
+    }
+
+    private static let expected: [String: Expectation] = [
+        "Cabalmail/Views/FromPicker.swift": Expectation(
+            wrappable: 1,
+            menuTitles: 2,
+            rawLabels: [".accessibilityLabel(fromAddress)", ".accessibilityLabel(address.address)"]
         ),
-        "Cabalmail/Views/RuleEditorExtras.swift": (1, [".accessibilityLabel(address)"]),
-        "Cabalmail/Views/SettingsDetailViews.swift": (1, [".accessibilityLabel(address.address)"]),
+        "Cabalmail/Views/RuleEditorExtras.swift": Expectation(
+            wrappable: 1, menuTitles: 0, rawLabels: [".accessibilityLabel(address)"]
+        ),
+        "Cabalmail/Views/SettingsDetailViews.swift": Expectation(
+            wrappable: 0, menuTitles: 1, rawLabels: [".accessibilityLabel(address.address)"]
+        ),
     ]
 
-    /// Rule 1: nothing draws a raw address, and every site draws the
-    /// wrappable one.
+    /// Rule 1: nothing draws a raw address, and every site draws either the
+    /// wrappable one or a menu title derived from it.
     func testEverySiteDrawsTheWrappableAddress() throws {
         var offenders: [String: Int] = [:]
         for (path, want) in Self.expected {
@@ -53,7 +75,12 @@ final class AddressPickerWrapSourceScanTests: XCTestCase {
             XCTAssertEqual(
                 code.components(separatedBy: "AddressDisplay.wrappable(").count - 1,
                 want.wrappable,
-                "\(path): draw each address through AddressDisplay.wrappable (#1597)"
+                "\(path): draw each non-menu address through AddressDisplay.wrappable (#1597)"
+            )
+            XCTAssertEqual(
+                try Self.menuTitleHits(in: code),
+                want.menuTitles,
+                "\(path): draw each menu row through AddressMenuTitlePolicy (#1702)"
             )
         }
         XCTAssertEqual(offenders, [:], "a raw address Text/Label hyphenates when it wraps (#1597)")
@@ -80,6 +107,14 @@ final class AddressPickerWrapSourceScanTests: XCTestCase {
         XCTAssertEqual(try Self.rawAddressHits(in: "Label(AddressDisplay.wrappable(a), systemImage: \"x\")"), 0)
         XCTAssertEqual(try Self.rawAddressHits(in: ".accessibilityLabel(address.address)"), 0)
         XCTAssertEqual(try Self.rawAddressHits(in: #"Label("Create new address…", systemImage: "plus")"#), 0)
+        XCTAssertEqual(try Self.menuTitleHits(in: "Text(menuTitle(address))"), 1)
+        XCTAssertEqual(
+            try Self.menuTitleHits(in: #"Label(menuTitle(address), systemImage: "checkmark")"#), 1
+        )
+        XCTAssertEqual(
+            try Self.menuTitleHits(in: "Text(AddressMenuTitlePolicy.rowTitle(address.address, on: .current))"), 1
+        )
+        XCTAssertEqual(try Self.menuTitleHits(in: "Text(AddressDisplay.wrappable(address.address))"), 0)
     }
 
     /// A comment explaining the rule names the raw call, and is not one.
@@ -101,6 +136,14 @@ final class AddressPickerWrapSourceScanTests: XCTestCase {
     /// `x.address` or `x.fromAddress`, followed by `)`, `,` or `??`.
     private static func rawAddressHits(in body: String) throws -> Int {
         try body.ranges(of: Regex(#"\b(?:Text|Label)\(\s*(?:\w+\.)*(?:address|fromAddress)\s*(?:\)|,|\?\?)"#)).count
+    }
+
+    /// A menu row's title: `menuTitle(...)` in the From menu, or the policy
+    /// called by name as the Default From picker row does.
+    private static func menuTitleHits(in body: String) throws -> Int {
+        try body.ranges(
+            of: Regex(#"\b(?:Text|Label)\(\s*(?:menuTitle\(|AddressMenuTitlePolicy\.rowTitle\()"#)
+        ).count
     }
 
     /// `body` with line comments cut.

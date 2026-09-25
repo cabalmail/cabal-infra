@@ -103,6 +103,22 @@ final class AppState {
     var toggleSeenRequestTick = 0
     var toggleFlaggedRequestTick = 0
     var moveSelectionRequestTick = 0
+    /// Mailbox ▸ Mark All as Read (⌥⌘T). The on-screen folder-scoped
+    /// `MessageListView` observes it and stages its confirmation; nothing
+    /// answers on the search surface, which is why the menu dims there.
+    var markFolderReadRequestTick = 0
+    /// Which section is in front of the user — the mail list or the feed
+    /// reader — so the Message/Mailbox and Feeds menus, which share chords
+    /// (⌘T, ⌘⇧8, ⌥⌘T), are never both enabled. Reported by the layout that
+    /// knows: `MailRootView` on the wide layouts (feed scope selected or
+    /// not), the section tabs on compact and visionOS. See
+    /// `SharedChordPolicy`.
+    var activeSection: ResumeSession.Section = .mail
+    /// What the Feeds menu's item commands have to act on, reported by the
+    /// surface that owns the feed scope and item selection
+    /// (`reportsFeedMenuAvailability`); the feed twin of
+    /// `messageMenuAvailability`.
+    var feedMenuAvailability: FeedMenuAvailability = .none
     /// What those commands (and the reply family) currently have to act on,
     /// reported by the mail surface via `reportsMessageMenuAvailability`. The
     /// menu dims a command that would be a no-op instead of advertising it.
@@ -781,16 +797,6 @@ extension AppState {
         guard let client else { return }
         await pushSessionToWatch(client: client, username: lastUsername)
     }
-}
-
-// MARK: - Message-menu selection intents
-
-// Bumpers for the selection-scoped tick counters declared on the main
-// type (stored properties can't live in an extension under @Observable).
-extension AppState {
-    func requestToggleSeen() { toggleSeenRequestTick += 1 }
-    func requestToggleFlagged() { toggleFlaggedRequestTick += 1 }
-    func requestMoveSelection() { moveSelectionRequestTick += 1 }
 }
 
 // MARK: - Per-folder unread + total counts

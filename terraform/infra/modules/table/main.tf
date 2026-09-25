@@ -272,15 +272,27 @@ resource "aws_dynamodb_table" "rss_feed" {
   }
 
   global_secondary_index {
-    name            = "by_canonical"
-    hash_key        = "canonical_url"
-    range_key       = "owner_key"
+    name = "by_canonical"
+    key_schema {
+      attribute_name = "canonical_url"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "owner_key"
+      key_type       = "RANGE"
+    }
     projection_type = "KEYS_ONLY"
   }
   global_secondary_index {
-    name            = "by_due"
-    hash_key        = "due_shard"
-    range_key       = "next_fetch_at"
+    name = "by_due"
+    key_schema {
+      attribute_name = "due_shard"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "next_fetch_at"
+      key_type       = "RANGE"
+    }
     projection_type = "KEYS_ONLY"
   }
 
@@ -335,15 +347,27 @@ resource "aws_dynamodb_table" "rss_item" {
   }
 
   global_secondary_index {
-    name            = "by_guid"
-    hash_key        = "feed_id"
-    range_key       = "guid"
+    name = "by_guid"
+    key_schema {
+      attribute_name = "feed_id"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "guid"
+      key_type       = "RANGE"
+    }
     projection_type = "KEYS_ONLY"
   }
   global_secondary_index {
-    name            = "by_fetched"
-    hash_key        = "feed_id"
-    range_key       = "fetched_key"
+    name = "by_fetched"
+    key_schema {
+      attribute_name = "feed_id"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "fetched_key"
+      key_type       = "RANGE"
+    }
     projection_type = "KEYS_ONLY"
   }
 
@@ -391,15 +415,27 @@ resource "aws_dynamodb_table" "rss_subscription" {
   }
 
   global_secondary_index {
-    name            = "by_user_folder"
-    hash_key        = "user"
-    range_key       = "folder_key"
+    name = "by_user_folder"
+    key_schema {
+      attribute_name = "user"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "folder_key"
+      key_type       = "RANGE"
+    }
     projection_type = "ALL"
   }
   global_secondary_index {
-    name            = "by_feed_notify"
-    hash_key        = "notify_feed_id"
-    range_key       = "user"
+    name = "by_feed_notify"
+    key_schema {
+      attribute_name = "notify_feed_id"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "user"
+      key_type       = "RANGE"
+    }
     projection_type = "KEYS_ONLY"
   }
 
@@ -484,17 +520,29 @@ resource "aws_dynamodb_table" "rss_user_item_state" {
   }
 
   global_secondary_index {
-    name            = "favorite_by_feed"
-    hash_key        = "user_feed"
-    range_key       = "favorite_key"
+    name = "favorite_by_feed"
+    key_schema {
+      attribute_name = "user_feed"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "favorite_key"
+      key_type       = "RANGE"
+    }
     projection_type = "KEYS_ONLY"
   }
 
   # Rows are a few flags; projecting them saves the state sync a BatchGet.
   global_secondary_index {
-    name            = "by_updated"
-    hash_key        = "user_feed"
-    range_key       = "updated_key"
+    name = "by_updated"
+    key_schema {
+      attribute_name = "user_feed"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "updated_key"
+      key_type       = "RANGE"
+    }
     projection_type = "ALL"
   }
 

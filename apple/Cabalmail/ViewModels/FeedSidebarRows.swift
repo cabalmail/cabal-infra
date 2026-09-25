@@ -16,6 +16,10 @@ struct FeedSidebarRow: Identifiable, Equatable {
     let hasChildren: Bool
     /// Unread items under this row (a folder sums its descendants).
     let unread: Int
+    /// Cached items under this row, the same way. What the badge shows
+    /// under the `total` / `both` folder-count modes; zero until the
+    /// caller has totals (older call sites pass none).
+    let total: Int
 
     var id: String {
         switch kind {
@@ -53,9 +57,9 @@ enum FeedSidebarRows {
     /// on both axes (#1548), so the shape lives here and neither layout owns
     /// a copy. Its identity is a folder with an empty id: `RssItemScope.all`
     /// is what selects it, so the id is never asked for a folder's items.
-    static func allFeedsRow(unread: Int) -> FeedSidebarRow {
+    static func allFeedsRow(unread: Int, total: Int = 0) -> FeedSidebarRow {
         FeedSidebarRow(kind: .folder(RssFolder(folderId: "", name: "All Feeds")),
-                       depth: 0, hasChildren: false, unread: unread)
+                       depth: 0, hasChildren: false, unread: unread, total: total)
     }
 
     /// `unreadOnly` is the sidebar's Unread pill (`FeedListFilter`): a
@@ -66,10 +70,15 @@ enum FeedSidebarRows {
     /// user. The text filter auto-expands collapsed folders (a match under
     /// one would otherwise be invisible); the Unread pill does not — it is a
     /// standing mode, and the chevrons keep meaning what they say.
+    ///
+    /// `totalCounts` is the cached item count per subscription
+    /// (`RssStore.totalCounts`), rolled up like the unread counts so a
+    /// folder's badge can read "unread / total" the way a mail folder's does.
     static func rows(
         folders: [RssFolder],
         subscriptions: [RssSubscription],
         unreadCounts: [String: Int],
+        totalCounts: [String: Int] = [:],
         collapsed: Set<String>,
         filter: String = "",
         unreadOnly: Bool = false,
@@ -85,10 +94,12 @@ enum FeedSidebarRows {
             if !needle.isEmpty && !sub.displayTitle.lowercased().contains(needle) { return false }
             return !unreadOnly || (unreadCounts[sub.subscriptionId] ?? 0) > 0
         }
-        func unreadUnder(_ folderId: String) -> Int {
-            let own = (subsByFolder[folderId] ?? []).reduce(0) { $0 + (unreadCounts[$1.subscriptionId] ?? 0) }
-            return own + (foldersByParent[folderId] ?? []).reduce(0) { $0 + unreadUnder($1.folderId) }
+        func sum(_ counts: [String: Int], under folderId: String) -> Int {
+            let own = (subsByFolder[folderId] ?? []).reduce(0) { $0 + (counts[$1.subscriptionId] ?? 0) }
+            return own + (foldersByParent[folderId] ?? []).reduce(0) { $0 + sum(counts, under: $1.folderId) }
         }
+        func unreadUnder(_ folderId: String) -> Int { sum(unreadCounts, under: folderId) }
+        func totalUnder(_ folderId: String) -> Int { sum(totalCounts, under: folderId) }
         func visit(_ parentId: String, depth: Int) {
             let children = (foldersByParent[parentId] ?? []).sorted {
                 ($0.displayOrder, $0.name.lowercased()) < ($1.displayOrder, $1.name.lowercased())
@@ -100,12 +111,14 @@ enum FeedSidebarRows {
                 // matches (or it is, or holds, the kept scope).
                 if narrowing && !hasMatch(under: folder.folderId) { continue }
                 out.append(FeedSidebarRow(kind: .folder(folder), depth: depth, hasChildren: hasChildren,
-                                          unread: unreadUnder(folder.folderId)))
+                                          unread: unreadUnder(folder.folderId),
+                                          total: totalUnder(folder.folderId)))
                 if collapsed.contains(folder.folderId) && needle.isEmpty { continue }
                 visit(folder.folderId, depth: depth + 1)
                 for sub in subs.sorted(by: { $0.displayTitle.lowercased() < $1.displayTitle.lowercased() }) {
                     out.append(FeedSidebarRow(kind: .subscription(sub), depth: depth + 1, hasChildren: false,
-                                              unread: unreadCounts[sub.subscriptionId] ?? 0))
+                                              unread: unreadCounts[sub.subscriptionId] ?? 0,
+                                              total: totalCounts[sub.subscriptionId] ?? 0))
                 }
             }
         }
@@ -118,13 +131,19 @@ enum FeedSidebarRows {
         for sub in (subsByFolder[""] ?? []).filter(matches)
             .sorted(by: { $0.displayTitle.lowercased() < $1.displayTitle.lowercased() }) {
             out.append(FeedSidebarRow(kind: .subscription(sub), depth: 0, hasChildren: false,
-                                      unread: unreadCounts[sub.subscriptionId] ?? 0))
+                                      unread: unreadCounts[sub.subscriptionId] ?? 0,
+                                      total: totalCounts[sub.subscriptionId] ?? 0))
         }
         return out
     }
 
-    /// Total unread across the catalog (the section header's badge).
+    /// Total unread across the catalog (the All Feeds row's badge).
     static func totalUnread(_ unreadCounts: [String: Int]) -> Int {
         unreadCounts.values.reduce(0, +)
+    }
+
+    /// Cached items across the catalog: the All Feeds row's "total".
+    static func grandTotal(_ totalCounts: [String: Int]) -> Int {
+        totalCounts.values.reduce(0, +)
     }
 }

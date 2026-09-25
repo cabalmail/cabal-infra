@@ -121,6 +121,11 @@ public protocol ApiClient: Sendable {
     /// `/empty_trash` Lambda (same trash-only restriction).
     func emptyTrash(host: String, folder: String) async throws
 
+    /// Sets `\Seen` on every unseen message in `folder` in one IMAP round
+    /// trip via the `/mark_folder_read` Lambda — the mail twin of
+    /// `/rss_mark_all_read`. Returns the number of messages flipped.
+    func markFolderRead(host: String, folder: String) async throws -> Int
+
     // MARK: Preferences
     /// Fetches the caller's display-name preference from `/get_preferences`.
     /// The Lambda returns the full preferences row; the other keys

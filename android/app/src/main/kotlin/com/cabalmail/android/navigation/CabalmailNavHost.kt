@@ -73,6 +73,7 @@ import com.cabalmail.android.ui.feeds.FeedManagementSheets
 import com.cabalmail.android.ui.feeds.FeedManagementViewModel
 import com.cabalmail.android.ui.feeds.FeedPane
 import com.cabalmail.android.ui.feeds.FeedRoutes
+import com.cabalmail.android.ui.feeds.FeedScopeSwitchMenu
 import com.cabalmail.android.ui.feeds.FeedsViewModel
 import com.cabalmail.android.ui.feeds.scopeTitle
 import com.cabalmail.android.ui.folders.FoldersAdminScreen
@@ -430,6 +431,7 @@ private fun MailNavGraph(
                 },
                 onOpenSearch = { navController.navigate("search") },
                 onEmptyTrash = viewModel::emptyTrash,
+                onMarkAllRead = viewModel::markAllRead,
                 onCompose = composeNew,
             )
         }
@@ -496,6 +498,9 @@ private fun MailNavGraph(
                     onCompose = composeNew,
                     folderMenu = folderMenu,
                     onSwitchFolder = switchFolder,
+                    // The folder list owns the call so its badge drops at once
+                    // and this list is told to refetch (see markAllRead).
+                    onMarkAllRead = { foldersViewModel.markAllRead(folder) },
                 )
             } else {
                 // Tablet / foldable / landscape phone (plan §7.2): list |
@@ -512,6 +517,7 @@ private fun MailNavGraph(
                     openCompose = openCompose,
                     folderMenu = folderMenu,
                     onSwitchFolder = switchFolder,
+                    onMarkAllRead = { foldersViewModel.markAllRead(folder) },
                     folderPane = {
                         val preferences by container.preferences.preferences.collectAsState()
                         FolderPane(
@@ -522,6 +528,7 @@ private fun MailNavGraph(
                             selectedFolder = folder,
                             onOpenFolder = switchFolder,
                             onEmptyTrash = foldersViewModel::emptyTrash,
+                            onMarkAllRead = foldersViewModel::markAllRead,
                             onPoll = foldersViewModel::poll,
                             scroll = foldersViewModel.paneScroll,
                             onScrollChange = { foldersViewModel.paneScroll = it },
@@ -851,6 +858,7 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
             onUnreadOnly = { unreadOnly ->
                 scope.launch { container.preferences.update { it.copy(feedFilterUnread = unreadOnly) } }
             },
+            countDisplay = preferences.folderCountDisplay,
             onRefresh = viewModel::refresh,
             onPoll = viewModel::poll,
             onOpenScope = openScope,
@@ -885,6 +893,16 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
             viewModel(viewModelStoreOwner = hubOwner, factory = FeedManagementViewModel.factory(container))
         val feedsState by feedsViewModel.state.collectAsState()
         val title = scopeTitle(itemScope, feedsState)
+        // The scope menu behind the title; a pick swaps the list in place
+        // through openScope, exactly as a tree tap does, so the resume
+        // cursor and the back stack come out the same either way.
+        val allFeedsTitle = stringResource(R.string.feeds_all)
+        val scopeMenu =
+            if (feedsState.hasLoaded) {
+                FeedScopeSwitchMenu.rows(feedsState.folders, feedsState.subscriptions, allFeedsTitle)
+            } else {
+                null
+            }
         val onSubscribed: (com.cabalmail.kit.models.RssSubscription) -> Unit = { sub ->
             openScope(RssItemScope.Subscription(sub.subscriptionId))
         }
@@ -898,6 +916,8 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                     onOpenItem = { item -> navController.navigate(FeedRoutes.item(item.feedId, item.sortKey)) },
                     onBack = { navController.popBackStack() },
                     onOpenSettings = state.subscription?.let { sub -> { management.openSettings(sub) } },
+                    scopeMenu = scopeMenu,
+                    onSwitchScope = openScope,
                 )
                 androidx.compose.material3.SnackbarHost(
                     hostState = snackbarHostState,
@@ -923,6 +943,8 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                 management = management,
                 onSubscribed = onSubscribed,
                 onUnsubscribed = { navController.popBackStack(FeedRoutes.HUB, inclusive = false) },
+                scopeMenu = scopeMenu,
+                onSwitchScope = openScope,
                 feedPane = {
                     FeedPane(
                         state = feedsState,
@@ -952,6 +974,7 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                         onUnreadOnly = { unreadOnly ->
                             scope.launch { container.preferences.update { it.copy(feedFilterUnread = unreadOnly) } }
                         },
+                        countDisplay = preferences.folderCountDisplay,
                         onOpenScope = openScope,
                         onPoll = feedsViewModel::poll,
                         management = management,

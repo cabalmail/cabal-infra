@@ -211,6 +211,7 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 | `save_draft` | Save/replace/discard a draft in the Drafts folder (UIDPLUS lifecycle) |
 | `move_messages` / `set_flag` | IMAP message operations |
 | `purge_messages` / `empty_trash` | Permanently delete (expunge) messages; trash folders only |
+| `mark_folder_read` | Mark every unseen message in a folder as read (one SEARCH + batched STORE) |
 
 ### React App (`react/admin/`)
 

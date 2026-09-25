@@ -2,14 +2,17 @@ package com.cabalmail.android.ui.mail
 
 import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.FolderCountDisplay
 
 /** The pills above the mail tab's folder list, in display order. */
-enum class FolderFilterPill { ALL, SUBSCRIBED, UNREAD }
+enum class FolderFilterPill { SUBSCRIBED, UNREAD }
 
 /**
  * The folder list's filter: [subscribed] and [unread] are independent
- * toggles; "All" is the state with both off. Persisted per device (not
- * synced), defaulting to Subscribed on, Unread off.
+ * toggles; both off is every folder, and there is deliberately no All
+ * pill — turning both off is the same act, and a third pill only restated
+ * it. Persisted per device (not synced), defaulting to Subscribed on,
+ * Unread off.
  */
 data class FolderListFilter(
     val subscribed: Boolean = true,
@@ -20,15 +23,13 @@ data class FolderListFilter(
     /** Whether [pill] draws selected. */
     fun isOn(pill: FolderFilterPill): Boolean =
         when (pill) {
-            FolderFilterPill.ALL -> isAll
             FolderFilterPill.SUBSCRIBED -> subscribed
             FolderFilterPill.UNREAD -> unread
         }
 
-    /** The filter after a tap on [pill]: All clears both, the others flip themselves. */
+    /** The filter after a tap on [pill]: that toggle flips, the other stays. */
     fun toggled(pill: FolderFilterPill): FolderListFilter =
         when (pill) {
-            FolderFilterPill.ALL -> FolderListFilter(subscribed = false, unread = false)
             FolderFilterPill.SUBSCRIBED -> copy(subscribed = !subscribed)
             FolderFilterPill.UNREAD -> copy(unread = !unread)
         }
@@ -124,4 +125,23 @@ object FolderSections {
      * guessing.
      */
     fun hasUnread(status: FolderStatus?): Boolean = (status?.unseen ?: 0) > 0
+
+    /**
+     * The badge text for a row under the "Folder counts" preference, or
+     * null for no badge: the unread count, the total, or "unread / total".
+     * A zero hides the badge in the single-count modes, and Both hides it
+     * only when there is nothing at all, so an all-read folder still shows
+     * its size. Shared by the mail folder rows and the feed tree, which
+     * read the same preference (cross-media plan, Phase 1).
+     */
+    fun badge(
+        display: FolderCountDisplay,
+        unread: Int,
+        total: Int,
+    ): String? =
+        when (display) {
+            FolderCountDisplay.UNREAD -> unread.takeIf { it > 0 }?.toString()
+            FolderCountDisplay.TOTAL -> total.takeIf { it > 0 }?.toString()
+            FolderCountDisplay.BOTH -> if (total > 0) "$unread / $total" else null
+        }
 }

@@ -9,12 +9,12 @@ enum FeedReaderAction: String, CaseIterable {
 
     var identifier: String { "feed.reader.\(rawValue)" }
 
-    /// Icon and label in the quiescent state (unread item, not a favorite,
+    /// Icon and label in the quiescent state (unread item, not flagged,
     /// reader styling available, feed content showing).
     var quiescentSymbol: String {
         switch self {
         case .read:          return "envelope.open"
-        case .favorite:      return "star"
+        case .favorite:      return "flag"
         case .readerMode:    return "doc.richtext"
         case .remoteContent: return "eye.slash"
         case .article:       return "safari"
@@ -25,7 +25,7 @@ enum FeedReaderAction: String, CaseIterable {
     var quiescentTitle: String {
         switch self {
         case .read:          return "Mark as read"
-        case .favorite:      return "Favorite"
+        case .favorite:      return "Flag"
         case .readerMode:    return "Show reader view"
         case .remoteContent: return "Show remote content"
         case .article:       return "Open article"

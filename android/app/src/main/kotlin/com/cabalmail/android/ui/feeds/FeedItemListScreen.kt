@@ -2,6 +2,7 @@ package com.cabalmail.android.ui.feeds
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
@@ -53,8 +55,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -71,14 +75,16 @@ import com.cabalmail.android.ui.theme.painter
 import com.cabalmail.kit.compose.HtmlText
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemFilter
+import com.cabalmail.kit.models.RssItemScope
 import com.cabalmail.kit.models.RssOrderingMode
 import com.cabalmail.kit.settings.FeedSwipeAction
 
 /**
- * One feed list: sticky filter pills, the orderings in the overflow menu
- * (single-feed scopes), per-feed search, swipe to mark read or favorite,
- * a confirmed mark-all-read, the health header, and the older-items
- * footer gated on the server having more.
+ * One feed list: the scope-switch menu behind the title, sticky filter
+ * pills, the orderings in the overflow menu (single-feed scopes), per-feed
+ * search, swipe to mark read or flag, a confirmed mark-all-read, the
+ * health header, and the older-items footer gated on the server having
+ * more.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +99,12 @@ fun FeedItemListScreen(
     highlightedId: String? = null,
     /** Opens the feed's settings sheet (single-feed scopes with a management model). */
     onOpenSettings: (() -> Unit)? = null,
+    /**
+     * The scope-switch menu behind the title (null until the feed tree has
+     * loaded); picking a row calls [onSwitchScope] with its scope.
+     */
+    scopeMenu: List<FeedScopeMenuRow>? = null,
+    onSwitchScope: (RssItemScope) -> Unit = {},
 ) {
     ForegroundPolling(viewModel::poll, FEED_POLL_MS)
     var confirmMarkAllRead by remember { mutableStateOf(false) }
@@ -104,7 +116,14 @@ fun FeedItemListScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = {
+                    FeedTitle(
+                        title = title,
+                        scope = state.scope,
+                        menu = scopeMenu,
+                        onSwitchScope = onSwitchScope,
+                    )
+                },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -214,6 +233,75 @@ fun FeedItemListScreen(
                 TextButton(onClick = { confirmMarkAllRead = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
+    }
+}
+
+/**
+ * The scope's name as a tappable affordance, the feed twin of the message
+ * list's `FolderTitle`: a tap opens the scope-switch menu — All Feeds,
+ * then the folder tree indented by depth with each folder's feeds beneath
+ * it — and the current scope carries the check mark. Until the tree loads
+ * the menu offers only the current scope, so the affordance never reads
+ * as empty. Picking the current scope just closes the menu.
+ */
+@Composable
+private fun FeedTitle(
+    title: String,
+    scope: RssItemScope,
+    menu: List<FeedScopeMenuRow>?,
+    onSwitchScope: (RssItemScope) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val rows = menu ?: listOf(FeedScopeMenuRow(scope = scope, title = title, depth = 0, isFolder = false))
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable(onClickLabel = stringResource(R.string.feed_switch_scope)) { open = true }
+                    .padding(horizontal = 4.dp),
+        ) {
+            Text(
+                title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            rows.forEach { row ->
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Indented by depth like the tree, with the feed
+                            // glyph telling a feed from a folder at the same
+                            // depth (the tree's chevron has no job here).
+                            Spacer(modifier = Modifier.width((row.depth * 14).dp))
+                            if (!row.isFolder && row.scope != RssItemScope.All) {
+                                Icon(
+                                    painterResource(R.drawable.ic_rss_feed),
+                                    contentDescription = null,
+                                    tint = ColorTokens.accentForestFg(),
+                                    modifier = Modifier.padding(end = 8.dp).size(16.dp),
+                                )
+                            }
+                            Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    },
+                    trailingIcon = {
+                        if (row.scope == scope) {
+                            Icon(Icons.Default.Check, contentDescription = stringResource(R.string.active_option))
+                        }
+                    },
+                    onClick = {
+                        open = false
+                        if (row.scope != scope) onSwitchScope(row.scope)
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -351,7 +439,7 @@ private fun OlderFooter(
     val searching = state.searchQuery.isNotBlank()
     if (searching && state.items.isNotEmpty()) return
     Row(
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(12.dp),
     ) {
@@ -368,7 +456,7 @@ private fun OlderFooter(
 /**
  * Each edge performs the action the synced feed swipe preference binds to
  * it ([LocalSwipeBindings]; by default start-to-end toggles read and
- * end-to-start toggles favorite). An edge bound to [FeedSwipeAction.NONE]
+ * end-to-start toggles the flag). An edge bound to [FeedSwipeAction.NONE]
  * does not drag. Both actions settle the row back.
  */
 @Composable
@@ -447,7 +535,8 @@ private fun FeedSwipeRow(
 
 /**
  * Unread dot, title, the first line of the body (when it has one), feed
- * name in multi-feed scopes, relative date, queued mark, favorite star.
+ * name in multi-feed scopes, relative date, queued mark, and the flag
+ * star — the mail rows' glyph and tint, described with the mail word.
  */
 @Composable
 internal fun FeedItemRow(
@@ -463,7 +552,7 @@ internal fun FeedItemRow(
     val snippet = remember(item.bodyHtml) { HtmlText.firstLine(item.bodyHtml) }
     val unreadText = stringResource(R.string.unread)
     val queuedText = stringResource(R.string.feed_change_queued)
-    val favoriteText = stringResource(R.string.feed_favorite)
+    val flaggedText = stringResource(R.string.flagged)
     // The row reads as one thing to a screen reader (and the tester's UI
     // dump), in the Apple rows' form: "Unread, <title>, <snippet>, <date>".
     val rowDescription =
@@ -532,7 +621,7 @@ internal fun FeedItemRow(
         if (item.isFavorite) {
             Icon(
                 Icons.Default.Star,
-                contentDescription = favoriteText,
+                contentDescription = flaggedText,
                 tint = ColorTokens.flaggedFg(),
                 modifier = Modifier.padding(start = 8.dp).size(18.dp),
             )

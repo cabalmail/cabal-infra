@@ -217,6 +217,12 @@ interface RssDao {
     )
     suspend fun unreadCounts(): List<RssUnreadCountRow>
 
+    @Query(
+        "SELECT s.subscription_id AS subscription_id, COUNT(*) AS count FROM rss_items i " +
+            "JOIN rss_subscriptions s ON s.feed_id = i.feed_id GROUP BY s.subscription_id",
+    )
+    suspend fun totalCounts(): List<RssUnreadCountRow>
+
     @Query("SELECT COUNT(*) FROM rss_items WHERE feed_id = :feedId")
     suspend fun itemCount(feedId: String): Int
 
@@ -547,6 +553,8 @@ class RoomRssStore(
 
     override suspend fun unreadCounts(): Map<String, Int> =
         dao.unreadCounts().associate { it.subscriptionId to it.count }
+
+    override suspend fun totalCounts(): Map<String, Int> = dao.totalCounts().associate { it.subscriptionId to it.count }
 
     override suspend fun search(
         feedId: String,

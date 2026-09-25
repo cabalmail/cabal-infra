@@ -148,6 +148,14 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    mark_folder_read = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     send = {
       runtime = "python3.13"
 

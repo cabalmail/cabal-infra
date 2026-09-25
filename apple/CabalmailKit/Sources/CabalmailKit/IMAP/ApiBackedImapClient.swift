@@ -386,6 +386,10 @@ extension ApiBackedImapClient {
     public func emptyTrash(folder: String) async throws {
         try await api.emptyTrash(host: host, folder: folder)
     }
+
+    public func markFolderRead(folder: String) async throws -> Int {
+        try await api.markFolderRead(host: host, folder: folder)
+    }
 }
 
 // MARK: - Search (extension)

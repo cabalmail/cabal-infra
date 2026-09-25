@@ -43,6 +43,9 @@ struct FeedSidebarRowLabel: View {
     let isSelected: Bool
     let isCollapsed: (String) -> Bool
     let toggleCollapse: (String) -> Void
+    /// The badge follows the Reading preference the mail folders read
+    /// (unread, total, or both); feed rows used to show unread only.
+    @Environment(Preferences.self) private var preferences
 
     var body: some View {
         HStack(spacing: 6) {
@@ -72,13 +75,19 @@ struct FeedSidebarRowLabel: View {
                                  : AnyShapeStyle(Color.primary.opacity(0.7)))
             Spacer(minLength: 4)
             healthBadge
-            if row.unread > 0 {
-                Text("\(row.unread)")
+            // Same rule as the mail rows (`FolderCountBadge`): nothing is
+            // drawn when the mode's count is zero, so no empty capsule.
+            if let badge = FolderCountBadge.text(display: preferences.folderCountDisplay,
+                                                 unread: row.unread, total: row.total) {
+                Text(badge)
                     .font(.caption.monospacedDigit())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1)
                     .background(Capsule().fill(Color.secondary.opacity(0.2)))
-                    .accessibilityLabel("\(row.unread) unread")
+                    .accessibilityLabel(
+                        FolderCountBadge.accessibilityLabel(display: preferences.folderCountDisplay,
+                                                            unread: row.unread, total: row.total) ?? badge
+                    )
             }
         }
         .padding(.leading, CGFloat(row.depth) * 14)
@@ -113,8 +122,8 @@ struct FeedSidebarList: View {
     @State private var management: FeedManagementViewModel?
     @State private var actions = FeedManagementActions()
     @AppStorage("cabalmail.feeds.collapsedFolders") private var collapsedRaw = ""
-    /// The All / Unread pill (`FeedListFilter`): sticky per device, never
-    /// synced; the wide sidebar's Feeds section reads the same key.
+    /// The Unread pill (`FeedListFilter`): sticky per device, never synced;
+    /// the wide sidebar's Feeds section reads the same key.
     @AppStorage("cabalmail.feeds.filter") private var filterRaw = FeedListFilter.defaultForFeeds.rawValue
     @State private var filter = ""
 
@@ -172,15 +181,16 @@ struct FeedSidebarList: View {
         }
     }
 
-    /// All / Unread, plus the tree's Expand all / Collapse all — the same
-    /// row the wide sidebar's Feeds section draws.
+    /// The Unread toggle, plus the tree's Expand all / Collapse all — the
+    /// same row the wide sidebar's Feeds section draws.
     private var pillRow: some View {
         SidebarFilterPillRow(
-            pills: FeedListFilter.allCases.map { candidate in
-                SidebarFilterPill(id: candidate.rawValue, label: candidate.label, isOn: listFilter == candidate) {
-                    filterRaw = candidate.rawValue
-                }
-            },
+            pills: [
+                SidebarFilterPill(id: FeedListFilter.unread.rawValue, label: FeedListFilter.pillLabel,
+                                  isOn: listFilter.unreadOnly) {
+                    filterRaw = listFilter.toggled.rawValue
+                },
+            ],
             identifierPrefix: "feed.filter",
             expansion: SidebarFilterPillRow.Expansion(
                 hasCollapsible: !collapsible.isEmpty,
@@ -213,7 +223,8 @@ struct FeedSidebarList: View {
                 } else {
                     FeedSidebarRowLabel(
                         row: FeedSidebarRows.allFeedsRow(
-                            unread: FeedSidebarRows.totalUnread(model.unreadCounts)
+                            unread: FeedSidebarRows.totalUnread(model.unreadCounts),
+                            total: FeedSidebarRows.grandTotal(model.totalCounts)
                         ),
                         isSelected: selection == .all,
                         isCollapsed: { _ in true }, toggleCollapse: { _ in }

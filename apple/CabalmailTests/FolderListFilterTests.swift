@@ -3,8 +3,9 @@ import CabalmailKit
 @testable import Cabalmail
 
 // The mail sidebar's filter pills replaced the Subscribed / All folders
-// sections. These pin the pill semantics (All is "neither toggle", the
-// other two are independent), the predicate, and the two exemptions.
+// sections. These pin the pill semantics (two independent toggles; both
+// off is every folder, with no All pill to say so), the predicate, and the
+// two exemptions.
 final class FolderListFilterTests: XCTestCase {
 
     private func folder(_ path: String, subscribed: Bool = true) -> Folder {
@@ -21,19 +22,19 @@ final class FolderListFilterTests: XCTestCase {
     func testFreshInstallOpensOnSubscribed() {
         XCTAssertEqual(FolderListFilter.defaultForMail, FolderListFilter(subscribed: true, unread: false))
         XCTAssertTrue(FolderListFilter.defaultForMail.isOn(.subscribed))
-        XCTAssertFalse(FolderListFilter.defaultForMail.isOn(.all))
+        XCTAssertFalse(FolderListFilter.defaultForMail.isOn(.unread))
     }
 
-    func testAllIsTheStateWithNeitherToggleOn() {
-        let all = FolderListFilter(subscribed: false, unread: false)
-        XCTAssertTrue(all.isAll)
-        XCTAssertTrue(all.isOn(.all))
-        XCTAssertFalse(FolderListFilter(subscribed: false, unread: true).isOn(.all))
+    func testEveryFolderIsTheStateWithNeitherToggleOnAndThereIsNoAllPill() {
+        XCTAssertTrue(FolderListFilter.unfiltered.isAll)
+        XCTAssertFalse(FolderListFilter(subscribed: false, unread: true).isAll)
+        XCTAssertEqual(FolderListFilter.Pill.allCases, [.subscribed, .unread],
+                       "turning both toggles off is the whole of \"All\"; a third pill only restated it")
     }
 
-    func testTappingAllClearsBothTogglesAndTheOthersFlipThemselves() {
+    func testTogglingBothOffReachesEveryFolderAndTheOthersFlipThemselves() {
         let both = FolderListFilter(subscribed: true, unread: true)
-        XCTAssertTrue(both.toggled(.all).isAll)
+        XCTAssertTrue(both.toggled(.subscribed).toggled(.unread).isAll)
         XCTAssertEqual(both.toggled(.subscribed), FolderListFilter(subscribed: false, unread: true))
         XCTAssertEqual(both.toggled(.unread), FolderListFilter(subscribed: true, unread: false))
         XCTAssertEqual(
@@ -43,8 +44,8 @@ final class FolderListFilterTests: XCTestCase {
         )
     }
 
-    func testAllDrawsEveryFolder() {
-        let all = FolderListFilter(subscribed: false, unread: false)
+    func testNoPillDrawsEveryFolder() {
+        let all = FolderListFilter.unfiltered
         XCTAssertEqual(all.apply(to: folders, unreadCounts: counts, selection: nil).map(\.path),
                        folders.map(\.path))
     }
@@ -101,7 +102,7 @@ final class FolderListFilterTests: XCTestCase {
         XCTAssertEqual(drawn.map(\.path), [], "the reported symptom: the tree is empty")
         let hint = subscribed.hint(for: folders, visible: drawn, needle: "beta")
         XCTAssertEqual(hint, FolderListFilter.Hint(suppressed: 1, anyVisible: false))
-        XCTAssertEqual(hint?.label, "Show 1 hidden match under All")
+        XCTAssertEqual(hint?.label, "Show 1 hidden match in all folders")
     }
 
     func testANeedleTheFilterHidesOnlyPartlyCountsTheRest() {
@@ -109,11 +110,11 @@ final class FolderListFilterTests: XCTestCase {
         let drawn = visible(subscribed, needle: "alpha")
         XCTAssertEqual(drawn.map(\.path), ["alpha"])
         XCTAssertEqual(subscribed.hint(for: folders, visible: drawn, needle: "alpha")?.label,
-                       "Show 1 more match under All",
+                       "Show 1 more match in all folders",
                        "a drawn row does not excuse the ones the pill took")
         let wide = visible(subscribed, needle: "a")
         XCTAssertEqual(subscribed.hint(for: folders, visible: wide, needle: "a")?.label,
-                       "Show 3 more matches under All")
+                       "Show 3 more matches in all folders")
     }
 
     func testThereIsNothingToSayWhenNothingIsSuppressed() {
@@ -125,7 +126,7 @@ final class FolderListFilterTests: XCTestCase {
                      "every match is already drawn")
         let all = FolderListFilter(subscribed: false, unread: false)
         XCTAssertNil(all.hint(for: folders, visible: visible(all, needle: "beta"), needle: "beta"),
-                     "All suppresses nothing, so it can hide nothing")
+                     "no pill suppresses nothing, so it can hide nothing")
     }
 
     func testTheOpenFolderExemptionDoesNotRaiseAHint() {

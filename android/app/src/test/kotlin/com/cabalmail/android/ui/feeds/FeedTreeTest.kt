@@ -41,6 +41,23 @@ class FeedTreeTest {
     }
 
     @Test
+    fun `totals roll up like unread, never filter, and default to zero`() {
+        val totals = mapOf("s-root" to 10, "s-news" to 20, "s-tech" to 40, "s-art" to 80)
+        val rows = FeedTree.rows(folders, subs, counts, totalCounts = totals)
+        assertEquals(60, rows.first { it.id == "folder:news" }.total, "a folder rolls up its subtree's items")
+        assertEquals(40, rows.first { it.id == "folder:tech" }.total)
+        assertEquals(80, rows.first { it.id == "sub:s-art" }.total)
+        assertEquals(6, rows.first { it.id == "folder:news" }.unread, "unread is untouched by totals")
+        assertEquals(150, FeedTree.totalItems(totals))
+        // A read feed with cached items still hides under the Unread pill:
+        // the total is a badge, not a filter.
+        val unreadRows = FeedTree.rows(folders, subs, mapOf("s-tech" to 4), unreadOnly = true, totalCounts = totals)
+        assertEquals(listOf("folder:news", "folder:tech", "sub:s-tech"), unreadRows.map { it.id })
+        assertEquals(60, unreadRows.first { it.id == "folder:news" }.total, "the roll-up is over the unfiltered tree")
+        assertEquals(0, FeedTree.rows(folders, subs, counts).first { it.id == "sub:s-art" }.total)
+    }
+
+    @Test
     fun `a collapsed folder hides its contents but keeps its roll-up`() {
         val rows = FeedTree.rows(folders, subs, counts, collapsed = setOf("news"))
         assertEquals(listOf("folder:art", "sub:s-art", "folder:news", "sub:s-root"), rows.map { it.id })

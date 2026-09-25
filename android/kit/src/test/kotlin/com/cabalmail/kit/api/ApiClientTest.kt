@@ -14,6 +14,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpRequestData
 import io.ktor.content.TextContent
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
@@ -313,6 +314,30 @@ class ApiClientTest {
 
             assertTrue(server.body(0).contains("\"flag\":\"cabal-flag-03\""))
             assertTrue(server.body(0).contains("\"op\":\"unset\""))
+        }
+
+    @Test
+    fun `markFolderRead PUTs the display folder path and returns the flipped count`() =
+        runTest {
+            val server =
+                Server(
+                    HttpStatusCode.OK to """{"status": "marked", "flipped": 12}""",
+                    HttpStatusCode.OK to """{"status": "marked"}""",
+                )
+
+            val flipped = server.api.markFolderRead("Lists/Kernel")
+            val absent = server.api.markFolderRead("INBOX")
+
+            assertEquals(12, flipped)
+            assertEquals(0, absent, "a reply without a count reads as nothing flipped")
+            assertEquals(HttpMethod.Put, server.requests[0].method)
+            assertTrue(
+                server.requests[0]
+                    .url.encodedPath
+                    .endsWith("/mark_folder_read"),
+            )
+            assertTrue(server.body(0).contains("\"folder\":\"Lists/Kernel\""))
+            assertTrue(server.body(0).contains("\"host\":\"imap.example.com\""))
         }
 
     @Test

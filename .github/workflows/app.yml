@@ -843,3 +843,57 @@ jobs:
         aws cloudfront create-invalidation \
           --distribution-id "${DIST_ID}" \
           --paths '/*' >/dev/null
+
+  # Post-deploy mail probe. Once the core mail tiers and/or the API
+  # Lambdas have rolled, sign in as the dedicated ci-probe user, send it
+  # one message through /send and one straight at the public MX on port
+  # 25, and fail unless both land in its INBOX carrying smtp-out's
+  # DKIM-Signature and smtp-in's Authentication-Results respectively.
+  # The services-stable wait in deploy-ecs-service.sh proves the new
+  # container is healthy; this proves the mail path behind it - and the
+  # MX leg is the only thing in CI that touches smtp-in, since smtp-out
+  # routes hosted domains straight to imap. A detector, not a gate: the
+  # roll has already happened, so a failure turns this run red and
+  # leaves the diagnosis to the operator. See docs/mail-probe.md.
+  #
+  # `always()` is what lets this job be evaluated when one of its
+  # dependencies was skipped (usually only one of docker / lambda-api
+  # runs); the explicit result checks keep it from running after a
+  # failed or cancelled deploy, and from running at all when nothing
+  # mail-related rolled (monitoring-only tiers, or an unapproved gate).
+  mail-probe:
+    needs: [setup, docker, lambda-api]
+    if: >-
+      always()
+      && needs.setup.result == 'success'
+      && needs.docker.result != 'failure' && needs.docker.result != 'cancelled'
+      && needs.lambda-api.result != 'failure' && needs.lambda-api.result != 'cancelled'
+      && (needs.lambda-api.result == 'success'
+      || (needs.docker.result == 'success'
+      && (contains(needs.setup.outputs.changed_tiers, '"imap"')
+      || contains(needs.setup.outputs.changed_tiers, '"smtp-in"')
+      || contains(needs.setup.outputs.changed_tiers, '"smtp-out"'))))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    # Everything else the probe needs comes from the environment's public
+    # config.json and the probe user's own address list; the password is
+    # read from SSM (/cabal/ci-probe/password, provisioned by
+    # terraform/infra/modules/app/ci_probe_user.tf) with the deploy role.
+    - name: probe
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: ./.github/scripts/mail-probe.py --control-domain "${TF_VAR_CONTROL_DOMAIN}"

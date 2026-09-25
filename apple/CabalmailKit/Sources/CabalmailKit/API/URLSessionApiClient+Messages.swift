@@ -45,6 +45,11 @@ private struct BulkOpPayload: Decodable {
 /// other than an explicit `status: "partial"` (including an undecodable
 /// body) is full success — a total failure arrives as a non-2xx status
 /// and throws inside `send` before reaching this.
+/// Response body of `/mark_folder_read`: `{"status": "marked", "flipped": N}`.
+private struct MarkFolderReadPayload: Decodable {
+    let flipped: Int
+}
+
 private func decodeBulkResult(_ data: Data, requested: [UInt32]) -> BulkOpResult {
     guard let payload = try? JSONDecoder().decode(BulkOpPayload.self, from: data),
           payload.status == "partial" else {
@@ -295,6 +300,15 @@ extension URLSessionApiClient {
             "folder": folder,
         ])
         _ = try await send(httpRequest, expectedStatuses: 200..<300)
+    }
+
+    public func markFolderRead(host: String, folder: String) async throws -> Int {
+        let httpRequest = try await put("/mark_folder_read", json: [
+            "host": host,
+            "folder": folder,
+        ])
+        let data = try await send(httpRequest, expectedStatuses: 200..<300)
+        return try JSONDecoder().decode(MarkFolderReadPayload.self, from: data).flipped
     }
 
     // MARK: - Send

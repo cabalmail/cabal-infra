@@ -58,18 +58,21 @@ from asc_api import (
 # to reach the hidden "Ready to Test" state that gates ALL distribution.
 # Until a build ripens, no attach path exists anywhere: the ASC web UI's
 # "Test a Build" dialog lists the build but cannot select it, and the API
-# either 404s the build id on both relationship directions ("no resource
-# of type 'builds'", even though GET /v1/builds reports it VALID - the
-# usual macOS shape) or doesn't surface the build in /v1/builds at all
-# (seen on iOS). The delay varies per build; macOS has been consistently
-# at the long end. When the 404-on-VALID signature repeats this many
-# times, the step downgrades to a warning instead of burning the full
-# poll window and failing a release CI can do nothing about - and a poll
-# that times out with the build never surfacing gets the same downgrade,
-# since altool has already verified the upload by then. Genuine failures
-# (FAILED/INVALID processing, missing group, any other persistent
-# refusal) still fail loudly, and for builds that ripen in time the
-# attach simply succeeds and none of this engages.
+# 404s the build id on both relationship directions ("no resource of type
+# 'builds'", even though GET /v1/builds reports it VALID). When that
+# signature repeats this many times, the step downgrades to a warning
+# instead of burning the full poll window and failing a release CI can do
+# nothing about. A poll that times out with the build never surfacing in
+# /v1/builds gets the same downgrade, since altool has already verified
+# the upload by then - but note that the "never surfaced" shape, once
+# blamed on this defect for the iOS and visionOS legs, was in fact
+# find_app_id resolving those legs' bundle id to the macOS app record
+# (ASC prefix-matches filter[bundleId]; see asc_api.find_app_id), so the
+# build was being looked for on the wrong app for the whole poll window.
+# With that fixed, a genuine never-surfaced timeout should be rare. Real
+# failures (FAILED/INVALID processing, missing group, any other persistent
+# refusal) still fail loudly, and for builds that ripen in time the attach
+# simply succeeds and none of this engages.
 KNOWN_DEFECT_ATTEMPTS = 10
 
 
@@ -221,8 +224,11 @@ def main():
         )
         return 1
     # Never surfaced in /v1/builds at all. altool verified the upload
-    # before this step ran, so this is the delayed-readiness defect
-    # manifesting one API layer earlier (the iOS shape) - same downgrade.
+    # before this step ran, so treat it as the delayed-readiness defect
+    # one API layer earlier and downgrade the same way. Historically this
+    # branch fired on every iOS/visionOS leg that had resolved the wrong
+    # app record (see KNOWN_DEFECT_ATTEMPTS above); the exact bundle-id
+    # match in find_app_id closed that, so a hit here now deserves a look.
     warn(
         f"Build {build_number} has not surfaced in the App Store Connect API "
         f"after {timeout}s despite a verified upload - the known "

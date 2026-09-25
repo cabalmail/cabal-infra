@@ -2,6 +2,7 @@ package com.cabalmail.android.ui.mail
 
 import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.FolderCountDisplay
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -25,14 +26,13 @@ class FolderSectionsTest {
         assertFalse(filter.isAll)
         assertTrue(filter.isOn(FolderFilterPill.SUBSCRIBED))
         assertFalse(filter.isOn(FolderFilterPill.UNREAD))
-        assertFalse(filter.isOn(FolderFilterPill.ALL))
     }
 
     @Test
-    fun `All is on exactly when both toggles are off`() {
+    fun `every folder is the state with both toggles off, and there is no All pill`() {
         val all = FolderListFilter(subscribed = false, unread = false)
         assertTrue(all.isAll)
-        assertTrue(all.isOn(FolderFilterPill.ALL))
+        assertEquals(listOf(FolderFilterPill.SUBSCRIBED, FolderFilterPill.UNREAD), FolderFilterPill.entries)
         assertFalse(FolderListFilter(subscribed = false, unread = true).isAll)
         assertFalse(FolderListFilter(subscribed = true, unread = true).isAll)
     }
@@ -46,10 +46,9 @@ class FolderSectionsTest {
     }
 
     @Test
-    fun `tapping All clears both toggles`() {
+    fun `turning both toggles off reaches every folder`() {
         val filter = FolderListFilter(subscribed = true, unread = true)
-        assertEquals(FolderListFilter(subscribed = false, unread = false), filter.toggled(FolderFilterPill.ALL))
-        assertTrue(FolderListFilter().toggled(FolderFilterPill.ALL).isAll)
+        assertTrue(filter.toggled(FolderFilterPill.SUBSCRIBED).toggled(FolderFilterPill.UNREAD).isAll)
     }
 
     @Test
@@ -70,7 +69,7 @@ class FolderSectionsTest {
     }
 
     @Test
-    fun `All shows every folder in server order`() {
+    fun `no pill shows every folder in server order`() {
         assertEquals(
             folders,
             FolderSections.rows(folders, subscribed, statuses, FolderListFilter(false, false), selected = null),
@@ -155,6 +154,17 @@ class FolderSectionsTest {
     fun `an unknown status rests dim, not highlighted`() {
         assertFalse(FolderSections.hasUnread(null))
         assertFalse(FolderSections.hasUnread(FolderStatus(messages = 40)))
+    }
+
+    @Test
+    fun `the badge shows unread, total, or both, and hides a zero`() {
+        assertEquals("3", FolderSections.badge(FolderCountDisplay.UNREAD, unread = 3, total = 40))
+        assertEquals(null, FolderSections.badge(FolderCountDisplay.UNREAD, unread = 0, total = 40))
+        assertEquals("40", FolderSections.badge(FolderCountDisplay.TOTAL, unread = 3, total = 40))
+        assertEquals(null, FolderSections.badge(FolderCountDisplay.TOTAL, unread = 3, total = 0))
+        assertEquals("3 / 40", FolderSections.badge(FolderCountDisplay.BOTH, unread = 3, total = 40))
+        assertEquals("0 / 40", FolderSections.badge(FolderCountDisplay.BOTH, unread = 0, total = 40))
+        assertEquals(null, FolderSections.badge(FolderCountDisplay.BOTH, unread = 0, total = 0))
     }
 
     @Test

@@ -127,6 +127,28 @@ final class RssStoreTests: XCTestCase {
         XCTAssertEqual(all[0].subscriptionId, "s1")
     }
 
+    /// `totalCounts` is the cached item count per subscription, read state
+    /// aside: the "total" the sidebar shows under the total / both
+    /// folder-count modes. A subscription with nothing cached is absent,
+    /// like an all-read one is from `unreadCounts`.
+    func testTotalCountsCountCachedItemsRegardlessOfReadState() async throws {
+        _ = try await store.replaceCatalog(RssCatalog(folders: [], subscriptions: [
+            sub("s1", feed: "f1", watermark: "2026-01-03T00:00:00+00:00"), sub("s2", feed: "f2"), sub("s3", feed: "f3"),
+        ]))
+        try await store.upsertItems([item("f1", 1), item("f1", 2), item("f1", 5, read: true), item("f2", 3)])
+        let totals = try await store.totalCounts()
+        XCTAssertEqual(totals, ["s1": 3, "s2": 1])
+        // Items 1 and 2 sit under s1's watermark, so unread and total differ.
+        let unread = try await store.unreadCounts()
+        XCTAssertEqual(unread, ["s2": 1])
+        // Marking read moves the unread map only; the cache is unchanged.
+        try await store.setRead(feedId: "f2", sortKey: item("f2", 3).sortKey, true)
+        let afterRead = try await store.totalCounts()
+        XCTAssertEqual(afterRead, ["s1": 3, "s2": 1])
+        let unreadAfter = try await store.unreadCounts()
+        XCTAssertEqual(unreadAfter, [:])
+    }
+
     func testServerExplicitUnreadSurvivesTheLocalWatermark() async throws {
         _ = try await store.replaceCatalog(RssCatalog(folders: [],
             subscriptions: [sub("s1", feed: "f1", watermark: "2026-01-03T00:00:00+00:00")]))

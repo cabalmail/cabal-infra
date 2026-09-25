@@ -362,7 +362,9 @@ class ReportedTransportPathTests(RetryHarness):
         # first find_build (call 3) drove an uncaught URLError out of main()
         # pre-fix; it now completes and attaches.
         transport = Transport(
-            json.dumps({"data": [{"id": "APP1"}]}).encode(),
+            json.dumps(
+                {"data": [{"id": "APP1", "attributes": {"bundleId": "com.cabalmail.Cabalmail"}}]}
+            ).encode(),
             json.dumps(
                 {"data": [{"id": "GRP1", "attributes": {"name": "stage"}}]}
             ).encode(),
@@ -390,6 +392,53 @@ class ReportedTransportPathTests(RetryHarness):
                     mock.patch.object(asc_api.time, "sleep", lambda _s: None):
                 self.assertEqual(assign.main(), 0)
         self.assertEqual(transport.attempts, 5)
+
+
+class AppLookupTests(RetryHarness):
+    """find_app_id must match the bundle id exactly, not by ASC's prefix.
+
+    `GET /v1/apps?filter[bundleId]=com.cabalmail.Cabalmail` also returns
+    `com.cabalmail.CabalmailMac`, in no stable order. With `limit=1` and
+    `data[0]`, the iOS and visionOS upload legs resolved the macOS app on
+    roughly half their runs, then polled `/v1/builds` on that app for the
+    full 40-minute window before warning that the build never surfaced.
+    Every such "hang" in the run history resolved app 6762522018 (macOS);
+    every fast leg resolved 6762482898 (iOS).
+    """
+
+    APPS_MAC_FIRST = json.dumps(
+        {
+            "data": [
+                {"id": "MAC", "attributes": {"bundleId": "com.cabalmail.CabalmailMac"}},
+                {"id": "IOS", "attributes": {"bundleId": "com.cabalmail.Cabalmail"}},
+            ]
+        }
+    ).encode()
+
+    def lookup(self, bundle_id, payload):
+        transport = Transport(payload)
+        with mock.patch.object(asc_api.urllib.request, "urlopen", transport):
+            return asc_api.find_app_id(bundle_id, token_factory), transport
+
+    def test_a_prefix_collision_resolves_the_exact_bundle_id(self):
+        app_id, _ = self.lookup("com.cabalmail.Cabalmail", self.APPS_MAC_FIRST)
+        self.assertEqual(app_id, "IOS")
+
+    def test_the_longer_bundle_id_still_resolves_itself(self):
+        app_id, _ = self.lookup("com.cabalmail.CabalmailMac", self.APPS_MAC_FIRST)
+        self.assertEqual(app_id, "MAC")
+
+    def test_a_prefix_only_match_is_not_an_app(self):
+        # Pre-fix this returned MAC's id for a bundle id no app has.
+        app_id, _ = self.lookup("com.cabalmail.Cabal", self.APPS_MAC_FIRST)
+        self.assertIsNone(app_id)
+
+    def test_the_query_asks_for_the_whole_prefix_set(self):
+        # limit=1 is what let the wrong row win; the lookup must be able to
+        # see past the first row to find the exact match.
+        _, transport = self.lookup("com.cabalmail.Cabalmail", self.APPS_MAC_FIRST)
+        self.assertNotIn("limit=1&", transport.calls[0][1] + "&")
+        self.assertIn("limit=200", transport.calls[0][1])
 
 
 class RetryAfterTests(RetryHarness):
@@ -440,7 +489,9 @@ class ReportedCallPathTests(RetryHarness):
     def test_find_app_id_and_find_build_survive_a_single_500(self):
         for call, payload in (
             (lambda: asc_api.find_app_id("com.cabalmail.Cabalmail", token_factory),
-             json.dumps({"data": [{"id": "APP1"}]}).encode()),
+             json.dumps(
+                 {"data": [{"id": "APP1", "attributes": {"bundleId": "com.cabalmail.Cabalmail"}}]}
+             ).encode()),
             (lambda: asc_api.find_build("APP1", "42", token_factory),
              json.dumps({"data": [{"id": "B1"}]}).encode()),
         ):

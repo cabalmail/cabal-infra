@@ -54,7 +54,7 @@ extension FeedItemListView {
         switch model.filter {
         case .all: return model.isSyncing ? "Fetching…" : "No items yet"
         case .unread: return "All caught up"
-        case .favorite: return "No favorites"
+        case .favorite: return "No flagged items"
         }
     }
 
@@ -63,7 +63,7 @@ extension FeedItemListView {
         switch model.filter {
         case .all: return "New items appear here as the feed is fetched."
         case .unread: return "Every item here has been read."
-        case .favorite: return "Swipe an item or use its menu to favorite it."
+        case .favorite: return "Swipe an item or use its menu to flag it."
         }
     }
 }

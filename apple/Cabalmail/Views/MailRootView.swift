@@ -145,7 +145,9 @@ struct MailRootView: View {
     /// reports on every mount — the list is re-keyed per folder — and the
     /// last report stands while the search surface (whose leading item is a
     /// plain title of similar size) has the column. Zero until measured.
-    @State private var listLeadingToolbarWidth: CGFloat = 0
+    /// Non-private so the `+Feeds` sibling's item list can report its own
+    /// scope-switch menu into the same slot.
+    @State var listLeadingToolbarWidth: CGFloat = 0
     /// Per-context list-filter text for the wide sidebar. On macOS / iPad-regular
     /// this view renders the "Filter folders" / "Filter addresses" field itself
     /// (below the section tabs) so it sits under the global search rather than
@@ -351,6 +353,19 @@ struct MailRootView: View {
         .reportsMessageMenuAvailability(
             selectedCount: listSelectionCount,
             hasOpenMessage: selectedEnvelope != nil
+        )
+        // The Feeds menu's twin, and which of the two sections is in front,
+        // so the chords the Message/Mailbox and Feeds menus share are never
+        // live on both (`SharedChordPolicy`). Only the wide layouts host
+        // feeds here; inside the compact tabs the Feeds tab reports instead.
+        .reportsFeedMenuAvailability(
+            selectedCount: selectedFeedItem == nil ? 0 : 1,
+            hasOpenItem: selectedFeedItem != nil,
+            hasScope: selectedFeedScope != nil && !isSearching,
+            hosts: isWideSidebar
+        )
+        .reportsActiveSection(
+            isWideSidebar ? (selectedFeedScope != nil && !isSearching ? .feeds : .mail) : nil
         )
         // Track the split view's overall width so the list column's max can be
         // clamped to leave the reading pane a floor (see `listColumnMaxWidth`).

@@ -87,6 +87,42 @@ final class FeedSidebarRowsTests: XCTestCase {
         XCTAssertEqual(FeedSidebarRows.totalUnread([:]), 0)
     }
 
+    // MARK: - Totals (cross-media plan, Phase 1)
+
+    /// The cached item count rolls up a folder tree exactly as unread does,
+    /// so a folder badge can read "unread / total" like a mail folder's.
+    func testTotalsRollUpLikeUnread() {
+        let rows = FeedSidebarRows.rows(folders: folders, subscriptions: subs,
+                                        unreadCounts: ["s-rust": 2, "s-df": 5],
+                                        totalCounts: ["s-rust": 40, "s-df": 25, "s-xkcd": 9], collapsed: [])
+        XCTAssertEqual(rows.map(\.title), ["Art", "Tech", "Apple", "Daring Fireball", "Rust Blog", "Comics!"])
+        XCTAssertEqual(rows.map(\.unread), [0, 7, 5, 5, 2, 0])
+        XCTAssertEqual(rows.map(\.total), [0, 65, 25, 25, 40, 9])
+    }
+
+    /// Callers that have no totals yet (or never will) get zero, not a crash
+    /// or a stale number: the badge then hides under the total modes.
+    func testTotalsDefaultToZeroWhenNotSupplied() {
+        let rows = FeedSidebarRows.rows(folders: folders, subscriptions: subs,
+                                        unreadCounts: ["s-df": 5], collapsed: [])
+        XCTAssertTrue(rows.allSatisfy { $0.total == 0 })
+    }
+
+    func testCollapseKeepsTheTotalRollUp() {
+        let rows = FeedSidebarRows.rows(folders: folders, subscriptions: subs, unreadCounts: [:],
+                                        totalCounts: ["s-df": 25, "s-rust": 40], collapsed: ["tech"])
+        XCTAssertEqual(rows.map(\.title), ["Art", "Tech", "Comics!"])
+        XCTAssertEqual(rows[1].total, 65)
+    }
+
+    func testGrandTotalAndTheAllFeedsRowCarryIt() {
+        XCTAssertEqual(FeedSidebarRows.grandTotal(["a": 2, "b": 3]), 5)
+        XCTAssertEqual(FeedSidebarRows.grandTotal([:]), 0)
+        let row = FeedSidebarRows.allFeedsRow(unread: 3, total: 12)
+        XCTAssertEqual(row.unread, 3)
+        XCTAssertEqual(row.total, 12)
+    }
+
     /// #1548: the row both sidebars head their list with. Its identity is a
     /// folder so the shared row label draws it exactly like the folder rows
     /// beneath it — that sameness is the fix.
