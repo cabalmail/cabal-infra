@@ -7,9 +7,10 @@
 //! push and pull) is Phase 6; what is here is the store, the schema, and the
 //! file I/O it depends on, deliberately built and tested first.
 //!
-//! Not to be confused with the *deployment descriptor* (`Deployment`, Phase 3),
-//! which is fetched from `https://{control_domain}/config.json` and owned by
-//! the deployment rather than the user. This module is the user's file.
+//! Not to be confused with the *deployment descriptor* ([`Deployment`]), which
+//! is fetched from `https://{control_domain}/config.json` and owned by the
+//! deployment rather than the user. It lives in [`deployment`]; everything
+//! else here is the user's file.
 //!
 //! # Precedence, highest wins
 //!
@@ -30,6 +31,7 @@
 //! in `$EDITOR` behaves exactly as if it had been changed in Settings.
 
 pub mod cli;
+pub mod deployment;
 pub mod docs;
 pub mod env;
 pub mod error;
@@ -41,6 +43,7 @@ pub mod value;
 use std::path::PathBuf;
 
 pub use cli::{Invocation, Override};
+pub use deployment::{CognitoConfig, Deployment, MailDomain, Origin, Resolution};
 pub use env::Environment;
 pub use error::{ConfigError, ConfigErrorKind, Location};
 pub use schema::{Key, KeySpec, Kind, Reload, Scope, Wire};

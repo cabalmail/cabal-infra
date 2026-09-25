@@ -16,6 +16,10 @@ pub const APP_DIRECTORY: &str = "cabalmail";
 /// The configuration file's name inside [`APP_DIRECTORY`].
 pub const CONFIG_FILE: &str = "config.toml";
 
+/// The cached deployment descriptor's name inside the cache's
+/// [`APP_DIRECTORY`].
+pub const DEPLOYMENT_CACHE_FILE: &str = "deployment.json";
+
 /// A snapshot of the environment variables configuration resolution reads.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Environment {
@@ -101,6 +105,26 @@ impl Environment {
         }
     }
 
+    /// The user's cache directory: `$XDG_CACHE_HOME` when it holds an absolute
+    /// path, otherwise the platform's, by the same rule as
+    /// [`config_home`](Self::config_home).
+    #[must_use]
+    pub fn cache_home(&self) -> Option<PathBuf> {
+        if let Some(path) = self.get("XDG_CACHE_HOME").map(PathBuf::from)
+            && path.is_absolute()
+        {
+            return Some(path);
+        }
+        directories::BaseDirs::new().map(|dirs| dirs.cache_dir().to_path_buf())
+    }
+
+    /// Where the fetched deployment descriptor is cached.
+    #[must_use]
+    pub fn deployment_cache_file(&self) -> Option<PathBuf> {
+        self.cache_home()
+            .map(|dir| dir.join(APP_DIRECTORY).join(DEPLOYMENT_CACHE_FILE))
+    }
+
     /// The user's `config.toml`.
     #[must_use]
     pub fn user_config_file(&self) -> Option<PathBuf> {
@@ -146,6 +170,25 @@ mod tests {
         assert!(
             resolved.is_none_or(|path| !path.starts_with("relative")),
             "a relative XDG_CONFIG_HOME was honoured"
+        );
+    }
+
+    #[test]
+    fn an_absolute_cache_home_relocates_the_deployment_cache() {
+        let env = Environment::from_pairs([("XDG_CACHE_HOME", "/tmp/xdg-cache")]);
+        assert_eq!(
+            env.deployment_cache_file(),
+            Some(PathBuf::from("/tmp/xdg-cache/cabalmail/deployment.json"))
+        );
+    }
+
+    #[test]
+    fn a_relative_cache_home_is_ignored() {
+        let env = Environment::from_pairs([("XDG_CACHE_HOME", "relative/path")]);
+        assert!(
+            env.deployment_cache_file()
+                .is_none_or(|path| !path.starts_with("relative")),
+            "a relative XDG_CACHE_HOME was honoured"
         );
     }
 

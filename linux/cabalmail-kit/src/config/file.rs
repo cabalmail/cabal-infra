@@ -17,6 +17,7 @@ use std::path::Path;
 
 use toml_edit::{Document, DocumentMut, InlineTable, Item, Table, TableLike};
 
+use super::env::CONFIG_FILE;
 use super::error::{ConfigError, ConfigErrorKind, Location, nearest_key_name};
 use super::schema::{Key, Scope};
 use super::settings::Settings;
@@ -478,8 +479,13 @@ pub fn write_atomic(path: &Path, contents: &str) -> Result<(), ConfigError> {
     let directory = path.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(directory).map_err(|error| io_error(error.to_string()))?;
 
+    let prefix = format!(
+        ".{}.",
+        path.file_name()
+            .map_or(CONFIG_FILE.into(), |name| name.to_string_lossy())
+    );
     let mut temporary = tempfile::Builder::new()
-        .prefix(".config.toml.")
+        .prefix(&prefix)
         .suffix(".tmp")
         .tempfile_in(directory)
         .map_err(|error| io_error(error.to_string()))?;

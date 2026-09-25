@@ -1,0 +1,31 @@
+{
+  "control_domain": "admin.example.com",
+  "domains": [
+    {
+      "domain": "example.net",
+      "zone_id": "Z0000000EXAMPLE1",
+      "name_servers": ["ns-1.awsdns-00.org", "ns-2.awsdns-00.net"],
+      "arn": "arn:aws:route53:::hostedzone/Z0000000EXAMPLE1"
+    },
+    {
+      "domain": "example.org",
+      "zone_id": "Z0000000EXAMPLE2",
+      "name_servers": ["ns-3.awsdns-00.com"],
+      "arn": "arn:aws:route53:::hostedzone/Z0000000EXAMPLE2"
+    }
+  ],
+  "invokeUrl": "https://abcdef1234.execute-api.us-east-1.amazonaws.com/prod",
+  "invitation_required": false,
+  "sms_enabled": false,
+  "monitoring": false,
+  "cognitoConfig": {
+    "region": "us-east-1",
+    "poolData": {
+      "UserPoolId": "us-east-1_EXAMPLE",
+      "ClientId": "exampleclientid0000000000"
+    },
+    "enrollClientId": "exampleenrollclientid00000",
+    "extensionClientId": "exampleextensionclientid00",
+    "hostedUiDomain": "auth.admin.example.com"
+  }
+}

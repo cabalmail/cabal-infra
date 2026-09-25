@@ -35,6 +35,10 @@ on:
       - 'react/admin/package-lock.json'
       - 'LICENSE.md'
       - 'design/color-tokens.json'
+      # The deployment descriptor Terraform writes, which the kit's config.json
+      # fixture is held to, and the module output that shapes its `domains`.
+      - 'terraform/infra/modules/app/templates/config.js.tftpl'
+      - 'terraform/infra/modules/domains/outputs.tf'
       # The PR-time gate runs the same `cargo xtask ci`, so the contract test
       # reads its path filter as well as this one.
       - '.github/workflows/lint.yml'

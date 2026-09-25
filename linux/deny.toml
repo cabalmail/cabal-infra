@@ -43,6 +43,11 @@ allow = [
   "Unlicense",
   # The Unicode data tables, via unicode-ident.
   "Unicode-3.0",
+  # The TLS stack: aws-lc-rs, aws-lc-sys, rustls-webpki, and untrusted are ISC,
+  # and aws-lc-sys and subtle carry BSD-3-Clause. Both are permissive and
+  # compatible with the AGPL.
+  "BSD-3-Clause",
+  "ISC",
   # File-level copyleft: it reaches the files of the crate itself and no
   # further, so linking one into an AGPL binary is not a licensing problem.
   # option-ext, under directories, is the only one today.

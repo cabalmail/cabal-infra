@@ -22,12 +22,13 @@ Status tags mirror the **Status:** line on each work item. An item with no tag h
   - [5. Release artifacts](#5-release-artifacts) — **partial**; AUR publication **blocked**
   - [6. Guard rails](#6-guard-rails) — **shipped** (WebView grep moved to Phase 4)
   - [Phase 2 verification](#phase-2-verification)
-- [Phase 3: Configuration, Authentication & API Client](#phase-3-configuration-authentication--api-client)
-  - [1. Runtime configuration](#1-runtime-configuration)
+- [Phase 3: Configuration, Authentication & API Client](#phase-3-configuration-authentication--api-client) — **in progress**
+  - [1. Runtime configuration](#1-runtime-configuration) — **partial** (kit side; first-launch prompt moved to item 6)
   - [2. Authentication](#2-authentication)
   - [3. Secret storage](#3-secret-storage)
   - [4. API client](#4-api-client)
   - [5. Models and caching](#5-models-and-caching)
+  - [6. Sign-in window](#6-sign-in-window)
   - [Phase 3 verification](#phase-3-verification)
 - [Phase 4: Mail Reading](#phase-4-mail-reading)
   - [1. Shell and folder sidebar](#1-shell-and-folder-sidebar)
@@ -403,7 +404,8 @@ Where the work stands, so it does not have to be reverse-engineered from git. Ev
 | --- | --- |
 | 1. Workspace scaffolding | **Complete** (2026-08-08). All five items shipped; `cargo run -p cabalmail-gtk` opens a window. |
 | 2. Build pipeline, packaging & test harness | **In progress.** Items 1, 2, 4, and 6 shipped, and item 5's artifact upload with them. Item 3 shipped layer (c) whole, and the *enforcement* halves of (a) and (d) - the coverage floor and the smoke job. What those two layers test is written with the code they test, so most of (a) and (d) arrives with Phases 3 to 5. Layer (b) moved to Phase 3, where the API client its fixtures decode into lands. Item 5's AUR publication is the one thing still blocked. |
-| 3-8 | Not started. |
+| 3. Configuration, authentication & API client | **In progress.** Item 1 is partial: the kit side is written, nothing in the app calls it yet, and its first-launch prompt for a control domain moved to item 6, the sign-in window, added 2026-09-22. |
+| 4-8 | Not started. |
 
 > **Paused (2026-08-24): AUR publication.** The AUR is closed to new account registrations, so the Arch package has no route to publication. Item 4's work is written, tested, and committed on the branch `claude/linux-phase-2-arch-packaging`, which is **not** pushed and has **no PR open** - deliberately, until the AUR question resolves. Item 5's AUR step was already a manual, human-gated act; it is now blocked outright. Nothing else in Phase 2 depends on either, so items 3 and 6 can proceed.
 
@@ -629,6 +631,16 @@ The `package-arch` job uploads the `.pkg.tar.zst` and its `.SRCINFO` as workflow
 
 ### 1. Runtime configuration
 
+**Status:** Partial, 2026-09-23 (`d562cdc3`, `4e3992a8`, and the review fixes after them). The kit side is written; nothing in the app calls it yet, and the first-launch half moved to item 6.
+
+- `cabalmail_kit::config::deployment` fetches and decodes the descriptor, derives `imap_host`, and caches it at `$XDG_CACHE_HOME/cabalmail/deployment.json`. `resolve` reads the control domain from `Settings`.
+- A descriptor whose `control_domain` names a different host from the one it was fetched from is refused and never cached. Case, a trailing dot, a port, and punycode all compare as one host. The cache is matched on the same rule, so it answers only for the host it came from.
+- The cache answers only a transient failure: no answer, a timeout, or 408/429/502/503/504. A 404, an undecodable body, a body over 1 MiB, or a descriptor naming a non-HTTPS `invokeUrl` is reported instead.
+- `cabalmail_kit::http::client` is the one client configuration, for this item and item 4. It allows HTTPS only, on the first hop and on every redirect, follows at most five redirects, and sets a connect timeout and a 30-second overall timeout. A refused scheme or redirect is a `Protocol` error rather than a retryable one. A certificate the trust store rejects stays retryable, since a captive portal is its usual cause.
+- `reqwest` runs on rustls with the aws-lc-rs provider and the system trust store via `rustls-platform-verifier`, and nothing links the system OpenSSL. `deny.toml` now allows ISC and BSD-3-Clause for the TLS stack. aws-lc-sys builds with the C compiler alone, but not under Arch's default `-flto=auto`: its objects become GCC LTO bytecode Rust's linker cannot resolve, so the PKGBUILD sets `options=('!lto')`.
+- The fixture at `cabalmail-kit/tests/fixtures/deployment/descriptor.json` is held to `terraform/infra/modules/app/templates/config.js.tftpl`, and its `domains` entries to `terraform/infra/modules/domains/outputs.tf`, by `xtask/tests/deployment_descriptor_contract.rs`.
+- **Not done:** the "entered on first launch" half. Entering a control domain is a sign-in-screen field on every other client, and no work item owned a sign-in screen, so one was added as [item 6](#6-sign-in-window). Until it lands, set `control_domain` with `cabalmail config set control_domain <host>`.
+
 Two distinct things are called "config" in this codebase, and conflating them will cause bugs. Keep the names apart in code and docs:
 
 | | **Deployment descriptor** | **User config** |
@@ -687,10 +699,25 @@ Phase 2's test harness moved its HTTP contract layer here, by the erratum under 
 
 `mime/`: RFC 2047 header decoding, multipart walking, attachment descriptor extraction, inline-image `cid:` resolution. Fetch full bodies and parse client-side — there is no `fetchPart` over the API.
 
+### 6. Sign-in window
+
+Added 2026-09-22. Items 2 and 3 are the kit's Cognito and keyring surface, and Phase 4 starts at the signed-in shell; nothing owned the screen between them, including item 1's first-launch prompt for a control domain.
+
+The signed-out state of the main window: an `AdwNavigationView` of pages, every call through `spawn_to_ui!`, and every error rendered from `CabalmailError`'s `Display`, never its debug form.
+
+- **Control domain.** Prefilled from `Settings.control_domain` and editable, as on the Apple sign-in screen. The descriptor is resolved (item 1) before the credentials page is enabled, so a typo'd domain fails on its own field rather than as a sign-in failure. On the first successful sign-in the normalized domain and the username are written to `[local]` through the config store, which is what materializes `config.toml` (see [What belongs where](#what-belongs-where)). A domain pinned by a flag or `CABALMAIL_CONTROL_DOMAIN` is shown read-only, with its provenance.
+- **Credentials and MFA.** Username and password, then a code page when `sign_in` returns `MfaRequired`, labelled for TOTP or SMS.
+- **Sign-up and password reset.** Sign-up, confirmation code, and resend; forgot password and its confirmation. Both are pages in the same navigation view, not separate windows.
+- **Keyring failure.** Item 3's actionable no-Secret-Service message is shown here, where it is detected, and `--session-only` is honoured.
+- **TOTP enrollment.** A dialog showing the `otpauth://` URI as a QR code and as text, confirming with a code. Reached from the primary menu until Phase 6's Account group links to the same dialog.
+- **Sign out.** A primary-menu action that clears the stored tokens and returns to this window with the control domain and username kept.
+- **Tests.** Widget tests against a fake auth service cover each page's construction and the MFA and sign-up transitions. `--self-test` asserts it reaches this window when signed out, which is the signed-out main window Phase 2's smoke criterion names.
+
 ### Phase 3 verification
 
 - Contract tests cover every endpoint in the table against committed fixtures.
 - Sign-in against the stage deployment succeeds from a scratch container, including a TOTP-challenged account.
+- A first launch with no `control_domain` set asks for one; after sign-in, `cabalmail --print-config` reports it and the username as `user file`.
 - Killing the keyring daemon produces the actionable message, not a panic.
 - Tokens survive an app restart; an expired access token triggers exactly one refresh under ten concurrent requests.
 
