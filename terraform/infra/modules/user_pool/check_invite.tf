@@ -30,7 +30,7 @@ resource "aws_s3_object" "check_invite_zip" {
   etag   = data.archive_file.check_invite_placeholder.output_md5
 
   lifecycle {
-    ignore_changes = [source, etag, content, content_base64, source_hash, version_id, metadata]
+    ignore_changes = [source, etag, content, content_base64, source_hash, metadata]
   }
 }
 
@@ -41,7 +41,7 @@ resource "aws_s3_object" "check_invite_hash" {
   content_type = "text/plain"
 
   lifecycle {
-    ignore_changes = [content, etag, source, source_hash, version_id]
+    ignore_changes = [content, etag, source, source_hash]
   }
 }
 

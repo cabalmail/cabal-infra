@@ -73,7 +73,7 @@ resource "aws_s3_object" "require_admin_mfa_zip" {
   etag   = data.archive_file.require_admin_mfa_placeholder.output_md5
 
   lifecycle {
-    ignore_changes = [source, etag, content, content_base64, source_hash, version_id, metadata]
+    ignore_changes = [source, etag, content, content_base64, source_hash, metadata]
   }
 }
 
@@ -84,7 +84,7 @@ resource "aws_s3_object" "require_admin_mfa_hash" {
   content_type = "text/plain"
 
   lifecycle {
-    ignore_changes = [content, etag, source, source_hash, version_id]
+    ignore_changes = [content, etag, source, source_hash]
   }
 }
 
