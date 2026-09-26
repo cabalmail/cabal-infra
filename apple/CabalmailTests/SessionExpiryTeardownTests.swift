@@ -60,6 +60,41 @@ final class SessionExpiryTeardownTests: XCTestCase {
         XCTAssertNil(state.signedOutReason)
     }
 
+    /// End to end across the seam: a real `URLSessionApiClient` dying of a
+    /// 401 the refresh could not cure, the real monitor, and a real
+    /// `AppState` observing it. The unit halves above can both pass while the
+    /// two ends are not actually connected; this is what says they are.
+    func testARefusedRequestTearsTheSessionDown() async throws {
+        let state = AppState()
+        state.status = .signedIn
+        state.observeSessionInvalidation()
+
+        let api = URLSessionApiClient(
+            configuration: Configuration(
+                controlDomain: "cabalmail.example",
+                domains: [MailDomain(domain: "cabalmail.example")],
+                invokeUrl: URL(string: "https://api.cabalmail.example/prod")!,
+                cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
+            ),
+            authService: NullAuthService(),
+            transport: TwoUnauthorizedTransport(),
+            sessionInvalidation: state.sessionInvalidation
+        )
+
+        do {
+            _ = try await api.listAddresses()
+            XCTFail("Expected the second 401 to surface as an expired session")
+        } catch let error as CabalmailError {
+            XCTAssertEqual(error, .authExpired, "the throw the call site still renders")
+        }
+
+        for _ in 0..<50 where state.status != .signedOut {
+            await Task.yield()
+        }
+        XCTAssertEqual(state.status, .signedOut)
+        XCTAssertEqual(state.signedOutReason, .sessionExpired)
+    }
+
     /// Starting a sign-in clears the explanation: by the time the user is
     /// typing, they have read it.
     func testSubmittingTheFormClearsTheReason() async {
@@ -147,5 +182,19 @@ final class SignInReasonSourceScanTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         return try String(contentsOf: apple.appendingPathComponent(path), encoding: .utf8)
+    }
+}
+
+/// Answers 401 to everything: the shape of a session Cognito will still mint
+/// tokens for but the API no longer honours.
+private struct TwoUnauthorizedTransport: HTTPTransport {
+    func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 401,
+            httpVersion: "HTTP/1.1",
+            headerFields: nil
+        )!
+        return (Data("unauthorized".utf8), response)
     }
 }
