@@ -243,6 +243,9 @@ targets:
       # Safari extension (compiled into the appex too).
       - path: Cabalmail/ExtensionControlDomainStore.swift
       - path: Cabalmail/AppStateSessionPersistence.swift
+      # Session lifecycle: the client-construction helpers and the expiry
+      # teardown the Kit's session-invalidation signal lands on (#1703).
+      - path: Cabalmail/AppStateSession.swift
       # Feed reader session flows (RSS plan, phase 5d): the periodic refresh.
       - path: Cabalmail/AppState+Feeds.swift
       # Folder-subscription set mutators, read by the message list's
