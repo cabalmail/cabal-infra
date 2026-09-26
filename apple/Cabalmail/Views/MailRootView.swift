@@ -689,7 +689,26 @@ extension MailRootView {
             // (the Cabalmail mark) and a navigation title, which need a
             // navigation container now that the view no longer lives in the
             // split's sidebar column.
-            NavigationStack { sidebar }
+            NavigationStack {
+                sidebar
+                    // Settings, evicted from the message-list column's bar
+                    // where a fifth occupant overflowed it on iPadOS 27
+                    // (#1626). This panel is the iPad's app-level chrome —
+                    // the analogue of macOS's Settings scene and compact
+                    // iPhone's Settings tab — and it has a bar of its own
+                    // with one occupant.
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                appState.requestSettings()
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .accessibilityLabel("Settings")
+                            }
+                            .accessibilityIdentifier("folderPanel.settings")
+                        }
+                    }
+            }
                 .frame(width: folderPanelWidth)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .shadow(color: .black.opacity(0.25), radius: 18, x: 4, y: 0)
@@ -805,11 +824,19 @@ extension MailRootView {
                 }
             }
         }
-        // Folder-panel toggle (standing in for the removed system sidebar
-        // toggle, same leading slot) and the app-level Settings gear.
-        // Regular-width iPad only (compact keeps its Settings tab and
-        // navigates folders as the stack root; macOS has its Settings
-        // scene and a tiled sidebar).
+        // Folder-panel toggle, standing in for the removed system sidebar
+        // toggle in the same leading slot. Regular-width iPad only (compact
+        // navigates folders as the stack root; macOS has a tiled sidebar).
+        //
+        // The app-level Settings gear used to sit beside it and does not any
+        // more: five occupants overflow this column's bar on iPadOS 27, and
+        // the system overflow they fold into never presents, which took
+        // Compose and Addresses out of reach entirely (#1626). The gear is
+        // the occupant that belongs least here now that the folder list is a
+        // floating panel — it is app-level chrome, not message-list chrome —
+        // so it moved onto that panel (`folderPanelOverlay`). Cmd+, still
+        // reaches Settings from anywhere (`CabalmailApp`'s `.appSettings`
+        // command group).
         #if os(iOS)
         .toolbar {
             if showsSettingsGear {
@@ -821,14 +848,6 @@ extension MailRootView {
                     } label: {
                         Image(systemName: "sidebar.leading")
                             .accessibilityLabel("Toggle folder list")
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        appState.requestSettings()
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .accessibilityLabel("Settings")
                     }
                 }
             }
