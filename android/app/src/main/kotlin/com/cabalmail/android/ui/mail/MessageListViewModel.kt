@@ -268,6 +268,10 @@ class MessageListViewModel(
                     is MailEvent.FlagChanged -> patchFlags(event.uids, event.flag, event.value)
                     is MailEvent.Removed -> removeFromWindow(event.uids)
                     is MailEvent.Reconcile -> refresh()
+                    // The folder SET changing says nothing about the messages
+                    // inside this one; the folder lists reload themselves
+                    // (FolderStateInvalidation).
+                    is MailEvent.FolderListChanged -> Unit
                 }
             }
         }
