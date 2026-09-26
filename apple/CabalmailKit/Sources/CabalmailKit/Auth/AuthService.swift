@@ -93,6 +93,11 @@ public actor CognitoAuthService: AuthService {
     private let transport: HTTPTransport
     private let secureStore: SecureStore
     private let clock: @Sendable () -> Date
+    /// Announces a refusal Cognito has made final, so the app can tear the
+    /// session down instead of every caller rendering the throw as text
+    /// (issue #1703). Optional because the memberwise construction tests use
+    /// has nobody listening.
+    private let sessionInvalidation: SessionInvalidationMonitor?
 
     /// Mid-sign-in MFA challenge state. Cognito hands back an opaque
     /// `Session` that `RespondToAuthChallenge` must echo; the username and
@@ -112,12 +117,14 @@ public actor CognitoAuthService: AuthService {
         configuration: Configuration,
         transport: HTTPTransport = URLSessionHTTPTransport(),
         secureStore: SecureStore,
-        clock: @Sendable @escaping () -> Date = { Date() }
+        clock: @Sendable @escaping () -> Date = { Date() },
+        sessionInvalidation: SessionInvalidationMonitor? = nil
     ) {
         self.configuration = configuration
         self.transport = transport
         self.secureStore = secureStore
         self.clock = clock
+        self.sessionInvalidation = sessionInvalidation
     }
 
     // MARK: - Sign-in flow
@@ -269,35 +276,6 @@ public actor CognitoAuthService: AuthService {
     }
 
     // MARK: - Internal
-
-    private func refresh(using tokens: AuthTokens) async throws -> AuthTokens {
-        guard let refreshToken = tokens.refreshToken else {
-            throw CabalmailError.authExpired
-        }
-        let body: [String: Any] = [
-            "AuthFlow": "REFRESH_TOKEN_AUTH",
-            "ClientId": configuration.cognito.clientId,
-            "AuthParameters": [
-                "REFRESH_TOKEN": refreshToken,
-            ],
-        ]
-        // A refresh Cognito refuses means the session is over, not that a
-        // credential was mistyped — nobody typed anything on this path.
-        let response = try await call("InitiateAuth", body: body, notAuthorized: .authExpired)
-        // REFRESH_TOKEN_AUTH omits the refresh token from the response — reuse
-        // the existing one so subsequent refreshes keep working.
-        var refreshed = try parseAuthResult(response)
-        if refreshed.refreshToken == nil {
-            refreshed = AuthTokens(
-                idToken: refreshed.idToken,
-                accessToken: refreshed.accessToken,
-                refreshToken: refreshToken,
-                tokenType: refreshed.tokenType,
-                expiresAt: refreshed.expiresAt
-            )
-        }
-        return refreshed
-    }
 
     private func persist(tokens: AuthTokens) throws {
         let data = try JSONEncoder().encode(tokens)
@@ -506,5 +484,55 @@ extension CognitoAuthService {
             text.removeLast()
         }
         return text
+    }
+}
+
+// MARK: - Token refresh
+
+/// Lives in an extension so the actor body stays under SwiftLint's
+/// `type_body_length` cap; same file, so the private stored properties above
+/// are still in reach.
+extension CognitoAuthService {
+    /// Wraps `performRefresh` so every way a refresh can end in `.authExpired`
+    /// — no refresh token stored, or Cognito refusing the one we have —
+    /// announces the session is over before the throw propagates. This is the
+    /// site that covers a request dying before it is ever sent, which is the
+    /// common case: `currentIdToken()` mints the token first (issue #1703).
+    private func refresh(using tokens: AuthTokens) async throws -> AuthTokens {
+        do {
+            return try await performRefresh(using: tokens)
+        } catch CabalmailError.authExpired {
+            sessionInvalidation?.sessionDidExpire()
+            throw CabalmailError.authExpired
+        }
+    }
+
+    private func performRefresh(using tokens: AuthTokens) async throws -> AuthTokens {
+        guard let refreshToken = tokens.refreshToken else {
+            throw CabalmailError.authExpired
+        }
+        let body: [String: Any] = [
+            "AuthFlow": "REFRESH_TOKEN_AUTH",
+            "ClientId": configuration.cognito.clientId,
+            "AuthParameters": [
+                "REFRESH_TOKEN": refreshToken,
+            ],
+        ]
+        // A refresh Cognito refuses means the session is over, not that a
+        // credential was mistyped — nobody typed anything on this path.
+        let response = try await call("InitiateAuth", body: body, notAuthorized: .authExpired)
+        // REFRESH_TOKEN_AUTH omits the refresh token from the response — reuse
+        // the existing one so subsequent refreshes keep working.
+        var refreshed = try parseAuthResult(response)
+        if refreshed.refreshToken == nil {
+            refreshed = AuthTokens(
+                idToken: refreshed.idToken,
+                accessToken: refreshed.accessToken,
+                refreshToken: refreshToken,
+                tokenType: refreshed.tokenType,
+                expiresAt: refreshed.expiresAt
+            )
+        }
+        return refreshed
     }
 }
