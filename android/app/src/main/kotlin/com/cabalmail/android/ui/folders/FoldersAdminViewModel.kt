@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.FolderStateInvalidation
+import com.cabalmail.android.MailEvent
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.FolderList
 import kotlinx.coroutines.async
@@ -38,6 +40,14 @@ class FoldersAdminViewModel(
 
     init {
         refresh()
+        // A folder emptied from the Mail tab leaves this screen's count — and
+        // so its delete affordance — wrong until the user pulls to refresh
+        // (#1734), so the count follows the same bus the message list does.
+        viewModelScope.launch {
+            container.mailEvents.events.collect { event ->
+                FolderStateInvalidation.staleCountFolder(event)?.let { reloadCount(it) }
+            }
+        }
     }
 
     fun refresh() {
@@ -77,6 +87,20 @@ class FoldersAdminViewModel(
         }
     }
 
+    /** Refetches one folder's count, leaving the rest of the map alone. */
+    private fun reloadCount(folder: String) {
+        viewModelScope.launch {
+            if (folder !in mutableState.value.folders.orEmpty()) {
+                return@launch
+            }
+            val count =
+                runCatching {
+                    container.requireApi().folderStatus(folder).messages
+                }.getOrNull() ?: return@launch
+            mutableState.update { it.copy(counts = it.counts + (folder to count)) }
+        }
+    }
+
     fun setSubscribed(
         folder: String,
         subscribed: Boolean,
@@ -86,6 +110,7 @@ class FoldersAdminViewModel(
             mutableState.update {
                 it.copy(subscribed = if (subscribed) it.subscribed + folder else it.subscribed - folder)
             }
+            container.mailEvents.emit(MailEvent.FolderListChanged(folder))
         }
     }
 
@@ -94,6 +119,7 @@ class FoldersAdminViewModel(
         mutate(folder, "Could not delete folder") { api ->
             apply(api.deleteFolder(folder))
             container.envelopeCache.invalidateFolder(folder)
+            container.mailEvents.emit(MailEvent.FolderListChanged(folder))
         }
     }
 
@@ -109,8 +135,20 @@ class FoldersAdminViewModel(
         mutableState.update { it.copy(creating = true, error = null) }
         viewModelScope.launch {
             try {
-                apply(container.requireApi().newFolder(trimmed, parent))
+                val before =
+                    mutableState.value.folders
+                        .orEmpty()
+                        .toSet()
+                val list = container.requireApi().newFolder(trimmed, parent)
+                apply(list)
                 mutableState.update { it.copy(creating = false) }
+                // The server composes the path from name and parent, so the
+                // row it added is the one the returned list has and we did not.
+                val created =
+                    list.folders
+                        .firstOrNull { it !in before }
+                        ?: trimmed
+                container.mailEvents.emit(MailEvent.FolderListChanged(created))
                 onCreated()
                 loadCounts()
             } catch (exception: Exception) {
