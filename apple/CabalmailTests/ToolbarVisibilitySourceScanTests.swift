@@ -34,6 +34,18 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         )
     }
 
+    func testTheClosedInspectorToggleRanksWithCompose() throws {
+        // Closed, `@` is still the only entry point to addresses on the wide
+        // layout, so it ranks with Compose rather than below it: at the list
+        // column's 300 pt floor the bar can seat two trailing items, and the
+        // pair that must survive is Compose and `@` (#1626).
+        let body = try Self.source("Cabalmail/Views/MailRootView.swift")
+        let ranked = "} else {\n"
+            + "                    ToolbarItem(placement: .primaryAction) { addressInspectorToggle }\n"
+            + "                        .keepsInBar()"
+        XCTAssertTrue(body.contains(ranked))
+    }
+
     func testTheHelperIsAvailabilityGuarded() throws {
         // `.high` does not exist before iOS 27 / macOS 26.1 and is
         // unavailable on visionOS; the helper must degrade to the item
