@@ -12,6 +12,10 @@ package com.cabalmail.android
  * Mail tab kept its old count on the Folders screen — which hides the delete
  * affordance entirely, since deleting is gated on the folder being empty.
  *
+ * Moving messages raises the same staleness twice over: the message list was
+ * the one mutator that announced nothing at all, and a move lands the
+ * messages somewhere, so the destination's count is wrong too.
+ *
  * Both screens now reload off [MailEventBus], and the rule for who reloads on
  * what lives here rather than in two `when` blocks that can drift apart. This
  * is deliberately narrower than "any mutation refetches everything": the
@@ -27,18 +31,21 @@ object FolderStateInvalidation {
     fun listIsStale(event: MailEvent): Boolean = event is MailEvent.FolderListChanged
 
     /**
-     * The folder whose message count [event] moved, or null if it moved none.
+     * The folders whose message count [event] moved; empty when it moved
+     * none. A move moves two of them — the folder the messages left and the
+     * one they landed in — and the destination is as wrong as the source
+     * until it is refetched.
      *
      * A count is not cosmetic on the Folders screen: it gates the delete
      * affordance, so a stale one leaves no way to delete the folder you just
      * emptied and nothing on screen saying why.
      */
-    fun staleCountFolder(event: MailEvent): String? =
+    fun staleCountFolders(event: MailEvent): Set<String> =
         when (event) {
-            is MailEvent.Removed -> event.folder
-            is MailEvent.Reconcile -> event.folder
+            is MailEvent.Removed -> setOfNotNull(event.folder, event.destination)
+            is MailEvent.Reconcile -> setOf(event.folder)
             // A flag write moves unread, not the message count the Folders
             // screen shows; the folder set is the other function's business.
-            is MailEvent.FlagChanged, is MailEvent.FolderListChanged -> null
+            is MailEvent.FlagChanged, is MailEvent.FolderListChanged -> emptySet()
         }
 }

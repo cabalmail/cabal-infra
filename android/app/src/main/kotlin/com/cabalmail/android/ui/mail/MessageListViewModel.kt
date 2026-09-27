@@ -258,7 +258,10 @@ class MessageListViewModel(
             )
         }
         refresh()
-        // Mirror reader-side changes (flags, disposals) into the window.
+        // Mirror changes made elsewhere (flags, disposals) into the window.
+        // Removals this screen started are already applied to it, and they
+        // are the ones still in [removing], so subtracting that set keeps the
+        // counts from being decremented twice for the same message.
         viewModelScope.launch {
             container.mailEvents.events.collect { event ->
                 if (event.folder != folder) {
@@ -266,7 +269,7 @@ class MessageListViewModel(
                 }
                 when (event) {
                     is MailEvent.FlagChanged -> patchFlags(event.uids, event.flag, event.value)
-                    is MailEvent.Removed -> removeFromWindow(event.uids)
+                    is MailEvent.Removed -> removeFromWindow(event.uids - removing)
                     is MailEvent.Reconcile -> refresh()
                     // The folder SET changing says nothing about the messages
                     // inside this one; the folder lists reload themselves
@@ -576,6 +579,11 @@ class MessageListViewModel(
         val fresh = claimForRemoval(uids) ?: return
         removeFromWindow(fresh)
         container.mailEvents.beginWrite()
+        // The list applied the move to its own rows, but the Folders screen's
+        // counts — and so its delete affordance — move too, and this screen
+        // used to announce nothing at all (#1734). Emitted after beginWrite,
+        // so a count refetch answering it waits for the MOVE to land.
+        container.mailEvents.emit(MailEvent.Removed(folder, fresh, destination))
         viewModelScope.launch {
             try {
                 container.requireApi().moveMessages(folder, destination, fresh.toList(), markSeen = markSeen)
@@ -613,6 +621,7 @@ class MessageListViewModel(
         val fresh = claimForRemoval(uids) ?: return
         removeFromWindow(fresh)
         container.mailEvents.beginWrite()
+        container.mailEvents.emit(MailEvent.Removed(folder, fresh))
         viewModelScope.launch {
             try {
                 container.requireApi().purgeMessages(folder, fresh.toList())
@@ -714,6 +723,9 @@ class MessageListViewModel(
     }
 
     private fun removeFromWindow(uids: Set<Long>) {
+        if (uids.isEmpty()) {
+            return
+        }
         // Bands no longer align exactly after a removal; drop the request
         // markers so any gap re-requests on the next scroll past it.
         requestedBands.clear()
