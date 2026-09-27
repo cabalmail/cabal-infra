@@ -15,6 +15,9 @@
 #   AWS_REGION      required by the aws CLI
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR source=spool-drain-lib.sh
+. "$(dirname "$0")/spool-drain-lib.sh"
+
 SPOOL_DIR=/var/spool/cabal-push
 POLL_SECONDS=2
 # A wake signal loses its point long before the queue's 1h retention; shed
@@ -30,19 +33,13 @@ if [ -z "${PUSH_QUEUE_URL:-}" ]; then
   exec sleep infinity
 fi
 
-mkdir -p "$SPOOL_DIR"
-chmod 1777 "$SPOOL_DIR"
+drain_init_spool "$SPOOL_DIR"
 
 send_one() {
   local file="$1"
 
   # Age out stale signals (drain was down / SQS unreachable for a long time).
-  local now file_mtime
-  now=$(date +%s)
-  file_mtime=$(stat -c %Y "$file" 2>/dev/null || echo 0)
-  if [ $((now - file_mtime)) -gt "$MAX_AGE_SECONDS" ]; then
-    echo "[push-spool-drain] dropping stale signal $(basename "$file")"
-    rm -f "$file"
+  if drain_shed_if_stale push-spool-drain "$file" "$MAX_AGE_SECONDS" signal; then
     return 0
   fi
 
@@ -80,10 +77,4 @@ send_one() {
 }
 
 echo "[push-spool-drain] Draining $SPOOL_DIR to $PUSH_QUEUE_URL"
-while true; do
-  for file in "$SPOOL_DIR"/sig.*; do
-    [ -e "$file" ] || continue
-    send_one "$file" || break
-  done
-  sleep "$POLL_SECONDS"
-done
+drain_poll_forever "$SPOOL_DIR" 'sig.*' "$POLL_SECONDS" send_one
