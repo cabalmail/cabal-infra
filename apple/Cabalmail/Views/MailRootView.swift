@@ -818,13 +818,21 @@ extension MailRootView {
                 // must keep: on an iPhone Duo the column beside it is narrow
                 // enough that Compose and `@` both fold into the system
                 // overflow, which is inert on the 27.1 beta, and the
-                // inspector then cannot be closed (#1670). Closed, it ranks
-                // like any other item.
+                // inspector then cannot be closed (#1670).
+                //
+                // Closed, it still ranks with Compose rather than below it:
+                // this button is the *only* entry point to addresses on this
+                // layout (`SettingsSheet`'s own doc records the move out of
+                // the sheet), so folding it away takes the feature with it
+                // (#1626). What the overflow may take is the More menu,
+                // whose Mark All as Read is also on the folder list's context
+                // menu and on ⌥⌘T.
                 if addressInspectorPresented {
                     ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
                         .keepsInBarFirst()
                 } else {
                     ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
+                        .keepsInBar()
                 }
             }
         }
