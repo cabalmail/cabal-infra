@@ -334,10 +334,15 @@ private fun ReadingSettings(
         label = { it.label() },
         onSelect = { value -> onUpdate { it.copy(defaultSort = value) } },
     )
-    ToggleRow(
-        title = stringResource(R.string.sort_descending),
-        checked = preferences.defaultSortDescending,
-        onChange = { value -> onUpdate { it.copy(defaultSortDescending = value) } },
+    // The direction, as a pair rather than a switch: the row above it sorts by
+    // sender and by subject as well as by date, and a switch labelled "Newest
+    // first" named nothing on two of those four (#1730).
+    EnumRow(
+        title = stringResource(R.string.sort_direction),
+        value = SortDirection.of(preferences.defaultSortDescending),
+        options = SortDirection.entries,
+        label = { it.label() },
+        onSelect = { value -> onUpdate { it.copy(defaultSortDescending = value.descending) } },
     )
     SettingsSectionHeader(stringResource(R.string.settings_section_feed_items))
     EnumRow(

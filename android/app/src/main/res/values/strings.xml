@@ -36,7 +36,9 @@
     <string name="sort_date_sent">Sort by date sent</string>
     <string name="sort_from">Sort by sender</string>
     <string name="sort_subject">Sort by subject</string>
-    <string name="sort_descending">Newest first</string>
+    <string name="sort_direction">Sort order</string>
+    <string name="opt_sort_ascending">Ascending</string>
+    <string name="opt_sort_descending">Descending</string>
     <string name="filter_all">All</string>
     <string name="filter_unread">Unread</string>
     <string name="filter_flagged">Flagged</string>
