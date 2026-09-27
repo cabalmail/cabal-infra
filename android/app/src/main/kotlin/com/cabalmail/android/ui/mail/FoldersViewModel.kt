@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.FolderStateInvalidation
 import com.cabalmail.android.MailEvent
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.api.ApiClient
@@ -52,6 +53,16 @@ class FoldersViewModel(
 
     init {
         refresh()
+        // The Folders screen mutates the same folder set this rail draws, and
+        // its own poll is 30-60 s away (#1734): a folder the user just created
+        // or deleted on this device reaches the rail on the mutation instead.
+        viewModelScope.launch {
+            container.mailEvents.events.collect { event ->
+                if (FolderStateInvalidation.listIsStale(event)) {
+                    poll()
+                }
+            }
+        }
     }
 
     fun refresh() = refresh(quiet = false)

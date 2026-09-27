@@ -36,6 +36,15 @@ sealed interface MailEvent {
     data class Reconcile(
         override val folder: String,
     ) : MailEvent
+
+    /**
+     * The set of folders changed: [folder] was created, deleted, or had its
+     * subscription flipped. Screens listing FOLDERS refetch; screens listing
+     * the messages inside one are unaffected ([FolderStateInvalidation]).
+     */
+    data class FolderListChanged(
+        override val folder: String,
+    ) : MailEvent
 }
 
 class MailEventBus {

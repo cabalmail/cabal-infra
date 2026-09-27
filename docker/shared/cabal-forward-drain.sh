@@ -18,6 +18,9 @@
 # there is no root-owner exception.
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR source=spool-drain-lib.sh
+. "$(dirname "$0")/spool-drain-lib.sh"
+
 SPOOL_DIR=/var/spool/cabal-forward
 POLL_SECONDS=2
 # Submission failures retry each pass until this age, then shed with a
@@ -29,18 +32,12 @@ ADDR_RE='^[^[:space:]@-][^[:space:]@]*@[^[:space:]@]+\.[^[:space:]@]+$'
 USER_RE='^[A-Za-z0-9._-]+$'
 
 echo "[cabal-forward-drain] Starting..."
-mkdir -p "$SPOOL_DIR"
-chmod 1777 "$SPOOL_DIR"
+drain_init_spool "$SPOOL_DIR"
 
 send_one() {
   local file="$1"
 
-  local now file_mtime
-  now=$(date +%s)
-  file_mtime=$(stat -c %Y "$file" 2>/dev/null || echo 0)
-  if [ $((now - file_mtime)) -gt "$MAX_AGE_SECONDS" ]; then
-    echo "[cabal-forward-drain] dropping stale forward $(basename "$file")"
-    rm -f "$file"
+  if drain_shed_if_stale cabal-forward-drain "$file" "$MAX_AGE_SECONDS" forward; then
     return 0
   fi
 
@@ -94,10 +91,4 @@ send_one() {
 }
 
 echo "[cabal-forward-drain] Draining $SPOOL_DIR"
-while true; do
-  for file in "$SPOOL_DIR"/fwd.*; do
-    [ -e "$file" ] || continue
-    send_one "$file" || break
-  done
-  sleep "$POLL_SECONDS"
-done
+drain_poll_forever "$SPOOL_DIR" 'fwd.*' "$POLL_SECONDS" send_one

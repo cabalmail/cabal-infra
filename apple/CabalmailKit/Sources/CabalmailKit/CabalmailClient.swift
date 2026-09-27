@@ -98,6 +98,12 @@ public actor CabalmailClient {
     /// back a client wired against the real Cognito, API Gateway, and mail
     /// tiers. Overrides let tests supply fakes for any of the pieces.
     ///
+    /// `sessionInvalidation` is the caller's — the app owns one monitor for
+    /// the whole process and hands the same one to every session it opens
+    /// (issue #1703), so an expiry announced by a client that is about to be
+    /// dropped still reaches the observer. Defaults to nil: a client nobody
+    /// is observing behaves exactly as it did before.
+    ///
     /// As of issue #371 the IMAP and SMTP work happens behind the Lambda
     /// API rather than via direct mail-protocol sockets — `imapClient` is
     /// an `ApiBackedImapClient`, and `send(_:)` posts to `/send` instead
@@ -109,17 +115,20 @@ public actor CabalmailClient {
         secureStore: SecureStore,
         httpTransport: HTTPTransport = URLSessionHTTPTransport(),
         cacheDirectory: URL,
-        bodyCacheCapacityBytes: UInt64 = 200 * 1024 * 1024
+        bodyCacheCapacityBytes: UInt64 = 200 * 1024 * 1024,
+        sessionInvalidation: SessionInvalidationMonitor? = nil
     ) throws -> CabalmailClient {
         let auth = CognitoAuthService(
             configuration: configuration,
             transport: httpTransport,
-            secureStore: secureStore
+            secureStore: secureStore,
+            sessionInvalidation: sessionInvalidation
         )
         let api = URLSessionApiClient(
             configuration: configuration,
             authService: auth,
-            transport: httpTransport
+            transport: httpTransport,
+            sessionInvalidation: sessionInvalidation
         )
         let imap = ApiBackedImapClient(api: api, host: configuration.imapHost)
         let smtp = LiveSmtpClient(

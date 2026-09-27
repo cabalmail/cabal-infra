@@ -179,4 +179,96 @@ final class ListColumnWidthTests: XCTestCase {
             min(window * ListColumnWidth.maximumWindowShare,
                 window - SidebarColumnWidth.ideal - ListColumnWidth.readerFloor))
     }
+
+    // MARK: - Issue #1716
+
+    // Where the column is PINNED rather than bounded (regular-width iPad and
+    // visionOS), the old ceiling was `splitWidth - readerFloor`: pinned width
+    // plus the reader's declared floor summed to exactly the window. UIKit
+    // resolves that fit at launch but drops the primary column when it
+    // re-resolves it during a resize, which left the reported window holding
+    // only the reader's placeholder — zero controls on screen, the folder panel
+    // parked at negative x, and no way back from inside the window.
+    //
+    // The band is not a pair of magic widths. It is every width where the clamp
+    // is active, i.e. `[regular-width floor, readerFloor + stored)` — which is
+    // why the tester's sweep broke at 700 and 725 but not at 749 or 834, where
+    // the stored width sat under the cap and the reader kept 11 and 96pt.
+
+    /// Widths the sweep drove, and the stored column width solved out of it
+    /// (700 → 340, 714 → 354 clamped; 834 → 378 unclamped, so 378 is stored).
+    private let storedWidthBehindTheSweep: CGFloat = 378
+    private let brokenSweepWidths: [CGFloat] = [700, 725]
+    /// Slack measured surviving the same resize transition that 0pt failed: the
+    /// sweep's 749pt row, where 378 sat under the cap and the reader got 11pt.
+    private let measuredSurvivingSlack: CGFloat = 11
+
+    /// What the column is actually pinned to: the stored width clamped to the
+    /// range, exactly as `MailRootView.listColumnWidth` computes it.
+    private func pinnedWidth(stored: CGFloat, inWindowOfWidth window: CGFloat) -> CGFloat {
+        let bounds = ListColumnWidth.pinnedBounds(splitWidth: window)
+        return min(max(stored, bounds.minimum), bounds.maximum)
+    }
+
+    // The invariant the fix buys, across every regular width and every stored
+    // width a user could have dragged to: the pinned column and the reader's
+    // floor never add up to the whole window.
+    func testThePinnedColumnNeverLeavesTheReaderExactlyItsFloor() {
+        for window in stride(from: CGFloat(600), through: 1400, by: 1) {
+            for stored in [CGFloat(220), 300, 360, storedWidthBehindTheSweep, 420, 640] {
+                let width = pinnedWidth(stored: stored, inWindowOfWidth: window)
+                XCTAssertGreaterThanOrEqual(
+                    window - width - ListColumnWidth.readerFloor,
+                    ListColumnWidth.reservedSlack,
+                    "a \(window)pt window with \(stored)pt stored pins an exact fit"
+                )
+            }
+        }
+    }
+
+    // The two widths the tester reproduced it at, held against the slack that
+    // was measured surviving rather than against the constant alone.
+    func testTheReproducedWidthsLeaveTheReaderMoreThanTheMeasuredSlack() {
+        for window in brokenSweepWidths {
+            let width = pinnedWidth(stored: storedWidthBehindTheSweep,
+                                    inWindowOfWidth: window)
+            XCTAssertGreaterThanOrEqual(
+                window - width - ListColumnWidth.readerFloor,
+                measuredSurvivingSlack,
+                "\(window)pt still resolves as tightly as the widths that broke"
+            )
+            XCTAssertLessThan(
+                width, window - ListColumnWidth.readerFloor,
+                "\(window)pt still pins the column to the old exact-fit ceiling"
+            )
+        }
+    }
+
+    // A window too narrow to seat `minimum` alongside the reader's floor and the
+    // slack takes the width from the list — the same call #984 made. A floor
+    // left above the ceiling would pin the column wider than the window can
+    // seat, which over-subscribes the split rather than merely filling it.
+    func testTheFloorFollowsTheCeilingDownInACrampedWindow() {
+        for window in stride(from: CGFloat(600), through: 1400, by: 1) {
+            let bounds = ListColumnWidth.pinnedBounds(splitWidth: window)
+            XCTAssertLessThanOrEqual(bounds.minimum, bounds.maximum,
+                                     "empty range in a \(window)pt window")
+            XCTAssertGreaterThanOrEqual(bounds.minimum, ListColumnWidth.squeezedMinimum,
+                                        "squeezed past the readable floor at \(window)pt")
+        }
+        let cramped = ListColumnWidth.pinnedBounds(splitWidth: 620)
+        XCTAssertLessThan(cramped.minimum, ListColumnWidth.minimum)
+    }
+
+    // The squeeze is for cramped windows only: a window with room for all of it
+    // still seats the full minimum, and a user's dragged width is still honoured
+    // wherever it fits.
+    func testARoomyWindowKeepsTheFullMinimumAndTheStoredWidth() {
+        let bounds = ListColumnWidth.pinnedBounds(splitWidth: 834)
+        XCTAssertEqual(bounds.minimum, ListColumnWidth.minimum)
+        XCTAssertEqual(
+            pinnedWidth(stored: storedWidthBehindTheSweep, inWindowOfWidth: 834),
+            storedWidthBehindTheSweep
+        )
+    }
 }

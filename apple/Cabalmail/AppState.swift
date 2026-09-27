@@ -31,6 +31,25 @@ final class AppState {
 
     var status: Status = .signedOut
 
+    /// Why the app is showing the sign-in form when the user did not ask for
+    /// it. `nil` after a deliberate Sign Out (and at a first launch), set when
+    /// a session is torn down under the user — on the launch path by
+    /// `restore()`'s expiry branch, and while the app is running by
+    /// `handleSessionExpiry()`. `SignInView` renders it so a blank form never
+    /// leaves the user guessing why they are back here (issue #1703).
+    var signedOutReason: SignedOutReason?
+
+    /// Announced by the Kit when this install's credentials stop working
+    /// (issue #1703). Process-scoped rather than per-session: it is handed to
+    /// every client `make(...)` builds, so a signal from a client that is
+    /// about to be dropped still reaches the observer.
+    @ObservationIgnored let sessionInvalidation = SessionInvalidationMonitor()
+
+    /// Observes `sessionInvalidation` for the life of a session. One observer
+    /// is what covers every call site: each view model keeps rendering its own
+    /// error text, and the teardown happens here exactly once.
+    @ObservationIgnored var sessionExpiryTask: Task<Void, Never>?
+
     /// Inline error for the second-factor form (wrong code, expired
     /// challenge). Kept separate from `Status.error` so a mistyped code
     /// doesn't bounce the user back to the password form.
@@ -308,13 +327,16 @@ final class AppState {
         status = .signingIn
         mfaError = nil
         pendingMfa = nil
+        // The explanation has been read by the time the user is typing.
+        signedOutReason = nil
         do {
             let configuration = try await ConfigLoader.load(controlDomain: controlDomain)
             let cacheDirectory = try Self.makeCacheDirectory()
             let newClient = try CabalmailClient.make(
                 configuration: configuration,
                 secureStore: Self.makeSecureStore(),
-                cacheDirectory: cacheDirectory
+                cacheDirectory: cacheDirectory,
+                sessionInvalidation: sessionInvalidation
             )
             let result = try await newClient.authService.signIn(username: username, password: password)
             if case .mfaCodeRequired(let method) = result {
@@ -405,7 +427,8 @@ final class AppState {
             let newClient = try CabalmailClient.make(
                 configuration: configuration,
                 secureStore: secureStore,
-                cacheDirectory: cacheDirectory
+                cacheDirectory: cacheDirectory,
+                sessionInvalidation: sessionInvalidation
             )
             // Touching `currentIdToken()` validates the keychain contents:
             // a fresh ID token returns cached; an expired one triggers a
@@ -424,6 +447,7 @@ final class AppState {
                 try? secureStore.remove(SecureStoreKey.authTokens)
                 try? secureStore.remove(SecureStoreKey.imapUsername)
                 try? secureStore.remove(SecureStoreKey.imapPassword)
+                signedOutReason = .sessionExpired
                 status = .signedOut
             case .network, .transport, .timeout, .cancelled, .notConfigured:
                 // Transient — leave the keychain alone. The sign-in form
@@ -657,6 +681,11 @@ extension AppState {
     func signOut() async {
         stopInboxBadgePolling()
         stopFeedRefreshPolling()
+        sessionExpiryTask?.cancel()
+        sessionExpiryTask = nil
+        // A deliberate sign-out is its own explanation; `handleSessionExpiry`
+        // re-sets this after calling through here.
+        signedOutReason = nil
         guard let client else { status = .signedOut; return }
         #if os(iOS) || os(macOS)
         // Deregister the APNs token while the Cognito session still works —
@@ -708,6 +737,7 @@ extension AppState {
             // values land a moment later.
             Task { await coordinator.start() }
         }
+        observeSessionInvalidation()
         self.status = .signedIn
         startInboxBadgePolling()
         requestContactsAccessIfNeeded()
@@ -735,40 +765,6 @@ extension AppState {
         // before the user opens it; then every fifteen minutes.
         startFeedRefreshPolling()
         await pushSessionToWatch(client: newClient, username: username)
-    }
-}
-
-// MARK: - Client construction helpers
-
-extension AppState {
-    /// The keychain store the session client persists Cognito tokens
-    /// through. On iOS and macOS it's wrapped in `PushMirroringSecureStore`
-    /// so every token write — sign-in and each silent refresh — also lands
-    /// in the shared containers the Notification Service Extension reads
-    /// (see `PushEnrichmentStore`). Static (and non-private) so the push
-    /// action-handler's cold-launch bootstrap builds an identical stack.
-    static func makeSecureStore() -> SecureStore {
-        #if os(iOS) || os(macOS)
-        return PushMirroringSecureStore(base: KeychainSecureStore())
-        #else
-        return KeychainSecureStore()
-        #endif
-    }
-
-    /// Returns the application-support cache directory for this app, creating
-    /// it if needed. Per-folder subdirectories are created by the cache
-    /// actors themselves. Static for the same bootstrap reason as
-    /// `makeSecureStore`.
-    static func makeCacheDirectory() throws -> URL {
-        let base = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let directory = base.appendingPathComponent("Cabalmail", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
     }
 }
 
