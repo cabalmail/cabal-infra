@@ -57,7 +57,9 @@ final class FolderSwitchPlacementTests: XCTestCase {
     func testTheTouchBranchDrawsBothHosts() throws {
         let body = try Self.source("Cabalmail/Views/MessageListView+FolderSwitch.swift")
         XCTAssertTrue(body.contains("switch folderSwitchHost {"))
-        XCTAssertTrue(body.contains("case .titleMenu:\n                content.toolbarTitleMenu { folderSwitchMenuItems }"))
+        let titleMenu = "case .titleMenu:\n"
+            + "                content.toolbarTitleMenu { folderSwitchMenuItems }"
+        XCTAssertTrue(body.contains(titleMenu))
         let columnHeader = try Self.slice(
             body, from: "case .columnHeader:", to: "            }\n            #endif"
         )
@@ -103,7 +105,8 @@ final class FolderSwitchPlacementTests: XCTestCase {
     // MARK: - Corpus
 
     private static func slice(_ body: String, from start: String, to end: String) throws -> String {
-        guard let lower = body.range(of: start), let upper = body.range(of: end, range: lower.upperBound..<body.endIndex) else {
+        guard let lower = body.range(of: start),
+              let upper = body.range(of: end, range: lower.upperBound..<body.endIndex) else {
             XCTFail("the landmarks this scan reads are gone")
             return ""
         }
