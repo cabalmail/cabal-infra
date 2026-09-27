@@ -328,7 +328,7 @@ struct MailRootView: View {
             // reader the width of the whole window: on iPhone Duo's 951 pt
             // inner display a list wider than 410 pt did that, so the
             // crease-pinned 50/50 split could never tile (#1679). The floor
-            // is the one `listColumnMaxWidth` already keeps for the reader.
+            // is the one `listColumnBounds` already keeps for the reader.
             detailColumn
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
             #else
@@ -368,7 +368,7 @@ struct MailRootView: View {
             isWideSidebar ? (selectedFeedScope != nil && !isSearching ? .feeds : .mail) : nil
         )
         // Track the split view's overall width so the list column's max can be
-        // clamped to leave the reading pane a floor (see `listColumnMaxWidth`).
+        // clamped to leave the reading pane a floor (see `listColumnBounds`).
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { newWidth in
@@ -744,16 +744,20 @@ extension MailRootView {
         #endif
     }
 
-    /// Upper bound for the list column: whatever leaves the reading pane its
-    /// floor. Falls back to a generous cap until the first geometry read lands.
-    private var listColumnMaxWidth: CGFloat {
-        guard splitWidth > 0 else { return 640 }
-        return max(listColumnMinWidth, splitWidth - readerColumnMinWidth)
+    /// Clamp range for the pinned list column: a ceiling that leaves the
+    /// reading pane its floor and a little more (`ListColumnWidth.pinnedBounds`
+    /// — an exact fit is what #1716 was), and a floor that follows it down in a
+    /// window too narrow to seat both. Falls back to a generous cap until the
+    /// first geometry read lands.
+    private var listColumnBounds: (minimum: CGFloat, maximum: CGFloat) {
+        guard splitWidth > 0 else { return (listColumnMinWidth, 640) }
+        return ListColumnWidth.pinnedBounds(splitWidth: splitWidth)
     }
 
     /// The persisted list-column width, clamped to the current valid range.
     private var listColumnWidth: CGFloat {
-        min(max(CGFloat(listColumnWidthStored), listColumnMinWidth), listColumnMaxWidth)
+        let bounds = listColumnBounds
+        return min(max(CGFloat(listColumnWidthStored), bounds.minimum), bounds.maximum)
     }
 
     /// Binding the drag handle writes: clamps on read, persists on write.
@@ -900,8 +904,8 @@ extension MailRootView {
                 .overlay(alignment: .trailing) {
                     ColumnResizeHandle(
                         width: listColumnWidthBinding,
-                        minWidth: listColumnMinWidth,
-                        maxWidth: listColumnMaxWidth
+                        minWidth: listColumnBounds.minimum,
+                        maxWidth: listColumnBounds.maximum
                     )
                 }
         } else {
