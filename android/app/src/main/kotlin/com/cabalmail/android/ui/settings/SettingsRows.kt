@@ -253,6 +253,16 @@ internal fun DefaultSort.label(): String =
     )
 
 @Composable
+internal fun SortDirection.label(): String = stringResource(labelRes())
+
+/** Shared with the message list's sort menu, so the two surfaces cannot drift. */
+internal fun SortDirection.labelRes(): Int =
+    when (this) {
+        SortDirection.ASCENDING -> R.string.opt_sort_ascending
+        SortDirection.DESCENDING -> R.string.opt_sort_descending
+    }
+
+@Composable
 internal fun MailSwipeAction.label(): String =
     stringResource(
         when (this) {
