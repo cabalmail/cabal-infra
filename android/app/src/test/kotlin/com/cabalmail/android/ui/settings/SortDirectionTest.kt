@@ -66,10 +66,12 @@ class SortDirectionTest {
      */
     @Test
     fun `only the feed order option is named for dates`() {
-        val named = Regex("""<string name="([^"]+)">Newest first</string>""")
-            .findAll(strings)
-            .map { it.groupValues[1] }
-            .toList()
+        val pattern = Regex("""<string name="([^"]+)">Newest first</string>""")
+        val named =
+            pattern
+                .findAll(strings)
+                .map { it.groupValues[1] }
+                .toList()
         assertEquals(listOf("feed_order_newest_first"), named)
     }
 
