@@ -58,10 +58,66 @@ extension MessageListView {
                     }
                 }
             #else
-            content.toolbarTitleMenu { folderSwitchMenuItems }
+            switch folderSwitchHost {
+            case .titleMenu:
+                content.toolbarTitleMenu { folderSwitchMenuItems }
+            case .columnHeader:
+                // The column-scoped bar has no width to spare for a title,
+                // menu or not, and what it folds away it hides for good
+                // (`FolderSwitchPlacement`, #1626). So the switch is drawn in
+                // the column instead and the bar's title goes with it: the
+                // header is the folder name, so a title above it would be the
+                // same redundancy the Mac removed its own title for.
+                VStack(spacing: 0) {
+                    folderSwitchHeaderMenu
+                    content
+                }
+                .toolbar(removing: .title)
+            }
             #endif
         }
     }
+
+    #if !os(macOS)
+    /// Where the switch is drawn on this layout (`FolderSwitchPlacement`).
+    /// Reads the same `showsSettingsGear` flag `MailRootView` does, and for
+    /// the same reason: the message list is a narrow split column and reports
+    /// a compact size class even on a regular-width iPad.
+    var folderSwitchHost: FolderSwitchHost {
+        FolderSwitchPlacement.host(
+            isWideSidebar: showsSettingsGear,
+            columnScopedToolbar: GlobalSearchFieldPlacement.platformColumnScopedToolbar
+        )
+    }
+
+    /// iPadOS: the folder name as a menu in a header row inside the column,
+    /// above the list and below the global search field that shares this
+    /// header. Same bold name and chevron as the Mac's toolbar menu, and the
+    /// same identifier, so one driver reads both.
+    @ViewBuilder
+    var folderSwitchHeaderMenu: some View {
+        Menu {
+            folderSwitchMenuItems
+        } label: {
+            HStack(spacing: 4) {
+                Text(folder.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Folder, \(folder.name)")
+        .accessibilityHint("Switch folder")
+        .accessibilityIdentifier("list.folderSwitch")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal)
+        .padding(.vertical, 4)
+    }
+    #endif
 
     #if os(macOS)
     /// macOS: the folder name, bold like the toolbar title it stands in

@@ -6,6 +6,14 @@ import CabalmailKit
 // so `.onChange` fires even when the same logical payload (UID, flag,
 // folder) recurs after a folder switch or UIDVALIDITY reset.
 
+/// Why the app is showing the sign-in form when the user did not ask for it.
+/// A deliberate Sign Out leaves `AppState.signedOutReason` nil and the form
+/// blank; an expiry sets this, and the form explains itself (issue #1703).
+/// Promoted out of `AppState` alongside `Toast`, for the same nesting reason.
+enum SignedOutReason: Sendable, Equatable {
+    case sessionExpired
+}
+
 /// Ephemeral banner message. Promoted out of `AppState` so the nested
 /// `Kind` enum stays at a single level of nesting (SwiftLint's cap).
 struct Toast: Equatable, Sendable {

@@ -15,15 +15,20 @@ public actor URLSessionApiClient: ApiClient {
     let configuration: Configuration
     let authService: AuthService
     let transport: HTTPTransport
+    /// Announces the second 401 below as an ended session (issue #1703).
+    /// Optional because tests construct the client without a listener.
+    let sessionInvalidation: SessionInvalidationMonitor?
 
     public init(
         configuration: Configuration,
         authService: AuthService,
-        transport: HTTPTransport = URLSessionHTTPTransport()
+        transport: HTTPTransport = URLSessionHTTPTransport(),
+        sessionInvalidation: SessionInvalidationMonitor? = nil
     ) {
         self.configuration = configuration
         self.authService = authService
         self.transport = transport
+        self.sessionInvalidation = sessionInvalidation
     }
 }
 
@@ -284,6 +289,10 @@ extension URLSessionApiClient {
         replayed.setValue(refreshed, forHTTPHeaderField: "Authorization")
         let (retryData, retryResponse) = try await transport.perform(replayed)
         if retryResponse.statusCode == 401 {
+            // The server rejected a token we had just refreshed: the session
+            // is over, not stale. Announce before throwing so the app tears
+            // it down once rather than the caller printing the error.
+            sessionInvalidation?.sessionDidExpire()
             throw CabalmailError.authExpired
         }
         guard expectedStatuses.contains(retryResponse.statusCode) else {

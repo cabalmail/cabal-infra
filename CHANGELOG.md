@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.1] - 2026-09-27
+
+### Fixed
+- Android: **Folder counts after moving messages.** Moving, trashing or
+  purging messages in the Mail tab now updates the affected folders' message
+  counts on the Folders tab straight away — both the folder the messages left
+  and the one they landed in — instead of leaving them wrong until a
+  pull-to-refresh. A folder you have just emptied therefore offers its delete
+  action right away, rather than silently hiding it.
+- Android: **Folder changes show up right away.** A folder created or
+  deleted in the Folders tab reached the Mail tab's folder list only when
+  that tab's own poll came round up to a minute later — long enough to tap
+  a folder that had already been deleted and get a server error — and a
+  folder emptied in the Mail tab kept its old count in the Folders tab,
+  which hid the delete button, since deleting needs an empty folder. Each
+  list now reloads as soon as the other changes something.
+- Android: **Sort order named as a direction.** The mail sort direction was a
+  switch labelled "Newest first", on a setting that also sorts by sender and by
+  subject — where the word described nothing — and it reused the string the
+  feed list's Order menu means literally. Settings now offers Ascending /
+  Descending beside the sort field, and the message list's sort menu marks the
+  direction the same way it marks the field.
+- Apple: **A session that expires while the app is running now signs you
+  out.** The client kept serving cached mail and Settings ▸ Account still
+  read "Signed in" — only a relaunch ever noticed. The Kit now announces an
+  expiry from the two places it is discovered (a refresh Cognito refuses, a
+  401 that survives one), the app tears the session down once on that signal,
+  and the sign-in form says why you are looking at it.
+- Apple: **Compose and Addresses are reachable again on iPad.** A fifth
+  occupant overflowed the message-list column's toolbar on iPadOS 27 and
+  folded those two into a system overflow button that never opens — with the
+  addresses inspector showing, that also hid the only control that closes it.
+  Settings has moved to the floating folder panel; Cmd+, still opens it from
+  anywhere.
+- Apple: **iPad folder switch moved into the message list.** The folder name is
+  now a menu in the list column's own header, next to search, instead of the
+  navigation bar's title menu. The column-scoped bar it left has no width to
+  spare: at the column's narrowest setting it was folding Addresses and the
+  More menu into a system overflow that never opens on iPadOS, which put both
+  out of reach. Addresses now also ranks with New Message for the width that is
+  left, so the only item the overflow can take is the More menu, whose Mark All
+  as Read is also on the folder list's menu and on Option-Command-T. macOS,
+  visionOS and iPhone keep the affordances they had.
+- Apple: **Resizing an iPad window no longer strands it with no controls.**
+  Dragging a window into a narrow regular width could leave it holding only
+  the reader's "No message selected" placeholder — no message list, no
+  navigation bar, nothing to tap — until it was resized wider or relaunched.
+  The pinned list column's ceiling left the reading pane exactly its declared
+  floor, so the two constraints summed to the whole window and the resize had
+  no room to resolve; it now keeps a margin beyond that floor, and gives the
+  list ground in a window too narrow to seat both.
+
 ## [1.22.0] - 2026-09-25
 
 ### Added

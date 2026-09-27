@@ -328,7 +328,7 @@ struct MailRootView: View {
             // reader the width of the whole window: on iPhone Duo's 951 pt
             // inner display a list wider than 410 pt did that, so the
             // crease-pinned 50/50 split could never tile (#1679). The floor
-            // is the one `listColumnMaxWidth` already keeps for the reader.
+            // is the one `listColumnBounds` already keeps for the reader.
             detailColumn
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
             #else
@@ -368,7 +368,7 @@ struct MailRootView: View {
             isWideSidebar ? (selectedFeedScope != nil && !isSearching ? .feeds : .mail) : nil
         )
         // Track the split view's overall width so the list column's max can be
-        // clamped to leave the reading pane a floor (see `listColumnMaxWidth`).
+        // clamped to leave the reading pane a floor (see `listColumnBounds`).
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { newWidth in
@@ -689,7 +689,26 @@ extension MailRootView {
             // (the Cabalmail mark) and a navigation title, which need a
             // navigation container now that the view no longer lives in the
             // split's sidebar column.
-            NavigationStack { sidebar }
+            NavigationStack {
+                sidebar
+                    // Settings, evicted from the message-list column's bar
+                    // where a fifth occupant overflowed it on iPadOS 27
+                    // (#1626). This panel is the iPad's app-level chrome —
+                    // the analogue of macOS's Settings scene and compact
+                    // iPhone's Settings tab — and it has a bar of its own
+                    // with one occupant.
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                appState.requestSettings()
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .accessibilityLabel("Settings")
+                            }
+                            .accessibilityIdentifier("folderPanel.settings")
+                        }
+                    }
+            }
                 .frame(width: folderPanelWidth)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .shadow(color: .black.opacity(0.25), radius: 18, x: 4, y: 0)
@@ -725,16 +744,20 @@ extension MailRootView {
         #endif
     }
 
-    /// Upper bound for the list column: whatever leaves the reading pane its
-    /// floor. Falls back to a generous cap until the first geometry read lands.
-    private var listColumnMaxWidth: CGFloat {
-        guard splitWidth > 0 else { return 640 }
-        return max(listColumnMinWidth, splitWidth - readerColumnMinWidth)
+    /// Clamp range for the pinned list column: a ceiling that leaves the
+    /// reading pane its floor and a little more (`ListColumnWidth.pinnedBounds`
+    /// — an exact fit is what #1716 was), and a floor that follows it down in a
+    /// window too narrow to seat both. Falls back to a generous cap until the
+    /// first geometry read lands.
+    private var listColumnBounds: (minimum: CGFloat, maximum: CGFloat) {
+        guard splitWidth > 0 else { return (listColumnMinWidth, 640) }
+        return ListColumnWidth.pinnedBounds(splitWidth: splitWidth)
     }
 
     /// The persisted list-column width, clamped to the current valid range.
     private var listColumnWidth: CGFloat {
-        min(max(CGFloat(listColumnWidthStored), listColumnMinWidth), listColumnMaxWidth)
+        let bounds = listColumnBounds
+        return min(max(CGFloat(listColumnWidthStored), bounds.minimum), bounds.maximum)
     }
 
     /// Binding the drag handle writes: clamps on read, persists on write.
@@ -795,21 +818,37 @@ extension MailRootView {
                 // must keep: on an iPhone Duo the column beside it is narrow
                 // enough that Compose and `@` both fold into the system
                 // overflow, which is inert on the 27.1 beta, and the
-                // inspector then cannot be closed (#1670). Closed, it ranks
-                // like any other item.
+                // inspector then cannot be closed (#1670).
+                //
+                // Closed, it still ranks with Compose rather than below it:
+                // this button is the *only* entry point to addresses on this
+                // layout (`SettingsSheet`'s own doc records the move out of
+                // the sheet), so folding it away takes the feature with it
+                // (#1626). What the overflow may take is the More menu,
+                // whose Mark All as Read is also on the folder list's context
+                // menu and on ⌥⌘T.
                 if addressInspectorPresented {
                     ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
                         .keepsInBarFirst()
                 } else {
                     ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
+                        .keepsInBar()
                 }
             }
         }
-        // Folder-panel toggle (standing in for the removed system sidebar
-        // toggle, same leading slot) and the app-level Settings gear.
-        // Regular-width iPad only (compact keeps its Settings tab and
-        // navigates folders as the stack root; macOS has its Settings
-        // scene and a tiled sidebar).
+        // Folder-panel toggle, standing in for the removed system sidebar
+        // toggle in the same leading slot. Regular-width iPad only (compact
+        // navigates folders as the stack root; macOS has a tiled sidebar).
+        //
+        // The app-level Settings gear used to sit beside it and does not any
+        // more: five occupants overflow this column's bar on iPadOS 27, and
+        // the system overflow they fold into never presents, which took
+        // Compose and Addresses out of reach entirely (#1626). The gear is
+        // the occupant that belongs least here now that the folder list is a
+        // floating panel — it is app-level chrome, not message-list chrome —
+        // so it moved onto that panel (`folderPanelOverlay`). Cmd+, still
+        // reaches Settings from anywhere (`CabalmailApp`'s `.appSettings`
+        // command group).
         #if os(iOS)
         .toolbar {
             if showsSettingsGear {
@@ -821,14 +860,6 @@ extension MailRootView {
                     } label: {
                         Image(systemName: "sidebar.leading")
                             .accessibilityLabel("Toggle folder list")
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        appState.requestSettings()
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .accessibilityLabel("Settings")
                     }
                 }
             }
@@ -881,8 +912,8 @@ extension MailRootView {
                 .overlay(alignment: .trailing) {
                     ColumnResizeHandle(
                         width: listColumnWidthBinding,
-                        minWidth: listColumnMinWidth,
-                        maxWidth: listColumnMaxWidth
+                        minWidth: listColumnBounds.minimum,
+                        maxWidth: listColumnBounds.maximum
                     )
                 }
         } else {

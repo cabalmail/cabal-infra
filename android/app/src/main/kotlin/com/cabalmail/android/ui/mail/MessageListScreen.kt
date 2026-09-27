@@ -70,7 +70,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
+import com.cabalmail.android.ui.settings.SortDirection
 import com.cabalmail.android.ui.settings.flagColor
+import com.cabalmail.android.ui.settings.labelRes
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -458,14 +460,19 @@ private fun DefaultTopBar(
                     )
                 }
                 HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sort_descending)) },
-                    trailingIcon = { if (state.sortDescending) ActiveMark() },
-                    onClick = {
-                        menuOpen = false
-                        viewModel.setSort(state.sortField, !state.sortDescending)
-                    },
-                )
+                // The direction as its own marked pair, like the fields above
+                // it: one checkable "Newest first" row named a date ordering
+                // on a menu that also sorts by sender and by subject (#1730).
+                SortDirection.entries.forEach { direction ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(direction.labelRes())) },
+                        trailingIcon = { if (state.sortDescending == direction.descending) ActiveMark() },
+                        onClick = {
+                            menuOpen = false
+                            viewModel.setSort(state.sortField, direction.descending)
+                        },
+                    )
+                }
             }
         },
     )

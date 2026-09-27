@@ -58,6 +58,12 @@ struct MessageListView: View {
     // extension that builds the rows can read it. macOS has no size class
     // and is always treated as wide (see `isWideLayout`).
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    // Whether the wide single-rail layout is active (regular-width iPad,
+    // visionOS). Decides where the folder switch is drawn: a column-scoped
+    // bar can't host it (`FolderSwitchPlacement`, #1626). A plain flag rather
+    // than the size class above for the reason its own doc gives — this is a
+    // narrow split column and reports compact even on a regular-width iPad.
+    @Environment(\.showsSettingsGear) var showsSettingsGear
     #endif
     // Drives the background-snapshot optimization: while the scene isn't
     // `.active`, `messageRow` (in `+Selection`) renders cheap placeholder

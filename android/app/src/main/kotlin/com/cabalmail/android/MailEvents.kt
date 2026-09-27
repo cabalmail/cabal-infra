@@ -1,10 +1,12 @@
 package com.cabalmail.android
 
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Cross-screen mail mutations, so a change made in the reader (or a
@@ -23,10 +25,15 @@ sealed interface MailEvent {
         val value: Boolean,
     ) : MailEvent
 
-    /** [uids] left [folder] (moved, disposed, purged). */
+    /**
+     * [uids] left [folder] (moved, disposed, purged), landing in
+     * [destination] when they moved somewhere rather than went away. Both
+     * folders' message counts moved with them ([FolderStateInvalidation]).
+     */
     data class Removed(
         override val folder: String,
         val uids: Set<Long>,
+        val destination: String? = null,
     ) : MailEvent
 
     /**
@@ -34,6 +41,15 @@ sealed interface MailEvent {
      * server-side; viewers of the folder should refetch true state.
      */
     data class Reconcile(
+        override val folder: String,
+    ) : MailEvent
+
+    /**
+     * The set of folders changed: [folder] was created, deleted, or had its
+     * subscription flipped. Screens listing FOLDERS refetch; screens listing
+     * the messages inside one are unaffected ([FolderStateInvalidation]).
+     */
+    data class FolderListChanged(
         override val folder: String,
     ) : MailEvent
 }
@@ -49,17 +65,28 @@ class MailEventBus {
      * folder changed underneath us" and the reload would resurrect rows
      * the user already watched leave.
      */
-    private val pendingWrites = AtomicInteger(0)
+    private val pendingWrites = MutableStateFlow(0)
 
-    val writesInFlight: Boolean get() = pendingWrites.get() > 0
+    val writesInFlight: Boolean get() = pendingWrites.value > 0
 
     /** Pairs with [endWrite] (in a finally) around the server call. */
     fun beginWrite() {
-        pendingWrites.incrementAndGet()
+        pendingWrites.update { it + 1 }
     }
 
     fun endWrite() {
-        pendingWrites.decrementAndGet()
+        pendingWrites.update { it - 1 }
+    }
+
+    /**
+     * Suspends until nothing is in flight, returning at once when nothing
+     * is. Events are emitted optimistically, so anything that answers one by
+     * READING server state — the message count the Folders screen shows —
+     * has to let the write land first, or it reads the pre-write value back
+     * and keeps it until the next poll (#1734).
+     */
+    suspend fun awaitWritesSettled() {
+        pendingWrites.first { it == 0 }
     }
 
     /**

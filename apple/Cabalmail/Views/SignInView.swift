@@ -117,6 +117,19 @@ struct SignInView: View {
                         Label(message, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(ColorTokens.dangerFg)
                     }
+                } else if appState.signedOutReason == .sessionExpired {
+                    // Why you are looking at this form: an expiry drops the
+                    // session under the user, on the launch path and while
+                    // the app is running alike (issue #1703). A deliberate
+                    // Sign Out leaves the reason nil and the form blank.
+                    Section {
+                        Label(
+                            "Your session expired — sign in again.",
+                            systemImage: "clock.badge.exclamationmark"
+                        )
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("signin.reason")
+                    }
                 }
                 Section {
                     #if os(macOS)

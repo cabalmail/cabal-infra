@@ -166,6 +166,10 @@ COPY shared/assemble-aliases.sh            /usr/local/bin/assemble-aliases.sh
 # Clears the planned-maintenance SSM flag once Dovecot is serving (imap only).
 COPY shared/clear-maintenance.sh           /usr/local/bin/clear-maintenance.sh
 
+# Shared skeleton (spool permissions, stale-file shed, polling loop) sourced
+# by all three shell spool-drain daemons below.
+COPY shared/spool-drain-lib.sh             /usr/local/bin/spool-drain-lib.sh
+
 # Push wake signals (imap only): the :0c recipe in procmailrc spools one
 # JSON signal per local delivery via push-enqueue.sh; the push-spool-drain
 # supervisord program forwards the spool to SQS with the task-role

@@ -80,6 +80,37 @@ enum ListColumnWidth {
         let floor = min(minimum, max(squeezedMinimum, ceiling - minimumTravel))
         return (floor, max(ceiling, floor + minimumTravel))
     }
+
+    /// Width the pinned column leaves over and above the reader's floor.
+    ///
+    /// Where the column is pinned to an exact width (regular-width iPad and
+    /// visionOS — see `MailRootView.resizableContentColumn`) a ceiling of
+    /// `splitWidth - readerFloor` makes the two constraints sum to exactly the
+    /// window. UIKit resolves that fit at launch but not during a size
+    /// transition: re-resolving it mid-resize, it gives up tiling and drops the
+    /// primary column, leaving the reader's empty-state placeholder alone in a
+    /// window with no control of any kind in it (#1716). Reserving slack means
+    /// the fit is never exact, so there is nothing to give up on. 11pt was
+    /// measured surviving the same transition that 0pt failed (#1716's width
+    /// sweep, the 749pt row against the 700 and 725 ones); this is that value
+    /// rounded up to the layout unit used elsewhere, and it costs the list at
+    /// most 16pt in the band where the clamp bites at all.
+    static let reservedSlack: CGFloat = 16
+
+    /// Clamp range for a column pinned to an exact width in a split of
+    /// `splitWidth`, with no sidebar column tiled beside it.
+    ///
+    /// The ceiling reserves `reservedSlack` beyond the reader's floor (above).
+    /// The floor follows the ceiling down: a window too narrow to seat
+    /// `minimum` alongside the reader's floor and that slack has to take the
+    /// width from the list — `squeezedMinimum` for the same reason `bounds`
+    /// does it (the reader is the point of the window) — because a floor left
+    /// above the ceiling would pin the column wider than the window can seat
+    /// and over-subscribe the split instead of merely filling it.
+    static func pinnedBounds(splitWidth: CGFloat) -> (minimum: CGFloat, maximum: CGFloat) {
+        let ceiling = max(squeezedMinimum, splitWidth - readerFloor - reservedSlack)
+        return (min(minimum, ceiling), ceiling)
+    }
 }
 
 #if os(macOS)
