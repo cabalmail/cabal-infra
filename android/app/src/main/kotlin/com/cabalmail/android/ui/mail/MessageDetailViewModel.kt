@@ -352,7 +352,13 @@ class MessageDetailViewModel(
                     folder,
                 )
         val markSeen = mutableState.value.envelope?.isSeen != true
-        departAfter { api ->
+        val destination =
+            when (intent) {
+                DisposeIntent.Purge -> null
+                DisposeIntent.Restore -> DisposeIntent.INBOX_FOLDER
+                is DisposeIntent.Move -> intent.destination
+            }
+        departAfter(destination) { api ->
             when (intent) {
                 DisposeIntent.Purge -> api.purgeMessages(folder, listOf(uid))
                 DisposeIntent.Restore ->
@@ -368,7 +374,7 @@ class MessageDetailViewModel(
         if (!canDepart()) {
             return
         }
-        departAfter { api -> api.moveMessages(folder, destination, listOf(uid)) }
+        departAfter(destination) { api -> api.moveMessages(folder, destination, listOf(uid)) }
     }
 
     /**
@@ -387,12 +393,19 @@ class MessageDetailViewModel(
      * case. [action] runs in the app scope so it survives this view model
      * being cleared on the way out; the caches are only touched once the
      * server has agreed, and a failure asks the folder's viewers to
-     * refetch true state.
+     * refetch true state. [destination] is where the message is landing, or
+     * null when it is going away — its count moves as well (#1734).
+     *
+     * The write is opened BEFORE the event so that a screen answering the
+     * event by reading server state can wait for the write to settle.
      */
-    private fun departAfter(action: suspend (ApiClient) -> Unit) {
+    private fun departAfter(
+        destination: String?,
+        action: suspend (ApiClient) -> Unit,
+    ) {
         mutableState.update { it.copy(departed = true, error = null) }
-        container.mailEvents.emit(MailEvent.Removed(folder, setOf(uid)))
         container.mailEvents.beginWrite()
+        container.mailEvents.emit(MailEvent.Removed(folder, setOf(uid), destination))
         container.appScope.launch {
             try {
                 action(container.requireApi())

@@ -45,7 +45,7 @@ class FoldersAdminViewModel(
         // (#1734), so the count follows the same bus the message list does.
         viewModelScope.launch {
             container.mailEvents.events.collect { event ->
-                FolderStateInvalidation.staleCountFolder(event)?.let { reloadCount(it) }
+                FolderStateInvalidation.staleCountFolders(event).forEach { reloadCount(it) }
             }
         }
     }
@@ -93,6 +93,10 @@ class FoldersAdminViewModel(
             if (folder !in mutableState.value.folders.orEmpty()) {
                 return@launch
             }
+            // The event announcing the move is optimistic, so a STATUS taken
+            // now would read the pre-move count back and stick with it until
+            // the user pulls to refresh — the whole complaint (#1734).
+            container.mailEvents.awaitWritesSettled()
             val count =
                 runCatching {
                     container.requireApi().folderStatus(folder).messages

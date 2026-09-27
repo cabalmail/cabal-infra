@@ -2,7 +2,6 @@ package com.cabalmail.android
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -35,18 +34,33 @@ class FolderStateInvalidationTest {
 
     @Test
     fun `messages leaving a folder make that folder's count stale`() {
-        assertEquals("Archive", FolderStateInvalidation.staleCountFolder(MailEvent.Removed("Archive", setOf(1L))))
-        assertEquals("Archive", FolderStateInvalidation.staleCountFolder(MailEvent.Reconcile("Archive")))
+        assertEquals(
+            setOf("Archive"),
+            FolderStateInvalidation.staleCountFolders(MailEvent.Removed("Archive", setOf(1L))),
+        )
+        assertEquals(setOf("Archive"), FolderStateInvalidation.staleCountFolders(MailEvent.Reconcile("Archive")))
+    }
+
+    @Test
+    fun `a move makes the destination's count stale as well as the source's`() {
+        assertEquals(
+            setOf("INBOX", "Trash"),
+            FolderStateInvalidation.staleCountFolders(MailEvent.Removed("INBOX", setOf(1L), "Trash")),
+        )
     }
 
     @Test
     fun `a flag write does not move the count the Folders screen shows`() {
-        assertNull(
-            FolderStateInvalidation.staleCountFolder(
+        assertEquals(
+            emptySet<String>(),
+            FolderStateInvalidation.staleCountFolders(
                 MailEvent.FlagChanged("INBOX", setOf(1L), "\\Seen", true),
             ),
         )
-        assertNull(FolderStateInvalidation.staleCountFolder(MailEvent.FolderListChanged("INBOX")))
+        assertEquals(
+            emptySet<String>(),
+            FolderStateInvalidation.staleCountFolders(MailEvent.FolderListChanged("INBOX")),
+        )
     }
 
     /**
@@ -76,13 +90,41 @@ class FolderStateInvalidationTest {
     }
 
     @Test
+    fun `every message movement announces itself`() {
+        val list = code("ui/mail/MessageListViewModel.kt")
+        // move and purge: the message list applies both to its own rows, and
+        // used to tell the Folders screen's counts nothing.
+        assertEquals(
+            2,
+            Regex("""MailEvent\.Removed\(""").findAll(list).count(),
+            "a message list mutation the Folders screen never hears about",
+        )
+        val reader = code("ui/mail/MessageDetailViewModel.kt")
+        assertTrue(
+            reader.contains("MailEvent.Removed(folder, setOf(uid), destination)"),
+            "the reader's disposals no longer name where the message landed",
+        )
+    }
+
+    @Test
+    fun `a count refetch waits for the optimistic write to settle`() {
+        // Only inside reloadCount: the whole-map load has no write to wait on.
+        val reload =
+            code("ui/folders/FoldersAdminViewModel.kt")
+                .substringAfter("private fun reloadCount")
+        val await = reload.indexOf("awaitWritesSettled()")
+        val status = reload.indexOf("folderStatus(")
+        assertTrue(await in 0 until status, "the count STATUS can race the write it is answering")
+    }
+
+    @Test
     fun `both folder lists reload off the bus`() {
         assertTrue(
             code("ui/mail/FoldersViewModel.kt").contains("FolderStateInvalidation.listIsStale"),
             "the Mail tab's rail is back to waiting for its own poll",
         )
         assertTrue(
-            code("ui/folders/FoldersAdminViewModel.kt").contains("FolderStateInvalidation.staleCountFolder"),
+            code("ui/folders/FoldersAdminViewModel.kt").contains("FolderStateInvalidation.staleCountFolders"),
             "the Folders screen is back to waiting for a pull-to-refresh",
         )
     }
