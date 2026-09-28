@@ -21,6 +21,13 @@
 # provider normalizes those keys like user attributes, so the trigger sees
 # custom:invitationCode.
 #
+# The MFA gate lives in another module and needs this user named in it:
+# require_admin_mfa's EXEMPT_USERS (modules/user_pool/require_admin_mfa.tf)
+# lists the machine accounts that authenticate with a password and can never
+# enroll an authenticator. A password-authenticating user missing from that
+# list signs in fine for GRACE_HOURS and is blocked forever after (#1739), so
+# any new account of this shape is added there in the same change.
+#
 # The containers learn about the user on their own schedule: sync-users.sh
 # runs only at container start, so the imap tier has to roll once after the
 # apply before the probe's api leg can pass, and smtp-in adds the address to

@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.2] - 2026-09-28
+
+### Deprecated
+- Apple: **iOS 18 and macOS 15 support.** A future release will raise
+  Cabalmail's minimum OS versions to iOS 26, iPadOS 26 and macOS 26,
+  ending support for iOS 18, iPadOS 18 and macOS 15. Until then those
+  versions stay supported. To keep receiving new builds after the
+  change, update to iOS 26, iPadOS 26 or macOS 26 or later.
+
+### Removed
+- **Pipeline column on the triage dashboard.** The `os27` routing feature —
+  a second, Studio-owned tester/fixer pipeline toggled per issue by the
+  `os27` label — is retired now that the Studio no longer runs a scheduled
+  tester/fixer pair. The column, its per-row toggle, the `/api/route`
+  endpoint, and the `--route-label` flag are gone from
+  `scripts/triage-dashboard.py`.
+
+### Fixed
+- Apple: **One row's swipe actions at a time.** On iOS, iPadOS, macOS and
+  visionOS 27 the message list's swipe actions come from the system's
+  swipe-actions container instead of a one-row list embedded in every row:
+  revealing one row's actions now retracts any other row's, and a tap on empty
+  space or a scroll dismisses them. Earlier OS versions keep the previous
+  behaviour, where each row's reveal was independent and stayed put.
+- **Post-deploy mail probe blocked at sign-in by the MFA gate.** The `ci-probe`
+  service account was missing from `EXEMPT_USERS` on the pre-token-generation
+  trigger, so it authenticated normally for its 48-hour grace window and was
+  refused from then on -- every `mail-probe` job on stage and prod died at
+  Cognito sign-in without exercising the mail path at all. The account is now
+  exempted alongside `master` and `dmarc`, and a source scan pins every
+  Terraform-declared Cognito user to that list so a new service account cannot
+  repeat it.
+
 ## [1.22.1] - 2026-09-27
 
 ### Fixed
