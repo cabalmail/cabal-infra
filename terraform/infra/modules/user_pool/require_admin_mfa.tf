@@ -191,11 +191,22 @@ resource "aws_lambda_function" "require_admin_mfa" {
       #   every outbound message.
       # - dmarc:  report-ingest mailbox (dmarc_user.tf); never signs in
       #   today, exempted defensively.
+      # - ci-probe: post-deploy mail probe (ci_probe_user.tf); signs in
+      #   from a GitHub runner with the SSM-stored password on every
+      #   mail-tier or API deploy. Added 2026-09-28 (#1739): it was
+      #   minted without an entry here and passed only for its 48-hour
+      #   grace window, then failed every probe in both envs.
       # A short-lived App Store review demo account ("apple") was also a
       # candidate; it is deleted. Re-add a demo account here for the
       # duration of any future App Review cycle - reviewers need static
       # credentials and their sign-ins score high-risk.
-      EXEMPT_USERS = "master,dmarc"
+      # Every aws_cognito_user Terraform declares belongs on this list -
+      # they are all machine accounts, and none can enroll. The
+      # invariant is pinned by
+      # lambda/api/_shared/tests/test_mfa_exempt_service_users.py,
+      # because the users are declared in the app module and the list
+      # lives here, which is what let ci-probe slip through review.
+      EXEMPT_USERS = "master,dmarc,ci-probe"
       # A new signup gets this long to sign in and enroll via the
       # Security page before the user gate applies to them.
       GRACE_HOURS = "48"
