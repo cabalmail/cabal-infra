@@ -81,13 +81,7 @@ extension MessageListView {
                             }
                         }
                     }
-                }
-                // 27 and later: scopes swipe-action coordination to this scroll
-                // view, so at most one row's actions are revealed at a time and
-                // a tap on blank space or a vertical scroll retracts them
-                // (#901). No-op below 27, where `SwipeActionRow` falls back to
-                // its per-row `List` -- see that file.
-                .coordinatedSwipeActionsContainer(),
+                },
                 model: model, visible: visible, proxy: proxy
             )
         }
@@ -227,8 +221,8 @@ extension MessageListView {
     /// `.background` every row collapses to the cheap `placeholderRow`: iOS
     /// renders a synchronous scene update in the background to snapshot the app
     /// for the switcher, and with the live rows present that means laying out a
-    /// per-row `List` (the pre-27 `SwipeActionRow` swipe mechanism) for every
-    /// visible message. That relayout -- kicked off by an archive and forced through in
+    /// per-row `List` (the `SwipeActionRow` swipe mechanism) for every visible
+    /// message. That relayout -- kicked off by an archive and forced through in
     /// a single pass on backgrounding -- could exceed the 10-second
     /// scene-update watchdog (`0x8BADF00D`, which fired with
     /// `WatchdogVisibility: Background`) even on a folder of fewer than 30
