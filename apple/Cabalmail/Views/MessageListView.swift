@@ -98,8 +98,8 @@ struct MessageListView: View {
     /// the same height at any given setting -- the invariant holds -- and they
     /// all recompute together when the accessibility size changes. Without this,
     /// larger accessibility fonts overflowed the fixed height and the per-row
-    /// `SwipeActionRow` List (its pre-27 path) began scrolling its own clipped
-    /// content, capturing the drag meant to scroll the whole list.
+    /// `SwipeActionRow` List began scrolling its own clipped content, capturing
+    /// the drag meant to scroll the whole list.
     ///
     /// The base 58 clears the row's two `.subheadline` lines (sender route +
     /// one-line subject) at the default size with a little slack; scaling

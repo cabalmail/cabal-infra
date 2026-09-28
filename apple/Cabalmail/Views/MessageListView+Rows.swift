@@ -66,14 +66,12 @@ extension MessageListView {
             .contentShape(Rectangle())
             .hoverEffect(.highlight)
             #endif
-            // Swipe-to-dispose / toggle-read come from `SwipeActionRow`
-            // (applied by `messageRow`), and drag-to-folder is applied OUTSIDE
-            // that wrapper by `draggableRow` -- both have to sit outside the
-            // per-row `List` that `SwipeActionRow` embeds BELOW 27 for its
-            // native `.swipeActions`, or the embedded List swallows them (the
-            // drag never lifts; the swipe modifier no-ops). On 27 and later
-            // there is no embedded List to swallow anything, but the placement
-            // is the same on both paths.
+            // Swipe-to-dispose / toggle-read are hand-rolled in
+            // `SwipeActionRow` (applied by `messageRow`), and drag-to-folder
+            // is applied OUTSIDE that wrapper by `draggableRow` -- both have
+            // to sit outside the per-row `List` that `SwipeActionRow` embeds
+            // for its native `.swipeActions`, or the embedded List swallows
+            // them (the drag never lifts; the swipe modifier no-ops).
         }
     }
 
@@ -148,11 +146,10 @@ extension MessageListView {
     /// long-press drag would fight the row's context menu.
     ///
     /// Applied by `messageRow` OUTSIDE the per-row `SwipeActionRow` (i.e.
-    /// outside the single-row `List` that wrapper embeds below 27 for its
-    /// native `.swipeActions`). A `.draggable` placed inside that List row is
+    /// outside the single-row `List` that wrapper embeds for its native
+    /// `.swipeActions`). A `.draggable` placed inside that List row is
     /// swallowed on macOS and never lifts, so the drag has to sit on the row
-    /// container instead; on the 27 path there is no embedded List, and the
-    /// same placement is correct there. Because the wrapper already fills the fixed row
+    /// container instead. Because the wrapper already fills the fixed row
     /// height, this only adds `.contentShape` (so a drag can start on the row's
     /// empty space, not just the text) -- no frame expansion, unlike the old
     /// inner version.
