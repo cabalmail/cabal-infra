@@ -107,7 +107,8 @@ struct MailRootView: View {
     /// doesn't report where a user drags the native list-reader divider, so the
     /// column is pinned to this width and a `ColumnResizeHandle` on its trailing
     /// edge drives it — letting the chosen split survive cold launches. macOS
-    /// keeps its native, self-persisting dividers. Stored as `Double` because
+    /// keeps its native divider and persists the width it is dragged to under
+    /// its own key (`ListColumnWidth`). Stored as `Double` because
     /// `@AppStorage` has no `CGFloat` overload.
     @AppStorage("cabalmail.layout.listColumnWidth") private var listColumnWidthStored: Double = 360
     /// Live width of the whole split view, read via `.onGeometryChange`, used to
@@ -310,8 +311,9 @@ struct MailRootView: View {
             #endif
         } content: {
             // Pin the list column to its persisted width and hang the drag
-            // handle on its trailing edge (wide iPad/visionOS only); compact and
-            // macOS pass through untouched. See `resizableContentColumn`.
+            // handle on its trailing edge (wide iPad/visionOS only); macOS
+            // bounds and remembers its native column instead, and compact
+            // passes through untouched. See `resizableContentColumn`.
             resizableContentColumn(decoratedContentColumn)
         } detail: {
             #if os(iOS)
@@ -486,7 +488,7 @@ struct MailRootView: View {
         #else
         .inspector(isPresented: addressInspectorBinding) {
             AddressListView(externalFilter: $addressListFilter)
-                .addressInspectorWidth()
+                .addressInspectorWidth(isPresented: addressInspectorPresented)
         }
         #endif
     }
@@ -721,7 +723,8 @@ extension MailRootView {
     /// Whether the list column is pinned to a user-set width and shows the drag
     /// handle. True only on the wide regular-width iPad / visionOS layout:
     /// compact collapses to a stack (a fixed width would fight the collapse) and
-    /// macOS already resizes and persists its dividers natively.
+    /// macOS resizes with its native divider, remembering the width without a
+    /// pin (`ListColumnWidth`).
     private var resizableColumns: Bool {
         #if os(macOS)
         return false
@@ -895,8 +898,9 @@ extension MailRootView {
     /// Pins the content column to the persisted width and overlays the drag
     /// handle, but only on the wide iPad/visionOS layout. macOS keeps its
     /// native resizable dividers and instead bounds the column so the reading
-    /// pane can't be starved (`ListColumnWidth`); compact iPhone, where that
-    /// policy passes through, gets the column untouched.
+    /// pane can't be starved, opening it at the width it was last left at
+    /// (`ListColumnWidth`); compact iPhone, where that policy passes through,
+    /// gets the column untouched.
     @ViewBuilder
     fileprivate func resizableContentColumn(_ column: some View) -> some View {
         if resizableColumns {

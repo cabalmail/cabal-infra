@@ -46,14 +46,15 @@ final class SidebarColumnWidthTests: XCTestCase {
 
     // The column reporting back (near enough) the width it was asked for is the
     // layout settling, not a drag. Persisting that would feed a systematic
-    // few-point delta back as the next launch's width, walking the sidebar
+    // rounding delta back as the next launch's width, walking the sidebar
     // narrower on every run — the very failure being fixed.
     func testSettlingAtTheWidthWeAskedForIsNotADrag() {
         XCTAssertFalse(
             SidebarColumnWidth.shouldPersist(measured: SidebarColumnWidth.ideal, stored: 0),
             "an unresized launch must not write a width"
         )
-        XCTAssertFalse(SidebarColumnWidth.shouldPersist(measured: 318, stored: 320))
+        // Half a point: the finest step a Retina layout rounds to.
+        XCTAssertFalse(SidebarColumnWidth.shouldPersist(measured: 319.5, stored: 320))
         XCTAssertFalse(
             SidebarColumnWidth.shouldPersist(measured: 0, stored: 320),
             "the pre-layout measurement is not a resize"
@@ -61,15 +62,28 @@ final class SidebarColumnWidthTests: XCTestCase {
     }
 
     func testRepeatedLaunchesHoldTheSameWidth() {
-        // Three launches with the same small measurement delta: the stored
-        // width has to be the same each time, not 4pt narrower.
+        // Three launches with the same half-point rounding delta: the stored
+        // width has to be the same each time, not a point and a half narrower.
         var stored = 320.0
         for _ in 0..<3 {
-            let measured = SidebarColumnWidth.resolved(stored: stored) - 2
+            let measured = SidebarColumnWidth.resolved(stored: stored) - 0.5
             if SidebarColumnWidth.shouldPersist(measured: measured, stored: stored) {
                 stored = Double(SidebarColumnWidth.clamp(measured))
             }
         }
         XCTAssertEqual(stored, 320)
+    }
+
+    // A drag writes each width it reaches beyond the slack, so where it stops
+    // can sit up to the slack from what is remembered. At the old 4pt slack a
+    // drag measured coming to rest at 352pt left 356 remembered; the next
+    // launch opened the column 4pt from where the user had put it.
+    func testADragIsRememberedWhereItStops() {
+        var stored = 381.0
+        for measured in stride(from: CGFloat(380), through: 352, by: -1)
+        where SidebarColumnWidth.shouldPersist(measured: measured, stored: stored) {
+            stored = Double(SidebarColumnWidth.clamp(measured))
+        }
+        XCTAssertLessThanOrEqual(abs(stored - 352), 1, "remembered \(stored) for a drag that stopped at 352")
     }
 }
