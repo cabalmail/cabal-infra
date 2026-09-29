@@ -193,14 +193,44 @@ final class ListColumnWidthTests: XCTestCase {
                                                      splitWidth: 1500, bounds: bounds))
     }
 
-    // A window narrowed past the column clamps it to the cap (844pt is the split
-    // a 1200pt window left beside a 356pt inspector). The clamped width is
-    // remembered like a dragged one: the next launch restores the same window,
-    // and the column comes back as it was last seen in it.
-    func testAWidthTheWindowClampsTheColumnToIsRemembered() {
-        let bounds = ListColumnWidth.bounds(splitWidth: 844, sidebarWidth: SidebarColumnWidth.ideal)
-        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: bounds.maximum, stored: 481,
-                                                    splitWidth: 844, bounds: bounds))
+    // Measured in the app on macOS 27: a list dragged to 500pt in a 1401pt
+    // window was held at 400 while the addresses inspector was open (a 1019pt
+    // split), and went back to 500 when it closed. Remembering the 400 brought
+    // the list back at 400 on the next launch, with the inspector closed and
+    // room for 500. The squeeze is the window's, not the user's.
+    func testAWidthTheRangeHoldsTheColumnAtIsNotRemembered() {
+        let squeezed = ListColumnWidth.bounds(splitWidth: 1019, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: squeezed.maximum, stored: 500,
+                                                     splitWidth: 1019, bounds: squeezed))
+        // The same, from a window narrowed past the column (844pt is the split
+        // a 1200pt window left beside a 356pt inspector).
+        let narrowed = ListColumnWidth.bounds(splitWidth: 844, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: narrowed.maximum, stored: 481,
+                                                     splitWidth: 844, bounds: narrowed))
+        // And from below: a width remembered in a cramped window, under the
+        // floor a roomier window raises the column to.
+        let roomy = ListColumnWidth.bounds(splitWidth: 1500, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: roomy.minimum, stored: 250,
+                                                     splitWidth: 1500, bounds: roomy))
+    }
+
+    // Held there by the range is one thing; dragged there is another. A drag
+    // starts from inside the range, so the width it reaches at either edge is
+    // the user's and is remembered.
+    func testADragToTheEdgeOfTheRangeIsRemembered() {
+        let bounds = ListColumnWidth.bounds(splitWidth: 1500, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: bounds.maximum, stored: 420,
+                                                    splitWidth: 1500, bounds: bounds))
+        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: bounds.minimum, stored: 420,
+                                                    splitWidth: 1500, bounds: bounds))
+    }
+
+    // A column held short of its remembered width can still be dragged; where
+    // the drag leaves it is the new width to remember.
+    func testADragWhileHeldIsRemembered() {
+        let squeezed = ListColumnWidth.bounds(splitWidth: 1019, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: squeezed.maximum - 40, stored: 500,
+                                                    splitWidth: 1019, bounds: squeezed))
     }
 
     // MARK: - Issue #1014
