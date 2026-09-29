@@ -22,7 +22,6 @@ import CabalmailKit
 /// way to reach the folder list.
 struct VisionSectionView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.scenePhase) private var scenePhase
 
     /// Mailbox selection shared across tabs: the Folders tab writes it, the Mail
     /// tab reads it. Lifted here (rather than owned by either tab) so a folder
@@ -105,22 +104,10 @@ struct VisionSectionView: View {
         // The same mapping, for the menus that share a chord across mail and
         // feeds (`SharedChordPolicy`).
         .reportsActiveSection(activeSection)
-        // Foreground reconcile: if another client moved the cursor on, offer the
-        // jump. Mirrors `MailRootView`'s handler; `hasLoadedInitial` gates out
-        // the cold-launch path (which offers its own resume toast from
-        // `landOnInboxIfNeeded`).
-        .onChange(of: scenePhase) { old, new in
-            guard new == .active, old != .active,
-                  let coordinator = appState.navCoordinator,
-                  coordinator.hasLoadedInitial else { return }
-            Task {
-                if let cursor = await coordinator.foreignCursorOnForeground() {
-                    appState.showToast(
-                        .resumeNavigation(folderName: Folder(path: cursor.folder).name, cursor: cursor),
-                        duration: 10
-                    )
-                }
-            }
+        // The cross-device probe lives on `SignedInRootView`. A tapped feed
+        // toast opens the Feeds tab, whose `FeedRootView` follows the request.
+        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
+            if request != nil { selection = .feeds }
         }
         // A resume toast was tapped: jump to the cursor's folder in Mail.
         .onChange(of: appState.navCoordinator?.navigateRequest) { _, request in
@@ -189,19 +176,8 @@ struct VisionSectionView: View {
                 selectedFolder = inbox
             }
         }
-        let landedPath = selectedFolder?.path
-        let candidate = await coordinator?.launchResumeCandidate(folders: folders)
-        // If the user already navigated elsewhere while the probe ran, leave
-        // them be rather than surfacing a now-stale prompt.
-        guard let landedPath, selectedFolder?.path == landedPath else { return }
-        if let candidate {
-            appState.showToast(
-                .resumeNavigation(folderName: Folder(path: candidate.folder).name, cursor: candidate),
-                duration: 10
-            )
-        } else {
-            coordinator?.materializeLanding()
-        }
+        // The cross-device probe runs from `SignedInRootView`.
+        coordinator?.materializeLanding()
     }
 }
 

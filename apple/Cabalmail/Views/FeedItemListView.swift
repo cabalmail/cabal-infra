@@ -108,6 +108,11 @@ struct FeedItemListView: View {
             hasAppeared = true
             applyLaunchRestoreWhenReady()
         }
+        // A cross-device feed toast for the scope already on screen parks a
+        // new item while this list is mounted: open it, over any selection.
+        .onChange(of: appState.navCoordinator?.pendingFeedRestore) { _, restore in
+            if restore != nil { applyLaunchRestoreWhenReady(replacingSelection: true) }
+        }
         // The Feeds menu's item chords (`+Commands`); the catalog commands
         // on the same tick are the sidebar's and are ignored here.
         .onChange(of: appState.feedCommandTick) { _, _ in
@@ -376,8 +381,8 @@ extension FeedItemListView {
     /// it; `consumeFeedItemRestore` makes the two call sites idempotent. The
     /// loaded row is preferred so the highlight matches; an item outside the
     /// loaded window still opens, as it always has.
-    private func applyLaunchRestoreWhenReady() {
-        guard hasAppeared, initialLoadComplete, selection == nil,
+    private func applyLaunchRestoreWhenReady(replacingSelection: Bool = false) {
+        guard hasAppeared, initialLoadComplete, selection == nil || replacingSelection,
               let restored = appState.navCoordinator?.consumeFeedItemRestore(for: scope)
         else { return }
         selection = model?.items.first { $0.id == restored.id } ?? restored

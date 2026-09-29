@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.MailEvent
+import com.cabalmail.android.reading.ReadingAnchor
 import com.cabalmail.android.reading.ReadingPositionKey
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.api.ApiClient
@@ -92,6 +93,7 @@ class MessageDetailViewModel(
     private var latestFraction: Float? = null
     private var recordJob: kotlinx.coroutines.Job? = null
     private var positionKey: String = ReadingPositionKey.mail(null, folder, uid)
+    private var messageIdForCursor: String? = null
 
     val isTrashFolder: Boolean = folder == "Trash"
 
@@ -126,7 +128,20 @@ class MessageDetailViewModel(
         recordJob =
             viewModelScope.launch {
                 kotlinx.coroutines.delay(SCROLL_SETTLE_MS)
-                latestFraction?.let { runCatching { container.readingPositions.record(positionKey, it) } }
+                latestFraction?.let { fraction ->
+                    runCatching { container.readingPositions.record(positionKey, fraction) }
+                    // The cross-device cursor carries the position in both
+                    // forms: `f<fraction>` as the anchor (Apple restores it
+                    // directly) and the bare fraction (Phase C).
+                    val anchor = ReadingAnchor.format(fraction)
+                    container.navCursor.record(
+                        folder = folder,
+                        uid = uid,
+                        messageId = messageIdForCursor,
+                        msgAnchor = anchor,
+                        msgFraction = anchor?.let { fraction.toDouble() },
+                    )
+                }
             }
     }
 
@@ -169,6 +184,7 @@ class MessageDetailViewModel(
                 // Keyed by Message-ID when known (it survives a move), else
                 // folder + UID — the same scheme as the feed reader and Apple.
                 positionKey = ReadingPositionKey.mail(messageId, folder, uid)
+                messageIdForCursor = messageId
                 val restore = container.readingPositions.fraction(positionKey)
                 mutableState.update {
                     it.copy(envelope = envelope, content = content, busy = false, restoreFraction = restore)

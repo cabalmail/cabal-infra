@@ -10,11 +10,24 @@ import Foundation
 /// cursor came from elsewhere (a different `clientID`, a newer `updatedAt`)
 /// and offer to follow it rather than silently overwriting it.
 ///
-/// `folder` is the only required field — a cursor with no folder is no cursor.
-/// `messageID` is the durable message identity (RFC 5322 Message-ID), which
-/// survives the message being moved between folders by another client; `uid`
-/// is the fast in-folder hint. Scroll offsets are best-effort.
+/// Two kinds share the cursor (resume-session plan, Phase C). A **mail**
+/// cursor names a folder — its only required field; a cursor with no folder
+/// is no cursor — and optionally a message: `messageID` is the durable
+/// identity (RFC 5322 Message-ID), which survives the message being moved
+/// between folders by another client, `uid` the fast in-folder hint. A
+/// **feed** cursor (`kind == .rss`) names a feed item by `rssItem`
+/// (`RssItem.id`, `<feedId>#<sortKey>`) and optionally the list scope it was
+/// read from (`rssScope`, an `RssItemScope.token`); its `folder` is empty.
+/// Either kind may carry the reading position — `messageAnchor` (element or
+/// `f<fraction>` form) and `messageFraction` — best-effort.
 public struct NavState: Sendable, Equatable {
+    public enum Kind: String, Sendable {
+        case mail
+        case rss
+    }
+
+    public var kind: Kind
+    /// The mail folder; empty on a feed cursor.
     public var folder: String
     public var messageID: String?
     public var uid: UInt32?
@@ -28,6 +41,14 @@ public struct NavState: Sendable, Equatable {
     /// Apple client resolves with `scrollIntoView` (a child-index path to the
     /// top-most visible element plus a small pixel delta). Opaque end to end.
     public var messageAnchor: String?
+    /// The same reading position as a 0–1 fraction of the scrollable height,
+    /// carried alongside the element anchor so a client that can only apply
+    /// a fraction (Android's body view runs with JavaScript off) still can.
+    public var messageFraction: Double?
+    /// Feed cursor: the item being read (`RssItem.id`).
+    public var rssItem: String?
+    /// Feed cursor: the list scope it was read from (`RssItemScope.token`).
+    public var rssScope: String?
     /// Identifies the install that wrote this cursor. Set by the client on
     /// save; echoed back on load. See `InstallIdentity`.
     public var clientID: String
@@ -44,9 +65,14 @@ public struct NavState: Sendable, Equatable {
         listScroll: Int? = nil,
         messageScroll: Int? = nil,
         messageAnchor: String? = nil,
+        messageFraction: Double? = nil,
         clientID: String,
         updatedAt: Int64? = nil
     ) {
+        self.kind = .mail
+        self.rssItem = nil
+        self.rssScope = nil
+        self.messageFraction = messageFraction
         self.folder = folder
         self.messageID = messageID
         self.uid = uid
@@ -59,8 +85,42 @@ public struct NavState: Sendable, Equatable {
     }
 }
 
+extension NavState {
+    /// A feed cursor for `itemID` (`RssItem.id`), read from `scope`
+    /// (an `RssItemScope.token`), at the given reading position.
+    public static func feed(
+        itemID: String,
+        scope: String?,
+        anchor: String? = nil,
+        fraction: Double? = nil,
+        clientID: String,
+        updatedAt: Int64? = nil
+    ) -> NavState {
+        var cursor = NavState(folder: "", messageAnchor: anchor, messageFraction: fraction,
+                              clientID: clientID, updatedAt: updatedAt)
+        cursor.kind = .rss
+        cursor.rssItem = itemID
+        cursor.rssScope = scope
+        return cursor
+    }
+
+    /// A feed cursor's item as the pair `RssStore.item(feedId:sortKey:)`
+    /// looks up — split at the first `#` (a sort key may itself contain one).
+    public var rssItemParts: (feedID: String, sortKey: String)? {
+        guard kind == .rss, let rssItem, let hash = rssItem.firstIndex(of: "#") else { return nil }
+        let feedID = String(rssItem[..<hash])
+        let sortKey = String(rssItem[rssItem.index(after: hash)...])
+        guard !feedID.isEmpty, !sortKey.isEmpty else { return nil }
+        return (feedID, sortKey)
+    }
+}
+
 extension NavState: Decodable {
     private enum CodingKeys: String, CodingKey {
+        case kind
+        case rssItem = "rss_item"
+        case rssScope = "rss_scope"
+        case messageFraction = "msg_fraction"
         case folder
         case messageID = "message_id"
         case uid
@@ -74,10 +134,23 @@ extension NavState: Decodable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // `folder` is required: its absence is how `/get_nav_state` signals
-        // "no cursor yet" (it returns `{}`), so a missing key here surfaces as
-        // a decode failure that `loadNavState` maps to nil.
-        self.folder = try container.decode(String.self, forKey: .folder)
+        let kindRaw = try container.decodeIfPresent(String.self, forKey: .kind)
+        self.kind = kindRaw == Kind.rss.rawValue ? .rss : .mail
+        if kind == .rss {
+            // A feed cursor's identity is its item; no item, no cursor.
+            self.rssItem = try container.decode(String.self, forKey: .rssItem)
+            self.rssScope = try container.decodeIfPresent(String.self, forKey: .rssScope)
+            self.folder = try container.decodeIfPresent(String.self, forKey: .folder) ?? ""
+        } else {
+            // `folder` is required on a mail cursor: its absence is how
+            // `/get_nav_state` signals "no cursor yet" (it returns `{}`), so a
+            // missing key surfaces as a decode failure that `loadNavState`
+            // maps to nil.
+            self.rssItem = nil
+            self.rssScope = nil
+            self.folder = try container.decode(String.self, forKey: .folder)
+        }
+        self.messageFraction = try container.decodeIfPresent(Double.self, forKey: .messageFraction)
         self.messageID = try container.decodeIfPresent(String.self, forKey: .messageID)
         self.uid = try container.decodeIfPresent(UInt32.self, forKey: .uid)
         self.uidValidity = try container.decodeIfPresent(UInt32.self, forKey: .uidValidity)
@@ -97,7 +170,15 @@ extension NavState {
     /// client cannot forge it. `uid`/`uidValidity` go out as `Int` because
     /// `JSONSerialization` has no unsigned type.
     public var requestBody: [String: Any] {
-        var body: [String: Any] = ["folder": folder, "client_id": clientID]
+        var body: [String: Any] = ["client_id": clientID]
+        if kind == .rss, let rssItem {
+            body["kind"] = Kind.rss.rawValue
+            body["rss_item"] = rssItem
+            if let rssScope { body["rss_scope"] = rssScope }
+        } else {
+            body["folder"] = folder
+        }
+        if let messageFraction { body["msg_fraction"] = messageFraction }
         if let messageID { body["message_id"] = messageID }
         if let uid { body["uid"] = Int(uid) }
         if let uidValidity { body["uid_validity"] = Int(uidValidity) }

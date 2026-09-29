@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
+import com.cabalmail.android.navigation.NavCursor
 import com.cabalmail.android.navigation.ResumeSessionStore
+import com.cabalmail.android.reading.ReadingAnchor
 import com.cabalmail.android.reading.ReadingPositionKey
 import com.cabalmail.android.reading.ReadingPositions
 import com.cabalmail.kit.models.RssItem
@@ -61,7 +63,10 @@ class FeedItemDetailViewModel(
     private val preferences: StateFlow<AppPreferences>,
     private val positions: ReadingPositions? = null,
     private val session: ResumeSessionStore? = null,
+    private val navCursor: NavCursor? = null,
 ) : ViewModel() {
+    /** The list scope this item was opened from, for the cross-device cursor. */
+    private var scopeToken: String? = null
     private val itemId = "$feedId#$sortKey"
     private val positionKey = ReadingPositionKey.feed(itemId)
     private var latestFraction: Float? = null
@@ -96,7 +101,13 @@ class FeedItemDetailViewModel(
                 )
             val restore = item?.let { positions?.fraction(positionKey) }
             // Where the user is now, for the next cold launch.
-            if (item != null) session?.recordFeedItem(itemId)
+            if (item != null) {
+                session?.recordFeedItem(itemId)
+                // The cross-device cursor follows the item being read
+                // (resume-session plan, Phase C), from wherever it was left.
+                scopeToken = session?.current()?.feedScope
+                navCursor?.recordFeedItem(itemId, scopeToken, restore?.let(ReadingAnchor::format), restore?.toDouble())
+            }
             mutableState.update {
                 it.copy(
                     item = item,
@@ -131,7 +142,11 @@ class FeedItemDetailViewModel(
         recordJob =
             viewModelScope.launch {
                 kotlinx.coroutines.delay(SCROLL_SETTLE_MS)
-                latestFraction?.let { runCatching { positions.record(positionKey, it) } }
+                latestFraction?.let { fraction ->
+                    runCatching { positions.record(positionKey, fraction) }
+                    val anchor = ReadingAnchor.format(fraction)
+                    navCursor?.recordFeedItem(itemId, scopeToken, anchor, anchor?.let { fraction.toDouble() })
+                }
             }
     }
 
@@ -224,6 +239,7 @@ class FeedItemDetailViewModel(
                         preferences = container.preferences.preferences,
                         positions = container.readingPositions,
                         session = container.resumeSession,
+                        navCursor = container.navCursor,
                     )
                 }
             }

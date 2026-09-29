@@ -121,12 +121,6 @@ struct MailRootView: View {
     @State private var contentColumnWidth: CGFloat = 0
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
-    /// Drives the cross-client cursor reconcile: returning to the foreground
-    /// re-reads the server cursor and, if another client moved it on, offers
-    /// the "pick up where you left off" toast. The initial launch transition
-    /// doesn't fire `.onChange`, so a cold launch offers its own resume toast
-    /// from the folder-load path (`finishLaunchLanding`) instead.
-    @Environment(\.scenePhase) private var scenePhase
     /// Global-search model for the wide (iPad-regular / macOS) layout, owned
     /// here so the toolbar search field and the content column share one query
     /// and result set. The compact-width analogue is `SearchView` (the iPhone
@@ -441,22 +435,17 @@ struct MailRootView: View {
             appState.endMessageDrag()
             return false
         }
-        // Returning to the foreground after the initial launch: if another
-        // client moved the cursor on, offer the jump. `hasLoadedInitial` gates
-        // out the cold-launch path (which offers its own resume toast via the
-        // sidebar's onFoldersLoaded), and `old != .active` ignores in-app
-        // interruptions that didn't actually background us.
-        .onChange(of: scenePhase) { old, new in
-            guard new == .active, old != .active,
-                  let coordinator = appState.navCoordinator,
-                  coordinator.hasLoadedInitial else { return }
-            Task {
-                if let cursor = await coordinator.foreignCursorOnForeground() {
-                    appState.showToast(
-                        .resumeNavigation(folderName: Folder(path: cursor.folder).name, cursor: cursor),
-                        duration: 10
-                    )
-                }
+        // The cross-device probe (launch and foreground) lives on
+        // `SignedInRootView`, which every layout keeps mounted. A tapped feed
+        // toast lands here on the wide layouts, where the feed reader shares
+        // this split view: open the scope, or — already showing it — the
+        // parked item directly.
+        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
+            guard isWideSidebar, let request, let coordinator = appState.navCoordinator else { return }
+            if selectedFeedScope == request.scope {
+                if let item = coordinator.consumeFeedItemRestore(for: request.scope) { selectedFeedItem = item }
+            } else {
+                feedSidebarSelection.wrappedValue = request.scope
             }
         }
         // The resume toast was tapped: navigate to the cross-client cursor.
@@ -616,9 +605,6 @@ extension MailRootView {
                         if let current = selectedFolder,
                            let fetched = folders.first(where: { $0.path == current.path }), fetched != current {
                             selectedFolder = fetched
-                        }
-                        if let coordinator = appState.navCoordinator, !coordinator.hasLoadedInitial {
-                            offerForeignCursorAtLaunch(from: folders)
                         }
                     }
                 }

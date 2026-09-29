@@ -102,9 +102,9 @@ additive optional fields.
 
 | Phase | Work item                                                | Status      |
 | ----- | -------------------------------------------------------- | ----------- |
-| A     | Apple: session record, feed-aware launch, position cache | Shipped 1.17.0 (2026-09-11); follow-ups for #1555, #1535, and the restored-item spinner in review (2026-09-13) |
-| B     | Android: position cache + local session record           | In review (2026-09-15): session record + silent launch restore, mail reading positions, foreign-cursor watermark and same-place check |
-| C     | Cross-device RSS toast (server additive fields)          | Not started; follows Phase B. Prerequisite: a dual-form anchor (element + fraction) on Apple; best after Phase D so the hand-off is element-level both ways |
+| A     | Apple: session record, feed-aware launch, position cache | Shipped 1.17.0 (2026-09-11); follow-ups (#1555, #1535, element anchors) 1.18.2; restored-reader spinner finally fixed by #1672 |
+| B     | Android: position cache + local session record           | Shipped 1.19.7 (2026-09-16), PR #1600; device-checked by the user 2026-09-28 |
+| C     | Cross-device RSS toast (server additive fields)          | In review (2026-09-28): feed cursors, dual-form anchor, probes moved to the signed-in root |
 | D     | Element anchors on Android (CSP hash-source boundary)    | Not started; briefed for a separate session (2026-09-13); covers the mail reader too |
 
 The background-termination investigation that surfaced this work is
@@ -245,12 +245,50 @@ hooks, sign-out clears. Not device-tested at the time of writing.
 
 ## Phase C — Cross-device RSS toast
 
-**Status:** Not started. Deliberately sequenced after the Android feed
+**Status:** In review (2026-09-28). Sequenced after the Android feed
 reader (RSS plan Phase 6, shipped 1.19.0) and this plan's Phase B, in
 that order: the toast's whole value is the cross-platform hand-off, so
 built earlier it would serve only Mac-to-iPhone and be tested with one
 client. The RSS plan records the same ordering from its side; the two
-documents should keep agreeing.
+documents should keep agreeing. Built before Phase D, so an
+Apple-to-Android hand-off restores to the fraction, not the element;
+Phase D upgrades that without a contract change.
+
+**As built.**
+
+- **Wire contract** (`set_nav_state`; `get_nav_state` unchanged). A
+  cursor is `mail` (default, `kind` omitted or null: `folder` required,
+  as before) or `rss` (`kind: "rss"`, `rss_item` = `RssItem.id`
+  required, `rss_scope` = scope token optional, no `folder` stored).
+  Either may carry `msg_anchor` and the new `msg_fraction` (0–1, stored
+  as a four-place `Decimal`, read back as a float). Shipped clients that
+  predate it read a folder-less cursor as "nothing to restore". Tests:
+  `lambda/api/_shared/tests/test_nav_state.py`.
+- **Dual-form anchor.** Apple's capture (scroll bridge and poll) now
+  reports the fraction beside the element anchor; `ScrollCapture`,
+  `ReadingPosition`, and the cursor carry both. Android sends its
+  fraction as the anchor's `f` form (which Apple restores directly) and
+  as `msg_fraction`.
+- **Writing a feed cursor.** Both clients write one when an item opens
+  and as it scrolls (Apple `recordFeedItem` / `recordFeedScroll`,
+  Android `NavCursor.recordFeedItem`); returning to mail writes a mail
+  cursor over it, as before.
+- **Offering one.** Foreign, newer than the persisted watermark, not
+  the item this device is already reading, and findable (the local
+  store, else `/rss_get_item`, cached). The toast names the feed.
+  Accepting it seeds the local position cache from the cursor, then
+  opens the feed's scope and item through the existing restore paths
+  (Apple `requestFeedNavigation`; Android `openForeignCursor`). A mail
+  cursor from Android seeds the fraction the same way.
+- **Apple probe placement fixed.** The launch and foreground probes
+  lived in the mail view, so an iPhone that launched into the Feeds tab
+  never offered anything. Both now run from `SignedInRootView`, which
+  every layout keeps mounted, and server writes are held from launch
+  until the probe has read the other device's cursor (the landing would
+  otherwise overwrite it). The compact tab bar and visionOS tabs switch
+  to the section a tapped toast names.
+- **Android** still probes at launch only (it never had a foreground
+  probe); adding one is a separate change if wanted.
 
 **Design constraint found on re-read (2026-09-13): the anchor must be
 dual-form.** Apple captures the element anchor (`i<path>|<delta>`) and

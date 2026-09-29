@@ -61,7 +61,9 @@ extension MessageDetailView {
             printRequestTick: model.printRequestTick,
             restoreAnchor: restoreScrollAnchor,
             onScrollCaptured: { capture in
-                reportMessageScroll(offset: nil, anchor: capture.anchor, atTop: capture.isAtTop)
+                reportMessageScroll(
+                    offset: nil, anchor: capture.anchor, fraction: capture.fraction, atTop: capture.isAtTop
+                )
             }
         )
     }
@@ -120,12 +122,12 @@ extension MessageDetailView {
     /// plain text, `anchor` for HTML; `atTop` clears both rather than storing
     /// a trivial position. The coordinator debounces and only writes on
     /// change, and ignores it unless the cursor is still on this message.
-    func reportMessageScroll(offset: Int?, anchor: String?, atTop: Bool) {
+    func reportMessageScroll(offset: Int?, anchor: String?, fraction: Double? = nil, atTop: Bool) {
         appState.navCoordinator?.recordMessageScroll(
             folderPath: folder.path,
             uid: envelope.uid,
             messageID: envelope.messageId,
-            position: ReadingPosition(anchor: anchor, offset: offset),
+            position: ReadingPosition(anchor: anchor, offset: offset, fraction: fraction),
             atTop: atTop
         )
     }

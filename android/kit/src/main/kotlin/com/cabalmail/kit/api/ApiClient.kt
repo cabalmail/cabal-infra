@@ -811,7 +811,8 @@ class ApiClient(
     /** The stored resume cursor, or null when none has been saved. */
     suspend fun getNavState(): NavState? {
         val state = decode<NavState>(call(HttpMethod.Get, "get_nav_state"))
-        return state.takeIf { it.folder != null }
+        // A mail cursor names a folder, a feed cursor an item; `{}` is none.
+        return state.takeIf { it.folder != null || it.isFeed }
     }
 
     /** Replaces the stored cursor; `updated_at` is stamped server-side. */
