@@ -57,6 +57,26 @@ extension ComposeViewModel {
         }
     }
 
+    /// Banner copy for a send refused because one body conversion failed
+    /// while the bridge stayed up. That can be a one-off, so unlike the
+    /// dead-bridge banner this one leaves Send on offer.
+    static func bodyConversionFailedMessage(_ failure: RichTextEditorController.CallFailure) -> String {
+        "The message editor didn't answer (\(failure.method): \(failure.reason)), so nothing "
+            + "was sent. Your message is still here — try Send again."
+    }
+
+    /// A send's body conversion threw. If the editor has been reported
+    /// unusable meanwhile, keep saying so, since Send is already withdrawn
+    /// (#812). That happens when the bridge died, and when the failing call
+    /// raised a page error: the page reports it through `onBridgeError` too.
+    func noteBodyConversionFailed(_ failure: RichTextEditorController.CallFailure) {
+        if let reason = editorController.bridgeFailure ?? editorUnavailable {
+            noteEditorUnavailable(reason)
+        } else {
+            errorMessage = Self.bodyConversionFailedMessage(failure)
+        }
+    }
+
     // MARK: - Attachments
 
     /// Add an already-loaded file (raw bytes + mime type) as an attachment.
@@ -105,8 +125,8 @@ extension ComposeViewModel {
     /// Assembles the `OutgoingMessage` from the current compose state.
     /// Shared by `send()` and `cancel()` (Save Draft) so both flows ship
     /// an identical message to `/send`.
-    func buildOutgoingMessage(from: EmailAddress) async -> OutgoingMessage {
-        await buildOutgoingMessage(from: from, bodies: computeMessageBodies())
+    func buildOutgoingMessage(from: EmailAddress) async throws -> OutgoingMessage {
+        try await buildOutgoingMessage(from: from, bodies: computeMessageBodies())
     }
 
     /// Assembly over bodies the caller has already converted. `cancel()`
@@ -145,8 +165,15 @@ extension ComposeViewModel {
     /// Resolves the (text, html) MIME-part bodies. `ComposeBodyPolicy`
     /// decides which pane the user authored; this does the WebKit
     /// conversions that answer implies.
-    func computeMessageBodies() async -> ComposeBodies {
-        let richHtml = await editorController.getHTML()
+    ///
+    /// Throws when a conversion fails. The lenient fallback, `""`, reads as
+    /// a pane the user left empty, so a body built from it went out with a
+    /// blank MIME part beside the one the user wrote — or, when `getHTML`
+    /// was the call that failed, with whatever the Markdown pane was seeded
+    /// with instead of what was typed. `styleParagraphs` keeps its identity
+    /// fallback: unstyled HTML is still the right content.
+    func computeMessageBodies() async throws -> ComposeBodies {
+        let richHtml = try await editorController.checked.getHTML()
         let source = ComposeBodyPolicy.source(
             richHTML: richHtml,
             richMirrorsMarkdown: richMirrorsMarkdown,
@@ -158,10 +185,10 @@ extension ComposeViewModel {
         case .empty:
             return ComposeBodies(text: "", html: "", source: source)
         case .rich:
-            let text = await editorController.htmlToMarkdown(richHtml)
+            let text = try await editorController.checked.htmlToMarkdown(richHtml)
             return ComposeBodies(text: text, html: richHtml, source: source)
         case .markdown:
-            let raw = await editorController.markdownToHtml(markdownBody)
+            let raw = try await editorController.checked.markdownToHtml(markdownBody)
             let styled = await editorController.styleParagraphs(raw)
             return ComposeBodies(text: markdownBody, html: styled, source: source)
         case .both:
@@ -256,7 +283,8 @@ extension ComposeViewModel {
         // server copy with an empty draft (#745).
         guard editorController.bridgeFailure == nil else { return }
         guard let fromEmail = currentFromEmail() else { return }
-        let bodies = await computeMessageBodies()
+        // Likewise a single failed conversion: skip, and the next tick retries.
+        guard let bodies = try? await computeMessageBodies() else { return }
         guard hasDraftContent(bodies: bodies) else { return }
         let message = buildOutgoingMessage(from: fromEmail, bodies: bodies)
         await serverDraftQueue.run {
@@ -270,6 +298,16 @@ extension ComposeViewModel {
                 // a duplicate draft copy, never a lost one.
             }
         }
+    }
+
+    /// Delete the draft entirely (user confirmed "Discard draft") and
+    /// dismiss. Also removes the server-side copy when one is recorded —
+    /// discarding on one device should discard everywhere.
+    func discard() async {
+        try? await draftStore.remove(id: draftId)
+        await discardServerDraftCopy()
+        stop()
+        onClose()
     }
 
     /// Drops this session's server-side Drafts copy, behind any save still

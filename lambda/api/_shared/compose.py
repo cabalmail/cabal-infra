@@ -177,8 +177,7 @@ def compose_message(subject, from_header, headers, text, html, attachments=None)
     if len(headers['references']):
         msg['References'] = ' '.join(headers['references'])
     msg['Date'] = formatdate(localtime=True)
-    msg.set_content(text, subtype='plain')
-    msg.add_alternative(html, subtype='html')
+    _set_body(msg, text, html)
     for attachment in attachments or []:
         msg.add_attachment(
             attachment['data'],
@@ -187,6 +186,27 @@ def compose_message(subject, from_header, headers, text, html, attachments=None)
             filename=attachment['filename'],
         )
     return msg
+
+
+def _set_body(msg, text, html):
+    """Writes the body: multipart/alternative when both halves carry
+    content, otherwise one part holding whichever half does.
+
+    Clients send both keys, and this used to wrap them as alternatives
+    unconditionally. An empty half is not another rendering of the message,
+    but a reader cannot tell: it shows the last part it can render, so a
+    message whose `html` arrived empty displayed as a blank body over the
+    text the sender wrote. The tester's direct-API /send (`"html": ""`)
+    delivered exactly that, and so would a client whose HTML conversion
+    failed on the way here. Whitespace counts as empty, since it renders as
+    nothing too; a message with neither half is one empty text/plain part.
+    """
+    if html.strip() and not text.strip():
+        msg.set_content(html, subtype='html')
+        return
+    msg.set_content(text, subtype='plain')
+    if html.strip():
+        msg.add_alternative(html, subtype='html')
 
 
 def unauthorized_sender_response_or_none(user, sender):

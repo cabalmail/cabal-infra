@@ -126,8 +126,9 @@ public final class RichTextEditorController: NSObject {
     /// failed, `ready` never arrived within `readyTimeout`, or the web
     /// content process died after boot. Every bridge call answers with its
     /// empty / identity fallback from that point on, so a caller about to
-    /// *send* or *persist* a converted body must check this and refuse
-    /// rather than treat `""` as "the user wrote nothing" (#745).
+    /// *send* or *persist* a converted body must not treat `""` as "the user
+    /// wrote nothing" (#745). It converts through `checked` instead, which
+    /// throws here and also when one call fails while the bridge is live.
     public private(set) var bridgeFailure: String?
 
     /// True while the editor's contenteditable has DOM focus. Tracked from
@@ -311,6 +312,66 @@ public final class RichTextEditorController: NSObject {
 
 }
 
+// MARK: - Checked conversions
+
+extension RichTextEditorController {
+    /// A bridge call that came back without an answer.
+    public struct CallFailure: Error, Equatable, Sendable {
+        /// The `window.cabal` method that failed, e.g. `markdownToHtml`.
+        public let method: String
+        /// The bridge's recorded failure, or what the call itself ran into.
+        public let reason: String
+    }
+
+    /// The conversions a message body is built from, throwing `CallFailure`
+    /// instead of falling back.
+    ///
+    /// `getHTML()`, `markdownToHtml(_:)` and `htmlToMarkdown(_:)` answer `""`
+    /// when a call fails. That suits a pane import, not a body about to be
+    /// sent: `""` is also what an empty pane answers, so the failure goes
+    /// out as a message part with nothing in it. `bridgeFailure` only covers
+    /// a bridge known to be dead (#745), not one call failing on a live
+    /// bridge, nor the gap between the content process dying and WebKit
+    /// reporting it. These throw in every one of those cases.
+    public var checked: Checked { Checked(controller: self) }
+
+    @MainActor
+    public struct Checked {
+        let controller: RichTextEditorController
+
+        public func getHTML() async throws -> String {
+            try await controller.checkedString("getHTML")
+        }
+
+        public func markdownToHtml(_ markdown: String) async throws -> String {
+            try await controller.checkedString("markdownToHtml", args: [markdown])
+        }
+
+        public func htmlToMarkdown(_ html: String) async throws -> String {
+            try await controller.checkedString("htmlToMarkdown", args: [html])
+        }
+    }
+
+    private func checkedString(_ method: String, args: [Any] = []) async throws -> String {
+        await waitUntilReady()
+        if let reason = bridgeFailure {
+            throw CallFailure(method: method, reason: reason)
+        }
+        let script = "window.cabal.\(method)(\(encode(args)));"
+        let failure: CallFailure
+        do {
+            if let value = try await webView.evaluateJavaScript(script) as? String {
+                return value
+            }
+            failure = CallFailure(method: method, reason: "the editor answered without text")
+        } catch {
+            failure = CallFailure(method: method, reason: error.localizedDescription)
+        }
+        NSLog("[RichTextEditor] %@ failed: %@", method, failure.reason)
+        throw failure
+    }
+}
+
 // MARK: - Bridge plumbing
 
 extension RichTextEditorController {
@@ -402,6 +463,7 @@ extension RichTextEditorController {
     // The WKWebView async/await API can throw on otherwise-benign navigations
     // (e.g. mid-call frame teardown). Conversions and commands aren't worth
     // surfacing errors for — they fall back to an empty / identity result.
+    // The exception is a body being built to send or save: see `checked`.
     private func call(_ method: String, args: [Any] = []) async {
         let script = "window.cabal.\(method)(\(encode(args)));"
         _ = try? await webView.evaluateJavaScript(script)
