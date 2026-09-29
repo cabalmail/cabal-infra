@@ -70,6 +70,15 @@ import XCTest
 ///   swiperow <query> edge:leading|trailing [hold:<s>]
 ///                              horizontal swipe within an element to
 ///                              reveal its swipe actions
+///   pscroll <query> [dx:<pt>] [dy:<pt>] [at:<x>,<y>]
+///                              POINTER scroll over an element (at its
+///                              centre, or at a normalized offset) or an
+///                              `xy:` coordinate: what a trackpad two-finger
+///                              swipe sends on iPadOS, which is scroll input,
+///                              not touches. Negative dx moves content right
+///                              (reveals a row's leading actions), positive
+///                              dx reveals its trailing ones. Arrives as
+///                              continuous (trackpad) scroll input
 ///   scroll <query> dir:up|down [amount:<fraction>] [press:<s>]
 ///   scroll <query> dir:up|down [press:<s>] until:<query>
 ///                              vertical swipe within an element to bring
@@ -239,7 +248,7 @@ final class SimDriveTests: XCTestCase {
     /// REPL rather than answering the command (#902). Checking the app's
     /// state first turns that into an ordinary error result.
     private static let appDependentVerbs: Set<String> = [
-        "dump", "focus", "tap", "type", "cmdv", "key", "drag", "swiperow", "scroll", "exists", "wait"
+        "dump", "focus", "tap", "type", "cmdv", "key", "drag", "swiperow", "pscroll", "scroll", "exists", "wait"
     ]
 
     /// Verbs whose argument begins with a query, and which therefore may be
@@ -360,6 +369,8 @@ final class SimDriveTests: XCTestCase {
             return try drag(args)
         case "swiperow":
             return try swipeRow(remainder)
+        case "pscroll":
+            return try pointerScroll(remainder)
         case "scroll":
             return try scroll(remainder)
         case "exists":
@@ -419,6 +430,30 @@ final class SimDriveTests: XCTestCase {
             thenHoldForDuration: hold
         )
         return "swiped \(query) \(edge) (hold \(hold)s)"
+    }
+
+    /// Pointer scroll over an element or an application coordinate -- what a
+    /// trackpad's two-finger swipe sends on iPadOS. XCUITest delivers it as
+    /// continuous scroll input, the trackpad kind (measured on iPadOS 27: a
+    /// recognizer taking only `.continuous` receives it, one taking only
+    /// `.discrete` does not). `drag` and `swiperow` synthesize TOUCHES, which
+    /// is a different input path: a view can answer one and ignore the other.
+    private func pointerScroll(_ remainder: String) throws -> String {
+        let query = try selector(from: remainder, verb: "pscroll", options: ["dx", "dy", "at"])
+        let args = remainder.split(separator: " ").map(String.init)
+        let deltaX = value(named: "dx", in: args).flatMap(Double.init) ?? 0
+        let deltaY = value(named: "dy", in: args).flatMap(Double.init) ?? 0
+        let target: XCUICoordinate
+        if query.hasPrefix("xy:") {
+            target = try coordinate(from: query)
+        } else {
+            let offset = value(named: "at", in: args)?.split(separator: ",").compactMap { Double($0) }
+            let normalized = offset.flatMap { $0.count == 2 ? CGVector(dx: $0[0], dy: $0[1]) : nil }
+                ?? CGVector(dx: 0.5, dy: 0.5)
+            target = try element(for: query).coordinate(withNormalizedOffset: normalized)
+        }
+        target.scroll(byDeltaX: deltaX, deltaY: deltaY)
+        return "pointer-scrolled \(query) by \(deltaX),\(deltaY)"
     }
 
     /// Vertical swipe *within* an element, to bring content below (or above)

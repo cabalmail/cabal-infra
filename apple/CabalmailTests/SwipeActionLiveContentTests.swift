@@ -161,7 +161,7 @@ private struct SwipeHarnessList: View {
         switch shape {
         case .swipeActionRow:
             SwipeActionRow(
-                height: SwipeTestHarness.rowHeight, rowBackground: .clear,
+                height: SwipeTestHarness.rowHeight, contentID: index, rowBackground: .clear,
                 leading: leading, trailing: trailing,
                 onSelect: {}, content: { label }
             )

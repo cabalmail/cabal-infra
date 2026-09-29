@@ -83,7 +83,7 @@ private struct IndexedList: View {
                         let uid = model.envelopes[index].uid
                         DisposingRow(model: model, uid: uid, rowHeight: SwipeTestHarness.rowHeight) {
                             SwipeActionRow(
-                                height: SwipeTestHarness.rowHeight, rowBackground: .clear,
+                                height: SwipeTestHarness.rowHeight, contentID: uid, rowBackground: .clear,
                                 leading: nil,
                                 trailing: SwipeActionSpec(systemImage: "archivebox", title: "Archive", tint: .red) {
                                     acted.uids.append(uid)

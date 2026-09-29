@@ -28,6 +28,8 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
     /// The row wrapper and the one file that builds rows with it.
     private static let rowSource = "Cabalmail/Views/SwipeActionRow.swift"
     private static let listSource = "Cabalmail/Views/MessageListView+Selection.swift"
+    /// The 27 path's trackpad half on iPadOS.
+    private static let trackpadSource = "Cabalmail/Views/TrackpadSwipe.swift"
 
     /// The 27 path exists and is availability-gated, so the pre-27 floor keeps
     /// compiling. Both edges are wired on it: a path that revealed only one
@@ -76,6 +78,35 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
             built.lowerBound, published.lowerBound,
             "the specs are published outside the .swipeActions modifiers, or they never reach the buttons (#1747)"
         )
+    }
+
+    /// On iPadOS the container's reveal answers touches only, so a trackpad's
+    /// two-finger swipe revealed nothing on the 27 path. The row carries a
+    /// trackpad half of its own and the container installs the coordinator
+    /// that keeps it to one row at a time; dropping either wiring brings the
+    /// regression back. What the half does once wired is
+    /// `TrackpadSwipeTrackerTests` (iOS bundle), which cannot see the wiring:
+    /// SwiftUI attaches the recognizer only once an event arrives.
+    func testContainerPathCarriesTheTrackpadHalfOnIOS() throws {
+        let code = Self.code(in: try Self.source(Self.rowSource))
+        let container = try Self.slice(code, from: "private var containerRow: some View {")
+        XCTAssertTrue(container.contains("withTrackpadSwipes("), "the 27 row drops its trackpad half")
+        let wrapper = try Self.slice(code, from: "private func withTrackpadSwipes(")
+        XCTAssertTrue(
+            wrapper.contains("#if os(iOS)"),
+            "the trackpad half is iOS-only; macOS reads the trackpad natively"
+        )
+        XCTAssertTrue(wrapper.contains(".trackpadSwipeReveal("), "the wrapper no longer installs the trackpad half")
+        let coordinated = try Self.slice(code, from: "func coordinatedSwipeActionsContainer() -> some View {")
+        XCTAssertTrue(
+            coordinated.contains(".trackpadSwipeCoordination()"),
+            "the container no longer installs the trackpad coordinator"
+        )
+        let bridge = Self.code(in: try Self.source(Self.trackpadSource))
+        let reveal = try Self.slice(bridge, from: "private struct TrackpadSwipeReveal: ViewModifier {")
+        for hook in ["TrackpadSwipeRecognizer(", "tracker.began(", "tracker.changed(", "tracker.ended("] {
+            XCTAssertTrue(reveal.contains(hook), "the reveal no longer feeds \(hook) from the recognizer")
+        }
     }
 
     /// The pre-27 path survives, both edges included: the floor is iOS 18 /
