@@ -113,9 +113,17 @@ enum ListColumnWidth {
     /// re-seated reports passing widths that are not its own — 0 and 91pt were
     /// measured mid-way through a window resize that clamped it. And only
     /// beyond the rounding slack the sidebar allows
-    /// (`SidebarColumnWidth.persistEpsilon`). A width the window clamps the
-    /// column to is remembered like a dragged one: the column comes back as it
-    /// was left, in the window it was left in.
+    /// (`SidebarColumnWidth.persistEpsilon`).
+    ///
+    /// Not, either, a width the range is holding the column at short of the one
+    /// remembered. That is the window, or the addresses inspector opening
+    /// beside the list, squeezing the column rather than the user resizing it,
+    /// and the split hands the width back as soon as there is room: measured on
+    /// macOS 27, a 500pt list held at 400 while the inspector was open went
+    /// back to 500 when it closed. Remembering the 400 brought the list back at
+    /// 400 on the next launch, into a window with room for 500. A drag that
+    /// takes the column to the edge of its range is still remembered; it
+    /// starts from inside the range.
     static func shouldPersist(measured: CGFloat,
                               stored: Double,
                               splitWidth: CGFloat,
@@ -124,7 +132,11 @@ enum ListColumnWidth {
         guard splitWidth > 0,
               measured >= bounds.minimum - slack,
               measured <= bounds.maximum + slack else { return false }
-        return abs(measured - resolved(stored: stored)) > slack
+        let remembered = resolved(stored: stored)
+        let heldAtCeiling = measured >= bounds.maximum - slack && remembered > bounds.maximum
+        let heldAtFloor = measured <= bounds.minimum + slack && remembered < bounds.minimum
+        guard !heldAtCeiling, !heldAtFloor else { return false }
+        return abs(measured - remembered) > slack
     }
 
     /// Width the pinned column leaves over and above the reader's floor.
