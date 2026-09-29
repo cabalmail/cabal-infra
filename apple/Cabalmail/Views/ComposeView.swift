@@ -200,10 +200,12 @@ struct ComposeView: View {
     /// they can afford the bridge round trip because `windowShouldClose`
     /// has already declined the close and returned `false`.
     private func cancelOrAsk() async {
-        let bodies = await model.computeMessageBodies()
+        // A failed conversion can't say the buffer is empty, so it asks,
+        // the same as a dead bridge.
+        let bodies = try? await model.computeMessageBodies()
         guard !ComposeCancelPolicy.needsDecision(
-            bridgeFailed: model.editorController.bridgeFailure != nil,
-            hasContent: model.hasDraftContent(bodies: bodies)
+            bridgeFailed: bodies == nil || model.editorController.bridgeFailure != nil,
+            hasContent: bodies.map { model.hasDraftContent(bodies: $0) } ?? false
         ) else {
             showDiscardConfirm = true
             return

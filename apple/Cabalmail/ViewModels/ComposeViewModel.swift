@@ -409,11 +409,13 @@ final class ComposeViewModel {
         isSending = true
         defer { isSending = false }
         do {
-            let message = await buildOutgoingMessage(from: fromEmail)
-            // Body assembly runs through the WebKit bridge, which answers
-            // "" for every conversion once it is dead. Sending that would
-            // deliver an empty message the user had written text into, so
-            // refuse and leave the window open (#745).
+            // Throws `CallFailure` when a body conversion fails, rather than
+            // handing back the `""` that used to go out as an empty part.
+            let message = try await buildOutgoingMessage(from: fromEmail)
+            // The bridge can also die just after converting. Send is
+            // withdrawn once it has (#812), so refuse and leave the window
+            // open rather than deliver from a composer that says it can't
+            // (#745).
             if let failure = editorController.bridgeFailure {
                 noteEditorUnavailable(failure)
                 return false
@@ -445,6 +447,8 @@ final class ComposeViewModel {
             stop()
             onClose()
             return true
+        } catch let failure as RichTextEditorController.CallFailure {
+            noteBodyConversionFailed(failure)
         } catch let error as CabalmailError {
             errorMessage = describe(error)
         } catch {
@@ -476,17 +480,19 @@ final class ComposeViewModel {
         let fromEmail = currentFromEmail()
         // Bodies first: converting them is what makes a sick bridge report
         // itself, so `bridgeFailure` is only trustworthy afterwards (#745).
-        let bodies = await computeMessageBodies()
+        // A conversion that fails on a live bridge leaves no body either,
+        // so it resolves the way a dead bridge does.
+        let bodies = try? await computeMessageBodies()
         switch ComposeCancelPolicy.resolve(
-            bridgeFailed: editorController.bridgeFailure != nil,
-            hasContent: hasDraftContent(bodies: bodies),
+            bridgeFailed: bodies == nil || editorController.bridgeFailure != nil,
+            hasContent: bodies.map { hasDraftContent(bodies: $0) } ?? false,
             hasFrom: fromEmail != nil
         ) {
         case .closeKeepingLocalCopy:
-            // Pushing an all-empty body would replace a good Drafts copy
-            // with a blank one, so keep the local draft (already flushed
-            // above) and let the window close — trapping the user in a
-            // compose they can't fix is worse.
+            // There is no body to push, and pushing an empty one would
+            // replace a good Drafts copy with a blank one, so keep the local
+            // draft (already flushed above) and let the window close —
+            // trapping the user in a compose they can't fix is worse.
             stop()
             onClose()
             return true
@@ -500,22 +506,12 @@ final class ComposeViewModel {
             errorMessage = ComposeCancelPolicy.missingFromMessage
             return false
         case .saveToServer:
-            guard let fromEmail else { return false }
+            guard let fromEmail, let bodies else { return false }
             return await pushDraftToServer(buildOutgoingMessage(from: fromEmail, bodies: bodies))
         }
     }
 
-    /// Delete the draft entirely (user confirmed "Discard draft") and
-    /// dismiss. Also removes the server-side copy when one is recorded —
-    /// discarding on one device should discard everywhere.
-    func discard() async {
-        try? await draftStore.remove(id: draftId)
-        await discardServerDraftCopy()
-        stop()
-        onClose()
-    }
-
-    // Attachment helpers, recipient parsing, message-body assembly, and
-    // error rendering live in `ComposeViewModel+Internals.swift` to keep
-    // this type body under the SwiftLint length ceiling.
+    // Discard, attachment helpers, recipient parsing, message-body
+    // assembly, and error rendering live in `ComposeViewModel+Internals.swift`
+    // to keep this type body under the SwiftLint length ceiling.
 }
