@@ -115,6 +115,38 @@ actor FakeImapClient: ImapClient {
         heldSearch = nil
     }
 
+    // The same hold for the list's own wire calls, so a test can make a
+    // move, STATUS or top-page fetch answer after something else has
+    // happened -- e.g. a refresh fetched before a dispose's move landed that
+    // only arrives once the dispose has finished. `holdNext(_:)` parks the
+    // next such call, `awaitHeld(_:)` waits for it to arrive, and
+    // `releaseHeld(_:)` lets it answer with whatever is scripted by then.
+    enum HeldCall: Hashable, Sendable { case move, status, topEnvelopes }
+    private var callsToHold: Set<HeldCall> = []
+    private var heldCalls: [HeldCall: CheckedContinuation<Void, Never>] = [:]
+    private var heldCallArrivals: [HeldCall: CheckedContinuation<Void, Never>] = [:]
+
+    func holdNext(_ call: HeldCall) {
+        callsToHold.insert(call)
+    }
+
+    func awaitHeld(_ call: HeldCall) async {
+        guard heldCalls[call] == nil else { return }
+        await withCheckedContinuation { heldCallArrivals[call] = $0 }
+    }
+
+    func releaseHeld(_ call: HeldCall) {
+        heldCalls.removeValue(forKey: call)?.resume()
+    }
+
+    private func parkIfHeld(_ call: HeldCall) async {
+        guard callsToHold.remove(call) != nil else { return }
+        await withCheckedContinuation { continuation in
+            heldCalls[call] = continuation
+            heldCallArrivals.removeValue(forKey: call)?.resume()
+        }
+    }
+
     func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
         searchCalls.append(query)
         if holdNext {
@@ -148,6 +180,7 @@ actor FakeImapClient: ImapClient {
         moveCalls.append(MoveCall(
             folder: folder, uids: Set(uids), destination: destination, markSeen: markSeen
         ))
+        await parkIfHeld(.move)
         if !moveResults.isEmpty {
             try moveResults.removeFirst().get()
         }
@@ -180,6 +213,7 @@ actor FakeImapClient: ImapClient {
     func subscribe(path: String) async throws { try trapVoid() }
     func unsubscribe(path: String) async throws { try trapVoid() }
     func status(path: String, flagged: Bool) async throws -> FolderStatus {
+        await parkIfHeld(.status)
         // Mirror the production transport: a URLSession data task whose
         // surrounding Task is cancelled fails with `URLError.cancelled`,
         // which `URLSessionHTTPTransport` normalizes to `network(...)`.
@@ -196,6 +230,7 @@ actor FakeImapClient: ImapClient {
     func topEnvelopes(
         folder: String, limit: UInt32, totalMessages: UInt32, sort: SortCriterion
     ) async throws -> [Envelope] {
+        await parkIfHeld(.topEnvelopes)
         // Cancellation-sensitive for the same reason as `status(path:flagged:)`.
         if Task.isCancelled { throw CabalmailError.network("cancelled") }
         guard let topEnvelopesResult else { return try trap() }
