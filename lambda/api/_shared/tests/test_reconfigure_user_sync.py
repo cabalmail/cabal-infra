@@ -31,6 +31,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 RECONFIGURE = os.path.join(_ROOT, 'docker', 'shared', 'reconfigure.sh')
 ENTRYPOINT = os.path.join(_ROOT, 'docker', 'shared', 'entrypoint.sh')
+SYNC_SCRIPT = os.path.join(_ROOT, 'docker', 'shared', 'sync-users.sh')
 
 SYNC = '/usr/local/bin/sync-users.sh'
 COMPILE = '/usr/local/bin/compile-user-rules.py'
@@ -103,6 +104,15 @@ class ReconfigureSyncsUsers(unittest.TestCase):
             '||' in line or '||' in '\n'.join(tail),
             'reconfigure.sh runs under `set -e`: an unguarded sync-users failure '
             'takes the whole reconfigure sidecar down')
+
+    def test_the_procmailrc_install_is_content_guarded(self):
+        sync = code(read(SYNC_SCRIPT))
+        install = sync.index('install -o "$username" -g "$username" -m 644')
+        self.assertIn(
+            'cmp -s /etc/procmailrc', sync[max(0, install - 200):install],
+            'the ~/.procmailrc install must sit under a `cmp -s` guard: the sync now '
+            'runs on every reconfigure pass and `install` writes in place, so an '
+            'unconditional rewrite races procmail reading the file it is replacing')
 
     def test_the_sync_precedes_the_rules_compiler(self):
         self.assertLess(
