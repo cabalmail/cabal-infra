@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.5] - 2026-09-29
+
+### Fixed
+- Apple: **A message the editor fails to convert stays unsent.** Send
+  refused only when the editor had stopped working altogether. If a single
+  conversion failed while it was still running, the message went out
+  anyway: without its HTML part from the Markdown pane, without its
+  plain-text part from the rich pane, or, when reading the rich pane
+  failed, carrying the quoted original or signature instead of what was
+  typed. Send now stops and says nothing was sent, with the message still
+  in the window to try again. Autosave skips that round, and closing the
+  window keeps the last saved draft instead of saving an empty one over it.
+- Apple: **macOS column widths survive a relaunch.** The message list and
+  the Addresses panel now open at the width they were last dragged to (the
+  panel keeps it across closing and reopening, too), and the folder sidebar
+  returns to within a point of where it was left rather than within 4pt. A
+  list that a small window or the open Addresses panel was squeezing when
+  the app quit still comes back at its dragged width. It used to come back
+  at its minimum: on macOS 27, AppKit's own saved divider positions
+  restored it short by the sidebar's width, so the app no longer uses them.
+- Apple: **Rapid swipe-to-dispose stays on the right row.** Disposing
+  message after message from the top of the list, a swipe made while the
+  server was still answering the previous one could open its actions on
+  the message below the one under your thumb or pointer: the disposed row
+  had finished its exit animation but stayed in the list until the server
+  replied, so the rows had not really moved up yet. The row now leaves as
+  soon as its animation ends, and no row takes a new tap or swipe during
+  that animation. A refresh already under way when a message was archived,
+  moved or deleted can also no longer bring it back for a moment.
+- **Mail no longer arrives with an empty body part.** `/send` and
+  `/save_draft` sent the text and HTML bodies as `multipart/alternative`
+  even when one of them was empty. A reader shows the last part it can
+  render, so a message whose HTML body was empty displayed as a blank body
+  in any client showing rich content, with the text reachable only as
+  plain text. Both parts now go out only when both have content;
+  otherwise the message is a single part holding the one that does.
+- Apple: **One row's swipe actions at a time, acting on the swiped
+  message.** On iOS, iPadOS, macOS and visionOS 27 the message list's
+  swipe actions come from the system's swipe-actions container again:
+  revealing one row's actions retracts any other row's, and a tap on
+  empty space or a scroll dismisses them. Unlike 1.22.2's attempt, each
+  action now follows its row as it changes: read/unread flips with the
+  message, and after the list shifts a swipe acts on the message the row
+  shows. Earlier OS versions keep the previous behaviour, where each
+  row's reveal is independent and stays put.
+
 ## [1.22.4] - 2026-09-29
 
 ### Added
