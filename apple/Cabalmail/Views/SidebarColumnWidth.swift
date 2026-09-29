@@ -30,9 +30,17 @@ enum SidebarColumnWidth {
     /// those instead would let a systematic delta walk the stored width a
     /// little further on every launch. Measured on macOS 26 an unresized
     /// column reports back exactly the width it was given (the split's own 8pt
-    /// goes to the divider, outside the measurement), so this is slack against
-    /// rounding, not a correction.
-    static let persistEpsilon: CGFloat = 4
+    /// goes to the divider, outside the measurement), and on 27 the sidebar,
+    /// list and inspector all do, so this is slack against rounding, not a
+    /// correction.
+    ///
+    /// It is also how far from where a drag stops the remembered width can be:
+    /// a drag writes each width it reaches beyond the slack, so the point it
+    /// comes to rest on can sit up to the slack away from the last write. At
+    /// the 4pt this used to be, a drag measured coming to rest at 352pt left
+    /// 356 remembered. The other columns that remember their widths share it
+    /// (`ListColumnWidth`, `AddressInspectorWidth`).
+    static let persistEpsilon: CGFloat = 1
 
     static func clamp(_ width: CGFloat) -> CGFloat {
         min(max(width, minimum), maximum)

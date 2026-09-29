@@ -1,14 +1,5 @@
 import SwiftUI
 
-/// Declared width of the trailing addresses inspector, shared by the
-/// `.inspector` modifier that sizes it and by `ToolbarSearchFieldWidth`, which
-/// has to know how far it can reach.
-enum AddressInspectorWidth {
-    static let minimum: CGFloat = 260
-    static let ideal: CGFloat = 300
-    static let maximum: CGFloat = 420
-}
-
 /// Width policy for the search field that rides the message-list column's
 /// toolbar on wide layouts (`MailRootView.toolbarSearchField`) — macOS and
 /// visionOS. iPadOS draws the field in the column instead, because its
@@ -136,19 +127,3 @@ enum ToolbarSearchFieldWidth {
         )
     }
 }
-
-#if !os(visionOS)
-extension View {
-    /// Sizes the trailing addresses inspector to `AddressInspectorWidth`, so
-    /// the panel and the search-field policy that has to account for it read
-    /// their widths from the same place. (visionOS presents the panel as a
-    /// sheet instead and never calls this.)
-    func addressInspectorWidth() -> some View {
-        inspectorColumnWidth(
-            min: AddressInspectorWidth.minimum,
-            ideal: AddressInspectorWidth.ideal,
-            max: AddressInspectorWidth.maximum
-        )
-    }
-}
-#endif

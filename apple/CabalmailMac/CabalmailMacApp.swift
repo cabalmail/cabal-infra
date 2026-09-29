@@ -31,6 +31,15 @@ struct CabalmailMacApp: App {
     // Notifications inserts/removes the item live via `isInserted`.
     @AppStorage(menuBarExtraDefaultsKey) private var showMenuBarExtra = true
 
+    init() {
+        // AppKit puts the main window's saved divider positions back before
+        // any of its SwiftUI content exists, and puts the message list's back
+        // wrong. The columns persist their own widths instead, so AppKit's
+        // copy has to be gone before the first window is built. See
+        // `SplitViewAutosave`.
+        SplitViewAutosave.clearSavedFrames(windowGroupID: mainWindowID)
+    }
+
     var body: some Scene {
         WindowGroup("Cabalmail", id: mainWindowID) {
             ContentView()
