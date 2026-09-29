@@ -47,22 +47,47 @@ extension MessageListViewModel {
 
     /// Capture the server-sourced counts from a STATUS reply: `totalMessages`
     /// (the All pill and the pagination gate) plus the Unread/Flagged pill
-    /// counts. Returns the message total so `refresh()` can reuse it for the
-    /// top-page fetch. `unseen`/`flagged` fall back to the prior value when a
+    /// counts. Returns the server's own message total so `refresh()` can
+    /// address the top-page fetch in the server's numbering. `unseen`/`flagged` fall back to the prior value when a
     /// transient STATUS drops them, rather than flashing 0. Lives here so the
     /// main view-model body stays under SwiftLint's type-body cap.
-    func applyStatusCounts(_ status: FolderStatus) -> UInt32 {
-        let messages = UInt32(max(0, status.messages ?? 0))
+    ///
+    /// `mayPredateRemoval` marks a reply that could have been taken before a
+    /// removal this client already applied -- one still in flight, or one
+    /// confirmed after the refresh began. Such a reply would count the
+    /// departed message again, so it may lower the counts but not raise them
+    /// (new mail waits for the next STATUS), and it isn't published to the
+    /// sidebar badge.
+    func applyStatusCounts(_ status: FolderStatus, mayPredateRemoval: Bool = false) -> UInt32 {
+        let serverMessages = UInt32(max(0, status.messages ?? 0))
+        var messages = serverMessages
+        var fetchedUnseen = max(0, status.unseen ?? unseen)
+        var fetchedFlagged = max(0, status.flagged ?? flagged)
+        if mayPredateRemoval {
+            messages = min(messages, totalMessages)
+            fetchedUnseen = min(fetchedUnseen, unseen)
+            fetchedFlagged = min(fetchedFlagged, flagged)
+        }
         // A changed folder size shifts every absolute index, so a bottom window
         // staged against the old total is no longer aligned -- drop it (the
         // stamp check in `performLoadWindow` is the backstop for the window
         // between a mutation and the STATUS that reflects it).
         if messages != totalMessages { invalidateBottomPrefetch() }
         totalMessages = messages
-        unseen = max(0, status.unseen ?? unseen)
-        flagged = max(0, status.flagged ?? flagged)
-        publishFolderCounts(status)
-        return messages
+        unseen = fetchedUnseen
+        flagged = fetchedFlagged
+        if !mayPredateRemoval { publishFolderCounts(status) }
+        return serverMessages
+    }
+
+    /// True when a STATUS or fetch issued at `startedAt` may have been
+    /// answered from this folder as it stood before a removal the list has
+    /// already applied: one is still in flight here or in the reader, or the
+    /// server confirmed one after `startedAt`.
+    func removalMayPostdate(_ startedAt: ContinuousClock.Instant) -> Bool {
+        !pendingRemovedUIDs.isEmpty
+            || !(appState.pendingMoveUIDs[folder.path]?.isEmpty ?? true)
+            || appState.removalConfirmed(folderPath: folder.path, after: startedAt)
     }
 
     /// Push the same STATUS reply at the sidebar badge. The badge and the
@@ -170,7 +195,8 @@ extension MessageListViewModel {
 
     /// Apply the in-flight-write shields to a freshly fetched page so a
     /// stale refresh can't undo an optimistic update. Rows we've
-    /// optimistically removed (a move/dispose still settling) are dropped,
+    /// optimistically removed (a move/dispose still settling, or one the
+    /// server has confirmed but an older fetch may still carry) are dropped,
     /// and rows with an in-flight flag write keep their optimistic flags
     /// rather than the fetched (pre-toggle) ones. Both the in-memory merge
     /// and the cache persist run through this so memory and disk stay in
@@ -179,12 +205,17 @@ extension MessageListViewModel {
     private func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
         let detailFlagWrites = appState.pendingFlagWriteUIDs[folder.path] ?? []
         let detailMoves = appState.pendingMoveUIDs[folder.path] ?? []
+        let confirmedGone = appState.confirmedRemovalUIDs(folderPath: folder.path)
         return fetched.compactMap { fetchedEnvelope in
             // A row optimistically removed by either this view model
             // (`pendingRemovedUIDs`) or the detail view (shared, folder-keyed
-            // `appState.pendingMoveUIDs`) stays gone until the move resolves.
+            // `appState.pendingMoveUIDs`) stays gone until the move resolves --
+            // and after that, a UID the server confirmed gone stays gone for
+            // good: IMAP never reuses one within a mailbox, so a fetch that
+            // still carries it was answered before the move landed.
             if pendingRemovedUIDs.contains(fetchedEnvelope.uid)
-                || detailMoves.contains(fetchedEnvelope.uid) { return nil }
+                || detailMoves.contains(fetchedEnvelope.uid)
+                || confirmedGone.contains(fetchedEnvelope.uid) { return nil }
             // A flag write in flight from either this view model
             // (`pendingFlagUIDs`) or the detail view (shared, folder-keyed
             // `appState.pendingFlagWriteUIDs`) shields the row's flags.

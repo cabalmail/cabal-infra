@@ -278,6 +278,11 @@ struct MessageDetailView: View {
                         inFlight: inFlight
                     )
                 }
+                // ...and past it: once the server confirms, keep the message
+                // out of any refresh that was already in flight.
+                newModel.onMoveConfirmed = { [weak appState] in
+                    appState?.recordConfirmedRemovals(folderPath: folderPath, uids: [uid])
+                }
                 model = newModel
                 activeModel = newModel
             }

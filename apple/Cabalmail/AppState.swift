@@ -221,6 +221,19 @@ final class AppState {
     /// per-mailbox UID-uniqueness reason as `pendingFlagWriteUIDs`.
     private(set) var pendingMoveUIDs: [String: Set<UInt32>] = [:]
 
+    /// UIDs the server has confirmed gone from a folder -- a list or reader
+    /// dispose, move or purge landed -- keyed by folder path, with when that
+    /// was confirmed. The shields above end when a move resolves, but a
+    /// refresh already in flight can still answer with the folder as it was
+    /// before the move and put the message back (the list then shifts under
+    /// the user's pointer). IMAP never reuses a UID within a mailbox, so a
+    /// fetch that still carries one of these is stale by definition, and
+    /// `MessageListViewModel.shieldFetched` drops it. Entries age out after
+    /// `confirmedRemovalWindow`, longer than any request can stay in flight.
+    /// Read at merge time only, like `pendingMoveUIDs`.
+    /// Maintained by the methods in `AppState+ConfirmedRemovals.swift`.
+    var confirmedRemovals: [String: [UInt32: ContinuousClock.Instant]] = [:]
+
     /// True while a message-row drag is in flight on a wide-screen layout.
     /// `MailRootView`'s sidebar watches this to temporarily reveal the
     /// folder list as a drop target when the user is on the Addresses tab,

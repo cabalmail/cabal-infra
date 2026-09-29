@@ -49,7 +49,7 @@ extension MessageDetailViewModel {
                 folder: folder.path,
                 uids: [envelope.uid]
             )
-            await pruneCachesAfterMove()
+            await confirmRemoval()
         } catch {
             errorMessage = "\(error)"
             onFailure?(error)

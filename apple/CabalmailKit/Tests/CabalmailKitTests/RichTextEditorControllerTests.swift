@@ -202,3 +202,109 @@ final class RichTextEditorControllerTests: XCTestCase {
         XCTAssertEqual(styled, "<p style=\"margin:0\">Para 1<br><br>Para 2</p>\n")
     }
 }
+
+// MARK: - Checked conversions
+
+/// The conversions a message body is built from go through `checked`, which
+/// has to report a failed call instead of answering the lenient API's `""`.
+/// That `""` is what went out as an empty MIME part: `bridgeFailure` only
+/// covers a bridge known to be dead (#745), so one call failing on a live
+/// bridge passed every guard. Same file as the suite so these share its
+/// booted controller and its CI carve-out.
+extension RichTextEditorControllerTests {
+    /// Positive control: on a healthy bridge the checked calls answer
+    /// exactly what the lenient ones do.
+    func testCheckedConversionsMatchTheLenientOnes() async throws {
+        let html = try await controller.checked.markdownToHtml("Hello world")
+        XCTAssertEqual(html, "<p>Hello world</p>\n")
+
+        let markdown = try await controller.checked.htmlToMarkdown("<p>Hello</p>")
+        let lenientMarkdown = await controller.htmlToMarkdown("<p>Hello</p>")
+        XCTAssertEqual(markdown, lenientMarkdown)
+
+        await controller.setHTML("<p>Kept</p>")
+        let read = try await controller.checked.getHTML()
+        XCTAssertEqual(read, "<p>Kept</p>")
+    }
+
+    /// The failure the send path used to miss: each call throws on a bridge
+    /// that is still up, while the lenient API answers `""` and nothing
+    /// records a bridge failure.
+    func testCheckedCallsThrowWhenOneCallFailsOnALiveBridge() async throws {
+        for method in ["getHTML", "markdownToHtml", "htmlToMarkdown"] {
+            try await breakBridgeMethod(method)
+        }
+
+        let lenient = await controller.markdownToHtml("Hello world")
+        XCTAssertEqual(lenient, "", "the fallback that went out as a blank part")
+        XCTAssertNil(controller.bridgeFailure, "the #745 guard sees nothing wrong")
+        XCTAssertTrue(controller.isReady)
+
+        await assertCallFailure("getHTML") {
+            try await self.controller.checked.getHTML()
+        }
+        await assertCallFailure("markdownToHtml") {
+            try await self.controller.checked.markdownToHtml("Hello world")
+        }
+        await assertCallFailure("htmlToMarkdown") {
+            try await self.controller.checked.htmlToMarkdown("<p>Hello</p>")
+        }
+    }
+
+    /// The other way a call comes back empty-handed: it answers, but not
+    /// with text. The lenient API reads that as `""` too.
+    func testCheckedCallThrowsWhenTheAnswerIsNotText() async throws {
+        try await breakBridgeMethod("markdownToHtml", body: "return 42;")
+
+        let lenient = await controller.markdownToHtml("Hello world")
+        XCTAssertEqual(lenient, "")
+
+        let failure = await assertCallFailure("markdownToHtml") {
+            try await self.controller.checked.markdownToHtml("Hello world")
+        }
+        XCTAssertEqual(failure?.reason, "the editor answered without text")
+    }
+
+    /// A bridge known to be dead throws without evaluating anything, and
+    /// says why.
+    func testCheckedCallsThrowOnADeadBridge() async {
+        controller.webViewWebContentProcessDidTerminate(controller.webView)
+        let reason = controller.bridgeFailure
+
+        let failure = await assertCallFailure("markdownToHtml") {
+            try await self.controller.checked.markdownToHtml("Hello world")
+        }
+        XCTAssertNotNil(reason)
+        XCTAssertEqual(failure?.reason, reason)
+    }
+
+    /// Replaces one `window.cabal` method so that calls to it fail. By
+    /// default it throws, the way a page-side exception fails a call.
+    private func breakBridgeMethod(
+        _ method: String,
+        body: String = "throw new Error('probe');"
+    ) async throws {
+        _ = try await controller.webView.evaluateJavaScript(
+            "window.cabal.\(method) = function () { \(body) }; true"
+        )
+    }
+
+    @discardableResult
+    private func assertCallFailure(
+        _ method: String,
+        _ call: () async throws -> String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async -> RichTextEditorController.CallFailure? {
+        do {
+            let answer = try await call()
+            XCTFail("\(method) answered \(answer.debugDescription) instead of throwing", file: file, line: line)
+        } catch let failure as RichTextEditorController.CallFailure {
+            XCTAssertEqual(failure.method, method, file: file, line: line)
+            return failure
+        } catch {
+            XCTFail("\(method) threw \(error), not a CallFailure", file: file, line: line)
+        }
+        return nil
+    }
+}

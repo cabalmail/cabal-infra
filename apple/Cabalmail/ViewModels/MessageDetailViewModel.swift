@@ -117,6 +117,14 @@ final class MessageDetailViewModel {
     /// `onFlagChanged`.
     var onMoveInFlight: ((Bool) -> Void)?
 
+    /// Fires once the server has confirmed an archive / trash / move / purge
+    /// (never on failure), so the list can keep the message out of any
+    /// refresh that was already in flight when the move landed -- the shield
+    /// `onMoveInFlight` holds ends at that moment. Wired to
+    /// `AppState.recordConfirmedRemovals` in `MessageDetailView`; nil in
+    /// tests.
+    var onMoveConfirmed: (() -> Void)?
+
     struct Attachment: Identifiable, Hashable {
         let id: String
         let filename: String
@@ -297,7 +305,7 @@ final class MessageDetailViewModel {
                 destination: destination,
                 markSeen: !wasSeen
             )
-            await pruneCachesAfterMove()
+            await confirmRemoval()
         } catch {
             errorMessage = "\(error)"
             onFailure?(error)
@@ -334,7 +342,7 @@ final class MessageDetailViewModel {
                 uids: [envelope.uid],
                 destination: destination
             )
-            await pruneCachesAfterMove()
+            await confirmRemoval()
         } catch {
             errorMessage = "\(error)"
             onFailure?(error)
@@ -370,9 +378,16 @@ extension MessageDetailViewModel {
         return status.uidValidity ?? 0
     }
 
+    /// The server confirmed the message gone from this folder: tell the list
+    /// (see `onMoveConfirmed`), then prune the caches.
+    func confirmRemoval() async {
+        onMoveConfirmed?()
+        await pruneCachesAfterMove()
+    }
+
     /// Cache cleanup once the open message has left `folder` — a confirmed
     /// dispose, move, or purge. The single-message counterpart to
-    /// `MessageListViewModel.pruneCachesAfter(move:uid:)`. The body cache is
+    /// `MessageListViewModel.pruneCachesAfter(move:uids:)`. The body cache is
     /// keyed by UIDVALIDITY, so an unresolvable validity leaves the body
     /// entry alone rather than guessing at the key; the envelope row goes
     /// either way.

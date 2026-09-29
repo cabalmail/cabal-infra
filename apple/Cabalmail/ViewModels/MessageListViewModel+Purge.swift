@@ -60,7 +60,7 @@ extension MessageListViewModel {
                 folder: FolderTree.trashPath,
                 uids: condemned.map(\.uid)
             )
-            await pruneCachesAfter(move: FolderTree.trashPath, uids: condemned.map(\.uid))
+            await confirmRemoval(from: FolderTree.trashPath, uids: condemned.map(\.uid))
         } catch {
             envelopes.append(contentsOf: condemned)
             envelopes.sort(by: envelopeOrder)

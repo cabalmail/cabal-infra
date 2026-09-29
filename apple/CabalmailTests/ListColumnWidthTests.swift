@@ -27,9 +27,9 @@ final class ListColumnWidthTests: XCTestCase {
         window - SidebarColumnWidth.ideal - listWidth
     }
 
-    // macOS 27 gives the content column everything up to its maximum, so the cap
-    // — not `ideal` — is the width a launch actually comes up at there. Both
-    // have to leave a readable reader.
+    // A launch opens the list at `ideal` (or at the width it was left at, which
+    // the cap clamps), and a column dragged as wide as it goes sits at the cap.
+    // Both have to leave a readable reader.
     func testTheLaunchWidthLeavesTheReadingPaneUsable() {
         for listWidth in [
             ListColumnWidth.ideal,
@@ -127,6 +127,110 @@ final class ListColumnWidthTests: XCTestCase {
     func testTheBoundsAreOrdered() {
         XCTAssertLessThan(ListColumnWidth.minimum, ListColumnWidth.ideal)
         XCTAssertLessThan(ListColumnWidth.squeezedMinimum, ListColumnWidth.minimum)
+    }
+
+    // MARK: - The width it was left at
+
+    // The column opened at `ideal` on every launch, whatever it had been dragged
+    // to, and AppKit's saved divider positions, restored over that, put a 481pt
+    // list beside a 340pt sidebar back at 141pt, to be pushed up to its 300pt
+    // floor (`SplitViewAutosave`). It opens at the width it was left at now.
+    func testTheColumnOpensAtTheWidthItWasLeftAt() {
+        XCTAssertEqual(ListColumnWidth.resolved(stored: 481), 481)
+        XCTAssertEqual(ListColumnWidth.resolved(stored: 0), ListColumnWidth.ideal,
+                       "a column never resized opens at ideal")
+        XCTAssertEqual(ListColumnWidth.resolved(stored: 40), ListColumnWidth.squeezedMinimum,
+                       "no range the column is given reaches below the squeeze")
+    }
+
+    // The first layout seats the column and the real range only clamps it
+    // afterwards, so the pre-layout range has to admit the width it opens at.
+    // A ceiling left at `ideal` would cut a wider remembered width to 420 for
+    // good; a floor above a narrower one would open it wider than it was left.
+    func testThePreLayoutRangeSeatsTheRememberedWidth() {
+        for remembered in [CGFloat(250), 300, 420, 481, 900] {
+            let bounds = ListColumnWidth.bounds(splitWidth: 0,
+                                                sidebarWidth: SidebarColumnWidth.ideal,
+                                                launchWidth: remembered)
+            XCTAssertLessThanOrEqual(bounds.minimum, remembered, "\(remembered)pt")
+            XCTAssertEqual(bounds.maximum, remembered, "\(remembered)pt")
+        }
+    }
+
+    func testADraggedWidthIsRemembered() {
+        let bounds = ListColumnWidth.bounds(splitWidth: 1500, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: 481, stored: 0,
+                                                    splitWidth: 1500, bounds: bounds))
+        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: 390, stored: 481,
+                                                    splitWidth: 1500, bounds: bounds))
+    }
+
+    // A column being re-seated reports widths that are not its own: 0 and 91pt
+    // were measured mid-way through a window resize that clamped it, 141 while
+    // AppKit's restore squeezed it. And before the split is measured the range
+    // is only a guess, so nothing measured against it is remembered.
+    func testPassingWidthsAreNotRemembered() {
+        let bounds = ListColumnWidth.bounds(splitWidth: 1500, sidebarWidth: SidebarColumnWidth.ideal)
+        for passing in [CGFloat(0), 91, 141] {
+            XCTAssertFalse(ListColumnWidth.shouldPersist(measured: passing, stored: 481,
+                                                         splitWidth: 1500, bounds: bounds),
+                           "\(passing)pt")
+        }
+        let guess = ListColumnWidth.bounds(splitWidth: 0,
+                                           sidebarWidth: SidebarColumnWidth.ideal,
+                                           launchWidth: 481)
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: 400, stored: 481,
+                                                     splitWidth: 0, bounds: guess))
+    }
+
+    // An unresized launch settles where it was asked to, to within rounding;
+    // writing that would walk the width a little further every launch.
+    func testSettlingIsNotADrag() {
+        let bounds = ListColumnWidth.bounds(splitWidth: 1500, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: 480.5, stored: 481,
+                                                     splitWidth: 1500, bounds: bounds))
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: ListColumnWidth.ideal, stored: 0,
+                                                     splitWidth: 1500, bounds: bounds))
+    }
+
+    // Measured in the app on macOS 27: a list dragged to 500pt in a 1401pt
+    // window was held at 400 while the addresses inspector was open (a 1019pt
+    // split), and went back to 500 when it closed. Remembering the 400 brought
+    // the list back at 400 on the next launch, with the inspector closed and
+    // room for 500. The squeeze is the window's, not the user's.
+    func testAWidthTheRangeHoldsTheColumnAtIsNotRemembered() {
+        let squeezed = ListColumnWidth.bounds(splitWidth: 1019, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: squeezed.maximum, stored: 500,
+                                                     splitWidth: 1019, bounds: squeezed))
+        // The same, from a window narrowed past the column (844pt is the split
+        // a 1200pt window left beside a 356pt inspector).
+        let narrowed = ListColumnWidth.bounds(splitWidth: 844, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: narrowed.maximum, stored: 481,
+                                                     splitWidth: 844, bounds: narrowed))
+        // And from below: a width remembered in a cramped window, under the
+        // floor a roomier window raises the column to.
+        let roomy = ListColumnWidth.bounds(splitWidth: 1500, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertFalse(ListColumnWidth.shouldPersist(measured: roomy.minimum, stored: 250,
+                                                     splitWidth: 1500, bounds: roomy))
+    }
+
+    // Held there by the range is one thing; dragged there is another. A drag
+    // starts from inside the range, so the width it reaches at either edge is
+    // the user's and is remembered.
+    func testADragToTheEdgeOfTheRangeIsRemembered() {
+        let bounds = ListColumnWidth.bounds(splitWidth: 1500, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: bounds.maximum, stored: 420,
+                                                    splitWidth: 1500, bounds: bounds))
+        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: bounds.minimum, stored: 420,
+                                                    splitWidth: 1500, bounds: bounds))
+    }
+
+    // A column held short of its remembered width can still be dragged; where
+    // the drag leaves it is the new width to remember.
+    func testADragWhileHeldIsRemembered() {
+        let squeezed = ListColumnWidth.bounds(splitWidth: 1019, sidebarWidth: SidebarColumnWidth.ideal)
+        XCTAssertTrue(ListColumnWidth.shouldPersist(measured: squeezed.maximum - 40, stored: 500,
+                                                    splitWidth: 1019, bounds: squeezed))
     }
 
     // MARK: - Issue #1014

@@ -32,9 +32,17 @@ struct DisposingRow<Content: View>: View {
             // by then, so there's nothing to clip — and settled rows (all of
             // them, nearly all the time) skip the clip cost.
             .frame(height: phase == .collapsing ? 0 : rowHeight, alignment: .top)
-            // Hit testing goes off with the fade, so the second swipe this
-            // animation exists to prevent can't land on the outgoing row.
-            .allowsHitTesting(phase == nil)
+            // Hit testing goes off with the fade -- on EVERY row while any row
+            // is leaving, not just the outgoing one. The outgoing row can't take
+            // the second tap this animation exists to prevent, and the rows
+            // below it can't take a touch either: when the envelope leaves they
+            // all re-point to the next one, so a swipe begun on the row that
+            // just slid under the thumb would reveal on the row beneath it. The
+            // ~300ms this lasts is how long the next row takes to arrive anyway.
+            // (A macOS trackpad swipe ignores hit testing and reaches the
+            // leaving row's own slot, which re-points to the incoming message as
+            // the collapse ends -- see `MessageListViewModel.dispose`.)
+            .allowsHitTesting(!model.isDisposingRow)
             .animation(animation(for: phase), value: phase)
     }
 
