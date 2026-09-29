@@ -15,6 +15,13 @@ import XCTest
 // There is no seam for NSToolbar's layout, so this reads the source, in the
 // shape the other `*SourceScanTests` set: the macOS arm writes the width
 // from inside a `.default`-mode run-loop block, not directly.
+//
+// The block is where the width is written, and Foundation declares it
+// `NS_SWIFT_SENDABLE`, so the write also has to state the main-run-loop
+// guarantee with `MainActor.assumeIsolated` (#1624) or the compiler reads it
+// as touching main-actor state from a nonisolated closure. The two halves
+// only work together — the deferral is what makes the isolation implicit,
+// and the statement is what makes it legal — so both are pinned here.
 final class ContentColumnWidthDeferralSourceScanTests: XCTestCase {
 
     private static let path = "Cabalmail/Views/MailRootView.swift"
@@ -26,6 +33,16 @@ final class ContentColumnWidthDeferralSourceScanTests: XCTestCase {
             "the macOS write of contentColumnWidth needs to run inside "
                 + "RunLoop.main.perform(inModes: [.default]), or a divider drag "
                 + "leaves the search field over the folder menu"
+        )
+    }
+
+    func testTheMacWriteStatesItsMainActorIsolation() throws {
+        let arm = try Self.macArm(in: Self.code(in: try Self.source()))
+        XCTAssertTrue(
+            Self.statesIsolation(arm),
+            "the deferred write of contentColumnWidth needs to run inside "
+                + "MainActor.assumeIsolated, or the Sendable run-loop block "
+                + "touches main-actor state and the macOS target warns twice"
         )
     }
 
@@ -45,8 +62,33 @@ final class ContentColumnWidthDeferralSourceScanTests: XCTestCase {
         )
     }
 
+    func testDetectorNeedsTheIsolationStatedInsideTheBlock() {
+        let head = "#if os(macOS)\n"
+        let block = "RunLoop.main.perform(inModes: [.default]) {\n"
+        let stated = block + "    MainActor.assumeIsolated {\n        contentColumnWidth = width\n    }\n}\n"
+        XCTAssertTrue(Self.statesIsolation(head + stated))
+        XCTAssertFalse(
+            Self.statesIsolation(head + block + "    contentColumnWidth = width\n}\n"),
+            "the reported shape: deferred, isolation unstated"
+        )
+        XCTAssertFalse(
+            Self.statesIsolation(
+                head + "MainActor.assumeIsolated {\n" + block + "    contentColumnWidth = width\n}\n}\n"
+            ),
+            "stating it around the block leaves the block itself nonisolated"
+        )
+        XCTAssertFalse(
+            Self.statesIsolation(
+                head + block + "    contentColumnWidth = width\n    MainActor.assumeIsolated {\n}\n}\n"
+            ),
+            "a write before the statement is not covered by it"
+        )
+    }
+
     func testTheScanReadsCodeNotProse() {
         XCTAssertFalse(Self.code(in: "// RunLoop.main.perform(inModes: [.default])").contains("RunLoop"))
+        XCTAssertFalse(Self.code(in: "// MainActor.assumeIsolated {").contains("assumeIsolated"))
+        XCTAssertTrue(Self.code(in: "MainActor.assumeIsolated {  // states the guarantee").contains("assumeIsolated"))
     }
 
     /// Floor: a mis-rooted read or a renamed helper finds nothing.
@@ -76,6 +118,16 @@ final class ContentColumnWidthDeferralSourceScanTests: XCTestCase {
               let write = arm.range(of: "contentColumnWidth = width") else { return false }
         return write.lowerBound > block.upperBound
             && !arm[arm.startIndex..<block.lowerBound].contains("contentColumnWidth = width")
+    }
+
+    /// The write sits inside a `MainActor.assumeIsolated` that itself opens
+    /// inside the run-loop block.
+    private static func statesIsolation(_ arm: String) -> Bool {
+        guard let block = arm.range(of: "RunLoop.main.perform(inModes: [.default]) {"),
+              let stated = arm.range(of: "MainActor.assumeIsolated {", range: block.upperBound..<arm.endIndex),
+              let write = arm.range(of: "contentColumnWidth = width", range: block.upperBound..<arm.endIndex)
+        else { return false }
+        return write.lowerBound > stated.upperBound
     }
 
     /// `body` with line comments cut.

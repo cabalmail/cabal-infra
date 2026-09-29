@@ -877,8 +877,15 @@ extension MailRootView {
     private func recordContentColumnWidth(_ width: CGFloat) {
         #if os(macOS)
         RunLoop.main.perform(inModes: [.default]) {
-            guard contentColumnWidth != width else { return }
-            contentColumnWidth = width
+            // Foundation declares this block `NS_SWIFT_SENDABLE`, so Swift types it
+            // nonisolated and reading or writing the main-actor `@State` inside it is
+            // an isolation violation. The block is scheduled on the main run loop, so
+            // it does run on the main actor: state that guarantee rather than leaving
+            // the compiler to infer it, and trap if it ever stops holding.
+            MainActor.assumeIsolated {
+                guard contentColumnWidth != width else { return }
+                contentColumnWidth = width
+            }
         }
         #else
         contentColumnWidth = width
