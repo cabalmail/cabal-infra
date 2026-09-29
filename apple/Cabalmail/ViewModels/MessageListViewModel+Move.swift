@@ -40,7 +40,7 @@ extension MessageListViewModel {
                 uids: [envelope.uid],
                 destination: destination
             )
-            await pruneCachesAfter(move: source, uid: envelope.uid)
+            await confirmRemoval(from: source, uids: [envelope.uid])
         } catch {
             restoreEnvelope(envelope, at: originalIndex)
             if wasUnread {
@@ -116,13 +116,13 @@ extension MessageListViewModel {
                     folder: source, uids: uids,
                     destination: destination, markSeen: markSeenFirst
                 )
-                await pruneCachesAfter(move: source, uids: uids)
+                await confirmRemoval(from: source, uids: uids)
             } catch CabalmailError.bulkPartialFailure(let succeeded, let failed) {
                 restoreAfterPartialMove(
                     source: source, destination: destination, snapshot: snapshot,
                     failed: failed, markSeenFirst: markSeenFirst
                 )
-                await pruneCachesAfter(move: source, uids: Array(succeeded))
+                await confirmRemoval(from: source, uids: Array(succeeded))
                 errorMessage = "Moved \(succeeded.count) of \(uids.count) messages. "
                     + "\(failed.count) could not be moved."
             } catch {

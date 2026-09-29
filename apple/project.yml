@@ -225,6 +225,7 @@ targets:
       # view code.
       - path: Cabalmail/ContentView.swift
       - path: Cabalmail/AppState.swift
+      - path: Cabalmail/AppState+ConfirmedRemovals.swift
       - path: Cabalmail/AppStateSignals.swift
       - path: Cabalmail/NavStateCoordinator.swift
       # The local resume-session layer of the coordinator (per-install

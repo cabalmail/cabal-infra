@@ -349,6 +349,7 @@ final class MessageListViewModel {
         if isSearchScope { return }
         isLoading = true
         defer { isLoading = false }
+        let startedAt = ContinuousClock.now
         dbg("refresh start sort=\(sortCriterion.field)")
         do {
             try await client.imapClient.connectAndAuthenticate()
@@ -368,6 +369,7 @@ final class MessageListViewModel {
                     try? await client.bodyCache.invalidate(folder: folder.path)
                     envelopes = []
                     resetWindow()
+                    appState.clearConfirmedRemovals(folderPath: folder.path)
                 }
                 self.uidValidity = fresh
             }
@@ -377,7 +379,7 @@ final class MessageListViewModel {
             // by offset. `totalMessages` from STATUS gates pagination.
             // STATUS drives the All/Unread/Flagged pill counts and the
             // pagination gate; helper lives in +Refresh to keep this body lean.
-            let messages = applyStatusCounts(status)
+            let messages = applyStatusCounts(status, mayPredateRemoval: removalMayPostdate(startedAt))
             // Once the window's front has been trimmed, the loaded rows no
             // longer include the top of the folder, so folding in the newest
             // page would splice a gap above them (and grow the window back).
@@ -511,94 +513,10 @@ final class MessageListViewModel {
     // The per-row flag actions (`markRead`, `toggleSeen`, `toggleFlag`) live in
     // `MessageListViewModel+Flags.swift` to keep this type body under the cap.
 
-    /// Dispose target is the current `Preferences.disposeAction` — Archive
-    /// or Trash. The preference is read on every invocation so a user who
-    /// toggles the setting mid-session sees the swipe behavior change
-    /// immediately.
-    ///
-    /// Also matches the React webmail behavior by marking the message
-    /// `\Seen` before the move: archived == read. The move carries
-    /// `markSeen`, so the server sets the flag while the UID still exists in
-    /// the source and moves it in the same call — one round trip instead of
-    /// a STORE followed by a MOVE.
-    ///
-    /// Optimistic UI: the row is disposed of locally before the server round
-    /// trip so the swipe feels instant, but it leaves the list on the two-leg
-    /// fade-then-collapse animation rather than blinking out (see
-    /// `beginRowDisposal`). If the move fails the row simply comes back — it
-    /// never left `envelopes`. Cache pruning still waits for server
-    /// confirmation — without that gate, a transient failure would leave the
-    /// persistent snapshot disagreeing with the server.
-    func dispose(_ envelope: Envelope) async {
-        guard pendingRemovedUIDs.insert(envelope.uid).inserted else { return }
-        defer { pendingRemovedUIDs.remove(envelope.uid) }
-
-        let destination = preferences.disposeAction.destinationFolder
-        let source = sourceFolder(for: envelope)
-        let wasUnread = !envelope.flags.contains(.seen)
-        // Start the row animation but deliberately DON'T await it before the
-        // move: a swipe landing just as the app is backgrounded has only a
-        // brief window to reach the network, so the request goes out first and
-        // the animation plays alongside it. The envelope leaves `envelopes`
-        // once both have settled. Until then the row renders transparent /
-        // collapsed and takes no hits, so it can't be swiped twice, and
-        // holding it in place keeps every absolute row index stable — the
-        // index-addressed list would otherwise shift the rows below instantly.
-        let disposal = beginRowDisposal(uid: envelope.uid)
-        // Optimistic count drop for the source folder: the dispose path
-        // marks the message `\Seen` before moving, so an unread message
-        // both loses its unread state AND leaves the folder. One -1 covers
-        // both — the post-move STATUS walk will fix it if the server
-        // disagrees. In cross-folder search mode `source` may differ from
-        // `folder.path`; the unread delta routes to the row's true mailbox.
-        if wasUnread {
-            appState.applyUnreadDelta(folderPath: source, delta: -1)
-        }
-
-        do {
-            // Mark-seen + move in one round trip (the Lambda adds `\Seen`
-            // before moving). Collapsing the old STORE-then-MOVE pair matters
-            // when the swipe lands just as the app is being backgrounded:
-            // there's only a brief window to reach the network, so halving the
-            // calls makes the archive far likelier to commit in time.
-            try await client.imapClient.move(
-                folder: source,
-                uids: [envelope.uid],
-                destination: destination,
-                markSeen: wasUnread
-            )
-            // Both mutations in one synchronous step so the list sees a single
-            // update: the envelope is gone AND the phase is cleared, which
-            // leaves the vacated slot rendering the next envelope at full
-            // height with nothing left to animate.
-            await disposal.value
-            envelopes.removeAll { $0.uid == envelope.uid }
-            adjustTotalMessages(by: -1)
-            endRowDisposal(uid: envelope.uid)
-            await pruneCachesAfter(move: source, uid: envelope.uid)
-        } catch {
-            // The row never left `envelopes`, so clearing the phase is the
-            // whole revert. Cancel the animation first: a failure during the
-            // fade would otherwise still collapse the row we're restoring.
-            disposal.cancel()
-            endRowDisposal(uid: envelope.uid)
-            if wasUnread {
-                appState.applyUnreadDelta(folderPath: source, delta: 1)
-            }
-            errorMessage = "\(error)"
-        }
-    }
-
-    /// Cache cleanup after a successful move out of `folder`. Pulled out
-    /// of `dispose(_:)` so `moveTo` (in the sibling extension) can share
-    /// the path without needing access to the private `uidValidity`.
-    func pruneCachesAfter(move folder: String, uid: UInt32) async {
-        await pruneCachesAfter(move: folder, uids: [uid])
-    }
-
-    /// Batch variant for the bulk-action paths. `EnvelopeCache.remove`
-    /// already takes an array; `MessageBodyCache.remove` is per-uid so
-    /// we loop.
+    /// Cache cleanup after a successful move out of `folder`, reached through
+    /// `confirmRemoval` so every removal path shares it without needing the
+    /// private `uidValidity`. `EnvelopeCache.remove` already takes an array;
+    /// `MessageBodyCache.remove` is per-uid so we loop.
     func pruneCachesAfter(move folder: String, uids: [UInt32]) async {
         guard let uidValidity, !uids.isEmpty else { return }
         // Messages just left this folder (a confirmed dispose / move / purge),
