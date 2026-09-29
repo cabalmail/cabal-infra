@@ -69,11 +69,16 @@ public struct ResumeSession: Codable, Equatable, Sendable {
 public struct ReadingPosition: Codable, Equatable, Sendable {
     public var anchor: String?
     public var offset: Int?
+    /// The same position as a 0–1 fraction of the scrollable height, kept
+    /// alongside an element anchor so the cross-device hand-off can give a
+    /// client that only applies fractions (Android) something it can use.
+    public var fraction: Double?
     public var savedAt: Date
 
-    public init(anchor: String? = nil, offset: Int? = nil, savedAt: Date = Date()) {
+    public init(anchor: String? = nil, offset: Int? = nil, fraction: Double? = nil, savedAt: Date = Date()) {
         self.anchor = anchor
         self.offset = offset
+        self.fraction = fraction
         self.savedAt = savedAt
     }
 }

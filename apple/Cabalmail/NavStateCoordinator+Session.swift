@@ -113,10 +113,35 @@ extension NavStateCoordinator {
             session.section = .feeds
             session.feedItemFeedID = item.feedId
             session.feedItemSortKey = item.sortKey
+            // The cross-device cursor follows the item being read (Phase C),
+            // starting from wherever this install last left it.
+            let saved = positions.position(for: ReadingPositionKey.feed(itemID: item.id))
+            activeKind = .rss
+            feedCursorItem = item.id
+            feedCursorScope = session.feedScope?.token
+            feedAnchor = saved?.anchor
+            feedFraction = saved?.fraction
+            scheduleSave()
         } else {
             session.clearFeedItem()
         }
         scheduleSessionSave()
+    }
+
+    /// The feed reader's scroll capture: the local position cache, and the
+    /// cross-device cursor when this item is the one it names.
+    func recordFeedScroll(itemID: String, capture: ScrollCapture) {
+        savePosition(
+            key: ReadingPositionKey.feed(itemID: itemID),
+            anchor: capture.anchor,
+            offset: nil,
+            fraction: capture.fraction,
+            atTop: capture.isAtTop
+        )
+        guard activeKind == .rss, feedCursorItem == itemID else { return }
+        feedAnchor = capture.isAtTop ? nil : capture.anchor
+        feedFraction = capture.isAtTop ? nil : capture.fraction
+        scheduleSave()
     }
 
     // MARK: Reading positions
@@ -132,15 +157,15 @@ extension NavStateCoordinator {
     /// Stores (or, at the top of the body, clears) the reading position for
     /// `key`. A no-op when nothing changed, so the reader's capture stream
     /// doesn't churn the store.
-    func savePosition(key: String, anchor: String?, offset: Int?, atTop: Bool) {
+    func savePosition(key: String, anchor: String?, offset: Int?, fraction: Double? = nil, atTop: Bool) {
         if atTop {
             guard positions.position(for: key) != nil else { return }
             positions.remove(key)
         } else {
             guard anchor != nil || offset != nil else { return }
             let current = positions.position(for: key)
-            if current?.anchor == anchor, current?.offset == offset { return }
-            positions.set(ReadingPosition(anchor: anchor, offset: offset), for: key)
+            if current?.anchor == anchor, current?.offset == offset, current?.fraction == fraction { return }
+            positions.set(ReadingPosition(anchor: anchor, offset: offset, fraction: fraction), for: key)
         }
         positionsDirty = true
         scheduleSessionSave()

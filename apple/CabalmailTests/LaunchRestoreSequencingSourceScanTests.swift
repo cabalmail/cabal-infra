@@ -17,11 +17,21 @@ final class LaunchRestoreSequencingSourceScanTests: XCTestCase {
         )
         XCTAssertFalse(body.contains("consumeFeedItemRestore"), "FeedRootView no longer consumes the restore at all")
         let list = try Self.source("Cabalmail/Views/FeedItemListView.swift")
-        XCTAssertTrue(list.contains("guard hasAppeared, initialLoadComplete, selection == nil,"))
+        // Every path waits for the list to have appeared and loaded; only a
+        // tapped cross-device feed toast (resume-session plan, Phase C) may
+        // replace a selection already on screen.
+        XCTAssertTrue(list.contains("guard hasAppeared, initialLoadComplete, selection == nil || replacingSelection,"))
         XCTAssertTrue(list.contains("let restored = appState.navCoordinator?.consumeFeedItemRestore(for: scope)"))
         XCTAssertEqual(
-            list.components(separatedBy: "applyLaunchRestoreWhenReady()").count - 1, 3,
-            "declared once, called after the initial load and from onAppear"
+            list.components(separatedBy: "func applyLaunchRestoreWhenReady(").count - 1, 1, "declared once"
+        )
+        XCTAssertEqual(
+            list.components(separatedBy: "applyLaunchRestoreWhenReady()").count - 1, 2,
+            "called after the initial load and from onAppear"
+        )
+        XCTAssertEqual(
+            list.components(separatedBy: "applyLaunchRestoreWhenReady(replacingSelection: true)").count - 1, 1,
+            "and once for a feed toast parked while the list is already on screen"
         )
     }
 

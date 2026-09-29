@@ -92,7 +92,7 @@ object ForeignCursorPolicy {
         if (writer.isEmpty() || writer == localClientId) return false
         val updatedAt = cursor.updatedAt ?: return false
         if (updatedAt <= offeredWatermark) return false
-        if (cursor.folder.isNullOrEmpty()) return false
+        if (cursor.folder.isNullOrEmpty() && !cursor.isFeed) return false
         return !samePlace(cursor, session)
     }
 
@@ -105,7 +105,11 @@ object ForeignCursorPolicy {
         cursor: NavState,
         session: ResumeSession?,
     ): Boolean {
-        if (session == null || session.section != ResumeSection.MAIL) return false
+        if (session == null) return false
+        if (cursor.isFeed) {
+            return session.section == ResumeSection.FEEDS && session.feedItemId == cursor.rssItem
+        }
+        if (session.section != ResumeSection.MAIL) return false
         if (session.folder == null || cursor.folder != session.folder) return false
         val cursorHasMessage = cursor.uid != null || cursor.messageId != null
         if (!cursorHasMessage && !session.hasMessage) return true
@@ -114,5 +118,18 @@ object ForeignCursorPolicy {
         val have = session.messageId
         if (wanted != null && have != null) return wanted == have
         return cursor.uid != null && cursor.uid == session.uid
+    }
+}
+
+/**
+ * The reading position a cross-device cursor hands over, as the fraction
+ * this client's body view can apply: the cursor's `msg_fraction` when it
+ * carries one (the Apple reader sends it beside its element anchor), else
+ * the `f<fraction>` anchor form, else nothing.
+ */
+object HandoffPosition {
+    fun fraction(cursor: NavState): Float? {
+        cursor.msgFraction?.let { return it.toFloat().coerceIn(0f, 1f) }
+        return cursor.msgAnchor?.let(com.cabalmail.android.reading.ReadingAnchor::fraction)
     }
 }

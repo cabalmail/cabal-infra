@@ -664,7 +664,8 @@ extension HTMLBodyCoordinator {
     (function(){
       \(anchorFunctionSource)
       var se=document.scrollingElement||document.documentElement;
-      return {anchor: __cabalAnchor(), top: se ? Math.round(se.scrollTop) : 0};
+      return {anchor: __cabalAnchor(), top: se ? Math.round(se.scrollTop) : 0,
+        frac: se && (se.scrollHeight - se.clientHeight) > 0 ? se.scrollTop / (se.scrollHeight - se.clientHeight) : 0};
     })();
     """
 

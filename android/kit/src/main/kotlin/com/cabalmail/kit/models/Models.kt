@@ -293,7 +293,26 @@ data class NavState(
     @SerialName("uid_validity") val uidValidity: Long? = null,
     @SerialName("list_scroll") val listScroll: Long? = null,
     @SerialName("msg_scroll") val msgScroll: Long? = null,
-)
+    /**
+     * The reading position as a 0–1 fraction of the scrollable height,
+     * alongside [msgAnchor] (resume-session plan, Phase C): what this client
+     * can apply when the anchor is the Apple element form.
+     */
+    @SerialName("msg_fraction") val msgFraction: Double? = null,
+    /** `"rss"` for a feed cursor; absent for mail. */
+    val kind: String? = null,
+    /** Feed cursor: the item being read (`RssItem.id`, `feedId#sortKey`). */
+    @SerialName("rss_item") val rssItem: String? = null,
+    /** Feed cursor: the list scope it was read from (`RssItemScope.token`). */
+    @SerialName("rss_scope") val rssScope: String? = null,
+) {
+    /** A feed cursor names an item; a mail cursor a folder. */
+    val isFeed: Boolean get() = kind == KIND_RSS && !rssItem.isNullOrEmpty()
+
+    companion object {
+        const val KIND_RSS = "rss"
+    }
+}
 
 /**
  * `/push_envelope` enrichment for a content-free wake signal: the sender

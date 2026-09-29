@@ -12,10 +12,15 @@ struct ScrollCapture: Equatable, Sendable {
 
     let anchor: String
     let isAtTop: Bool
+    /// The same position as a 0–1 fraction of the scrollable height — what
+    /// the cross-device cursor hands a client that can only apply fractions
+    /// (Android; resume-session plan, Phase C).
+    let fraction: Double
 
-    init(anchor: String, isAtTop: Bool) {
+    init(anchor: String, isAtTop: Bool, fraction: Double = 0) {
         self.anchor = anchor
         self.isAtTop = isAtTop
+        self.fraction = fraction
     }
 
     /// From the `{anchor, top}` payload both the scroll bridge and the poll
@@ -24,7 +29,8 @@ struct ScrollCapture: Equatable, Sendable {
     init?(bridgePayload payload: [String: Any]) {
         guard let anchor = payload["anchor"] as? String, !anchor.isEmpty else { return nil }
         let top = (payload["top"] as? NSNumber)?.intValue ?? 0
-        self.init(anchor: anchor, isAtTop: top < Self.topThreshold)
+        let fraction = min(1, max(0, (payload["frac"] as? NSNumber)?.doubleValue ?? 0))
+        self.init(anchor: anchor, isAtTop: top < Self.topThreshold, fraction: fraction)
     }
 }
 
@@ -79,7 +85,11 @@ extension HTMLBodyCoordinator {
       function report() {
         timer = null;
         var se = document.scrollingElement || document.documentElement;
-        handler.postMessage({ kind: "scroll", anchor: __cabalAnchor(), top: se ? Math.round(se.scrollTop) : 0 });
+        var range = se ? se.scrollHeight - se.clientHeight : 0;
+        handler.postMessage({
+          kind: "scroll", anchor: __cabalAnchor(), top: se ? Math.round(se.scrollTop) : 0,
+          frac: range > 0 ? se.scrollTop / range : 0
+        });
       }
       window.addEventListener("scroll", function () {
         if (timer) { clearTimeout(timer); }
