@@ -294,6 +294,7 @@ extension MessageListView {
                 draggableRow(for: envelope, model: model) {
                     SwipeActionRow(
                         height: rowHeight,
+                        contentID: envelope.uid,
                         rowBackground: background,
                         leading: swipeSpec(for: model.swipeLeading, envelope: envelope, model: model),
                         trailing: swipeSpec(for: model.swipeTrailing, envelope: envelope, model: model),
