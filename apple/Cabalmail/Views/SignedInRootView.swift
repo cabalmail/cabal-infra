@@ -41,6 +41,7 @@ import CabalmailKit
 /// redundant rails.
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isOffline = false
     /// The window width the section layout was last laid out at; see
     /// `SectionLayoutPolicy.layout(isCompactWidth:isCompactHeight:measuredWidth:)`.
@@ -70,11 +71,32 @@ struct SignedInRootView: View {
                     .animation(.default, value: appState.toast)
             }
             .task { await observeReachability() }
+            // The cross-device "pick up where you left off" probe, at launch
+            // and on each return to the foreground. Here — the one view every
+            // layout keeps mounted — rather than in the mail view, so an
+            // iPhone that launches into the Feeds tab still offers another
+            // device's position, mail or feed (resume-session plan, Phase C).
+            .task { await offerCrossDeviceCursor(atLaunch: true) }
+            .onChange(of: scenePhase) { old, new in
+                guard new == .active, old != .active,
+                      appState.navCoordinator?.hasLoadedInitial == true else { return }
+                Task { await offerCrossDeviceCursor(atLaunch: false) }
+            }
             // App-wide compose-request receiver (mailto: URLs, menu and
             // toolbar New Message). Lives here — not on MessageListView —
             // because this view is in the visible hierarchy in every tab,
             // folder, and modal state; see ComposeRequestRouter.
             .composeRequestRouter()
+    }
+
+    private func offerCrossDeviceCursor(atLaunch: Bool) async {
+        guard let coordinator = appState.navCoordinator else { return }
+        let candidate = atLaunch
+            ? await coordinator.launchResumeCandidate()
+            : await coordinator.foreignCursorOnForeground()
+        guard let candidate else { return }
+        let title = await coordinator.resumeTitle(for: candidate)
+        appState.showToast(.resumeNavigation(folderName: title, cursor: candidate), duration: 10)
     }
 
     @ViewBuilder
@@ -187,7 +209,11 @@ struct SignedInRootView: View {
         }
         if let cursor = toast.resumeCursor {
             return {
-                appState.navCoordinator?.navigateRequest = cursor
+                if cursor.kind == .rss {
+                    Task { await appState.navCoordinator?.requestFeedNavigation(cursor) }
+                } else {
+                    appState.navCoordinator?.navigateRequest = cursor
+                }
                 appState.toast = nil
             }
         }

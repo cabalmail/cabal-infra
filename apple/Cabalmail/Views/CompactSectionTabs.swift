@@ -110,6 +110,14 @@ struct CompactSectionTabs: View {
                 appState.navCoordinator?.noteSection(section)
             }
         }
+        // A tapped cross-device toast opens the section it names; the tab's
+        // own root follows the request from there.
+        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
+            if request != nil { tab = .feeds }
+        }
+        .onChange(of: appState.navCoordinator?.navigateRequest) { _, request in
+            if request != nil { tab = .mail }
+        }
         // The same section, for the menus that share a chord across mail and
         // feeds (`SharedChordPolicy`): each tab keeps its selection while the
         // other is in front, so the section is what decides between them.

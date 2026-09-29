@@ -28,11 +28,15 @@
 # list signs in fine for GRACE_HOURS and is blocked forever after (#1739), so
 # any new account of this shape is added there in the same change.
 #
-# The containers learn about the user on their own schedule: sync-users.sh
-# runs only at container start, so the imap tier has to roll once after the
-# apply before the probe's api leg can pass, and smtp-in adds the address to
-# its access map on its next reconfigure event or roll. docs/mail-probe.md
-# lists the failure signatures of a probe that ran before that.
+# The containers learn about the user on their own schedule, without a roll:
+# sync-users.sh runs on every reconfigure pass (#1721), so the imap tier
+# creates the account and Maildir on its next pass, and smtp-in adds the
+# address to its access map on the same tick. Terraform writes the address row
+# straight to DynamoDB rather than through the API, so no address-changed event
+# is published for it and the periodic fallback is what picks it up - within
+# RECONFIGURE_INTERVAL of the apply, 15 minutes by default.
+# docs/mail-probe.md lists the failure signatures of a probe that ran before
+# that.
 
 resource "random_password" "ci_probe_password" {
   length           = 24

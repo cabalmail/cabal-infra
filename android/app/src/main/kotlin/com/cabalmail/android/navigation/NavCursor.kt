@@ -54,6 +54,8 @@ class NavCursor(
         uid: Long? = null,
         messageId: String? = null,
         listScroll: Long? = null,
+        msgAnchor: String? = null,
+        msgFraction: Double? = null,
     ) {
         pending.value =
             NavState(
@@ -61,6 +63,30 @@ class NavCursor(
                 uid = uid,
                 messageId = messageId,
                 listScroll = listScroll,
+                msgAnchor = msgAnchor,
+                msgFraction = msgFraction,
+            )
+    }
+
+    /**
+     * The feed item being read (resume-session plan, Phase C), so another
+     * device can offer to pick it up. [anchor] is this client's `f<fraction>`
+     * form, which the Apple reader restores directly; [fraction] rides along
+     * for any reader that only applies fractions.
+     */
+    fun recordFeedItem(
+        itemId: String,
+        scopeToken: String?,
+        anchor: String? = null,
+        fraction: Double? = null,
+    ) {
+        pending.value =
+            NavState(
+                kind = NavState.KIND_RSS,
+                rssItem = itemId,
+                rssScope = scopeToken,
+                msgAnchor = anchor,
+                msgFraction = fraction,
             )
     }
 
@@ -75,7 +101,7 @@ class NavCursor(
         }
         restored = true
         val state = runCatching { api().getNavState() }.getOrNull() ?: return null
-        if (state.folder == null) {
+        if (state.folder == null && !state.isFeed) {
             return null
         }
         return RestoredCursor(state = state, local = state.clientId == clientId())

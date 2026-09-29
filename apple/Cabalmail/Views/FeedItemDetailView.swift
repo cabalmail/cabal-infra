@@ -115,9 +115,7 @@ struct FeedItemDetailView: View {
                         readerMode: model.readerMode,
                         restoreAnchor: restoreAnchor,
                         onScrollCaptured: { capture in
-                            appState.navCoordinator?.savePosition(
-                                key: positionKey, anchor: capture.anchor, offset: nil, atTop: capture.isAtTop
-                            )
+                            appState.navCoordinator?.recordFeedScroll(itemID: item.id, capture: capture)
                         }
                     )
                 }

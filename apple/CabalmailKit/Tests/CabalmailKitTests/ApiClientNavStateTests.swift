@@ -91,6 +91,53 @@ final class ApiClientNavStateTests: XCTestCase {
         XCTAssertNil(payload?["uid_validity"])
         XCTAssertNil(payload?["msg_scroll"])
     }
+
+    // MARK: Feed cursors (resume-session plan, Phase C)
+
+    func testFeedCursorDecodesWithoutAFolder() async throws {
+        let body = """
+        {"kind":"rss","rss_item":"f1#2026-09-28T00:00:00+00:00#i1","rss_scope":"sub:s1",\
+        "msg_anchor":"f0.420","msg_fraction":0.42,"client_id":"pixel","updated_at":1759000000000}
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let cursor = try await makeClient(http).loadNavState()
+        XCTAssertEqual(cursor?.kind, NavState.Kind.rss)
+        XCTAssertEqual(cursor?.folder, "")
+        XCTAssertEqual(cursor?.rssItem, "f1#2026-09-28T00:00:00+00:00#i1")
+        XCTAssertEqual(cursor?.rssScope, "sub:s1")
+        XCTAssertEqual(cursor?.messageAnchor, "f0.420")
+        XCTAssertEqual(cursor?.messageFraction, 0.42)
+        XCTAssertEqual(cursor?.rssItemParts?.feedID, "f1")
+        XCTAssertEqual(cursor?.rssItemParts?.sortKey, "2026-09-28T00:00:00+00:00#i1", "split at the first #")
+    }
+
+    func testFeedCursorWithoutAnItemReadsAsNoCursor() async throws {
+        let body = #"{"kind":"rss","client_id":"pixel"}"#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let cursor = try await makeClient(http).loadNavState()
+        XCTAssertNil(cursor)
+    }
+
+    func testFeedCursorRequestBodyOmitsTheFolder() {
+        let cursor = NavState.feed(itemID: "f1#k1", scope: "all", anchor: "i2.0|4", fraction: 0.25, clientID: "mac")
+        let body = cursor.requestBody
+        XCTAssertEqual(body["kind"] as? String, "rss")
+        XCTAssertEqual(body["rss_item"] as? String, "f1#k1")
+        XCTAssertEqual(body["rss_scope"] as? String, "all")
+        XCTAssertEqual(body["msg_anchor"] as? String, "i2.0|4")
+        XCTAssertEqual(body["msg_fraction"] as? Double, 0.25)
+        XCTAssertEqual(body["client_id"] as? String, "mac")
+        XCTAssertNil(body["folder"])
+    }
+
+    func testMailCursorCarriesTheFractionAndNoKind() {
+        let cursor = NavState(folder: "INBOX", uid: 7, messageAnchor: "i1|0", messageFraction: 0.5, clientID: "mac")
+        let body = cursor.requestBody
+        XCTAssertNil(body["kind"], "mail cursors stay unmarked")
+        XCTAssertEqual(body["folder"] as? String, "INBOX")
+        XCTAssertEqual(body["msg_fraction"] as? Double, 0.5)
+        XCTAssertNil(cursor.rssItemParts)
+    }
 }
 
 /// Unit tests for the `NavState` value type and the install identifier — no
@@ -114,4 +161,5 @@ final class NavStateModelTests: XCTestCase {
         XCTAssertEqual(first, second)
         defaults.removeObject(forKey: InstallIdentity.defaultsKey)
     }
+
 }

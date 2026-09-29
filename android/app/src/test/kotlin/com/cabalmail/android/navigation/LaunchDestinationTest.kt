@@ -181,4 +181,47 @@ class LaunchDestinationTest {
             "the same place is never offered",
         )
     }
+
+    // ------------------------------------------------------------- feed cursor (Phase C)
+
+    private fun feedCursor(
+        item: String = "f1#k1",
+        clientId: String = "other-install",
+        updatedAt: Long = 2_000,
+    ) = NavState(kind = NavState.KIND_RSS, rssItem = item, clientId = clientId, updatedAt = updatedAt)
+
+    @Test
+    fun `a foreign feed cursor is offered unless this device is reading that item`() {
+        val inMail = ResumeSession(folder = "INBOX")
+        assertTrue(ForeignCursorPolicy.shouldOffer(feedCursor(), "this-install", 0, inMail))
+        val reading = ResumeSession(section = ResumeSection.FEEDS, feedScope = "all", feedItemId = "f1#k1")
+        assertFalse(ForeignCursorPolicy.shouldOffer(feedCursor(), "this-install", 0, reading), "same item")
+        val other = ResumeSession(section = ResumeSection.FEEDS, feedItemId = "f2#k2")
+        assertTrue(ForeignCursorPolicy.shouldOffer(feedCursor(), "this-install", 0, other))
+        assertFalse(
+            ForeignCursorPolicy.shouldOffer(feedCursor(clientId = "this-install"), "this-install", 0, other),
+            "own cursor",
+        )
+        assertFalse(
+            ForeignCursorPolicy.shouldOffer(
+                NavState(kind = NavState.KIND_RSS, clientId = "x", updatedAt = 5),
+                "me",
+                0,
+                null,
+            ),
+            "a feed cursor with no item is no cursor",
+        )
+    }
+
+    @Test
+    fun `the hand-off position prefers the fraction and falls back to the anchor form`() {
+        assertEquals(0.42f, HandoffPosition.fraction(NavState(msgFraction = 0.42, msgAnchor = "i2.0|4")))
+        assertEquals(0.5f, HandoffPosition.fraction(NavState(msgAnchor = "f0.500")))
+        assertEquals(
+            null,
+            HandoffPosition.fraction(NavState(msgAnchor = "i2.0|4")),
+            "an element anchor alone is not applicable here",
+        )
+        assertEquals(1f, HandoffPosition.fraction(NavState(msgFraction = 3.0)))
+    }
 }

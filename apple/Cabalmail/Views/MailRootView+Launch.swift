@@ -106,21 +106,9 @@ extension MailRootView {
         } else {
             selectedFolder = inbox
         }
-        let landedPath = selectedFolder?.path
-        Task {
-            let candidate = await coordinator?.launchResumeCandidate(folders: folders)
-            // If the user already navigated elsewhere while the probe ran,
-            // leave them be rather than surfacing a now-stale prompt.
-            guard let landedPath, selectedFolder?.path == landedPath else { return }
-            if let candidate {
-                appState.showToast(
-                    .resumeNavigation(folderName: Folder(path: candidate.folder).name, cursor: candidate),
-                    duration: 10
-                )
-            } else {
-                coordinator?.materializeLanding()
-            }
-        }
+        // The cross-device probe runs from `SignedInRootView`; the server
+        // write this landing held back goes out once it has.
+        coordinator?.materializeLanding()
     }
 
     /// The fetched `Folder` for `path` when the sidebar has loaded it, else a
@@ -129,18 +117,4 @@ extension MailRootView {
         loadedFolders.first { $0.path == path } ?? Folder(path: path)
     }
 
-    /// The launch-time cross-device probe on its own, for launches that had
-    /// no mail landing to finish (the feed reader, a parked navigate
-    /// request). Offers the toast if another install's cursor is reachable.
-    func offerForeignCursorAtLaunch(from folders: [Folder]) {
-        Task {
-            guard let candidate = await appState.navCoordinator?.launchResumeCandidate(folders: folders) else {
-                return
-            }
-            appState.showToast(
-                .resumeNavigation(folderName: Folder(path: candidate.folder).name, cursor: candidate),
-                duration: 10
-            )
-        }
-    }
 }

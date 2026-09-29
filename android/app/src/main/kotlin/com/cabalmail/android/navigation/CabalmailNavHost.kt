@@ -58,6 +58,7 @@ import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
 import com.cabalmail.android.notifications.NewMailSync
 import com.cabalmail.android.notifications.PushRegistrar
+import com.cabalmail.android.reading.ReadingPositionKey
 import com.cabalmail.android.ui.addresses.AddressesScreen
 import com.cabalmail.android.ui.addresses.AddressesViewModel
 import com.cabalmail.android.ui.compose.ComposeLaunch
@@ -350,7 +351,7 @@ fun CabalmailNavHost(
                                 duration = SnackbarDuration.Indefinite,
                             )
                         if (result == SnackbarResult.ActionPerformed) {
-                            navController.openCursor(cursor.state, compactWidth)
+                            navController.openForeignCursor(container, cursor.state, compactWidth)
                         }
                     }
 
@@ -788,6 +789,55 @@ private suspend fun RssStore.scopeExists(scope: RssItemScope): Boolean =
             folders.any { it.folderId == scope.folderId }
         }
     }
+
+/**
+ * A tapped cross-device prompt (resume-session plan, Phase C). The cursor's
+ * reading position is seeded into this install's position cache first, so
+ * the reader restores it through its usual path; then a feed cursor opens
+ * the Feeds destination, its scope, and its item (fetched from the server
+ * and cached when this device has not synced it yet), and a mail cursor
+ * opens its folder and message as before.
+ */
+private suspend fun NavHostController.openForeignCursor(
+    container: AppContainer,
+    state: NavState,
+    compactWidth: Boolean,
+) {
+    val fraction = HandoffPosition.fraction(state)
+    if (!state.isFeed) {
+        val folder = state.folder
+        val uid = state.uid
+        if (fraction != null && folder != null && uid != null) {
+            container.readingPositions.record(ReadingPositionKey.mail(state.messageId, folder, uid), fraction)
+        }
+        openCursor(state, compactWidth)
+        return
+    }
+    val parts = state.rssItem?.let(FeedRoutes::splitItemId) ?: return
+    val (feedId, sortKey) = parts
+    val item =
+        runCatching { container.rssStore.item(feedId, sortKey) }.getOrNull()
+            ?: runCatching { container.requireApi().getItem(feedId, sortKey) }.getOrNull()?.also { fetched ->
+                runCatching { container.rssStore.upsertItems(listOf(fetched)) }
+            }
+            ?: return
+    if (fraction != null) container.readingPositions.record(ReadingPositionKey.feed(item.id), fraction)
+    val scope =
+        state.rssScope?.let(RssItemScope::fromToken)
+            ?: item.subscriptionId.takeIf { it.isNotEmpty() }?.let { RssItemScope.Subscription(it) }
+            ?: RssItemScope.All
+    navigate(TopLevel.FEEDS.route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+    LaunchDestination.feedRoutes(scope, item, compactWidth).forEach { step ->
+        navigate(step.route) {
+            step.popUpTo?.let { popUpTo(it) }
+            launchSingleTop = true
+        }
+    }
+}
 
 /**
  * Builds the back stack a stored cursor points at: folder → message on a

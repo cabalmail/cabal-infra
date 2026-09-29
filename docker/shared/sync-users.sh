@@ -55,8 +55,15 @@ aws cognito-idp list-users \
   # local delivery, and an unguarded install of a missing file aborts
   # the whole sync under set -e.
   if [ -f /etc/procmailrc ]; then
-    install -o "$username" -g "$username" -m 644 \
-      /etc/procmailrc "/home/${username}/.procmailrc"
+    # Only when the content differs: this script now runs on every
+    # reconfigure pass, not just at container start (#1721), and `install`
+    # writes the destination in place - a procmail invocation reading
+    # ~/.procmailrc mid-write would see a partial file. A no-op pass must
+    # not touch the file at all.
+    if ! cmp -s /etc/procmailrc "/home/${username}/.procmailrc"; then
+      install -o "$username" -g "$username" -m 644 \
+        /etc/procmailrc "/home/${username}/.procmailrc"
+    fi
     # Heal ~/.procmail/log ownership: before DROPPRIVS landed in
     # procmailrc, the privileged /etc/procmailrc pass could leave the
     # log root-owned on EFS, permanently blocking the recipient's own

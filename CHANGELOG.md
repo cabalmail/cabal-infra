@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.4] - 2026-09-29
+
+### Added
+- Android: **Pick up feed items from other devices.** Reading a feed item
+  records it as the "pick up where you left off" position, so another
+  device offers to open the same item at the same place, and a feed item
+  read on an iPhone, iPad, or Mac is offered here. Accepting it opens the
+  feed, the item, and the reading position; a mail message handed over
+  from another device reopens at its position too.
+- Apple: **Pick up a feed item from another device.** Reading a feed item
+  now records it as the "pick up where you left off" position, so another
+  device (Apple or Android) offers to open the same item at the same place,
+  and a feed item read elsewhere is offered here. The prompt names the feed,
+  opens its list and the item, and restores the reading position. The
+  prompt also appears when the iPhone opens on the Feeds tab, which it
+  previously did not. Reading positions now travel in a form both clients
+  can apply.
+
+### Changed
+- **OS accounts converge on the Cognito pool on every reconfigure pass.** The imap and smtp-out tiers ran `sync-users.sh` only at container start, so a user created outside the signup flow — `AdminCreateUser`, or a Terraform-managed Cognito user, neither of which fires the post-confirmation trigger that rolls the mail services — had no passwd entry and no Maildir until the tier next rolled for some unrelated reason, and could neither receive mail nor list folders in the meantime. The reconfigure sidecar now syncs users before each regeneration, so such a user is provisioned on the next address-change event or periodic pass (15 minutes by default) with no deploy.
+
 ## [1.22.3] - 2026-09-28
 
 ### Fixed

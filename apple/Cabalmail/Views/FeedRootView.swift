@@ -69,6 +69,13 @@ struct FeedRootView: View {
             hasOpenItem: selectedItem != nil,
             hasScope: selectedScope != nil
         )
+        // A tapped cross-device feed toast: open its scope. The item list
+        // (re-mounted for a new scope, or already showing it) selects the
+        // parked item once it is on screen and loaded.
+        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
+            guard let request, selectedScope != request.scope else { return }
+            selectedScope = request.scope
+        }
         .task(id: selectedItem?.subscriptionId) { await resolveSubscription() }
         .task {
             // Once per process (the coordinator guards it): reopen the scope

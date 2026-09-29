@@ -4,9 +4,15 @@
 #
 # Replaces: SSM SendCommand -> chef-solo full run
 #
-# This handles address changes only (the common case). User sync runs
-# at container startup and does not need to happen on every address
-# change. See Phase 5 for the rare new-user case.
+# This handles address changes AND user sync. Address changes are the
+# common case; the user sync is here because a Cognito user created
+# outside the signup flow (AdminCreateUser, or Terraform's
+# aws_cognito_user) never fires the PostConfirmation trigger that
+# force-rolls the services, so without it that user has no passwd entry
+# and no Maildir until the tier next rolls for some unrelated reason
+# (#1721). It is idempotent and cheap - one list-users call plus a
+# getent per user - so running it on every regeneration converges the
+# container on the pool instead of only at startup.
 #
 # Required env vars: TIER, CERT_DOMAIN, AWS_REGION
 # Optional env vars: SQS_QUEUE_URL (if unset, periodic-only mode)
@@ -28,6 +34,19 @@ fi
 # Re-runs generate-config.sh (DynamoDB scan), rebuilds the hash
 # databases sendmail reads, and signals daemons to reload.
 regenerate() {
+  # Converge OS accounts on the Cognito pool before anything reads them.
+  # Same tier gate as entrypoint.sh: imap delivers locally via procmail and
+  # smtp-out resolves submission auth against the passwd db, so both need
+  # local users; smtp-in has none and dropped the capabilities the sync
+  # needs. Ordered first because compile-user-rules.py derives its user list
+  # from the synced homes (/home/*/Maildir), so a user created here is
+  # compiled in the same pass. Failure must not kill the loop (set -e), and
+  # a stale passwd db is better than a dead reconfigure sidecar.
+  if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+    /usr/local/bin/sync-users.sh \
+      || echo "[reconfigure] sync-users failed; keeping current OS accounts"
+  fi
+
   echo "[reconfigure] Regenerating configs from DynamoDB..."
   /usr/local/bin/generate-config.sh
 

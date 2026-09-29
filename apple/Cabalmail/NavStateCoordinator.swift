@@ -90,6 +90,30 @@ final class NavStateCoordinator {
     var listScroll: Int?
     var messageScroll: Int?
     var messageAnchor: String?
+    var messageFraction: Double?
+    /// Which kind of cursor a save writes: the mail fields above, or the feed
+    /// item below (resume-session plan, Phase C).
+    var activeKind: NavState.Kind = .mail
+    var feedCursorItem: String?
+    var feedCursorScope: String?
+    var feedAnchor: String?
+    var feedFraction: Double?
+    /// Server writes are held from launch until the cross-device probe has
+    /// read the cursor another install left; the latest snapshot is written
+    /// on release. Otherwise this launch's own landing could overwrite the
+    /// very cursor the probe is about to look for.
+    var serverWritesHeld = true
+    var heldSnapshot: NavState?
+
+    /// A feed position the views should open (a tapped cross-device feed
+    /// toast). The item itself is parked as `pendingFeedRestore`.
+    struct FeedNavigateRequest: Equatable, Sendable {
+        let scope: RssItemScope
+        let tick: Int
+    }
+
+    var feedNavigateRequest: FeedNavigateRequest?
+    var feedNavigateTick = 0
 
     // Local resume layer (see the `+Session` extension).
     let store: ResumeSessionStore
@@ -248,6 +272,8 @@ final class NavStateCoordinator {
         listScroll = nil
         messageScroll = nil
         messageAnchor = nil
+        messageFraction = nil
+        activeKind = .mail
         session.section = .mail
         session.folder = folderPath
         session.clearMessage()
@@ -268,6 +294,8 @@ final class NavStateCoordinator {
         self.messageID = messageID
         messageScroll = nil
         messageAnchor = nil
+        messageFraction = nil
+        activeKind = .mail
         session.section = .mail
         session.folder = folderPath
         session.uid = uid
@@ -293,11 +321,13 @@ final class NavStateCoordinator {
         guard folder == folderPath, self.uid == uid else { return }
         messageScroll = atTop ? nil : position.offset
         messageAnchor = atTop ? nil : position.anchor
+        messageFraction = atTop ? nil : position.fraction
         scheduleSave()
         savePosition(
             key: ReadingPositionKey.mail(messageID: messageID, folder: folderPath, uid: uid),
             anchor: position.anchor,
             offset: position.offset,
+            fraction: position.fraction,
             atTop: atTop
         )
     }
@@ -316,9 +346,15 @@ final class NavStateCoordinator {
         scheduleSave()
     }
 
-    private func scheduleSave() {
-        guard let folder else { return }
-        let snapshot = NavState(
+    /// The cursor a save would write now: the feed item when the user is
+    /// reading one, else the mail position.
+    var workingCursor: NavState? {
+        if activeKind == .rss, let feedCursorItem {
+            return .feed(itemID: feedCursorItem, scope: feedCursorScope, anchor: feedAnchor,
+                         fraction: feedFraction, clientID: clientID)
+        }
+        guard let folder else { return nil }
+        return NavState(
             folder: folder,
             messageID: messageID,
             uid: uid,
@@ -326,15 +362,34 @@ final class NavStateCoordinator {
             listScroll: listScroll,
             messageScroll: messageScroll,
             messageAnchor: messageAnchor,
+            messageFraction: messageFraction,
             clientID: clientID
         )
+    }
+
+    func scheduleSave() {
+        guard let snapshot = workingCursor else { return }
         saveTask?.cancel()
         let debounce = saveDebounce
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: debounce)
-            guard !Task.isCancelled else { return }
-            await self?.persist(snapshot)
+            guard !Task.isCancelled, let self else { return }
+            if self.serverWritesHeld {
+                self.heldSnapshot = snapshot
+                return
+            }
+            await self.persist(snapshot)
         }
+    }
+
+    /// The launch probe has run: stop holding server writes and write the
+    /// newest position recorded meanwhile.
+    func releaseServerWrites() {
+        guard serverWritesHeld else { return }
+        serverWritesHeld = false
+        guard let held = heldSnapshot else { return }
+        heldSnapshot = nil
+        Task { [weak self] in await self?.persist(held) }
     }
 
     private func persist(_ cursor: NavState) async {

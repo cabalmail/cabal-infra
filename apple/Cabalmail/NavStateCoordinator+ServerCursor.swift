@@ -22,9 +22,14 @@ extension NavStateCoordinator {
     /// no prompt. Never restores — the caller offers a toast. Marks the cursor
     /// as offered so neither the foreground path nor the next launch repeats
     /// it.
-    func launchResumeCandidate(folders: [Folder]) async -> NavState? {
+    /// `folders` is the fetched folder list when the caller has one; nil
+    /// asks the server whether the cursor's folder still exists instead
+    /// (the probe runs from the signed-in root, before any sidebar loads).
+    func launchResumeCandidate(folders: [Folder]? = nil) async -> NavState? {
         guard !hasLoadedInitial else { return nil }
         hasLoadedInitial = true
+        // Whatever the probe finds, this launch's own writes may go out now.
+        defer { releaseServerWrites() }
         guard let cursor = try? await client.navState() else { return nil }
         // This install's own cursor is never offered back to it: the local
         // session has already put the user there.
@@ -37,15 +42,77 @@ extension NavStateCoordinator {
             lastSeenUpdatedAt = updatedAt
             return nil
         }
-        // The folder must still exist (another client may have deleted it).
-        guard folders.contains(where: { $0.path == cursor.folder }) else { return nil }
-        // A message cursor must still be reachable in that folder.
-        if cursor.messageID != nil || cursor.uid != nil {
-            let reachable = await messageIsReachable(cursor)
-            if !reachable { return nil }
-        }
+        guard await isReachable(cursor, folders: folders) else { return nil }
         lastSeenUpdatedAt = updatedAt
         return cursor
+    }
+
+    /// A feed cursor's item must be findable (the local store, else the
+    /// server); a mail cursor's folder must still exist (another client may
+    /// have deleted it) and its message, if it names one, be in the folder's
+    /// initial window.
+    func isReachable(_ cursor: NavState, folders: [Folder]?) async -> Bool {
+        if cursor.kind == .rss {
+            return await feedItem(for: cursor) != nil
+        }
+        if let folders {
+            guard folders.contains(where: { $0.path == cursor.folder }) else { return false }
+        } else {
+            do {
+                try await client.imapClient.connectAndAuthenticate()
+                _ = try await client.imapClient.status(path: cursor.folder)
+            } catch {
+                return false
+            }
+        }
+        if cursor.messageID != nil || cursor.uid != nil {
+            return await messageIsReachable(cursor)
+        }
+        return true
+    }
+
+    /// A feed cursor's item: the local store first, else fetched from the
+    /// server and cached — another device may have read an item this one has
+    /// not synced yet.
+    func feedItem(for cursor: NavState) async -> RssItem? {
+        guard let parts = cursor.rssItemParts, let store = client.rssStore else { return nil }
+        if let local = (try? await store.item(feedId: parts.feedID, sortKey: parts.sortKey)) ?? nil {
+            return local
+        }
+        guard let fetched = try? await client.rss?.getItem(feedId: parts.feedID, sortKey: parts.sortKey) else {
+            return nil
+        }
+        try? await store.upsertItems([fetched])
+        return fetched
+    }
+
+    /// The name the resume toast shows: the folder, or the feed's title.
+    func resumeTitle(for cursor: NavState) async -> String {
+        guard cursor.kind == .rss else { return Folder(path: cursor.folder).name }
+        let item = await feedItem(for: cursor)
+        if let item, !item.subscriptionId.isEmpty, let store = client.rssStore,
+           let subscription = (try? await store.subscription(id: item.subscriptionId)) ?? nil {
+            return subscription.displayTitle
+        }
+        if let title = item?.title, !title.isEmpty { return title }
+        return "a feed"
+    }
+
+    /// A tapped feed toast: resolve the item, seed the local reading
+    /// position from the cursor so the reader restores it through its usual
+    /// path, park the item for its scope, and ask the views to open it.
+    func requestFeedNavigation(_ cursor: NavState) async {
+        guard let item = await feedItem(for: cursor) else { return }
+        let anchor = cursor.messageAnchor ?? cursor.messageFraction.map { String(format: "f%.4f", $0) }
+        if anchor != nil {
+            savePosition(key: ReadingPositionKey.feed(itemID: item.id), anchor: anchor, offset: nil,
+                         fraction: cursor.messageFraction, atTop: false)
+        }
+        let scope = cursor.rssScope.flatMap(RssItemScope.init(token:))
+            ?? (item.subscriptionId.isEmpty ? .all : .subscription(item.subscriptionId))
+        pendingFeedRestore = PendingFeedRestore(scope: scope, item: item)
+        feedNavigateTick += 1
+        feedNavigateRequest = FeedNavigateRequest(scope: scope, tick: feedNavigateTick)
     }
 
     /// Whether `cursor`'s recorded message is present in its folder's initial
@@ -89,7 +156,12 @@ extension NavStateCoordinator {
         else { return nil }
         lastSeenUpdatedAt = updatedAt
         // The other install is where this one already is: no prompt.
-        if Self.cursor(cursor, matchesFolder: folder, uid: uid, messageID: messageID) { return nil }
+        if cursor.kind == .rss {
+            if activeKind == .rss, feedCursorItem == cursor.rssItem { return nil }
+        } else if Self.cursor(cursor, matchesFolder: folder, uid: uid, messageID: messageID) {
+            return nil
+        }
+        guard await isReachable(cursor, folders: nil) else { return nil }
         return cursor
     }
 
@@ -99,7 +171,13 @@ extension NavStateCoordinator {
     /// folder and — when either side names a message — the same message, by
     /// Message-ID when both carry one, else by UID.
     static func cursor(_ cursor: NavState, matches session: ResumeSession?) -> Bool {
-        guard let session, session.section == .mail else { return false }
+        guard let session else { return false }
+        if cursor.kind == .rss {
+            guard session.section == .feeds, let feedID = session.feedItemFeedID,
+                  let sortKey = session.feedItemSortKey else { return false }
+            return cursor.rssItem == "\(feedID)#\(sortKey)"
+        }
+        guard session.section == .mail else { return false }
         return Self.cursor(cursor, matchesFolder: session.folder, uid: session.uid, messageID: session.messageID)
     }
 

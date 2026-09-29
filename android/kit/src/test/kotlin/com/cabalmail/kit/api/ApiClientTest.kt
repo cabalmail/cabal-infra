@@ -404,6 +404,47 @@ class ApiClientTest {
         }
 
     @Test
+    fun `a feed nav state decodes without a folder`() =
+        runTest {
+            val server =
+                Server(
+                    HttpStatusCode.OK to
+                        """{"kind": "rss", "rss_item": "f1#k1", "rss_scope": "sub:s1", "msg_anchor": "i2.0|4",
+                        "msg_fraction": 0.42, "client_id": "mac", "updated_at": 5}""",
+                )
+
+            val state = server.api.getNavState()
+
+            assertEquals(true, state?.isFeed)
+            assertEquals("f1#k1", state?.rssItem)
+            assertEquals("sub:s1", state?.rssScope)
+            assertEquals(0.42, state?.msgFraction)
+            assertNull(state?.folder)
+        }
+
+    @Test
+    fun `a feed nav state without an item decodes to null`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"kind": "rss", "client_id": "mac"}""")
+
+            assertNull(server.api.getNavState())
+        }
+
+    @Test
+    fun `a mail nav state from this client carries no kind`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"folder": "INBOX", "client_id": "c1"}""")
+
+            server.api.setNavState(
+                NavState(folder = "INBOX", clientId = "c1", msgAnchor = "f0.420", msgFraction = 0.42),
+            )
+
+            val body = server.body(0)
+            assertFalse(body.contains("kind"))
+            assertTrue(body.contains("\"msg_fraction\":0.42"))
+        }
+
+    @Test
     fun `setNavState never sends updated_at`() =
         runTest {
             val server =
