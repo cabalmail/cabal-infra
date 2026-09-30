@@ -219,7 +219,11 @@ struct MessageDetailView: View {
         // re-consuming, so whichever body type lands first wins.
         .onChange(of: model?.htmlBody) { _, _ in consumeScrollRestoreIfReady() }
         .onChange(of: model?.plainText) { _, _ in consumeScrollRestoreIfReady() }
-        .onAppear {
+        // `appState` is captured explicitly so the four relay closures
+        // below — which are stored on the view model and so outlive this
+        // body — can keep holding it weakly without the compiler reading
+        // the difference as an accident (`#ImplicitStrongCapture`).
+        .onAppear { [appState] in
             BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
             // Drive the body fetch from `.onAppear` rather than SwiftUI's
             // `.task` modifier. On iPhone-compact NavigationStack push,

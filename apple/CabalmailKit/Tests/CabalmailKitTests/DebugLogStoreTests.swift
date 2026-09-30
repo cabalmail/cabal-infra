@@ -35,6 +35,32 @@ final class DebugLogStoreTests: XCTestCase {
         XCTAssertEqual(collected, ["one", "two"])
     }
 
+    /// #1761, the same shape as `MailboxWatcherTests`' leak case: the store
+    /// keeps every subscriber's continuation, each continuation stores the
+    /// termination handler, and that handler used to hold the store strongly
+    /// — the `[weak self]` sat on the `Task` nested inside it, which needs a
+    /// strong `self` in the handler to be formed at all.
+    func testStoreDeallocatesWhileASubscriberStillHoldsTheStream() async throws {
+        var store: DebugLogStore? = DebugLogStore(capacity: 4)
+        weak var leaked: DebugLogStore? = store
+        let stream = await store!.newEntries()
+        store = nil
+
+        var released = false
+        for _ in 0..<200 {
+            if leaked == nil {
+                released = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(
+            released,
+            "the store outlived its last owner: a subscriber's termination handler is holding it (#1761)"
+        )
+        withExtendedLifetime(stream) {}
+    }
+
     func testClearEmptiesBuffer() async {
         let store = DebugLogStore(capacity: 10)
         await store.log(.info, "cat", "one")

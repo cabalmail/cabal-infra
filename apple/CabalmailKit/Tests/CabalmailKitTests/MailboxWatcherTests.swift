@@ -106,6 +106,47 @@ final class MailboxWatcherTests: XCTestCase {
     /// milliseconds) so slow CI simulators don't flake, while a genuine
     /// stall still fails within one test's budget instead of hanging the
     /// whole run.
+    /// #1761: the termination handler the watcher stores on its own
+    /// continuation used to hold `self` strongly. The `[weak self]` written
+    /// one level in, on the `Task` inside the handler, could not prevent that
+    /// — forming a weak reference needs a strong one in the enclosing scope,
+    /// which is the handler. So the watcher retained itself for as long as a
+    /// consumer held the stream.
+    ///
+    /// The factory throws `CancellationError` because that is the one input
+    /// that makes `runLoop` return: the run loop holds `self` strongly for as
+    /// long as it runs, which would mask the cycle and let this test pass
+    /// either way.
+    func testWatcherDeallocatesWhileAConsumerStillHoldsTheStream() async throws {
+        var watcher: MailboxWatcher? = MailboxWatcher(
+            folder: "INBOX",
+            streamFactory: { _ in throw CancellationError() },
+            initialBackoffSeconds: 0.01,
+            maxBackoffSeconds: 0.01,
+            clock: { _ in }
+        )
+        weak var leaked: MailboxWatcher? = watcher
+        let stream = await watcher!.start()
+        watcher = nil
+
+        var released = false
+        for _ in 0..<200 {
+            if leaked == nil {
+                released = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(
+            released,
+            "the watcher outlived its last owner: its stored termination handler is holding it (#1761)"
+        )
+        // The stream is what keeps the continuation (and so the handler) alive
+        // for the whole poll above; releasing it early would end the stream,
+        // clear the handler, and let even the cyclic version deallocate.
+        withExtendedLifetime(stream) {}
+    }
+
     private func withDeadline<T: Sendable>(
         seconds: TimeInterval = 10,
         _ operation: @escaping @Sendable () async -> T

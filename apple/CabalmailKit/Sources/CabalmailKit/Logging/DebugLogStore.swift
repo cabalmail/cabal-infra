@@ -84,8 +84,12 @@ public actor DebugLogStore {
         AsyncStream { continuation in
             let id = UUID()
             continuations[id] = continuation
-            continuation.onTermination = { @Sendable _ in
-                Task { [weak self] in
+            // Weak at the stored closure, not inside the `Task`: the
+            // continuation holds this handler and the store holds the
+            // continuation, so a strong `self` here retains the store for as
+            // long as a subscriber keeps the stream (see `MailboxWatcher`).
+            continuation.onTermination = { @Sendable [weak self] _ in
+                Task {
                     await self?.removeContinuation(id: id)
                 }
             }
