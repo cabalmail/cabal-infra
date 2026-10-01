@@ -101,8 +101,26 @@ final class MessageListViewModel {
 
     /// Anchor row for range selection: the fixed pivot a shift-click or
     /// shift-arrow extends from -- the last row plainly selected or
-    /// command-clicked.
-    var selectionAnchor: UInt32?
+    /// command-clicked. Settable only through `setSelectionAnchor(_:)`, so
+    /// it cannot drift out of step with `selectionRangeBase`.
+    private(set) var selectionAnchor: UInt32?
+
+    /// The selection a range operation extends *from*: whatever was selected
+    /// at the moment `selectionAnchor` was pinned.
+    ///
+    /// A shift-click unions its span onto this rather than replacing the
+    /// selection, which is how rows picked with command outside the span
+    /// survive (#1768). It is never written on its own -- a base left over
+    /// from an earlier anchor would resurrect rows the user has since
+    /// dropped -- which is what `setSelectionAnchor(_:)` enforces.
+    private(set) var selectionRangeBase: Set<UInt32> = []
+
+    /// Pin the pivot for range selection, recording the selection it starts
+    /// from. The anchor and its base always move together.
+    func setSelectionAnchor(_ uid: UInt32?) {
+        selectionAnchor = uid
+        selectionRangeBase = selectedUIDs
+    }
 
     /// The moving end of a keyboard range selection (the row a plain arrow
     /// last landed on, or a shift-arrow last extended to). Distinct from the
