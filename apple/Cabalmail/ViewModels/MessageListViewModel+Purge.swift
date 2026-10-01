@@ -39,7 +39,14 @@ extension MessageListViewModel {
     /// `/purge_messages` Lambda rejects non-trash folders, so gating
     /// client-side turns a mis-wired call into a no-op rather than a
     /// server error toast.
+    ///
+    /// The rows are replaced before anything leaves: a full swipe's Delete
+    /// Forever held its row slid open while the dialog asked (see
+    /// `replaceRows(showing:)`), and the message moving up into that row
+    /// would otherwise inherit it -- as would the message itself if the
+    /// purge is refused.
     func purgeMessages(uids: Set<UInt32>) async {
+        replaceRows(showing: uids)
         let condemned = envelopes.filter {
             uids.contains($0.uid) && sourceFolder(for: $0) == FolderTree.trashPath
         }

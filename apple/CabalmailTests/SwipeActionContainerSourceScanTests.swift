@@ -28,6 +28,10 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
     /// The row wrapper and the one file that builds rows with it.
     private static let rowSource = "Cabalmail/Views/SwipeActionRow.swift"
     private static let listSource = "Cabalmail/Views/MessageListView+Selection.swift"
+    /// Hosts the Delete Forever confirmation.
+    private static let listViewSource = "Cabalmail/Views/MessageListView.swift"
+    /// The 27 path's trackpad half on iPadOS.
+    private static let trackpadSource = "Cabalmail/Views/TrackpadSwipe.swift"
 
     /// The 27 path exists and is availability-gated, so the pre-27 floor keeps
     /// compiling. Both edges are wired on it: a path that revealed only one
@@ -76,6 +80,35 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
             built.lowerBound, published.lowerBound,
             "the specs are published outside the .swipeActions modifiers, or they never reach the buttons (#1747)"
         )
+    }
+
+    /// On iPadOS the container's reveal answers touches only, so a trackpad's
+    /// two-finger swipe revealed nothing on the 27 path. The row carries a
+    /// trackpad half of its own and the container installs the coordinator
+    /// that keeps it to one row at a time; dropping either wiring brings the
+    /// regression back. What the half does once wired is
+    /// `TrackpadSwipeTrackerTests` (iOS bundle), which cannot see the wiring:
+    /// SwiftUI attaches the recognizer only once an event arrives.
+    func testContainerPathCarriesTheTrackpadHalfOnIOS() throws {
+        let code = Self.code(in: try Self.source(Self.rowSource))
+        let container = try Self.slice(code, from: "private var containerRow: some View {")
+        XCTAssertTrue(container.contains("withTrackpadSwipes("), "the 27 row drops its trackpad half")
+        let wrapper = try Self.slice(code, from: "private func withTrackpadSwipes(")
+        XCTAssertTrue(
+            wrapper.contains("#if os(iOS)"),
+            "the trackpad half is iOS-only; macOS reads the trackpad natively"
+        )
+        XCTAssertTrue(wrapper.contains(".trackpadSwipeReveal("), "the wrapper no longer installs the trackpad half")
+        let coordinated = try Self.slice(code, from: "func coordinatedSwipeActionsContainer() -> some View {")
+        XCTAssertTrue(
+            coordinated.contains(".trackpadSwipeCoordination()"),
+            "the container no longer installs the trackpad coordinator"
+        )
+        let bridge = Self.code(in: try Self.source(Self.trackpadSource))
+        let reveal = try Self.slice(bridge, from: "private struct TrackpadSwipeReveal: ViewModifier {")
+        for hook in ["TrackpadSwipeRecognizer(", "tracker.began(", "tracker.changed(", "tracker.ended("] {
+            XCTAssertTrue(reveal.contains(hook), "the reveal no longer feeds \(hook) from the recognizer")
+        }
     }
 
     /// The pre-27 path survives, both edges included: the floor is iOS 18 /
@@ -129,6 +162,58 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
         XCTAssertTrue(
             Self.code(in: try Self.source(Self.rowSource)).contains("swipeActionsContainer()"),
             "the gated wrapper is where the 27-only modifier is called (#901)"
+        )
+    }
+
+    /// A destructive full swipe holds its row open until the row leaves the
+    /// container, and the index-addressed list only ever re-points its slots,
+    /// so the next message inherited the reveal. The model replaces the row by
+    /// renewing the slot's identity, which only works if the list keys its
+    /// rows by that identity -- and scrolling has to address the same one.
+    /// `FullSwipeRowReplacementTests` drives the behavior on a mirror of this
+    /// list; this pins that the app's list is the shape it mirrors.
+    func testVirtualizedListIsKeyedByReplaceableSlots() throws {
+        let code = Self.code(in: try Self.source(Self.listSource))
+        let list = try Self.slice(code, from: "func virtualizedList(")
+        XCTAssertTrue(
+            list.contains("ForEach(model.rowSlots(count: rowCount), id: \\.self)"),
+            "the virtualized rows are keyed by MessageListSlot, or a full swipe's reveal outlives its message"
+        )
+        XCTAssertFalse(
+            list.contains("ForEach(0..<rowCount"),
+            "rows keyed by index alone can't be replaced"
+        )
+        XCTAssertTrue(
+            list.contains("MessageRowIdentity.identify(visible, generations: model.rowGenerations)"),
+            "the filtered list's rows carry the model's row generations"
+        )
+        let scrolls = code.components(separatedBy: "proxy.scrollTo(").dropFirst()
+        let toSlots = scrolls.filter { $0.hasPrefix("model.rowSlot(at:") }
+        XCTAssertEqual(
+            toSlots.count, 3,
+            "PgUp/PgDn, Home/End and arrow-key scrolling address rows by slot, or they miss a replaced one"
+        )
+    }
+
+    /// Cancelling Delete Forever after a full swipe leaves that row held open
+    /// behind its button unless the row is replaced; both ways out of the
+    /// dialog without deleting go through the helper that does it.
+    func testCancelledDeleteForeverReplacesTheRows() throws {
+        let code = Self.code(in: try Self.source(Self.listViewSource))
+        let helper = try Self.slice(code, from: "private func withdrawPurgeCandidate()")
+        XCTAssertTrue(helper.contains("replaceRows(showing: candidate.uids)"))
+        let binding = try Self.slice(code, from: "private var purgeDialogBinding: Binding<Bool> {")
+        XCTAssertTrue(binding.contains("withdrawPurgeCandidate()"), "dismissing the dialog must replace the rows")
+        guard let dialog = code.range(of: "\"Delete Forever?\""),
+              let cancel = code.range(
+                  of: "Button(\"Cancel\", role: ConfirmationDialogPolicy.backOutRole) {",
+                  range: dialog.upperBound..<code.endIndex
+              ) else {
+            return XCTFail("the Delete Forever dialog's Cancel button moved; re-point this scan")
+        }
+        XCTAssertTrue(
+            code[cancel.upperBound...].prefix(80).contains("withdrawPurgeCandidate()"),
+            "Cancel must replace the rows"
         )
     }
 

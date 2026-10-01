@@ -70,8 +70,16 @@ public actor MailboxWatcher {
         stop()
         let stream = AsyncStream<WatchEvent> { continuation in
             self.continuation = continuation
-            continuation.onTermination = { @Sendable _ in
-                Task { [weak self] in await self?.stop() }
+            // The weak capture belongs on the termination handler itself,
+            // not on the `Task` inside it. A `[weak self]` one level in still
+            // needs a strong `self` in the enclosing closure to form the weak
+            // reference from, and this enclosing closure is *stored* on the
+            // continuation — which the watcher in turn holds — so that strong
+            // reference is a cycle for as long as the stream lives. Capturing
+            // at the stored closure is what makes the weakness do what it was
+            // written to do (and what silences `#ImplicitStrongCapture`).
+            continuation.onTermination = { @Sendable [weak self] _ in
+                Task { await self?.stop() }
             }
         }
         runner = Task { [weak self] in

@@ -113,17 +113,21 @@ extension MessageListViewModel {
     /// load is still in flight, where the row `.task`'s `ensureLoaded` would
     /// bail on the single-flight gate and leave the landing rows blank.
     func noteRowVisible(_ index: Int) {
-        visibleRowIndices.insert(index)
+        visibleRowIndices[index, default: 0] += 1
         scheduleEnsureLoaded()
     }
 
-    /// Row onDisappear: this absolute index left the rendered set.
-    func noteRowHidden(_ index: Int) { visibleRowIndices.remove(index) }
+    /// Row onDisappear: a row at this absolute index left the rendered set.
+    /// The index stays rendered while another row there still reports in.
+    func noteRowHidden(_ index: Int) {
+        guard let rows = visibleRowIndices[index] else { return }
+        visibleRowIndices[index] = rows > 1 ? rows - 1 : nil
+    }
 
     /// Lowest / highest absolute index the list is currently rendering, or nil
     /// before any row has reported in (empty folder, first paint).
-    var firstVisibleRow: Int? { visibleRowIndices.min() }
-    var lastVisibleRow: Int? { visibleRowIndices.max() }
+    var firstVisibleRow: Int? { visibleRowIndices.keys.min() }
+    var lastVisibleRow: Int? { visibleRowIndices.keys.max() }
 
     /// Debounced "load the window the list settled on" after a scroll/key jump.
     /// Resetting the task on each call (every row appear and every PgUp/PgDown)

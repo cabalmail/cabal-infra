@@ -183,7 +183,7 @@ cd apple/Tools/SimDrive
 
 The full command grammar (`launch`, `activate`, `env`, `dump`, `sysdump`,
 `sysapp`, `focus`, `tap`, `type`, `cmdv`, `orient`, `drag`, `swiperow`,
-`scroll`, `exists`, `wait`) is documented at the top of
+`pscroll`, `scroll`, `exists`, `wait`) is documented at the top of
 `Tools/SimDrive/SimDriveUITests/SimDriveTests.swift`. Notes that keep
 sessions out of known potholes:
 
@@ -231,6 +231,13 @@ sessions out of known potholes:
   depending on an anchor chosen for unrelated reasons. `until:` has to
   come last — the rest of the line is its query, which is how a label
   with spaces gets through.
+- **Touch and trackpad are different input.** `drag` and `swiperow`
+  synthesize touches; `pscroll` synthesizes pointer scrolling, which is
+  what a trackpad's two-finger swipe sends on iPadOS. UIKit routes the two
+  differently, so a control can answer one and ignore the other: the
+  iPadOS 27 message-list swipe did exactly that until it gained a
+  trackpad path of its own. Check both when changing anything a row
+  swipe depends on.
 - **Gestures hold the runner's main thread.** A swipe reveal cannot be
   observed from inside the runner mid-gesture. Use `drag ... hold:<s>`
   or `swiperow ... hold:<s>` and screenshot from *outside* during the

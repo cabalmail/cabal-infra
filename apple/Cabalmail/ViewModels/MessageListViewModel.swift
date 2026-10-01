@@ -101,8 +101,26 @@ final class MessageListViewModel {
 
     /// Anchor row for range selection: the fixed pivot a shift-click or
     /// shift-arrow extends from -- the last row plainly selected or
-    /// command-clicked.
-    var selectionAnchor: UInt32?
+    /// command-clicked. Settable only through `setSelectionAnchor(_:)`, so
+    /// it cannot drift out of step with `selectionRangeBase`.
+    private(set) var selectionAnchor: UInt32?
+
+    /// The selection a range operation extends *from*: whatever was selected
+    /// at the moment `selectionAnchor` was pinned.
+    ///
+    /// A shift-click unions its span onto this rather than replacing the
+    /// selection, which is how rows picked with command outside the span
+    /// survive (#1768). It is never written on its own -- a base left over
+    /// from an earlier anchor would resurrect rows the user has since
+    /// dropped -- which is what `setSelectionAnchor(_:)` enforces.
+    private(set) var selectionRangeBase: Set<UInt32> = []
+
+    /// Pin the pivot for range selection, recording the selection it starts
+    /// from. The anchor and its base always move together.
+    func setSelectionAnchor(_ uid: UInt32?) {
+        selectionAnchor = uid
+        selectionRangeBase = selectedUIDs
+    }
 
     /// The moving end of a keyboard range selection (the row a plain arrow
     /// last landed on, or a shift-arrow last extended to). Distinct from the
@@ -211,7 +229,10 @@ final class MessageListViewModel {
     /// Absolute indices of the rows the list is currently rendering, tracked via
     /// row onAppear/onDisappear. `@ObservationIgnored` so the high-frequency
     /// churn never invalidates the view; read only by the page-scroll handlers.
-    @ObservationIgnored var visibleRowIndices: Set<Int> = []
+    /// Counted rather than a set: a replaced row (`replaceRows(showing:)`) is
+    /// one row leaving its index and another arriving at it, and SwiftUI
+    /// doesn't promise the old one's onDisappear comes first.
+    @ObservationIgnored var visibleRowIndices: [Int: Int] = [:]
     /// Pre-fetched bottom window, staged off to the side so the first jump to
     /// the bottom (End / scrollbar-to-bottom) is instant rather than a round
     /// trip. The single contiguous `envelopes` window can't hold both the top
@@ -264,6 +285,15 @@ final class MessageListViewModel {
     /// in `+Optimistic`), so the list closes the gap visibly instead of
     /// instantaneously. Empty except during those ~300ms.
     var rowDisposalPhases: [UInt32: RowDisposalPhase] = [:]
+
+    /// Generation of each replaced slot of the virtualized list, keyed by
+    /// absolute index; an absent index is generation 0. Part of the row's
+    /// identity (`MessageListSlot`), so a bump gives that slot a new row --
+    /// see `replaceRows(showing:)` in `+RowReplacement`.
+    var slotGenerations: [Int: Int] = [:]
+    /// The same for the filtered / search list, whose rows are keyed by
+    /// message (`MessageRowIdentity`) rather than by slot.
+    var rowGenerations: [UInt32: Int] = [:]
 
     init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, appState: AppState) {
         self.scope = scope

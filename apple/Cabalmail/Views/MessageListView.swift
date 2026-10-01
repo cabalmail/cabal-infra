@@ -164,9 +164,22 @@ struct MessageListView: View {
         Binding(
             get: { purgeCandidate != nil },
             set: { isPresented in
-                if !isPresented { purgeCandidate = nil }
+                if !isPresented { withdrawPurgeCandidate() }
             }
         )
+    }
+
+    /// Closes the "Delete Forever?" dialog without deleting anything. A full
+    /// swipe's Delete Forever holds its row slid open while the dialog asks,
+    /// and nothing but a new row lets go of that, so the candidate's rows come
+    /// back replaced (`replaceRows(showing:)`). Confirming takes the same
+    /// care inside `purgeMessages`; by the time a confirmed dialog dismisses,
+    /// the candidate is already cleared and this does nothing.
+    private func withdrawPurgeCandidate() {
+        if let candidate = purgeCandidate {
+            model?.replaceRows(showing: candidate.uids)
+        }
+        purgeCandidate = nil
     }
 
     /// Boolean projection of `disposeCandidate`, same shape as above.
@@ -413,7 +426,7 @@ extension MessageListView {
                 }
             }
             Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
-                purgeCandidate = nil
+                withdrawPurgeCandidate()
             }
         } message: { candidate in
             Text(

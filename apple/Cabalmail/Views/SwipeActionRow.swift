@@ -34,6 +34,19 @@ import SwiftUI
 // the few things that equality does see. `SwipeActionLiveContentTests` drives
 // the real container on macOS and fails if a swipe runs a stale closure.
 //
+// The container keeps one more thing on the row: a full swipe whose action
+// has the destructive role (Archive, Trash, Delete Forever) holds the row slid
+// open -- content off the edge, the action button across it -- until the row
+// leaves the container. In the index-addressed list it never does: its slot
+// re-points at the next message, which would inherit the reveal. Nothing here
+// can let go of it, so the list hands the slot a new row once the swiped message's
+// fate is settled (`MessageListViewModel+RowReplacement.swift`;
+// `FullSwipeRowReplacementTests` drives it on macOS).
+//
+// On iPadOS the container's reveal answers touches only, so a trackpad's
+// two-finger swipe revealed nothing there; on iOS the 27 path adds a trackpad
+// half of its own (`TrackpadSwipe.swift`).
+//
 // Below 27 there is no container API, so each loaded row embeds a single-row
 // `List` purely to borrow its native `.swipeActions`. Hand-rolling the gesture
 // isn't an option (a SwiftUI `DragGesture` can't read the macOS two-finger
@@ -105,11 +118,20 @@ extension SwipeActionSpec {
 /// Clicking / tapping the row selects it (`onSelect`).
 struct SwipeActionRow<Content: View>: View {
     let height: CGFloat
+    /// What the row is showing. The list addresses rows by index, so one row
+    /// shows a different message once the list shifts; a trackpad reveal
+    /// belongs to the message and is dropped when this changes.
+    let contentID: AnyHashable
     let rowBackground: Color
     let leading: SwipeActionSpec?
     let trailing: SwipeActionSpec?
     let onSelect: () -> Void
     @ViewBuilder let content: () -> Content
+
+    #if os(iOS)
+    /// Present on 27 and later, inside `coordinatedSwipeActionsContainer()`.
+    @Environment(TrackpadSwipeCoordinator.self) private var trackpadSwipes: TrackpadSwipeCoordinator?
+    #endif
 
     var body: some View {
         if #available(iOS 27.0, macOS 27.0, visionOS 27.0, *) {
@@ -129,11 +151,13 @@ struct SwipeActionRow<Content: View>: View {
     @available(iOS 27.0, macOS 27.0, visionOS 27.0, *)
     private var containerRow: some View {
         swipeEdges(
-            rowButton
-                .padding(.horizontal, 16)
-                .frame(height: height)
-                .background(rowBackground)
-                .clipped()
+            withTrackpadSwipes(
+                rowButton
+                    .padding(.horizontal, 16)
+                    .frame(height: height)
+                    .background(rowBackground)
+            )
+            .clipped()
         )
         // Outside the `.swipeActions` modifiers so it reaches the buttons they
         // reveal, and re-published on every build of this row -- the content
@@ -161,6 +185,18 @@ struct SwipeActionRow<Content: View>: View {
         case (false, false):
             row
         }
+    }
+
+    /// iPadOS: the trackpad half of the 27 path's swipe, inside the clip so its
+    /// reveal stays within the row. The container's own reveal answers touches
+    /// only (see `TrackpadSwipe.swift`). Everywhere else the row passes through.
+    @ViewBuilder
+    private func withTrackpadSwipes(_ row: some View) -> some View {
+        #if os(iOS)
+        row.trackpadSwipeReveal(contentID: contentID, leading: leading, trailing: trailing, height: height)
+        #else
+        row
+        #endif
     }
 
     /// Below 27: the borrowed single-row `List`. #901 (several rows revealed at
@@ -217,7 +253,15 @@ struct SwipeActionRow<Content: View>: View {
     /// VoiceOver and automation can activate it, matching the bulk-mode row,
     /// which has always been a `Button`. Shared by both paths.
     private var rowButton: some View {
-        Button(action: onSelect) {
+        Button {
+            #if os(iOS)
+            // A click on another row retracts an open trackpad reveal, as a tap
+            // does the container's own. (The revealed row's click never gets
+            // here: its reveal takes it.)
+            trackpadSwipes?.closeAll()
+            #endif
+            onSelect()
+        } label: {
             content()
                 .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
                 .contentShape(Rectangle())
@@ -281,10 +325,19 @@ extension View {
     /// own tap retracts it. The two therefore ship together: a row that drops
     /// its embedded `List` needs a container above it, and
     /// `SwipeActionContainerSourceScanTests` pins the pairing.
+    ///
+    /// On iOS it also installs the coordinator for the rows' trackpad reveal
+    /// (`TrackpadSwipe.swift`), which the native container knows nothing
+    /// about.
     @ViewBuilder
     func coordinatedSwipeActionsContainer() -> some View {
         if #available(iOS 27.0, macOS 27.0, visionOS 27.0, *) {
+            #if os(iOS)
             swipeActionsContainer()
+                .trackpadSwipeCoordination()
+            #else
+            swipeActionsContainer()
+            #endif
         } else {
             self
         }
