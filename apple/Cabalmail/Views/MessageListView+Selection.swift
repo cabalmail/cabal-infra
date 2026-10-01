@@ -28,6 +28,12 @@ extension MessageListView {
     /// selects/opens; the per-row context menu and drag come from `row(...)`.
     /// Swipe-to-dispose, native multi-select, and keyboard nav are Stage B.
     ///
+    /// The range is iterated as `MessageListSlot`s rather than bare indices: a
+    /// slot whose row a destructive full swipe held open gets a new generation,
+    /// and so a new row, once the swiped message's fate is settled (see
+    /// `MessageListViewModel+RowReplacement.swift`). Scrolling to a row goes
+    /// through `model.rowSlot(at:)` for the same reason.
+    ///
     /// Filtered / search mode (visible != all loaded) can't map rows onto
     /// absolute folder slots, so it falls back to a plain `ForEach(visible)`.
     @ViewBuilder
@@ -48,8 +54,8 @@ extension MessageListView {
                                 .padding()
                         }
                         if virtualize {
-                            ForEach(0..<rowCount, id: \.self) { index in
-                                indexedRow(index, model: model, visible: visible)
+                            ForEach(model.rowSlots(count: rowCount), id: \.self) { slot in
+                                indexedRow(slot.index, model: model, visible: visible)
                             }
                         } else {
                             // Identity comes from `MessageRowIdentity`, not
@@ -58,7 +64,7 @@ extension MessageListView {
                             // `ForEach` given two elements with one id draws only
                             // the first — the other match disappears from the
                             // list while the header still counts it.
-                            let rows = MessageRowIdentity.identify(visible)
+                            let rows = MessageRowIdentity.identify(visible, generations: model.rowGenerations)
                             ForEach(rows) { row in
                                 messageRow(row.envelope, model: model, visible: visible)
                                     .task {
@@ -159,7 +165,7 @@ extension MessageListView {
               let first = model.firstVisibleRow, let last = model.lastVisibleRow
         else { return .ignored }
         withAnimation(.easeOut(duration: 0.12)) {
-            proxy.scrollTo(down ? last : first, anchor: down ? .top : .bottom)
+            proxy.scrollTo(model.rowSlot(at: down ? last : first), anchor: down ? .top : .bottom)
         }
         // The post-scroll row appears re-arm the settle backstop, which loads
         // the window at the new visible center once it stops.
@@ -196,7 +202,7 @@ extension MessageListView {
             let total = Int(model.totalMessages)
             let target = toEnd ? (total > 0 ? min(rowCount - 1, total - 1) : rowCount - 1) : 0
             model.ensureLoaded(around: target)
-            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(target, anchor: anchor) }
+            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(model.rowSlot(at: target), anchor: anchor) }
         } else if let edge = toEnd ? visible.last : visible.first {
             withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(edge.id, anchor: anchor) }
         }
@@ -495,13 +501,13 @@ extension MessageListView {
             model.selectionAnchor = target.uid
             model.selectionCursor = target.uid
         }
-        // The virtualized `ForEach` is keyed by absolute folder index (Int);
-        // the filtered fallback by envelope id. Scroll to whichever the active
-        // `ForEach` uses (in virtualize mode `visible` == `envelopes`, so the
-        // absolute index is `windowStart + next`).
+        // The virtualized `ForEach` is keyed by slot (absolute folder index
+        // plus generation); the filtered fallback by envelope id. Scroll to
+        // whichever the active `ForEach` uses (in virtualize mode `visible` ==
+        // `envelopes`, so the absolute index is `windowStart + next`).
         withAnimation(.easeOut(duration: 0.12)) {
             if virtualize {
-                proxy.scrollTo(Int(model.windowStart) + next, anchor: .center)
+                proxy.scrollTo(model.rowSlot(at: Int(model.windowStart) + next), anchor: .center)
             } else {
                 proxy.scrollTo(target.id, anchor: .center)
             }

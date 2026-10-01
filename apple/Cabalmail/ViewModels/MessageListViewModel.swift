@@ -211,7 +211,10 @@ final class MessageListViewModel {
     /// Absolute indices of the rows the list is currently rendering, tracked via
     /// row onAppear/onDisappear. `@ObservationIgnored` so the high-frequency
     /// churn never invalidates the view; read only by the page-scroll handlers.
-    @ObservationIgnored var visibleRowIndices: Set<Int> = []
+    /// Counted rather than a set: a replaced row (`replaceRows(showing:)`) is
+    /// one row leaving its index and another arriving at it, and SwiftUI
+    /// doesn't promise the old one's onDisappear comes first.
+    @ObservationIgnored var visibleRowIndices: [Int: Int] = [:]
     /// Pre-fetched bottom window, staged off to the side so the first jump to
     /// the bottom (End / scrollbar-to-bottom) is instant rather than a round
     /// trip. The single contiguous `envelopes` window can't hold both the top
@@ -264,6 +267,15 @@ final class MessageListViewModel {
     /// in `+Optimistic`), so the list closes the gap visibly instead of
     /// instantaneously. Empty except during those ~300ms.
     var rowDisposalPhases: [UInt32: RowDisposalPhase] = [:]
+
+    /// Generation of each replaced slot of the virtualized list, keyed by
+    /// absolute index; an absent index is generation 0. Part of the row's
+    /// identity (`MessageListSlot`), so a bump gives that slot a new row --
+    /// see `replaceRows(showing:)` in `+RowReplacement`.
+    var slotGenerations: [Int: Int] = [:]
+    /// The same for the filtered / search list, whose rows are keyed by
+    /// message (`MessageRowIdentity`) rather than by slot.
+    var rowGenerations: [UInt32: Int] = [:]
 
     init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, appState: AppState) {
         self.scope = scope

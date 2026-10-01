@@ -136,6 +136,11 @@ extension MessageListViewModel {
     /// A move that fails while the row is still fading stops the collapse
     /// and the row simply comes back where it stands; one that fails after
     /// the row has left is re-inserted at its old index.
+    ///
+    /// Either way the row is replaced as the animation ends, not just
+    /// re-pointed or restored: a full swipe that got here holds its row slid
+    /// open for the deletion it announced, and only a new row lets go of that
+    /// (see `replaceRows(showing:)`).
     func dispose(_ envelope: Envelope) async {
         guard pendingRemovedUIDs.insert(envelope.uid).inserted else { return }
         defer { pendingRemovedUIDs.remove(envelope.uid) }
@@ -143,6 +148,10 @@ extension MessageListViewModel {
         let destination = preferences.disposeAction.destinationFolder
         let source = sourceFolder(for: envelope)
         let wasUnread = !envelope.flags.contains(.seen)
+        // Where the swipe happened. A refresh that adds mail above the row
+        // during the animation moves the message down a slot, but the row
+        // that was swiped -- and held open -- stays where it was.
+        let swipedSlot = slotIndex(of: envelope.uid)
         // Start the row animation but deliberately DON'T await it before the
         // move: a swipe landing just as the app is backgrounded has only a
         // brief window to reach the network, so the request goes out first and
@@ -181,13 +190,15 @@ extension MessageListViewModel {
         }
         await disposal.value
 
-        // Both mutations in one synchronous step so the list sees a single
-        // update: the envelope is gone AND the phase is cleared, which leaves
-        // the vacated slot rendering the next envelope at full height. A
-        // disposal cancelled mid-fade never reached `.collapsing`; its row
-        // stays, and clearing the phase fades it back in.
+        // All of it in one synchronous step so the list sees a single update:
+        // the row is replaced, the envelope is gone AND the phase is cleared,
+        // which leaves the vacated slot rendering the next envelope at full
+        // height, in a row of its own rather than the swiped one. A disposal
+        // cancelled mid-fade never reached `.collapsing`; its message stays,
+        // in a new row, and clearing the phase brings it back.
         let originalIndex = envelopes.firstIndex { $0.uid == uid }
         let dropped = rowDisposalPhases[uid] == .collapsing && originalIndex != nil
+        replaceRows(showing: [uid], alsoAt: swipedSlot.map { [$0] } ?? [])
         if dropped {
             envelopes.removeAll { $0.uid == uid }
             adjustTotalMessages(by: -1)

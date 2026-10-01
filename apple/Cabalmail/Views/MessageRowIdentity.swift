@@ -18,12 +18,17 @@ import CabalmailKit
 /// which the server can return for envelopes it couldn't parse. Distinct
 /// identities there are still better than a vanished row; it only means
 /// SwiftUI rebuilds the later duplicate if an earlier one is removed.
+///
+/// `generation` changes when the message's row has to be replaced rather
+/// than updated -- after a destructive full swipe that left it in place
+/// (`MessageListViewModel.replaceRows(showing:)`).
 struct MessageRowIdentity: Hashable {
     let uid: UInt32
     let messageID: String?
     /// 0 for the first row with this (uid, messageID) pair, 1 for the next,
     /// and so on. Non-zero only in the indistinguishable case above.
     let occurrence: Int
+    var generation = 0
 }
 
 /// An envelope paired with the identity its row is drawn under.
@@ -35,8 +40,11 @@ struct IdentifiedEnvelope: Identifiable, Hashable {
 extension MessageRowIdentity {
     /// Pairs each envelope with an identity unique across `envelopes`,
     /// preserving order. What `ForEach` iterates in the search / filtered
-    /// list.
-    static func identify(_ envelopes: [Envelope]) -> [IdentifiedEnvelope] {
+    /// list. `generations` is the model's per-UID row generation.
+    static func identify(
+        _ envelopes: [Envelope],
+        generations: [UInt32: Int] = [:]
+    ) -> [IdentifiedEnvelope] {
         var seen: [Key: Int] = [:]
         return envelopes.map { envelope in
             let key = Key(uid: envelope.uid, messageID: envelope.messageId)
@@ -46,7 +54,8 @@ extension MessageRowIdentity {
                 id: MessageRowIdentity(
                     uid: envelope.uid,
                     messageID: envelope.messageId,
-                    occurrence: occurrence
+                    occurrence: occurrence,
+                    generation: generations[envelope.uid] ?? 0
                 ),
                 envelope: envelope
             )

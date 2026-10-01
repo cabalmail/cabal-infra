@@ -34,6 +34,15 @@ import SwiftUI
 // the few things that equality does see. `SwipeActionLiveContentTests` drives
 // the real container on macOS and fails if a swipe runs a stale closure.
 //
+// The container keeps one more thing on the row: a full swipe whose action
+// has the destructive role (Archive, Trash, Delete Forever) holds the row slid
+// open -- content off the edge, the action button across it -- until the row
+// leaves the container. In the index-addressed list it never does: its slot
+// re-points at the next message, which would inherit the reveal. Nothing here
+// can let go of it, so the list hands the slot a new row once the swiped message's
+// fate is settled (`MessageListViewModel+RowReplacement.swift`;
+// `FullSwipeRowReplacementTests` drives it on macOS).
+//
 // On iPadOS the container's reveal answers touches only, so a trackpad's
 // two-finger swipe revealed nothing there; on iOS the 27 path adds a trackpad
 // half of its own (`TrackpadSwipe.swift`).
