@@ -11,8 +11,9 @@ import Foundation
 /// makes it stick; the sheet reads and writes it through `@Bindable`.
 @Observable
 final class NewFolderForm {
-    /// Folder name as typed. Not trimmed — `canCreate` and `submissionName`
-    /// decide what counts as usable.
+    /// Folder name as typed. Not trimmed — `canCreate` decides whether the
+    /// Create button is usable, and `FolderListViewModel.createFolder` trims
+    /// before it submits.
     var name: String = ""
 
     /// Selected parent path, or `""` for the picker's "None (top level)" row.
