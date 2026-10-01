@@ -28,6 +28,8 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
     /// The row wrapper and the one file that builds rows with it.
     private static let rowSource = "Cabalmail/Views/SwipeActionRow.swift"
     private static let listSource = "Cabalmail/Views/MessageListView+Selection.swift"
+    /// Hosts the Delete Forever confirmation.
+    private static let listViewSource = "Cabalmail/Views/MessageListView.swift"
     /// The 27 path's trackpad half on iPadOS.
     private static let trackpadSource = "Cabalmail/Views/TrackpadSwipe.swift"
 
@@ -160,6 +162,58 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
         XCTAssertTrue(
             Self.code(in: try Self.source(Self.rowSource)).contains("swipeActionsContainer()"),
             "the gated wrapper is where the 27-only modifier is called (#901)"
+        )
+    }
+
+    /// A destructive full swipe holds its row open until the row leaves the
+    /// container, and the index-addressed list only ever re-points its slots,
+    /// so the next message inherited the reveal. The model replaces the row by
+    /// renewing the slot's identity, which only works if the list keys its
+    /// rows by that identity -- and scrolling has to address the same one.
+    /// `FullSwipeRowReplacementTests` drives the behavior on a mirror of this
+    /// list; this pins that the app's list is the shape it mirrors.
+    func testVirtualizedListIsKeyedByReplaceableSlots() throws {
+        let code = Self.code(in: try Self.source(Self.listSource))
+        let list = try Self.slice(code, from: "func virtualizedList(")
+        XCTAssertTrue(
+            list.contains("ForEach(model.rowSlots(count: rowCount), id: \\.self)"),
+            "the virtualized rows are keyed by MessageListSlot, or a full swipe's reveal outlives its message"
+        )
+        XCTAssertFalse(
+            list.contains("ForEach(0..<rowCount"),
+            "rows keyed by index alone can't be replaced"
+        )
+        XCTAssertTrue(
+            list.contains("MessageRowIdentity.identify(visible, generations: model.rowGenerations)"),
+            "the filtered list's rows carry the model's row generations"
+        )
+        let scrolls = code.components(separatedBy: "proxy.scrollTo(").dropFirst()
+        let toSlots = scrolls.filter { $0.hasPrefix("model.rowSlot(at:") }
+        XCTAssertEqual(
+            toSlots.count, 3,
+            "PgUp/PgDn, Home/End and arrow-key scrolling address rows by slot, or they miss a replaced one"
+        )
+    }
+
+    /// Cancelling Delete Forever after a full swipe leaves that row held open
+    /// behind its button unless the row is replaced; both ways out of the
+    /// dialog without deleting go through the helper that does it.
+    func testCancelledDeleteForeverReplacesTheRows() throws {
+        let code = Self.code(in: try Self.source(Self.listViewSource))
+        let helper = try Self.slice(code, from: "private func withdrawPurgeCandidate()")
+        XCTAssertTrue(helper.contains("replaceRows(showing: candidate.uids)"))
+        let binding = try Self.slice(code, from: "private var purgeDialogBinding: Binding<Bool> {")
+        XCTAssertTrue(binding.contains("withdrawPurgeCandidate()"), "dismissing the dialog must replace the rows")
+        guard let dialog = code.range(of: "\"Delete Forever?\""),
+              let cancel = code.range(
+                  of: "Button(\"Cancel\", role: ConfirmationDialogPolicy.backOutRole) {",
+                  range: dialog.upperBound..<code.endIndex
+              ) else {
+            return XCTFail("the Delete Forever dialog's Cancel button moved; re-point this scan")
+        }
+        XCTAssertTrue(
+            code[cancel.upperBound...].prefix(80).contains("withdrawPurgeCandidate()"),
+            "Cancel must replace the rows"
         )
     }
 

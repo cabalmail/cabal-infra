@@ -49,6 +49,20 @@ final class MessageRowIdentityTests: XCTestCase {
         XCTAssertEqual(Set(rows.map { $0.id }).count, 2, "an indistinguishable duplicate still gets its own row")
     }
 
+    func testAReplacedRowGetsANewIdentityAndNoOtherRowDoes() {
+        // A destructive full swipe that leaves its message in place (a failed
+        // archive, a cancelled Delete Forever) holds the row open; the model
+        // bumps the message's generation so the list builds it a new row.
+        let envelopes = [
+            TestFixtures.makeEnvelope(uid: 1, messageId: "<probe1@example.com>"),
+            TestFixtures.makeEnvelope(uid: 4, messageId: "<probe2@example.com>"),
+        ]
+        let before = MessageRowIdentity.identify(envelopes).map(\.id)
+        let after = MessageRowIdentity.identify(envelopes, generations: [4: 1]).map(\.id)
+        XCTAssertEqual(after[0], before[0])
+        XCTAssertNotEqual(after[1], before[1], "the replaced message's row must not keep its identity")
+    }
+
     func testDistinctUIDsAreUnaffected() {
         // The ordinary folder / broken-collision case from the report's
         // control run: nothing about identity changes when UIDs differ.

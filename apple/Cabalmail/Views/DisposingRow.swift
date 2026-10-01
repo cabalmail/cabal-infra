@@ -3,7 +3,9 @@ import SwiftUI
 /// Plays a message row out of the list in two legs — fade at full height,
 /// then collapse to zero height — while the view model holds the envelope in
 /// place. `MessageListViewModel.dispose(_:)` drops the envelope only once both
-/// legs have run (see `beginRowDisposal`).
+/// legs have run (see `beginRowDisposal`), and in the same step hands the slot
+/// a new row, so the next message doesn't inherit a full swipe's held-open
+/// reveal (see `replaceRows(showing:)`).
 ///
 /// Why an animation at all: the removal itself is instantaneous, and under the
 /// index-addressed virtualized list it isn't even a row removal — every slot
