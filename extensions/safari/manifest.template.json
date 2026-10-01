@@ -37,7 +37,8 @@
   "permissions": [
     "storage",
     "identity",
-    "history"
+    "history",
+    "nativeMessaging"
   ],
   "optional_host_permissions": [
     "https://*/*"
