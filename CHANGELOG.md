@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.6] - 2026-10-01
+
+### Fixed
+- Apple: **A full swipe no longer leaves the next message covered.**
+  Archiving or trashing a message with a full swipe removed it, but the
+  message that moved up into its row came up hidden behind the swiped
+  row's action button, and on iPhone dragging the button closed went back
+  to the folder list instead. A message whose archive failed, or whose
+  Delete Forever was cancelled after a full swipe in Trash, came back
+  hidden behind its own button the same way. The row a full swipe empties
+  is now replaced with a fresh one. This affected the 27 OS releases,
+  where the message list uses the system's swipe-actions container.
+- Apple: **Trackpad swipes work in the iPad message list again.** On
+  iPadOS 27 a two-finger swipe on a trackpad revealed no swipe actions,
+  because the list's new swipe-actions container (1.22.5) answers touches
+  only. A two-finger swipe now reveals the row's leading or trailing
+  action, one row at a time; clicking it runs it, and a long swipe runs it
+  outright. Clicking the row, clicking another row, or scrolling puts it
+  away. Touch swipes are unchanged.
+- Apple: **Shift-clicking keeps your ⌘-picked messages.** On macOS (and on
+  iPad with a keyboard or trackpad), shift-clicking a row after
+  command-clicking a few replaced the whole selection with the new range,
+  silently dropping every message picked outside it — three selected plus a
+  shift-click one row down left two. The range now joins what is already
+  selected, the way Finder and Mail behave: command-picked rows outside the
+  range keep their highlight, and a second shift-click still re-aims the
+  range from the same anchor rather than piling spans up. Shift+Up/Down
+  follows the same rule.
+- Apple: **The built-in Safari extension now takes your server from the
+  app.** The extension embedded in the Mac and iOS apps is meant to ask
+  the app which Cabalmail server you are signed into, so you never type it
+  twice — but its manifest did not request native messaging, and WebKit
+  only hands that bridge to an extension that asks for it. The request was
+  therefore never made and the popup always showed its "which Cabalmail
+  server should this extension use?" form instead. It now asks for the
+  permission, so the embedded extension takes the server from the app. The
+  separately-installed Safari and Chrome builds are unaffected and still
+  ask in the popup.
+
 ## [1.22.5] - 2026-09-29
 
 ### Fixed
