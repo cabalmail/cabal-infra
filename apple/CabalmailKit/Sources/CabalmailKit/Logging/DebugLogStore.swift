@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Phase 7 swaps anonymous `print` / ad-hoc error-message strings for a
 /// structured `DebugLogStore`: every view model, transport, and watcher
-/// pushes `LogEntry` records here; the Settings → Debug Log screen renders
+/// pushes `Entry` records here; the Settings → Debug Log screen renders
 /// the most-recent `capacity` entries. Kept in memory — crashes take it
 /// with them — because the logs are a troubleshooting aid, not a durable
 /// audit trail. `MetricKitCollector` funnels MetricKit crash and hang
@@ -13,7 +13,7 @@ import Foundation
 /// Concurrency: an actor because writes come from every part of the app
 /// (IMAP connection actor, SMTP connection actor, main-actor view models,
 /// background tasks). Observers subscribe via `newEntries` — an
-/// `AsyncStream<LogEntry>` — which keeps SwiftUI views up-to-date without
+/// `AsyncStream<Entry>` — which keeps SwiftUI views up-to-date without
 /// dragging an `@Observable` across actor boundaries.
 public actor DebugLogStore {
     public enum Level: String, Sendable, Codable, CaseIterable {

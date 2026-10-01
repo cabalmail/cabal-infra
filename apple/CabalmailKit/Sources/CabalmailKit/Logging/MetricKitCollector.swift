@@ -14,8 +14,8 @@ import MetricKit
 /// need a server to ship them to. Diagnostics give us crash, hang, CPU,
 /// and disk-write reports without any ingress infrastructure.
 ///
-/// Activated by `CabalmailClient.enableCrashReporting()` — off by default
-/// because the plan marks it opt-in.
+/// Activated by `CabalmailClient.setCrashReportingEnabled(_:)` — off by
+/// default because the plan marks it opt-in.
 public final class MetricKitCollector: NSObject, @unchecked Sendable {
     /// Process-lifetime singleton. MetricKit subscription is global to the
     /// process (`MXMetricManager.shared`), so the subscriber object must

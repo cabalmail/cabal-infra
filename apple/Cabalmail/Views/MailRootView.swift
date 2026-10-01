@@ -376,7 +376,7 @@ struct MailRootView: View {
         .onChange(of: selectedFolder) { old, folder in
             // A same-path change is a metadata reconcile — the launch landing
             // swapping its provisional `Folder(path: "INBOX")` for the fetched
-            // one (`finishInboxLanding`). Same mailbox, so keep the user's
+            // one (`finishLaunchLanding`). Same mailbox, so keep the user's
             // message selection and don't re-record the cursor.
             guard old?.path != folder?.path else { return }
             selectedEnvelope = nil

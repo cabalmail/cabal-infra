@@ -29,7 +29,7 @@ public struct PushEnrichmentStore: @unchecked Sendable {
     public static let keychainAccessGroupSuffix = "com.cabalmail.shared"
     /// App Group `UserDefaults` key carrying the API Gateway stage URL.
     public static let apiURLDefaultsKey = "cabal.push.api_url"
-    /// Keychain coordinates of the mirrored token JSON (`tokenPayload`).
+    /// Keychain coordinates of the mirrored token JSON (`PushTokenPayload`).
     public static let keychainService = "com.cabalmail.push"
     public static let keychainAccount = "push.auth"
 
