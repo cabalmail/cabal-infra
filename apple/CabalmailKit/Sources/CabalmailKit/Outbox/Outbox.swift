@@ -175,7 +175,7 @@ public actor Outbox {
         let (stream, continuation) = AsyncStream<[Entry]>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let token = UUID()
         observers[token] = continuation
-        continuation.onTermination = { [weak self] _ in
+        continuation.onTermination = { @Sendable [weak self] _ in
             guard let self else { return }
             Task { await self.removeObserver(token) }
         }
