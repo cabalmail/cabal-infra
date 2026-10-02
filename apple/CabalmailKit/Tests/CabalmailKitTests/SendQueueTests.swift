@@ -54,9 +54,9 @@ final class SendQueueTests: XCTestCase {
         let outbox = try Outbox(directory: directory, maxAttempts: 2)
         _ = try await outbox.enqueue(Self.makeMessage(subject: "give up"))
         let clock = TestClock()
-        let queue = SendQueue(outbox: outbox, now: { clock.now }) { _ in
+        let queue = SendQueue(outbox: outbox, now: { clock.now }, sender: { _ in
             throw CabalmailError.network("always fails")
-        }
+        })
         await queue.kickDrain()
         try await waitUntil {
             (try await outbox.list().first?.attempts ?? 0) == 1
@@ -101,10 +101,10 @@ final class SendQueueTests: XCTestCase {
         _ = try await outbox.enqueue(Self.makeMessage(subject: "flappy"))
         let clock = TestClock()
         let calls = SentCounter()
-        let queue = SendQueue(outbox: outbox, now: { clock.now }) { _ in
+        let queue = SendQueue(outbox: outbox, now: { clock.now }, sender: { _ in
             await calls.bump()
             throw CabalmailError.network("down again")
-        }
+        })
         await queue.kickDrain()
         try await waitUntil { await calls.count == 1 }
 
@@ -154,7 +154,7 @@ final class SendQueueTests: XCTestCase {
         entry.lastAttemptAt = clock.now
         try await outbox.update(entry)
         let sent = SentCounter()
-        let queue = SendQueue(outbox: outbox, now: { clock.now }) { _ in await sent.bump() }
+        let queue = SendQueue(outbox: outbox, now: { clock.now }, sender: { _ in await sent.bump() })
 
         clock.advance(by: SendQueue.Backoff.standard.base + 1)
         await queue.kickDrain()
