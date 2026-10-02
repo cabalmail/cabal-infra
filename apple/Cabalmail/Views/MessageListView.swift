@@ -596,6 +596,13 @@ extension MessageListView {
                 selection = next
             }
         }
+        .onChange(of: appState.lastFailedRemoval) { _, signal in
+            // The reader's dispose / move / purge failed after the handler
+            // above pruned its row: put the row back. The selection stays
+            // where the advance left it, as with a failed swipe.
+            guard let signal, signal.folderPath == folder.path else { return }
+            model?.restorePrunedEnvelope(uid: signal.uid, markUnread: signal.markUnread)
+        }
         .onChange(of: appState.lastDraftReplaced) { _, signal in
             // A compose session saved over a Drafts copy this list may be
             // showing. Handler in `+Actions.swift`; other folders ignore it.

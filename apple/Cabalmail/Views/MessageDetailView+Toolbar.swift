@@ -221,9 +221,8 @@ extension MessageDetailView {
                 )
             },
             onFailure: { error in
-                // The optimistic prune has already happened upstream;
-                // surface a toast so the user knows the move didn't take
-                // and can retry on the next refresh.
+                // The model has already had the list put the row back;
+                // surface a toast so the user knows the move didn't take.
                 appState.showToast(Toast(
                     kind: .error,
                     message: failureMessage(for: action, error: error)
