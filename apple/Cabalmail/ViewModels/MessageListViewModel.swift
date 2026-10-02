@@ -6,7 +6,9 @@ import CabalmailKit
 // TEMP diagnostic logger (remove with the dbg() calls). Routed through unified
 // logging so the output is visible from a Release / TestFlight build in
 // Console.app (filter subsystem "com.cabalmail.debug") -- print() stdout is
-// not. Values are logged .public so they aren't redacted in Release.
+// not. The event text is logged .public so it isn't redacted in Release; the
+// folder path is .private, since folder names are user content and a
+// sysdiagnose shouldn't carry them.
 private let mlvmDebugLog = Logger(subsystem: "com.cabalmail.debug", category: "messagelist")
 
 /// Backs `MessageListView`. Owns the paginated envelope window, envelope
@@ -638,8 +640,11 @@ extension MessageListViewModel {
     // Internal (not private) so the sibling-file extensions can call it. Uses
     // os.Logger (not print) so it's visible from a Release / TestFlight build.
     func dbg(_ msg: String) {
-        let line = "CABALDBG [\(folder.path)] \(msg) | n=\(envelopes.count)"
-        mlvmDebugLog.notice("\(line, privacy: .public)")
+        let path = folder.path
+        let count = envelopes.count
+        mlvmDebugLog.notice(
+            "CABALDBG [\(path, privacy: .private)] \(msg, privacy: .public) | n=\(count, privacy: .public)"
+        )
     }
 
     // TEMP diagnostic (remove with the dbg() calls). Monotonic milliseconds
