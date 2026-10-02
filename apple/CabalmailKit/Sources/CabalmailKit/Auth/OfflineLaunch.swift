@@ -29,7 +29,7 @@ extension CabalmailError {
     /// or a timeout. Distinct from anything the server said.
     var isUnreachable: Bool {
         switch self {
-        case .network, .transport, .timeout:
+        case .network, .transport:
             return true
         default:
             return false

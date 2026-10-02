@@ -552,7 +552,6 @@ final class AppState {
         case .invalidCredentials: return "Incorrect username or password."
         case .notConfigured:      return "Control domain is invalid."
         case .authExpired:        return "Session expired. Please sign in again."
-        case .timeout:            return "Request timed out."
         case .cancelled:          return "Cancelled."
         case .notSignedIn:        return "Not signed in."
         // Planned IMAP redeploy: show the API's friendly copy verbatim, no

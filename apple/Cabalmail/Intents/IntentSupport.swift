@@ -26,8 +26,6 @@ enum IntentError: Error, CustomLocalizedStringResourceConvertible {
         switch error {
         case .notSignedIn, .authExpired, .invalidCredentials:
             return .notSignedIn
-        case .timeout:
-            return .message("The request timed out.")
         // Planned IMAP redeploy / Cognito-trigger copy is user-facing
         // verbatim, same as AppState's canned messages.
         case .maintenance(let message):
