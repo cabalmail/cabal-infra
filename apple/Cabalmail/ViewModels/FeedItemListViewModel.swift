@@ -46,7 +46,6 @@ final class FeedItemListViewModel {
     private let defaults: FeedDefaultsPersisting?
     private let bus: FeedStateBus
     private let pageSize = 100
-    private var loaded = 0
     /// True while this model's own broad post is being delivered, so the
     /// handler below doesn't reload a list that was just reloaded.
     private var postingSelf = false
@@ -158,24 +157,28 @@ final class FeedItemListViewModel {
                 hasMoreLocal = false
             } else {
                 items = try await store.items(.init(scope: scope, filter: filter, ordering: ordering,
-                                                    limit: pageSize, offset: 0))
+                                                    limit: pageSize))
                 hasMoreLocal = items.count == pageSize
             }
-            loaded = items.count
             await refreshPendingMarks()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    /// Next page from the store (scrolling).
+    /// Next page from the store (scrolling): the rows that sort after the
+    /// last one shown. Keyed, not offset, because the result set moves
+    /// under a paged list - rows read in the Unread pill stay on screen
+    /// but leave the filter, and syncs insert newer rows above - and an
+    /// offset then skips or repeats rows. Anything already shown is
+    /// dropped, so `ForEach` never sees a duplicate id.
     func loadMore() async {
-        guard hasMoreLocal, let store = client.rssStore, searchQuery.isEmpty else { return }
+        guard hasMoreLocal, let store = client.rssStore, searchQuery.isEmpty, let last = items.last else { return }
         do {
             let page = try await store.items(.init(scope: scope, filter: filter, ordering: ordering,
-                                                   limit: pageSize, offset: loaded))
-            items += page
-            loaded += page.count
+                                                   limit: pageSize, after: .init(after: last)))
+            let shown = Set(items.map(\.id))
+            items += page.filter { !shown.contains($0.id) }
             hasMoreLocal = page.count == pageSize
         } catch {
             errorMessage = error.localizedDescription
