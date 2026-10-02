@@ -17,6 +17,24 @@ on:
     paths:
       - 'apple/**'
       - '.github/workflows/apple.yml'
+  # The PR gate: every PR touching Apple code builds and tests before merge,
+  # so a regression is caught on its own PR instead of on the stage push
+  # after it lands. A PR run stops at the test and build jobs: `approval`
+  # and both upload jobs are skipped for pull_request, so no environment
+  # gate, signing secret, or TestFlight upload is reachable from a PR.
+  # `apple-gate` is the one stable check name to require in branch
+  # protection.
+  pull_request:
+    paths:
+      - 'apple/**'
+      - '.github/workflows/apple.yml'
+
+# A new push to a PR supersedes the run on its previous head, so that run is
+# cancelled. Push runs on main/stage are never cancelled: they end in an
+# upload, and a half-finished one is worse than a queued one.
+concurrency:
+  group: apple-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Track the runner image's newest stable Xcode. Pinning a specific version
@@ -57,6 +75,13 @@ jobs:
   # -----------------------------------------------------------------------
   # CabalmailKit tests across platforms. Matrix of three destinations so
   # conditional code paths on any platform break CI loudly.
+  #
+  # On a pull_request the visionOS leg is dropped: its simulator is the one
+  # that wedges on WebKit (see the carve-out on the test step), and a PR
+  # gate that hangs or flakes gets ignored. visionOS still gets compile
+  # coverage on every PR from the app-build matrix's visionOS leg, which
+  # compiles the Kit for xros along with the app, and its tests still run on
+  # every main/stage push.
   # -----------------------------------------------------------------------
   kit-test:
     name: Test CabalmailKit (${{ matrix.platform }})
@@ -64,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macOS, iOS, visionOS]
+        platform: ${{ fromJSON(github.event_name == 'pull_request' && '["macOS","iOS"]' || '["macOS","iOS","visionOS"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -511,8 +536,39 @@ jobs:
         if: failure()
         run: .github/scripts/dump-xcodebuild-raw.sh
 
+  # -----------------------------------------------------------------------
+  # One stable check that reflects every test and build job, for branch
+  # protection to require: green only when all of them passed, red if any
+  # failed, was cancelled, or was skipped. Runs on pushes too, so the check
+  # name means the same thing everywhere.
+  # -----------------------------------------------------------------------
+  apple-gate:
+    needs: [kit-test, app-test, ios-app-test, app-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: gate
+      env:
+        KIT_TEST: ${{ needs.kit-test.result }}
+        APP_TEST: ${{ needs.app-test.result }}
+        IOS_APP_TEST: ${{ needs.ios-app-test.result }}
+        APP_BUILD: ${{ needs.app-build.result }}
+      run: |
+        set -euo pipefail
+        echo "[apple-gate] kit-test=$KIT_TEST app-test=$APP_TEST ios-app-test=$IOS_APP_TEST app-build=$APP_BUILD"
+        for result in "$KIT_TEST" "$APP_TEST" "$IOS_APP_TEST" "$APP_BUILD"; do
+          if [ "$result" != "success" ]; then
+            echo "::error::an Apple test or build job did not succeed ($result)"
+            exit 1
+          fi
+        done
+
+  # The environment gate in front of the uploads. Never on a pull_request:
+  # a PR run ends at apple-gate. ios-app-test is a dependency so a red
+  # iOS-hosted suite stops TestFlight like the other suites do.
   approval:
-    needs: [kit-test, app-test, app-build]
+    needs: [kit-test, app-test, ios-app-test, app-build]
+    if: ${{ github.event_name != 'pull_request' }}
     environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     runs-on: ubuntu-latest
     steps:
