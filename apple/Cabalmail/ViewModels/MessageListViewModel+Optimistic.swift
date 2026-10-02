@@ -287,6 +287,49 @@ extension MessageListViewModel {
         adjustTotalMessages(by: 1)
     }
 
+    /// Keeps a row `pruneEnvelope(uid:)` is about to drop, if the reader's
+    /// move for it is still in flight, so `restorePrunedEnvelope` can bring
+    /// it back should the move fail. Entries whose move has since resolved
+    /// are dropped here, which keeps the stash to in-flight moves. A prune
+    /// with no move behind it (a send-from-draft) isn't kept.
+    func stashForReaderRevert(_ envelope: Envelope, at index: Int) {
+        let inFlight = appState.pendingMoveUIDs[folder.path] ?? []
+        readerPrunedEnvelopes = readerPrunedEnvelopes.filter { inFlight.contains($0.key) }
+        guard inFlight.contains(envelope.uid) else { return }
+        readerPrunedEnvelopes[envelope.uid] = (envelope, index)
+    }
+
+    /// Undo `pruneEnvelope(uid:)` after the reader's dispose, move or purge
+    /// failed on the server: the row comes back where it was, with the
+    /// folder total and Unread pill adjustments the prune made. `markUnread`
+    /// is set when the reader's dispose had marked an unread message read;
+    /// the row comes back unread. Carried here rather than as a separate
+    /// flag signal so it can't land before the row is back.
+    ///
+    /// The failure normally arrives after the prune. If it beat it (both
+    /// signals in one update), the row is still here: it is remembered in
+    /// `readerFailedUIDs` so the prune skips it. A UID this list never had
+    /// loaded is left alone, as its prune left the counts alone.
+    func restorePrunedEnvelope(uid: UInt32, markUnread: Bool = false) {
+        if let stashed = readerPrunedEnvelopes.removeValue(forKey: uid) {
+            guard !envelopes.contains(where: { $0.uid == uid }) else { return }
+            var envelope = stashed.envelope
+            if markUnread {
+                envelope = rebuildEnvelope(envelope, flags: envelope.flags.subtracting([.seen]))
+            }
+            restoreEnvelope(envelope, at: stashed.index)
+            if !envelope.flags.contains(.seen) {
+                unseen += 1
+            }
+            invalidateBottomPrefetch()
+        } else if envelopes.contains(where: { $0.uid == uid }) {
+            readerFailedUIDs.insert(uid)
+            if markUnread {
+                applyOptimisticFlag(uid: uid, flag: .seen, add: false)
+            }
+        }
+    }
+
     /// Rebuilds an `Envelope` value with a different flag set. `Envelope`
     /// has no mutating accessor, so we copy every field through the public
     /// initializer; the cost is only paid on flag toggles and the call

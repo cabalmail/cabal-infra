@@ -181,6 +181,13 @@ final class AppState {
     var lastDisposedEnvelope: DisposedEnvelope?
     private var disposedTick = 0
 
+    /// Latest reader dispose / move / purge whose server write failed after
+    /// `lastDisposedEnvelope` had already pruned the row. `MessageListView`
+    /// puts the row back. Sent by `signalRemovalFailed` in
+    /// `AppStateSignals.swift`, hence the internal tick.
+    var lastFailedRemoval: FailedRemoval?
+    var failedRemovalTick = 0
+
     /// Latest envelope-flag change driven from the detail view (currently:
     /// `\Seen` toggles). `MessageListView` observes this so the row's bold
     /// styling and unread dot flip the moment the user taps "Mark as read"
