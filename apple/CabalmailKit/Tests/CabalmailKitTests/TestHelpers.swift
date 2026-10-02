@@ -145,6 +145,7 @@ actor StubAuthService: AuthService {
     var tokens: AuthTokens?
     var credentials: ImapCredentials
     var idTokenCallCount = 0
+    var forcedRefreshCount = 0
 
     init(
         tokens: AuthTokens? = AuthTokens(
@@ -184,6 +185,11 @@ actor StubAuthService: AuthService {
         idTokenCallCount += 1
         guard let tokens else { throw CabalmailError.notSignedIn }
         return tokens.idToken
+    }
+
+    func refreshIdToken(replacing rejected: String?) async throws -> String {
+        forcedRefreshCount += 1
+        return try await currentIdToken()
     }
 
     func currentImapCredentials() async throws -> ImapCredentials {

@@ -13,7 +13,7 @@ private func makeConfiguration() -> Configuration {
 }
 
 final class AuthServiceTests: XCTestCase {
-    func testSignInStoresTokensAndCredentials() async throws {
+    func testSignInStoresTokensAndUsernameButNotPassword() async throws {
         let authResult = """
         {
           "AuthenticationResult": {
@@ -50,9 +50,23 @@ final class AuthServiceTests: XCTestCase {
 
         let token = try await service.currentIdToken()
         XCTAssertEqual(token, "ID-TOKEN")
-        let creds = try await service.currentImapCredentials()
-        XCTAssertEqual(creds.username, "alice")
-        XCTAssertEqual(creds.password, "hunter2")
+        XCTAssertEqual(try store.getString(SecureStoreKey.imapUsername), "alice")
+        XCTAssertNil(try store.getString(SecureStoreKey.imapPassword), "The password must not be persisted")
+    }
+
+    func testInitScrubsPasswordStoredByOlderBuilds() async throws {
+        let store = InMemorySecureStore()
+        try store.setString("alice", forKey: SecureStoreKey.imapUsername)
+        try store.setString("hunter2", forKey: SecureStoreKey.imapPassword)
+
+        _ = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: RecordingHTTPTransport(responses: []),
+            secureStore: store
+        )
+
+        XCTAssertNil(try store.getString(SecureStoreKey.imapPassword))
+        XCTAssertEqual(try store.getString(SecureStoreKey.imapUsername), "alice")
     }
 
     func testCurrentIdTokenRefreshesWhenExpired() async throws {
@@ -281,9 +295,8 @@ final class AuthServiceMfaTests: XCTestCase {
 
         let token = try await service.currentIdToken()
         XCTAssertEqual(token, "I")
-        let creds = try await service.currentImapCredentials()
-        XCTAssertEqual(creds.username, "alice")
-        XCTAssertEqual(creds.password, "hunter2")
+        XCTAssertEqual(try store.getString(SecureStoreKey.imapUsername), "alice")
+        XCTAssertNil(try store.getString(SecureStoreKey.imapPassword), "The password must not be persisted")
     }
 
     func testSubmitMfaCodeWithoutChallengeThrows() async throws {
