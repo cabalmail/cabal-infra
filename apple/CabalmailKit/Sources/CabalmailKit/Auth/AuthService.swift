@@ -39,7 +39,7 @@ public enum SignInResult: Sendable, Equatable {
     case mfaCodeRequired(MfaMethod)
 }
 
-/// Interface surfaced to the app target and to `ApiClient`/`ImapClient`/`SmtpClient`.
+/// Interface surfaced to the app target and to `ApiClient`.
 ///
 /// The React app uses `amazon-cognito-identity-js`. The Apple equivalent
 /// described in `docs/0.6.x/ios-client-plan.md` is **AWS Amplify Swift**, but
@@ -79,12 +79,6 @@ public protocol AuthService: Sendable {
     /// token already differs from `rejected`, another caller refreshed in the
     /// meantime and that token is returned without a second round-trip.
     func refreshIdToken(replacing rejected: String?) async throws -> String
-
-    /// Credentials for the legacy direct IMAP/SMTP clients, which production
-    /// no longer wires (mail goes through the Lambda API, issue #371). The
-    /// password is no longer persisted, so `CognitoAuthService` always throws
-    /// `.notSignedIn` here; the member goes away with the legacy stack.
-    func currentImapCredentials() async throws -> ImapCredentials
 
     /// Tokens currently in the secure store, or nil if signed out. Exposed
     /// for observers (e.g. a SwiftUI `@Observable` that mirrors the auth state).
@@ -283,16 +277,6 @@ public actor CognitoAuthService: AuthService {
             return tokens.idToken
         }
         return try await sharedRefresh(using: tokens).idToken
-    }
-
-    public func currentImapCredentials() async throws -> ImapCredentials {
-        guard
-            let username = try secureStore.getString(SecureStoreKey.imapUsername),
-            let password = try secureStore.getString(SecureStoreKey.imapPassword)
-        else {
-            throw CabalmailError.notSignedIn
-        }
-        return ImapCredentials(username: username, password: password)
     }
 
     public func currentTokens() async -> AuthTokens? {

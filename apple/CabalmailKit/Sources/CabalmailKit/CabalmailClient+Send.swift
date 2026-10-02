@@ -126,18 +126,18 @@ extension CabalmailClient {
         )
     }
 
-    /// Classifies which SMTP failures should fall through to the outbox.
+    /// Classifies which `/send` failures should fall through to the outbox.
     ///
-    /// `network` / `transport` / `timeout` / `cancelled` are transient —
+    /// `network` / `transport` / `cancelled` are transient —
     /// retrying when the connection returns has a real chance of
     /// succeeding. `sendInFlight` joins them: the API is holding an
     /// unresolved claim on this Message-Id, so the message is neither sent
     /// nor refused and the outbox is where it belongs until the claim
-    /// clears (#1019). `invalidCredentials`, `smtpCommandFailed`, and the
+    /// clears (#1019). `invalidCredentials`, `server`, and the
     /// rest are application-level and surface to the user immediately.
     static func shouldQueue(_ error: CabalmailError) -> Bool {
         switch error {
-        case .network, .transport, .timeout, .cancelled, .sendInFlight:
+        case .network, .transport, .cancelled, .sendInFlight:
             return true
         default:
             return false

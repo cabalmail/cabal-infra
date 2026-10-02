@@ -30,14 +30,7 @@ final class MetricKitCollectorLifecycleTests: XCTestCase {
             authService: auth,
             transport: RecordingHTTPTransport(responses: [])
         )
-        let imap = LiveImapClient(
-            factory: ScriptedConnectionFactory(stream: ScriptedByteStream()),
-            authService: auth
-        )
-        let smtp = LiveSmtpClient(
-            factory: ScriptedConnectionFactory(stream: ScriptedByteStream()),
-            authService: auth
-        )
+        let imap = ApiBackedImapClient(api: api, host: config.imapHost)
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let envelopes = try EnvelopeCache(directory: tmp.appendingPathComponent("e"))
         let bodies = try MessageBodyCache(directory: tmp.appendingPathComponent("b"))
@@ -48,7 +41,6 @@ final class MetricKitCollectorLifecycleTests: XCTestCase {
             authService: auth,
             apiClient: api,
             imapClient: imap,
-            smtpClient: smtp,
             addressCache: AddressCache(),
             envelopeCache: envelopes,
             bodyCache: bodies,

@@ -59,7 +59,6 @@ extension NavStateCoordinator {
             guard folders.contains(where: { $0.path == cursor.folder }) else { return false }
         } else {
             do {
-                try await client.imapClient.connectAndAuthenticate()
                 _ = try await client.imapClient.status(path: cursor.folder)
             } catch {
                 return false
@@ -122,7 +121,6 @@ extension NavStateCoordinator {
     /// we can't stand behind.
     func messageIsReachable(_ cursor: NavState) async -> Bool {
         do {
-            try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: cursor.folder)
             let total = UInt32(max(0, status.messages ?? 0))
             guard total > 0 else { return false }

@@ -24,8 +24,10 @@ import Foundation
 ///   * No raw APPEND — `/send` handles the Outbox + Sent shuffle
 ///     server-side and `/save_draft` owns the Drafts-folder lifecycle
 ///     (save / replace / discard with UIDPLUS coordinates), so no caller
-///     needs a byte-level APPEND. `append(_:_:_:)` here throws
-///     `protocolError` to make accidental callers obvious.
+///     needs a byte-level APPEND.
+///   * No single-part fetch — there is no mapping from RFC 3501 part IDs
+///     to the Lambda's attachment index, so callers fetch the full body
+///     with `fetchBody` and parse MIME client-side.
 ///   * Envelope addresses arrive in RFC 5322 mailbox form — the Lambda
 ///     emits `"Display Name" <mailbox@host>` when an addr-name is set
 ///     and bare `mailbox@host` otherwise. `parseAddress` splits the two
@@ -35,27 +37,10 @@ public actor ApiBackedImapClient: ImapClient {
     private let host: String
     private let pollInterval: TimeInterval
 
-    /// Cached folder subscription set, populated on the first
-    /// `listFolders()` call so `status` and other look-ups don't have to
-    /// re-fetch. Invalidated by subscribe/unsubscribe/create/delete.
-    private var subscriptionCache: Set<String>?
-
     public init(api: ApiClient, host: String, pollInterval: TimeInterval = 30) {
         self.api = api
         self.host = host
         self.pollInterval = pollInterval
-    }
-
-    // MARK: - Connection lifecycle (no-ops for HTTP)
-
-    /// No-op — `ApiClient` attaches the Cognito ID token on every request
-    /// and refreshes on 401.
-    public func connectAndAuthenticate() async throws {}
-
-    public func disconnect() async {}
-
-    public func invalidate() async {
-        subscriptionCache = nil
     }
 
     // MARK: - Folders
@@ -63,7 +48,6 @@ public actor ApiBackedImapClient: ImapClient {
     public func listFolders() async throws -> [Folder] {
         let list = try await api.listFolders(host: host)
         let subscribed = Set(list.subFolders)
-        subscriptionCache = subscribed
         // The Lambda already returns folder paths with `.` → `/`, sorted.
         return list.folders.map { path in
             Folder(path: path, attributes: [], isSubscribed: subscribed.contains(path))
@@ -72,22 +56,18 @@ public actor ApiBackedImapClient: ImapClient {
 
     public func createFolder(name: String, parent: String?) async throws {
         try await api.createFolder(host: host, parent: parent ?? "", name: name)
-        subscriptionCache = nil
     }
 
     public func deleteFolder(path: String) async throws {
         try await api.deleteFolder(host: host, name: path)
-        subscriptionCache = nil
     }
 
     public func subscribe(path: String) async throws {
         try await api.subscribeFolder(host: host, folder: path)
-        subscriptionCache?.insert(path)
     }
 
     public func unsubscribe(path: String) async throws {
         try await api.unsubscribeFolder(host: host, folder: path)
-        subscriptionCache?.remove(path)
     }
 
     public func status(path: String, flagged: Bool) async throws -> FolderStatus {
@@ -115,16 +95,6 @@ public actor ApiBackedImapClient: ImapClient {
         }
         let data = try await api.fetchPresignedData(url: url)
         return RawMessage(uid: uid, bytes: data, flags: [])
-    }
-
-    public func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data {
-        // No supported mapping exists from RFC 3501 part IDs ("1.2", "2") to
-        // the Lambda's integer attachment index. Callers that need a single
-        // MIME part should fetch the full body and parse client-side; the
-        // viewmodel that drives attachment download already does this.
-        throw CabalmailError.protocolError(
-            "fetchPart is not supported by the API-backed client; use fetchBody and parse MIME"
-        )
     }
 
     // MARK: - Flags and moves
@@ -207,15 +177,6 @@ public actor ApiBackedImapClient: ImapClient {
 
     // `searchEnvelopes(_:)` lives in an extension below so the primary
     // type body stays under SwiftLint's 250-line cap.
-
-    // MARK: - Append (unsupported)
-
-    public func append(folder: String, message: Data, flags: Set<Flag>) async throws {
-        throw CabalmailError.protocolError(
-            "append is not supported by the API-backed client; "
-                + "/send handles Outbox + Sent and /save_draft handles Drafts"
-        )
-    }
 
     // MARK: - IDLE (polling fallback)
 
@@ -433,27 +394,6 @@ extension ApiBackedImapClient {
 // In an extension (same file, so it still reaches the actor's private
 // `api`/`host`) to keep the main actor body under SwiftLint's type-body cap.
 extension ApiBackedImapClient {
-    // Legacy UID-range fetch. The view model now paginates positionally via
-    // `envelopes(offset:limit:)`; this remains only to satisfy the protocol
-    // requirement shared with `LiveImapClient`. It still pulls the full UID
-    // list, so it is not on any hot path.
-    public func envelopes(
-        folder: String,
-        range: ClosedRange<UInt32>,
-        sort: SortCriterion
-    ) async throws -> [Envelope] {
-        let allIds = try await api.listMessageIds(
-            host: host,
-            folder: folder,
-            sortOrder: sort.direction.wireOrder,
-            sortField: sort.field.wireField
-        )
-        let windowed = allIds.filter { range.contains($0) }
-        guard !windowed.isEmpty else { return [] }
-        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: windowed)
-        return raw.map { Self.makeEnvelope($0) }
-    }
-
     public func envelopes(
         folder: String,
         offset: UInt32,

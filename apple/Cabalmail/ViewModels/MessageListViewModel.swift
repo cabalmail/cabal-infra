@@ -393,7 +393,6 @@ final class MessageListViewModel {
         let startedAt = ContinuousClock.now
         dbg("refresh start sort=\(sortCriterion.field)")
         do {
-            try await client.imapClient.connectAndAuthenticate()
             // flagged: true asks for the SEARCH FLAGGED count too -- this is the
             // one status call that drives the filter-pill counts.
             let status = try await client.imapClient.status(path: folder.path, flagged: true)

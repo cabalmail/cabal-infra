@@ -288,7 +288,6 @@ private struct SweepFakeImapClient: ImapClient {
     let folders: [Folder]
     let envelopesByFolder: [String: [Envelope]]
 
-    func connectAndAuthenticate() async throws {}
     func listFolders() async throws -> [Folder] { folders }
     func createFolder(name: String, parent: String?) async throws { throw CabalmailError.cancelled }
     func deleteFolder(path: String) async throws { throw CabalmailError.cancelled }
@@ -304,10 +303,6 @@ private struct SweepFakeImapClient: ImapClient {
         )
     }
 
-    func envelopes(
-        folder: String, range: ClosedRange<UInt32>, sort: SortCriterion
-    ) async throws -> [Envelope] { throw CabalmailError.cancelled }
-
     func topEnvelopes(
         folder: String, limit: UInt32, totalMessages: UInt32, sort: SortCriterion
     ) async throws -> [Envelope] {
@@ -317,18 +312,10 @@ private struct SweepFakeImapClient: ImapClient {
     func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage {
         throw CabalmailError.cancelled
     }
-    func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data {
-        throw CabalmailError.cancelled
-    }
     func setFlags(
         folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation
     ) async throws { throw CabalmailError.cancelled }
     func move(
         folder: String, uids: [UInt32], destination: String, markSeen: Bool
     ) async throws { throw CabalmailError.cancelled }
-    func append(folder: String, message: Data, flags: Set<Flag>) async throws {
-        throw CabalmailError.cancelled
-    }
-    func disconnect() async {}
-    func invalidate() async {}
 }

@@ -5,12 +5,8 @@ import Foundation
 /// Reachability observer used by the offline banner and the outgoing send
 /// queue.
 ///
-/// `NetworkPathMonitor` already tracks path *transitions* for socket
-/// invalidation; `Reachability` sits alongside it and exposes current
-/// status + a stream of changes for UI and the send queue. Splitting the
-/// two keeps each surface narrowly focused — socket invalidation wants a
-/// gateway-or-interface-level signal, UI cares only about "is there any
-/// usable path."
+/// Exposes the current status plus a stream of changes; the UI and the
+/// send queue care only about "is there any usable path."
 ///
 /// Concurrency: `NWPathMonitor` delivers updates on its own queue; this
 /// class stores the last status under a lock and yields it into the

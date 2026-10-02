@@ -127,7 +127,7 @@ final class WatchHandoffTests: XCTestCase {
         XCTAssertEqual(params?["REFRESH_TOKEN"] as? String, "REFRESH-TOKEN")
     }
 
-    func testAdoptDoesNotInventImapCredentials() async throws {
+    func testAdoptDoesNotStoreAPassword() async throws {
         let http = RecordingHTTPTransport(responses: [])
         let store = InMemorySecureStore()
         let service = CognitoAuthService(
@@ -138,16 +138,8 @@ final class WatchHandoffTests: XCTestCase {
 
         try await service.adopt(tokens: makeTokens(), username: "alice")
 
-        // The password never rides the hand-off, so the IMAP/SMTP credential
-        // pair must stay unavailable rather than surfacing a bogus one.
-        do {
-            _ = try await service.currentImapCredentials()
-            XCTFail("expected notSignedIn")
-        } catch let error as CabalmailError {
-            guard case .notSignedIn = error else {
-                XCTFail("expected notSignedIn, got \(error)")
-                return
-            }
-        }
+        // The password never rides the hand-off, so nothing may land under
+        // the old IMAP password key.
+        XCTAssertNil(try store.getString(SecureStoreKey.imapPassword))
     }
 }

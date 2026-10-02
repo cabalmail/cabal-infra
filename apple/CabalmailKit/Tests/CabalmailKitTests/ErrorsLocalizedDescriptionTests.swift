@@ -62,10 +62,8 @@ final class ErrorsLocalizedDescriptionTests: XCTestCase {
         let cases: [CabalmailError] = [
             .notConfigured, .notSignedIn, .invalidCredentials, .authExpired,
             .network("boom"), .transport("boom"), .protocolError("boom"), .decoding("boom"),
-            .timeout, .cancelled,
+            .cancelled,
             .server(code: "404", message: ""),
-            .imapCommandFailed(status: "NO", detail: "Mailbox doesn't exist"),
-            .smtpCommandFailed(code: 550, detail: "Sender rejected"),
             .maintenance(message: "Mail is briefly unavailable."),
             .bulkPartialFailure(succeeded: [1, 2], failed: [3])
         ]
