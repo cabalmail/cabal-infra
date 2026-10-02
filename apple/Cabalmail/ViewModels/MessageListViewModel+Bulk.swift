@@ -55,6 +55,28 @@ extension MessageListViewModel {
         selectedUIDs = Set(visible.map(\.uid))
     }
 
+    /// Drops UIDs that more than one loaded row carries from different
+    /// folders. IMAP UIDs are unique only within a folder, so a cross-folder
+    /// search can show Archive UID 1 next to `zeta` UID 1, and a bare-UID
+    /// selection can't say which of the two the user picked. Acting on both
+    /// would move or flag a message the user never chose, so those rows are
+    /// left alone and the banner says why; the reader acts on one message by
+    /// its own folder and still works for them. Folder mode and single-folder
+    /// searches never collide, so this returns `uids` unchanged there. The
+    /// lasting fix keys selection by folder plus UID (the MessageRef work).
+    private func unambiguous(_ uids: Set<UInt32>) -> Set<UInt32> {
+        var foldersByUID: [UInt32: Set<String>] = [:]
+        for envelope in envelopes where uids.contains(envelope.uid) {
+            foldersByUID[envelope.uid, default: []].insert(sourceFolder(for: envelope))
+        }
+        let ambiguous = Set(foldersByUID.filter { $0.value.count > 1 }.keys)
+        guard !ambiguous.isEmpty else { return uids }
+        let skipped = envelopes.filter { ambiguous.contains($0.uid) }.count
+        errorMessage = "\(skipped) selected messages were left unchanged because they share an ID "
+            + "with a result from another folder. Open each one to act on it."
+        return uids.subtracting(ambiguous)
+    }
+
     /// Group an arbitrary UID set by source folder. Single-folder mode
     /// and folder-scoped searches collapse to one bucket; cross-folder
     /// search results may produce several.
@@ -97,6 +119,7 @@ extension MessageListViewModel {
     /// rejects (whole-group or `bulkPartialFailure` split) revert to
     /// their pre-op state. Leaves any active selection intact.
     func setSeen(_ shouldBeSeen: Bool, uids: Set<UInt32>) async {
+        let uids = unambiguous(uids)
         let grouping = groupedByFolder(uids)
         let prior = priorFlagState(uids: uids, flag: .seen)
         // Unread badge tracking — capture the actual transition UIDs per
@@ -133,6 +156,7 @@ extension MessageListViewModel {
     /// unread-count bookkeeping (flagged isn't a count we surface in
     /// the sidebar).
     func setFlagged(_ shouldBeFlagged: Bool, uids: Set<UInt32>) async {
+        let uids = unambiguous(uids)
         let grouping = groupedByFolder(uids)
         let prior = priorFlagState(uids: uids, flag: .flagged)
         for uid in uids {
@@ -153,9 +177,15 @@ extension MessageListViewModel {
     /// blind "apply the opposite" would corrupt rows that already carried
     /// the target state (e.g. mark-read over an already-read message).
     private func priorFlagState(uids: Set<UInt32>, flag: Flag) -> [UInt32: Bool] {
-        Dictionary(uniqueKeysWithValues: envelopes
-            .filter { uids.contains($0.uid) }
-            .map { ($0.uid, $0.flags.contains(flag)) })
+        // Uniquing rather than `uniqueKeysWithValues:`, which traps on a
+        // repeated UID; `unambiguous` has already dropped cross-folder
+        // collisions, so a repeat here is the same row loaded twice.
+        Dictionary(
+            envelopes
+                .filter { uids.contains($0.uid) }
+                .map { ($0.uid, $0.flags.contains(flag)) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     /// One flag-group wire call plus reconciliation: returns the UIDs the
@@ -198,6 +228,7 @@ extension MessageListViewModel {
     /// a context-menu move on an unselected row leaves the user's
     /// selection alone.
     func moveMessages(uids: Set<UInt32>, to destination: String) async {
+        let uids = unambiguous(uids)
         await performMove(uidsBySource: groupedByFolder(uids), to: destination, markSeenFirst: false)
         selectedUIDs.subtract(uids)
     }
@@ -207,6 +238,7 @@ extension MessageListViewModel {
     /// both destinations side by side; marks `\Seen` first to match the
     /// single-row dispose (archived == read).
     func disposeMessages(uids: Set<UInt32>, action: DisposeAction) async {
+        let uids = unambiguous(uids)
         await performMove(
             uidsBySource: groupedByFolder(uids),
             to: action.destinationFolder,
