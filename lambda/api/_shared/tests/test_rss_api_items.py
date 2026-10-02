@@ -260,6 +260,54 @@ class MarkAllRead(unittest.TestCase):
         _, body = call(mod, body={})
         self.assertEqual(body['subscriptions'], 2)
 
+    def test_client_watermark_is_kept_not_replaced_by_now(self):
+        # A mark-all-read queued offline replays later; the watermark is the
+        # tap time the client sends, so items published after it stay unread.
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_mark_all_read')
+        seed(tables, 'f1', 3)
+        state = tables['cabal-rss-user-item-state']
+        early, late = '2024-01-01T00:00:00+00:00#i1', '2024-01-03T00:00:00+00:00#i3'
+        for sk in (early, late):
+            state.rows[(f'{USER}#f1', sk)] = {'user_feed': f'{USER}#f1', 'sort_key': sk, 'is_read': False}
+        status, body = call(mod, body={'subscription_id': 'sub-f1', 'watermark': '2024-01-02T00:00:00Z'})
+        self.assertEqual((status, body['flipped']), (200, 1))
+        self.assertEqual(body['read_watermark'], '2024-01-02T00:00:00+00:00')
+        self.assertEqual(tables['cabal-rss-subscription'].rows[(USER, 'sub-f1')]['read_watermark'],
+                         '2024-01-02T00:00:00+00:00')
+        self.assertTrue(state.rows[(f'{USER}#f1', early)]['is_read'])
+        self.assertFalse(state.rows[(f'{USER}#f1', late)]['is_read'])
+        # The computed read state agrees: day 3 is unread under the watermark.
+        sub = tables['cabal-rss-subscription'].rows[(USER, 'sub-f1')]
+        self.assertFalse(rss_api.is_read(None, '2024-01-03T00:00:00+00:00', sub['read_watermark']))
+
+    def test_watermark_never_moves_backwards(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_mark_all_read')
+        seed(tables, 'f1', 1, sub_extra={'read_watermark': '2024-06-01T00:00:00+00:00'})
+        status, _ = call(mod, body={'subscription_id': 'sub-f1', 'watermark': '2024-01-02T00:00:00Z'})
+        self.assertEqual(status, 200)
+        self.assertEqual(tables['cabal-rss-subscription'].rows[(USER, 'sub-f1')]['read_watermark'],
+                         '2024-06-01T00:00:00+00:00')
+
+    def test_future_watermark_is_clamped_to_now(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_mark_all_read')
+        seed(tables, 'f1', 1)
+        _, body = call(mod, body={'subscription_id': 'sub-f1', 'watermark': '2999-01-01T00:00:00Z'})
+        self.assertLess(body['read_watermark'], '2999')
+        self.assertEqual(tables['cabal-rss-subscription'].rows[(USER, 'sub-f1')]['read_watermark'],
+                         body['read_watermark'])
+
+    def test_invalid_watermark_is_rejected(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_mark_all_read')
+        seed(tables, 'f1', 1)
+        for bad in ('yesterday', 12345):
+            status, body = call(mod, body={'subscription_id': 'sub-f1', 'watermark': bad})
+            self.assertEqual((status, body['code']), (400, 'invalid_watermark'))
+        self.assertNotIn('read_watermark', tables['cabal-rss-subscription'].rows[(USER, 'sub-f1')])
+
 
 if __name__ == '__main__':
     unittest.main()

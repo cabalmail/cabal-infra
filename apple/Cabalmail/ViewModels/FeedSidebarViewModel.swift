@@ -67,9 +67,8 @@ final class FeedSidebarViewModel {
         defer { isRefreshing = false }
         errorMessage = nil
         do {
-            let diff = try await engine.refreshCatalog()
+            try await engine.refreshCatalog()
             await load()
-            FeedWebStorage.drop(uuids: diff.removedDataStoreUuids)
         } catch {
             errorMessage = FeedErrorText.describe(error)
         }
@@ -79,6 +78,7 @@ final class FeedSidebarViewModel {
             // Every feed failed: almost certainly offline; one line, not one per feed.
             errorMessage = FeedErrorText.describe(first.value)
         }
+        await FeedWebStorage.dropDeparted(from: client.rssStore)
         await load()
     }
 

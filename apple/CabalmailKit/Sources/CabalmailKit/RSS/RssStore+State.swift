@@ -14,6 +14,10 @@ extension RssStore {
         public var sortKey: String
         public var subscriptionId: String
         public var value: Bool
+        /// For `markAllRead`: the watermark the user's tap applied locally,
+        /// which the drain sends so the server applies the same one. ""
+        /// for the other kinds.
+        public var watermark: String = ""
     }
 
     /// Sync bookkeeping for one feed.
@@ -63,9 +67,11 @@ extension RssStore {
             UPDATE items SET is_read = 1 WHERE feed_id = ? AND state_is_explicit = 1 AND is_read = 0
               AND published_at <= ?
             """, [.init(sub.feedId), .init(watermark)])
+        // `created_at` carries the watermark itself (the tap time, unless the
+        // caller passed one), which `pendingMutations` hands to the drain.
         try database.run(
             "INSERT INTO pending (kind, subscription_id, feed_id, created_at) VALUES ('mark_all_read', ?, ?, ?)",
-            [.init(subscriptionId), .init(sub.feedId), .init(Self.isoNow())])
+            [.init(subscriptionId), .init(sub.feedId), .init(watermark)])
     }
 
     /// Applies state rows the server reported (the state sync) to the
@@ -107,11 +113,13 @@ extension RssStore {
     }
 
     public func pendingMutations() throws -> [PendingMutation] {
-        try database.rows("SELECT id, kind, feed_id, sort_key, subscription_id, value FROM pending ORDER BY id")
-            .compactMap {
+        try database.rows(
+            "SELECT id, kind, feed_id, sort_key, subscription_id, value, created_at FROM pending ORDER BY id"
+        ).compactMap {
             guard let kind = PendingKind(rawValue: $0.string(1)) else { return nil }
             return PendingMutation(id: $0.int(0), kind: kind, feedId: $0.string(2), sortKey: $0.string(3),
-                                   subscriptionId: $0.string(4), value: $0.bool(5))
+                                   subscriptionId: $0.string(4), value: $0.bool(5),
+                                   watermark: kind == .markAllRead ? $0.string(6) : "")
         }
     }
 

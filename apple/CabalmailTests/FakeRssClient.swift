@@ -126,7 +126,7 @@ actor FakeRssClient: RssClient {
 
     func setItemState(_ changes: [RssItemStateChange]) async throws -> Int { changes.count }
 
-    func markAllRead(scope: RssItemScope) async throws -> RssMarkAllReadResult {
+    func markAllRead(scope: RssItemScope, watermark: String?) async throws -> RssMarkAllReadResult {
         markAllReadCalls.append(scope)
         return try decode(#"{"subscriptions": 1, "flipped": 0, "read_watermark": "2026-09-10T00:00:00+00:00"}"#)
     }

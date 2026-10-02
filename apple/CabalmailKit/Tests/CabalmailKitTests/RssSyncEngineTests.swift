@@ -118,6 +118,8 @@ final class RssSyncEngineTests: XCTestCase {
         XCTAssertNil(changes[1].isFavorite)
         let observed107 = await client.markAllReadCalls
         XCTAssertEqual(observed107, [.subscription("s1")])
+        let sentWatermarks = await client.markAllReadWatermarks
+        XCTAssertEqual(sentWatermarks, ["w"])   // the tap's, not the replay time
         let observed11 = try await store.subscription(id: "s1")?.readWatermark
         XCTAssertEqual(observed11, "w")   // MAX("w", "server-w")
     }
@@ -241,6 +243,8 @@ actor FakeRssClient: RssClient {
     private(set) var stateSyncCalls: [SyncCall] = []
     private(set) var stateCalls: [[RssItemStateChange]] = []
     private(set) var markAllReadCalls: [RssItemScope] = []
+    /// The watermark each mark-all-read sent (nil = none).
+    private(set) var markAllReadWatermarks: [String?] = []
     /// Every mutating call in the order it arrived ("state" / "mark_all_read").
     private(set) var pushLog: [String] = []
 
@@ -295,8 +299,9 @@ actor FakeRssClient: RssClient {
         return changes.count
     }
 
-    func markAllRead(scope: RssItemScope) async throws -> RssMarkAllReadResult {
+    func markAllRead(scope: RssItemScope, watermark: String?) async throws -> RssMarkAllReadResult {
         markAllReadCalls.append(scope)
+        markAllReadWatermarks.append(watermark)
         pushLog.append("mark_all_read")
         let json = #"{"subscriptions": 1, "flipped": 0, "read_watermark": "\#(markAllReadWatermark)"}"#
         return try JSONDecoder().decode(RssMarkAllReadResult.self, from: Data(json.utf8))

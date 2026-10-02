@@ -718,6 +718,9 @@ extension AppState {
         IntentBridge.shared.sessionWillEnd()
         #endif
         await client.imapClient.disconnect()
+        // Per-feed site data (publisher logins) lives in WebKit, out of the
+        // Kit's reach: drop it while the feed store still knows the stores.
+        FeedWebStorage.drop(uuids: (try? await client.rssStore?.allDataStoreUuids()) ?? [])
         // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
         // dropping the session so the next account to sign in on this device
         // can't read the previous user's messages from the shared on-disk
