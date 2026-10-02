@@ -167,7 +167,7 @@ final class AppState {
     var pendingFeedCommand: FeedCommand?
     /// The main window the latest command tick is aimed at; nil reaches
     /// every window. Set with each tick by the `request…` methods and read
-    /// by the observers when the tick fires (`AppState+CommandWindow`).
+    /// by the observers when the tick fires (`AppStateSignals.swift`).
     @ObservationIgnored var commandWindow: UUID?
     /// The main window most recently in front, for commands issued while a
     /// compose or Settings window is key.
@@ -286,7 +286,7 @@ final class AppState {
     // "Compose routing + onboarding" extension below, alongside the
     // contacts-access helper.
     // `window` names the main window the command is for; nil reaches every
-    // window (see `AppState+CommandWindow`).
+    // window (see `AppStateSignals.swift`).
     func requestCompose(in window: UUID? = nil) { commandWindow = window; composeRequestTick += 1 }
     func requestRefresh(in window: UUID? = nil) { commandWindow = window; refreshRequestTick += 1 }
     func requestReply(in window: UUID? = nil) { commandWindow = window; replyRequestTick += 1 }
