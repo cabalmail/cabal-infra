@@ -34,7 +34,18 @@ public protocol RssClient: Sendable {
     func getItem(feedId: String, sortKey: String) async throws -> RssItem
     /// Returns the number of state rows written (at most 100 per call).
     func setItemState(_ changes: [RssItemStateChange]) async throws -> Int
-    func markAllRead(scope: RssItemScope) async throws -> RssMarkAllReadResult
+    /// `watermark` is when the user asked (ISO 8601); the server writes it,
+    /// clamped to its own now, instead of the time the call arrives, so a
+    /// mark-all-read replayed from the offline queue leaves items that
+    /// arrived in between unread. Nil means "now".
+    func markAllRead(scope: RssItemScope, watermark: String?) async throws -> RssMarkAllReadResult
     func importOpml(_ opml: String, folderId: String?) async throws -> RssOpmlImportResult
     func exportOpml() async throws -> RssOpmlExport
+}
+
+public extension RssClient {
+    /// Mark-all-read as of the server's now.
+    func markAllRead(scope: RssItemScope) async throws -> RssMarkAllReadResult {
+        try await markAllRead(scope: scope, watermark: nil)
+    }
 }
