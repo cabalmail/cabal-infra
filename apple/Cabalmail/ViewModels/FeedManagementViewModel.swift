@@ -141,13 +141,12 @@ final class FeedManagementViewModel {
 
     /// Server catalog → store, dropping departed subscriptions' web storage.
     private func refreshCatalog() async throws {
-        let diff: RssStore.CatalogDiff
         if let engine {
-            diff = try await engine.refreshCatalog()
+            try await engine.refreshCatalog()
         } else {
-            diff = try await store.replaceCatalog(try await rss.listSubscriptions())
+            _ = try await store.replaceCatalog(try await rss.listSubscriptions())
         }
-        FeedWebStorage.drop(uuids: diff.removedDataStoreUuids)
+        await FeedWebStorage.dropDeparted(from: store)
         bus.postCatalogChanged()
     }
 

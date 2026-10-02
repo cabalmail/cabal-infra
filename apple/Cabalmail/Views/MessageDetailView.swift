@@ -297,6 +297,10 @@ struct MessageDetailView: View {
                 newModel.onMoveConfirmed = { [weak appState] in
                     appState?.recordConfirmedRemovals(folderPath: folderPath, uids: [uid])
                 }
+                // ...or, if the server refuses, put the pruned row back.
+                newModel.onMoveFailed = { [weak appState] markUnread in
+                    appState?.signalRemovalFailed(folderPath: folderPath, uid: uid, markUnread: markUnread)
+                }
                 model = newModel
                 activeModel = newModel
             }

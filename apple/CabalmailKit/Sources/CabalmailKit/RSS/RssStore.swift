@@ -23,7 +23,7 @@ public actor RssStore {
     /// RSS state beside it).
     public nonisolated let directory: URL
 
-    static let schemaVersion = 4
+    static let schemaVersion = 5
 
     public init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -34,33 +34,91 @@ public actor RssStore {
         try Self.migrate(database)
     }
 
-    /// Forward-only migrations keyed on `user_version`. A downgrade is
-    /// delete-and-repopulate (the store is a cache of server state).
-    private static func migrate(_ database: SQLiteDatabase) throws {
-        if database.userVersion < 1 {
-            try database.exec(Schema.version1)
-            database.userVersion = 1
-        }
-        if database.userVersion < 2 {
-            try database.exec(Schema.version2)
-            database.userVersion = 2
-        }
-        if database.userVersion < 3 {
-            try database.exec(Schema.version3)
-            database.userVersion = 3
-        }
-        if database.userVersion < 4 {
-            try database.exec(Schema.version4)
-            database.userVersion = 4
+    /// Opens the store, and when the file cannot be opened or migrated -
+    /// corrupt, left half-migrated by an older build, or written by a newer
+    /// schema - deletes it and starts empty: the store is a cache of server
+    /// state, and the next sync repopulates it. Nil when even a fresh file
+    /// fails, so the caller runs without feeds rather than without mail.
+    public static func openRecovering(directory: URL) -> RssStore? {
+        if let store = try? RssStore(directory: directory) { return store }
+        removeDatabaseFiles(in: directory)
+        return try? RssStore(directory: directory)
+    }
+
+    /// Deletes the database and its WAL and shared-memory side files.
+    static func removeDatabaseFiles(in directory: URL) {
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent("rss.sqlite" + suffix))
         }
     }
 
-    /// Drops every row (sign-out, or a corrupt-cache recovery).
+    /// The file's `user_version` is past what this build knows.
+    struct NewerSchemaError: Error, CustomStringConvertible {
+        let found: Int
+        var description: String { "rss.sqlite schema \(found) is newer than \(RssStore.schemaVersion)" }
+    }
+
+    /// Forward-only migrations keyed on `user_version`, each step and its
+    /// `user_version` write in one transaction (SQLite DDL is transactional),
+    /// so a crash mid-step leaves the previous version intact rather than a
+    /// half-applied one that fails on every rerun. A downgrade (a file from
+    /// a newer build) throws, and `openRecovering` deletes and repopulates.
+    private static func migrate(_ database: SQLiteDatabase) throws {
+        let steps = [Schema.version1, Schema.version2, Schema.version3, Schema.version4, Schema.version5]
+        assert(steps.count == schemaVersion)
+        let current = database.userVersion
+        guard current <= schemaVersion else { throw NewerSchemaError(found: current) }
+        for (index, sql) in steps.enumerated() where index >= current {
+            try database.exec("BEGIN")
+            do {
+                try database.exec(sql)
+                try database.exec("PRAGMA user_version = \(index + 1)")
+                try database.exec("COMMIT")
+            } catch {
+                try? database.exec("ROLLBACK")
+                throw error
+            }
+        }
+    }
+
+    /// Drops every row (sign-out, or a corrupt-cache recovery). Read
+    /// `allDataStoreUuids()` first if the web storage must go too.
     public func clear() throws {
         try database.exec("""
             DELETE FROM pending; DELETE FROM feed_sync; DELETE FROM items;
-            DELETE FROM subscriptions; DELETE FROM folders;
+            DELETE FROM subscriptions; DELETE FROM folders; DELETE FROM departed_data_stores;
             """)
+    }
+
+    // MARK: - Per-subscription web storage
+
+    /// Every web-storage identifier this store knows of - the current
+    /// subscriptions' and departed ones not yet dropped - for sign-out,
+    /// which must drop them all before `clear()` forgets them.
+    public func allDataStoreUuids() throws -> [String] {
+        let rows = try database.rows("""
+            SELECT data_store_uuid FROM subscriptions WHERE data_store_uuid != ''
+            UNION SELECT uuid FROM departed_data_stores ORDER BY 1
+            """)
+        return rows.map { $0.string(0) }
+    }
+
+    /// The web-storage identifiers of subscriptions `replaceCatalog` has
+    /// removed since the last call, handed over once. They are recorded in
+    /// the same transaction that deletes the subscription, so the app can
+    /// drop the storage after any sync path - the poller's `syncAll`
+    /// included - not just the ones that kept the `CatalogDiff`.
+    public func takeDepartedDataStoreUuids() throws -> [String] {
+        try database.exec("BEGIN")
+        do {
+            let uuids = try database.rows("SELECT uuid FROM departed_data_stores ORDER BY uuid").map { $0.string(0) }
+            try database.exec("DELETE FROM departed_data_stores")
+            try database.exec("COMMIT")
+            return uuids
+        } catch {
+            try? database.exec("ROLLBACK")
+            throw error
+        }
     }
 
     // MARK: - Catalog
@@ -84,6 +142,10 @@ public actor RssStore {
         do {
             for sub in removed {
                 try database.run("DELETE FROM subscriptions WHERE subscription_id = ?", [.init(sub.subscriptionId)])
+                if !sub.dataStoreUuid.isEmpty {
+                    try database.run("INSERT OR IGNORE INTO departed_data_stores (uuid) VALUES (?)",
+                                     [.init(sub.dataStoreUuid)])
+                }
             }
             for feedId in Set(removed.map(\.feedId)).subtracting(keptFeeds) {
                 try deleteFeedRows(feedId)
@@ -315,5 +377,11 @@ enum Schema {
     static let version4 = """
         ALTER TABLE subscriptions ADD COLUMN default_filter TEXT NOT NULL DEFAULT 'unread';
         ALTER TABLE folders ADD COLUMN default_filter TEXT NOT NULL DEFAULT 'unread';
+        """
+
+    /// Web-storage identifiers of removed subscriptions, kept until the app
+    /// layer (which owns WebKit) has dropped them.
+    static let version5 = """
+        CREATE TABLE IF NOT EXISTS departed_data_stores (uuid TEXT PRIMARY KEY);
         """
 }

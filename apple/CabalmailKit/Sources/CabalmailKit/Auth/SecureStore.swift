@@ -137,5 +137,6 @@ public struct KeychainSecureStore: SecureStore {
 public enum SecureStoreKey {
     public static let authTokens = "auth.tokens"
     public static let imapUsername = "imap.username"
+    /// No longer written; kept so stores from older builds can be scrubbed.
     public static let imapPassword = "imap.password"
 }

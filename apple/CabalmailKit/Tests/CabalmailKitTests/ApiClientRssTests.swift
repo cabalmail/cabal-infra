@@ -128,6 +128,7 @@ final class ApiClientRssTests: XCTestCase {
         let (client, http) = makeClient([
             (#"{"updated": 2}"#, 200),
             (#"{"subscriptions": 1, "flipped": 0, "read_watermark": "w"}"#, 200),
+            (#"{"subscriptions": 1, "flipped": 0, "read_watermark": "t"}"#, 200),
         ])
         let updated = try await client.setItemState([
             RssItemStateChange(feedId: "f", sortKey: "k1", isRead: true, isFavorite: true),
@@ -143,6 +144,11 @@ final class ApiClientRssTests: XCTestCase {
         XCTAssertNil(items?[1]["is_read"])
         XCTAssertEqual(items?[1]["is_favorite"] as? Bool, false)
         XCTAssertEqual(body(requests[1])["subscription_id"] as? String, "s")
+        XCTAssertNil(body(requests[1])["watermark"])
+        _ = try await client.markAllRead(scope: .folder("d"), watermark: "2026-10-01T12:00:00Z")
+        let all = await http.requests
+        XCTAssertEqual(body(all[2])["folder_id"] as? String, "d")
+        XCTAssertEqual(body(all[2])["watermark"] as? String, "2026-10-01T12:00:00Z")
     }
 
     func testUpdateSubscriptionSendsOnlyChangedFields() async throws {

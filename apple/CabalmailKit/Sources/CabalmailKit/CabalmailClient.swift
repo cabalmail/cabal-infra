@@ -48,7 +48,7 @@ public actor CabalmailClient {
     /// outlive initialization. Phase 7 — the offline banner streams from
     /// here, and `SendQueue` subscribes to drain the outbox on reconnect.
     public nonisolated let reachability: Reachability?
-    private nonisolated let sendQueue: SendQueue?
+    nonisolated let sendQueue: SendQueue?
     #endif
 
     /// Opt-in crash / hang reporter. Starts disabled — the Settings toggle
@@ -143,7 +143,8 @@ public actor CabalmailClient {
         )
         let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
         let outbox = try Outbox(directory: cacheDirectory.appendingPathComponent("outbox"))
-        let rssStore = try RssStore(directory: cacheDirectory.appendingPathComponent("rss"))
+        // A broken feed cache must not stop mail: recreate it, else no feeds.
+        let rssStore = RssStore.openRecovering(directory: cacheDirectory.appendingPathComponent("rss"))
         #if canImport(CoreSpotlight)
         let spotlight: SpotlightIndexer? = SpotlightIndexer(index: LiveSearchableIndex())
         #else
@@ -162,7 +163,7 @@ public actor CabalmailClient {
             outbox: outbox,
             spotlightIndexer: spotlight,
             rssStore: rssStore,
-            rssSync: RssSyncEngine(client: api, store: rssStore),
+            rssSync: rssStore.map { RssSyncEngine(client: api, store: $0) },
             monitorNetworkPath: true
         )
     }

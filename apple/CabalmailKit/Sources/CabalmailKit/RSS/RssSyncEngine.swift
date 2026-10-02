@@ -172,7 +172,11 @@ public actor RssSyncEngine {
                 try await store.deletePending(ids: ids)
                 cleared += ids.count
             case .markAllRead(let mutation):
-                let result = try await client.markAllRead(scope: .subscription(mutation.subscriptionId))
+                // The tap-time watermark, not the replay time: items that
+                // arrived while the row sat in the queue stay unread.
+                let result = try await client.markAllRead(
+                    scope: .subscription(mutation.subscriptionId),
+                    watermark: mutation.watermark.isEmpty ? nil : mutation.watermark)
                 try await store.applyServerWatermark(subscriptionId: mutation.subscriptionId,
                                                      watermark: result.readWatermark)
                 try await store.deletePending(ids: [mutation.id])

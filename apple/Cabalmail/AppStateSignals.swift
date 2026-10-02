@@ -90,6 +90,19 @@ struct DisposedEnvelope: Equatable, Sendable {
     let tick: Int
 }
 
+/// Signal payload for a reader dispose, move or purge that failed on the
+/// server. The row was already pruned on the optimistic `DisposedEnvelope`;
+/// this asks the list to put it back. `tick` is monotonic for the same
+/// reason as `DisposedEnvelope`'s.
+struct FailedRemoval: Equatable, Sendable {
+    let folderPath: String
+    let uid: UInt32
+    /// The reader's dispose had marked an unread message read; the restored
+    /// row comes back unread.
+    let markUnread: Bool
+    let tick: Int
+}
+
 /// Signal payload for a Drafts copy that `/save_draft` replaced in place —
 /// posted when a compose session closes via Save Draft rather than Send.
 /// Distinct from `DisposedEnvelope` because a replace is not a dispose:
@@ -163,7 +176,8 @@ struct MessageMoveRequest: Equatable, Sendable {
 // MARK: - Message-menu selection intents
 
 // Bumpers for the selection-scoped tick counters declared on the main
-// type (stored properties can't live in an extension under @Observable).
+// type (stored properties can't live in an extension under @Observable),
+// plus the reader's removal-failed signal for the same reason.
 // Here rather than in `AppState.swift` so that file stays under SwiftLint's
 // `file_length` cap.
 extension AppState {
@@ -171,6 +185,19 @@ extension AppState {
     func requestToggleFlagged(in window: UUID? = nil) { commandWindow = window; toggleFlaggedRequestTick += 1 }
     func requestMarkFolderRead(in window: UUID? = nil) { commandWindow = window; markFolderReadRequestTick += 1 }
     func requestMoveSelection(in window: UUID? = nil) { commandWindow = window; moveSelectionRequestTick += 1 }
+
+    /// The reader's dispose, move or purge of `uid` failed on the server, so
+    /// the row its optimistic `signalDisposed` pruned should come back.
+    /// `markUnread` hands back the unread count the dispose's read mark took.
+    func signalRemovalFailed(folderPath: String, uid: UInt32, markUnread: Bool = false) {
+        failedRemovalTick += 1
+        lastFailedRemoval = FailedRemoval(
+            folderPath: folderPath, uid: uid, markUnread: markUnread, tick: failedRemovalTick
+        )
+        if markUnread {
+            applyUnreadDelta(folderPath: folderPath, delta: 1)
+        }
+    }
 }
 
 // MARK: - Command window targeting

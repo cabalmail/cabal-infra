@@ -13,7 +13,15 @@ import Foundation
 /// (close-without-send plus a long debounce) and records the server
 /// coordinates on the persisted `Draft`. This on-disk copy remains the live
 /// editing buffer and the crash-recovery story.
+///
+/// Each file is a schema-versioned `PersistedRecord`. A file this build
+/// can't read is moved to `quarantine/` instead of deleted, and one written
+/// by a newer build is skipped and left alone.
 public actor DraftStore {
+    /// Bump when `Draft`'s persisted shape changes, and teach `read(_:)` to
+    /// migrate the older version.
+    static let schemaVersion = 1
+
     private let directory: URL
 
     public init(directory: URL) throws {
@@ -34,28 +42,23 @@ public actor DraftStore {
         }
         var updated = draft
         updated.updatedAt = Date()
-        let data = try encoder.encode(updated)
+        let data = try PersistedRecordCoding.encode(updated, version: Self.schemaVersion, encoder: encoder)
         try data.write(to: fileURL(for: updated.id), options: .atomic)
     }
 
-    /// Returns the draft with the given id, or nil if it's missing or the
-    /// on-disk JSON is unreadable. Corrupt files are deleted so they don't
-    /// keep tripping subsequent reads.
+    /// Returns the draft with the given id, or nil if it's missing or
+    /// unreadable. An unreadable file is quarantined so it stops tripping
+    /// subsequent reads without the draft text being destroyed.
     public func load(id: UUID) throws -> Draft? {
         let url = fileURL(for: id)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let data = try Data(contentsOf: url)
-        do {
-            return try decoder.decode(Draft.self, from: data)
-        } catch {
-            try? FileManager.default.removeItem(at: url)
-            return nil
-        }
+        return read(data, at: url)
     }
 
     /// Lists every draft the store currently holds, most-recently-updated
-    /// first. Unreadable files are silently skipped (same recovery behavior
-    /// as `load`).
+    /// first. Unreadable files are quarantined and skipped (same recovery
+    /// behavior as `load`).
     public func list() throws -> [Draft] {
         let urls: [URL]
         do {
@@ -68,11 +71,15 @@ public actor DraftStore {
         }
         var drafts: [Draft] = []
         for url in urls where url.pathExtension == "json" {
-            if let data = try? Data(contentsOf: url),
-               let draft = try? decoder.decode(Draft.self, from: data) {
+            let data: Data
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                RecordQuarantine.quarantine(url, reason: error, category: "DraftStore")
+                continue
+            }
+            if let draft = read(data, at: url) {
                 drafts.append(draft)
-            } else {
-                try? FileManager.default.removeItem(at: url)
             }
         }
         return drafts.sorted { $0.updatedAt > $1.updatedAt }
@@ -85,13 +92,31 @@ public actor DraftStore {
         }
     }
 
+    /// Removes every draft, including unreadable and quarantined files, so
+    /// sign-out leaves none of the previous account's text on disk.
     public func removeAll() throws {
-        for draft in try list() {
-            try remove(id: draft.id)
-        }
+        try RecordQuarantine.removeEverything(in: directory)
     }
 
     // MARK: - Internals
+
+    private func read(_ data: Data, at url: URL) -> Draft? {
+        switch PersistedRecordCoding.read(
+            Draft.self, from: data, currentVersion: Self.schemaVersion, decoder: decoder
+        ) {
+        case .decoded(let draft):
+            return draft
+        case .newerSchema(let version):
+            CabalmailLog.warn(
+                "DraftStore",
+                "skipping \(url.lastPathComponent): schema \(version) is newer than this build"
+            )
+            return nil
+        case .undecodable(let error):
+            RecordQuarantine.quarantine(url, reason: error, category: "DraftStore")
+            return nil
+        }
+    }
 
     private func fileURL(for id: UUID) -> URL {
         directory.appendingPathComponent("\(id.uuidString).json")
