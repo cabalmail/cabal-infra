@@ -477,7 +477,7 @@ final class AppState {
                 try? secureStore.remove(SecureStoreKey.imapPassword)
                 signedOutReason = .sessionExpired
                 status = .signedOut
-            case .network, .transport, .timeout, .cancelled, .notConfigured:
+            case .network, .transport, .cancelled, .notConfigured:
                 // Transient — leave the keychain alone. The sign-in form
                 // will show but pre-filled, and a retry (or a later launch)
                 // has a chance to recover without forcing the user to
@@ -524,7 +524,6 @@ final class AppState {
     private func refreshInboxUnread() async {
         guard let client else { return }
         do {
-            try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: "INBOX")
             setInboxUnread(status.unseen ?? 0)
         } catch {
@@ -544,8 +543,6 @@ final class AppState {
         case .protocolError(let text):          return "Protocol error: \(text)"
         case .server(_, let text):              return "Server error: \(text)"
         case .decoding(let text):               return "Response error: \(text)"
-        case .imapCommandFailed(_, let detail): return "IMAP: \(detail)"
-        case .smtpCommandFailed(_, let detail): return "SMTP: \(detail)"
         default:                                return "\(error)"
         }
     }
@@ -724,7 +721,6 @@ extension AppState {
         #if os(iOS)
         IntentBridge.shared.sessionWillEnd()
         #endif
-        await client.imapClient.disconnect()
         // Per-feed site data (publisher logins) lives in WebKit, out of the
         // Kit's reach: drop it while the feed store still knows the stores.
         FeedWebStorage.drop(uuids: (try? await client.rssStore?.allDataStoreUuids()) ?? [])

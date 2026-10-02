@@ -118,7 +118,6 @@ enum MessageRawSource {
         if let cached = await client.bodyCache.fetch(folder: folder, uidValidity: uidValidity, uid: uid) {
             return cached
         }
-        try await client.imapClient.connectAndAuthenticate()
         let raw = try await client.imapClient.fetchBody(folder: folder, uid: uid)
         try await client.bodyCache.store(folder: folder, uidValidity: uidValidity, uid: uid, bytes: raw.bytes)
         return raw.bytes
