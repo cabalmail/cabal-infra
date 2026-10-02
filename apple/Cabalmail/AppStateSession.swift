@@ -14,11 +14,17 @@ extension AppState {
     /// the session. Replaces any previous observer, so signing back in does
     /// not leave two running. Called from `wireSession`, which is the one
     /// place both entry paths (sign-in, restore) pass through.
+    ///
+    /// Subscribes here, not inside the task. The task's body waits for the
+    /// main actor's next turn — at launch that can be long enough for a
+    /// restore's first call to die of the refresh — and the monitor has no
+    /// replay, so a signal in that gap found no listener and the app stayed
+    /// signed in. Registered now, it is buffered until the loop drains it.
     func observeSessionInvalidation() {
         sessionExpiryTask?.cancel()
-        let invalidation = sessionInvalidation
+        let events = sessionInvalidation.events()
         sessionExpiryTask = Task { [weak self] in
-            for await _ in invalidation.events() {
+            for await _ in events {
                 await self?.handleSessionExpiry()
             }
         }

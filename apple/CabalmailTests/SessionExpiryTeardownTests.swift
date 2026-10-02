@@ -68,6 +68,7 @@ final class SessionExpiryTeardownTests: XCTestCase {
         let state = AppState()
         state.status = .signedIn
         state.observeSessionInvalidation()
+        let observer = try XCTUnwrap(state.sessionExpiryTask)
 
         let api = URLSessionApiClient(
             configuration: Configuration(
@@ -88,11 +89,43 @@ final class SessionExpiryTeardownTests: XCTestCase {
             XCTAssertEqual(error, .authExpired, "the throw the call site still renders")
         }
 
-        for _ in 0..<50 where state.status != .signedOut {
-            await Task.yield()
-        }
+        await awaitTeardown(by: observer)
         XCTAssertEqual(state.status, .signedOut)
         XCTAssertEqual(state.signedOutReason, .sessionExpired)
+    }
+
+    /// The observer has to be listening when `observeSessionInvalidation()`
+    /// returns, not when its task first runs. The monitor has no replay, and
+    /// a main-actor task waits for the actor's next turn — so a signal in
+    /// that gap was dropped and the app stayed signed in. The test above
+    /// only lost that race when the main thread was busy (first test in a
+    /// freshly launched host); with no suspension point between the two
+    /// lines below, this one opens the gap on every run.
+    func testASignalBeforeTheObserverFirstRunsIsNotLost() async throws {
+        let state = AppState()
+        state.status = .signedIn
+        state.observeSessionInvalidation()
+        let observer = try XCTUnwrap(state.sessionExpiryTask)
+
+        state.sessionInvalidation.sessionDidExpire()
+
+        await awaitTeardown(by: observer)
+        XCTAssertEqual(state.status, .signedOut)
+        XCTAssertEqual(state.signedOutReason, .sessionExpired)
+    }
+
+    /// Waits for the session observer to finish. It ends because the teardown
+    /// it runs cancels it (`signOut()` cancels `sessionExpiryTask`), so its
+    /// completion is the moment `status` and `signedOutReason` are final — no
+    /// yield count to tune against the main actor's load. Bounded so a signal
+    /// that never arrives fails as a timeout rather than hanging the suite.
+    private func awaitTeardown(by observer: Task<Void, Never>) async {
+        let finished = expectation(description: "the session observer ran the teardown")
+        Task {
+            await observer.value
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 5)
     }
 
     /// Starting a sign-in clears the explanation: by the time the user is

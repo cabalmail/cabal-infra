@@ -41,6 +41,13 @@ struct HTMLBodyView: View {
     /// child-index path + delta produced by a prior `onScrollCaptured`, resumed
     /// from the nav cursor). Nil for a normal open. See `NavStateCoordinator`.
     var restoreAnchor: String?
+    /// When true, the web view runs under the bottom bar (the compact tab
+    /// bar) so the glass shows the message through it instead of a black
+    /// strip; WebKit insets the content by the bar's UIKit safe area, so the
+    /// last line still scrolls clear. iOS 26 and later only — see
+    /// `underBottomGlass(_:)`. The hover pill and link popover keep the safe
+    /// area, so they stay above the bar.
+    var runsUnderBottomBar: Bool = false
     /// Reports the current scroll anchor while the message is on screen: after
     /// each scroll settles (the scroll bridge, `HTMLBodyView+ScrollBridge`) and
     /// on a slow poll as a fallback. The reader relays it to the nav
@@ -65,6 +72,7 @@ struct HTMLBodyView: View {
         readerMode: Bool,
         printRequestTick: Int = 0,
         restoreAnchor: String? = nil,
+        runsUnderBottomBar: Bool = false,
         onScrollCaptured: ((ScrollCapture) -> Void)? = nil
     ) {
         self.html = html
@@ -73,11 +81,15 @@ struct HTMLBodyView: View {
         self.readerMode = readerMode
         self.printRequestTick = printRequestTick
         self.restoreAnchor = restoreAnchor
+        self.runsUnderBottomBar = runsUnderBottomBar
         self.onScrollCaptured = onScrollCaptured
     }
 
     var body: some View {
         platformView
+            // Before the overlay, so the pill is placed in the safe frame
+            // rather than under the bar the web view now extends beneath.
+            .underBottomGlass(runsUnderBottomBar)
             .overlay(alignment: .bottomLeading) { hoverStatusPill }
             .popover(
                 item: $linkMenu,
