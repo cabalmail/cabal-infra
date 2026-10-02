@@ -73,6 +73,13 @@ public protocol AuthService: Sendable {
     /// Fresh ID token for attaching to API requests; refreshes automatically.
     func currentIdToken() async throws -> String
 
+    /// ID token after the server rejected `rejected`: refreshes even if the
+    /// stored token still looks unexpired by the local clock (a skewed device
+    /// clock or a server-side revocation both look like that). If the stored
+    /// token already differs from `rejected`, another caller refreshed in the
+    /// meantime and that token is returned without a second round-trip.
+    func refreshIdToken(replacing rejected: String?) async throws -> String
+
     /// Cognito username + password persisted at sign-in. Used by the IMAP and
     /// SMTP clients to authenticate against Dovecot and Sendmail-submission,
     /// both of which authenticate against the same Cognito user pool.
@@ -112,6 +119,11 @@ public actor CognitoAuthService: AuthService {
     }
 
     private var pendingChallenge: PendingChallenge?
+
+    /// The refresh currently talking to Cognito, if any. Every caller that
+    /// needs a refresh while one is running awaits this one instead of
+    /// starting its own, so a burst of 401s costs one `InitiateAuth`.
+    private var inFlightRefresh: Task<AuthTokens, Error>?
 
     public init(
         configuration: Configuration,
@@ -231,6 +243,9 @@ public actor CognitoAuthService: AuthService {
 
     public func signOut() async throws {
         pendingChallenge = nil
+        // A refresh still in flight must not write tokens back after this.
+        inFlightRefresh?.cancel()
+        inFlightRefresh = nil
         try secureStore.remove(SecureStoreKey.authTokens)
         try secureStore.remove(SecureStoreKey.imapUsername)
         try secureStore.remove(SecureStoreKey.imapPassword)
@@ -256,9 +271,17 @@ public actor CognitoAuthService: AuthService {
         if !tokens.isExpired(now: clock()) {
             return tokens.idToken
         }
-        let refreshed = try await refresh(using: tokens)
-        try persist(tokens: refreshed)
-        return refreshed.idToken
+        return try await sharedRefresh(using: tokens).idToken
+    }
+
+    public func refreshIdToken(replacing rejected: String?) async throws -> String {
+        guard let tokens = try loadTokens() else {
+            throw CabalmailError.notSignedIn
+        }
+        if let rejected, tokens.idToken != rejected, !tokens.isExpired(now: clock()) {
+            return tokens.idToken
+        }
+        return try await sharedRefresh(using: tokens).idToken
     }
 
     public func currentImapCredentials() async throws -> ImapCredentials {
@@ -458,9 +481,7 @@ extension CognitoAuthService {
         if !tokens.isExpired(now: clock()) {
             return tokens.accessToken
         }
-        let refreshed = try await refresh(using: tokens)
-        try persist(tokens: refreshed)
-        return refreshed.accessToken
+        return try await sharedRefresh(using: tokens).accessToken
     }
 }
 
@@ -489,10 +510,39 @@ extension CognitoAuthService {
 
 // MARK: - Token refresh
 
+extension AuthService {
+    /// Default for test doubles that have no refresh to force.
+    public func refreshIdToken(replacing rejected: String?) async throws -> String {
+        try await currentIdToken()
+    }
+}
+
 /// Lives in an extension so the actor body stays under SwiftLint's
 /// `type_body_length` cap; same file, so the private stored properties above
 /// are still in reach.
 extension CognitoAuthService {
+    /// Refreshes and persists, joining a refresh that is already running
+    /// rather than starting a second one (the `BimiUrlCache` pattern). The
+    /// actor is reentrant across the Cognito round-trip, so without this every
+    /// caller that found the token stale would send its own `InitiateAuth`.
+    private func sharedRefresh(using tokens: AuthTokens) async throws -> AuthTokens {
+        if let inFlight = inFlightRefresh {
+            return try await inFlight.value
+        }
+        let task = Task { () throws -> AuthTokens in
+            let refreshed = try await self.refresh(using: tokens)
+            // Signed out while Cognito was answering: drop the tokens.
+            guard !Task.isCancelled else { throw CabalmailError.notSignedIn }
+            try self.persist(tokens: refreshed)
+            return refreshed
+        }
+        inFlightRefresh = task
+        defer {
+            if inFlightRefresh == task { inFlightRefresh = nil }
+        }
+        return try await task.value
+    }
+
     /// Wraps `performRefresh` so every way a refresh can end in `.authExpired`
     /// — no refresh token stored, or Cognito refusing the one we have —
     /// announces the session is over before the throw propagates. This is the

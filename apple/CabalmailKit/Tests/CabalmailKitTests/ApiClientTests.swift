@@ -96,6 +96,9 @@ final class ApiClientTests: XCTestCase {
         let callCount = await auth.idTokenCallCount
         // One token fetch for the initial attach, one forced refresh after 401.
         XCTAssertEqual(callCount, 2)
+        let forced = await auth.forcedRefreshCount
+        XCTAssertEqual(forced, 1)
+        XCTAssertEqual(requests[1].value(forHTTPHeaderField: "Authorization"), "idtoken")
     }
 
     func testSecondaryUnauthorizedSurfacesAsAuthExpired() async throws {

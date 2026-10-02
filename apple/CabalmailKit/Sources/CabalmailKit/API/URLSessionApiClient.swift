@@ -259,9 +259,10 @@ extension URLSessionApiClient {
     }
 
     /// Sends a request with automatic one-shot retry on HTTP 401. The first
-    /// 401 forces a token refresh via `AuthService.currentIdToken()` and
-    /// replays the request with the new token attached; a second 401 surfaces
-    /// as `.authExpired` so the UI can send the user back to the sign-in view.
+    /// 401 forces a token refresh via `AuthService.refreshIdToken(replacing:)`
+    /// and replays the request with the new token attached; a second 401
+    /// surfaces as `.authExpired` so the UI can send the user back to the
+    /// sign-in view.
     func send(_ request: URLRequest, expectedStatuses: Range<Int>) async throws -> Data {
         let (data, response) = try await transport.perform(request)
         if response.statusCode == 401 {
@@ -282,10 +283,12 @@ extension URLSessionApiClient {
         expectedStatuses: Range<Int>
     ) async throws -> Data {
         var replayed = original
-        // Drop the stale token before asking for a fresh one so a cached
-        // hit doesn't reattach the token the server just rejected.
-        replayed.setValue(nil, forHTTPHeaderField: "Authorization")
-        let refreshed = try await authService.currentIdToken()
+        // Not `currentIdToken()`: by the local clock the rejected token can
+        // still look fresh (a skewed clock, a revoked token), and that call
+        // would hand it straight back. Passing the rejected token lets a
+        // burst of 401s share one refresh.
+        let rejected = original.value(forHTTPHeaderField: "Authorization")
+        let refreshed = try await authService.refreshIdToken(replacing: rejected)
         replayed.setValue(refreshed, forHTTPHeaderField: "Authorization")
         let (retryData, retryResponse) = try await transport.perform(replayed)
         if retryResponse.statusCode == 401 {
