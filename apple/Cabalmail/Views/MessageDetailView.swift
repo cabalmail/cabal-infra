@@ -67,6 +67,8 @@ struct MessageDetailView: View {
     // See `ReaderHeaderColumnPolicy` and `MessageDetailView+Header.swift`.
     @ScaledMetric(relativeTo: .caption2)
     var headerTrailingColumnMinWidth = ReaderHeaderColumnPolicy.baseMinPaneWidth
+    /// Aims this reader's compose requests at its own window.
+    @Environment(\.commandWindowID) var commandWindowID
     #if os(iOS)
     // Drives `actionPlacement`: compact width puts the actions in the
     // navigation bar; at regular width the reader shares the window with the
@@ -74,8 +76,6 @@ struct MessageDetailView: View {
     // columns. See `ReaderToolbarLayout.placement`. The compact tab tree
     // forces `.compact` even in landscape on a Plus / Max.
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    /// Aims this reader's compose requests at its own window.
-    @Environment(\.commandWindowID) var commandWindowID
     // Measured width of the pane-scoped action bar, fed to
     // `ReaderToolbarLayout.ownBar` so the item set tracks the pane as the
     // user drags the split divider. Starts at 0, which draws the compact
