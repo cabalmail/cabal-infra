@@ -15,8 +15,17 @@ import Foundation
 ///    "reachable" kicks a drain pass that retries every queued entry
 ///    in enqueue order.
 /// 4. Failures increment `Entry.attempts` and push the error into the
-///    debug log; an entry that hits `Outbox.maxAttempts` is removed and
-///    surfaced as a permanent failure via the `onFailure` callback.
+///    debug log. A failed entry isn't retried until its backoff delay
+///    (exponential in its attempt count, from its last attempt) has passed,
+///    so a flapping network can't spend the whole budget in seconds; the
+///    queue schedules its own drain for when the next entry comes due. A
+///    reconnect since an entry's last attempt shortens its wait to the
+///    first step (`Backoff.base`), so mail queued during a long outage
+///    goes soon after the network returns without letting a flapping
+///    link retry more often than that.
+/// 5. An entry that hits `Outbox.maxAttempts` stays in the outbox marked
+///    `failedAt`. The queue stops retrying it, and the app surfaces it
+///    (via `Outbox.changes()`) for the user to retry or discard.
 ///
 /// The queue is main-actor-agnostic: the drain pass runs on its own task
 /// so UI doesn't hitch behind a slow retry. Callbacks fire back to the
@@ -24,8 +33,44 @@ import Foundation
 public actor SendQueue {
     public typealias Sender = @Sendable (OutgoingMessage) async throws -> Void
 
+    /// Time-based retry spacing: `base` after the first failed attempt,
+    /// doubling per attempt, capped at `cap`.
+    public struct Backoff: Sendable, Equatable {
+        public var base: TimeInterval
+        public var cap: TimeInterval
+
+        public init(base: TimeInterval, cap: TimeInterval) {
+            self.base = base
+            self.cap = cap
+        }
+
+        /// 30 s, 1 min, 2 min … capped at an hour: the default ten attempts
+        /// span roughly three hours before an entry is marked failed.
+        public static let standard = Backoff(base: 30, cap: 3600)
+
+        /// The wait after `attempts` attempts. An entry never attempted is
+        /// due at once; one whose attempt was rolled back (a send still in
+        /// flight server-side) still waits `base`, so it can't spin.
+        public func delay(afterAttempts attempts: Int) -> TimeInterval {
+            let exponent = Double(max(attempts, 1) - 1)
+            return min(base * pow(2, exponent), cap)
+        }
+
+        /// When `entry` may next be attempted.
+        public func nextAttempt(for entry: Outbox.Entry) -> Date? {
+            guard let last = entry.lastAttemptAt else { return nil }
+            return last.addingTimeInterval(delay(afterAttempts: entry.attempts))
+        }
+    }
+
     private let outbox: Outbox
     private let sender: Sender
+    private let backoff: Backoff
+    private let now: @Sendable () -> Date
+    /// When reachability last came back; see `dueDate(for:)`.
+    private var reconnectedAt: Date?
+    /// Sleeps until the earliest deferred entry is due, then kicks a drain.
+    private var retryTask: Task<Void, Never>?
     private var drainTask: Task<Void, Never>?
     private var reachabilityTask: Task<Void, Never>?
     /// A kick that arrived while a drain was already running, owed another
@@ -36,8 +81,15 @@ public actor SendQueue {
     /// drain that replaced it.
     private var drainGeneration = 0
 
-    public init(outbox: Outbox, sender: @escaping Sender) {
+    public init(
+        outbox: Outbox,
+        backoff: Backoff = .standard,
+        now: @escaping @Sendable () -> Date = { Date() },
+        sender: @escaping Sender
+    ) {
         self.outbox = outbox
+        self.backoff = backoff
+        self.now = now
         self.sender = sender
     }
 
@@ -51,7 +103,7 @@ public actor SendQueue {
             for await reachable in reachability {
                 guard !Task.isCancelled, let self else { break }
                 if reachable {
-                    await self.kickDrain()
+                    await self.reconnected()
                 }
             }
         }
@@ -73,6 +125,11 @@ public actor SendQueue {
         startDrain()
     }
 
+    private func reconnected() {
+        reconnectedAt = now()
+        kickDrain()
+    }
+
     public func stop() {
         drainTask?.cancel()
         drainTask = nil
@@ -80,6 +137,8 @@ public actor SendQueue {
         drainGeneration += 1
         reachabilityTask?.cancel()
         reachabilityTask = nil
+        retryTask?.cancel()
+        retryTask = nil
     }
 
     private func startDrain() {
@@ -110,11 +169,18 @@ public actor SendQueue {
         // otherwise fall into the same hole the coalescing closes.
         if pendingKick {
             startDrain()
+        } else {
+            Task { await scheduleRetry(generation: generation) }
         }
     }
 
     private func drain() async {
-        let entries = (try? await outbox.list()) ?? []
+        let current = now()
+        let entries = ((try? await outbox.list()) ?? []).filter { entry in
+            guard !entry.isFailed else { return false }
+            guard let due = dueDate(for: entry) else { return true }
+            return due <= current
+        }
         guard !entries.isEmpty else { return }
         CabalmailLog.info("SendQueue", "draining \(entries.count) outbox entr\(entries.count == 1 ? "y" : "ies")")
         for entry in entries {
@@ -123,10 +189,45 @@ public actor SendQueue {
         }
     }
 
+    /// Arms one timer for the earliest entry still waiting out its backoff,
+    /// so a deferred retry happens even if reachability never changes.
+    private func scheduleRetry(generation: Int) async {
+        guard generation == drainGeneration, drainTask == nil else { return }
+        let entries = (try? await outbox.list()) ?? []
+        let due = entries.filter { !$0.isFailed }.compactMap { dueDate(for: $0) }.min()
+        // Re-check after the await: a stop() or a new drain may have run.
+        guard generation == drainGeneration, drainTask == nil else { return }
+        retryTask?.cancel()
+        retryTask = nil
+        guard let due else { return }
+        let delay = max(due.timeIntervalSince(now()), 0)
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.retryTimerFired(generation: generation)
+        }
+    }
+
+    /// When `entry` may next be attempted: its backoff, cut to
+    /// `Backoff.base` when the network came back after its last attempt.
+    private func dueDate(for entry: Outbox.Entry) -> Date? {
+        guard let last = entry.lastAttemptAt, let scheduled = backoff.nextAttempt(for: entry) else { return nil }
+        if let reconnectedAt, reconnectedAt > last {
+            return min(scheduled, last.addingTimeInterval(backoff.base))
+        }
+        return scheduled
+    }
+
+    private func retryTimerFired(generation: Int) {
+        guard generation == drainGeneration else { return }
+        retryTask = nil
+        kickDrain()
+    }
+
     private func attemptSend(_ original: Outbox.Entry) async {
         var entry = original
         entry.attempts += 1
-        entry.lastAttemptAt = Date()
+        entry.lastAttemptAt = now()
         do {
             try await sender(entry.message)
             try? await outbox.remove(id: entry.id)
@@ -153,14 +254,15 @@ public actor SendQueue {
                 "queued send failed (\(entry.attempts)/\(maxAttempts)): \(error)"
             )
             if entry.attempts >= maxAttempts {
-                try? await outbox.remove(id: entry.id)
+                // Keep the message: marking it failed takes it out of the
+                // drain and puts it in front of the user (audit F8).
+                entry.failedAt = now()
                 CabalmailLog.error(
                     "SendQueue",
-                    "dropping \(entry.id) after \(entry.attempts) attempts"
+                    "giving up on \(entry.id) after \(entry.attempts) attempts; kept for the user"
                 )
-            } else {
-                try? await outbox.update(entry)
             }
+            try? await outbox.update(entry)
         }
     }
 }

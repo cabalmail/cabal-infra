@@ -45,6 +45,7 @@ final class AsyncStreamTerminationCaptureScanTests: XCTestCase {
         "IMAP/LiveImapClient+Idle.swift": .noSelf,
         "IMAP/MailboxWatcher.swift": .weakHandler,
         "Logging/DebugLogStore.swift": .weakHandler,
+        "Outbox/Outbox.swift": .weakHandler,
         "Reachability.swift": .strongHandler,
     ]
 
