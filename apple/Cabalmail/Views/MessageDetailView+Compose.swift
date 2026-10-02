@@ -77,6 +77,6 @@ extension MessageDetailView {
     /// so a mailto: arriving mid-reply and this reply flow never race two
     /// sheet presentations against each other.
     func presentCompose(seed: Draft) {
-        appState.requestCompose(seed: seed)
+        appState.requestCompose(seed: seed, in: commandWindowID)
     }
 }

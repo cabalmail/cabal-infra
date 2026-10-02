@@ -165,7 +165,7 @@ struct FeedSidebarList: View {
         .feedManagementSheets(actions, management: management, folders: model?.folders ?? [],
                               subscriptions: model?.subscriptions ?? [], selection: $selection,
                               handlesCommands: true, onRefresh: { Task { await model?.refresh() } })
-        .onChange(of: appState.sidebarTreeCommandTick) { _, _ in
+        .onWindowCommand(appState.sidebarTreeCommandTick) {
             // The Feeds menu's Expand all / Collapse all; the mail pair is
             // the Mail tab's to answer.
             guard let command = appState.pendingSidebarTreeCommand, !command.isMail else { return }

@@ -1302,6 +1302,20 @@ pane has focus (users can rarely tell which it is). Esc and ⌘A stay
 focus-scoped on the list: window-scoped versions would steal them from
 the search field.
 
+Because `AppState` is one per process, every main window sees every
+tick. Each main window therefore carries an identity
+(`MainWindowCommandScope`: the `commandWindowID` environment value, also
+published with `focusedSceneValue`). A menu command reads the focused
+window with `@FocusedValue` and passes it to the `request…` method,
+falling back to the main window last in front while a compose window is
+key; an in-window button passes its own window. Observers use
+`.onWindowCommand(tick)` instead of `.onChange(of:)`, which drops a tick
+aimed at another window. A `request…` call that names no window reaches
+every window, which is what data-change refreshes (Empty Trash, push
+actions) want. Drag-and-drop moves are scoped tighter still: the drag
+payload names the message list it lifted from, and only that list
+performs the move a sidebar drop posts.
+
 ### Platform polish
 
 - **Reachability banner.** `SignedInRootView` overlays a capsule banner

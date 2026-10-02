@@ -52,7 +52,7 @@ struct ComposeRequestRouter: ViewModifier {
                     present(seed: seed)
                 }
             }
-            .onChange(of: appState.composeRequestTick) { _, _ in
+            .onWindowCommand(appState.composeRequestTick) {
                 // Menu shortcuts and toolbar buttons pass no seed; the
                 // mailto: handler parks one. Fall back to a fresh draft
                 // for the former.

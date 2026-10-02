@@ -147,7 +147,17 @@ struct MessageDragItem: Codable, Hashable, Sendable {
 struct MessageMoveRequest: Equatable, Sendable {
     let destination: String
     let items: [MessageDragItem]
+    /// The list the drag lifted from (`MessageDragPayload.sourceList`).
+    /// Every mounted list in every window observes the request, so only
+    /// this one performs the move; nil (a payload without one) is
+    /// performed by any list, as before.
+    let sourceList: UUID?
     let tick: Int
+
+    /// Whether the list identified by `listID` is the one to perform it.
+    func isPerformed(by listID: UUID) -> Bool {
+        sourceList.map { $0 == listID } ?? true
+    }
 }
 
 // MARK: - Message-menu selection intents
@@ -157,8 +167,8 @@ struct MessageMoveRequest: Equatable, Sendable {
 // Here rather than in `AppState.swift` so that file stays under SwiftLint's
 // `file_length` cap.
 extension AppState {
-    func requestToggleSeen() { toggleSeenRequestTick += 1 }
-    func requestToggleFlagged() { toggleFlaggedRequestTick += 1 }
-    func requestMarkFolderRead() { markFolderReadRequestTick += 1 }
-    func requestMoveSelection() { moveSelectionRequestTick += 1 }
+    func requestToggleSeen(in window: UUID? = nil) { commandWindow = window; toggleSeenRequestTick += 1 }
+    func requestToggleFlagged(in window: UUID? = nil) { commandWindow = window; toggleFlaggedRequestTick += 1 }
+    func requestMarkFolderRead(in window: UUID? = nil) { commandWindow = window; markFolderReadRequestTick += 1 }
+    func requestMoveSelection(in window: UUID? = nil) { commandWindow = window; moveSelectionRequestTick += 1 }
 }

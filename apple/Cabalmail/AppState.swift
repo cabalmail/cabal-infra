@@ -165,6 +165,13 @@ final class AppState {
     var sidebarTreeCommandTick = 0
     var pendingSidebarTreeCommand: SidebarTreeCommand?
     var pendingFeedCommand: FeedCommand?
+    /// The main window the latest command tick is aimed at; nil reaches
+    /// every window. Set with each tick by the `request…` methods and read
+    /// by the observers when the tick fires (`AppState+CommandWindow`).
+    @ObservationIgnored var commandWindow: UUID?
+    /// The main window most recently in front, for commands issued while a
+    /// compose or Settings window is key.
+    @ObservationIgnored var lastActiveMainWindow: UUID?
 
     /// A Spotlight result tapped before sign-in / restore completed; routed
     /// once the session is wired, mirroring `PushRegistrar.pendingOpen`.
@@ -278,12 +285,14 @@ final class AppState {
     // `requestCompose(seed:)` and `consumePendingComposeSeed()` live in the
     // "Compose routing + onboarding" extension below, alongside the
     // contacts-access helper.
-    func requestCompose() { composeRequestTick += 1 }
-    func requestRefresh() { refreshRequestTick += 1 }
-    func requestReply() { replyRequestTick += 1 }
-    func requestReplyAll() { replyAllRequestTick += 1 }
-    func requestForward() { forwardRequestTick += 1 }
-    func requestSettings() { settingsRequestTick += 1 }
+    // `window` names the main window the command is for; nil reaches every
+    // window (see `AppState+CommandWindow`).
+    func requestCompose(in window: UUID? = nil) { commandWindow = window; composeRequestTick += 1 }
+    func requestRefresh(in window: UUID? = nil) { commandWindow = window; refreshRequestTick += 1 }
+    func requestReply(in window: UUID? = nil) { commandWindow = window; replyRequestTick += 1 }
+    func requestReplyAll(in window: UUID? = nil) { commandWindow = window; replyAllRequestTick += 1 }
+    func requestForward(in window: UUID? = nil) { commandWindow = window; forwardRequestTick += 1 }
+    func requestSettings(in window: UUID? = nil) { commandWindow = window; settingsRequestTick += 1 }
     // The selection-scoped request bumpers live in the "Message-menu
     // selection intents" extension below (SwiftLint type-body budget), and
     // the cross-view signal senders (`signalDisposed`, `signalFlagChange`,
@@ -897,8 +906,9 @@ extension AppState {
     /// forward, resume draft); the macOS Commands menu still calls the
     /// zero-arg form, which leaves `pendingComposeSeed` nil and lets
     /// the receiver fall back to a fresh draft.
-    func requestCompose(seed: Draft) {
+    func requestCompose(seed: Draft, in window: UUID? = nil) {
         pendingComposeSeed = seed
+        commandWindow = window
         composeRequestTick += 1
     }
 
@@ -965,11 +975,14 @@ extension AppState {
     /// Post a drag-and-drop move for the active message list to perform.
     /// `tick` is monotonic so dragging onto the same folder twice still fires
     /// the list's `.onChange` observer.
-    func requestMove(items: [MessageDragItem], to destination: String) {
+    /// `sourceList` names the message list the drag lifted from, which is
+    /// the one list that performs the move.
+    func requestMove(items: [MessageDragItem], to destination: String, from sourceList: UUID?) {
         moveRequestTick += 1
         pendingMoveRequest = MessageMoveRequest(
             destination: destination,
             items: items,
+            sourceList: sourceList,
             tick: moveRequestTick
         )
     }

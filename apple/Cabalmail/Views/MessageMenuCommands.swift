@@ -24,8 +24,13 @@ import SwiftUI
 /// for a single open message, an invisible button on the message list
 /// for a multi-selection — so it acts on the mail window only, but
 /// works there regardless of which pane has focus.
+///
+/// Each command is aimed at the focused main window (`MainWindowCommandScope`),
+/// or the one last in front while a compose window is key, so a second
+/// window's list and reader leave it alone.
 struct MessageMenuCommands: Commands {
     let appState: AppState
+    @FocusedValue(\.commandWindowID) private var focusedWindow
 
     var body: some Commands {
         // Every command here is a no-op with nothing to act on, so each is
@@ -36,25 +41,27 @@ struct MessageMenuCommands: Commands {
         // front may hold them live (`SharedChordPolicy`).
         let itemsLive = SharedChordPolicy.mailItemsLive(availability, activeSection: appState.activeSection)
         CommandMenu("Message") {
-            Button("Reply") { appState.requestReply() }
+            Button("Reply") { appState.requestReply(in: target) }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!availability.canReply)
-            Button("Reply All") { appState.requestReplyAll() }
+            Button("Reply All") { appState.requestReplyAll(in: target) }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(!availability.canReply)
-            Button("Forward") { appState.requestForward() }
+            Button("Forward") { appState.requestForward(in: target) }
                 .keyboardShortcut("j", modifiers: [.command, .shift])
                 .disabled(!availability.canReply)
             Divider()
-            Button("Mark as Read/Unread") { appState.requestToggleSeen() }
+            Button("Mark as Read/Unread") { appState.requestToggleSeen(in: target) }
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(!itemsLive)
-            Button("Flag/Unflag") { appState.requestToggleFlagged() }
+            Button("Flag/Unflag") { appState.requestToggleFlagged(in: target) }
                 .keyboardShortcut("8", modifiers: [.command, .shift])
                 .disabled(!itemsLive)
-            Button("Move to Folder…") { appState.requestMoveSelection() }
+            Button("Move to Folder…") { appState.requestMoveSelection(in: target) }
                 .keyboardShortcut("m", modifiers: .command)
                 .disabled(!availability.canActOnSelection)
         }
     }
+
+    private var target: UUID? { appState.menuCommandTarget(focused: focusedWindow) }
 }

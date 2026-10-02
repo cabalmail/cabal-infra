@@ -312,7 +312,7 @@ extension FolderListView {
         defer { appState.endMessageDrag() }
         let items = payloads.flatMap { $0.items }
         guard !items.isEmpty else { return false }
-        appState.requestMove(items: items, to: folder.path)
+        appState.requestMove(items: items, to: folder.path, from: payloads.lazy.compactMap(\.sourceList).first)
         return true
     }
 

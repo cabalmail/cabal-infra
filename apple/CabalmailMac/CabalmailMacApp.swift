@@ -43,6 +43,9 @@ struct CabalmailMacApp: App {
     var body: some Scene {
         WindowGroup("Cabalmail", id: mainWindowID) {
             ContentView()
+                // Gives this window the identity its menu commands are aimed
+                // at, so a second window ignores them (MainWindowCommandScope).
+                .mainWindowCommandScope(appState)
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
@@ -90,7 +93,7 @@ struct CabalmailMacApp: App {
                     // as macOS's default mail handler (System Settings
                     // -> Desktop & Dock -> Default mail reader).
                     if let mailto = MailtoURL(url) {
-                        appState.requestCompose(seed: mailto.draft())
+                        appState.requestCompose(seed: mailto.draft(), in: appState.lastActiveMainWindow)
                     }
                 }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in

@@ -40,16 +40,18 @@ extension AppState {
     }
 
     /// Names the command and bumps the tick the feed sidebar observes.
-    func requestFeedCommand(_ command: FeedCommand) {
+    func requestFeedCommand(_ command: FeedCommand, in window: UUID? = nil) {
         pendingFeedCommand = command
+        commandWindow = window
         feedCommandTick += 1
     }
 
     /// Names the sidebar-tree command (Expand all / Collapse all on the mail
     /// or feed tree) and bumps the tick both sidebars observe; each applies
     /// the commands for the tree it owns.
-    func requestSidebarTree(_ command: SidebarTreeCommand) {
+    func requestSidebarTree(_ command: SidebarTreeCommand, in window: UUID? = nil) {
         pendingSidebarTreeCommand = command
+        commandWindow = window
         sidebarTreeCommandTick += 1
     }
 

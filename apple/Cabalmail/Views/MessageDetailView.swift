@@ -74,6 +74,8 @@ struct MessageDetailView: View {
     // columns. See `ReaderToolbarLayout.placement`. The compact tab tree
     // forces `.compact` even in landscape on a Plus / Max.
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    /// Aims this reader's compose requests at its own window.
+    @Environment(\.commandWindowID) var commandWindowID
     // Measured width of the pane-scoped action bar, fed to
     // `ReaderToolbarLayout.ownBar` so the item set tracks the pane as the
     // user drags the split divider. Starts at 0, which draws the compact
@@ -219,9 +221,9 @@ struct MessageDetailView: View {
             Text("This message will be permanently deleted. This can't be undone.")
         }
         .modifier(RevokeAddressConfirmation(pending: $pendingRevoke, perform: revoke))
-        .onChange(of: appState.replyRequestTick) { _, _ in beginCompose(.reply) }
-        .onChange(of: appState.replyAllRequestTick) { _, _ in beginCompose(.replyAll) }
-        .onChange(of: appState.forwardRequestTick) { _, _ in beginCompose(.forward) }
+        .onWindowCommand(appState.replyRequestTick) { beginCompose(.reply) }
+        .onWindowCommand(appState.replyAllRequestTick) { beginCompose(.replyAll) }
+        .onWindowCommand(appState.forwardRequestTick) { beginCompose(.forward) }
         // Once a body is available, consume a pending scroll restore from the
         // nav cursor (a no-op on a normal open). Both branches guard against
         // re-consuming, so whichever body type lands first wins.
