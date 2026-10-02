@@ -114,6 +114,13 @@ struct FeedItemDetailView: View {
                         allowRemote: model.remoteContentAllowed,
                         readerMode: model.readerMode,
                         restoreAnchor: restoreAnchor,
+                        // Under the tab bar's glass rather than above a black
+                        // strip. The live article page (`ArticleWebView`)
+                        // deliberately stays above the bar: WebKit pins a
+                        // page's `position: fixed` bottom elements (consent
+                        // and subscribe bars) to the web view's real bottom
+                        // edge, where the tray shield would swallow their taps.
+                        runsUnderBottomBar: true,
                         onScrollCaptured: { capture in
                             appState.navCoordinator?.recordFeedScroll(itemID: item.id, capture: capture)
                         }

@@ -45,6 +45,33 @@ extension MessageDetailView {
         }
     }
 
+    #if os(iOS)
+    /// Overflow-menu rows standing in for the flag control where the compact
+    /// navigation bar leaves it off (`ReaderToolbarLayout.topBarDemotedToOverflow`):
+    /// the plain toggle, then the palette's flags as a submenu in place of
+    /// the control's touch-and-hold menu. Shown only while the bar lacks the
+    /// control, so the accessibility identifier stays unique.
+    @ViewBuilder
+    var flagMenuItems: some View {
+        if let model {
+            Button {
+                Task { await model.toggleFlagged() }
+            } label: {
+                flagToolbarLabel(isFlagged: model.isFlagged)
+            }
+            .accessibilityIdentifier("reader.toggleFlag")
+            let rows = menuRows(model: model)
+            if !rows.isEmpty {
+                Menu {
+                    keywordOptionItems(rows: rows, model: model)
+                } label: {
+                    Label("Flags", systemImage: "tag")
+                }
+            }
+        }
+    }
+    #endif
+
     @ViewBuilder
     private func flagToolbarLabel(isFlagged: Bool) -> some View {
         Label(
