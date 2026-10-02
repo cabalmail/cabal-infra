@@ -258,17 +258,24 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
         return sites.sorted()
     }
 
+    /// A scan anchor that is no longer in the source. Thrown as a failure, not
+    /// an `XCTSkip`: a renamed or deleted declaration means the scan checks
+    /// nothing, and a skip would let that pass green.
+    private struct ScanAnchorMissing: Error, CustomStringConvertible {
+        let description: String
+    }
+
     /// The text of one declaration's body: from `opener` to the line that
     /// closes it at the declaration's own indentation. Used so an assertion
     /// about the 27 path can't be satisfied by the pre-27 path's text.
     private static func slice(_ body: String, from opener: String) throws -> String {
         let lines = body.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         guard let start = lines.firstIndex(where: { $0.contains(opener) }) else {
-            throw XCTSkip("no declaration matching \(opener)")
+            throw ScanAnchorMissing(description: "no declaration matching \(opener)")
         }
         let indent = lines[start].prefix { $0 == " " }
         guard let end = lines[(start + 1)...].firstIndex(where: { $0 == indent + "}" }) else {
-            throw XCTSkip("unterminated declaration \(opener)")
+            throw ScanAnchorMissing(description: "unterminated declaration \(opener)")
         }
         return lines[start...end].joined(separator: "\n")
     }
