@@ -69,6 +69,8 @@ extension AppState {
     private func refreshFeeds() async {
         guard let engine = client?.rssSync else { return }
         _ = await engine.syncAll()
+        // A subscription removed on another device takes its site data along.
+        await FeedWebStorage.dropDeparted(from: engine.store)
         // The store changed under the open views: badges re-read their
         // counts and a list still on its first page reloads.
         FeedStateBus.shared.post()

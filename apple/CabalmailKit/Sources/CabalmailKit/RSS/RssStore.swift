@@ -23,7 +23,7 @@ public actor RssStore {
     /// RSS state beside it).
     public nonisolated let directory: URL
 
-    static let schemaVersion = 4
+    static let schemaVersion = 5
 
     public init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -64,7 +64,7 @@ public actor RssStore {
     /// half-applied one that fails on every rerun. A downgrade (a file from
     /// a newer build) throws, and `openRecovering` deletes and repopulates.
     private static func migrate(_ database: SQLiteDatabase) throws {
-        let steps = [Schema.version1, Schema.version2, Schema.version3, Schema.version4]
+        let steps = [Schema.version1, Schema.version2, Schema.version3, Schema.version4, Schema.version5]
         assert(steps.count == schemaVersion)
         let current = database.userVersion
         guard current <= schemaVersion else { throw NewerSchemaError(found: current) }
@@ -81,12 +81,44 @@ public actor RssStore {
         }
     }
 
-    /// Drops every row (sign-out, or a corrupt-cache recovery).
+    /// Drops every row (sign-out, or a corrupt-cache recovery). Read
+    /// `allDataStoreUuids()` first if the web storage must go too.
     public func clear() throws {
         try database.exec("""
             DELETE FROM pending; DELETE FROM feed_sync; DELETE FROM items;
-            DELETE FROM subscriptions; DELETE FROM folders;
+            DELETE FROM subscriptions; DELETE FROM folders; DELETE FROM departed_data_stores;
             """)
+    }
+
+    // MARK: - Per-subscription web storage
+
+    /// Every web-storage identifier this store knows of - the current
+    /// subscriptions' and departed ones not yet dropped - for sign-out,
+    /// which must drop them all before `clear()` forgets them.
+    public func allDataStoreUuids() throws -> [String] {
+        let rows = try database.rows("""
+            SELECT data_store_uuid FROM subscriptions WHERE data_store_uuid != ''
+            UNION SELECT uuid FROM departed_data_stores ORDER BY 1
+            """)
+        return rows.map { $0.string(0) }
+    }
+
+    /// The web-storage identifiers of subscriptions `replaceCatalog` has
+    /// removed since the last call, handed over once. They are recorded in
+    /// the same transaction that deletes the subscription, so the app can
+    /// drop the storage after any sync path - the poller's `syncAll`
+    /// included - not just the ones that kept the `CatalogDiff`.
+    public func takeDepartedDataStoreUuids() throws -> [String] {
+        try database.exec("BEGIN")
+        do {
+            let uuids = try database.rows("SELECT uuid FROM departed_data_stores ORDER BY uuid").map { $0.string(0) }
+            try database.exec("DELETE FROM departed_data_stores")
+            try database.exec("COMMIT")
+            return uuids
+        } catch {
+            try? database.exec("ROLLBACK")
+            throw error
+        }
     }
 
     // MARK: - Catalog
@@ -110,6 +142,10 @@ public actor RssStore {
         do {
             for sub in removed {
                 try database.run("DELETE FROM subscriptions WHERE subscription_id = ?", [.init(sub.subscriptionId)])
+                if !sub.dataStoreUuid.isEmpty {
+                    try database.run("INSERT OR IGNORE INTO departed_data_stores (uuid) VALUES (?)",
+                                     [.init(sub.dataStoreUuid)])
+                }
             }
             for feedId in Set(removed.map(\.feedId)).subtracting(keptFeeds) {
                 try deleteFeedRows(feedId)
@@ -341,5 +377,11 @@ enum Schema {
     static let version4 = """
         ALTER TABLE subscriptions ADD COLUMN default_filter TEXT NOT NULL DEFAULT 'unread';
         ALTER TABLE folders ADD COLUMN default_filter TEXT NOT NULL DEFAULT 'unread';
+        """
+
+    /// Web-storage identifiers of removed subscriptions, kept until the app
+    /// layer (which owns WebKit) has dropped them.
+    static let version5 = """
+        CREATE TABLE IF NOT EXISTS departed_data_stores (uuid TEXT PRIMARY KEY);
         """
 }
