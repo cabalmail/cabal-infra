@@ -60,6 +60,7 @@ extension MessageDetailView {
             readerMode: model.readerMode,
             printRequestTick: model.printRequestTick,
             restoreAnchor: restoreScrollAnchor,
+            runsUnderBottomBar: bodyRunsUnderBottomBar,
             onScrollCaptured: { capture in
                 reportMessageScroll(
                     offset: nil, anchor: capture.anchor, fraction: capture.fraction, atTop: capture.isAtTop

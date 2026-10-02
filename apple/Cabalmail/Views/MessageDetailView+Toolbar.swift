@@ -8,8 +8,9 @@ import CabalmailKit
 
 extension MessageDetailView {
     /// Draws whichever button `ReaderToolbarLayout` put in this slot — the
-    /// touch bottom bar or the macOS top toolbar — so the bars' contents and
-    /// the tested layout can't drift apart. Exhaustive one-case-per-action
+    /// compact navigation bar, the regular-width bottom bar or pane-scoped
+    /// bar, or the macOS top toolbar — so the bars' contents and the tested
+    /// layout can't drift apart. Exhaustive one-case-per-action
     /// dispatch; the branch count IS the point, not incidental complexity.
     @ViewBuilder
     // swiftlint:disable:next cyclomatic_complexity
@@ -100,7 +101,8 @@ extension MessageDetailView {
     // blank row there (#1047). The toolbars themselves still draw icons only —
     // macOS's unified toolbar does that by default, and the touch call sites
     // apply `.labelStyle(.iconOnly)` (see `readerActionBar` and the
-    // `.bottomBar` group in `MessageDetailView.toolbarContent`).
+    // navigation-bar and `.bottomBar` items in
+    // `MessageDetailView.toolbarContent`).
 
     /// Drafts-folder affordance: resume the open draft in compose.
     /// Disabled until the body fetch + MIME parse complete so a tap can't
@@ -289,8 +291,9 @@ extension MessageDetailView {
     }
 
     #if os(iOS) || os(visionOS)
-    /// Menu twins of the two display toggles the bottom bar gave up to stay
-    /// inside `ReaderToolbarLayout.capacity`. Same actions, same shortcuts,
+    /// Menu twins of the two display toggles the touch bars gave up to stay
+    /// inside their budgets (`ReaderToolbarLayout.capacity` and
+    /// `topBarCapacity`). Same actions, same shortcuts,
     /// spelled out as labelled rows — a menu row carrying only an SF Symbol
     /// reads as blank. Shown only while the toggles are off the bar: a wide
     /// pane-scoped bar promotes them back (`displayTogglesAreOnBar`), and the
@@ -346,6 +349,42 @@ extension MessageDetailView {
         }
     }
 
+    #if os(iOS)
+    /// Second home for the compact navigation bar's leading control. That bar
+    /// has an unmeasured budget, and a narrow iPad window can fold even a
+    /// ranked item into a system overflow this repo has found inert (#1626,
+    /// #1670); the menu is the one item ranked above every other, so Reply,
+    /// Reply All and Forward (Edit Draft in Drafts) stay reachable from it.
+    /// No accessibility identifiers: the bar's control owns `reader.reply`.
+    @ViewBuilder
+    func replyMenuItems(model: MessageDetailViewModel) -> some View {
+        if model.leadingToolbarAction == .editDraft {
+            Button {
+                beginResumeDraft()
+            } label: {
+                Label("Edit Draft", systemImage: "square.and.pencil")
+            }
+            .disabled(!model.canResumeDraft)
+        } else {
+            Button {
+                beginCompose(.reply)
+            } label: {
+                Label("Reply", systemImage: "arrowshape.turn.up.left")
+            }
+            Button {
+                beginCompose(.replyAll)
+            } label: {
+                Label("Reply All", systemImage: "arrowshape.turn.up.left.2")
+            }
+            Button {
+                beginCompose(.forward)
+            } label: {
+                Label("Forward", systemImage: "arrowshape.turn.up.forward")
+            }
+        }
+    }
+    #endif
+
     /// Overflow menu (•••) — the touch platforms' home for the actions that
     /// don't earn a slot on their width-budgeted bars. macOS stopped using it
     /// in the #1047 rework: there every action is its own toolbar button and
@@ -358,11 +397,26 @@ extension MessageDetailView {
     var overflowMenuButton: some View {
         Menu {
             if let model {
+                #if os(iOS)
+                if actionPlacement == .topBar {
+                    replyMenuItems(model: model)
+                    Divider()
+                }
+                #endif
+
                 Button {
                     moveSheetPresented = true
                 } label: {
                     Label("Move to folder…", systemImage: "folder")
                 }
+
+                #if os(iOS)
+                // The compact navigation bar leaves Flag off to stay inside
+                // `ReaderToolbarLayout.topBarCapacity`; the menu carries it.
+                if actionPlacement == .topBar {
+                    flagMenuItems
+                }
+                #endif
 
                 #if os(iOS) || os(visionOS)
                 if !displayTogglesAreOnBar {

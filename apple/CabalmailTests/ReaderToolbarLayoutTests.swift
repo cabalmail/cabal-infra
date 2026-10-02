@@ -54,25 +54,110 @@ final class ReaderToolbarLayoutTests: XCTestCase {
         }
     }
 
+    // Compact width keeps the section tab bar on screen while a message is
+    // open, so the actions move up into the navigation bar the way the feed
+    // reader draws its controls. The reader used to hide the tab bar and take
+    // the bottom edge, which made it the one screen without the section tabs.
+    func testCompactWidthUsesTheNavigationBar() {
+        for os27 in [true, false] {
+            XCTAssertEqual(
+                ReaderToolbarLayout.placement(isRegularWidth: false, isOS27OrLater: os27),
+                .topBar,
+                "compact os27=\(os27) must leave the bottom edge to the section tab bar"
+            )
+        }
+    }
+
+    // The compact navigation bar seats the back button beside the reader's
+    // actions, and the iOS 27 SDK pads each item wider, so it gets its own
+    // budget rather than the bottom bar's five. Past it the system folds the
+    // tail into an overflow this repo has found inert (#1626, #1670).
+    func testTopBarStaysWithinItsCapacity() {
+        for leading in [LeadingReaderAction.reply, .editDraft] {
+            let actions = ReaderToolbarLayout.topBar(leading: leading)
+            XCTAssertLessThanOrEqual(
+                actions.count,
+                ReaderToolbarLayout.topBarCapacity,
+                "\(leading) navigation bar draws \(actions.count) items beside the back button"
+            )
+            XCTAssertLessThan(
+                ReaderToolbarLayout.topBarCapacity,
+                ReaderToolbarLayout.capacity,
+                "the navigation bar also seats the back button, so it holds less than the bottom bar"
+            )
+        }
+    }
+
+    func testTopBarOrderMatchesWhatTheViewDraws() {
+        // `MessageDetailView.toolbarContent` draws these item by item, with
+        // ranks in the system's overflow: Reply / Edit Draft and dispose
+        // `keepsInBar()`, the menu `keepsInBarFirst()`, Read unranked. Dispose
+        // is Delete Forever inside Trash, and the menu is the only touch
+        // route to the demoted actions. A change here must change the view.
+        XCTAssertEqual(
+            ReaderToolbarLayout.topBar(leading: .reply),
+            [.reply, .toggleRead, .dispose, .overflow]
+        )
+        XCTAssertEqual(
+            ReaderToolbarLayout.topBar(leading: .editDraft),
+            [.editDraft, .toggleRead, .dispose, .overflow]
+        )
+    }
+
+    func testTopBarSwapsTheLeadingSlotForDrafts() {
+        XCTAssertEqual(ReaderToolbarLayout.topBar(leading: .reply).first, .reply)
+        XCTAssertEqual(ReaderToolbarLayout.topBar(leading: .editDraft).first, .editDraft)
+        XCTAssertEqual(
+            ReaderToolbarLayout.topBar(leading: .reply).dropFirst(),
+            ReaderToolbarLayout.topBar(leading: .editDraft).dropFirst(),
+            "the leading slot swaps; everything after it stays put"
+        )
+    }
+
+    func testTopBarDemotionsAreOffTheBar() {
+        for leading in [LeadingReaderAction.reply, .editDraft] {
+            let actions = ReaderToolbarLayout.topBar(leading: leading)
+            for demoted in ReaderToolbarLayout.topBarDemotedToOverflow + ReaderToolbarLayout.demotedToOverflow {
+                XCTAssertFalse(
+                    actions.contains(demoted),
+                    "\(demoted.rawValue) rides in the overflow menu, not the \(leading) navigation bar"
+                )
+            }
+        }
+    }
+
+    func testEveryActionIsStillReachableFromTheTopBar() {
+        let reachable = Set(ReaderToolbarLayout.topBar(leading: .reply))
+            .union(ReaderToolbarLayout.topBar(leading: .editDraft))
+            .union(ReaderToolbarLayout.topBarDemotedToOverflow)
+            .union(ReaderToolbarLayout.demotedToOverflow)
+            .union(ReaderToolbarLayout.touchOverflowOnly)
+
+        XCTAssertEqual(
+            reachable,
+            Set(ReaderToolbarAction.allCases),
+            "every reader action must be on the navigation bar or in the overflow menu"
+        )
+    }
+
     // Regression coverage for issue #923: at regular width on iOS 27 a
     // `.bottomBar` group attaches to the window rather than the split view's
     // detail column, spreading the reader's actions under the message list.
-    // The reader draws its own pane-scoped bar there, and only there — iOS 26
-    // and compact width keep the system bar.
+    // The reader draws its own pane-scoped bar there, and only there.
     func testRegularWidthOnOS27DrawsItsOwnBar() {
-        XCTAssertTrue(
-            ReaderToolbarLayout.usesOwnActionBar(isRegularWidth: true, isOS27OrLater: true),
+        XCTAssertEqual(
+            ReaderToolbarLayout.placement(isRegularWidth: true, isOS27OrLater: true),
+            .ownBar,
             "iPad-regular on iOS 27 must pin the actions to the reading pane"
         )
     }
 
-    func testSystemBarIsKeptEverywhereElse() {
-        for (regular, os27) in [(true, false), (false, true), (false, false)] {
-            XCTAssertFalse(
-                ReaderToolbarLayout.usesOwnActionBar(isRegularWidth: regular, isOS27OrLater: os27),
-                "regular=\(regular) os27=\(os27) must keep the system bottom bar"
-            )
-        }
+    func testRegularWidthBeforeOS27KeepsTheSystemBottomBar() {
+        XCTAssertEqual(
+            ReaderToolbarLayout.placement(isRegularWidth: true, isOS27OrLater: false),
+            .bottomBar,
+            "iPad-regular on iOS 26 keeps the system bottom bar"
+        )
     }
 
     // The pane-scoped bar's width-adaptive item set (the Notes half of #923):
