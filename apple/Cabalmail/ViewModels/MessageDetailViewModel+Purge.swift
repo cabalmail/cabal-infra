@@ -51,6 +51,7 @@ extension MessageDetailViewModel {
             )
             await confirmRemoval()
         } catch {
+            onMoveFailed?(false)
             errorMessage = "\(error)"
             onFailure?(error)
         }

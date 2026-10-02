@@ -272,6 +272,15 @@ final class MessageListViewModel {
     /// moves are still returning.
     var pendingRemovedUIDs: Set<UInt32> = []
 
+    /// Rows `pruneEnvelope(uid:)` took out for a reader dispose / move /
+    /// purge that is still in flight, with the index each held, so a failed
+    /// server write can put the row back (`restorePrunedEnvelope`).
+    /// Only in-flight removals are kept, so it holds a handful at most.
+    @ObservationIgnored var readerPrunedEnvelopes: [UInt32: (envelope: Envelope, index: Int)] = [:]
+    /// Reader removals that failed before their prune ran; the prune skips
+    /// them. See `restorePrunedEnvelope(uid:markUnread:)`.
+    @ObservationIgnored var readerFailedUIDs: Set<UInt32> = []
+
     /// UIDs with an in-flight flag write (`\Seen` / `\Flagged`) that this view
     /// model issued. While a UID sits here `mergeFetched` keeps the optimistic
     /// flags rather than letting a stale fetch revert them. Flag writes that
@@ -602,7 +611,12 @@ extension MessageListViewModel {
     /// touches the list's in-memory copy so the row disappears immediately
     /// without a server round trip.
     func pruneEnvelope(uid: UInt32) {
-        let removed = envelopes.first { $0.uid == uid }
+        if readerFailedUIDs.remove(uid) != nil { return }
+        let removedIndex = envelopes.firstIndex { $0.uid == uid }
+        let removed = removedIndex.map { envelopes[$0] }
+        if let removed, let removedIndex {
+            stashForReaderRevert(removed, at: removedIndex)
+        }
         let loadedBefore = envelopes.count
         envelopes.removeAll { $0.uid == uid }
         // Only adjust when a row really left the window: a signal for a UID
