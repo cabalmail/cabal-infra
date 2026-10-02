@@ -343,7 +343,11 @@ final class AppState {
         // The explanation has been read by the time the user is typing.
         signedOutReason = nil
         do {
-            let configuration = try await ConfigLoader.load(controlDomain: controlDomain)
+            // The cache is seeded here so a launch with no network right
+            // after this sign-in can still restore (see `restoreIfPossible`).
+            let configuration = try await ConfigLoader.load(
+                controlDomain: controlDomain, cache: ConfigurationCache()
+            )
             let cacheDirectory = try Self.makeCacheDirectory()
             let newClient = try CabalmailClient.make(
                 configuration: configuration,
@@ -404,10 +408,13 @@ final class AppState {
     /// - Refresh-token expired / revoked → clear the keychain so the sign-in
     ///   form starts clean, but keep `lastUsername` / `controlDomain` so
     ///   the form pre-fills.
-    /// - Network / transport error → stay signed out *without* clearing
-    ///   the keychain, so the next launch (or a manual sign-in) can
-    ///   recover without forcing a password re-entry. This is the "airplane
-    ///   mode at launch" path.
+    /// - Network / transport error → the "airplane mode at launch" path.
+    ///   `config.json` comes from the last good copy, and a token refresh
+    ///   that can't reach Cognito still wires the session, so cached mail
+    ///   is readable offline. Only with no cached config (never fetched on
+    ///   this install) does it stay signed out, *without* clearing the
+    ///   keychain, so a later launch or a manual sign-in can recover
+    ///   without forcing a password re-entry.
     /// - Any other error → `.error(message)`.
     ///
     /// Idempotent: if a client is already wired or sign-in is in flight,
@@ -435,7 +442,11 @@ final class AppState {
 
         status = .restoring
         do {
-            let configuration = try await ConfigLoader.load(controlDomain: domain)
+            // Offline, the last good config.json stands in for the fetch so
+            // the cached mail, Outbox and feeds stay reachable at launch.
+            let configuration = try await ConfigLoader.load(
+                controlDomain: domain, cache: ConfigurationCache()
+            )
             let cacheDirectory = try Self.makeCacheDirectory()
             let newClient = try CabalmailClient.make(
                 configuration: configuration,
@@ -447,7 +458,15 @@ final class AppState {
             // a fresh ID token returns cached; an expired one triggers a
             // silent refresh; an expired / revoked refresh throws
             // `.authExpired` (Cognito's `NotAuthorizedException`).
-            _ = try await newClient.authService.currentIdToken()
+            do {
+                _ = try await newClient.authService.currentIdToken()
+            } catch let error as CabalmailError where Self.isOfflineTokenCheckFailure(error) {
+                // The refresh couldn't reach Cognito, which says nothing
+                // about whether the session is still good. Wire it with the
+                // keychain tokens so the on-disk caches are readable; the
+                // first call made back online refreshes, and a refusal then
+                // tears the session down through `sessionInvalidation`.
+            }
             // Restore is the common launch path, so this is what keeps the
             // watch's session copy and the device's `/push_register` row
             // fresh across app launches (see `wireSession`).
@@ -473,6 +492,17 @@ final class AppState {
             }
         } catch {
             status = .error(error.localizedDescription)
+        }
+    }
+
+    /// Token-check failures `restoreIfPossible` treats as "offline" rather
+    /// than as a verdict on the session.
+    private static func isOfflineTokenCheckFailure(_ error: CabalmailError) -> Bool {
+        switch error {
+        case .network, .transport, .timeout:
+            return true
+        default:
+            return false
         }
     }
 
