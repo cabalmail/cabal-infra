@@ -43,6 +43,7 @@ struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
     @State private var isOffline = false
+    @State private var failedSends = FailedSendMonitor()
     /// The window width the section layout was last laid out at; see
     /// `SectionLayoutPolicy.layout(isCompactWidth:isCompactHeight:measuredWidth:)`.
     @State private var measuredWidth: CGFloat?
@@ -69,8 +70,10 @@ struct SignedInRootView: View {
                 statusBanners
                     .animation(.default, value: isOffline)
                     .animation(.default, value: appState.toast)
+                    .animation(.default, value: failedSends.visible.map(\.id))
             }
             .task { await observeReachability() }
+            .task(id: appState.client.map { ObjectIdentifier($0) }) { await failedSends.observe(appState.client) }
             // The cross-device "pick up where you left off" probe, at launch
             // and on each return to the foreground. Here — the one view every
             // layout keeps mounted — rather than in the mail view, so an
@@ -166,6 +169,10 @@ struct SignedInRootView: View {
                     text: "Offline — some actions will retry automatically.",
                     tint: ColorTokens.warningFg
                 )
+            }
+            if !failedSends.visible.isEmpty, let client = appState.client {
+                FailedSendBanner(monitor: failedSends, client: client)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let toast = appState.toast {
                 // The offline banner above carries no dismissal: it reports a

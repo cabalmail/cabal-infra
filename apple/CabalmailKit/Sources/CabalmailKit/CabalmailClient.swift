@@ -48,7 +48,7 @@ public actor CabalmailClient {
     /// outlive initialization. Phase 7 — the offline banner streams from
     /// here, and `SendQueue` subscribes to drain the outbox on reconnect.
     public nonisolated let reachability: Reachability?
-    private nonisolated let sendQueue: SendQueue?
+    nonisolated let sendQueue: SendQueue?
     #endif
 
     /// Opt-in crash / hang reporter. Starts disabled — the Settings toggle
