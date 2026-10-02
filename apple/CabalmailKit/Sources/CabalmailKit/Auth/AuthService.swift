@@ -80,9 +80,10 @@ public protocol AuthService: Sendable {
     /// meantime and that token is returned without a second round-trip.
     func refreshIdToken(replacing rejected: String?) async throws -> String
 
-    /// Cognito username + password persisted at sign-in. Used by the IMAP and
-    /// SMTP clients to authenticate against Dovecot and Sendmail-submission,
-    /// both of which authenticate against the same Cognito user pool.
+    /// Credentials for the legacy direct IMAP/SMTP clients, which production
+    /// no longer wires (mail goes through the Lambda API, issue #371). The
+    /// password is no longer persisted, so `CognitoAuthService` always throws
+    /// `.notSignedIn` here; the member goes away with the legacy stack.
     func currentImapCredentials() async throws -> ImapCredentials
 
     /// Tokens currently in the secure store, or nil if signed out. Exposed
@@ -107,15 +108,13 @@ public actor CognitoAuthService: AuthService {
     private let sessionInvalidation: SessionInvalidationMonitor?
 
     /// Mid-sign-in MFA challenge state. Cognito hands back an opaque
-    /// `Session` that `RespondToAuthChallenge` must echo; the username and
-    /// password ride along so the IMAP credentials can be persisted only
-    /// once the challenge succeeds. Memory-only by design: a relaunch
-    /// mid-challenge restarts the sign-in.
+    /// `Session` that `RespondToAuthChallenge` must echo; the username rides
+    /// along so it can be persisted only once the challenge succeeds.
+    /// Memory-only by design: a relaunch mid-challenge restarts the sign-in.
     private struct PendingChallenge {
         let method: MfaMethod
         let session: String
         let username: String
-        let password: String
     }
 
     private var pendingChallenge: PendingChallenge?
@@ -137,6 +136,10 @@ public actor CognitoAuthService: AuthService {
         self.secureStore = secureStore
         self.clock = clock
         self.sessionInvalidation = sessionInvalidation
+        // Builds before this one stored the user's Cognito password for the
+        // direct IMAP/SMTP stack, which nothing live reads any more. Scrub
+        // any copy left behind; a no-op once it is gone.
+        try? secureStore.remove(SecureStoreKey.imapPassword)
     }
 
     // MARK: - Sign-in flow
@@ -164,20 +167,20 @@ public actor CognitoAuthService: AuthService {
             pendingChallenge = PendingChallenge(
                 method: method,
                 session: session,
-                username: username,
-                password: password
+                username: username
             )
             return .mfaCodeRequired(method)
         }
         let tokens = try parseAuthResult(response)
-        try complete(tokens: tokens, username: username, password: password)
+        try complete(tokens: tokens, username: username)
         return .signedIn
     }
 
-    fileprivate func complete(tokens: AuthTokens, username: String, password: String) throws {
+    /// Persists the session. The password is deliberately not stored: the
+    /// refresh token is what keeps the session alive.
+    fileprivate func complete(tokens: AuthTokens, username: String) throws {
         try persist(tokens: tokens)
         try secureStore.setString(username, forKey: SecureStoreKey.imapUsername)
-        try secureStore.setString(password, forKey: SecureStoreKey.imapPassword)
     }
 
     public func signUp(
@@ -253,10 +256,8 @@ public actor CognitoAuthService: AuthService {
 
     /// Installs externally obtained tokens — the watch app's credential
     /// bootstrap, where the paired iPhone hands its session over via a
-    /// `WatchHandoff`. The password never leaves the phone, so
-    /// `currentImapCredentials()` stays unavailable on the adopting device;
-    /// the API-backed clients only need `currentIdToken()`, which refreshes
-    /// off the adopted refresh token.
+    /// `WatchHandoff`. The API-backed clients only need `currentIdToken()`,
+    /// which refreshes off the adopted refresh token.
     public func adopt(tokens: AuthTokens, username: String) throws {
         try persist(tokens: tokens)
         try secureStore.setString(username, forKey: SecureStoreKey.imapUsername)
@@ -418,7 +419,7 @@ extension CognitoAuthService {
         // of retries, so `pendingChallenge` is kept until success.
         let response = try await call("RespondToAuthChallenge", body: body)
         let tokens = try parseAuthResult(response)
-        try complete(tokens: tokens, username: pending.username, password: pending.password)
+        try complete(tokens: tokens, username: pending.username)
         pendingChallenge = nil
     }
 

@@ -33,11 +33,10 @@ public struct AuthTokens: Sendable, Codable, Hashable {
     }
 }
 
-/// IMAP / SMTP password pair. Cognito's pool uses `USER_PASSWORD_AUTH` and
-/// Dovecot authenticates against the same Cognito user, so the same password
-/// is used in both places (see `docker/shared/entrypoint.sh`). We still keep
-/// the IMAP value in a separate Keychain item so signing out of the API
-/// session also cleans it up.
+/// IMAP / SMTP password pair for the legacy direct-protocol clients. Dovecot
+/// authenticates against the same Cognito user, so it would be the Cognito
+/// password (see `docker/shared/entrypoint.sh`). The app no longer persists
+/// that password, so production never produces one of these.
 public struct ImapCredentials: Sendable, Hashable {
     public let username: String
     public let password: String
