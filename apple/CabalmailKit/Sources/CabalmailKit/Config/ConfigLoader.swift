@@ -69,10 +69,10 @@ public enum ConfigLoader {
 private extension CabalmailError {
     var allowsCachedConfiguration: Bool {
         switch self {
-        case .network, .transport, .timeout, .server, .decoding:
+        case .server, .decoding:
             return true
         default:
-            return false
+            return isUnreachable
         }
     }
 }

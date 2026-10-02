@@ -24,7 +24,7 @@ final class ConfigLoaderTests: XCTestCase {
     {
       "control_domain": "mail.example.com",
       "domains": [
-        {"domain": "example.com", "arn": "arn:aws:route53:::hostedzone/Z1", "zone_id": "Z1", "name_servers": ["ns1.example.net"]}
+        {"domain": "example.com", "zone_id": "Z1", "name_servers": ["ns1.example.net"]}
       ],
       "invokeUrl": "https://api.example.com/prod",
       "cognitoConfig": {
