@@ -139,7 +139,7 @@ struct SignedInRootView: View {
                 // The gear button and the ⌘, command both bump the tick;
                 // routing through it (rather than a direct binding) keeps the
                 // trigger working regardless of which column holds focus.
-                .onChange(of: appState.settingsRequestTick) { _, _ in
+                .onWindowCommand(appState.settingsRequestTick) {
                     settingsPresented = true
                 }
         }

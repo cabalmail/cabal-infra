@@ -110,7 +110,7 @@ struct FeedManagementSheets: ViewModifier {
                 Text("Items you have not opened will be marked read too.")
             }
             .feedOpmlFlows(actions.opml, management: management)
-            .onChange(of: appState.feedCommandTick) { _, _ in
+            .onWindowCommand(appState.feedCommandTick) {
                 guard handlesCommands, let command = appState.pendingFeedCommand else { return }
                 if !actions.handle(command, management: management) { onRefresh() }
             }

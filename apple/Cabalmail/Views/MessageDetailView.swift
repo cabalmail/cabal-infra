@@ -67,6 +67,8 @@ struct MessageDetailView: View {
     // See `ReaderHeaderColumnPolicy` and `MessageDetailView+Header.swift`.
     @ScaledMetric(relativeTo: .caption2)
     var headerTrailingColumnMinWidth = ReaderHeaderColumnPolicy.baseMinPaneWidth
+    /// Aims this reader's compose requests at its own window.
+    @Environment(\.commandWindowID) var commandWindowID
     #if os(iOS)
     // Drives `actionPlacement`: compact width puts the actions in the
     // navigation bar; at regular width the reader shares the window with the
@@ -219,9 +221,9 @@ struct MessageDetailView: View {
             Text("This message will be permanently deleted. This can't be undone.")
         }
         .modifier(RevokeAddressConfirmation(pending: $pendingRevoke, perform: revoke))
-        .onChange(of: appState.replyRequestTick) { _, _ in beginCompose(.reply) }
-        .onChange(of: appState.replyAllRequestTick) { _, _ in beginCompose(.replyAll) }
-        .onChange(of: appState.forwardRequestTick) { _, _ in beginCompose(.forward) }
+        .onWindowCommand(appState.replyRequestTick) { beginCompose(.reply) }
+        .onWindowCommand(appState.replyAllRequestTick) { beginCompose(.replyAll) }
+        .onWindowCommand(appState.forwardRequestTick) { beginCompose(.forward) }
         // Once a body is available, consume a pending scroll restore from the
         // nav cursor (a no-op on a normal open). Both branches guard against
         // re-consuming, so whichever body type lands first wins.

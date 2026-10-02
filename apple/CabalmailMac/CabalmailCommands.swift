@@ -23,8 +23,11 @@ import CabalmailKit
 struct CabalmailCommands: Commands {
     let appState: AppState
     @Environment(\.openWindow) private var openWindow
+    @FocusedValue(\.commandWindowID) private var focusedWindow
 
     private var signedIn: Bool { appState.status == .signedIn }
+    /// The main window the Mailbox items act in (`MainWindowCommandScope`).
+    private var target: UUID? { appState.menuCommandTarget(focused: focusedWindow) }
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -59,7 +62,7 @@ struct CabalmailCommands: Commands {
             // not the cheap merge-refresh — the manual paths exist
             // precisely so the user can escape stale in-memory state.
             Button("Refresh") {
-                appState.requestRefresh()
+                appState.requestRefresh(in: target)
             }
             // Unlike New Message, this one has nowhere to go with no mail
             // window on screen: `refreshRequestTick`'s only consumer is the
@@ -73,7 +76,7 @@ struct CabalmailCommands: Commands {
             // enables whichever section is in front, never both. Confirmed
             // by the list before anything happens (`+MarkAllRead`).
             Button("Mark All as Read") {
-                appState.requestMarkFolderRead()
+                appState.requestMarkFolderRead(in: target)
             }
             .keyboardShortcut("t", modifiers: [.command, .option])
             .disabled(!SharedChordPolicy.mailMarkAllReadLive(
@@ -84,9 +87,9 @@ struct CabalmailCommands: Commands {
             // so they work whichever pane has focus. No chords: nothing
             // conventional is free (Cmd+Option+arrows are the outline
             // view's own), and the buttons are one click away.
-            Button("Expand All Folders") { appState.requestSidebarTree(.expandAllFolders) }
+            Button("Expand All Folders") { appState.requestSidebarTree(.expandAllFolders, in: target) }
                 .disabled(!signedIn)
-            Button("Collapse All Folders") { appState.requestSidebarTree(.collapseAllFolders) }
+            Button("Collapse All Folders") { appState.requestSidebarTree(.collapseAllFolders, in: target) }
                 .disabled(!signedIn)
         }
     }

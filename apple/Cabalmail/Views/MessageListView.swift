@@ -86,6 +86,12 @@ struct MessageListView: View {
     /// The "Mark all messages in … as read?" confirmation (`+MarkAllRead`),
     /// staged by the toolbar's More menu and the Mailbox menu's ⌥⌘T.
     @State var markAllReadConfirmPresented = false
+    /// This window's identity, for aiming its own compose and refresh
+    /// requests at itself (`MainWindowCommandScope`).
+    @Environment(\.commandWindowID) var commandWindowID
+    /// This list's identity, carried on the drags it starts so that only
+    /// it performs the move a sidebar drop posts (`MessageMoveRequest`).
+    @State var dragSourceID = UUID()
     /// List-row height. Rows are pinned to this so the virtualized list
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
@@ -230,7 +236,7 @@ struct MessageListView: View {
     /// anchored here can't present when this view isn't visible, and
     /// two competing sheet hosts would block each other.
     private func presentCompose(seed: Draft) {
-        appState.requestCompose(seed: seed)
+        appState.requestCompose(seed: seed, in: commandWindowID)
     }
 
     @ViewBuilder
@@ -368,7 +374,7 @@ extension MessageListView {
                 // reliable escape from any stale-state bug the merge path
                 // doesn't catch.
                 Button {
-                    appState.requestRefresh()
+                    appState.requestRefresh(in: commandWindowID)
                 } label: {
                     RefreshActivityIcon(isLoading: model?.isLoading == true)
                         .accessibilityLabel("Refresh")
@@ -539,7 +545,7 @@ extension MessageListView {
         // `ComposeRequestRouter` on the signed-in root, not here — this
         // view isn't in the visible hierarchy in every state a compose
         // request can arrive from.)
-        .onChange(of: appState.refreshRequestTick) { _, _ in
+        .onWindowCommand(appState.refreshRequestTick) {
             // Manual refresh paths (Mailbox > Refresh menu item, the
             // arrow.clockwise toolbar button) get hard-reload semantics
             // — wipe in-memory state before refresh — so the user has a
@@ -552,13 +558,13 @@ extension MessageListView {
         // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) acting on the
         // current selection. Handlers live in `MessageListView+Actions.swift`;
         // each no-ops when nothing is selected.
-        .onChange(of: appState.toggleSeenRequestTick) { _, _ in
+        .onWindowCommand(appState.toggleSeenRequestTick) {
             if let model { toggleSeenOnSelection(model: model) }
         }
-        .onChange(of: appState.toggleFlaggedRequestTick) { _, _ in
+        .onWindowCommand(appState.toggleFlaggedRequestTick) {
             if let model { toggleFlaggedOnSelection(model: model) }
         }
-        .onChange(of: appState.moveSelectionRequestTick) { _, _ in
+        .onWindowCommand(appState.moveSelectionRequestTick) {
             if let model { moveSelection(model: model) }
         }
         .onChange(of: appState.lastDisposedEnvelope) { _, signal in
@@ -651,10 +657,10 @@ extension MessageListView {
         // selection). The drop handler posts the destination + payload on
         // AppState; route it through the view model so the move shares the
         // optimistic-prune / unread-count / cache-cleanup path with the
-        // bulk and menu-driven moves. Only the list the drag came from has a
-        // model holding those UIDs, so other folders' lists no-op.
+        // bulk and menu-driven moves. Every mounted list in every window sees
+        // the request, so only the list the drag lifted from performs it.
         .onChange(of: appState.pendingMoveRequest) { _, request in
-            guard let request, let model else { return }
+            guard let request, let model, request.isPerformed(by: dragSourceID) else { return }
             Task { await model.applyMoveRequest(request) }
         }
         // A cross-client restore / jump was scheduled. For an already-mounted

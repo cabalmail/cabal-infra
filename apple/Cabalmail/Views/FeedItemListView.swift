@@ -22,6 +22,8 @@ struct FeedItemListView: View {
     // `+Commands` siblings can reach them.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
+    /// Aims this list's compose requests at its own window.
+    @Environment(\.commandWindowID) private var commandWindowID
     @State var model: FeedItemListViewModel?
     /// Gates for the launch restore — see `applyLaunchRestoreWhenReady`.
     @State private var hasAppeared = false
@@ -115,7 +117,7 @@ struct FeedItemListView: View {
         }
         // The Feeds menu's item chords (`+Commands`); the catalog commands
         // on the same tick are the sidebar's and are ignored here.
-        .onChange(of: appState.feedCommandTick) { _, _ in
+        .onWindowCommand(appState.feedCommandTick) {
             guard let model, let command = appState.pendingFeedCommand else { return }
             handleFeedCommand(command, model: model)
         }
@@ -123,7 +125,7 @@ struct FeedItemListView: View {
 
     private var composeButton: some View {
         Button {
-            appState.requestCompose(seed: ReplyBuilder.newDraft())
+            appState.requestCompose(seed: ReplyBuilder.newDraft(), in: commandWindowID)
         } label: {
             Image(systemName: "square.and.pencil")
                 .accessibilityLabel("New Message")

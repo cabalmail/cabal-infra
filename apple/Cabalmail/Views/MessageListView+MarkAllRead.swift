@@ -40,7 +40,7 @@ extension MessageListView {
                 } message: {
                     Text("Every unread message in the folder is marked read, in one step.")
                 }
-                .onChange(of: appState.markFolderReadRequestTick) { _, _ in
+                .onWindowCommand(appState.markFolderReadRequestTick) {
                     markAllReadConfirmPresented = true
                 }
                 // Tells the Mailbox menu which folder ⌥⌘T would act on; the

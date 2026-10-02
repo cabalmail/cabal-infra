@@ -86,14 +86,21 @@ final class FolderSwitchPlacementTests: XCTestCase {
     /// The other half of the invariant: the More menu is the only item the
     /// system overflow may take, because Mark All as Read has two other routes.
     /// If that ever stops being true, the bar needs a fourth ranked item.
+    @MainActor
     func testMarkAllAsReadHasARouteOffTheBar() throws {
         let sidebar = try Self.source("Cabalmail/Views/FolderListView+Helpers.swift")
         XCTAssertTrue(
             sidebar.contains("markAllRead(folderPath: folder.path)"),
             "the folder list's own menu is the More menu's second home (#1626)"
         )
-        let signals = try Self.source("Cabalmail/AppStateSignals.swift")
-        XCTAssertTrue(signals.contains("func requestMarkFolderRead()"), "⌥⌘T is the third route")
+        // ⌥⌘T is the third route. Checked by behaviour rather than by the
+        // request method's declared text, which now names its target window
+        // (defect 11): the Mailbox menu's request bumps the tick the list's
+        // confirmation observes.
+        let appState = AppState()
+        let before = appState.markFolderReadRequestTick
+        appState.requestMarkFolderRead()
+        XCTAssertEqual(appState.markFolderReadRequestTick, before + 1, "⌥⌘T is the third route")
     }
 
     /// Floor: a mis-rooted read finds nothing and passes everything above.

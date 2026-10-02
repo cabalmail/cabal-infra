@@ -201,11 +201,12 @@ extension MessageListView {
     ) -> MessageDragPayload {
         appState.beginMessageDrag()
         guard items.count == 1, let item = items.first else {
-            return MessageDragPayload(items: items)
+            return MessageDragPayload(items: items, sourceList: dragSourceID)
         }
         let client = model.client
         return MessageDragPayload(
             items: items,
+            sourceList: dragSourceID,
             subject: envelope.subject,
             rawSource: {
                 try await MessageRawSource.bytes(client: client, folder: item.sourceFolder, uid: item.uid)

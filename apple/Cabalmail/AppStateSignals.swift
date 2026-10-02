@@ -160,7 +160,17 @@ struct MessageDragItem: Codable, Hashable, Sendable {
 struct MessageMoveRequest: Equatable, Sendable {
     let destination: String
     let items: [MessageDragItem]
+    /// The list the drag lifted from (`MessageDragPayload.sourceList`).
+    /// Every mounted list in every window observes the request, so only
+    /// this one performs the move; nil (a payload without one) is
+    /// performed by any list, as before.
+    let sourceList: UUID?
     let tick: Int
+
+    /// Whether the list identified by `listID` is the one to perform it.
+    func isPerformed(by listID: UUID) -> Bool {
+        sourceList.map { $0 == listID } ?? true
+    }
 }
 
 // MARK: - Message-menu selection intents
@@ -171,10 +181,10 @@ struct MessageMoveRequest: Equatable, Sendable {
 // Here rather than in `AppState.swift` so that file stays under SwiftLint's
 // `file_length` cap.
 extension AppState {
-    func requestToggleSeen() { toggleSeenRequestTick += 1 }
-    func requestToggleFlagged() { toggleFlaggedRequestTick += 1 }
-    func requestMarkFolderRead() { markFolderReadRequestTick += 1 }
-    func requestMoveSelection() { moveSelectionRequestTick += 1 }
+    func requestToggleSeen(in window: UUID? = nil) { commandWindow = window; toggleSeenRequestTick += 1 }
+    func requestToggleFlagged(in window: UUID? = nil) { commandWindow = window; toggleFlaggedRequestTick += 1 }
+    func requestMarkFolderRead(in window: UUID? = nil) { commandWindow = window; markFolderReadRequestTick += 1 }
+    func requestMoveSelection(in window: UUID? = nil) { commandWindow = window; moveSelectionRequestTick += 1 }
 
     /// The reader's dispose, move or purge of `uid` failed on the server, so
     /// the row its optimistic `signalDisposed` pruned should come back.
@@ -187,5 +197,41 @@ extension AppState {
         if markUnread {
             applyUnreadDelta(folderPath: folderPath, delta: 1)
         }
+    }
+}
+
+// MARK: - Command window targeting
+//
+// Which main window a command tick is for. The `request…` methods record
+// the target in `commandWindow` as they bump a tick; the observers, through
+// `onWindowCommand` (`Views/MainWindowCommandScope.swift`), ask `commandReaches`
+// before acting. A nil target reaches every window: that is what a
+// data-change refresh wants (Empty Trash, a push action), and it keeps any
+// caller that names no window working as it did before targeting existed.
+@MainActor
+extension AppState {
+    /// Records `window` as the main window most recently in front.
+    func noteActiveMainWindow(_ window: UUID) {
+        lastActiveMainWindow = window
+    }
+
+    /// Forgets a main window that closed, so a command issued from a
+    /// compose window cannot be aimed at a window no longer there.
+    func forgetMainWindow(_ window: UUID) {
+        if lastActiveMainWindow == window { lastActiveMainWindow = nil }
+    }
+
+    /// The window a menu command is for: the focused main window, or the
+    /// one last in front when the key window is a compose or Settings
+    /// window.
+    func menuCommandTarget(focused: UUID?) -> UUID? {
+        focused ?? lastActiveMainWindow
+    }
+
+    /// Whether the latest command tick is for the window `window`. A view
+    /// outside any main window (nil) answers every tick, as before.
+    func commandReaches(_ window: UUID?) -> Bool {
+        guard let target = commandWindow, let window else { return true }
+        return target == window
     }
 }
