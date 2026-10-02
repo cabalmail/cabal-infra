@@ -457,20 +457,14 @@ jobs:
     runs-on: xcode-27
     strategy:
       fail-fast: false
+      # On a pull_request only visionOS and watchOS build here. The iOS and
+      # macOS legs are dropped because ios-app-test and app-test already
+      # compile and link those same app targets (for the iOS simulator and
+      # native macOS), and each leg holds a macOS runner: with several PRs
+      # open at once, eight macOS jobs per PR run starved the runner pool.
+      # Pushes still build all four, including the iOS device SDK.
       matrix:
-        include:
-          - scheme: Cabalmail
-            platform: iOS
-            destination: 'generic/platform=iOS'
-          - scheme: Cabalmail
-            platform: visionOS
-            destination: 'generic/platform=visionOS'
-          - scheme: CabalmailMac
-            platform: macOS
-            destination: 'generic/platform=macOS'
-          - scheme: CabalmailWatch
-            platform: watchOS
-            destination: 'generic/platform=watchOS'
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"scheme":"Cabalmail","platform":"visionOS","destination":"generic/platform=visionOS"},{"scheme":"CabalmailWatch","platform":"watchOS","destination":"generic/platform=watchOS"}]' || '[{"scheme":"Cabalmail","platform":"iOS","destination":"generic/platform=iOS"},{"scheme":"Cabalmail","platform":"visionOS","destination":"generic/platform=visionOS"},{"scheme":"CabalmailMac","platform":"macOS","destination":"generic/platform=macOS"},{"scheme":"CabalmailWatch","platform":"watchOS","destination":"generic/platform=watchOS"}]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
