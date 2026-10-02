@@ -64,7 +64,6 @@ extension MessageListViewModel {
         // asked with, not whatever they hold when it answers.
         let filters = searchFilters
         do {
-            try await client.imapClient.connectAndAuthenticate()
             let query = buildSearchQuery(text: trimmed, filters: filters)
             // Fetch in bounded `searchPageSize` chunks by walking the cursor,
             // rather than asking for the whole set in one request (Layer 3.2

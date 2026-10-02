@@ -417,7 +417,6 @@ private extension MessageDetailViewModel {
         ) {
             return cached
         }
-        try await client.imapClient.connectAndAuthenticate()
         let raw = try await client.imapClient.fetchBody(folder: folder.path, uid: envelope.uid)
         try await client.bodyCache.store(
             folder: folder.path,

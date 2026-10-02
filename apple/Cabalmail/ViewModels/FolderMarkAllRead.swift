@@ -18,7 +18,6 @@ enum FolderMarkAllRead {
     /// Lambda error for the caller to surface in its own `errorMessage`.
     @discardableResult
     static func perform(folderPath: String, client: CabalmailClient, appState: AppState) async throws -> Int {
-        try await client.imapClient.connectAndAuthenticate()
         let flipped = try await client.imapClient.markFolderRead(folder: folderPath)
         try? await client.envelopeCache.invalidate(folder: folderPath)
         if let total = appState.folderTotalCounts[folderPath] {

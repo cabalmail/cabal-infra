@@ -412,7 +412,6 @@ extension ComposeViewModel {
         switch error {
         case .invalidCredentials: return "Send failed: your credentials were rejected."
         case .network(let detail): return "Network error: \(detail)"
-        case .smtpCommandFailed(_, let detail): return "SMTP error: \(detail)"
         case .authExpired: return "Your session expired; please sign in again."
         case .maintenance(let message): return message
         default: return "Send failed: \(error)"

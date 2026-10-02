@@ -304,7 +304,6 @@ struct NotificationFolderPickerView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            try await client.imapClient.connectAndAuthenticate()
             let all = try await client.imapClient.listFolders()
             folders = sortForPicker(all)
         } catch {

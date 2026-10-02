@@ -17,10 +17,10 @@ public struct RawMessage: Sendable, Codable, Hashable {
     }
 }
 
-/// Outbound message, used both by `SmtpClient.send(_:)` and IMAP `APPEND`
-/// for draft storage. Rich-text rendering, quoting, and inline attachments
-/// are the caller's responsibility — `SmtpClient` emits exactly the payload
-/// it is handed.
+/// Outbound message, submitted through `CabalmailClient.send(_:)` (the
+/// `/send` Lambda) and saved through `saveDraft(_:)` (`/save_draft`).
+/// Rich-text rendering, quoting, and inline attachments are the caller's
+/// responsibility.
 public struct OutgoingMessage: Sendable, Codable, Hashable {
     public let from: EmailAddress
     public let to: [EmailAddress]
@@ -34,7 +34,7 @@ public struct OutgoingMessage: Sendable, Codable, Hashable {
     public let attachments: [Attachment]
     public let extraHeaders: [String: String]
     /// Message-ID to stamp on the outgoing RFC 5322 payload. When nil,
-    /// `SmtpClient` generates a random one at send time. Callers that need
+    /// `CabalmailClient` generates a random one at send time. Callers that need
     /// the Sent-folder copy to match the wire copy (see
     /// `CabalmailClient.send(_:)`) pass a pre-generated value here.
     public let messageId: String?

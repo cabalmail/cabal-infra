@@ -199,7 +199,6 @@ extension MessageListView {
     func loadFolderSwitchChoices() async {
         guard !isSearchScope, let client = appState.client else { return }
         do {
-            try await client.imapClient.connectAndAuthenticate()
             switchFolders = try await client.imapClient.listFolders()
         } catch {
             // The menu falls back to the current folder; the sidebar

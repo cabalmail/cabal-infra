@@ -1,18 +1,15 @@
 import Foundation
 
-/// High-level IMAP operations used by the rest of the Apple client.
+/// High-level mailbox operations used by the rest of the Apple client.
 ///
-/// The `LiveImapClient` implementation opens one long-lived authenticated
-/// `ImapConnection` for command traffic; IDLE takes a dedicated second
-/// connection so ongoing foreground sync doesn't block mailbox operations
-/// (replies, folder switches).
+/// The production implementation is `ApiBackedImapClient`, which maps each
+/// call onto a Cabalmail Lambda endpoint (issue #371); nothing in the app
+/// speaks IMAP directly.
 ///
 /// Folder paths in this API use `/` as the delimiter regardless of the
-/// server's native separator (Dovecot's is `.`). `LiveImapClient` performs
-/// the translation at the boundary, mirroring the `list_folders` Lambda's
-/// `.replace("/", ".")` normalization (see `lambda/api/python/python/helper.py`).
+/// server's native separator (Dovecot's is `.`). The Lambdas perform the
+/// translation with `.replace("/", ".")`.
 public protocol ImapClient: Sendable {
-    func connectAndAuthenticate() async throws
     func listFolders() async throws -> [Folder]
     func createFolder(name: String, parent: String?) async throws
     func deleteFolder(path: String) async throws
@@ -22,11 +19,6 @@ public protocol ImapClient: Sendable {
     /// (an extra SEARCH FLAGGED); the cheap STATUS-only `status(path:)`
     /// convenience leaves `FolderStatus.flagged` nil for badge/idle polls.
     func status(path: String, flagged: Bool) async throws -> FolderStatus
-    func envelopes(
-        folder: String,
-        range: ClosedRange<UInt32>,
-        sort: SortCriterion
-    ) async throws -> [Envelope]
 
     /// Fetches a positional page: the `limit` envelopes starting at `offset`
     /// in the sorted result (offset 0 is the newest page under the default
@@ -35,7 +27,7 @@ public protocol ImapClient: Sendable {
     /// dead-ends on sparse folders, since the caller stops when the loaded
     /// count reaches the folder's STATUS message count. The API-backed client
     /// overrides this with `/list_messages?offset=&limit=`; the default throws
-    /// (production never paginates through `LiveImapClient`).
+    /// so test doubles needn't implement it.
     func envelopes(
         folder: String,
         offset: UInt32,
@@ -60,7 +52,6 @@ public protocol ImapClient: Sendable {
         sort: SortCriterion
     ) async throws -> [Envelope]
     func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage
-    func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data
     func setFlags(folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation) async throws
 
     /// Moves messages to `destination`. When `markSeen` is true the server
@@ -93,18 +84,8 @@ public protocol ImapClient: Sendable {
     /// post-fetch UID range expansion at the call site.
     ///
     /// The default extension throws `protocolError`; the API-backed
-    /// implementation overrides it. `LiveImapClient` inherits the
-    /// default — production traffic never goes through it (see the
-    /// CLAUDE.md note on `ApiBackedImapClient`).
+    /// implementation overrides it.
     func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult
-
-    func append(folder: String, message: Data, flags: Set<Flag>) async throws
-    func disconnect() async
-
-    /// Drops any cached connection so the next command reconnects. Used by
-    /// `CabalmailClient`'s network-path monitor to purge sockets established
-    /// against a prior network (sleep/wake, WiFi↔cellular handoff).
-    func invalidate() async
 
     /// Opens an IDLE stream for `folder` and yields `IdleEvent`s until
     /// cancelled. Implementations without a live server (unit-test mocks,
@@ -135,22 +116,13 @@ public extension ImapClient {
     }
 
     /// Convenience overload — delegates to the sorted variant with
-    /// `SortCriterion.default` (REVERSE ARRIVAL). Lets existing callers
-    /// and test doubles stay sort-agnostic when the conventional Inbox
-    /// order is all they need.
-    func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope] {
-        try await envelopes(folder: folder, range: range, sort: .default)
-    }
-
-    /// Convenience overload — see `envelopes(folder:offset:limit:sort:)`.
+    /// `SortCriterion.default` (REVERSE ARRIVAL).
     func envelopes(folder: String, offset: UInt32, limit: UInt32) async throws -> [Envelope] {
         try await envelopes(folder: folder, offset: offset, limit: limit, sort: .default)
     }
 
     /// Default: positional pagination is an API-backed contract (offset/limit
-    /// on `/list_messages`). `LiveImapClient` and test doubles inherit this
-    /// throw; production never paginates through them. The legacy UID-range
-    /// `envelopes(folder:range:)` remains for `LiveImapClient`'s own tests.
+    /// on `/list_messages`). Test doubles inherit this throw.
     func envelopes(
         folder: String,
         offset: UInt32,
@@ -162,7 +134,8 @@ public extension ImapClient {
         )
     }
 
-    /// Convenience overload — see `envelopes(folder:range:)` above.
+    /// Convenience overload — delegates to the sorted variant with
+    /// `SortCriterion.default`.
     func topEnvelopes(
         folder: String,
         limit: UInt32,
@@ -185,9 +158,7 @@ public extension ImapClient {
     }
 
     /// Default implementation: only the API-backed client speaks the
-    /// `/search_envelopes` contract today. `LiveImapClient` could grow a
-    /// native translator (criteria list + `UID FETCH ENVELOPE`) but
-    /// production never calls it, so the cheap default protects test
+    /// `/search_envelopes` contract, so the cheap default protects test
     /// doubles without forcing every conformer to ship a stub.
     func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
         throw CabalmailError.protocolError(
@@ -249,8 +220,7 @@ public extension ImapClient {
     }
 
     /// Default implementation — same rationale as `searchEnvelopes`: the
-    /// `/purge_messages` contract is API-only today and production never
-    /// routes through `LiveImapClient`.
+    /// `/purge_messages` contract is API-only.
     func purge(folder: String, uids: [UInt32]) async throws {
         throw CabalmailError.protocolError(
             "purge is not implemented by this ImapClient"
@@ -313,8 +283,9 @@ public struct SearchResult: Sendable, Hashable {
     }
 }
 
-/// Opens a second connection for IDLE and yields untagged events until the
-/// returned stream is cancelled. See `LiveImapClient.idle(folder:)`.
+/// A mailbox change reported by `ImapClient.idle(folder:)`. The API-backed
+/// client polls folder status and synthesizes these (see
+/// `ApiBackedImapClient.idle(folder:)`).
 public struct IdleEvent: Sendable, Hashable {
     public enum Kind: Sendable, Hashable {
         case exists(UInt32)
@@ -323,30 +294,3 @@ public struct IdleEvent: Sendable, Hashable {
     }
     public let kind: Kind
 }
-
-/// Dependency used by `LiveImapClient` to open connections. Tests inject a
-/// factory that returns a `ByteStream` preloaded with scripted server
-/// responses; production code builds a `NetworkByteStream` on port 993.
-public protocol ImapConnectionFactory: Sendable {
-    func makeConnection() async throws -> ByteStream
-}
-
-#if canImport(Network)
-/// Production factory that opens a TLS-wrapped `NetworkByteStream` against
-/// the configured `host`.
-public struct NetworkImapConnectionFactory: ImapConnectionFactory {
-    public let host: String
-    public let port: UInt16
-
-    public init(host: String, port: UInt16 = 993) {
-        self.host = host
-        self.port = port
-    }
-
-    public func makeConnection() async throws -> ByteStream {
-        let stream = NetworkByteStream(host: host, port: port, useTLS: true)
-        try await stream.start()
-        return stream
-    }
-}
-#endif

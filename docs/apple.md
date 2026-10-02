@@ -971,54 +971,36 @@ so the wire surface reduces to JSON POSTs against
 that directly — no AWS SDK dependency, no ~2 MB extra binary. The
 `AuthService` protocol leaves room to swap in Amplify later.
 
-### IMAP: hand-rolled on `NWConnection`
+### Mail traffic: the Lambda API, not IMAP or SMTP
 
-`CabalmailKit` ships a small hand-rolled IMAP client (`LiveImapClient`)
-built on `NWConnection` + a byte-accurate response parser, rather than
-`swift-nio-imap` or `MailCore2`. Trade-offs:
-
-- **For us:** zero external SwiftPM packages (simpler CI, no network
-  resolution, no visionOS build surprises); the parser handles the exact
-  subset of RFC 3501 we need (envelopes, flags, body literals,
-  bodystructure-as-attachment-heuristic, status, search, list/lsub).
-- **Against:** we own the IMAP parser. Real servers emit corner cases we
-  haven't seen yet.
-
-See the top-level [`CLAUDE.md`](../CLAUDE.md) for the production wiring:
-the live mail traffic goes through `ApiBackedImapClient` against the
-Lambda API surface, not `LiveImapClient` direct-to-IMAP.
-
-### SMTP submission: implicit TLS on 465 instead of STARTTLS on 587
-
-`NWConnection`'s TLS stack attaches at connect time, so a clean STARTTLS
-upgrade requires a custom framer — meaningfully more code with no
-operational upside. The submission listener already binds 465 as well as
-587 (see
-[`terraform/infra/modules/elb/main.tf`](../terraform/infra/modules/elb/main.tf)),
-and implicit-TLS on 465 is operationally equivalent to STARTTLS on 587,
-so `LiveSmtpClient` defaults to 465. `NetworkByteStream.startTLS(host:)`
-throws deliberately so future contributors see exactly why the upgrade
-path isn't available.
+`CabalmailKit` speaks no mail protocol. `ApiBackedImapClient` adapts the
+same Lambda endpoints the React app uses (`/list_folders`,
+`/list_envelopes`, `/fetch_message`, `/set_flag`, `/move_messages`, ...)
+onto the `ImapClient` protocol, and `CabalmailClient.send(_:)` posts to
+`/send`, which does the Outbox append, SMTP submission and Sent move
+server-side. Issue #371 made the switch after the earlier hand-rolled
+`NWConnection` IMAP and SMTP clients proved unreliable across network
+transitions and sleep/wake; that stack has since been deleted.
 
 ### Storage: Keychain for secrets, on-disk Codable for mirrors
 
 - Cognito tokens: one JSON blob in the data-protection keychain
   (`KeychainSecureStore`, `kSecUseDataProtectionKeychain = true`).
-- IMAP username + password: separate keychain items keyed to the tokens
-  so sign-out cleans them up together.
+- Username: a separate keychain item cleared with the tokens on
+  sign-out. No password is stored; `CognitoAuthService` scrubs the
+  `imap.password` item older builds wrote.
 - Envelopes: per-folder JSON files under the app support directory,
   keyed by UIDVALIDITY — the reconnect flow (`STATUS` + UID FETCH since
   UIDNEXT) drops straight onto this.
 - Bodies: per-folder directory of raw `.eml` files, LRU-evicted by mtime
   when the total exceeds a configurable cap (default 200 MB).
 
-### IDLE: separate connection, `AsyncThrowingStream`
+### New-mail polling: `AsyncThrowingStream` over folder status
 
-`LiveImapClient.idle(folder:)` opens a second authenticated connection
-dedicated to IDLE so foreground mailbox operations aren't blocked by the
-open IDLE socket. Untagged `EXISTS` / `EXPUNGE` / `FETCH` events stream
-via `AsyncThrowingStream<IdleEvent, Error>`; terminating the stream
-cancels the reader task, issues `DONE\r\n`, and closes the connection.
+There is no IDLE. `ApiBackedImapClient.idle(folder:)` polls folder status
+and yields an `IdleEvent` when `UIDNEXT` advances or the message count
+drops; `MailboxWatcher` coalesces those events and applies the reconnect
+backoff. Terminating the stream cancels the polling task.
 
 ### Rich-text editor: WKWebView contenteditable + fetched marked/turndown
 
