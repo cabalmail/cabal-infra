@@ -143,7 +143,8 @@ public actor CabalmailClient {
         )
         let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
         let outbox = try Outbox(directory: cacheDirectory.appendingPathComponent("outbox"))
-        let rssStore = try RssStore(directory: cacheDirectory.appendingPathComponent("rss"))
+        // A broken feed cache must not stop mail: recreate it, else no feeds.
+        let rssStore = RssStore.openRecovering(directory: cacheDirectory.appendingPathComponent("rss"))
         #if canImport(CoreSpotlight)
         let spotlight: SpotlightIndexer? = SpotlightIndexer(index: LiveSearchableIndex())
         #else
@@ -162,7 +163,7 @@ public actor CabalmailClient {
             outbox: outbox,
             spotlightIndexer: spotlight,
             rssStore: rssStore,
-            rssSync: RssSyncEngine(client: api, store: rssStore),
+            rssSync: rssStore.map { RssSyncEngine(client: api, store: $0) },
             monitorNetworkPath: true
         )
     }

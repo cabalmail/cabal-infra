@@ -34,24 +34,50 @@ public actor RssStore {
         try Self.migrate(database)
     }
 
-    /// Forward-only migrations keyed on `user_version`. A downgrade is
-    /// delete-and-repopulate (the store is a cache of server state).
+    /// Opens the store, and when the file cannot be opened or migrated -
+    /// corrupt, left half-migrated by an older build, or written by a newer
+    /// schema - deletes it and starts empty: the store is a cache of server
+    /// state, and the next sync repopulates it. Nil when even a fresh file
+    /// fails, so the caller runs without feeds rather than without mail.
+    public static func openRecovering(directory: URL) -> RssStore? {
+        if let store = try? RssStore(directory: directory) { return store }
+        removeDatabaseFiles(in: directory)
+        return try? RssStore(directory: directory)
+    }
+
+    /// Deletes the database and its WAL and shared-memory side files.
+    static func removeDatabaseFiles(in directory: URL) {
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent("rss.sqlite" + suffix))
+        }
+    }
+
+    /// The file's `user_version` is past what this build knows.
+    struct NewerSchemaError: Error, CustomStringConvertible {
+        let found: Int
+        var description: String { "rss.sqlite schema \(found) is newer than \(RssStore.schemaVersion)" }
+    }
+
+    /// Forward-only migrations keyed on `user_version`, each step and its
+    /// `user_version` write in one transaction (SQLite DDL is transactional),
+    /// so a crash mid-step leaves the previous version intact rather than a
+    /// half-applied one that fails on every rerun. A downgrade (a file from
+    /// a newer build) throws, and `openRecovering` deletes and repopulates.
     private static func migrate(_ database: SQLiteDatabase) throws {
-        if database.userVersion < 1 {
-            try database.exec(Schema.version1)
-            database.userVersion = 1
-        }
-        if database.userVersion < 2 {
-            try database.exec(Schema.version2)
-            database.userVersion = 2
-        }
-        if database.userVersion < 3 {
-            try database.exec(Schema.version3)
-            database.userVersion = 3
-        }
-        if database.userVersion < 4 {
-            try database.exec(Schema.version4)
-            database.userVersion = 4
+        let steps = [Schema.version1, Schema.version2, Schema.version3, Schema.version4]
+        assert(steps.count == schemaVersion)
+        let current = database.userVersion
+        guard current <= schemaVersion else { throw NewerSchemaError(found: current) }
+        for (index, sql) in steps.enumerated() where index >= current {
+            try database.exec("BEGIN")
+            do {
+                try database.exec(sql)
+                try database.exec("PRAGMA user_version = \(index + 1)")
+                try database.exec("COMMIT")
+            } catch {
+                try? database.exec("ROLLBACK")
+                throw error
+            }
         }
     }
 
