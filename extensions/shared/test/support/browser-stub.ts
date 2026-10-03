@@ -24,11 +24,70 @@ export function setNativeResponder(fn: ((message: unknown) => unknown) | null): 
   nativeResponder = fn;
 }
 
-export default {
+/**
+ * Listeners the background registers at import, and the browser calls it
+ * makes -- enough of the surface to drive `tabs.onUpdated` the way a
+ * navigation does. Registration happens once per process (the module is
+ * imported once), so `resetStorage` deliberately leaves `listeners` alone
+ * and only `resetCalls` clears what a case recorded.
+ */
+export const listeners = {
+  tabsUpdated: [] as ((tabId: number, changeInfo: { url?: string }) => void)[],
+};
+
+export const calls = {
+  windowsCreated: [] as { incognito?: boolean; url?: string }[],
+  tabsRemoved: [] as number[],
+  historyDeleted: [] as { url?: string }[],
+};
+
+export function resetCalls(): void {
+  calls.windowsCreated.length = 0;
+  calls.tabsRemoved.length = 0;
+  calls.historyDeleted.length = 0;
+}
+
+/**
+ * `history` is absent by default, which is Safari: WebKit implements no
+ * `history` API, so the namespace is simply not there (#1765). Chrome's
+ * arm installs it.
+ */
+export function setHistoryApi(present: boolean): void {
+  stub.history = present
+    ? {
+        deleteUrl: async (details: { url?: string }) => {
+          calls.historyDeleted.push(details);
+        },
+      }
+    : undefined;
+}
+
+const stub: {
+  history?: { deleteUrl: (details: { url?: string }) => Promise<void> };
+  [key: string]: unknown;
+} = {
   runtime: {
     sendNativeMessage: async (_app: string, message: unknown) => {
       if (!nativeResponder) throw new Error('no native host');
       return nativeResponder(message);
+    },
+    onMessage: {
+      addListener: () => {},
+    },
+  },
+  tabs: {
+    onUpdated: {
+      addListener: (fn: (tabId: number, changeInfo: { url?: string }) => void) => {
+        listeners.tabsUpdated.push(fn);
+      },
+    },
+    remove: async (tabId: number) => {
+      calls.tabsRemoved.push(tabId);
+    },
+  },
+  windows: {
+    create: async (options: { incognito?: boolean; url?: string }) => {
+      calls.windowsCreated.push(options);
     },
   },
   storage: {
@@ -44,3 +103,5 @@ export default {
     },
   },
 };
+
+export default stub;
