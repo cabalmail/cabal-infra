@@ -6,11 +6,15 @@
  * native bridge instead.
  */
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   allowedPrivateLinkTarget,
   forgetPrivateLinkToken,
   parsePrivateLinkFragment,
+  PRIVATE_LINK_TOKEN,
   privateLinkTarget,
   resolvePrivateLinkToken,
 } from '../src/privateLink/handoff';
@@ -139,5 +143,43 @@ describe('forgetPrivateLinkToken', () => {
 
   it('swallows the absence of a host', async () => {
     await expect(forgetPrivateLinkToken(TOKEN)).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * The token alphabet is a contract between three files in three languages
+ * -- the app that mints it, this module, and the redirector page that has
+ * to tell a token from a target without being able to resolve either. A
+ * one-sided change would not fail any suite that only reads this side, so
+ * the other two are scanned (the pattern of `_RUNBOOK_MAP` vs
+ * docs/monitoring.md on the Lambda side).
+ */
+describe('the token shape agrees across the three implementations', () => {
+  const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+  const read = (rel: string) => {
+    const body = readFileSync(join(REPO_ROOT, rel), 'utf8');
+    // Corpus floor: a path that silently moved must read as a failure
+    // rather than as a clean scan.
+    expect(body.length, rel).toBeGreaterThan(500);
+    return body;
+  };
+
+  it('matches 32 lower-case hex characters and nothing adjacent', () => {
+    expect(PRIVATE_LINK_TOKEN.test(TOKEN)).toBe(true);
+    expect(PRIVATE_LINK_TOKEN.test(TOKEN.toUpperCase())).toBe(false);
+    expect(PRIVATE_LINK_TOKEN.test(TOKEN.slice(1))).toBe(false);
+    expect(PRIVATE_LINK_TOKEN.test(TOKEN + '0')).toBe(false);
+    expect(PRIVATE_LINK_TOKEN.test('g'.repeat(32))).toBe(false);
+  });
+
+  it('is the guard the redirector page applies to the fragment', () => {
+    const page = read('terraform/infra/modules/app/templates/private-link.html');
+    expect(page).toContain(PRIVATE_LINK_TOKEN.source);
+  });
+
+  it('is what the app mints: 16 random bytes as lower-case hex', () => {
+    const store = read('apple/Cabalmail/PrivateLinkTokenStore.swift');
+    expect(store).toContain('(0..<16)');
+    expect(store).toContain('"%02x"');
   });
 });
