@@ -110,7 +110,13 @@ describe('manifest permissions cover the APIs the code calls', () => {
       ],
       identity: ['shared/src/auth/webAuthDriver.ts'],
       history: ['chrome/src/background.ts'],
-      nativeMessaging: ['shared/src/config/controlDomain.ts'],
+      // Two call sites since #1765: the control-domain handoff and the
+      // private-link token resolution, both answered by the appex embedded
+      // in the macOS mail app.
+      nativeMessaging: [
+        'shared/src/config/controlDomain.ts',
+        'shared/src/privateLink/handoff.ts',
+      ],
     });
   });
 
