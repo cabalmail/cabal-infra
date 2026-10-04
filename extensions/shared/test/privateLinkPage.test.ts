@@ -25,7 +25,7 @@ const TOKEN = '0123456789abcdef0123456789abcdef';
 
 /** The page's markup, and its inline script, taken apart once. */
 const MARKUP = PAGE.replace(/^[\s\S]*?<html[^>]*>/, '').replace(/<\/html>[\s\S]*$/, '');
-const SCRIPT = /<script>([\s\S]*?)<\/script>/.exec(PAGE)?.[1] ?? '';
+const SCRIPT = /<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/i.exec(PAGE)?.[1] ?? '';
 
 /**
  * Install the page, point `location.hash` at `fragment`, then run its
