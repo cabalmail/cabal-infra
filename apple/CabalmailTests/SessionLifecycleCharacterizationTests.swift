@@ -9,22 +9,25 @@ import CabalmailKit
 /// it as it is today, quirks included, so the move shows any change. A quirk
 /// that looks wrong is pinned anyway and says so.
 ///
-/// `AppState` has no injection seam, so only the branches that never reach
-/// the keychain, the network, `UserDefaults.standard` or an OS prompt are
-/// here, and every test runs with no client wired:
+/// These predate `AppState`'s `SessionEnvironment` seam, so only the branches
+/// that never reach the keychain, the network, `UserDefaults.standard` or an
+/// OS prompt are here, and every test runs with no client wired:
 ///
 /// - `restoreIfPossible()` is a pure no-op while signing in or restoring: the
 ///   idempotence both launch-restore call sites rely on. The signed-in no-op
 ///   is not pinned: production is never `.signedIn` without a client, so it
 ///   returns at the `client == nil` guard, which needs a client to reach.
 /// - `submitMfaCode(_:)` with no challenge parked, and `cancelMfaChallenge()`.
-///   The parked-challenge halves (mismatch, success) need a session seam.
+///   The parked-challenge halves (mismatch, success) are pinned through the
+///   seam by `SignInMfaCharacterizationTests`.
 /// - `handleSessionExpiry()` from the states `SessionExpiryTeardownTests`
 ///   leaves out (#1703); that suite covers `.signedIn` and `.signedOut`.
 ///
 /// `SessionObserverCharacterizationTests` below pins the observer that calls
 /// `handleSessionExpiry()`; `SessionTeardownCharacterizationTests` pins what a
-/// sign-out with no client stops and leaves behind.
+/// sign-out with no client stops and leaves behind; `SignInCharacterizationTests`
+/// and `SignInMfaCharacterizationTests` pin sign-in and the second factor end to
+/// end through `SessionHarness`.
 @MainActor
 final class SessionLifecycleCharacterizationTests: XCTestCase {
     private static let mismatch = "That code did not match. Please try again."
