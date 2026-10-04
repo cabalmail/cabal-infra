@@ -26,7 +26,10 @@ public typealias IdleStreamFactory = @Sendable (String) async throws -> AsyncThr
 ///
 /// When the stream ends or fails, the watcher reopens it after a backoff
 /// that doubles from 2s up to 60s, and resets to 2s each time the factory
-/// hands back a new stream.
+/// hands back a new stream. A factory must therefore throw when it cannot
+/// reach its source, as `ApiBackedImapClient.idle(folder:)` does when its
+/// first poll fails: one that always hands back a stream keeps the backoff
+/// at 2s however long the failure lasts (#1797).
 public actor MailboxWatcher {
     public enum WatchEvent: Sendable, Equatable {
         /// Mailbox changed — caller should pull fresh envelopes.

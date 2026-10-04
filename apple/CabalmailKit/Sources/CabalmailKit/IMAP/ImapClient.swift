@@ -90,11 +90,13 @@ public protocol ImapClient: Sendable {
     /// Opens a change stream for `folder` and yields `IdleEvent`s until
     /// cancelled. The name is historical (IMAP IDLE): the API-backed client
     /// polls folder status and synthesizes the events (see
-    /// `ApiBackedImapClient.idle(folder:)`). Implementations without a
-    /// server (unit-test mocks, in-memory fakes) can return an empty
-    /// stream — `MailboxWatcher` treats an immediately-finished stream as a
-    /// clean exit and backs off, which is the right behavior for those
-    /// transports.
+    /// `ApiBackedImapClient.idle(folder:)`). Throw from this call itself,
+    /// not from inside the stream, when the source can't be reached:
+    /// `MailboxWatcher` grows its reconnect backoff only while opening
+    /// fails. Implementations without a server (unit-test mocks, in-memory
+    /// fakes) can return an empty stream — `MailboxWatcher` treats an
+    /// immediately-finished stream as a clean exit and backs off, which is
+    /// the right behavior for those transports.
     ///
     /// `MessageListViewModel` runs a `MailboxWatcher` over the resulting
     /// stream so a reported EXISTS / EXPUNGE / FETCH triggers an envelope
