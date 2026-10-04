@@ -27,11 +27,29 @@ extension MessageListViewModel {
     func setSort(_ criterion: SortCriterion) async {
         guard sortCriterion != criterion else { return }
         dbg("setSort \(criterion.field)")
+        // Set at once, so the menu shows it and a second pick builds on it.
+        let previous = sortCriterion
         sortCriterion = criterion
+        var probe: PrefetchedStatus?
+        if !isSearchScope {
+            // The new order comes from the server, so ask it before dropping
+            // the list. Offline the wipe used to run anyway and leave the list
+            // empty (#1796); now the list stays, and the order goes back
+            // unless a newer pick has replaced it. Cached rows can't stand in:
+            // they're a window of the old order, and merged with the new
+            // order's first page they'd leave gaps in it.
+            guard let answered = await probeBeforeReset() else {
+                if sortCriterion == criterion { sortCriterion = previous }
+                return
+            }
+            // A newer pick arrived during the wait, and does the reset itself.
+            guard sortCriterion == criterion else { return }
+            probe = answered
+        }
         envelopes.removeAll()
         sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
-        await refresh()
+        await refresh(prefetched: probe)
         // Re-stage the bottom window in the new order (resetWindow dropped the
         // old one) so End stays instant after a re-sort.
         scheduleBottomPrefetch()

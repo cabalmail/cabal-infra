@@ -246,6 +246,15 @@ extension MessageListViewModel {
         // "type to search" state.
         guard !isSearchScope else { return }
         await refresh()
+        // Offline the refresh can't answer, and the list used to stay empty
+        // (#1796): the saved counts come back, and under the default order
+        // the folder's cached rows too, as `loadInitial` starts from. The
+        // snapshot is a window of that order; under another it would leave
+        // gaps once the server answers.
+        if envelopes.isEmpty, errorMessage != nil {
+            if sortCriterion == .default { await hydrateFromCache() }
+            await seedSavedCounts()
+        }
     }
 
     /// Resolves the IMAP mailbox that owns `envelope`. In folder mode

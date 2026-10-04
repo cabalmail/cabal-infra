@@ -210,6 +210,11 @@ extension MessageListViewModel {
             if isSearchActive { await runSearch(resetFilterTab: false, preserveDepth: true) }
             return
         }
+        // Ask the server before dropping anything. Offline the wipe used to
+        // run anyway: the list emptied, and with the snapshot went the
+        // folder's rows for every later offline launch and its Spotlight
+        // entries (#1796).
+        guard let probe = await probeBeforeReset() else { return }
         try? await client.envelopeCache.invalidate(folder: folder.path)
         envelopes.removeAll()
         totalMessages = 0
@@ -219,7 +224,32 @@ extension MessageListViewModel {
         hasMore = true
         sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
-        await refresh()
+        await refresh(prefetched: probe)
+    }
+
+    /// A STATUS already asked for, and when, for `refresh(prefetched:)`.
+    struct PrefetchedStatus {
+        let status: FolderStatus
+        let askedAt: ContinuousClock.Instant
+    }
+
+    /// Asks the server for this folder's STATUS before a reset that drops the
+    /// list (`hardReload`, `setSort`). Nil, with the error shown, when it
+    /// can't be reached: the caller then keeps the list as it is (#1796).
+    /// Raises `isLoading` for the wait, so the list shows its spinner, the
+    /// Refresh button stays disabled and no page loads in between; the
+    /// refresh that follows lowers it, or this does if there is none.
+    func probeBeforeReset() async -> PrefetchedStatus? {
+        isLoading = true
+        let askedAt = ContinuousClock.now
+        do {
+            let status = try await client.folderStatus(path: folder.path, flagged: true)
+            return PrefetchedStatus(status: status, askedAt: askedAt)
+        } catch {
+            isLoading = false
+            errorMessage = error.localizedDescription
+            return nil
+        }
     }
 
     /// Apply the in-flight-write shields to a freshly fetched page so a
