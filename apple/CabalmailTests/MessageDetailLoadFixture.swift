@@ -27,6 +27,28 @@ final class MessageDetailLoadFixture {
         return client
     }
 
+    /// A client whose folder-state cache has a directory, so a STATUS
+    /// recorded with `saveFolderStatus` is read back the way an earlier
+    /// online session would have left it.
+    func makeClientSavingFolderState(imap: FakeImapClient) async throws -> CabalmailClient {
+        let folderRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("detail-folder-state-\(UUID().uuidString)")
+        clientRoots.append(folderRoot)
+        let client = try TestFixtures.makeClient(imap: imap, folderStateCache: FolderStateCache(directory: folderRoot))
+        await track(client)
+        return client
+    }
+
+    /// What an earlier online session saved for `folder`: its UIDVALIDITY.
+    func saveFolderStatus(_ client: CabalmailClient, folder: String = "INBOX", uidValidity: UInt32? = nil) async {
+        let generation = await client.folderStateCache.generation
+        await client.folderStateCache.recordStatus(
+            FolderStatus(messages: 1, uidValidity: uidValidity ?? self.uidValidity),
+            for: folder,
+            ifUnchangedSince: generation
+        )
+    }
+
     /// Registers a client built elsewhere (a list model's) for cleanup.
     func track(_ client: CabalmailClient) async {
         clientRoots.append(await client.bodyCache.directory.deletingLastPathComponent())

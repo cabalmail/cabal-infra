@@ -146,19 +146,30 @@ final class MessageDetailLoadTests: XCTestCase {
         XCTAssertEqual(cached, MessageDetailMimeFixture.alternative)
     }
 
-    /// Pins current behaviour, which looks like a defect: with no envelope
-    /// snapshot for the folder, a failed STATUS (the server out of reach)
-    /// stops the reader before it looks in the body cache, so a message whose
-    /// body is already on disk can't be opened offline. The case is narrow
-    /// (a folder with no snapshot yet, such as a search hit's source folder,
-    /// or one whose snapshot Mark All Read has just invalidated). The reader asks
-    /// `imapClient.status` directly rather than `CabalmailClient.folderStatus`,
-    /// so its STATUS isn't recorded, and the last-known validity the
-    /// `FolderStateCache` keeps (`savedFolderStatus`) is never consulted --
-    /// though that method's doc rules it out for UIDVALIDITY decisions, so a
-    /// fix would have to choose to trust it for a read-only cache lookup.
-    /// Tracked in #1810.
-    func testOfflineAFailedStatusBlocksOpeningABodyThatIsAlreadyCached() async throws {
+    /// Offline, with no envelope snapshot for the folder (a search hit's
+    /// source folder, or one Mark All Read has just invalidated), a body
+    /// already on disk still opens: the reader looks it up under the
+    /// UIDVALIDITY the folder last reported (#1810). Before, the failed STATUS
+    /// ended the open without a look in the cache.
+    func testOfflineACachedBodyOpensUnderTheFoldersSavedValidity() async throws {
+        let imap = FakeImapClient()
+        await imap.scriptStatusResults([.failure(CabalmailError.network("offline"))])
+        let client = try await fixture.makeClientSavingFolderState(imap: imap)
+        await fixture.saveFolderStatus(client)
+        let model = try await fixture.makeReader(imap: imap, uid: uid, client: client)
+        try await fixture.cacheBody(MessageDetailMimeFixture.alternative, for: model)
+
+        await model.load()
+
+        XCTAssertEqual(model.plainText, MessageDetailMimeFixture.alternativePlain)
+        XCTAssertNil(model.errorMessage)
+        let fetches = await imap.fetchBodyCalls
+        XCTAssertTrue(fetches.isEmpty)
+    }
+
+    /// The saved UIDVALIDITY is a cache key only: with nothing saved for the
+    /// folder, a failed STATUS still ends the open (#1810).
+    func testOfflineWithNothingSavedForTheFolderTheStatusErrorStands() async throws {
         let imap = FakeImapClient()
         await imap.scriptStatusResults([.failure(CabalmailError.network("offline"))])
         let model = try await fixture.makeReader(imap: imap, uid: uid)
@@ -174,10 +185,9 @@ final class MessageDetailLoadTests: XCTestCase {
         XCTAssertTrue(fetches.isEmpty)
     }
 
-    /// Pins current behaviour, which looks like a defect: the bytes arrived,
-    /// but a failed write to the on-disk body cache fails the whole open.
-    /// Tracked in #1811.
-    func testAFailedCacheWriteFailsTheOpenEvenThoughTheBytesArrived() async throws {
+    /// The bytes arrived, so a failed write to the on-disk body cache no
+    /// longer fails the open (#1811).
+    func testAFailedCacheWriteStillOpensTheMessage() async throws {
         let imap = FakeImapClient()
         await imap.scriptBody(folder: "INBOX", uid: uid, [.success(MessageDetailMimeFixture.alternative)])
         let model = try await snapshottedReader(imap: imap)
@@ -189,9 +199,9 @@ final class MessageDetailLoadTests: XCTestCase {
 
         await model.load()
 
-        XCTAssertNil(model.plainText)
-        XCTAssertNil(model.htmlBody)
-        XCTAssertNotNil(model.errorMessage)
+        XCTAssertEqual(model.plainText, MessageDetailMimeFixture.alternativePlain)
+        XCTAssertEqual(model.htmlBody, MessageDetailMimeFixture.alternativeHTML)
+        XCTAssertNil(model.errorMessage)
         XCTAssertTrue(model.hasAttemptedLoad)
         let fetches = await MessageDetailLoadFixture.fetchKeys(imap)
         XCTAssertEqual(fetches, ["INBOX#7"])
