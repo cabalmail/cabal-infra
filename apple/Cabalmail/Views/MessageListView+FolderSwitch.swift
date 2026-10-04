@@ -199,7 +199,9 @@ extension MessageListView {
     func loadFolderSwitchChoices() async {
         guard !isSearchScope, let client = appState.client else { return }
         do {
-            switchFolders = try await client.imapClient.listFolders()
+            // Offline, the saved list, so the menu can still switch to a
+            // folder whose rows are cached.
+            switchFolders = try await client.foldersForDisplay().folders
         } catch {
             // The menu falls back to the current folder; the sidebar
             // surfaces folder-list errors in its own chrome.

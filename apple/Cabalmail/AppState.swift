@@ -274,6 +274,9 @@ final class AppState {
     // maps live in the "Per-folder unread + total counts" extension below.
     var folderUnreadCounts: [String: Int] = [:]
     var folderTotalCounts: [String: Int] = [:]
+    /// Keeps the counts above in step with the saved folder state, for
+    /// offline launches (`SavedFolderCounts`).
+    let savedFolderCounts = SavedFolderCounts()
     /// Paths of the folders the server's LSUB reports, published by
     /// `FolderListViewModel` on every folder-list load and subscription
     /// toggle. `nil` until the first list lands. Keyed by path, like the
@@ -533,7 +536,7 @@ final class AppState {
     private func refreshInboxUnread() async {
         guard let client else { return }
         do {
-            let status = try await client.imapClient.status(path: "INBOX")
+            let status = try await client.folderStatus(path: "INBOX")
             setInboxUnread(status.unseen ?? 0)
         } catch {
             // Best-effort: if the STATUS call fails (transient network
@@ -747,6 +750,7 @@ extension AppState {
         // builds a composer for the next session in between.
         composeSlots.endSession()
         self.client = nil
+        savedFolderCounts.reset()
         self.navCoordinator = nil
         self.searchModelStore = nil
         self.prefsCoordinator?.stop()
@@ -760,6 +764,7 @@ extension AppState {
     /// and the watch hand-off.
     private func wireSession(client newClient: CabalmailClient, username: String) async {
         self.client = newClient
+        savedFolderCounts.cache = newClient.folderStateCache
         self.navCoordinator = NavStateCoordinator(client: newClient)
         if let preferences {
             // Swap the local settings cache to this account's scoped keys
@@ -849,6 +854,7 @@ extension AppState {
     /// total in hand (e.g. an optimistic delta-based recovery path).
     func setUnreadCount(folderPath: String, count: Int) {
         folderUnreadCounts[folderPath] = max(0, count)
+        savedFolderCounts.countChanged(folderPath, unread: max(0, count), total: folderTotalCounts[folderPath])
     }
 
     /// Replace the unread + total counts for one folder in one shot.
@@ -857,6 +863,7 @@ extension AppState {
     func setFolderCounts(folderPath: String, unread: Int, total: Int) {
         folderUnreadCounts[folderPath] = max(0, unread)
         folderTotalCounts[folderPath] = max(0, total)
+        savedFolderCounts.countChanged(folderPath, unread: max(0, unread), total: max(0, total))
         if Self.isInbox(folderPath) { setInboxUnread(unread) }
     }
 
@@ -873,6 +880,7 @@ extension AppState {
     /// Bump (or reduce) the count for one folder. Clamped at zero so a
     /// stale +1 from a doubled signal can't make the badge negative.
     func applyUnreadDelta(folderPath: String, delta: Int) {
+        savedFolderCounts.unreadAdjusted(folderPath, from: folderUnreadCounts[folderPath], by: delta)
         let current = folderUnreadCounts[folderPath] ?? 0
         folderUnreadCounts[folderPath] = max(0, current + delta)
         // Keep the icon badge live. It reads `inboxUnreadCount`, which the

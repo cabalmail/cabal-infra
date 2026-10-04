@@ -22,6 +22,9 @@ public actor CabalmailClient {
     public nonisolated let bodyCache: MessageBodyCache
     public nonisolated let draftStore: DraftStore
     public nonisolated let outbox: Outbox
+    /// The folder list and folder counts the server last returned, saved for
+    /// offline launches (`CabalmailClient+Folders.swift`).
+    public nonisolated let folderStateCache: FolderStateCache
 
     /// RSS reader (docs/1.x/rss-implementation-plan.md, phase 5). Wired by
     /// `make(...)`; nil under the memberwise initializer so existing tests
@@ -62,7 +65,8 @@ public actor CabalmailClient {
         envelopeCache: EnvelopeCache,
         bodyCache: MessageBodyCache,
         draftStore: DraftStore,
-        outbox: Outbox
+        outbox: Outbox,
+        folderStateCache: FolderStateCache = FolderStateCache()
     ) {
         self.configuration = configuration
         self.authService = authService
@@ -73,6 +77,7 @@ public actor CabalmailClient {
         self.bodyCache = bodyCache
         self.draftStore = draftStore
         self.outbox = outbox
+        self.folderStateCache = folderStateCache
         self.spotlightIndexer = nil
         self.rss = nil
         self.rssStore = nil
@@ -127,6 +132,7 @@ public actor CabalmailClient {
         )
         let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
         let outbox = try Outbox(directory: cacheDirectory.appendingPathComponent("outbox"))
+        let folderState = FolderStateCache(directory: cacheDirectory.appendingPathComponent("folders"))
         // A broken feed cache must not stop mail: recreate it, else no feeds.
         let rssStore = RssStore.openRecovering(directory: cacheDirectory.appendingPathComponent("rss"))
         #if canImport(CoreSpotlight)
@@ -144,6 +150,7 @@ public actor CabalmailClient {
             bodyCache: bodies,
             draftStore: drafts,
             outbox: outbox,
+            folderStateCache: folderState,
             spotlightIndexer: spotlight,
             rssStore: rssStore,
             rssSync: rssStore.map { RssSyncEngine(client: api, store: $0) },
@@ -165,6 +172,7 @@ public actor CabalmailClient {
         bodyCache: MessageBodyCache,
         draftStore: DraftStore,
         outbox: Outbox,
+        folderStateCache: FolderStateCache,
         spotlightIndexer: SpotlightIndexer?,
         rssStore: RssStore?,
         rssSync: RssSyncEngine?,
@@ -179,6 +187,7 @@ public actor CabalmailClient {
         self.bodyCache = bodyCache
         self.draftStore = draftStore
         self.outbox = outbox
+        self.folderStateCache = folderStateCache
         self.spotlightIndexer = spotlightIndexer
         self.rss = apiClient as? RssClient
         self.rssStore = rssStore

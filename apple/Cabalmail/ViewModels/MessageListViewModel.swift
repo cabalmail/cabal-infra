@@ -199,6 +199,11 @@ final class MessageListViewModel {
     // count. Reset alongside `totalMessages` on folder/search change.
     var unseen: Int = 0
     var flagged: Int = 0
+    /// The All pill's count until a STATUS answers this session: the folder
+    /// total last saved (`seedSavedCounts`). Kept apart from `totalMessages`,
+    /// which also sizes the list, where a total nothing can load offline
+    /// would draw placeholder rows.
+    var savedMessageCount: Int?
     var hasMore = true
     // Sliding-window pagination state. `envelopes` holds a contiguous window
     // [windowStart, windowStart + count) of the folder's sorted list;
@@ -404,7 +409,7 @@ final class MessageListViewModel {
         do {
             // flagged: true asks for the SEARCH FLAGGED count too -- this is the
             // one status call that drives the filter-pill counts.
-            let status = try await client.imapClient.status(path: folder.path, flagged: true)
+            let status = try await client.folderStatus(path: folder.path, flagged: true)
             dbg("refresh uidv=\(status.uidValidity ?? 0)/\(self.uidValidity ?? 0) msgs=\(status.messages ?? -1)")
             let uidNext = status.uidNext ?? 1
             // Only a concrete, *changed* UIDVALIDITY means "rebuild from

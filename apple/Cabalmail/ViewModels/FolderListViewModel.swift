@@ -19,6 +19,10 @@ final class FolderListViewModel {
     var folders: [Folder] = []
     var isLoading = false
     var errorMessage: String?
+    /// True while `folders` is the list an earlier launch saved, drawn because
+    /// the server can't be reached. It can lag the server, so the parent's
+    /// launch landing doesn't reconcile against it.
+    private(set) var isShowingSavedCopy = false
     /// Paths whose counts are currently being fetched on-demand (lazy
     /// unsubscribed selection or the in-pane refresh button). The view
     /// reads this to render a spinner on the unsubscribed-folder banner's
@@ -61,15 +65,32 @@ final class FolderListViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let all = try await client.imapClient.listFolders()
+            let (all, savedBecause) = try await client.foldersForDisplay()
+            if let savedBecause {
+                errorMessage = savedBecause.localizedDescription
+                // A list fetched live this session is newer than the saved
+                // one, which predates any folder deleted or subscription
+                // changed since: keep it, as a failed refresh always did.
+                guard folders.isEmpty || isShowingSavedCopy else { return }
+                await showSavedCopy(all)
+                return
+            }
             folders = sortForSidebar(all)
-            errorMessage = nil
+            // Badges seeded from a saved copy (here, or by visionOS's landing
+            // model) go with it, so a recount cut short leaves them blank
+            // rather than old. A no-op unless something was seeded.
+            for path in appState.savedFolderCounts.takeSeeded() {
+                appState.folderUnreadCounts[path] = nil
+                appState.folderTotalCounts[path] = nil
+            }
+            isShowingSavedCopy = false
             // Publish the LSUB set by path so the message list's
             // unsubscribed-folder banner reads subscription from here rather
             // than from whatever `Folder` value the selection happens to hold
             // — a navigate request selects a stand-in `Folder(path:)` whose
             // flag is a default, not a fact.
             appState.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
+            errorMessage = nil
             // Keep the Spotlight indexer's subscription gate current — it
             // also purges the index domains of folders unsubscribed or
             // deleted from another client since the last list.
@@ -78,6 +99,38 @@ final class FolderListViewModel {
             )
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Offline: the saved list draws the sidebar, and the error stays up above
+    /// it, as the message list's does over its cached rows. It stays away
+    /// from the Spotlight gate, which purges folders missing from its set,
+    /// and the badges start from the counts saved with it.
+    private func showSavedCopy(_ all: [Folder]) async {
+        folders = sortForSidebar(all)
+        isShowingSavedCopy = true
+        appState.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
+        await seedSavedCounts()
+    }
+
+    /// Badges from the counts saved by the last successful STATUS (and the
+    /// changes made here since), for the folders a refresh recounts (INBOX
+    /// and the subscribed ones) that this session hasn't counted live.
+    /// Unsubscribed folders get no badge until opened, as online. Only a
+    /// reply that carried both numbers is used, as
+    /// `MessageListViewModel.publishFolderCounts` requires of a live one.
+    /// Written straight to the maps rather than through `setFolderCounts`,
+    /// which would also set the app badge: that shows what this device last
+    /// set, which can be newer than the saved STATUS.
+    private func seedSavedCounts() async {
+        let saved = await client.savedFolderStatuses()
+        let recounted = folders.filter { $0.isSubscribed || AppState.isInbox($0.path) }
+        for folder in recounted where appState.folderUnreadCounts[folder.path] == nil {
+            guard let status = saved[folder.path], let unread = status.unseen,
+                  let total = status.messages else { continue }
+            appState.folderUnreadCounts[folder.path] = max(0, unread)
+            appState.folderTotalCounts[folder.path] = max(0, total)
+            appState.savedFolderCounts.markSeeded(folder.path)
         }
     }
 
@@ -95,11 +148,7 @@ final class FolderListViewModel {
         let target = !folder.isSubscribed
         applySubscription(path: folder.path, to: target)
         do {
-            if target {
-                try await client.imapClient.subscribe(path: folder.path)
-            } else {
-                try await client.imapClient.unsubscribe(path: folder.path)
-            }
+            try await client.setSubscribed(target, path: folder.path)
             errorMessage = nil
             // Unsubscribing purges the folder from the Spotlight index;
             // subscribing admits it (indexed on next open or session sweep).
@@ -162,7 +211,7 @@ final class FolderListViewModel {
     func deleteFolder(_ folder: Folder) async -> Bool {
         guard canDelete(folder) else { return false }
         do {
-            try await client.imapClient.deleteFolder(path: folder.path)
+            try await client.deleteFolder(path: folder.path)
             folders.removeAll { $0.path == folder.path }
             errorMessage = nil
             // The folder's envelope-cache snapshot isn't invalidated on
@@ -296,7 +345,7 @@ final class FolderListViewModel {
     private func fetchAndPublishCount(path: String) async -> FolderStatus? {
         refreshingPaths.insert(path)
         defer { refreshingPaths.remove(path) }
-        guard let status = try? await client.imapClient.status(path: path) else {
+        guard let status = try? await client.folderStatus(path: path) else {
             return nil
         }
         let unread = status.unseen ?? 0
