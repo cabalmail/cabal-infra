@@ -22,8 +22,10 @@ def handler(event, _context): # pylint: disable=too-many-locals
     except ValueError as err:
         return _invalid(err)
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    message = get_message(query_string['host'], user,
-                          query_string['folder'].replace("/","."), int(query_string['id']))
+    # IMAP's own path: nested folders arrive as "Parent/Child" but the server,
+    # and so the raw-message cache key get_message writes, uses "Parent.Child".
+    imap_folder = query_string['folder'].replace("/", ".")
+    message = get_message(query_string['host'], user, imap_folder, int(query_string['id']))
     body_plain = ""
     body_html = ""
     body_html_charset = "utf8"
@@ -64,9 +66,11 @@ def handler(event, _context): # pylint: disable=too-many-locals
     return {
         "statusCode": 200,
         "body": json.dumps({
+            # The object get_message cached; signing the slash path instead
+            # pointed nested folders at a key that does not exist (#1803).
             "message_raw": sign_url(
                                     CACHE_BUCKET,
-                                    f"{user}/{query_string['folder']}/{query_string['id']}/raw"),
+                                    f"{user}/{imap_folder}/{query_string['id']}/raw"),
             "message_body_plain": body_plain_decoded,
             "message_body_html": body_html_decoded,
             "recipient": recipient,
