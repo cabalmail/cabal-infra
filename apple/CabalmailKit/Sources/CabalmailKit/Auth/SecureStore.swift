@@ -4,7 +4,7 @@ import Security
 #endif
 
 /// Minimal key/value store for secrets that the Apple client must persist
-/// across launches — Cognito tokens and the IMAP/SMTP password.
+/// across launches — the Cognito tokens.
 ///
 /// Extracted behind a protocol so unit tests can inject `InMemorySecureStore`
 /// without linking the Security framework's kSecClass side effects into the
@@ -26,9 +26,8 @@ public extension SecureStore {
     }
 }
 
-/// In-memory store used by tests. Not thread-safe — tests drive it from a
-/// single task, and `Sendable` conformance is satisfied by the reference
-/// semantics of the underlying `NSMutableDictionary`.
+/// In-memory store used by tests. Thread-safe: every access takes `lock`,
+/// which is what backs the `@unchecked Sendable`.
 public final class InMemorySecureStore: SecureStore, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: Data] = [:]
@@ -136,6 +135,7 @@ public struct KeychainSecureStore: SecureStore {
 /// clear them exhaustively.
 public enum SecureStoreKey {
     public static let authTokens = "auth.tokens"
+    /// No longer written; kept so stores from older builds can be scrubbed.
     public static let imapUsername = "imap.username"
     /// No longer written; kept so stores from older builds can be scrubbed.
     public static let imapPassword = "imap.password"

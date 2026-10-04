@@ -20,12 +20,11 @@ extension ToolbarContent {
     /// Two guards, because they answer different questions. `#available`
     /// is a runtime check on the device; it does not stop the compiler from
     /// needing the symbol. `visibilityPriority` first exists in the iOS 27 /
-    /// macOS 26.1 SDKs, and CI's release legs build with the runner's stable
-    /// Xcode — 26.6 with the iOS 26.5 SDK as of this writing — which has no
-    /// such member, so the call must also be compiled out of older
-    /// toolchains. Xcode 27 is the first to ship Swift 6.4, hence the
-    /// compiler-version test; when the stable Xcode is 27, the `#if` is
-    /// always true and can go.
+    /// macOS 26.1 SDKs, so the call must also be compiled out of an Xcode 26
+    /// toolchain, whose SDKs have no such member. Xcode 27 is the first to
+    /// ship Swift 6.4, hence the compiler-version test. CI builds every leg
+    /// with Xcode 27, where the test is always true; it stays so a checkout
+    /// still builds under Xcode 26, and can go once nothing does.
     @ToolbarContentBuilder
     func keepsInBar() -> some ToolbarContent {
         #if (os(iOS) || os(macOS)) && compiler(>=6.4)

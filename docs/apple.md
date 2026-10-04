@@ -945,8 +945,14 @@ still requires a visionOS device in the loop.
 
 The roadmap treats macOS as a first-class platform, so the macOS target
 is native rather than Mac Catalyst. `CabalmailMac/` is a separate app
-that shares `CabalmailKit` only; views are not reused from the iOS
-target.
+target with its own `@main`, menu commands, windows, settings, asset
+catalog and entitlements, but it compiles the iOS target's source tree as
+well: the `CabalmailMac` target in `apple/project.yml` takes all of
+`Cabalmail/` minus a short exclude list (the iOS `@main`, the App Intents,
+and the iOS Info.plist, entitlements and asset catalogs). The shared
+views and view models branch with `#if os(macOS)` where the platforms
+diverge, so a new file under `Cabalmail/` lands in both apps unless it is
+added to that exclude list.
 
 ### Runtime configuration: published `config.json`
 

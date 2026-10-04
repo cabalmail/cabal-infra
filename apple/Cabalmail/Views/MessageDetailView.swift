@@ -234,7 +234,6 @@ struct MessageDetailView: View {
         // body — can keep holding it weakly without the compiler reading
         // the difference as an accident (`#ImplicitStrongCapture`).
         .onAppear { [appState] in
-            BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
             // Drive the body fetch from `.onAppear` rather than SwiftUI's
             // `.task` modifier. On iPhone-compact NavigationStack push,
             // `.task` fires twice for the same view identity with
@@ -243,8 +242,8 @@ struct MessageDetailView: View {
             // leaving the view stuck on a spinner. `.onAppear` only fires
             // when the view actually appears, and the load itself runs on
             // an unstructured Task owned by the view model, immune to
-            // SwiftUI's `.task` cancellation. The model cancels that Task
-            // in `onDisappear()` when the view is genuinely going away.
+            // SwiftUI's `.task` cancellation, and deliberately outlives a
+            // disappearance (see `MessageDetailViewModel.loadTask`).
             let activeModel: MessageDetailViewModel
             if let existing = model {
                 activeModel = existing
@@ -306,7 +305,6 @@ struct MessageDetailView: View {
             }
             activeModel.startLoadIfNeeded()
         }
-        .onDisappear { model?.onDisappear() }
     }
 
     @ViewBuilder

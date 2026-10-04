@@ -130,10 +130,11 @@ public actor CognitoAuthService: AuthService {
         self.secureStore = secureStore
         self.clock = clock
         self.sessionInvalidation = sessionInvalidation
-        // Builds before this one stored the user's Cognito password for the
-        // direct IMAP/SMTP stack, which nothing live reads any more. Scrub
-        // any copy left behind; a no-op once it is gone.
+        // Older builds stored the user's Cognito password and username for
+        // the direct IMAP/SMTP stack, which no longer exists. Scrub any copy
+        // left behind; a no-op once they are gone.
         try? secureStore.remove(SecureStoreKey.imapPassword)
+        try? secureStore.remove(SecureStoreKey.imapUsername)
     }
 
     // MARK: - Sign-in flow
@@ -166,15 +167,8 @@ public actor CognitoAuthService: AuthService {
             return .mfaCodeRequired(method)
         }
         let tokens = try parseAuthResult(response)
-        try complete(tokens: tokens, username: username)
-        return .signedIn
-    }
-
-    /// Persists the session. The password is deliberately not stored: the
-    /// refresh token is what keeps the session alive.
-    fileprivate func complete(tokens: AuthTokens, username: String) throws {
         try persist(tokens: tokens)
-        try secureStore.setString(username, forKey: SecureStoreKey.imapUsername)
+        return .signedIn
     }
 
     public func signUp(
@@ -252,9 +246,8 @@ public actor CognitoAuthService: AuthService {
     /// bootstrap, where the paired iPhone hands its session over via a
     /// `WatchHandoff`. The API-backed clients only need `currentIdToken()`,
     /// which refreshes off the adopted refresh token.
-    public func adopt(tokens: AuthTokens, username: String) throws {
+    public func adopt(tokens: AuthTokens) throws {
         try persist(tokens: tokens)
-        try secureStore.setString(username, forKey: SecureStoreKey.imapUsername)
     }
 
     // MARK: - Token access
@@ -285,6 +278,8 @@ public actor CognitoAuthService: AuthService {
 
     // MARK: - Internal
 
+    /// Persists the session. Only the tokens are stored, never the password
+    /// or username: the refresh token is what keeps the session alive.
     private func persist(tokens: AuthTokens) throws {
         let data = try JSONEncoder().encode(tokens)
         try secureStore.set(data, forKey: SecureStoreKey.authTokens)
@@ -403,7 +398,7 @@ extension CognitoAuthService {
         // of retries, so `pendingChallenge` is kept until success.
         let response = try await call("RespondToAuthChallenge", body: body)
         let tokens = try parseAuthResult(response)
-        try complete(tokens: tokens, username: pending.username)
+        try persist(tokens: tokens)
         pendingChallenge = nil
     }
 

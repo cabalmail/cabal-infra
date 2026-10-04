@@ -113,7 +113,7 @@ private struct RuleConditionsSection: View {
                     TextField("contains…", text: $condition.value)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
-                        #if os(iOS)
+                        #if os(iOS) || os(visionOS)
                         .textInputAutocapitalization(.never)
                         #endif
                     Button(role: .destructive) {

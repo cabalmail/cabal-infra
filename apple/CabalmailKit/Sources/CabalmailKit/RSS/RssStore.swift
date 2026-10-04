@@ -3,10 +3,12 @@ import Foundation
 /// The RSS reader's on-device store: the whole catalog (folders,
 /// subscriptions), the items the device has synced, the caller's read and
 /// favorite state, per-feed sync cursors, and the queue of mutations made
-/// while offline. One SQLite file per account, WAL mode, FTS5 over item
-/// text for per-feed search. `RssSyncEngine` is the writer for everything
-/// that comes from the server; the UI writes only optimistic state changes
-/// (which also enqueue the mutation for the engine to push).
+/// while offline. One SQLite file per install (`rss/` under the client's
+/// shared cache directory, emptied by `clearLocalData()` on sign-out), WAL
+/// mode, FTS5 over item text for per-feed search. `RssSyncEngine` is the
+/// writer for everything that comes from the server; the UI writes only
+/// optimistic state changes (which also enqueue the mutation for the engine
+/// to push).
 ///
 /// Read state follows the server's rule so the two never disagree: an item
 /// the user explicitly marked (locally, or on any device - the server says

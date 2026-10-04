@@ -1,0 +1,11 @@
+# SimDrive is a development tool, not shipped code: an XCUITest bundle that
+# the `simdrive` CLI drives verb by verb. `SimDriveTests.execute` is the
+# verb table, one `case` per command, so it is long and branchy by design,
+# and splitting it would scatter the table rather than separate concerns.
+# The size and complexity rules are tuned for app code and are relaxed here;
+# every other rule in apple/.swiftlint.yml still applies.
+disabled_rules:
+  - file_length
+  - type_body_length
+  - function_body_length
+  - cyclomatic_complexity

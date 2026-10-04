@@ -89,10 +89,11 @@ final class MessageDetailViewModel {
     func requestPrint() { printRequestTick += 1 }
 
     /// In-flight body fetch (#403). Owned by the model so SwiftUI's `.task`
-    /// double-fire can't cancel it. Not torn down by `onDisappear()` — that
-    /// callback is unreliable on iPhone (phantom fires mid-push); the Task
-    /// runs to completion and the model deallocates naturally if the view
-    /// is truly gone.
+    /// double-fire can't cancel it. Deliberately not cancelled when the view
+    /// disappears: `.onDisappear` is unreliable on iPhone (SwiftUI fires it
+    /// mid-push for phantom view instances that aren't going away), so the
+    /// Task runs to completion and the model deallocates naturally if the
+    /// view is truly gone.
     private var loadTask: Task<Void, Never>?
 
     /// Hook for the view to relay flag changes to the list view model so the
@@ -154,11 +155,7 @@ final class MessageDetailViewModel {
         self.readerMode = preferences.defaultBodyRenderMode == .reader
     }
 
-    // swiftlint:disable:next function_body_length
     func load() async {
-        let uid = envelope.uid
-        let startedAt = Date()
-        BodyFetchLog.loadEnter(uid: uid)
         // #403: SwiftUI fires `.onDisappear` mid-push transition, cancelling
         // this Task before `.onAppear` re-fires and spawns the live one.
         // Short-circuit so the cancelled Task doesn't paint an error screen.
@@ -171,45 +168,36 @@ final class MessageDetailViewModel {
         defer {
             isLoading = false
             if completed { hasAttemptedLoad = true }
-            let hasBody = htmlBody != nil || plainText != nil
-            BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil, hasBody: hasBody)
         }
         // One automatic retry on transient `URLError.cancelled`.
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
-            let attemptNumber = 2 - attemptsRemaining
-            BodyFetchLog.loadAttempt(uid: uid, attempt: attemptNumber)
             do {
                 let bytes = try await fetchBodyBytes()
                 let tree = MimeParser.parse(bytes)
                 try await hydrate(from: tree)
                 errorMessage = nil
-                BodyFetchLog.loadSuccess(uid: uid, attempt: attemptNumber, bytes: bytes.count)
                 donateBodyToSpotlight()
                 scheduleMarkAsReadIfNeeded()
                 completed = true
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
-                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
                 if Task.isCancelled { return }
                 if attemptsRemaining > 0 { continue }
                 errorMessage = "Couldn't load message body."
                 completed = true
                 return
             } catch let urlError as URLError {
-                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
                 errorMessage = urlError.localizedDescription
                 completed = true
                 return
             } catch is CancellationError {
-                BodyFetchLog.loadCancellation(uid: uid, attempt: attemptNumber)
                 if Task.isCancelled { return }
                 errorMessage = "Couldn't load message body."
                 completed = true
                 return
             } catch {
-                BodyFetchLog.loadOther(uid: uid, attempt: attemptNumber, error: error)
                 errorMessage = error.localizedDescription
                 completed = true
                 return
@@ -239,24 +227,10 @@ final class MessageDetailViewModel {
         }
     }
 
-    /// Deliberately a near no-op. `.onDisappear` is unreliable as a "user
-    /// truly left" signal on iPhone: SwiftUI fires it mid-push for phantom
-    /// view instances that aren't actually going away (#403), so the
-    /// body-fetch `loadTask` isn't cancelled here — the model deallocates
-    /// naturally when the view is genuinely gone.
-    func onDisappear() {
-        BodyFetchLog.disappear(uid: envelope.uid, hadTask: loadTask != nil)
-    }
-
     /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
     func startLoadIfNeeded() {
-        let uid = envelope.uid
-        BodyFetchLog.startGate(uid: uid, hasHTML: htmlBody != nil,
-                               hasPlain: plainText != nil,
-                               isLoading: isLoading, hasTask: loadTask != nil)
         guard htmlBody == nil, plainText == nil, !isLoading else { return }
         if let existing = loadTask, !existing.isCancelled { return }
-        BodyFetchLog.startSpawn(uid: uid)
         loadTask = Task { @MainActor [weak self] in await self?.load() }
     }
 

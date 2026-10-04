@@ -50,14 +50,15 @@ final class AuthServiceTests: XCTestCase {
 
         let token = try await service.currentIdToken()
         XCTAssertEqual(token, "ID-TOKEN")
-        XCTAssertEqual(try store.getString(SecureStoreKey.imapUsername), "alice")
+        XCTAssertNil(try store.getString(SecureStoreKey.imapUsername), "The username must not be persisted")
         XCTAssertNil(try store.getString(SecureStoreKey.imapPassword), "The password must not be persisted")
     }
 
-    func testInitScrubsPasswordStoredByOlderBuilds() async throws {
+    func testInitScrubsCredentialsStoredByOlderBuilds() async throws {
         let store = InMemorySecureStore()
         try store.setString("alice", forKey: SecureStoreKey.imapUsername)
         try store.setString("hunter2", forKey: SecureStoreKey.imapPassword)
+        try store.setString("{}", forKey: SecureStoreKey.authTokens)
 
         _ = CognitoAuthService(
             configuration: makeConfiguration(),
@@ -66,7 +67,9 @@ final class AuthServiceTests: XCTestCase {
         )
 
         XCTAssertNil(try store.getString(SecureStoreKey.imapPassword))
-        XCTAssertEqual(try store.getString(SecureStoreKey.imapUsername), "alice")
+        XCTAssertNil(try store.getString(SecureStoreKey.imapUsername))
+        // The scrub is aimed at the legacy keys only: the session survives.
+        XCTAssertEqual(try store.getString(SecureStoreKey.authTokens), "{}")
     }
 
     func testCurrentIdTokenRefreshesWhenExpired() async throws {
@@ -295,7 +298,7 @@ final class AuthServiceMfaTests: XCTestCase {
 
         let token = try await service.currentIdToken()
         XCTAssertEqual(token, "I")
-        XCTAssertEqual(try store.getString(SecureStoreKey.imapUsername), "alice")
+        XCTAssertNil(try store.getString(SecureStoreKey.imapUsername), "The username must not be persisted")
         XCTAssertNil(try store.getString(SecureStoreKey.imapPassword), "The password must not be persisted")
     }
 

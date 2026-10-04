@@ -47,8 +47,10 @@ enum GlobalSearchFieldPlacement {
 
     /// Whether the running platform gives the message-list column its own
     /// column-width navigation bar. iPadOS does; macOS's toolbar spans the
-    /// window, and visionOS keeps the ornament-hosted bar the field has always
-    /// ridden there.
+    /// window. visionOS answers false too, which keeps its folder switch on
+    /// the title menu (`FolderSwitchPlacement`); the global field itself is
+    /// never mounted there, because visionOS does not build `MailRootView`
+    /// (`VisionSectionView` gives search its own tab).
     static var platformColumnScopedToolbar: Bool {
         #if os(iOS)
         true

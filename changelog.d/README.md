@@ -42,8 +42,9 @@ the same unreleased cycle, or a latent bug fixed before exposure.
 ## Apple client entries
 
 Any fragment describing a change to the Apple clients (`apple/Cabalmail`,
-`apple/CabalmailMac`, `apple/CabalmailKit/Sources`) must prefix its entry with
-`Apple:`, right after the leading `- `:
+`apple/CabalmailMac`, `apple/CabalmailWatch`, the notification-service and
+web-extension target directories, `apple/CabalmailKit/Sources`) must prefix its
+entry with `Apple:`, right after the leading `- `:
 
     - Apple: **Threaded reader.** Messages now group into conversation
       threads in the reader pane.

@@ -13,16 +13,19 @@ import CabalmailKit
 /// pushes the reader against that result's true source mailbox, so mark-read /
 /// archive / move land in the right folder.
 ///
-/// iPad / macOS reach the same `.search`-scope list through `MailRootView`'s
-/// reading-pane toolbar search field instead (no bottom tab bar there), so this
-/// view is the compact-width surface only.
+/// iPad / macOS reach the same `.search`-scope list through the global search
+/// field `MailRootView` mounts on the message-list column instead (no bottom
+/// tab bar there; see `GlobalSearchFieldPlacement`), so this view is the
+/// compact-width surface only.
 struct SearchView: View {
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
 
-    /// Owned here (not by `MessageListView`) so `.searchable` can bind its
-    /// `searchQuery`; injected into the list, which skips the folder lifecycle
-    /// in `.search` scope.
+    /// The search model `AppState` shares with the regular split's search
+    /// (`sharedSearchModel`, #1654), held here rather than by
+    /// `MessageListView` so `.searchable` can bind its `searchQuery`;
+    /// injected into the list, which skips the folder lifecycle in `.search`
+    /// scope.
     @State private var model: MessageListViewModel?
     @State private var selectedEnvelope: Envelope?
 
