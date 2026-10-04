@@ -5,6 +5,139 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.0] - 2026-10-04
+
+### Added
+- **Tap-time watermark for `/rss_mark_all_read`.** The endpoint takes an
+  optional `watermark` (ISO 8601), clamped to the server's now and never
+  moved backwards, and flips explicit unreads only up to it. A client
+  replaying a mark-all-read queued offline sends the moment of the tap, so
+  items that arrived in between are no longer marked read. Requests
+  without the field behave as before.
+
+### Changed
+- **Apple builds and tests run on every pull request.** `apple.yml` now
+  triggers on PRs touching `apple/**`: CabalmailKit tests on macOS and the
+  iOS simulator, both app-layer suites (which compile the iOS and Mac
+  apps), and unsigned visionOS and watchOS builds, summed up in one
+  `apple-gate` check. Previously a PR got only SwiftLint, and every build
+  and test ran after merge. A PR run never reaches the approval gate or
+  the uploads, and a newer push to the PR cancels its stale run. The
+  iOS-hosted app-layer suite now also gates the TestFlight upload, and
+  `lint.yml`'s SwiftLint job moves to the same `xcode-27` image as
+  `apple.yml`.
+- Apple: **The iPhone mail reader keeps the tab bar, like the feed reader.**
+  Opening a message used to hide the Mail / Feeds / Addresses / Settings
+  tabs and put the reader's actions in a bottom toolbar. Reply, read/unread,
+  archive/delete and the "…" menu now sit in the navigation bar at the top,
+  the way the feed reader shows its controls, and the tabs stay on screen.
+  Flag moves into the "…" menu on iPhone, with custom flags under Flags,
+  and the menu also offers Reply, Reply All and Forward. On iOS 26 and
+  later, a message's text and a feed item's text run underneath the tab bar
+  and show through the glass instead of stopping at a black strip; the last
+  line still scrolls clear of the bar. The in-app article view still stops
+  above the bar, so a site's cookie or subscribe banner stays tappable. A
+  narrow iPad window (Slide Over or a narrow Split View) gets the iPhone
+  layout; full-width iPad keeps its bottom action bar.
+
+### Removed
+- Apple: **Direct IMAP and SMTP client code.** The hand-rolled IMAP and
+  SMTP socket clients, their parser and connection layers, and the
+  network-path monitor that only served them are gone, along with their
+  tests (about 2,300 lines of source and 870 of tests). Mail has gone
+  through the Cabalmail API since issue #371, so nothing in the app
+  used them. The mail protocol interface also drops the connect,
+  disconnect, append, single-part fetch, and UID-range calls that were
+  no-ops or unused against the API, and three error cases only that
+  code could raise.
+
+### Fixed
+- Apple: **Sign-in recovers after a rejected token.** When the server answers
+  401, the app now asks Cognito for a fresh token instead of replaying the one
+  it just had refused, which it did whenever that token still looked unexpired
+  by the device clock (a skewed clock, or a token revoked server-side). Several
+  requests rejected at once now share a single refresh.
+- Apple: **Bulk actions on search results no longer hit a second
+  message.** Message IDs are only unique within a folder, so a search
+  across folders could show two results with the same ID, and selecting
+  one selected both. Marking read, flagging, moving, or archiving that
+  selection acted on both messages, and marking read or flagging could
+  crash the app. Those messages are now left unchanged with a note
+  saying why, and the rest of the selection is acted on as before; open
+  each one to act on it.
+- Apple: **A damaged feed cache can no longer stop mail from starting.**
+  The on-device feed database migrates each schema step in a transaction,
+  so an interrupted upgrade no longer leaves it half-applied, and a cache
+  that still cannot be opened (corrupt, half-migrated by an older build,
+  or from a newer one) is deleted and rebuilt from the server. If even
+  that fails, the app starts without feeds instead of failing sign-in.
+- Apple: **Feed lists no longer skip or repeat items as you scroll.** The
+  next page of a feed list was fetched by position, so items you read in
+  the Unread view pushed unread items past the page boundary, where they
+  never appeared, and items synced in while you scrolled showed up twice.
+  The list now continues from the last row shown and drops any row it
+  already has.
+- Apple: **Offline "mark all read" no longer swallows newer items.** A
+  feed's mark-all-read made offline is replayed with the time you tapped
+  it, not the time it reached the server, so items that arrived in between
+  stay unread on every device.
+- Apple: **Opening the app offline shows your cached mail.** A launch
+  with no network used to land on the sign-in form, because the app
+  fetched its server configuration before anything else and never kept a
+  copy. It now remembers the last good configuration and, when the
+  session can't be refreshed for lack of a connection, opens with the
+  saved sign-in so the cached mailbox, Outbox and feeds stay readable
+  until the network returns.
+- Apple: **Queued mail that can't be sent is kept and shown, not dropped.**
+  A message queued while offline used to be deleted after ten failed
+  retries with nothing on screen, and a flapping connection could spend
+  all ten in seconds. Retries now back off over time (30 seconds,
+  doubling to an hour), and a message that still fails stays in the
+  outbox with a banner offering Retry, or Discard / Keep for Later when
+  you close it. Queued messages and local drafts that can't be read are
+  moved aside to a quarantine folder instead of being deleted, and both
+  are now stored with a schema version so a later update can migrate
+  them rather than lose them.
+- Apple: **A failed delete or move from the reader puts the message back.**
+  Archiving, deleting, or moving a message from the reading pane removes
+  its row from the list straight away. When the server refused, the row
+  stayed gone, and the folder's message and unread counts stayed short,
+  until a later refresh. The row now comes back where it was, unread
+  again if archiving had marked it read, alongside the error banner.
+  Permanent delete from Trash recovers the same way.
+- Apple: **A session that expires at launch signs you out reliably.** The
+  app only began listening for an expired session a moment after it
+  started a session, and the expiry signal is not replayed. A refusal that
+  landed in that gap, most likely at launch while the app was still busy
+  starting up, was missed, and the app could stay in the mail shell with
+  Settings ▸ Account reading "Signed in". The listener is now in place
+  before the session goes live, so a refusal at any point signs you out
+  with the "Your session expired" explanation.
+- Apple: **Menu commands and drags act in one window.** With two iPad or Mac
+  windows open, a menu command or shortcut (Reply, Mark as Read, Flag, Move,
+  Refresh, the Feeds menu, Settings) acted in every window at once, so Reply
+  opened two drafts; it now acts only in the window in front. Dragging a
+  message onto a folder sent the move once per open message list, which could
+  show a spurious error; only the list the drag came from performs it now.
+
+### Security
+- Apple: **Folder names kept out of diagnostic logs.** The temporary
+  message-list diagnostics logged folder names in the clear, so they could
+  appear in a sysdiagnose. They are now redacted; the rest of each
+  diagnostic line is unchanged.
+- Apple: **Feed site data is cleared on sign-out and after any sync.** The
+  per-feed website data an article view keeps (cookies, publisher logins)
+  survived sign-out, and when a feed was unsubscribed on another device it
+  was cleared only if the sync that noticed happened to be a sidebar
+  refresh. Removed feeds are now remembered until their data is cleared,
+  whichever sync noticed, and signing out clears every feed's data.
+- Apple: **Your password is no longer kept on the device.** Signing in used
+  to save your Cabalmail password in the Keychain for a direct IMAP/SMTP
+  connection the app stopped using when mail moved to the API. The app no
+  longer saves it, and the first launch after updating deletes any copy an
+  earlier build left behind. Staying signed in still works as before, through
+  Cognito's refresh token.
+
 ## [1.22.6] - 2026-10-01
 
 ### Fixed
