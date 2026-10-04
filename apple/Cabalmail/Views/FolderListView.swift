@@ -51,8 +51,10 @@ struct FolderListView: View {
         get { feedsCollapsedRaw }
         nonmutating set { feedsCollapsedRaw = newValue }
     }
-    /// Called exactly once, the first time the folder list successfully
-    /// loads. `MailRootView` uses it to complete the launch INBOX landing:
+    /// Called at most once, when the first load returns the server's list.
+    /// A saved copy drawn offline doesn't count, and neither does a later
+    /// load: by then the user may have moved, and the landing would move
+    /// them back. `MailRootView` uses it to complete the launch INBOX landing:
     /// the fetched INBOX replaces the provisional `Folder(path: "INBOX")`
     /// its launch task pre-selected (so the message list never waited on
     /// this fetch), and the saved-position resume probe runs.
@@ -250,7 +252,7 @@ struct FolderListView: View {
                 async let inbox: () = newModel.refreshInboxCount()
                 await newModel.loadFolderList()
                 _ = await inbox
-                if !didNotifyLoad, !newModel.folders.isEmpty {
+                if !didNotifyLoad, !newModel.folders.isEmpty, !newModel.isShowingSavedCopy {
                     didNotifyLoad = true
                     onFoldersLoaded(newModel.folders)
                 }
@@ -260,6 +262,7 @@ struct FolderListView: View {
                 await newModel.refreshSubscribedCounts()
             }
         }
+        .task { await reloadWhenBackOnline() }
         .onChange(of: selection?.path) { _, newPath in
             autoExpandAncestors(of: newPath)
             lazyFetchCountIfNeeded(path: newPath)

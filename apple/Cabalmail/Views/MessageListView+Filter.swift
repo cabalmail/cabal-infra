@@ -118,7 +118,7 @@ extension MessageListView {
             return model.envelopes.filter { filter.includes($0) }.count
         }
         switch filter {
-        case .all:     return Int(model.totalMessages)
+        case .all:     return model.allCount
         case .unread:  return model.unseen
         case .flagged: return model.flagged
         }

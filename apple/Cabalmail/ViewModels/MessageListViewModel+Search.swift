@@ -238,6 +238,7 @@ extension MessageListViewModel {
         totalMessages = 0
         unseen = 0
         flagged = 0
+        savedMessageCount = nil
         hasMore = true
         resetWindow()
         // Folder scope drops back to the folder view; the global search
