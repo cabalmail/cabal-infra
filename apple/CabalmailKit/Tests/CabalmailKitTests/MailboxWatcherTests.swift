@@ -1,7 +1,7 @@
 import XCTest
 @testable import CabalmailKit
 
-/// Exercises `MailboxWatcher`'s IDLE reconnect loop against a scripted
+/// Exercises `MailboxWatcher`'s reconnect loop against a scripted
 /// stream factory. The production factory is `ApiBackedImapClient.idle(folder:)`,
 /// which polls the API — we substitute a closure that returns pre-built
 /// `AsyncThrowingStream`s to drive the watcher's states without touching
@@ -99,6 +99,76 @@ final class MailboxWatcherTests: XCTestCase {
         }
         XCTAssertTrue(sawReconnecting)
         XCTAssertTrue(sawChanged)
+    }
+
+    /// #1797: the backoff grows while opening keeps failing and drops back
+    /// once an open succeeds. The other tests here pin the initial backoff
+    /// to the maximum, so none of them could see the doubling.
+    func testBackoffDoublesWhileOpeningFailsAndResetsAfterASuccessfulOpen() async {
+        let attempts = AttemptCounter()
+        let watcher = MailboxWatcher(
+            folder: "INBOX",
+            streamFactory: { _ in
+                // Six failed opens, one that succeeds and then drops, then
+                // failed opens again.
+                if await attempts.next() == 7 {
+                    return AsyncThrowingStream { $0.finish(throwing: CabalmailError.network("dropped")) }
+                }
+                throw CabalmailError.network("offline")
+            },
+            initialBackoffSeconds: 2,
+            maxBackoffSeconds: 60,
+            clock: { _ in }
+        )
+        let stream = await watcher.start()
+        let waits = await withDeadline { await Self.reconnectWaits(from: stream, count: 8, stopping: watcher) }
+        XCTAssertEqual(waits, [2, 4, 8, 16, 32, 60, 2, 4])
+    }
+
+    /// #1797 end to end, over the production factory. Offline, every poll
+    /// fails; the watcher has to back off rather than reopen every 2 s.
+    /// Before the fix the first poll ran inside the stream, every open
+    /// succeeded, and this read [2, 2, 2, 2].
+    func testWatcherOverTheApiBackedClientBacksOffWhileOffline() async {
+        let api = URLSessionApiClient(
+            configuration: Configuration(
+                controlDomain: "cabalmail.example",
+                domains: [MailDomain(domain: "cabalmail.example")],
+                invokeUrl: URL(string: "https://api.cabalmail.example/prod")!,
+                cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
+            ),
+            authService: StubAuthService(),
+            transport: ScriptedHTTPTransport { _ in throw CabalmailError.network("offline") }
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com", pollInterval: 0.01)
+        let watcher = MailboxWatcher(
+            folder: "INBOX",
+            streamFactory: { try await client.idle(folder: $0) },
+            initialBackoffSeconds: 2,
+            maxBackoffSeconds: 60,
+            clock: { _ in }
+        )
+        let stream = await watcher.start()
+        let waits = await withDeadline { await Self.reconnectWaits(from: stream, count: 4, stopping: watcher) }
+        XCTAssertEqual(waits, [2, 4, 8, 16])
+    }
+
+    /// The first `count` reconnect waits the watcher announces, after which
+    /// it is stopped.
+    private static func reconnectWaits(
+        from stream: AsyncStream<MailboxWatcher.WatchEvent>,
+        count: Int,
+        stopping watcher: MailboxWatcher
+    ) async -> [TimeInterval] {
+        var waits: [TimeInterval] = []
+        for await event in stream {
+            if case .reconnecting(let after) = event { waits.append(after) }
+            if waits.count == count {
+                await watcher.stop()
+                break
+            }
+        }
+        return waits
     }
 
     /// Races `operation` against a wall-clock deadline; `nil` means it
