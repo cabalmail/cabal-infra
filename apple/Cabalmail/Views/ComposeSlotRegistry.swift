@@ -51,9 +51,10 @@ final class ComposeSlotRegistry {
         return ComposeSlot(index: index)
     }
 
-    /// Replaces the seed of an already-open slot. The `mailto:` handler
-    /// needs this: the system spawns the window before the URL arrives,
-    /// so the seed lands after the slot does.
+    /// Replaces the seed of an already-open slot, for a `mailto:` link that
+    /// lands in a window that has one. The window the system spawns for a
+    /// link has no slot and keeps its seed itself (see
+    /// `seed(forWindowWith:ownSeed:)`).
     func reseed(_ slot: ComposeSlot, with seed: Draft) {
         occupied.insert(slot.index)
         seeds[slot.index] = seed
@@ -61,9 +62,25 @@ final class ComposeSlotRegistry {
 
     /// The seed a slot should be composing from, or nil when the slot was
     /// never handed out in this process — a scene the system restored at
-    /// launch is the case that matters.
+    /// launch with its value is the case that matters.
     func seed(for slot: ComposeSlot) -> Draft? {
         seeds[slot.index]
+    }
+
+    /// What a compose window shows. A window opened with a slot composes
+    /// from that slot's seed. A window without one composes from `ownSeed`,
+    /// which it keeps for itself, and never from a slot's. Those are the
+    /// windows this process did not open: a scene restored at launch (macOS
+    /// brings it back with no value) or one the system spawned for a
+    /// `mailto:` link.
+    ///
+    /// They used to fall back to slot 0. SwiftUI keeps a dismissed window
+    /// mounted, so every such window the user had closed rebuilt and started
+    /// a hidden composer whenever slot 0 was handed out again, and each one
+    /// saved that draft to Drafts every minute until the app quit.
+    func seed(forWindowWith slot: ComposeSlot?, ownSeed: Draft) -> Draft {
+        guard let slot else { return ownSeed }
+        return seed(for: slot) ?? Self.restoredSeed(for: slot)
     }
 
     /// Frees the index. The seed stays parked; the next `acquire` of this
