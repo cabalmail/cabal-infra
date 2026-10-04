@@ -13,7 +13,7 @@ private func makeConfiguration() -> Configuration {
 }
 
 final class AuthServiceTests: XCTestCase {
-    func testSignInStoresTokensAndUsernameButNotPassword() async throws {
+    func testSignInStoresTokensButNotUsernameOrPassword() async throws {
         let authResult = """
         {
           "AuthenticationResult": {
