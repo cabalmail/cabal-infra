@@ -634,6 +634,10 @@ targets:
     platform: macOS
     sources:
       - path: CabalmailTests
+      # The test doubles this bundle shares with the Kit's own tests,
+      # compiled here rather than linked: see the CabalmailKitTestSupport
+      # target in CabalmailKit/Package.swift for why.
+      - path: CabalmailKit/Tests/CabalmailKitTestSupport
     dependencies:
       - target: CabalmailMac
       - package: CabalmailKit

@@ -36,9 +36,23 @@ let package = Package(
                 .process("Design/ColorTokens.xcassets"),
             ]
         ),
+        // Test doubles shared with the app-layer test bundle. Deliberately
+        // not a product: CabalmailMacTests compiles these same sources itself
+        // (project.yml). Linking a product that depends on CabalmailKit put a
+        // second copy of the Kit into the test process beside the host app's,
+        // and `as? CabalmailError` casts across the two copies failed.
+        .target(
+            name: "CabalmailKitTestSupport",
+            dependencies: ["CabalmailKit"],
+            path: "Tests/CabalmailKitTestSupport",
+            // The app test bundle compiles these doubles under complete
+            // checking (project.yml), so check them the same way here; the
+            // Kit's own targets get it in workstream 0.7.
+            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
+        ),
         .testTarget(
             name: "CabalmailKitTests",
-            dependencies: ["CabalmailKit"],
+            dependencies: ["CabalmailKit", "CabalmailKitTestSupport"],
             path: "Tests/CabalmailKitTests"
         ),
     ]
