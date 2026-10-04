@@ -87,14 +87,17 @@ public protocol ImapClient: Sendable {
     /// implementation overrides it.
     func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult
 
-    /// Opens an IDLE stream for `folder` and yields `IdleEvent`s until
-    /// cancelled. Implementations without a live server (unit-test mocks,
-    /// in-memory fakes) can return an empty stream — `MailboxWatcher` treats
-    /// an immediately-finished stream as a clean exit and backs off, which
-    /// is the right behavior for those transports.
+    /// Opens a change stream for `folder` and yields `IdleEvent`s until
+    /// cancelled. The name is historical (IMAP IDLE): the API-backed client
+    /// polls folder status and synthesizes the events (see
+    /// `ApiBackedImapClient.idle(folder:)`). Implementations without a
+    /// server (unit-test mocks, in-memory fakes) can return an empty
+    /// stream — `MailboxWatcher` treats an immediately-finished stream as a
+    /// clean exit and backs off, which is the right behavior for those
+    /// transports.
     ///
-    /// Phase 7 wires `MessageListViewModel` into the resulting stream so a
-    /// server-initiated EXISTS / EXPUNGE / FETCH triggers an envelope
+    /// `MessageListViewModel` runs a `MailboxWatcher` over the resulting
+    /// stream so a reported EXISTS / EXPUNGE / FETCH triggers an envelope
     /// refresh. The watcher itself holds the reconnect / backoff policy.
     func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error>
 }
@@ -149,8 +152,8 @@ public extension ImapClient {
         )
     }
 
-    /// Default implementation used by test doubles and any client that
-    /// doesn't yet support IDLE. Returning an immediately-finished stream
+    /// Default implementation for test doubles and in-memory fakes, which
+    /// have no server to poll. Returning an immediately-finished stream
     /// means the watcher yields one `.active` event and then sits in the
     /// reconnect backoff — cheap, correct, and no per-mock boilerplate.
     func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error> {

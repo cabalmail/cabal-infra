@@ -109,8 +109,7 @@ final class OfflineFolderStateTests: XCTestCase {
             tokens: AuthTokens(
                 idToken: "ID", accessToken: "ACCESS", refreshToken: "REFRESH",
                 tokenType: "Bearer", expiresAt: Date().addingTimeInterval(3600)
-            ),
-            username: "alice"
+            )
         )
         _ = try await first.folders()
         _ = try await first.folderStatus(path: "INBOX", flagged: true)

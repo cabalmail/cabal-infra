@@ -89,9 +89,9 @@ struct MessageDetailView: View {
     /// system bottom bar, which it draws as an ornament under the window.
     var actionPlacement: ReaderToolbarLayout.Placement {
         #if os(iOS)
-        // A runtime check, not a compile-time one: CI builds this with the
-        // stable Xcode against the iOS 26 SDK, and the same binary has to
-        // pick the right bar on both OS generations.
+        // A runtime check, not a compile-time one: the deployment target is
+        // below iOS 27, so the same binary has to pick the right bar on both
+        // OS generations.
         let isOS27OrLater: Bool
         if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
         return ReaderToolbarLayout.placement(
@@ -234,7 +234,6 @@ struct MessageDetailView: View {
         // body — can keep holding it weakly without the compiler reading
         // the difference as an accident (`#ImplicitStrongCapture`).
         .onAppear { [appState] in
-            BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
             // Drive the body fetch from `.onAppear` rather than SwiftUI's
             // `.task` modifier. On iPhone-compact NavigationStack push,
             // `.task` fires twice for the same view identity with
@@ -243,8 +242,8 @@ struct MessageDetailView: View {
             // leaving the view stuck on a spinner. `.onAppear` only fires
             // when the view actually appears, and the load itself runs on
             // an unstructured Task owned by the view model, immune to
-            // SwiftUI's `.task` cancellation. The model cancels that Task
-            // in `onDisappear()` when the view is genuinely going away.
+            // SwiftUI's `.task` cancellation, and deliberately outlives a
+            // disappearance (see `MessageDetailViewModel.loadTask`).
             let activeModel: MessageDetailViewModel
             if let existing = model {
                 activeModel = existing
@@ -306,7 +305,6 @@ struct MessageDetailView: View {
             }
             activeModel.startLoadIfNeeded()
         }
-        .onDisappear { model?.onDisappear() }
     }
 
     @ViewBuilder

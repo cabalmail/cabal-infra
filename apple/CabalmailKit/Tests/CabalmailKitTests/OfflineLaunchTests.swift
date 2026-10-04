@@ -26,7 +26,7 @@ final class OfflineLaunchTests: XCTestCase {
             tokenType: "Bearer",
             expiresAt: Date().addingTimeInterval(-3600)
         )
-        try await service.adopt(tokens: expired, username: "alice")
+        try await service.adopt(tokens: expired)
         return service
     }
 

@@ -81,7 +81,7 @@ final class WatchHandoffTests: XCTestCase {
             secureStore: store
         )
 
-        try await service.adopt(tokens: makeTokens(), username: "alice")
+        try await service.adopt(tokens: makeTokens())
 
         // A fresh adopted token is returned as-is — no network traffic.
         let token = try await service.currentIdToken()
@@ -112,8 +112,7 @@ final class WatchHandoffTests: XCTestCase {
         // Adopt tokens that are already expired — the realistic hand-off
         // case when the watch has been out of range for an hour.
         try await service.adopt(
-            tokens: makeTokens(expiresAt: Date(timeIntervalSinceNow: -60)),
-            username: "alice"
+            tokens: makeTokens(expiresAt: Date(timeIntervalSinceNow: -60))
         )
 
         let token = try await service.currentIdToken()
@@ -136,10 +135,11 @@ final class WatchHandoffTests: XCTestCase {
             secureStore: store
         )
 
-        try await service.adopt(tokens: makeTokens(), username: "alice")
+        try await service.adopt(tokens: makeTokens())
 
         // The password never rides the hand-off, so nothing may land under
-        // the old IMAP password key.
+        // the old IMAP password key; nor is the username stored any more.
         XCTAssertNil(try store.getString(SecureStoreKey.imapPassword))
+        XCTAssertNil(try store.getString(SecureStoreKey.imapUsername))
     }
 }

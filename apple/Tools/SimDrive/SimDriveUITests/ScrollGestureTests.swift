@@ -118,13 +118,12 @@ final class ScrollGestureTests: XCTestCase {
     func testDirectionOnlySwapsTheEndpoints() {
         let plan = ScrollGesture.plan(requestedTravel: 300, containerHeight: 720)
         let down = plan.offsets(goingDown: true)
-        let up = plan.offsets(goingDown: false)
+        let upward = plan.offsets(goingDown: false)
         XCTAssertGreaterThan(down.press, down.release)
-        XCTAssertEqual(down.press, -up.press, accuracy: 0.001)
-        XCTAssertEqual(down.release, -up.release, accuracy: 0.001)
+        XCTAssertEqual(down.press, -upward.press, accuracy: 0.001)
+        XCTAssertEqual(down.release, -upward.release, accuracy: 0.001)
     }
 }
-
 
 /// Regression cover for #1191: on visionOS a press-and-drag scrolls nothing at
 /// all, so `scroll` reported a plausible travel and left every row on the
@@ -222,7 +221,6 @@ final class ScrollProgressTests: XCTestCase {
 /// below covers the other half.
 final class ScrollFeedbackTests: XCTestCase {
 
-    
     /// The reported measurement, as arithmetic. iPhone 26.5, Settings at the
     /// top: the default `dir:down` plans 437 points of finger travel across 3
     /// sweeps of 145.7, and the first one moves the form about 335 — a gain

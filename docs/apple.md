@@ -945,8 +945,14 @@ still requires a visionOS device in the loop.
 
 The roadmap treats macOS as a first-class platform, so the macOS target
 is native rather than Mac Catalyst. `CabalmailMac/` is a separate app
-that shares `CabalmailKit` only; views are not reused from the iOS
-target.
+target with its own `@main`, menu commands, windows, settings, asset
+catalog and entitlements, but it compiles the iOS target's source tree as
+well: the `CabalmailMac` target in `apple/project.yml` takes all of
+`Cabalmail/` minus a short exclude list (the iOS `@main`, the App Intents,
+and the iOS Info.plist, entitlements and asset catalogs). The shared
+views and view models branch with `#if os(macOS)` where the platforms
+diverge, so a new file under `Cabalmail/` lands in both apps unless it is
+added to that exclude list.
 
 ### Runtime configuration: published `config.json`
 
@@ -986,9 +992,9 @@ transitions and sleep/wake; that stack has since been deleted.
 
 - Cognito tokens: one JSON blob in the data-protection keychain
   (`KeychainSecureStore`, `kSecUseDataProtectionKeychain = true`).
-- Username: a separate keychain item cleared with the tokens on
-  sign-out. No password is stored; `CognitoAuthService` scrubs the
-  `imap.password` item older builds wrote.
+- Username and password: neither is stored. `CognitoAuthService`
+  scrubs the `imap.username` and `imap.password` items older builds
+  wrote.
 - Envelopes: per-folder JSON files under the app support directory,
   keyed by UIDVALIDITY — the reconnect flow (`STATUS` + UID FETCH since
   UIDNEXT) drops straight onto this.
@@ -1217,18 +1223,20 @@ spinning up the full view model.
 - **About.** Version + build (read from `Bundle.main.infoDictionary`) and
   a link to the GitHub issues.
 
-### IDLE is tied to the message list lifetime
+### Change watching is tied to the message list lifetime
 
-`MailboxWatcher` opens a dedicated IDLE connection and emits `.changed` /
+`MailboxWatcher` consumes `ApiBackedImapClient.idle(folder:)`, which
+polls folder status (see "New-mail polling" above), and emits `.changed` /
 `.reconnecting` / `.active` ticks on an `AsyncStream`.
 `MessageListViewModel.startWatching()` drives it from the message list's
 `.task { }` and stops it on `.onDisappear`. The watcher stays off while
 the user is elsewhere — mailbox management, compose sheet, settings — so
-the server only holds one open IDLE socket per active mailbox.
-Reconnects use bounded exponential backoff (2s → 60s) per RFC 2177's
-29-minute disconnect cadence; consecutive `EXISTS` bursts are coalesced
-on the view-model side with a 1-second refresh floor so a message sweep
-doesn't trigger N envelope fetches.
+only the mailbox on screen is polled. When the polling stream ends or
+fails, the watcher reopens it after a backoff meant to double from 2s to
+60s (issue #1797: with the polling client it currently stays at 2s).
+Consecutive `EXISTS` bursts are coalesced on the view-model side with a
+1-second refresh floor so a message sweep doesn't trigger N envelope
+fetches.
 
 ### Send failures classify transient vs permanent before queueing
 

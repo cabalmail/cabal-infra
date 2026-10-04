@@ -186,8 +186,7 @@ final class OfflineAddressListTests: XCTestCase {
             tokens: AuthTokens(
                 idToken: "ID", accessToken: "ACCESS", refreshToken: "REFRESH",
                 tokenType: "Bearer", expiresAt: Date().addingTimeInterval(3600)
-            ),
-            username: "alice"
+            )
         )
         _ = try await first.addresses()
 
