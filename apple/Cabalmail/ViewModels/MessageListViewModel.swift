@@ -1,15 +1,6 @@
 import Foundation
 import Observation
-import os
 import CabalmailKit
-
-// TEMP diagnostic logger (remove with the dbg() calls). Routed through unified
-// logging so the output is visible from a Release / TestFlight build in
-// Console.app (filter subsystem "com.cabalmail.debug") -- print() stdout is
-// not. The event text is logged .public so it isn't redacted in Release; the
-// folder path is .private, since folder names are user content and a
-// sysdiagnose shouldn't carry them.
-private let mlvmDebugLog = Logger(subsystem: "com.cabalmail.debug", category: "messagelist")
 
 /// Backs `MessageListView`. Owns the paginated envelope window, envelope
 /// cache hydration, search results, and the per-row mark-as-read / dispose
@@ -218,7 +209,8 @@ final class MessageListViewModel {
     var windowStart: UInt32 = 0
     var hasTrimmedFront = false
 
-    /// Foreground-only IDLE loop. Nil when the view is offscreen; started on
+    /// Foreground-only change watcher (`MailboxWatcher`, which polls folder
+    /// status). Nil when the view is offscreen; started on
     /// `task`, stopped on `onDisappear`. Separated from the refresh path so
     /// UIDVALIDITY changes, pagination, and flag toggles never fight the
     /// watcher for the main actor.
@@ -328,14 +320,14 @@ final class MessageListViewModel {
         self.appState = appState
     }
 
-    /// Start the IDLE-backed auto-refresh loop. Called from the view's
+    /// Start the watcher-driven auto-refresh loop. Called from the view's
     /// `.task` after `loadInitial()` settles. The watcher runs on its own
-    /// actor and emits `.changed` whenever the server pushes an
-    /// EXISTS/EXPUNGE/FETCH; we collapse bursts to a single refresh by
-    /// gating on elapsed time (IMAP doesn't promise deduped notifications
-    /// and a 10-message import can fire EXISTS ten times in a second).
+    /// actor and emits `.changed` whenever a folder-status poll shows an
+    /// arrival (`UIDNEXT` advanced) or a removal (the count dropped); we
+    /// collapse bursts to a single refresh by gating on elapsed time, since
+    /// one poll can report both.
     func startWatching() async {
-        // The global search surface has no anchor folder to IDLE on.
+        // The global search surface has no anchor folder to watch.
         guard !isSearchScope, watcher == nil else { return }
         let client = self.client
         let watcher = MailboxWatcher(
@@ -356,10 +348,9 @@ final class MessageListViewModel {
         }
     }
 
-    /// Tear down the watcher. View hooks this into `.onDisappear` so IDLE
-    /// stops when the list isn't on-screen — we don't want to hold a
-    /// background IMAP connection open for a mailbox the user isn't looking
-    /// at (each session costs ~1 IMAP connection against Dovecot's pool).
+    /// Tear down the watcher. View hooks this into `.onDisappear` so the
+    /// status polling stops when the list isn't on screen — no API calls
+    /// for a mailbox the user isn't looking at.
     func stopWatching() async {
         watcherTask?.cancel()
         watcherTask = nil
@@ -380,8 +371,8 @@ final class MessageListViewModel {
     }
 
     private func handleWatcherChanged() async {
-        // Coalesce bursts — a multi-message delivery can push ten EXISTS
-        // notifications inside a single second. One refresh is enough.
+        // Coalesce bursts: one status poll can report both an arrival and a
+        // removal, and one refresh covers both.
         let now = Date()
         guard now.timeIntervalSince(lastRefreshFromWatcher) > 1 else { return }
         lastRefreshFromWatcher = now
@@ -393,7 +384,7 @@ final class MessageListViewModel {
     /// the list, and it is used rather than asked for again.
     func refresh(prefetched: PrefetchedStatus? = nil) async {
         // Re-route while a search is showing — pull-to-refresh and the
-        // IDLE / 60-second background refreshes shouldn't silently wipe
+        // watcher / 60-second background refreshes shouldn't silently wipe
         // active search results back to the folder view. Re-running the
         // search keeps the result set fresh against any concurrent
         // mailbox churn.
@@ -408,7 +399,6 @@ final class MessageListViewModel {
         isLoading = true
         defer { isLoading = false }
         let startedAt = prefetched?.askedAt ?? ContinuousClock.now
-        dbg("refresh start sort=\(sortCriterion.field)")
         do {
             // flagged: true asks for the SEARCH FLAGGED count too -- this is the
             // one status call that drives the filter-pill counts.
@@ -418,7 +408,6 @@ final class MessageListViewModel {
             } else {
                 status = try await client.folderStatus(path: folder.path, flagged: true)
             }
-            dbg("refresh uidv=\(status.uidValidity ?? 0)/\(self.uidValidity ?? 0) msgs=\(status.messages ?? -1)")
             let uidNext = status.uidNext ?? 1
             // Only a concrete, *changed* UIDVALIDITY means "rebuild from
             // scratch." A missing/zero reading from a flaky STATUS must not
@@ -426,7 +415,6 @@ final class MessageListViewModel {
             // routine background refresh.
             if let fresh = status.uidValidity, fresh != 0 {
                 if let known = self.uidValidity, known != fresh {
-                    dbg("refresh WIPE-uidValidity \(known) -> \(fresh)")
                     try? await client.envelopeCache.invalidate(folder: folder.path)
                     try? await client.bodyCache.invalidate(folder: folder.path)
                     envelopes = []
@@ -458,7 +446,6 @@ final class MessageListViewModel {
                 totalMessages: messages,
                 sort: sortCriterion
             )
-            dbg("refresh topFetched=\(fetched.count)")
             // `status.messages == 0` is the server's own count, not the `?? 0`
             // fallback `applyStatusCounts` applies: only an explicit zero
             // licenses pruning the list against an empty fetch (#939).
@@ -541,12 +528,10 @@ final class MessageListViewModel {
                 envelopes.removeFirst(overflow)
                 windowStart += UInt32(overflow)
                 hasTrimmedFront = true
-                dbg("trim removed=\(overflow) windowStart=\(windowStart)")
             }
             // Done when the page comes back empty or the absolute bottom of
             // the window reaches the folder's STATUS total.
             hasMore = !fetched.isEmpty && (windowStart + UInt32(envelopes.count)) < totalMessages
-            dbg("loadMore off=\(offset) fetched=\(fetched.count) hasMore=\(hasMore) total=\(totalMessages)")
             // Persist is debounced: rewriting the whole on-disk snapshot is
             // O(loaded count) and, awaited here on every page, put a growing
             // write (~0.7s at 800 rows, ~1.5s at 1500) on the pagination
@@ -559,7 +544,6 @@ final class MessageListViewModel {
         } catch {
             // Best-effort pagination — don't surface an error unless we're
             // blocked entirely.
-            dbg("loadMore ERROR \(error)")
         }
     }
 
@@ -664,35 +648,17 @@ extension MessageListViewModel {
     /// Apply a flag toggle that originated outside the list (currently: the
     /// detail view's Mark-as-read toggle). Updates the in-memory envelope so
     /// the row's bold styling and unread dot match the new state without
-    /// waiting for IDLE. No-op when the UID isn't currently in the window.
+    /// waiting for a refresh. No-op when the UID isn't currently in the
+    /// window.
     func applyFlagChange(uid: UInt32, flag: Flag, added: Bool) {
         applyOptimisticFlag(uid: uid, flag: flag, add: added)
     }
-
-    // TEMP diagnostic (remove once the deep-scroll reset is pinned). Logs the
-    // event and the current envelope count: a list wipe shows up as a count
-    // drop here, while a scroll-only reset shows the count holding steady.
-    // Internal (not private) so the sibling-file extensions can call it. Uses
-    // os.Logger (not print) so it's visible from a Release / TestFlight build.
-    func dbg(_ msg: String) {
-        let path = folder.path
-        let count = envelopes.count
-        mlvmDebugLog.notice(
-            "CABALDBG [\(path, privacy: .private)] \(msg, privacy: .public) | n=\(count, privacy: .public)"
-        )
-    }
-
-    // TEMP diagnostic (remove with the dbg() calls). Monotonic milliseconds
-    // for measuring per-page merge / persist cost as the loaded count grows
-    // -- the "smoothness gets worse as the list gets longer" complaint.
-    func nowMs() -> Double { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000 }
 
     // Internal so `loadInitial` in the `+Refresh` sibling can reach it.
     func hydrateFromCache() async {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             uidValidity = snapshot.uidValidity
             envelopes = snapshot.envelopes.values.sorted(by: envelopeOrder)
-            dbg("hydrate loaded=\(snapshot.envelopes.count)")
             // `hasMore`/`totalMessages` stay at their defaults; the refresh
             // that follows hydration sets the real count from STATUS.
         }
@@ -728,9 +694,7 @@ extension MessageListViewModel {
     private func persistLoadedPages() async {
         guard !hasTrimmedFront,
               let uidValidity, let uidNext = envelopes.map(\.uid).max() else { return }
-        let started = nowMs()
         try? await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
-        dbg("persist flush persistMs=\(Int(nowMs() - started))")
     }
 
     /// Resets the sliding-window cursor to a fresh top-anchored state. Called

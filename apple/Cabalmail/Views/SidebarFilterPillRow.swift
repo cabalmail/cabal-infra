@@ -11,10 +11,11 @@ struct SidebarFilterPill: Identifiable {
 
 /// The filter row above a sidebar tree: pills on the leading edge, the
 /// Expand all / Collapse all affordances on the trailing edge. Drawn the way
-/// the message list's `filterPill` and the feed item list's `filterBar`
-/// draw theirs — same font, padding, and accent wash — so the three rows
-/// read as one control family. The pills' semantics (radio vs. toggles) are
-/// the caller's; this only draws what it is told is on.
+/// the message list's `filterPill` draws its pills: same font, padding,
+/// rounded rectangle, and accent wash. The feed item list's `filterBar` does
+/// not match yet; it draws capsules with an `accentForestFg` tint. The pills'
+/// semantics (radio vs. toggles) are the caller's; this only draws what it is
+/// told is on.
 struct SidebarFilterPillRow: View {
     let pills: [SidebarFilterPill]
     /// Machine-facing prefix for the pills (`folder.filter` / `feed.filter`);

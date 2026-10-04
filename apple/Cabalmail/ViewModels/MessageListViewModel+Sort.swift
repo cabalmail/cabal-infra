@@ -26,7 +26,6 @@ extension MessageListViewModel {
     /// doesn't change so UI repeat-clicks don't burn a refresh.
     func setSort(_ criterion: SortCriterion) async {
         guard sortCriterion != criterion else { return }
-        dbg("setSort \(criterion.field)")
         // Set at once, so the menu shows it and a second pick builds on it.
         let previous = sortCriterion
         sortCriterion = criterion

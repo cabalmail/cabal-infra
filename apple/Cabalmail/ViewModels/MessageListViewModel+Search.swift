@@ -219,7 +219,6 @@ extension MessageListViewModel {
     /// them in this folder, helper.py raises `KeyError`). Same pattern
     /// as `setSort(_:)`.
     func clearSearch() async {
-        dbg("clearSearch")
         searchQuery = ""
         submittedQuery = ""
         searchFilters = MessageSearchFilters()
