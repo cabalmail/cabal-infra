@@ -45,6 +45,10 @@ final class AppState {
     /// about to be dropped still reaches the observer.
     @ObservationIgnored let sessionInvalidation = SessionInvalidationMonitor()
 
+    /// What the session lifecycle reaches outside the process; `.live`
+    /// everywhere but the app-layer tests (see `SessionEnvironment`).
+    @ObservationIgnored var sessionEnvironment = SessionEnvironment.live
+
     /// Observes `sessionInvalidation` for the life of a session. One observer
     /// is what covers every call site: each view model keeps rendering its own
     /// error text, and the teardown happens here exactly once.
@@ -364,13 +368,9 @@ final class AppState {
         do {
             // The cache is seeded here so a launch with no network right
             // after this sign-in can still restore (see `restoreIfPossible`).
-            let configuration = try await ConfigLoader.load(controlDomain: controlDomain, cache: ConfigurationCache())
-            let cacheDirectory = try Self.makeCacheDirectory()
-            let newClient = try CabalmailClient.make(
-                configuration: configuration,
-                secureStore: Self.makeSecureStore(),
-                cacheDirectory: cacheDirectory,
-                sessionInvalidation: sessionInvalidation
+            let configuration = try await sessionEnvironment.loadConfiguration(controlDomain)
+            let newClient = try sessionEnvironment.makeClient(
+                configuration, sessionEnvironment.makeSecureStore(), sessionInvalidation
             )
             let result = try await newClient.authService.signIn(username: username, password: password)
             if case .mfaCodeRequired(let method) = result {
@@ -409,7 +409,7 @@ final class AppState {
         // Existing installs signed in long ago and the setter above never
         // re-fires for them; re-publish at launch so the embedded Safari
         // extension learns the domain without a fresh sign-in.
-        ExtensionControlDomainStore.publish(controlDomain)
+        sessionEnvironment.publishControlDomain(controlDomain)
     }
 
     /// Launch-time auto-restore. Looks at the UserDefaults-persisted
@@ -451,7 +451,7 @@ final class AppState {
             status = .signedOut
             return
         }
-        let secureStore = Self.makeSecureStore()
+        let secureStore = sessionEnvironment.makeSecureStore()
         guard (try? secureStore.get(SecureStoreKey.authTokens)) != nil else {
             status = .signedOut
             return
@@ -461,14 +461,8 @@ final class AppState {
         do {
             // Offline, the last good config.json stands in for the fetch so
             // the cached mail, Outbox and feeds stay reachable at launch.
-            let configuration = try await ConfigLoader.load(controlDomain: domain, cache: ConfigurationCache())
-            let cacheDirectory = try Self.makeCacheDirectory()
-            let newClient = try CabalmailClient.make(
-                configuration: configuration,
-                secureStore: secureStore,
-                cacheDirectory: cacheDirectory,
-                sessionInvalidation: sessionInvalidation
-            )
+            let configuration = try await sessionEnvironment.loadConfiguration(domain)
+            let newClient = try sessionEnvironment.makeClient(configuration, secureStore, sessionInvalidation)
             // Validates the keychain contents: a fresh ID token passes; an
             // expired one triggers a silent refresh; an expired / revoked
             // refresh throws `.authExpired` (Cognito's
@@ -511,10 +505,7 @@ final class AppState {
     /// Idempotent: subsequent calls while the task is running are no-ops.
     func startInboxBadgePolling() {
         guard inboxBadgeTask == nil, client != nil else { return }
-        Task {
-            _ = try? await UNUserNotificationCenter.current()
-                .requestAuthorization(options: [.badge])
-        }
+        sessionEnvironment.hooks.requestBadgeAuthorization()
         let interval = inboxBadgePollInterval
         inboxBadgeTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -723,15 +714,9 @@ extension AppState {
         // re-sets this after calling through here.
         signedOutReason = nil
         guard let client else { status = .signedOut; return }
-        #if os(iOS) || os(macOS)
-        // Deregister the APNs token while the Cognito session still works —
-        // `/push_deregister` is an authenticated call like every other, and
-        // `authService.signOut()` below wipes the tokens.
-        await PushRegistrar.shared.sessionWillEnd()
-        #endif
-        #if os(iOS)
-        IntentBridge.shared.sessionWillEnd()
-        #endif
+        // Push deregistration and the Intents bridge, while the Cognito
+        // session still works: `authService.signOut()` below wipes the tokens.
+        await sessionEnvironment.hooks.sessionWillEnd()
         // Per-feed site data (publisher logins) lives in WebKit, out of the
         // Kit's reach: drop it while the feed store still knows the stores.
         FeedWebStorage.drop(uuids: (try? await client.rssStore?.allDataStoreUuids()) ?? [])
@@ -742,7 +727,7 @@ extension AppState {
         await client.clearLocalData()
         try? await client.authService.signOut()
         // Tell the watch to drop its copy of the credentials too.
-        WatchSessionBridge.shared.pushSignedOut()
+        sessionEnvironment.hooks.sessionDidEnd()
         // Forget this install's resume session and reading positions too, so
         // the next account on the device doesn't inherit them.
         self.navCoordinator?.clearLocalState()
@@ -765,7 +750,7 @@ extension AppState {
     private func wireSession(client newClient: CabalmailClient, username: String) async {
         self.client = newClient
         savedFolderCounts.cache = newClient.folderStateCache
-        self.navCoordinator = NavStateCoordinator(client: newClient)
+        self.navCoordinator = sessionEnvironment.makeNavCoordinator(newClient)
         if let preferences {
             // Swap the local settings cache to this account's scoped keys
             // before the server pull below: the previous account's values
@@ -784,20 +769,8 @@ extension AppState {
         self.status = .signedIn
         startInboxBadgePolling()
         requestContactsAccessIfNeeded()
-        #if os(iOS) || os(macOS)
-        // Runs on both entry paths, so every launch re-registers the APNs
-        // token — `/push_register` upserts, making this a cheap refresh of
-        // the row's `last_seen_at`.
-        PushRegistrar.shared.sessionDidStart(appState: self, client: newClient)
-        #endif
-        #if os(iOS)
-        // Hand the session to the App Intents bridge (replays a parked
-        // OpenFolderIntent from a cold launch) and re-donate the
-        // folder-parameterized App Shortcut phrases now that the folder
-        // list is reachable.
-        IntentBridge.shared.sessionDidStart(appState: self)
-        CabalmailAppShortcuts.updateAppShortcutParameters()
-        #endif
+        // Push registration, the Intents bridge and App Shortcut phrases.
+        sessionEnvironment.hooks.sessionDidStart(self, newClient)
         // Refresh the on-device Spotlight index for this session (each
         // subscribed folder's top page), and route a Spotlight tap that
         // arrived before the session was wired (cold launch from search).
@@ -819,11 +792,7 @@ extension AppState {
     /// without WatchConnectivity, so callers don't need platform guards.
     private func pushSessionToWatch(client: CabalmailClient, username: String) async {
         guard let tokens = await client.authService.currentTokens() else { return }
-        WatchSessionBridge.shared.pushSession(
-            configuration: client.configuration,
-            tokens: tokens,
-            username: username
-        )
+        sessionEnvironment.hooks.pushSessionToWatch(client.configuration, tokens, username)
     }
 
     /// Re-offers the current session to the watch. Called on every return
@@ -971,10 +940,7 @@ extension AppState {
     /// message list that immediately follows shows hydrated names
     /// from the first paint.
     func requestContactsAccessIfNeeded() {
-        let store = contactsStore
-        Task {
-            _ = await store.requestAccess()
-        }
+        sessionEnvironment.hooks.requestContactsAccess(contactsStore)
     }
 }
 
