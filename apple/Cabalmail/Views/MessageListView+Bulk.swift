@@ -51,7 +51,7 @@ extension MessageListView {
 
     /// The bulk actions' "left unchanged" note (`model.skippedNotice`), pinned
     /// to the bottom of the list so it is on screen at any scroll position,
-    /// next to the action bar the user just used. It overlays the rows rather
+    /// just above the action bar when one is showing. It overlays the rows rather
     /// than joining them, so nothing moves when it comes or goes, and it hangs
     /// from the bottom for the reason the root banners do
     /// (`StatusBannerPlacement`, #1426): the top of the list is what the user

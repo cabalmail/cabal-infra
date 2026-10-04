@@ -101,15 +101,18 @@ final class SelfSentSearchCopyTests: XCTestCase {
         XCTAssertNil(model.errorMessage, "a skipped row is not a failure", file: file, line: line)
     }
 
-    func testBulkSeenLeavesBothCopiesAndActsOnTheRest() async throws {
+    func testMarkingUnreadLeavesBothCopiesAndActsOnTheRest() async throws {
+        // The soak's repro: Mark Unread on a selection holding the INBOX copy
+        // marked the Sent copy unread instead.
         let imap = FakeImapClient()
         let model = try await selfSentSearchModel(imap: imap)
 
-        await model.setSeen(true, uids: [9, 4])
+        await model.setSeen(false, uids: [9, 4])
 
         let calls = await imap.flagCalls
         XCTAssertEqual(calls.map(\.folder), ["Receipts"], "neither copy of the self-sent message is written")
         XCTAssertEqual(calls.first?.uids, [4])
+        XCTAssertEqual(calls.first?.operation, .remove)
         XCTAssertEqual(
             model.envelopes.filter { $0.uid == 9 }.map { $0.flags.contains(.seen) }, [true, false],
             "the Sent copy stays read and the INBOX copy stays unread"
@@ -206,22 +209,69 @@ final class SelfSentSearchCopyTests: XCTestCase {
         XCTAssertEqual(calls.map(\.folder), ["Receipts"])
         XCTAssertEqual(calls.first?.uids, [4])
         XCTAssertEqual(model.envelopes.map(\.uid), [9, 9])
-        XCTAssertEqual(model.selectedUIDs, [9])
+        // Unlike a bulk move, a drag drops every UID it carried from the
+        // selection: a lone skipped UID left selected would open its first
+        // copy in the wide layouts' reader.
+        XCTAssertEqual(model.selectedUIDs, [])
         assertLeftUnchangedNotice(model)
     }
 
-    func testSingleRowDragIsNotGuarded() async throws {
-        // A one-item drag names the row it lifted, so the guard (which reasons
-        // about a bare-UID selection) stays out of it.
+    /// Two different messages under one UID (the #1777 shape) plus an
+    /// unrelated row. Each UID-1 row resolves to its own folder, so a drag
+    /// that lifts just one of them names it exactly.
+    private func collidingSearchModel(imap: FakeImapClient) async throws -> MessageListViewModel {
+        await imap.scriptSearch(SearchResult(
+            envelopes: [
+                SearchedEnvelope(
+                    envelope: TestFixtures.makeEnvelope(uid: 1, messageId: "<archive@example.com>"),
+                    folder: "Archive"
+                ),
+                SearchedEnvelope(
+                    envelope: TestFixtures.makeEnvelope(uid: 1, messageId: "<zeta@example.com>"),
+                    folder: "zeta0802"
+                ),
+                SearchedEnvelope(
+                    envelope: TestFixtures.makeEnvelope(uid: 2, messageId: "<inbox@example.com>"),
+                    folder: "INBOX"
+                ),
+            ],
+            totalEstimate: 3, nextCursor: nil, foldersSearched: ["Archive", "zeta0802", "INBOX"], truncated: false
+        ))
+        let model = try TestFixtures.makeModel(imap: imap, envelopes: [])
+        model.searchQuery = "probe"
+        await model.runSearch()
+        return model
+    }
+
+    func testSingleRowDragOfACollidingUIDIsNotGuarded() async throws {
         let imap = FakeImapClient()
-        let model = try await selfSentSearchModel(imap: imap)
+        let model = try await collidingSearchModel(imap: imap)
+        model.skippedNotice = "an earlier note"
 
         await model.applyMoveRequest(MessageMoveRequest(
-            destination: "Junk", items: [MessageDragItem(uid: 4, sourceFolder: "Receipts")], sourceList: nil, tick: 1
+            destination: "Junk", items: [MessageDragItem(uid: 1, sourceFolder: "zeta0802")], sourceList: nil, tick: 1
         ))
 
         let calls = await imap.moveCalls
-        XCTAssertEqual(calls.map(\.folder), ["Receipts"])
+        XCTAssertEqual(calls.map(\.folder), ["zeta0802"], "the guard is for bare-UID selections, not one lifted row")
+        XCTAssertEqual(calls.first?.uids, [1])
+        XCTAssertEqual(model.skippedNotice, "an earlier note", "a single-row drag neither runs nor clears the guard")
+    }
+
+    func testRowsDroppedTogetherEachNamingOneRowAreNotGuarded() async throws {
+        // A drop can merge several single-row payloads; a UID that appears
+        // once still names its row.
+        let imap = FakeImapClient()
+        let model = try await collidingSearchModel(imap: imap)
+
+        await model.applyMoveRequest(MessageMoveRequest(
+            destination: "Junk",
+            items: [MessageDragItem(uid: 1, sourceFolder: "zeta0802"), MessageDragItem(uid: 2, sourceFolder: "INBOX")],
+            sourceList: nil, tick: 1
+        ))
+
+        let calls = await imap.moveCalls
+        XCTAssertEqual(Set(calls.map(\.folder)), ["zeta0802", "INBOX"])
         XCTAssertNil(model.skippedNotice)
     }
 
@@ -261,5 +311,18 @@ final class SelfSentSearchCopyTests: XCTestCase {
         model.searchQuery = "receipt"
         await model.runSearch()
         XCTAssertNil(model.skippedNotice)
+    }
+
+    func testClearingTheSearchDropsTheNote() async throws {
+        let imap = FakeImapClient()
+        let model = try await selfSentSearchModel(imap: imap)
+        await model.setSeen(true, uids: [9])
+        XCTAssertNotNil(model.skippedNotice)
+
+        // `clearSearch` runs a folder refresh the fake doesn't script; the
+        // reset it does first is what this checks.
+        await model.clearSearch()
+
+        XCTAssertNil(model.skippedNotice, "no note about rows that are no longer listed")
     }
 }

@@ -79,12 +79,14 @@ final class MessageListViewModel {
     // Internal so `performLoadWindow` in the `+Refresh` sibling can clear it.
     var isLoadingWindow = false
     var errorMessage: String?
-    /// Why the last bulk action left some rows alone (the cross-folder guard,
-    /// `unambiguous(_:)` in `+Bulk`). Not `errorMessage`: that reports the
-    /// list's own failures, scrolls with the rows and is cleared by the next
-    /// successful load, which in search mode is a page the user pulls in just
-    /// by scrolling. This answers something the user just did, so the list
-    /// pins it until they dismiss it, act again, or leave the results.
+    /// Why the last action on selected rows left some of them alone (the
+    /// cross-folder guard, `unambiguous(_:)` in `+Bulk`, behind the bulk bar,
+    /// the selection menu and shortcuts, a row menu's Archive or Delete, and
+    /// a multi-row drag). Not `errorMessage`: that reports the list's own
+    /// failures, scrolls with the rows and is cleared by the next successful
+    /// load, which in search mode is a page the user pulls in just by
+    /// scrolling. This answers something the user just did, so the list pins
+    /// it until they dismiss it, act again, or leave the results.
     var skippedNotice: String?
 
     /// Active sort key. Drives both the in-memory display order and the

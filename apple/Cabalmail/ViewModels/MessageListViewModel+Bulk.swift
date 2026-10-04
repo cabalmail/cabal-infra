@@ -63,28 +63,37 @@ extension MessageListViewModel {
     /// two folders under one UID (mail you send yourself, in INBOX and Sent):
     /// nothing on the wire tells those rows apart, so `sourceFolder(for:)`
     /// names the first copy for both, and acting there could change the copy
-    /// the user wasn't looking at. Either way those rows are left alone and
-    /// `skippedNotice` says why. Folder mode and single-folder searches never
+    /// the user wasn't looking at. Either way those rows are left alone, and
+    /// the returned `notice` (nil when nothing was skipped) is what the caller
+    /// shows as `skippedNotice`. Folder mode and single-folder searches never
     /// collide, so this returns `uids` unchanged there. The lasting fix keys
     /// selection by folder plus UID (the MessageRef work).
-    func unambiguous(_ uids: Set<UInt32>) -> Set<UInt32> {
+    func unambiguous(_ uids: Set<UInt32>) -> (kept: Set<UInt32>, notice: String?) {
         var foldersByUID: [UInt32: Set<String>] = [:]
         for envelope in envelopes where uids.contains(envelope.uid) {
             foldersByUID[envelope.uid, default: []].formUnion(sourceFolders(for: envelope))
         }
         let ambiguous = Set(foldersByUID.filter { $0.value.count > 1 }.keys)
-        guard !ambiguous.isEmpty else {
-            skippedNotice = nil
-            return uids
-        }
+        guard !ambiguous.isEmpty else { return (uids, nil) }
         let skipped = envelopes.filter { ambiguous.contains($0.uid) }.count
         // "Act on them from their own folders", not "open each one": the
         // reader routes through `sourceFolder(for:)` too, so for copies it
         // can't tell apart it would open the first copy whichever row was
         // tapped, and wide layouts open the first row with the UID anyway.
-        skippedNotice = "\(skipped) messages were left unchanged because they share an ID "
+        let notice = "\(skipped) messages were left unchanged because they share an ID "
             + "with a result from another folder. Act on them from their own folders."
-        return uids.subtracting(ambiguous)
+        return (uids.subtracting(ambiguous), notice)
+    }
+
+    /// Shows a move's `unambiguous` notice once the move has settled. After
+    /// the round trip, not before: on wide layouts the rows the move drops
+    /// from the selection can take the action bar with them, and the note sits
+    /// on that bar, so setting it first would draw it above the bar and drop
+    /// it a beat later. A search ended or replaced meanwhile owns the list, so
+    /// its rows get no note about the old ones.
+    func settleSkippedNotice(_ notice: String?, searchedFor query: String) {
+        guard submittedQuery == query else { return }
+        skippedNotice = notice
     }
 
     /// Group an arbitrary UID set by source folder. Single-folder mode
@@ -129,7 +138,8 @@ extension MessageListViewModel {
     /// rejects (whole-group or `bulkPartialFailure` split) revert to
     /// their pre-op state. Leaves any active selection intact.
     func setSeen(_ shouldBeSeen: Bool, uids: Set<UInt32>) async {
-        let uids = unambiguous(uids)
+        let (uids, notice) = unambiguous(uids)
+        skippedNotice = notice
         let grouping = groupedByFolder(uids)
         let prior = priorFlagState(uids: uids, flag: .seen)
         // Unread badge tracking — capture the actual transition UIDs per
@@ -166,7 +176,8 @@ extension MessageListViewModel {
     /// unread-count bookkeeping (flagged isn't a count we surface in
     /// the sidebar).
     func setFlagged(_ shouldBeFlagged: Bool, uids: Set<UInt32>) async {
-        let uids = unambiguous(uids)
+        let (uids, notice) = unambiguous(uids)
+        skippedNotice = notice
         let grouping = groupedByFolder(uids)
         let prior = priorFlagState(uids: uids, flag: .flagged)
         for uid in uids {
@@ -238,9 +249,11 @@ extension MessageListViewModel {
     /// a context-menu move on an unselected row leaves the user's
     /// selection alone.
     func moveMessages(uids: Set<UInt32>, to destination: String) async {
-        let uids = unambiguous(uids)
+        let query = submittedQuery
+        let (uids, notice) = unambiguous(uids)
         await performMove(uidsBySource: groupedByFolder(uids), to: destination, markSeenFirst: false)
         selectedUIDs.subtract(uids)
+        settleSkippedNotice(notice, searchedFor: query)
     }
 
     /// Archive or trash an explicit UID set. `action` is a parameter
@@ -248,12 +261,14 @@ extension MessageListViewModel {
     /// both destinations side by side; marks `\Seen` first to match the
     /// single-row dispose (archived == read).
     func disposeMessages(uids: Set<UInt32>, action: DisposeAction) async {
-        let uids = unambiguous(uids)
+        let query = submittedQuery
+        let (uids, notice) = unambiguous(uids)
         await performMove(
             uidsBySource: groupedByFolder(uids),
             to: action.destinationFolder,
             markSeenFirst: true
         )
         selectedUIDs.subtract(uids)
+        settleSkippedNotice(notice, searchedFor: query)
     }
 }

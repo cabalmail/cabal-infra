@@ -58,21 +58,28 @@ extension MessageListViewModel {
     /// action bar's count stays truthful; bulk mode itself is left as the
     /// user set it (a drag isn't a "done selecting" signal).
     ///
-    /// A drag of more than one item is a multi-row selection, built from
-    /// every loaded row whose UID is selected (`dragItems(for:model:)`), so
-    /// it gets the bulk actions' cross-folder guard: a UID loaded from more
-    /// than one folder stays put, and stays selected, like a bulk move. A
-    /// single-item drag names the one row it lifted.
+    /// A UID the request carries more than once is a bare-UID selection that
+    /// spans rows from different folders (`dragItems(for:model:)` adds every
+    /// loaded row whose UID is selected), which is the bulk actions' case, so
+    /// it gets their cross-folder guard and stays put. A UID carried once
+    /// names its one row, as a single-row drag does, and stays unguarded like
+    /// a swipe; for copies the source-folder index can't tell apart that row
+    /// carries the first copy's folder, as the swipe and the reader do, until
+    /// selection keys on folder plus UID.
     func applyMoveRequest(_ request: MessageMoveRequest) async {
-        var items = request.items
-        if items.count > 1 {
-            let kept = unambiguous(Set(items.map(\.uid)))
-            items.removeAll { !kept.contains($0.uid) }
-        }
+        let query = submittedQuery
+        let repeated = Set(Dictionary(grouping: request.items, by: \.uid).filter { $0.value.count > 1 }.keys)
+        let guarded = unambiguous(repeated)
+        let skipped = repeated.subtracting(guarded.kept)
+        let items = request.items.filter { !skipped.contains($0.uid) }
         let grouping = Dictionary(grouping: items, by: \.sourceFolder)
             .mapValues { $0.map(\.uid) }
         await performMove(uidsBySource: grouping, to: request.destination, markSeenFirst: false)
-        selectedUIDs.subtract(items.map(\.uid))
+        // Every dragged UID leaves the selection, skipped ones included: a
+        // lone skipped UID left selected would open its first copy in the
+        // wide layouts' reader, a message the drag didn't move.
+        selectedUIDs.subtract(request.items.map(\.uid))
+        if request.items.count > 1 { settleSkippedNotice(guarded.notice, searchedFor: query) }
     }
 
     /// Shared optimistic move used by the bulk-action bar and the drag-and-
