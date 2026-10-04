@@ -290,7 +290,7 @@ final class ComposeViewModel {
         do {
             (availableAddresses, isSavedCopy) = try await client.addressesForSending(forceRefresh: forceRefresh)
         } catch {
-            errorMessage = "Couldn't load addresses: \(error)"
+            errorMessage = "Couldn't load addresses: \(error.localizedDescription)"
             return
         }
         // Offline, the list is the one an earlier fetch saved. It can lack

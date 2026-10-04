@@ -285,9 +285,18 @@ public actor CognitoAuthService: AuthService {
         try secureStore.set(data, forKey: SecureStoreKey.authTokens)
     }
 
+    /// The stored session, or nil. A stored blob that no longer decodes
+    /// (corrupt, or written by a build with a different `AuthTokens` shape)
+    /// is removed and treated as no session, so the next launch shows the
+    /// sign-in form with the session-expired note instead of the same raw
+    /// decoding error on every launch (#1806).
     private func loadTokens() throws -> AuthTokens? {
         guard let data = try secureStore.get(SecureStoreKey.authTokens) else { return nil }
-        return try JSONDecoder().decode(AuthTokens.self, from: data)
+        guard let tokens = try? JSONDecoder().decode(AuthTokens.self, from: data) else {
+            try? secureStore.remove(SecureStoreKey.authTokens)
+            return nil
+        }
+        return tokens
     }
 
     // MARK: - Cognito IdP wire
@@ -395,8 +404,11 @@ extension CognitoAuthService {
         ]
         // A wrong code surfaces as CodeMismatchException from `call`;
         // Cognito keeps the challenge session valid for a bounded number
-        // of retries, so `pendingChallenge` is kept until success.
-        let response = try await call("RespondToAuthChallenge", body: body)
+        // of retries, so `pendingChallenge` is kept until success. The
+        // password was already accepted, so a NotAuthorizedException here
+        // means the challenge session itself has expired (Cognito allows
+        // three minutes), not a wrong password (#1807).
+        let response = try await call("RespondToAuthChallenge", body: body, notAuthorized: .authExpired)
         let tokens = try parseAuthResult(response)
         try persist(tokens: tokens)
         pendingChallenge = nil

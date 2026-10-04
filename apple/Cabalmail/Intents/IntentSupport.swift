@@ -35,7 +35,7 @@ enum IntentError: Error, CustomLocalizedStringResourceConvertible {
         case .network, .transport:
             return .message("Cabalmail could not reach the server.")
         default:
-            return .message("\(error)")
+            return .message("\(error.localizedDescription)")
         }
     }
 }

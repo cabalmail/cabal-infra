@@ -16,7 +16,8 @@ import CabalmailKit
 /// can be: with the status put back on the code form, a code submitted
 /// afterwards never reaches Cognito.
 ///
-/// Pins #1807 (an expired challenge reads as a bad password). The stray
+/// Protects the #1807 fix (an expired challenge reads as an expired session,
+/// not a bad password). The stray
 /// submit and cancel of #1826 are `SessionLifecycleCharacterizationTests`.
 @MainActor
 final class SignInMfaCharacterizationTests: XCTestCase {
@@ -112,16 +113,15 @@ final class SignInMfaCharacterizationTests: XCTestCase {
         XCTAssertEqual(sessions, ["SESSION-1", "SESSION-1"], "both codes answer the one challenge")
     }
 
-    /// Pins current behaviour, which looks like a defect: Cognito refuses a
-    /// code sent after the challenge session expired with
-    /// `NotAuthorizedException`, which reads as `.invalidCredentials`, so the
-    /// form says the password was wrong when it was the code that was late.
-    /// The challenge is dropped with it.
-    /// Tracked in #1807.
-    func testAnExpiredChallengeSaysIncorrectPasswordAndDropsTheChallenge() async {
+    /// Cognito refuses a code sent after the challenge session expired with
+    /// `NotAuthorizedException`. The auth service reads that as `.authExpired`
+    /// on the challenge, so the form says the session expired rather than
+    /// that the password was wrong (#1807; before, it said "Incorrect username
+    /// or password."). The challenge is dropped with it.
+    func testAnExpiredChallengeSaysTheSessionExpiredAndDropsTheChallenge() async {
         await assertAnswerRestartsSignIn(
             .error(type: "NotAuthorizedException", message: "Invalid session for the user, session is expired."),
-            shows: "Incorrect username or password."
+            shows: "Session expired. Please sign in again."
         )
     }
 

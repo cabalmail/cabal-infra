@@ -91,11 +91,12 @@ final class AuthMfaCharacterizationTests: XCTestCase {
         XCTAssertEqual(token, "I")
     }
 
-    /// Pins current behaviour, which looks like a defect: Cognito answers an
-    /// expired challenge session with `NotAuthorizedException`, and `call`
-    /// maps that to its default `.invalidCredentials` (only refresh passes
-    /// another mapping), so `AppState.submitMfaCode` shows "Incorrect
-    /// username or password." for a password Cognito had already accepted.
+    /// Cognito answers a code sent after the challenge session expired (it
+    /// allows three minutes) with `NotAuthorizedException`. The password was
+    /// already accepted, so the service reports `.authExpired`, which
+    /// `AppState.submitMfaCode` shows as "Session expired. Please sign in
+    /// again." Before #1807 it reported `.invalidCredentials`, and the form
+    /// said "Incorrect username or password."
     ///
     /// The second submit re-sending `sess-1` is not a defect: `submitMfaCode`
     /// keeps the challenge until success by design (Cognito allows a bounded
@@ -104,8 +105,7 @@ final class AuthMfaCharacterizationTests: XCTestCase {
     /// and AppState never reaches it, because on any error but
     /// `CodeMismatchException` it drops its parked client and returns to the
     /// password form.
-    /// Tracked in #1807.
-    func testNotAuthorizedOnTheChallengeResponseReadsAsInvalidCredentials() async throws {
+    func testNotAuthorizedOnTheChallengeResponseReadsAsAnExpiredSession() async throws {
         let expired = Self.refusal("NotAuthorizedException", "Invalid session for the user, session is expired.")
         let http = RecordingHTTPTransport(responses: [
             Self.challenge("SOFTWARE_TOKEN_MFA", session: "sess-1"), expired, expired,
@@ -113,8 +113,8 @@ final class AuthMfaCharacterizationTests: XCTestCase {
         let service = makeService(http)
         _ = try await service.signIn(username: "user-one", password: "pw")
 
-        await assertThrows(.invalidCredentials) { try await service.submitMfaCode("123456") }
-        await assertThrows(.invalidCredentials) { try await service.submitMfaCode("123456") }
+        await assertThrows(.authExpired) { try await service.submitMfaCode("123456") }
+        await assertThrows(.authExpired) { try await service.submitMfaCode("123456") }
 
         let requests = await http.requests
         XCTAssertEqual(requests.count, 3)
