@@ -119,7 +119,7 @@ public actor CabalmailClient {
             sessionInvalidation: sessionInvalidation
         )
         let imap = ApiBackedImapClient(api: api, host: configuration.imapHost)
-        let addresses = AddressCache()
+        let addresses = AddressCache(directory: cacheDirectory.appendingPathComponent("addresses"))
         let envelopes = try EnvelopeCache(directory: cacheDirectory.appendingPathComponent("envelopes"))
         let bodies = try MessageBodyCache(
             directory: cacheDirectory.appendingPathComponent("bodies"),
