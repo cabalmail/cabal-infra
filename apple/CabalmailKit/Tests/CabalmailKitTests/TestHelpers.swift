@@ -28,3 +28,8 @@ func waitUntil(
 ) async throws {
     try await CabalmailKitTestSupport.waitUntil(timeout: timeout, file: file, line: line, condition)
 }
+
+/// Forwards to the shared `bufferedCount`.
+func bufferedCount<Element: Sendable>(_ stream: AsyncStream<Element>) async -> Int {
+    await CabalmailKitTestSupport.bufferedCount(stream)
+}

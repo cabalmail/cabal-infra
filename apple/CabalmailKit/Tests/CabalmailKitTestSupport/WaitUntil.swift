@@ -31,3 +31,38 @@ public func waitUntil(
         line: line
     )
 }
+
+/// `waitUntil` for main-actor state: polls `condition` on the main actor,
+/// letting the model's own tasks run between polls, until it holds, failing
+/// at the caller's line after `timeout`. Staying on the main actor keeps the
+/// condition from crossing an isolation boundary, which `waitUntil`'s
+/// nonisolated closure would.
+@MainActor
+public func waitUntilOnMainActor(
+    timeout: TimeInterval = defaultWaitTimeout,
+    file: StaticString = #filePath,
+    line: UInt = #line,
+    _ condition: () -> Bool
+) async throws {
+    let deadline = Date().addingTimeInterval(timeout)
+    while !condition() {
+        guard Date() < deadline else {
+            XCTFail(String(format: "condition never held within %.0fs", timeout), file: file, line: line)
+            return
+        }
+        try await Task.sleep(nanoseconds: 10_000_000)
+    }
+}
+
+/// Counts the elements already buffered on `stream` without waiting for
+/// more: cancelling the drain finishes the stream, which still hands over
+/// its buffer, so this never waits on an element that isn't coming.
+public func bufferedCount<Element: Sendable>(_ stream: AsyncStream<Element>) async -> Int {
+    let drain = Task {
+        var count = 0
+        for await _ in stream { count += 1 }
+        return count
+    }
+    drain.cancel()
+    return await drain.value
+}
