@@ -81,6 +81,9 @@ extension MessageListViewModel {
             guard submittedQuery == trimmed, searchFilters == filters else { return }
             envelopes = result.envelopes.map(\.envelope)
             sourceFolderIndex = SearchSourceFolderIndex(result.envelopes)
+            // A fresh search's rows are not the ones the note was about; the
+            // in-place refresh of the same search (`preserveDepth`) keeps it.
+            if !preserveDepth { skippedNotice = nil }
             searchTotalEstimate = result.totalEstimate
             searchTruncated = result.truncated
             searchFoldersSearched = result.foldersSearched
@@ -226,6 +229,7 @@ extension MessageListViewModel {
         filterTab = .all
         isSearchActive = false
         sourceFolderIndex = SearchSourceFolderIndex()
+        skippedNotice = nil
         searchTotalEstimate = 0
         searchTruncated = false
         searchFoldersSearched = []
@@ -250,6 +254,15 @@ extension MessageListViewModel {
     /// right mailbox.
     func sourceFolder(for envelope: Envelope) -> String {
         sourceFolderIndex.folder(for: envelope) ?? folder.path
+    }
+
+    /// Every mailbox a row like `envelope` came from: one for an ordinary
+    /// row, more for the same message filed in several folders under one
+    /// UID (mail sent to yourself, in INBOX and Sent), whose rows the index
+    /// can't tell apart and `sourceFolder(for:)` can only name the first of.
+    func sourceFolders(for envelope: Envelope) -> Set<String> {
+        let folders = sourceFolderIndex.folders(for: envelope)
+        return folders.isEmpty ? [folder.path] : Set(folders)
     }
 
     /// The folder "This folder only" narrows to. Folder scope is its own

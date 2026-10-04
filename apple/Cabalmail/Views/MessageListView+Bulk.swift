@@ -49,6 +49,32 @@ extension MessageListView {
         model?.leaveBulkMode()
     }
 
+    /// The bulk actions' "left unchanged" note (`model.skippedNotice`), pinned
+    /// to the bottom of the list so it is on screen at any scroll position,
+    /// next to the action bar the user just used. It overlays the rows rather
+    /// than joining them, so nothing moves when it comes or goes, and it hangs
+    /// from the bottom for the reason the root banners do
+    /// (`StatusBannerPlacement`, #1426): the top of the list is what the user
+    /// is reading. The animation is scoped to this container so it can't
+    /// animate the row changes the same action makes.
+    func skippedNoticeBanner(model: MessageListViewModel) -> some View {
+        VStack {
+            if let notice = model.skippedNotice {
+                ToastBanner(
+                    toast: Toast(kind: .info, message: notice),
+                    onDismiss: { model.skippedNotice = nil }
+                )
+                .padding(.bottom, 6)
+                .padding(.horizontal, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                // `.contain` keeps the close button its own element.
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("list.skippedNotice")
+            }
+        }
+        .animation(.default, value: model.skippedNotice)
+    }
+
     /// Bottom action bar rendered in `safeAreaInset` while bulkMode is
     /// active. Mirrors React's bulk-mode pill row (Archive / Move /
     /// Delete / Mark Read/Unread / Flag).

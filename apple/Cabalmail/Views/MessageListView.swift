@@ -259,6 +259,9 @@ struct MessageListView: View {
         .overlay {
             searchResultsPlaceholder(model: model, visibleRowCount: visible.count)
         }
+        // Inside the safe-area insets below, so it sits above the bulk
+        // action bar rather than on it.
+        .overlay(alignment: .bottom) { skippedNoticeBanner(model: model) }
         // A search/filter list that empties out from under the user (every
         // loaded Unread row marked read, say) has no rows left to fire the
         // near-end prefetch, so kick the next page from here instead. The

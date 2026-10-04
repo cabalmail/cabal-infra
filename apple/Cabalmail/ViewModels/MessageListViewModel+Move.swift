@@ -57,11 +57,22 @@ extension MessageListViewModel {
     /// bulk selection are dropped from `selectedUIDs` afterwards so the
     /// action bar's count stays truthful; bulk mode itself is left as the
     /// user set it (a drag isn't a "done selecting" signal).
+    ///
+    /// A drag of more than one item is a multi-row selection, built from
+    /// every loaded row whose UID is selected (`dragItems(for:model:)`), so
+    /// it gets the bulk actions' cross-folder guard: a UID loaded from more
+    /// than one folder stays put, and stays selected, like a bulk move. A
+    /// single-item drag names the one row it lifted.
     func applyMoveRequest(_ request: MessageMoveRequest) async {
-        let grouping = Dictionary(grouping: request.items, by: \.sourceFolder)
+        var items = request.items
+        if items.count > 1 {
+            let kept = unambiguous(Set(items.map(\.uid)))
+            items.removeAll { !kept.contains($0.uid) }
+        }
+        let grouping = Dictionary(grouping: items, by: \.sourceFolder)
             .mapValues { $0.map(\.uid) }
         await performMove(uidsBySource: grouping, to: request.destination, markSeenFirst: false)
-        selectedUIDs.subtract(request.items.map(\.uid))
+        selectedUIDs.subtract(items.map(\.uid))
     }
 
     /// Shared optimistic move used by the bulk-action bar and the drag-and-

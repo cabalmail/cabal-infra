@@ -15,7 +15,16 @@ import CabalmailKit
 /// folders while still separating the other collision shape: one message
 /// filed in two folders, same Message-ID under two different UIDs.
 ///
-/// A row whose envelope has no Message-ID falls back to the UID-only
+/// One shape that key cannot separate: one message filed in two folders
+/// under the *same* UID. Mail you send yourself lands in INBOX and Sent
+/// with one Message-ID, and in a small mailbox the two UIDs can coincide;
+/// nothing else on the wire tells the copies apart (the API carries no
+/// INTERNALDATE or size). Every folder such a key came from is kept, so
+/// `folders(for:)` can report the ambiguity even though `folder(for:)`
+/// can only name the first.
+///
+/// A row whose envelope has no Message-ID keys on `(uid, nil)` like any
+/// other; an envelope the index has never seen falls back to the UID-only
 /// map, which keeps the first row seen for that UID — the same
 /// best-effort answer the old map gave, minus the trap.
 struct SearchSourceFolderIndex: Equatable {
@@ -26,7 +35,9 @@ struct SearchSourceFolderIndex: Equatable {
         let messageID: String?
     }
 
-    private var byRow: [RowKey: String] = [:]
+    /// Every distinct folder a row with this key came from, in server
+    /// order. More than one entry only for rows the key can't tell apart.
+    private var byRow: [RowKey: [String]] = [:]
     private var byUID: [UInt32: String] = [:]
 
     /// Empty index — folder mode and single-folder searches, where
@@ -34,36 +45,41 @@ struct SearchSourceFolderIndex: Equatable {
     init() {}
 
     init(_ rows: [SearchedEnvelope]) {
-        // First-wins on both maps: duplicates are a genuine ambiguity
-        // (two rows the index can't tell apart), and keeping the first
-        // match in server order is the row the user sees highest.
-        byRow = Dictionary(
-            rows.map { (RowKey(uid: $0.envelope.uid, messageID: $0.envelope.messageId), $0.folder) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        byUID = Dictionary(
-            rows.map { ($0.envelope.uid, $0.folder) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        add(rows)
     }
 
     var isEmpty: Bool { byRow.isEmpty }
 
-    /// Extends the index with a later search page. Existing entries win,
-    /// matching the init's first-in-server-order rule — an earlier page's
-    /// row is the one the user sees highest.
+    /// Extends the index with a later search page. Existing entries win
+    /// `folder(for:)`, matching first-in-server-order: an earlier page's
+    /// row is the one the user sees highest. A page that brings the same
+    /// key from another folder still records that folder, so the copy on
+    /// page 2 makes the copy on page 1 ambiguous.
     mutating func add(_ rows: [SearchedEnvelope]) {
         for row in rows {
             let key = RowKey(uid: row.envelope.uid, messageID: row.envelope.messageId)
-            if byRow[key] == nil { byRow[key] = row.folder }
+            // Distinct folders, not rows: a page boundary can deliver the
+            // same row twice, and that is not two copies.
+            if byRow[key]?.contains(row.folder) != true { byRow[key, default: []].append(row.folder) }
             if byUID[row.envelope.uid] == nil { byUID[row.envelope.uid] = row.folder }
         }
     }
 
     /// The folder `envelope` came from, or nil when this index doesn't
     /// know it (folder mode, or a row that was never part of the result
-    /// set).
+    /// set). For rows the index can't tell apart this is the first one's
+    /// folder; check `folders(for:)` before acting on more than one row.
     func folder(for envelope: Envelope) -> String? {
-        byRow[RowKey(uid: envelope.uid, messageID: envelope.messageId)] ?? byUID[envelope.uid]
+        byRow[RowKey(uid: envelope.uid, messageID: envelope.messageId)]?.first ?? byUID[envelope.uid]
+    }
+
+    /// Every folder a row indistinguishable from `envelope` came from:
+    /// one entry for an ordinary row, several for the same message filed
+    /// in more than one folder under one UID, and empty when this index
+    /// doesn't know the row.
+    func folders(for envelope: Envelope) -> [String] {
+        byRow[RowKey(uid: envelope.uid, messageID: envelope.messageId)]
+            ?? byUID[envelope.uid].map { [$0] }
+            ?? []
     }
 }

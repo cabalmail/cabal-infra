@@ -55,25 +55,35 @@ extension MessageListViewModel {
         selectedUIDs = Set(visible.map(\.uid))
     }
 
-    /// Drops UIDs that more than one loaded row carries from different
-    /// folders. IMAP UIDs are unique only within a folder, so a cross-folder
-    /// search can show Archive UID 1 next to `zeta` UID 1, and a bare-UID
-    /// selection can't say which of the two the user picked. Acting on both
-    /// would move or flag a message the user never chose, so those rows are
-    /// left alone and the banner says why; the reader acts on one message by
-    /// its own folder and still works for them. Folder mode and single-folder
-    /// searches never collide, so this returns `uids` unchanged there. The
-    /// lasting fix keys selection by folder plus UID (the MessageRef work).
-    private func unambiguous(_ uids: Set<UInt32>) -> Set<UInt32> {
+    /// Drops UIDs that loaded rows carry from more than one folder. IMAP UIDs
+    /// are unique only within a folder, so a cross-folder search can show
+    /// Archive UID 1 next to `zeta` UID 1, and a bare-UID selection can't say
+    /// which of the two the user picked; acting on both would move or flag a
+    /// message the user never chose. The same goes for one message filed in
+    /// two folders under one UID (mail you send yourself, in INBOX and Sent):
+    /// nothing on the wire tells those rows apart, so `sourceFolder(for:)`
+    /// names the first copy for both, and acting there could change the copy
+    /// the user wasn't looking at. Either way those rows are left alone and
+    /// `skippedNotice` says why. Folder mode and single-folder searches never
+    /// collide, so this returns `uids` unchanged there. The lasting fix keys
+    /// selection by folder plus UID (the MessageRef work).
+    func unambiguous(_ uids: Set<UInt32>) -> Set<UInt32> {
         var foldersByUID: [UInt32: Set<String>] = [:]
         for envelope in envelopes where uids.contains(envelope.uid) {
-            foldersByUID[envelope.uid, default: []].insert(sourceFolder(for: envelope))
+            foldersByUID[envelope.uid, default: []].formUnion(sourceFolders(for: envelope))
         }
         let ambiguous = Set(foldersByUID.filter { $0.value.count > 1 }.keys)
-        guard !ambiguous.isEmpty else { return uids }
+        guard !ambiguous.isEmpty else {
+            skippedNotice = nil
+            return uids
+        }
         let skipped = envelopes.filter { ambiguous.contains($0.uid) }.count
-        errorMessage = "\(skipped) selected messages were left unchanged because they share an ID "
-            + "with a result from another folder. Open each one to act on it."
+        // "Act on them from their own folders", not "open each one": the
+        // reader routes through `sourceFolder(for:)` too, so for copies it
+        // can't tell apart it would open the first copy whichever row was
+        // tapped, and wide layouts open the first row with the UID anyway.
+        skippedNotice = "\(skipped) messages were left unchanged because they share an ID "
+            + "with a result from another folder. Act on them from their own folders."
         return uids.subtracting(ambiguous)
     }
 
