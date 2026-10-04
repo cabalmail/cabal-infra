@@ -185,7 +185,7 @@ extension MessageListViewModel {
     /// arrow.clockwise button route through this path so the user has a
     /// way to escape stale state (e.g., a search that populated the
     /// list with foreign-folder UIDs the regular refresh's UID-range
-    /// pruning can't catch). The IDLE watcher and the 60-second wall-
+    /// pruning can't catch). The change watcher and the 60-second wall-
     /// clock fallback intentionally keep calling `refresh()` directly —
     /// they fire often, and the merge path is the cheap "fold new mail
     /// in" loop the cache is designed around. Hard reload stays on the
@@ -203,7 +203,6 @@ extension MessageListViewModel {
     /// unrelated phantom never reached the fetch path far enough to
     /// land a body in it.
     func hardReload() async {
-        dbg("hardReload")
         // Search scope has no folder cache to wipe; a force-reload just re-runs
         // the active search (or no-ops when nothing is searched).
         if isSearchScope {
@@ -295,16 +294,13 @@ extension MessageListViewModel {
     /// include these too." Shielded so an in-flight local write survives a
     /// concurrent refresh (see `shieldFetched`).
     func mergeFetched(_ fetched: [Envelope]) {
-        let before = envelopes.count
         var byUID: [UInt32: Envelope] = Dictionary(
             uniqueKeysWithValues: envelopes.map { ($0.uid, $0) }
         )
         for envelope in shieldFetched(fetched) {
             byUID[envelope.uid] = envelope
         }
-        let mergeStart = nowMs()
         envelopes = byUID.values.sorted(by: envelopeOrder)
-        dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count) sortMs=\(Int(nowMs() - mergeStart))")
     }
 
     /// Fetches the page immediately above the window and prepends it, then
@@ -336,9 +332,9 @@ extension MessageListViewModel {
             }
             hasTrimmedFront = windowStart > 0
             hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
-            dbg("loadPrev off=\(offset) fetched=\(fetched.count) windowStart=\(windowStart) hasMore=\(hasMore)")
         } catch {
-            dbg("loadPrev ERROR \(error)")
+            // Best-effort: a failed page leaves the window as it was, and the
+            // next scroll toward the top asks again.
         }
     }
 
@@ -374,7 +370,6 @@ extension MessageListViewModel {
             hasTrimmedFront = staged.start > 0
             hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
             bottomPrefetch = nil
-            dbg("loadWindow adopt-prefetch around=\(absoluteIndex) start=\(staged.start)")
             return
         }
         let total = Int(totalMessages)
@@ -399,9 +394,9 @@ extension MessageListViewModel {
             envelopes = fetched.sorted(by: envelopeOrder)
             hasTrimmedFront = start > 0
             hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
-            dbg("loadWindow around=\(absoluteIndex) start=\(start) fetched=\(fetched.count)")
         } catch {
-            dbg("loadWindow ERROR \(error)")
+            // Best-effort: the rows stay placeholders until the next jump or
+            // scroll asks for them again.
         }
     }
 
@@ -465,9 +460,8 @@ extension MessageListViewModel {
             guard !Task.isCancelled, !fetched.isEmpty,
                   sortAtKickoff == sortCriterion, total == totalMessages else { return }
             bottomPrefetch = BottomPrefetch(start: start, total: total, envelopes: fetched.sorted(by: envelopeOrder))
-            dbg("bottomPrefetch staged start=\(start) n=\(fetched.count) total=\(total)")
         } catch {
-            dbg("bottomPrefetch ERROR \(error)")
+            // Best-effort (see above): End takes the normal round trip.
         }
     }
 
@@ -542,7 +536,6 @@ extension MessageListViewModel {
         } else {
             disappeared = []
         }
-        dbg("applyRefreshPage disappeared=\(disappeared.count) fetched=\(fetched.count)")
         if !disappeared.isEmpty {
             let gone = Set(disappeared)
             envelopes.removeAll { gone.contains($0.uid) }

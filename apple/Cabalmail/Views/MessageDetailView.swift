@@ -258,7 +258,7 @@ struct MessageDetailView: View {
                 // Relay flag changes (\Seen toggles) up to AppState so the
                 // list view's `.onChange` handler can flip the row's bold
                 // styling and unread dot without waiting for the next
-                // IDLE / pull-to-refresh.
+                // refresh.
                 let folderPath = folder.path
                 let uid = envelope.uid
                 newModel.onFlagChanged = { [weak appState] flag, added in

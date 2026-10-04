@@ -6,12 +6,12 @@ import CabalmailKit
 /// cap; same `@MainActor` extension as the rest of the view model.
 @MainActor
 extension MessageListViewModel {
-    /// Optimistic flag toggle. Updates the in-memory envelope before the
-    /// server round trip so the swipe action and context-menu commands feel
-    /// instant; reverts the change if `setFlags` fails so the row goes back
-    /// to the truthful state. Mirrors the same shape used by
-    /// `MessageDetailViewModel.setSeen` so a future "mark all" can land on
-    /// the same primitive.
+    /// Optimistic flag toggle for one row. Updates the in-memory envelope
+    /// before the server round trip so the swipe action and context-menu
+    /// commands feel instant; reverts the change, and any unread-badge
+    /// delta, if `setFlags` fails so the row goes back to the truthful
+    /// state. Selections take their own path (`setSeen(_:uids:)` and
+    /// `setFlagged(_:uids:)` in the bulk extension).
     func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
         let source = sourceFolder(for: envelope)
         applyOptimisticFlag(uid: envelope.uid, flag: flag, add: add)

@@ -182,7 +182,7 @@ final class AppState {
     /// Latest envelope disposed from the detail view. `MessageListView`
     /// observes this via `.onChange` and prunes the matching UID from its
     /// in-memory list so the moved message disappears immediately, without
-    /// waiting for the next IDLE / pull-to-refresh. `tick` is monotonic so
+    /// waiting for the next refresh. `tick` is monotonic so
     /// re-disposing the same UID (e.g. in a different folder) still fires
     /// the observer.
     var lastDisposedEnvelope: DisposedEnvelope?
@@ -198,8 +198,8 @@ final class AppState {
     /// Latest envelope-flag change driven from the detail view (currently:
     /// `\Seen` toggles). `MessageListView` observes this so the row's bold
     /// styling and unread dot flip the moment the user taps "Mark as read"
-    /// in the detail toolbar, without waiting for the next IDLE / pull-to-
-    /// refresh. `tick` is monotonic so a revert (after a server error) still
+    /// in the detail toolbar, without waiting for the next refresh. `tick`
+    /// is monotonic so a revert (after a server error) still
     /// fires the observer when the same UID + flag flips back.
     var lastEnvelopeFlagChange: EnvelopeFlagChange?
     private var flagChangeTick = 0
