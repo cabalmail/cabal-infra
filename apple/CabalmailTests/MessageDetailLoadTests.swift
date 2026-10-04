@@ -13,12 +13,9 @@ import CabalmailKit
 /// fallback does offline; the threading identity the reply path overlays
 /// (Phase 0 of docs/draft-sync-and-threading.md); and the attachment strip /
 /// inline `cid:` images. The failure surface lives in
-/// `MessageDetailLoadFailureTests`, and mark-as-read on open in
-/// `MessageDetailMarkSeenTests`.
-///
-/// The attachment tests use uids near `UInt32.max`: the reader writes
-/// attachments to a shared temp directory named by uid, and a real
-/// mailbox's uids are unlikely to reach that range.
+/// `MessageDetailLoadFailureTests`, mark-as-read on open in
+/// `MessageDetailMarkSeenTests`, and which parts are the body and where
+/// attachment files go in `MessageDetailAttachmentTests`.
 @MainActor
 final class MessageDetailLoadTests: XCTestCase {
     private var fixture: MessageDetailLoadFixture!
@@ -254,47 +251,5 @@ final class MessageDetailLoadTests: XCTestCase {
         XCTAssertEqual(unnamed.mimeType, "application/octet-stream")
         XCTAssertEqual(unnamed.size, 4)
         XCTAssertEqual(try Data(contentsOf: unnamed.fileURL), Data([0, 1, 2, 3]))
-    }
-
-    /// Pins current behaviour, which looks like a defect: the body's plain
-    /// text is the first `text/plain` part in the tree, whatever its
-    /// disposition, so a `.txt` attachment becomes the "plain text
-    /// alternative" (and the text the reader donates to Spotlight).
-    /// Tracked in #1812.
-    func testATextAttachmentBecomesThePlainTextBody() async throws {
-        let uid: UInt32 = 4_294_960_012
-        let imap = FakeImapClient()
-        await imap.scriptBody(folder: "INBOX", uid: uid, [.success(MessageDetailMimeFixture.htmlWithTextAttachment)])
-        let model = try await snapshottedReader(imap: imap, uid: uid)
-
-        await model.load()
-
-        XCTAssertEqual(model.htmlBody, "<p>Body</p>")
-        XCTAssertEqual(model.plainText, "attached notes")
-        XCTAssertEqual(model.attachments.map(\.filename), ["notes.txt"])
-    }
-
-    /// Pins current behaviour, which looks like a defect: attachment files go
-    /// to a temp directory keyed by uid alone, so two folders' messages with
-    /// the same uid and file name share one file, and the later open
-    /// overwrites what the earlier reader's attachment strip points at.
-    /// Tracked in #1813.
-    func testSameUidAttachmentsInTwoFoldersShareOneTempFile() async throws {
-        let uid: UInt32 = 4_294_960_013
-        let imap = FakeImapClient()
-        let inboxBytes = MessageDetailMimeFixture.namedBlob("inbox copy")
-        let archiveBytes = MessageDetailMimeFixture.namedBlob("archive copy")
-        await imap.scriptBody(folder: "INBOX", uid: uid, [.success(inboxBytes)])
-        await imap.scriptBody(folder: "Archive", uid: uid, [.success(archiveBytes)])
-        let inbox = try await snapshottedReader(imap: imap, uid: uid)
-        let archive = try await fixture.makeReader(imap: imap, uid: uid, folderPath: "Archive")
-        try await fixture.seedSnapshot(archive)
-
-        await inbox.load()
-        await archive.load()
-
-        XCTAssertEqual(inbox.attachments.first?.fileURL, archive.attachments.first?.fileURL)
-        let inboxFile = try XCTUnwrap(inbox.attachments.first?.fileURL)
-        XCTAssertEqual(try Data(contentsOf: inboxFile), Data("archive copy".utf8))
     }
 }

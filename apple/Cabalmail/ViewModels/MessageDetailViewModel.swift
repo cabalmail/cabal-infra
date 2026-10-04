@@ -16,6 +16,10 @@ final class MessageDetailViewModel {
     // can reach them.
     let client: CabalmailClient
     let preferences: Preferences
+    /// This reader's own folder for attachment files. One folder per UID let
+    /// same-UID messages in two folders overwrite each other's files (#1813).
+    @ObservationIgnored private let attachmentDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("cabalmail-attachments-\(UUID().uuidString)", isDirectory: true)
 
     var isLoading = false
     var errorMessage: String?
@@ -419,10 +423,11 @@ private extension MessageDetailViewModel {
     }
 
     func hydrate(from root: MimePart) async throws {
-        if let plain = root.firstPart(where: { $0.contentType.mimeType == "text/plain" }) {
+        // Parts marked as attachments are never the body (#1812).
+        if let plain = root.bodyPart(mimeType: "text/plain") {
             plainText = plain.textContent()
         }
-        if let html = root.firstPart(where: { $0.contentType.mimeType == "text/html" }) {
+        if let html = root.bodyPart(mimeType: "text/html") {
             htmlBody = html.textContent()
         }
         rootHeaders = root.headers
@@ -437,9 +442,10 @@ private extension MessageDetailViewModel {
         // silently fail to render. See `MimePart.inlineImageDataURL`.
         let plan = root.attachmentPlan()
         inlineImages = plan.inlineImages
+        var fileNames = AttachmentFileNamer()
         attachments = try plan.attachments.map { item in
             let filename = item.filename ?? "attachment-\(UUID().uuidString).bin"
-            let url = try writeToTmp(data: item.data, filename: filename)
+            let url = try writeToTmp(data: item.data, filename: fileNames.name(for: filename))
             return Attachment(
                 id: item.contentID ?? url.lastPathComponent,
                 filename: filename,
@@ -450,15 +456,12 @@ private extension MessageDetailViewModel {
         }
     }
 
-    /// Writes a decoded part to the app's temp directory. Phase-7 polish can
-    /// replace this with a size-bounded managed directory; for Phase 4 we
-    /// rely on the OS sweeping `/tmp` between launches.
+    /// Writes a decoded part, under a name from `AttachmentFileNamer`, to this
+    /// reader's own temp folder (`attachmentDirectory`). The OS sweeps the
+    /// temp directory between launches; nothing deletes the folder sooner.
     func writeToTmp(data: Data, filename: String) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cabalmail-attachments-\(envelope.uid)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let safeName = filename.replacingOccurrences(of: "/", with: "_")
-        let url = directory.appendingPathComponent(safeName)
+        try FileManager.default.createDirectory(at: attachmentDirectory, withIntermediateDirectories: true)
+        let url = attachmentDirectory.appendingPathComponent(filename)
         try data.write(to: url, options: .atomic)
         return url
     }
