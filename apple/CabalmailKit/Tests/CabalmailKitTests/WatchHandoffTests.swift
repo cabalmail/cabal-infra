@@ -112,8 +112,7 @@ final class WatchHandoffTests: XCTestCase {
         // Adopt tokens that are already expired — the realistic hand-off
         // case when the watch has been out of range for an hour.
         try await service.adopt(
-            tokens: makeTokens(expiresAt: Date(timeIntervalSinceNow: -60)),
-            username: "alice"
+            tokens: makeTokens(expiresAt: Date(timeIntervalSinceNow: -60))
         )
 
         let token = try await service.currentIdToken()
