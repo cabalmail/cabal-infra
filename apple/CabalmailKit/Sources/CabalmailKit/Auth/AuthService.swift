@@ -103,7 +103,7 @@ public actor CognitoAuthService: AuthService {
 
     /// Mid-sign-in MFA challenge state. Cognito hands back an opaque
     /// `Session` that `RespondToAuthChallenge` must echo; the username rides
-    /// along so it can be persisted only once the challenge succeeds.
+    /// along because the challenge response must echo `USERNAME` too.
     /// Memory-only by design: a relaunch mid-challenge restarts the sign-in.
     private struct PendingChallenge {
         let method: MfaMethod

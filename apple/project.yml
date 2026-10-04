@@ -185,9 +185,10 @@ targets:
         # `com.apple.developer.mail-client` (a fork removes it until Apple
         # approves its own request; see the file's comment and the
         # "Setting Cabalmail as the default mail handler" section of
-        # `docs/apple.md`), push, the App Group and keychain group shared
-        # with the Notification Service Extension, and the associated
-        # domain for Password AutoFill.
+        # `docs/apple.md`), push, the App Group shared with the
+        # Notification Service Extension and the Safari web extension, the
+        # keychain group shared with the NSE, and the associated domain for
+        # Password AutoFill.
         CODE_SIGN_ENTITLEMENTS: Cabalmail/Cabalmail.entitlements
       configs:
         # Manual-signing settings live ON THE APP TARGET ONLY, not in the

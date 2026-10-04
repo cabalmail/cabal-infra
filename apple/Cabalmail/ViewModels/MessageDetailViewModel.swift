@@ -156,9 +156,9 @@ final class MessageDetailViewModel {
     }
 
     func load() async {
-        // #403: SwiftUI fires `.onDisappear` mid-push transition, cancelling
-        // this Task before `.onAppear` re-fires and spawns the live one.
-        // Short-circuit so the cancelled Task doesn't paint an error screen.
+        // Defensive (#403): nothing in the view cancels `loadTask` any more
+        // (see its doc), but a Task that arrives here cancelled must not
+        // paint an error screen.
         if Task.isCancelled { return }
         errorMessage = nil
         isLoading = true

@@ -21,8 +21,8 @@ import Foundation
 /// item sync is keyed on ingest time and never re-delivers a changed item.
 public actor RssStore {
     let database: SQLiteDatabase
-    /// Directory the database lives in (the caller may put other per-account
-    /// RSS state beside it).
+    /// Directory the database lives in (the caller may keep other RSS state
+    /// beside it).
     public nonisolated let directory: URL
 
     static let schemaVersion = 5

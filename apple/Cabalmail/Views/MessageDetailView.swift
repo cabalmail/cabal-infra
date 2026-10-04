@@ -89,9 +89,9 @@ struct MessageDetailView: View {
     /// system bottom bar, which it draws as an ornament under the window.
     var actionPlacement: ReaderToolbarLayout.Placement {
         #if os(iOS)
-        // A runtime check, not a compile-time one: CI builds this with the
-        // stable Xcode against the iOS 26 SDK, and the same binary has to
-        // pick the right bar on both OS generations.
+        // A runtime check, not a compile-time one: the deployment target is
+        // below iOS 27, so the same binary has to pick the right bar on both
+        // OS generations.
         let isOS27OrLater: Bool
         if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
         return ReaderToolbarLayout.placement(

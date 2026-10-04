@@ -152,8 +152,8 @@ public extension ImapClient {
         )
     }
 
-    /// Default implementation used by test doubles and any client that
-    /// doesn't yet support IDLE. Returning an immediately-finished stream
+    /// Default implementation for test doubles and in-memory fakes, which
+    /// have no server to poll. Returning an immediately-finished stream
     /// means the watcher yields one `.active` event and then sits in the
     /// reconnect backoff — cheap, correct, and no per-mock boilerplate.
     func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error> {

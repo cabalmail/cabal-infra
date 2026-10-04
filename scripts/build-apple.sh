@@ -104,6 +104,8 @@ kit_test() {
       -scheme CabalmailKit \
       -destination 'platform=macOS' \
       -skipPackagePluginValidation \
+      -test-timeouts-enabled YES \
+      -default-test-execution-time-allowance 180 \
       -derivedDataPath "$DERIVED_DATA" \
       "${COMMON_FLAGS[@]}" )
 }
@@ -119,6 +121,8 @@ test_scheme() {
     -scheme "$scheme" \
     -destination "$destination" \
     -skipPackagePluginValidation \
+    -test-timeouts-enabled YES \
+    -default-test-execution-time-allowance 180 \
     -derivedDataPath "$DERIVED_DATA" \
     "${COMMON_FLAGS[@]}" \
     CODE_SIGN_IDENTITY=""

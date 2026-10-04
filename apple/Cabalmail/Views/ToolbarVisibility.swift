@@ -21,7 +21,7 @@ extension ToolbarContent {
     /// is a runtime check on the device; it does not stop the compiler from
     /// needing the symbol. `visibilityPriority` first exists in the iOS 27 /
     /// macOS 26.1 SDKs, so the call must also be compiled out of an Xcode 26
-    /// toolchain, whose SDKs have no such member. Xcode 27 is the first to
+    /// toolchain, whose iOS SDK has no such member. Xcode 27 is the first to
     /// ship Swift 6.4, hence the compiler-version test. CI builds every leg
     /// with Xcode 27, where the test is always true; it stays so a checkout
     /// still builds under Xcode 26, and can go once nothing does.
