@@ -191,10 +191,10 @@ extension MessageListViewModel {
     /// in" loop the cache is designed around. Hard reload stays on the
     /// manual paths the user explicitly invokes.
     ///
-    /// Invalidating the on-disk snapshot here matters because
-    /// `applyRefreshPage` only reconciles the top page, and only while
-    /// the list still fits in it — once paginated it prunes nothing, and
-    /// even when it does prune it touches the top page alone. Foreign-
+    /// Invalidating the on-disk snapshot here matters because a refresh
+    /// prunes the snapshot only of rows it can prove gone: `applyRefreshPage`
+    /// while the list still fits the top page, and a window re-read
+    /// (`+Reconcile`) only within what it read. Foreign-
     /// folder UIDs that leaked into the cache (historically through
     /// pagination during search) sit in the paginated tail, so without an
     /// explicit invalidate they'd survive every subsequent refresh and re-
@@ -260,7 +260,7 @@ extension MessageListViewModel {
     /// and the cache persist run through this so memory and disk stay in
     /// agreement. The optimistic flags are read back from the current
     /// in-memory `envelopes`, which is where the write paths stash them.
-    private func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
+    func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
         let detailFlagWrites = appState.pendingFlagWriteUIDs[folder.path] ?? []
         let detailMoves = appState.pendingMoveUIDs[folder.path] ?? []
         let confirmedGone = appState.confirmedRemovalUIDs(folderPath: folder.path)
@@ -484,11 +484,11 @@ extension MessageListViewModel {
     ///   * Not yet paginated (the whole list fits in the top page) ->
     ///     reconcile against the fetch; a missing row was moved/expunged
     ///     out from under us, so prune it and deletes reflect promptly.
-    ///   * Paginated past the top page -> suppress pruning entirely; the
+    ///   * Paginated past the top page -> suppress pruning here; the
     ///     fetch can't see the tail and the client can't place tail rows
-    ///     against it, so a delete surfaces on the next hard reload /
-    ///     folder switch instead. Same trade the non-default sorts already
-    ///     took, and far better than collapsing a scrolled list to the top.
+    ///     against it. A delete made elsewhere is caught instead by the
+    ///     counts (`planWindow` in `+Reconcile`), which re-reads the window
+    ///     by position rather than collapsing a scrolled list to the top.
     ///   * ...UNLESS the fetch now spans the whole folder. When STATUS
     ///     reports no more messages than we just fetched (`fetched.count >=
     ///     totalMessages`), the top page IS the entire folder, so any loaded
@@ -508,12 +508,13 @@ extension MessageListViewModel {
     /// safe -- and it has to be the server's own 0, not the `?? 0` default
     /// `applyStatusCounts` falls back to, or a STATUS that dropped the
     /// field would wipe a live list. Hence `serverReportsEmpty`.
+    @discardableResult
     func applyRefreshPage(
         _ fetched: [Envelope],
         uidNext: UInt32,
         uidValidity: UInt32,
         serverReportsEmpty: Bool = false
-    ) async throws {
+    ) async throws -> Bool {
         // The top page is authoritative over the loaded rows when either the
         // window still fits in one top page, or the fetch spans the whole
         // (possibly shrunken) folder -- see the doc comment above. The
@@ -523,8 +524,9 @@ extension MessageListViewModel {
         let windowFitsTopPage = UInt32(envelopes.count) <= pageSize
         let fetchSpansFolder = UInt32(fetched.count) >= totalMessages
             && UInt32(envelopes.count) > totalMessages
+        let licensed = (!fetched.isEmpty || serverReportsEmpty) && (windowFitsTopPage || fetchSpansFolder)
         let disappeared: [UInt32]
-        if !fetched.isEmpty || serverReportsEmpty, windowFitsTopPage || fetchSpansFolder {
+        if licensed {
             let fetchedUIDs = Set(fetched.map(\.uid))
             // A row we're removing ourselves is exempt: a refresh landing in
             // the moment between a dispose's move committing and the row
@@ -566,5 +568,6 @@ extension MessageListViewModel {
             uidNext: uidNext,
             into: folder.path
         )
+        return licensed
     }
 }

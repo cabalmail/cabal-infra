@@ -86,6 +86,11 @@ extension MessageListViewModel {
     func adjustTotalMessages(by delta: Int) {
         guard !isSearchActive, delta != 0 else { return }
         totalMessages = UInt32(max(0, Int(totalMessages) + delta))
+        // The removal is this list's own, so the next STATUS mustn't read it
+        // as a change made elsewhere (`WindowAnchor`).
+        if let anchor = alignment.anchor {
+            alignment.anchor?.total = UInt32(max(0, Int(anchor.total) + delta))
+        }
     }
 
     /// Leg of the two-stage row-disposal animation a row is currently in.

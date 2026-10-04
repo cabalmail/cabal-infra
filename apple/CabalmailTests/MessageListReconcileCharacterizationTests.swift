@@ -118,22 +118,21 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
 
     // MARK: - Paginated past the top page
 
-    /// Two halves. Keeping the stale row is a deliberate, documented trade
-    /// (`applyRefreshPage`'s doc comment): once the list has paged past the
-    /// top page, a refresh prunes nothing, because pruning a scrolled list
-    /// against the top page collapsed it to the top -- so a message removed
-    /// elsewhere stays listed and cached until a hard reload. A refactor must
-    /// not "fix" that by pruning a paginated window against the top page.
-    ///
-    /// Pins current behaviour, which looks like a defect: the next page's
-    /// offset (`performLoadMore`'s `windowStart + count`) counts that phantom,
-    /// so the real message at the page boundary (UID 40) is never fetched.
-    /// Nothing documents this half; it is the one to fix.
-    /// Tracked in #1817.
-    func testAPaginatedListKeepsARowRemovedElsewhereAndSkipsOneOnTheNextPageWeakness() async throws {
+    /// Once the list has paged past the top page, a refresh still never
+    /// prunes against the top page alone: that collapsed a scrolled list to
+    /// the top, and a refactor must not bring it back. A message removed
+    /// elsewhere is caught by the counts instead. STATUS is one short of what
+    /// the window's anchor expects with no new UID to explain it, so the
+    /// window is read again by position: the dead row leaves the list and the
+    /// snapshot, and the next page starts where the server's rows do, so the
+    /// row at the old page boundary (UID 40) is loaded rather than skipped.
+    /// Fixed in #1817; this test pinned the skip until then.
+    func testAPaginatedListDropsARowRemovedElsewhereAndTheNextPageSkipsNothing() async throws {
         let loaded = fixture.newestFirst(100, through: 41)
         let remaining = fixture.newestFirst(100, through: 1).filter { $0 != 70 }
         let model = try await fixture.makeModel(loaded: loaded, total: 100)
+        // The STATUS these rows were paged in against, as paging leaves it.
+        model.alignment.anchor = WindowAnchor(total: 100, uidNext: 101)
         try await fixture.seedSnapshot(model, uids: loaded)
         await fixture.scriptRefresh(messages: 99, page: Array(remaining.prefix(50)))
         await fixture.imap.scriptFolderContents(fixture.rows(remaining))
@@ -142,9 +141,9 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
 
         XCTAssertEqual(model.totalMessages, 99)
         XCTAssertEqual(model.envelopes.count, 60)
-        XCTAssertTrue(model.envelopes.contains { $0.uid == 70 }, "UID 70 left the folder but stays listed")
+        XCTAssertFalse(model.envelopes.contains { $0.uid == 70 }, "UID 70 left the folder and the list")
         let cached = await fixture.snapshotUIDs(model)
-        XCTAssertEqual(cached?.contains(70), true, "and cached")
+        XCTAssertEqual(cached?.contains(70), false, "and the snapshot")
 
         model.ensureLoaded(around: 59)
         await fixture.awaitLoadMore(model)
@@ -152,11 +151,11 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         await model.stopWatching()
 
         let pages = await fixture.pageCalls()
-        XCTAssertEqual(pages, ["Work offset=60 limit=200 dateReceived/descending"])
+        let read = "Work offset=0 limit=60 dateReceived/descending"
+        XCTAssertEqual(pages, [read, "Work offset=60 limit=200 dateReceived/descending"])
         let listed = Set(model.envelopes.map(\.uid))
         XCTAssertEqual(listed.count, 99)
-        XCTAssertTrue(listed.contains(70), "the phantom is still listed")
-        XCTAssertFalse(listed.contains(40), "and the real message at the page boundary was never fetched")
+        XCTAssertTrue(listed.contains(40), "the real message at the old page boundary is loaded")
         XCTAssertTrue(listed.contains(39))
     }
 
