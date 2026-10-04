@@ -2,13 +2,6 @@ import XCTest
 import CabalmailKit
 @testable import Cabalmail
 
-/// Fails every request the way URLSession does with no connection.
-struct UnreachableTransport: HTTPTransport {
-    func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        throw CabalmailError.network("The Internet connection appears to be offline.")
-    }
-}
-
 /// `/list_folders` and `/folder_status` answering as the server last did.
 struct FolderServerTransport: HTTPTransport {
     func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
