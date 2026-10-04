@@ -1005,8 +1005,8 @@ transitions and sleep/wake; that stack has since been deleted.
 
 There is no IDLE. `ApiBackedImapClient.idle(folder:)` polls folder status
 and yields an `IdleEvent` when `UIDNEXT` advances or the message count
-drops; `MailboxWatcher` coalesces those events and applies the reconnect
-backoff. Terminating the stream cancels the polling task.
+drops; `MailboxWatcher` turns those events into refresh ticks and applies
+the reconnect backoff, and the message list coalesces bursts of ticks. Terminating the stream cancels the polling task.
 
 ### Rich-text editor: WKWebView contenteditable + fetched marked/turndown
 
@@ -1232,8 +1232,10 @@ polls folder status (see "New-mail polling" above), and emits `.changed` /
 `.task { }` and stops it on `.onDisappear`. The watcher stays off while
 the user is elsewhere — mailbox management, compose sheet, settings — so
 only the mailbox on screen is polled. When the polling stream ends or
-fails, the watcher reopens it after a backoff meant to double from 2s to
-60s (issue #1797: with the polling client it currently stays at 2s).
+fails, the watcher reopens it after a backoff that doubles from 2s to 60s
+while reopening keeps failing. `idle(folder:)` makes its first poll
+before it returns the stream, so an unreachable API fails the reopen
+itself and the backoff grows.
 Consecutive `EXISTS` bursts are coalesced on the view-model side with a
 1-second refresh floor so a message sweep doesn't trigger N envelope
 fetches.
