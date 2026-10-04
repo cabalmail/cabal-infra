@@ -296,4 +296,10 @@ public struct IdleEvent: Sendable, Hashable {
         case fetch(UInt32)
     }
     public let kind: Kind
+
+    /// Public so an `ImapClient` conformer outside the Kit (a test double)
+    /// can produce events too.
+    public init(kind: Kind) {
+        self.kind = kind
+    }
 }
