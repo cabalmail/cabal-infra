@@ -5,7 +5,7 @@ import Foundation
 extension CabalmailClient {
     /// Removes every piece of locally cached user data: the on-disk envelope
     /// snapshots and message bodies, the local draft buffers, the outbox
-    /// queue, and the in-memory address list. Called on sign-out.
+    /// queue, and the saved address list. Called on sign-out.
     ///
     /// The caches live in a shared, non-user-scoped application-support
     /// directory, so without this a second account signing in on the same
@@ -14,7 +14,7 @@ extension CabalmailClient {
     /// under the new session). Best-effort: a failure to clear one cache
     /// doesn't stop the rest.
     public func clearLocalData() async {
-        await addressCache.invalidate()
+        await addressCache.clear()
         try? await envelopeCache.clearAll()
         try? await bodyCache.clearAll()
         try? await draftStore.removeAll()

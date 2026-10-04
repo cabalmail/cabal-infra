@@ -13,11 +13,12 @@ extension MessageDetailView {
     /// addresses (per the React app's 0.3.0 behavior). Threads from the
     /// fetched message's headers when the body has loaded — the list
     /// envelope may lack the threading fields (Phase 0 of the draft-sync
-    /// plan).
+    /// plan). The model is read after the address fetch, so a body that
+    /// lands meanwhile is still quoted.
     func beginCompose(_ mode: ReplyBuilder.ReplyMode) {
         guard let client = appState.client else { return }
         Task { @MainActor in
-            let addresses = (try? await client.addresses()) ?? []
+            let addresses = await Self.replyAddresses(client: client)
             let seed = ReplyBuilder.build(
                 from: model?.threadedEnvelope ?? envelope,
                 body: model?.plainText,
@@ -30,6 +31,13 @@ extension MessageDetailView {
             }
             presentCompose(seed: seed)
         }
+    }
+
+    /// The addresses a reply's From is matched against. Offline that's the
+    /// list an earlier fetch saved, so a reply still goes out from the
+    /// address the message was sent to rather than the default.
+    static func replyAddresses(client: CabalmailClient) async -> [Address] {
+        (try? await client.addressesForSending().addresses) ?? []
     }
 
     /// Forwarding includes the original message's attachments. The detail

@@ -286,12 +286,18 @@ final class ComposeViewModel {
     }
 
     func refreshAddresses(forceRefresh: Bool = false) async {
+        let isSavedCopy: Bool
         do {
-            availableAddresses = try await client.addresses(forceRefresh: forceRefresh)
+            (availableAddresses, isSavedCopy) = try await client.addressesForSending(forceRefresh: forceRefresh)
         } catch {
             errorMessage = "Couldn't load addresses: \(error)"
             return
         }
+        // Offline, the list is the one an earlier fetch saved. It can lack
+        // an address created since on another device, so it can't show that
+        // a default From is gone; clearing it here would also push the
+        // cleared default to the server once the connection returns.
+        guard !isSavedCopy else { return }
         // The preference-seeded pre-fill is only trustworthy once the real
         // address list confirms it. A default that isn't in the list — a
         // revoked address, or one leaked in from another account before

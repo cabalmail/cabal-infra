@@ -280,7 +280,8 @@ enum TestFixtures {
     /// caches make that a no-op).
     static func makeClient(
         imap: FakeImapClient,
-        transport: HTTPTransport = NullHTTPTransport()
+        transport: HTTPTransport = NullHTTPTransport(),
+        addressCache: AddressCache = AddressCache()
     ) throws -> CabalmailClient {
         let config = makeConfiguration()
         let auth = NullAuthService()
@@ -295,7 +296,7 @@ enum TestFixtures {
                 transport: transport
             ),
             imapClient: imap,
-            addressCache: AddressCache(),
+            addressCache: addressCache,
             envelopeCache: try EnvelopeCache(directory: tmp.appendingPathComponent("e")),
             bodyCache: try MessageBodyCache(directory: tmp.appendingPathComponent("b")),
             draftStore: try DraftStore(directory: tmp.appendingPathComponent("d")),
