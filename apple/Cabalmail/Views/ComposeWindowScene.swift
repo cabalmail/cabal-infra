@@ -117,6 +117,10 @@ private struct ComposeWindowContent: View {
     /// changed per evaluation would rebuild the composer on every redraw.
     @State private var ownSeed = Draft()
 
+    /// Set when this window's composer closes; see
+    /// `ComposeSlotRegistry.mayCompose(_:closedOn:)`.
+    @State private var closedOn: ComposeSlotRegistry.ClosedCompose?
+
     /// What this window is composing right now; see
     /// `ComposeSlotRegistry.seed(forWindowWith:ownSeed:)`.
     private var seed: Draft {
@@ -141,13 +145,14 @@ private struct ComposeWindowContent: View {
 
     @ViewBuilder
     private var composer: some View {
-        if let client = appState.client {
+        if let client = appState.client, appState.composeSlots.mayCompose(seed, closedOn: closedOn) {
             ComposeView(model: ComposeViewModel(
                 seed: seed,
                 client: client,
                 draftStore: client.draftStore,
                 preferences: preferences,
                 onClose: {
+                    closedOn = appState.composeSlots.closedCompose(for: seed)
                     // Free the slot before dismissing so the next composer
                     // can recycle this window instead of minting a
                     // presentation SwiftUI will never release. A window
@@ -173,7 +178,7 @@ private struct ComposeWindowContent: View {
             .id(seed.id)
             .environment(appState)
             .environment(preferences)
-        } else {
+        } else if appState.client == nil {
             ContentUnavailableView(
                 "Sign in required",
                 systemImage: "person.crop.circle.badge.exclamationmark",
@@ -181,6 +186,10 @@ private struct ComposeWindowContent: View {
                     "Sign in from the main Cabalmail window to compose a message."
                 )
             )
+        } else {
+            // Closed before the last sign-out, and only still here because
+            // SwiftUI keeps closed windows mounted: nothing to compose.
+            Color.clear
         }
     }
 }

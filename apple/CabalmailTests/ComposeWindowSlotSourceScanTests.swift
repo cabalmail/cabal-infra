@@ -12,12 +12,31 @@ import XCTest
 // did the same to a closed window that really held it. Each hidden composer
 // saved its draft to Drafts every minute until the app quit.
 //
-// `ComposeSlotRegistryTests` proves `seed(forWindowWith:ownSeed:)` keeps a
-// slotless window on its own seed. The scene itself cannot be exercised in a
-// unit test, so this pins that the window asks that rule and has no slot-0
-// fallback of its own. Restoring `slot ?? ComposeSlot(index: 0)` fails
+// Signing back in after a sign-out (an expired session forces one) rebuilt
+// the composer of every closed window, also hidden, from the seed it closed
+// on.
+//
+// `ComposeSlotRegistryTests` proves the two rules: `seed(forWindowWith:
+// ownSeed:)` keeps a slotless window on its own seed, and `mayCompose(_:
+// closedOn:)` keeps a closed window empty across a sign-out. The scene
+// itself cannot be exercised in a unit test, so this pins that the window
+// and the sign-out use them. Restoring `slot ?? ComposeSlot(index: 0)` fails
 // `testSlotlessWindowsHaveNoSlotFallback` by name.
 final class ComposeWindowSlotSourceScanTests: XCTestCase {
+
+    func testClosedWindowsAskBeforeComposingAcrossASignOut() throws {
+        let scene = try Self.code(Self.source("Cabalmail/Views/ComposeWindowScene.swift"))
+        XCTAssertTrue(
+            scene.contains("appState.composeSlots.mayCompose(seed, closedOn: closedOn)"),
+            "the composer must be gated on the window's close"
+        )
+        XCTAssertTrue(
+            scene.contains("closedOn = appState.composeSlots.closedCompose(for: seed)"),
+            "onClose must record the close"
+        )
+        let signOut = try Self.code(Self.source("Cabalmail/AppState.swift"))
+        XCTAssertTrue(signOut.contains("composeSlots.endSession()"), "sign-out must end the compose session")
+    }
 
     func testSlotlessWindowsHaveNoSlotFallback() throws {
         let scene = try Self.code(Self.source("Cabalmail/Views/ComposeWindowScene.swift"))
@@ -25,9 +44,15 @@ final class ComposeWindowSlotSourceScanTests: XCTestCase {
             try Self.slotLiterals(in: scene), 0,
             "a window without a slot must not borrow one: it would follow that slot's seed while closed"
         )
-        XCTAssertTrue(scene.contains("seed(forWindowWith: slot, ownSeed: ownSeed)"))
+        XCTAssertTrue(
+            scene.contains("seed(forWindowWith: slot, ownSeed: ownSeed)"),
+            "the window must ask the registry's rule for its seed"
+        )
         XCTAssertTrue(scene.contains("ownSeed = mailto.draft()"), "a mailto: window keeps its seed itself")
-        XCTAssertTrue(scene.contains("if let slot { appState.composeSlots.release(slot) }"))
+        XCTAssertTrue(
+            scene.contains("if let slot { appState.composeSlots.release(slot) }"),
+            "a window without a slot must not free one"
+        )
     }
 
     /// Proves the detector catches the shipped shape, so a rewrite of the
@@ -37,11 +62,12 @@ final class ComposeWindowSlotSourceScanTests: XCTestCase {
         XCTAssertEqual(try Self.slotLiterals(in: Self.code(shipped)), 1)
         let shippedReseed = "                            slot ?? ComposeSlot(index: 0),"
         XCTAssertEqual(try Self.slotLiterals(in: Self.code(shippedReseed)), 1)
+        XCTAssertEqual(try Self.slotLiterals(in: Self.code("ComposeWindowContent(slot: slot ?? .init(index: 0))")), 1)
         XCTAssertEqual(try Self.slotLiterals(in: Self.code("    /// used to fall back to `ComposeSlot(index: 0)`")), 0)
     }
 
     private static func slotLiterals(in code: String) throws -> Int {
-        try code.ranges(of: Regex(#"\bComposeSlot\(\s*index:"#)).count
+        try code.ranges(of: Regex(#"(\bComposeSlot(\.init)?|\.init)\(\s*index:"#)).count
     }
 
     /// Line comments cut first: prose about the old fallback is not one.

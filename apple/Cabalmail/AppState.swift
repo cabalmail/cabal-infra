@@ -743,6 +743,9 @@ extension AppState {
         // Forget this install's resume session and reading positions too, so
         // the next account on the device doesn't inherit them.
         self.navCoordinator?.clearLocalState()
+        // Same turn as dropping the client, so no closed compose window
+        // builds a composer for the next session in between.
+        composeSlots.endSession()
         self.client = nil
         self.navCoordinator = nil
         self.searchModelStore = nil
