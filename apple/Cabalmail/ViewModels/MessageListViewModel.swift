@@ -388,7 +388,10 @@ final class MessageListViewModel {
         await refresh()
     }
 
-    func refresh() async {
+    /// `prefetched` is a STATUS already asked for, with when it was asked:
+    /// `hardReload` and `setSort` check the server with one before dropping
+    /// the list, and it is used rather than asked for again.
+    func refresh(prefetched: PrefetchedStatus? = nil) async {
         // Re-route while a search is showing — pull-to-refresh and the
         // IDLE / 60-second background refreshes shouldn't silently wipe
         // active search results back to the folder view. Re-running the
@@ -404,12 +407,17 @@ final class MessageListViewModel {
         if isSearchScope { return }
         isLoading = true
         defer { isLoading = false }
-        let startedAt = ContinuousClock.now
+        let startedAt = prefetched?.askedAt ?? ContinuousClock.now
         dbg("refresh start sort=\(sortCriterion.field)")
         do {
             // flagged: true asks for the SEARCH FLAGGED count too -- this is the
             // one status call that drives the filter-pill counts.
-            let status = try await client.folderStatus(path: folder.path, flagged: true)
+            let status: FolderStatus
+            if let prefetched {
+                status = prefetched.status
+            } else {
+                status = try await client.folderStatus(path: folder.path, flagged: true)
+            }
             dbg("refresh uidv=\(status.uidValidity ?? 0)/\(self.uidValidity ?? 0) msgs=\(status.messages ?? -1)")
             let uidNext = status.uidNext ?? 1
             // Only a concrete, *changed* UIDVALIDITY means "rebuild from
