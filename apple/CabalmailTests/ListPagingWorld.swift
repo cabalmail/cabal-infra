@@ -1,0 +1,144 @@
+import XCTest
+import CabalmailKit
+@testable import Cabalmail
+
+/// One paging test's world for the workstream 0.8 characterization suites of
+/// the folder list's sliding-window paging (MessageListPagingCharacterizationTests,
+/// MessageListBottomPrefetchCharacterizationTests and
+/// MessageListPagingGateCharacterizationTests): a scripted server folder, a
+/// scratch cache directory removed at teardown, and the list models built
+/// over them.
+///
+/// The folder is in server order, newest first, and `makeEnvelope` sets no
+/// date, so the list's own order (UID descending) agrees with it: index `i`
+/// of an `n`-message folder holds UID `n - i`. It is not INBOX, so a refresh
+/// publishing its counts never reaches the inbox badge of the host app.
+@MainActor
+final class ListPagingWorld {
+    static let folderPath = "Work"
+
+    /// One recorded `envelopes(offset:limit:)` request.
+    struct Page: Equatable, CustomStringConvertible {
+        let offset: UInt32
+        let limit: UInt32
+        var sort: SortCriterion = .default
+        var folder: String = ListPagingWorld.folderPath
+
+        var description: String {
+            "\(folder)[\(offset)+\(limit) \(sort.field.rawValue) \(sort.direction.rawValue)]"
+        }
+    }
+
+    let imap = FakeImapClient()
+    private let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("list-paging-\(UUID().uuidString)")
+    private var models: [MessageListViewModel] = []
+
+    static func serverFolder(size: Int) -> [Envelope] {
+        (0..<size).map { TestFixtures.makeEnvelope(uid: UInt32(size - $0)) }
+    }
+
+    /// The UIDs an `size`-message folder holds at the absolute indices `range`.
+    static func uids(_ range: Range<Int>, size: Int = 1000) -> [UInt32] {
+        range.map { UInt32(size - $0) }
+    }
+
+    static func status(messages: Int) -> FolderStatus {
+        FolderStatus(messages: messages, unseen: 0, flagged: 0, uidValidity: 7, uidNext: UInt32(messages + 1))
+    }
+
+    /// Scripts a `size`-message folder: every positional page slices it, and
+    /// STATUS and the top page answer from it. `statusCount` makes STATUS
+    /// report a different total than the folder pages.
+    func scriptServer(size: Int, statusCount: Int? = nil) async {
+        let folder = Self.serverFolder(size: size)
+        await imap.scriptFolderContents(folder)
+        await imap.scriptInitialLoad(
+            status: Self.status(messages: statusCount ?? size),
+            topEnvelopes: Array(folder.prefix(50))
+        )
+    }
+
+    /// A list model over the fixture folder with its own caches under the
+    /// scratch root, and `preloaded` rows already showing. Nothing runs until
+    /// the test drives it.
+    func makeModel(preloaded: [Envelope] = []) throws -> MessageListViewModel {
+        let directory = root.appendingPathComponent(UUID().uuidString)
+        let config = TestFixtures.makeConfiguration()
+        let auth = NullAuthService()
+        let client = CabalmailClient(
+            configuration: config,
+            authService: auth,
+            apiClient: URLSessionApiClient(configuration: config, authService: auth, transport: NullHTTPTransport()),
+            imapClient: imap,
+            addressCache: AddressCache(),
+            envelopeCache: try EnvelopeCache(directory: directory.appendingPathComponent("envelopes")),
+            bodyCache: try MessageBodyCache(directory: directory.appendingPathComponent("bodies")),
+            draftStore: try DraftStore(directory: directory.appendingPathComponent("drafts")),
+            outbox: try Outbox(directory: directory.appendingPathComponent("outbox"))
+        )
+        let model = MessageListViewModel(
+            folder: Folder(path: Self.folderPath, isSubscribed: true),
+            client: client,
+            preferences: Preferences(store: InMemoryPreferenceStore()),
+            appState: AppState()
+        )
+        model.envelopes = preloaded
+        models.append(model)
+        return model
+    }
+
+    /// A list as a background refresh leaves it: the first `preloaded` rows of
+    /// the folder showing (none for a fresh list), then one `refresh()` for
+    /// STATUS and the top page. No bottom page is staged: only `loadInitial`
+    /// and `setSort` stage one.
+    func openedList(
+        size: Int = 1000,
+        preloaded: Int = 0,
+        statusCount: Int? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws -> MessageListViewModel {
+        await scriptServer(size: size, statusCount: statusCount)
+        let model = try makeModel(preloaded: Array(Self.serverFolder(size: size).prefix(preloaded)))
+        await model.refresh()
+        XCTAssertNil(model.errorMessage, "the opening refresh failed", file: file, line: line)
+        return model
+    }
+
+    /// Waits for every load the model owns (load-more, load-previous, the far
+    /// jump and the bottom prefetch), then checks that none is still running,
+    /// so a load moved onto some other task fails here instead of letting a
+    /// "nothing changed" assertion pass before the load has run. Call it only
+    /// while nothing is held at the fake.
+    func settle(
+        _ model: MessageListViewModel,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        await model.loadMoreTask?.value
+        await model.loadPrevTask?.value
+        await model.loadWindowTask?.value
+        await model.bottomPrefetchTask?.value
+        XCTAssertFalse(model.isLoadingMore, "a load-more is still running", file: file, line: line)
+        XCTAssertFalse(model.isLoadingPrevious, "a load-previous is still running", file: file, line: line)
+        XCTAssertFalse(model.isLoadingWindow, "a jump is still running", file: file, line: line)
+    }
+
+    /// Every page request so far, in order.
+    func pages() async -> [Page] {
+        await imap.envelopesCalls.map {
+            Page(offset: $0.offset, limit: $0.limit, sort: $0.sort, folder: $0.folder)
+        }
+    }
+
+    /// Cancels every model's own tasks (the debounced snapshot write among
+    /// them), then removes the caches.
+    func tearDown() async {
+        for model in models {
+            await model.stopWatching()
+        }
+        models = []
+        try? FileManager.default.removeItem(at: root)
+    }
+}
