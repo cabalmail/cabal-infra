@@ -273,21 +273,20 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
     }
 
     /// The event runs `refresh()`, not `hardReload()`. On a list scrolled deep
-    /// enough that its front was trimmed, that refresh updates the count but
-    /// fetches no top page and leaves the rows where they are (64794213).
-    ///
-    /// Pins current behaviour, which looks like a defect: `windowStart` is
-    /// not shifted when the total changes, so the deep window is one row off
-    /// against the server's positions. The new message took index 0, so the
-    /// server's index 300 now holds UID 701 while the list still shows 700
-    /// there. Scrolling back up loads indices 100..<300 (UIDs 901...702), and
-    /// UID 701 is never fetched.
-    /// Tracked in #1818.
-    func testAnEventOnADeepScrolledListMovesOnlyTheCountSoScrollingUpSkipsARow() async throws {
+    /// enough that its front was trimmed, that refresh fetches no top page
+    /// (64794213), but the new message took index 0 and moved every server
+    /// position under the window down one. The counts show it (one more
+    /// message, one new UID), so the window is read again by position, one
+    /// page centred on it: index 300 holds UID 701 as on the server, and
+    /// scrolling back up loads the rows above without skipping one. Fixed in
+    /// #1818; this test pinned the skip until then.
+    func testAnEventOnADeepScrolledListRealignsTheWindowSoScrollingUpSkipsNothing() async throws {
         let imap = harness.imap
         await imap.scriptInitialLoad(status: ListWatcherHarness.status(messages: 1001), topEnvelopes: [])
         await imap.scriptFolderContents(ListWatcherHarness.folder(of: 1001))
         let model = try harness.makeWindowModel(window: 300..<600)
+        // The STATUS these rows were paged in against, as paging leaves it.
+        model.alignment.anchor = WindowAnchor(total: 1000, uidNext: 1001)
         await model.startWatching()
         try await harness.awaitStreams()
 
@@ -296,9 +295,9 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         try await waitUntilOnMainActor { !model.isLoading }
 
         XCTAssertEqual(model.totalMessages, 1001)
-        XCTAssertEqual(model.windowStart, 300, "the start stays put although every index moved down one")
-        XCTAssertEqual(model.envelopes.count, 300)
-        XCTAssertEqual(model.envelope(at: 300)?.uid, 700)
+        XCTAssertEqual(model.windowStart, 325, "one page centred on the old window")
+        XCTAssertEqual(model.envelopes.count, 250)
+        XCTAssertEqual(model.envelope(at: 325)?.uid, 676, "the row the server has at 325")
         XCTAssertNil(model.errorMessage)
         let topCalls = await imap.topEnvelopesCalls
         XCTAssertTrue(topCalls.isEmpty, "no top page while the front is trimmed")
@@ -307,11 +306,13 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         let previous = try XCTUnwrap(model.loadPrevTask)
         await previous.value
         let calls = await imap.envelopesCalls
-        XCTAssertEqual(calls, [.init(folder: "INBOX", offset: 100, limit: 200, sort: .default)])
-        XCTAssertEqual(model.windowStart, 100)
+        XCTAssertEqual(calls, [
+            .init(folder: "INBOX", offset: 325, limit: 250, sort: .default),
+            .init(folder: "INBOX", offset: 125, limit: 200, sort: .default),
+        ])
+        XCTAssertEqual(model.windowStart, 125)
         XCTAssertEqual(model.envelope(at: 299)?.uid, 702)
-        XCTAssertEqual(model.envelope(at: 300)?.uid, 700, "the server holds UID 701 at index 300")
-        XCTAssertFalse(model.envelopes.contains { $0.uid == 701 }, "UID 701 is never loaded")
+        XCTAssertEqual(model.envelope(at: 300)?.uid, 701, "the server holds UID 701 at index 300")
     }
 
     /// Pins current behaviour, which looks like a defect: while the Unread or

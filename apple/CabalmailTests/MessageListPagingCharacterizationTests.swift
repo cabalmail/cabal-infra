@@ -102,9 +102,12 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
     // MARK: - Trim at the window cap
 
     /// P3. 500 rows plus a 200-row page is 100 over the 600 cap: the front
-    /// goes, the window starts at 100, and from then on a refresh updates the
-    /// counts but fetches no top page (it would splice a gap above the rows).
-    func testTheWindowTrimsItsFrontAtTheCapAndARefreshThenSkipsTheTopPage() async throws {
+    /// goes and the window starts at 100. From then on a refresh fetches no
+    /// top page (it would splice a gap above the rows). New mail above the
+    /// window still moves every server position under it, so the counts send
+    /// the window to be read again by position, one page centred on it: the
+    /// rows move to where the server now has them (#1818).
+    func testTheWindowTrimsItsFrontAtTheCapAndARefreshRealignsItWithoutTheTopPage() async throws {
         let model = try await world.openedList(preloaded: 500)
         XCTAssertEqual(model.envelopes.count, 500)
 
@@ -122,16 +125,20 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
 
         let topFetches = await world.imap.topEnvelopesCalls.count
         let statuses = await world.imap.statusCalls.count
+        // Three messages arrive on top: the folder now holds 1003.
+        await world.imap.scriptFolderContents(ListPagingWorld.serverFolder(size: 1003))
         await world.imap.scriptStatusResults([.success(ListPagingWorld.status(messages: 1003))])
         await model.refresh()
 
         let topFetchesAfter = await world.imap.topEnvelopesCalls.count
         let statusesAfter = await world.imap.statusCalls.count
+        let pagesAfter = await world.pages()
         XCTAssertEqual(statusesAfter, statuses + 1, "STATUS still runs")
         XCTAssertEqual(topFetchesAfter, topFetches, "no top page once the front is trimmed")
+        XCTAssertEqual(pagesAfter.last, Page(offset: 275, limit: 250), "one page centred on the window")
         XCTAssertEqual(model.totalMessages, 1003, "the counts move")
-        XCTAssertEqual(model.envelopes.map(\.uid), uids(100..<700), "the rows do not")
-        XCTAssertEqual(model.windowStart, 100)
+        XCTAssertEqual(model.windowStart, 275)
+        XCTAssertEqual(model.envelopes.map(\.uid), uids(275..<525, size: 1003), "and so do the rows")
         XCTAssertNil(model.errorMessage)
     }
 

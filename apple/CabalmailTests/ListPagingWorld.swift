@@ -101,6 +101,13 @@ final class ListPagingWorld {
     ) async throws -> MessageListViewModel {
         await scriptServer(size: size, statusCount: statusCount)
         let model = try makeModel(preloaded: Array(Self.serverFolder(size: size).prefix(preloaded)))
+        if preloaded > 0 {
+            // Rows a real load left showing line up with the STATUS it read,
+            // so the window carries that anchor; a bare window would be read
+            // again by position, as one hydrated from the snapshot is.
+            let total = UInt32(statusCount ?? size)
+            model.alignment.anchor = WindowAnchor(total: total, uidNext: total + 1)
+        }
         await model.refresh()
         XCTAssertNil(model.errorMessage, "the opening refresh failed", file: file, line: line)
         return model

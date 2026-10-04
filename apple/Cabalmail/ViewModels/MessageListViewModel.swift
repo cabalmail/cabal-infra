@@ -208,6 +208,9 @@ final class MessageListViewModel {
     // the `+Refresh` sibling (loadPrevious) can reach them.
     var windowStart: UInt32 = 0
     var hasTrimmedFront = false
+    /// What the window is known to line up with on the server, and the state
+    /// of any re-read that realigns it (`+Reconcile`).
+    @ObservationIgnored var alignment = WindowAlignment()
 
     /// Foreground-only change watcher (`MailboxWatcher`, which polls folder
     /// status). Nil when the view is offscreen; started on
@@ -397,8 +400,9 @@ final class MessageListViewModel {
         // sentinel path; bail instead.
         if isSearchScope { return }
         isLoading = true
-        defer { isLoading = false }
+        defer { finishRefresh() }
         let startedAt = prefetched?.askedAt ?? ContinuousClock.now
+        var generation = alignment.generation
         do {
             // flagged: true asks for the SEARCH FLAGGED count too -- this is the
             // one status call that drives the filter-pill counts.
@@ -420,6 +424,7 @@ final class MessageListViewModel {
                     envelopes = []
                     resetWindow()
                     appState.clearConfirmedRemovals(folderPath: folder.path)
+                    generation = alignment.generation
                 }
                 self.uidValidity = fresh
             }
@@ -429,29 +434,15 @@ final class MessageListViewModel {
             // by offset. `totalMessages` from STATUS gates pagination.
             // STATUS drives the All/Unread/Flagged pill counts and the
             // pagination gate; helper lives in +Refresh to keep this body lean.
-            let messages = applyStatusCounts(status, mayPredateRemoval: removalMayPostdate(startedAt))
-            // Once the window's front has been trimmed, the loaded rows no
-            // longer include the top of the folder, so folding in the newest
-            // page would splice a gap above them (and grow the window back).
-            // Skip it -- new top mail surfaces when the user returns to the
-            // top or hard-reloads. The deep window is static meanwhile, and
-            // disappear-detection is already suppressed once paginated.
-            if hasTrimmedFront {
-                errorMessage = nil
-                return
-            }
-            let fetched = try await client.imapClient.topEnvelopes(
-                folder: folder.path,
-                limit: pageSize,
-                totalMessages: messages,
-                sort: sortCriterion
-            )
-            // `status.messages == 0` is the server's own count, not the `?? 0`
-            // fallback `applyStatusCounts` applies: only an explicit zero
-            // licenses pruning the list against an empty fetch (#939).
-            try await applyRefreshPage(fetched, uidNext: uidNext,
-                                       uidValidity: uidValidity,
-                                       serverReportsEmpty: status.messages == 0)
+            let mayPredate = removalMayPostdate(startedAt)
+            let messages = applyStatusCounts(status, mayPredateRemoval: mayPredate)
+            let reading = windowReading(status, askedAt: startedAt,
+                                        mayPredateRemoval: mayPredate, generation: generation)
+            // Whether the loaded rows still sit where the server has them
+            // decides what comes next: usually the top page, as always.
+            try await refreshWindow(reading, messages: messages, uidNext: uidNext,
+                                    uidValidity: uidValidity,
+                                    serverReportsEmpty: status.messages == 0)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -470,7 +461,7 @@ final class MessageListViewModel {
     /// there's no jump and no trim-retrigger thrash. The fetches run on
     /// model-owned tasks so they outlive the row `.task`'s cancellation.
     func ensureLoaded(around absoluteIndex: Int) {
-        guard !isSearchActive, pendingRemovedUIDs.isEmpty,
+        guard !isSearchActive, pendingRemovedUIDs.isEmpty, !alignment.isReconciling,
               !isLoading, !isLoadingMore, !isLoadingPrevious, !isLoadingWindow
               else { return }
         let windowLo = Int(windowStart)
@@ -659,6 +650,9 @@ extension MessageListViewModel {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             uidValidity = snapshot.uidValidity
             envelopes = snapshot.envelopes.values.sorted(by: envelopeOrder)
+            // Nothing says where these rows sit on the server now; the
+            // refresh that follows decides (`planWindow`).
+            forgetWindowAnchor()
             // `hasMore`/`totalMessages` stay at their defaults; the refresh
             // that follows hydration sets the real count from STATUS.
         }
@@ -704,6 +698,7 @@ extension MessageListViewModel {
     func resetWindow() {
         windowStart = 0
         hasTrimmedFront = false
+        forgetWindowAnchor()
         // A wiped / re-anchored window (hard reload, sort change, search clear,
         // UIDVALIDITY change) invalidates any staged bottom window with it.
         invalidateBottomPrefetch()
