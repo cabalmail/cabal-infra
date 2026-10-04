@@ -44,11 +44,16 @@ extension UTType {
 /// rides `.draggable` on the source side and is decoded automatically by
 /// `.dropDestination(for: MessageDragPayload.self)` on the folder side.
 ///
-/// Only `items` and `subject` are on the wire; `rawSource` is the lazy
-/// fetch behind the `.eml` representation and never leaves the process (a
-/// decoded payload has none, and `exportsEml` is false for it).
+/// Only `items`, `sourceList` and `subject` are on the wire; `rawSource` is
+/// the lazy fetch behind the `.eml` representation and never leaves the
+/// process (a decoded payload has none, and `exportsEml` is false for it).
 struct MessageDragPayload: Codable, Transferable {
     let items: [MessageDragItem]
+    /// The message list the drag lifted from (`MessageListView.dragSourceID`).
+    /// The drop's move request is observed by every mounted list in every
+    /// window; this names the one that performs it. Nil when absent from the
+    /// wire, which any list performs, as before.
+    let sourceList: UUID?
     /// The dragged message's subject, for the `.eml` file name. Nil for a
     /// multi-message drag, which offers no `.eml`.
     let subject: String?
@@ -56,19 +61,26 @@ struct MessageDragPayload: Codable, Transferable {
     /// the drag source for a single-item drag; nil otherwise.
     let rawSource: (@Sendable () async throws -> Data)?
 
-    init(items: [MessageDragItem], subject: String? = nil, rawSource: (@Sendable () async throws -> Data)? = nil) {
+    init(
+        items: [MessageDragItem],
+        sourceList: UUID? = nil,
+        subject: String? = nil,
+        rawSource: (@Sendable () async throws -> Data)? = nil
+    ) {
         self.items = items
+        self.sourceList = sourceList
         self.subject = subject
         self.rawSource = rawSource
     }
 
     private enum CodingKeys: String, CodingKey {
-        case items, subject
+        case items, sourceList, subject
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         items = try container.decode([MessageDragItem].self, forKey: .items)
+        sourceList = try container.decodeIfPresent(UUID.self, forKey: .sourceList)
         subject = try container.decodeIfPresent(String.self, forKey: .subject)
         rawSource = nil
     }
@@ -76,6 +88,7 @@ struct MessageDragPayload: Codable, Transferable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(items, forKey: .items)
+        try container.encodeIfPresent(sourceList, forKey: .sourceList)
         try container.encodeIfPresent(subject, forKey: .subject)
     }
 
@@ -118,7 +131,6 @@ enum MessageRawSource {
         if let cached = await client.bodyCache.fetch(folder: folder, uidValidity: uidValidity, uid: uid) {
             return cached
         }
-        try await client.imapClient.connectAndAuthenticate()
         let raw = try await client.imapClient.fetchBody(folder: folder, uid: uid)
         try await client.bodyCache.store(folder: folder, uidValidity: uidValidity, uid: uid, bytes: raw.bytes)
         return raw.bytes

@@ -6,7 +6,9 @@ import CabalmailKit
 // TEMP diagnostic logger (remove with the dbg() calls). Routed through unified
 // logging so the output is visible from a Release / TestFlight build in
 // Console.app (filter subsystem "com.cabalmail.debug") -- print() stdout is
-// not. Values are logged .public so they aren't redacted in Release.
+// not. The event text is logged .public so it isn't redacted in Release; the
+// folder path is .private, since folder names are user content and a
+// sysdiagnose shouldn't carry them.
 private let mlvmDebugLog = Logger(subsystem: "com.cabalmail.debug", category: "messagelist")
 
 /// Backs `MessageListView`. Owns the paginated envelope window, envelope
@@ -272,6 +274,15 @@ final class MessageListViewModel {
     /// moves are still returning.
     var pendingRemovedUIDs: Set<UInt32> = []
 
+    /// Rows `pruneEnvelope(uid:)` took out for a reader dispose / move /
+    /// purge that is still in flight, with the index each held, so a failed
+    /// server write can put the row back (`restorePrunedEnvelope`).
+    /// Only in-flight removals are kept, so it holds a handful at most.
+    @ObservationIgnored var readerPrunedEnvelopes: [UInt32: (envelope: Envelope, index: Int)] = [:]
+    /// Reader removals that failed before their prune ran; the prune skips
+    /// them. See `restorePrunedEnvelope(uid:markUnread:)`.
+    @ObservationIgnored var readerFailedUIDs: Set<UInt32> = []
+
     /// UIDs with an in-flight flag write (`\Seen` / `\Flagged`) that this view
     /// model issued. While a UID sits here `mergeFetched` keeps the optimistic
     /// flags rather than letting a stale fetch revert them. Flag writes that
@@ -382,7 +393,6 @@ final class MessageListViewModel {
         let startedAt = ContinuousClock.now
         dbg("refresh start sort=\(sortCriterion.field)")
         do {
-            try await client.imapClient.connectAndAuthenticate()
             // flagged: true asks for the SEARCH FLAGGED count too -- this is the
             // one status call that drives the filter-pill counts.
             let status = try await client.imapClient.status(path: folder.path, flagged: true)
@@ -602,7 +612,12 @@ extension MessageListViewModel {
     /// touches the list's in-memory copy so the row disappears immediately
     /// without a server round trip.
     func pruneEnvelope(uid: UInt32) {
-        let removed = envelopes.first { $0.uid == uid }
+        if readerFailedUIDs.remove(uid) != nil { return }
+        let removedIndex = envelopes.firstIndex { $0.uid == uid }
+        let removed = removedIndex.map { envelopes[$0] }
+        if let removed, let removedIndex {
+            stashForReaderRevert(removed, at: removedIndex)
+        }
         let loadedBefore = envelopes.count
         envelopes.removeAll { $0.uid == uid }
         // Only adjust when a row really left the window: a signal for a UID
@@ -638,8 +653,11 @@ extension MessageListViewModel {
     // Internal (not private) so the sibling-file extensions can call it. Uses
     // os.Logger (not print) so it's visible from a Release / TestFlight build.
     func dbg(_ msg: String) {
-        let line = "CABALDBG [\(folder.path)] \(msg) | n=\(envelopes.count)"
-        mlvmDebugLog.notice("\(line, privacy: .public)")
+        let path = folder.path
+        let count = envelopes.count
+        mlvmDebugLog.notice(
+            "CABALDBG [\(path, privacy: .private)] \(msg, privacy: .public) | n=\(count, privacy: .public)"
+        )
     }
 
     // TEMP diagnostic (remove with the dbg() calls). Monotonic milliseconds

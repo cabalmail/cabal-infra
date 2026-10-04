@@ -320,9 +320,9 @@ final class ReplyBuilderThreadingTests: XCTestCase {
         XCTAssertTrue(draft.references.isEmpty)
     }
 
-    // MARK: - Integration: ReplyBuilder → OutgoingMessage → MessageBuilder
+    // MARK: - Integration: ReplyBuilder → OutgoingMessage → /send headers
 
-    func testReplyBuilderOutputFeedsMessageBuilderWithThreadingHeaders() {
+    func testReplyBuilderOutputFeedsSendWireHeadersWithThreading() {
         let envelope = makeEnvelope(
             from: [("bob", "example.com")],
             to: [("alice", "mail.example.com")],
@@ -348,11 +348,10 @@ final class ReplyBuilderThreadingTests: XCTestCase {
             inReplyTo: draft.inReplyTo,
             references: draft.references
         )
-        let wire = MessageBuilder.build(message, messageID: "reply@example.com", date: fixedDate)
-        let text = String(data: wire, encoding: .utf8) ?? ""
-        XCTAssertTrue(text.contains("In-Reply-To: <orig@example.com>"))
-        XCTAssertTrue(text.contains("References: <orig@example.com>"))
-        XCTAssertTrue(text.contains("Subject: Re: Proposal"))
+        let headers = CabalmailClient.wireHeaders(for: message)
+        XCTAssertEqual(headers.inReplyTo, ["<orig@example.com>"])
+        XCTAssertEqual(headers.references, ["<orig@example.com>"])
+        XCTAssertEqual(message.subject, "Re: Proposal")
     }
 }
 

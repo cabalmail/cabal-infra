@@ -40,16 +40,18 @@ extension AppState {
     }
 
     /// Names the command and bumps the tick the feed sidebar observes.
-    func requestFeedCommand(_ command: FeedCommand) {
+    func requestFeedCommand(_ command: FeedCommand, in window: UUID? = nil) {
         pendingFeedCommand = command
+        commandWindow = window
         feedCommandTick += 1
     }
 
     /// Names the sidebar-tree command (Expand all / Collapse all on the mail
     /// or feed tree) and bumps the tick both sidebars observe; each applies
     /// the commands for the tree it owns.
-    func requestSidebarTree(_ command: SidebarTreeCommand) {
+    func requestSidebarTree(_ command: SidebarTreeCommand, in window: UUID? = nil) {
         pendingSidebarTreeCommand = command
+        commandWindow = window
         sidebarTreeCommandTick += 1
     }
 
@@ -69,6 +71,8 @@ extension AppState {
     private func refreshFeeds() async {
         guard let engine = client?.rssSync else { return }
         _ = await engine.syncAll()
+        // A subscription removed on another device takes its site data along.
+        await FeedWebStorage.dropDeparted(from: engine.store)
         // The store changed under the open views: badges re-read their
         // counts and a list still on its first page reloads.
         FeedStateBus.shared.post()

@@ -165,6 +165,13 @@ final class AppState {
     var sidebarTreeCommandTick = 0
     var pendingSidebarTreeCommand: SidebarTreeCommand?
     var pendingFeedCommand: FeedCommand?
+    /// The main window the latest command tick is aimed at; nil reaches
+    /// every window. Set with each tick by the `request…` methods and read
+    /// by the observers when the tick fires (`AppStateSignals.swift`).
+    @ObservationIgnored var commandWindow: UUID?
+    /// The main window most recently in front, for commands issued while a
+    /// compose or Settings window is key.
+    @ObservationIgnored var lastActiveMainWindow: UUID?
 
     /// A Spotlight result tapped before sign-in / restore completed; routed
     /// once the session is wired, mirroring `PushRegistrar.pendingOpen`.
@@ -180,6 +187,13 @@ final class AppState {
     /// the observer.
     var lastDisposedEnvelope: DisposedEnvelope?
     private var disposedTick = 0
+
+    /// Latest reader dispose / move / purge whose server write failed after
+    /// `lastDisposedEnvelope` had already pruned the row. `MessageListView`
+    /// puts the row back. Sent by `signalRemovalFailed` in
+    /// `AppStateSignals.swift`, hence the internal tick.
+    var lastFailedRemoval: FailedRemoval?
+    var failedRemovalTick = 0
 
     /// Latest envelope-flag change driven from the detail view (currently:
     /// `\Seen` toggles). `MessageListView` observes this so the row's bold
@@ -278,12 +292,14 @@ final class AppState {
     // `requestCompose(seed:)` and `consumePendingComposeSeed()` live in the
     // "Compose routing + onboarding" extension below, alongside the
     // contacts-access helper.
-    func requestCompose() { composeRequestTick += 1 }
-    func requestRefresh() { refreshRequestTick += 1 }
-    func requestReply() { replyRequestTick += 1 }
-    func requestReplyAll() { replyAllRequestTick += 1 }
-    func requestForward() { forwardRequestTick += 1 }
-    func requestSettings() { settingsRequestTick += 1 }
+    // `window` names the main window the command is for; nil reaches every
+    // window (see `AppStateSignals.swift`).
+    func requestCompose(in window: UUID? = nil) { commandWindow = window; composeRequestTick += 1 }
+    func requestRefresh(in window: UUID? = nil) { commandWindow = window; refreshRequestTick += 1 }
+    func requestReply(in window: UUID? = nil) { commandWindow = window; replyRequestTick += 1 }
+    func requestReplyAll(in window: UUID? = nil) { commandWindow = window; replyAllRequestTick += 1 }
+    func requestForward(in window: UUID? = nil) { commandWindow = window; forwardRequestTick += 1 }
+    func requestSettings(in window: UUID? = nil) { commandWindow = window; settingsRequestTick += 1 }
     // The selection-scoped request bumpers live in the "Message-menu
     // selection intents" extension below (SwiftLint type-body budget), and
     // the cross-view signal senders (`signalDisposed`, `signalFlagChange`,
@@ -343,7 +359,9 @@ final class AppState {
         // The explanation has been read by the time the user is typing.
         signedOutReason = nil
         do {
-            let configuration = try await ConfigLoader.load(controlDomain: controlDomain)
+            // The cache is seeded here so a launch with no network right
+            // after this sign-in can still restore (see `restoreIfPossible`).
+            let configuration = try await ConfigLoader.load(controlDomain: controlDomain, cache: ConfigurationCache())
             let cacheDirectory = try Self.makeCacheDirectory()
             let newClient = try CabalmailClient.make(
                 configuration: configuration,
@@ -404,10 +422,13 @@ final class AppState {
     /// - Refresh-token expired / revoked → clear the keychain so the sign-in
     ///   form starts clean, but keep `lastUsername` / `controlDomain` so
     ///   the form pre-fills.
-    /// - Network / transport error → stay signed out *without* clearing
-    ///   the keychain, so the next launch (or a manual sign-in) can
-    ///   recover without forcing a password re-entry. This is the "airplane
-    ///   mode at launch" path.
+    /// - Network / transport error → the "airplane mode at launch" path.
+    ///   `config.json` comes from the last good copy, and a token refresh
+    ///   that can't reach Cognito still wires the session, so cached mail
+    ///   is readable offline. Only with no cached config (never fetched on
+    ///   this install) does it stay signed out, *without* clearing the
+    ///   keychain, so a later launch or a manual sign-in can recover
+    ///   without forcing a password re-entry.
     /// - Any other error → `.error(message)`.
     ///
     /// Idempotent: if a client is already wired or sign-in is in flight,
@@ -435,7 +456,9 @@ final class AppState {
 
         status = .restoring
         do {
-            let configuration = try await ConfigLoader.load(controlDomain: domain)
+            // Offline, the last good config.json stands in for the fetch so
+            // the cached mail, Outbox and feeds stay reachable at launch.
+            let configuration = try await ConfigLoader.load(controlDomain: domain, cache: ConfigurationCache())
             let cacheDirectory = try Self.makeCacheDirectory()
             let newClient = try CabalmailClient.make(
                 configuration: configuration,
@@ -443,11 +466,12 @@ final class AppState {
                 cacheDirectory: cacheDirectory,
                 sessionInvalidation: sessionInvalidation
             )
-            // Touching `currentIdToken()` validates the keychain contents:
-            // a fresh ID token returns cached; an expired one triggers a
-            // silent refresh; an expired / revoked refresh throws
-            // `.authExpired` (Cognito's `NotAuthorizedException`).
-            _ = try await newClient.authService.currentIdToken()
+            // Validates the keychain contents: a fresh ID token passes; an
+            // expired one triggers a silent refresh; an expired / revoked
+            // refresh throws `.authExpired` (Cognito's
+            // `NotAuthorizedException`). A refresh that can't reach Cognito
+            // passes, so cached mail is readable offline.
+            try await OfflineLaunch.validateStoredSession(newClient.authService)
             // Restore is the common launch path, so this is what keeps the
             // watch's session copy and the device's `/push_register` row
             // fresh across app launches (see `wireSession`).
@@ -462,7 +486,7 @@ final class AppState {
                 try? secureStore.remove(SecureStoreKey.imapPassword)
                 signedOutReason = .sessionExpired
                 status = .signedOut
-            case .network, .transport, .timeout, .cancelled, .notConfigured:
+            case .network, .transport, .cancelled, .notConfigured:
                 // Transient — leave the keychain alone. The sign-in form
                 // will show but pre-filled, and a retry (or a later launch)
                 // has a chance to recover without forcing the user to
@@ -509,7 +533,6 @@ final class AppState {
     private func refreshInboxUnread() async {
         guard let client else { return }
         do {
-            try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: "INBOX")
             setInboxUnread(status.unseen ?? 0)
         } catch {
@@ -529,8 +552,6 @@ final class AppState {
         case .protocolError(let text):          return "Protocol error: \(text)"
         case .server(_, let text):              return "Server error: \(text)"
         case .decoding(let text):               return "Response error: \(text)"
-        case .imapCommandFailed(_, let detail): return "IMAP: \(detail)"
-        case .smtpCommandFailed(_, let detail): return "SMTP: \(detail)"
         default:                                return "\(error)"
         }
     }
@@ -540,7 +561,6 @@ final class AppState {
         case .invalidCredentials: return "Incorrect username or password."
         case .notConfigured:      return "Control domain is invalid."
         case .authExpired:        return "Session expired. Please sign in again."
-        case .timeout:            return "Request timed out."
         case .cancelled:          return "Cancelled."
         case .notSignedIn:        return "Not signed in."
         // Planned IMAP redeploy: show the API's friendly copy verbatim, no
@@ -709,7 +729,9 @@ extension AppState {
         #if os(iOS)
         IntentBridge.shared.sessionWillEnd()
         #endif
-        await client.imapClient.disconnect()
+        // Per-feed site data (publisher logins) lives in WebKit, out of the
+        // Kit's reach: drop it while the feed store still knows the stores.
+        FeedWebStorage.drop(uuids: (try? await client.rssStore?.allDataStoreUuids()) ?? [])
         // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
         // dropping the session so the next account to sign in on this device
         // can't read the previous user's messages from the shared on-disk
@@ -897,8 +919,9 @@ extension AppState {
     /// forward, resume draft); the macOS Commands menu still calls the
     /// zero-arg form, which leaves `pendingComposeSeed` nil and lets
     /// the receiver fall back to a fresh draft.
-    func requestCompose(seed: Draft) {
+    func requestCompose(seed: Draft, in window: UUID? = nil) {
         pendingComposeSeed = seed
+        commandWindow = window
         composeRequestTick += 1
     }
 
@@ -965,11 +988,14 @@ extension AppState {
     /// Post a drag-and-drop move for the active message list to perform.
     /// `tick` is monotonic so dragging onto the same folder twice still fires
     /// the list's `.onChange` observer.
-    func requestMove(items: [MessageDragItem], to destination: String) {
+    /// `sourceList` names the message list the drag lifted from, which is
+    /// the one list that performs the move.
+    func requestMove(items: [MessageDragItem], to destination: String, from sourceList: UUID?) {
         moveRequestTick += 1
         pendingMoveRequest = MessageMoveRequest(
             destination: destination,
             items: items,
+            sourceList: sourceList,
             tick: moveRequestTick
         )
     }

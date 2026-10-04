@@ -16,7 +16,6 @@ struct InboxStatusIntent: AppIntent {
         let client = try await IntentBridge.shared.activeClient()
         let unread: Int
         do {
-            try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: "INBOX")
             unread = status.unseen ?? 0
         } catch {

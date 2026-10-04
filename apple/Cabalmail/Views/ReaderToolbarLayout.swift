@@ -41,8 +41,27 @@ enum ReaderToolbarAction: String, CaseIterable {
 enum ReaderToolbarLayout {
     /// Items the bottom bar draws before the system starts compacting —
     /// measured on the iOS 27 SDK at 402pt, where four app buttons plus the
-    /// system's overflow control were what rendered.
+    /// system's overflow control were what rendered. Bottom bar only: the
+    /// compact navigation bar also seats the back button and has its own
+    /// budget, `topBarCapacity`.
     static let capacity = 5
+
+    /// Items the compact navigation bar carries beside the back button.
+    /// Not measured on a device: derived from the bottom bar's five slots at
+    /// 402pt on the iOS 27 SDK, less one for the back button, and from the
+    /// feed reader, whose three items plus a title are known to fit. The iOS
+    /// 27 SDK pads each bar item wider than 26 did, and anything past the
+    /// budget folds into a system overflow that this repo has found inert
+    /// (#1626, #1670), so the set stays at four rather than reusing the
+    /// bottom bar's five.
+    static let topBarCapacity = 4
+
+    /// What the compact navigation bar gives up to stay inside
+    /// `topBarCapacity`, on top of `demotedToOverflow`: the overflow menu
+    /// carries them as rows there. Flag goes rather than Read because the
+    /// read toggle also drives the after-mark-read navigation, and rather
+    /// than Reply or dispose because those are the reader's primary actions.
+    static let topBarDemotedToOverflow: [ReaderToolbarAction] = [.toggleFlag]
 
     /// The two display toggles the bar gave up. Both are inert on plain-text
     /// mail (they disable themselves when there's no HTML body), so they are
@@ -87,23 +106,57 @@ enum ReaderToolbarLayout {
         ]
     }
 
-    /// Whether the reader draws the action set itself, in a bar pinned under
-    /// the reading pane, instead of handing it to a `.bottomBar` toolbar
-    /// group.
-    ///
-    /// A `.bottomBar` group in a `NavigationSplitView`'s detail column
-    /// attaches to that column's navigation container on the iOS 26 SDK and
-    /// to the *window* on iOS 27 (measured both ways; an explicit
-    /// `NavigationStack` around the column does not move it back). At regular
-    /// width that spreads the reader's actions across the list column too, so
-    /// Reply and Mark-as-read render under the message list they don't act
-    /// on. Compact width has one column, so the two containers coincide and
-    /// the system bar stays correct there.
-    static func usesOwnActionBar(isRegularWidth: Bool, isOS27OrLater: Bool) -> Bool {
-        isRegularWidth && isOS27OrLater
+    /// Where the reader's touch action set lives.
+    enum Placement: Equatable {
+        /// Trailing items of the navigation bar, the way the feed reader
+        /// draws its controls. Compact width, where the section tab bar
+        /// owns the bottom edge.
+        case topBar
+        /// A system `.bottomBar` toolbar group (regular width before iOS 27).
+        case bottomBar
+        /// The reader's own bar pinned under the reading pane (regular width
+        /// on iOS 27 and later).
+        case ownBar
     }
 
-    /// Bottom-bar items, in drawn order.
+    /// Which bar carries the touch action set.
+    ///
+    /// Compact width puts the actions in the navigation bar so the section
+    /// tab bar can stay on screen while a message is open, matching the feed
+    /// reader. The reader used to hide the tab bar and take the bottom edge
+    /// for a `.bottomBar` group, which left the reader as the one screen
+    /// without the Mail / Feeds / Addresses / Settings tabs.
+    ///
+    /// At regular width there is no section tab bar, and the bottom edge
+    /// stays the actions' home. A `.bottomBar` group in a
+    /// `NavigationSplitView`'s detail column attaches to that column's
+    /// navigation container on the iOS 26 SDK and to the *window* on iOS 27
+    /// (measured both ways; an explicit `NavigationStack` around the column
+    /// does not move it back). That spreads the reader's actions across the
+    /// list column too, so Reply and Mark-as-read render under the message
+    /// list they don't act on; iOS 27 therefore draws the pane-scoped bar.
+    static func placement(isRegularWidth: Bool, isOS27OrLater: Bool) -> Placement {
+        guard isRegularWidth else { return .topBar }
+        return isOS27OrLater ? .ownBar : .bottomBar
+    }
+
+    /// Compact navigation-bar items, in drawn order. The view draws each as
+    /// its own item and ranks them for the system's overflow: the menu above
+    /// all (`keepsInBarFirst`) as the only touch route to Move, the display
+    /// toggles, Flag, source, headers and Print, and a second home for Reply;
+    /// Reply / Edit Draft and dispose next (`keepsInBar`), dispose being
+    /// Delete Forever inside Trash; Read unranked, so it folds first.
+    static func topBar(leading: LeadingReaderAction) -> [ReaderToolbarAction] {
+        [
+            leading == .editDraft ? .editDraft : .reply,
+            .toggleRead,
+            .dispose,
+            .overflow
+        ]
+    }
+
+    /// Bottom-bar items (the regular-width `.bottomBar` group), in drawn
+    /// order.
     static func bottomBar(leading: LeadingReaderAction) -> [ReaderToolbarAction] {
         [
             leading == .editDraft ? .editDraft : .reply,

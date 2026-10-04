@@ -125,6 +125,15 @@ final class MessageDetailViewModel {
     /// tests.
     var onMoveConfirmed: (() -> Void)?
 
+    /// Fires when an archive / trash / move / purge fails on the server, so
+    /// the list can put back the row it pruned optimistically. The argument
+    /// is true when a dispose had marked an unread message read, so the row
+    /// comes back unread; it rides this one call rather than a separate
+    /// `onFlagChanged`, which could reach the list before the row does.
+    /// Wired to `AppState.signalRemovalFailed` in `MessageDetailView`; nil
+    /// in tests.
+    var onMoveFailed: ((Bool) -> Void)?
+
     struct Attachment: Identifiable, Hashable {
         let id: String
         let filename: String
@@ -273,10 +282,12 @@ final class MessageDetailViewModel {
     /// Optimistic UI: `onSuccess` fires before the server round trip so the
     /// list selection advances to the next unread message instantly. The
     /// list view also prunes the row in response. If the server work fails,
-    /// `onFailure` lets the view revert: the list re-inserts the row and
-    /// the user gets a toast. Cache pruning still waits for confirmation —
-    /// pruning before that would leave the persistent snapshot disagreeing
-    /// with the server on a transient failure.
+    /// `onMoveFailed` has the list re-insert the row, unread again if this
+    /// call marked it read (as the list's own dispose reverts its unread
+    /// delta), and `onFailure` shows the user a toast. Cache pruning still
+    /// waits for confirmation — pruning before that would leave the
+    /// persistent snapshot disagreeing with the server on a transient
+    /// failure.
     func dispose(
         action: DisposeAction? = nil,
         onSuccess: (() -> Void)? = nil,
@@ -307,6 +318,10 @@ final class MessageDetailViewModel {
             )
             await confirmRemoval()
         } catch {
+            if !wasSeen {
+                isSeen = false
+            }
+            onMoveFailed?(!wasSeen)
             errorMessage = "\(error)"
             onFailure?(error)
         }
@@ -324,8 +339,9 @@ final class MessageDetailViewModel {
     /// messages into project folders.
     ///
     /// Optimistic UI: `onSuccess` fires before the server round trip so
-    /// the list view can prune the row immediately. On failure the caller
-    /// surfaces a toast; cache pruning still waits for confirmation so a
+    /// the list view can prune the row immediately. On failure the list
+    /// puts the row back (`onMoveFailed`) and the caller surfaces a toast;
+    /// cache pruning still waits for confirmation so a
     /// transient error doesn't leave the persistent snapshot disagreeing
     /// with the server.
     func move(
@@ -344,6 +360,7 @@ final class MessageDetailViewModel {
             )
             await confirmRemoval()
         } catch {
+            onMoveFailed?(false)
             errorMessage = "\(error)"
             onFailure?(error)
         }
@@ -417,7 +434,6 @@ private extension MessageDetailViewModel {
         ) {
             return cached
         }
-        try await client.imapClient.connectAndAuthenticate()
         let raw = try await client.imapClient.fetchBody(folder: folder.path, uid: envelope.uid)
         try await client.bodyCache.store(
             folder: folder.path,

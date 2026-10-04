@@ -135,4 +135,94 @@ final class SearchSourceFolderTests: XCTestCase {
         XCTAssertTrue(model.sourceFolderIndex.isEmpty)
         XCTAssertEqual(model.sourceFolder(for: hit), "INBOX", "folder mode owns every row again")
     }
+    // MARK: - Bulk actions over colliding UIDs
+
+    /// A cross-folder search holding Archive UID 1, zeta0802 UID 1, and an
+    /// unambiguous INBOX UID 2. A bare-UID selection of 1 can't say which
+    /// of the two rows the user meant.
+    private func collidingSearchModel(imap: FakeImapClient) async throws -> MessageListViewModel {
+        await imap.scriptSearch(SearchResult(
+            envelopes: [
+                SearchedEnvelope(
+                    envelope: TestFixtures.makeEnvelope(uid: 1, messageId: "<archive@example.com>"),
+                    folder: "Archive"
+                ),
+                SearchedEnvelope(
+                    envelope: TestFixtures.makeEnvelope(uid: 1, messageId: "<zeta@example.com>"),
+                    folder: "zeta0802"
+                ),
+                SearchedEnvelope(
+                    envelope: TestFixtures.makeEnvelope(uid: 2, messageId: "<inbox@example.com>"),
+                    folder: "INBOX"
+                ),
+            ],
+            totalEstimate: 3,
+            nextCursor: nil,
+            foldersSearched: ["Archive", "zeta0802", "INBOX"],
+            truncated: false
+        ))
+        let model = try TestFixtures.makeModel(imap: imap, envelopes: [])
+        model.searchQuery = "probe"
+        await model.runSearch()
+        XCTAssertEqual(model.envelopes.count, 3)
+        return model
+    }
+
+    func testBulkSeenSkipsCollidingUIDsAndActsOnTheRest() async throws {
+        let imap = FakeImapClient()
+        let model = try await collidingSearchModel(imap: imap)
+
+        // Before the fix this trapped in priorFlagState's
+        // Dictionary(uniqueKeysWithValues:), and the grouping would have
+        // flagged both UID-1 messages.
+        await model.setSeen(true, uids: [1, 2])
+
+        let calls = await imap.flagCalls
+        XCTAssertEqual(calls.count, 1, "only the unambiguous row reaches the server")
+        XCTAssertEqual(calls.first?.folder, "INBOX")
+        XCTAssertEqual(calls.first?.uids, [2])
+        let collided = model.envelopes.filter { $0.uid == 1 }
+        XCTAssertEqual(collided.count, 2)
+        XCTAssertTrue(collided.allSatisfy { !$0.flags.contains(.seen) }, "neither UID-1 row changes")
+        XCTAssertNotNil(model.errorMessage, "the user is told why some rows were left alone")
+    }
+
+    func testBulkFlagSkipsCollidingUIDs() async throws {
+        let imap = FakeImapClient()
+        let model = try await collidingSearchModel(imap: imap)
+
+        await model.setFlagged(true, uids: [1])
+
+        let calls = await imap.flagCalls
+        XCTAssertTrue(calls.isEmpty)
+        XCTAssertTrue(model.envelopes.allSatisfy { !$0.flags.contains(.flagged) })
+        XCTAssertNotNil(model.errorMessage)
+    }
+
+    func testBulkMoveSkipsCollidingUIDsAndMovesTheRest() async throws {
+        let imap = FakeImapClient()
+        let model = try await collidingSearchModel(imap: imap)
+        model.selectedUIDs = [1, 2]
+
+        await model.moveMessages(uids: [1, 2], to: "Junk")
+
+        let calls = await imap.moveCalls
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls.first?.folder, "INBOX")
+        XCTAssertEqual(calls.first?.uids, [2])
+        XCTAssertEqual(model.envelopes.map(\.uid), [1, 1], "both UID-1 rows stay put")
+        XCTAssertEqual(model.selectedUIDs, [1], "the rows left in place stay selected")
+        XCTAssertNotNil(model.errorMessage)
+    }
+
+    func testBulkDisposeLeavesCollidingUIDsInPlace() async throws {
+        let imap = FakeImapClient()
+        let model = try await collidingSearchModel(imap: imap)
+
+        await model.disposeMessages(uids: [1], action: .archive)
+
+        let calls = await imap.moveCalls
+        XCTAssertTrue(calls.isEmpty, "Archive UID 1 and zeta0802 UID 1 are both untouched")
+        XCTAssertEqual(model.envelopes.count, 3)
+    }
 }

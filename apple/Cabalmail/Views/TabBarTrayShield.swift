@@ -39,9 +39,9 @@ private final class TrayShieldUIView: UIView {
     /// The band is read live from `safeAreaInsets`, so it tracks the bar's
     /// actual reserved height across devices, orientations, and appearance
     /// changes for free. The window comparison keeps the shield inert
-    /// wherever the bar is hidden (`MessageDetailView` hides it for the
-    /// reader): with no bar, this view's bottom inset collapses to the
-    /// window's own home-indicator inset and nothing may be blocked.
+    /// wherever the bar is hidden: with no bar, this view's bottom inset
+    /// collapses to the window's own home-indicator inset and nothing may be
+    /// blocked.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         guard let window else { return false }
         let band = safeAreaInsets.bottom

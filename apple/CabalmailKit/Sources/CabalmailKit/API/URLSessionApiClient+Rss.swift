@@ -121,13 +121,14 @@ extension URLSessionApiClient: RssClient {
         return try await decodeRss(Payload.self, from: request).updated
     }
 
-    public func markAllRead(scope: RssItemScope) async throws -> RssMarkAllReadResult {
+    public func markAllRead(scope: RssItemScope, watermark: String?) async throws -> RssMarkAllReadResult {
         var body: [String: Any] = [:]
         switch scope {
         case .subscription(let id): body["subscription_id"] = id
         case .folder(let id): body["folder_id"] = id
         case .all: break
         }
+        if let watermark, !watermark.isEmpty { body["watermark"] = watermark }
         let request = try await post("/rss_mark_all_read", json: body)
         return try await decodeRss(RssMarkAllReadResult.self, from: request)
     }

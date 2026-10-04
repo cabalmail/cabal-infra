@@ -67,10 +67,14 @@ struct MessageDetailView: View {
     // See `ReaderHeaderColumnPolicy` and `MessageDetailView+Header.swift`.
     @ScaledMetric(relativeTo: .caption2)
     var headerTrailingColumnMinWidth = ReaderHeaderColumnPolicy.baseMinPaneWidth
+    /// Aims this reader's compose requests at its own window.
+    @Environment(\.commandWindowID) var commandWindowID
     #if os(iOS)
-    // Drives `drawsOwnActionBar`: at regular width the reader shares the
-    // window with the message list, and on iOS 27 a `.bottomBar` group
-    // spreads across both columns. See `ReaderToolbarLayout`.
+    // Drives `actionPlacement`: compact width puts the actions in the
+    // navigation bar; at regular width the reader shares the window with the
+    // message list, and on iOS 27 a `.bottomBar` group spreads across both
+    // columns. See `ReaderToolbarLayout.placement`. The compact tab tree
+    // forces `.compact` even in landscape on a Plus / Max.
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     // Measured width of the pane-scoped action bar, fed to
     // `ReaderToolbarLayout.ownBar` so the item set tracks the pane as the
@@ -79,38 +83,51 @@ struct MessageDetailView: View {
     @State var readerPaneWidth: CGFloat = 0
     #endif
 
-    /// True when the reader pins the action set under its own pane instead of
-    /// emitting a `.bottomBar` toolbar group. iOS 27 at regular width only —
-    /// every other platform and OS generation keeps the system bar.
-    var drawsOwnActionBar: Bool {
+    #if os(iOS) || os(visionOS)
+    /// Which bar carries the touch action set. iOS picks per size class and
+    /// OS generation (`ReaderToolbarLayout.placement`); visionOS keeps the
+    /// system bottom bar, which it draws as an ornament under the window.
+    var actionPlacement: ReaderToolbarLayout.Placement {
         #if os(iOS)
         // A runtime check, not a compile-time one: CI builds this with the
         // stable Xcode against the iOS 26 SDK, and the same binary has to
         // pick the right bar on both OS generations.
         let isOS27OrLater: Bool
         if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
-        return ReaderToolbarLayout.usesOwnActionBar(
+        return ReaderToolbarLayout.placement(
             isRegularWidth: horizontalSizeClass == .regular,
             isOS27OrLater: isOS27OrLater
         )
+        #else
+        return .bottomBar
+        #endif
+    }
+    #endif
+
+    /// True when the reader pins the action set under its own pane instead of
+    /// handing it to a system toolbar group. iOS 27 at regular width only.
+    var drawsOwnActionBar: Bool {
+        #if os(iOS)
+        return actionPlacement == .ownBar
         #else
         return false
         #endif
     }
 
-    #if !os(macOS)
-    /// Visibility the reader asks for on the section `TabView`'s bar: `.hidden`
-    /// where that bar is the compact bottom one the action toolbar would
-    /// collide with, `.automatic` on visionOS, where the same `TabView` is the
-    /// leading ornament carrying the only entry points to Folders, Feeds,
-    /// Addresses, Settings and Search. Rule in
-    /// `SectionLayoutPolicy.readerHidesSectionTabBar`.
-    var sectionTabBarVisibility: Visibility {
-        SectionLayoutPolicy.readerHidesSectionTabBar(
-            isVisionOS: SectionLayoutPolicy.isVisionOS
-        ) ? .hidden : .automatic
+    /// True when the HTML body runs under the compact tab bar so the glass
+    /// shows the message through it (`HTMLBodyView.runsUnderBottomBar`).
+    /// Compact width only: that bar is UIKit chrome, which the web view
+    /// insets its content for. The iOS 27 pane-scoped `readerActionBar` is a
+    /// SwiftUI `safeAreaInset` that a bridged `WKWebView` never sees, so the
+    /// end of the message would stay stuck under it; regular width keeps the
+    /// body above its bottom bar as before.
+    var bodyRunsUnderBottomBar: Bool {
+        #if os(iOS)
+        return actionPlacement == .topBar
+        #else
+        return false
+        #endif
     }
-    #endif
 
     var body: some View {
         GeometryReader { proxy in
@@ -163,13 +180,6 @@ struct MessageDetailView: View {
         // in `headerBlock` right below it.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        // Reading a message uses the full bottom edge for the action toolbar;
-        // the compact-width section `TabView`'s bottom tab bar would otherwise
-        // occlude it. The tab bar reappears automatically when the user swipes
-        // back to the message list. Not on visionOS, whose section `TabView` is
-        // the window's leading ornament and the only route to the other five
-        // sections - see `SectionLayoutPolicy.readerHidesSectionTabBar`.
-        .toolbar(sectionTabBarVisibility, for: .tabBar)
         #endif
         .toolbar { toolbarContent }
         // Window-scoped keyboard equivalents, hosted where the toolbar can't
@@ -181,7 +191,7 @@ struct MessageDetailView: View {
         #if os(iOS)
         // Pins the action set to the reading pane on iOS 27 at regular width.
         // Inert (empty content) everywhere else, so compact iPhone and iOS 26
-        // keep the system `.bottomBar` group untouched.
+        // keep their system toolbar groups untouched.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if drawsOwnActionBar { readerActionBar }
         }
@@ -211,9 +221,9 @@ struct MessageDetailView: View {
             Text("This message will be permanently deleted. This can't be undone.")
         }
         .modifier(RevokeAddressConfirmation(pending: $pendingRevoke, perform: revoke))
-        .onChange(of: appState.replyRequestTick) { _, _ in beginCompose(.reply) }
-        .onChange(of: appState.replyAllRequestTick) { _, _ in beginCompose(.replyAll) }
-        .onChange(of: appState.forwardRequestTick) { _, _ in beginCompose(.forward) }
+        .onWindowCommand(appState.replyRequestTick) { beginCompose(.reply) }
+        .onWindowCommand(appState.replyAllRequestTick) { beginCompose(.replyAll) }
+        .onWindowCommand(appState.forwardRequestTick) { beginCompose(.forward) }
         // Once a body is available, consume a pending scroll restore from the
         // nav cursor (a no-op on a normal open). Both branches guard against
         // re-consuming, so whichever body type lands first wins.
@@ -287,6 +297,10 @@ struct MessageDetailView: View {
                 newModel.onMoveConfirmed = { [weak appState] in
                     appState?.recordConfirmedRemovals(folderPath: folderPath, uids: [uid])
                 }
+                // ...or, if the server refuses, put the pruned row back.
+                newModel.onMoveFailed = { [weak appState] markUnread in
+                    appState?.signalRemovalFailed(folderPath: folderPath, uid: uid, markUnread: markUnread)
+                }
                 model = newModel
                 activeModel = newModel
             }
@@ -311,16 +325,44 @@ struct MessageDetailView: View {
     // demotion priority so that when the window gets too narrow AppKit's
     // trailing-first eviction into the » popup demotes Print first and the
     // filing actions last (#1047); there is no app-owned overflow menu there.
-    // iOS/visionOS route a width-budgeted subset to a bottom bar (easier to
-    // reach with a thumb; the extras ride `overflowMenuButton`). Both orders
-    // live in `ReaderToolbarLayout`, which is where anything new gets a slot.
+    // iOS/visionOS route a width-budgeted subset to a bar (the navigation
+    // bar at compact width, matching the feed reader, so the section tab bar
+    // stays on screen; the bottom bar, or the pane-scoped bar on iOS 27, at
+    // regular width) with the extras riding `overflowMenuButton`. Every
+    // order lives in `ReaderToolbarLayout`, which is where anything new gets
+    // a slot.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         #if os(iOS) || os(visionOS)
-        // `drawsOwnActionBar` takes the bar over on iOS 27 at regular width,
-        // where a `.bottomBar` group would span the whole window rather than
-        // the reading pane (see `readerActionBar`).
-        if !drawsOwnActionBar {
+        // `.ownBar` (iOS 27 at regular width) emits nothing here:
+        // `readerActionBar` draws the set under the reading pane, where a
+        // `.bottomBar` group would span the whole window instead.
+        if actionPlacement == .topBar {
+            // `ReaderToolbarLayout.topBar`, item by item so each can carry its
+            // own rank in the system's overflow: the menu is kept above all,
+            // Reply / Edit Draft and dispose next, and Read folds first —
+            // the list's swipe and long-press menu are its second home.
+            // `ReaderToolbarLayoutTests` pins the order drawn here.
+            ToolbarItem(placement: .primaryAction) {
+                toolbarButton(for: model?.leadingToolbarAction == .editDraft ? .editDraft : .reply)
+                    .labelStyle(.iconOnly)
+            }
+            .keepsInBar()
+            ToolbarItem(placement: .primaryAction) {
+                seenButton
+                    .labelStyle(.iconOnly)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                disposeButton
+                    .labelStyle(.iconOnly)
+            }
+            .keepsInBar()
+            ToolbarItem(placement: .primaryAction) {
+                overflowMenuButton
+                    .labelStyle(.iconOnly)
+            }
+            .keepsInBarFirst()
+        } else if actionPlacement == .bottomBar {
             ToolbarItemGroup(placement: .bottomBar) {
                 let actions = ReaderToolbarLayout.bottomBar(
                     leading: model?.leadingToolbarAction ?? .reply

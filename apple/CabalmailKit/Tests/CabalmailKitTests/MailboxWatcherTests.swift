@@ -2,10 +2,10 @@ import XCTest
 @testable import CabalmailKit
 
 /// Exercises `MailboxWatcher`'s IDLE reconnect loop against a scripted
-/// stream factory. The production factory is `LiveImapClient.idle(folder:)`,
-/// which opens a real socket — we substitute a closure that returns
-/// pre-built `AsyncThrowingStream`s to drive the watcher's states without
-/// touching the network.
+/// stream factory. The production factory is `ApiBackedImapClient.idle(folder:)`,
+/// which polls the API — we substitute a closure that returns pre-built
+/// `AsyncThrowingStream`s to drive the watcher's states without touching
+/// the network.
 ///
 /// Every stream consumption here goes through `withDeadline`: an unbounded
 /// `for await` on the watcher stream waits forever if the expected event

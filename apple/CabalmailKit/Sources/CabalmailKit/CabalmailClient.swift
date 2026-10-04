@@ -2,8 +2,8 @@ import Foundation
 
 /// Top-level facade for the Apple client.
 ///
-/// Owns the `AuthService` session and exposes ready-to-use `ApiClient`,
-/// `ImapClient`, and `SmtpClient` instances plus their caches. The app
+/// Owns the `AuthService` session and exposes ready-to-use `ApiClient`
+/// and `ImapClient` instances plus their caches. The app
 /// target holds a single shared `CabalmailClient` instance in its
 /// `@Observable` root and injects it into views via `.environment`.
 public actor CabalmailClient {
@@ -17,7 +17,6 @@ public actor CabalmailClient {
     public nonisolated let authService: AuthService
     public nonisolated let apiClient: ApiClient
     public nonisolated let imapClient: ImapClient
-    public nonisolated let smtpClient: SmtpClient
     public nonisolated let addressCache: AddressCache
     public nonisolated let envelopeCache: EnvelopeCache
     public nonisolated let bodyCache: MessageBodyCache
@@ -38,17 +37,12 @@ public actor CabalmailClient {
     /// the optional.
     public nonisolated let spotlightIndexer: SpotlightIndexer?
 
-    /// Retained so the path monitor outlives initialization. The underlying
-    /// `NWPathMonitor` stops when this property is released. Only `make(...)`
-    /// sets it — tests that build the client via the memberwise initializer
-    /// leave it nil and skip proactive invalidation.
     #if canImport(Network)
-    private nonisolated let pathMonitor: NetworkPathMonitor?
     /// Retained so Reachability observers and the send queue's drain task
     /// outlive initialization. Phase 7 — the offline banner streams from
     /// here, and `SendQueue` subscribes to drain the outbox on reconnect.
     public nonisolated let reachability: Reachability?
-    private nonisolated let sendQueue: SendQueue?
+    nonisolated let sendQueue: SendQueue?
     #endif
 
     /// Opt-in crash / hang reporter. Starts disabled — the Settings toggle
@@ -64,7 +58,6 @@ public actor CabalmailClient {
         authService: AuthService,
         apiClient: ApiClient,
         imapClient: ImapClient,
-        smtpClient: SmtpClient,
         addressCache: AddressCache,
         envelopeCache: EnvelopeCache,
         bodyCache: MessageBodyCache,
@@ -75,7 +68,6 @@ public actor CabalmailClient {
         self.authService = authService
         self.apiClient = apiClient
         self.imapClient = imapClient
-        self.smtpClient = smtpClient
         self.addressCache = addressCache
         self.envelopeCache = envelopeCache
         self.bodyCache = bodyCache
@@ -87,7 +79,6 @@ public actor CabalmailClient {
         self.rssSync = nil
         self.metricKitCollector = .shared
         #if canImport(Network)
-        self.pathMonitor = nil
         self.reachability = nil
         self.sendQueue = nil
         #endif
@@ -106,10 +97,7 @@ public actor CabalmailClient {
     ///
     /// As of issue #371 the IMAP and SMTP work happens behind the Lambda
     /// API rather than via direct mail-protocol sockets — `imapClient` is
-    /// an `ApiBackedImapClient`, and `send(_:)` posts to `/send` instead
-    /// of running its own SMTP submission. `LiveSmtpClient` is still wired
-    /// as `smtpClient` so anything left calling that surface keeps working,
-    /// but the production send path no longer touches it.
+    /// an `ApiBackedImapClient`, and `send(_:)` posts to `/send`.
     public static func make(
         configuration: Configuration,
         secureStore: SecureStore,
@@ -131,10 +119,6 @@ public actor CabalmailClient {
             sessionInvalidation: sessionInvalidation
         )
         let imap = ApiBackedImapClient(api: api, host: configuration.imapHost)
-        let smtp = LiveSmtpClient(
-            factory: NetworkSmtpConnectionFactory(host: configuration.smtpHost),
-            authService: auth
-        )
         let addresses = AddressCache()
         let envelopes = try EnvelopeCache(directory: cacheDirectory.appendingPathComponent("envelopes"))
         let bodies = try MessageBodyCache(
@@ -143,7 +127,8 @@ public actor CabalmailClient {
         )
         let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
         let outbox = try Outbox(directory: cacheDirectory.appendingPathComponent("outbox"))
-        let rssStore = try RssStore(directory: cacheDirectory.appendingPathComponent("rss"))
+        // A broken feed cache must not stop mail: recreate it, else no feeds.
+        let rssStore = RssStore.openRecovering(directory: cacheDirectory.appendingPathComponent("rss"))
         #if canImport(CoreSpotlight)
         let spotlight: SpotlightIndexer? = SpotlightIndexer(index: LiveSearchableIndex())
         #else
@@ -154,7 +139,6 @@ public actor CabalmailClient {
             authService: auth,
             apiClient: api,
             imapClient: imap,
-            smtpClient: smtp,
             addressCache: addresses,
             envelopeCache: envelopes,
             bodyCache: bodies,
@@ -162,13 +146,13 @@ public actor CabalmailClient {
             outbox: outbox,
             spotlightIndexer: spotlight,
             rssStore: rssStore,
-            rssSync: RssSyncEngine(client: api, store: rssStore),
-            monitorNetworkPath: true
+            rssSync: rssStore.map { RssSyncEngine(client: api, store: $0) },
+            observeReachability: true
         )
     }
 
-    /// Designated init used by `make(...)` — installs a `NetworkPathMonitor`
-    /// that calls `imapClient.invalidate()` whenever the active path shifts.
+    /// Designated init used by `make(...)` — installs the `Reachability`
+    /// observer and the `SendQueue` that drains the outbox on reconnect.
     /// Separated from the public memberwise initializer so tests can keep
     /// constructing bare clients without touching `Network.framework`.
     private init(
@@ -176,7 +160,6 @@ public actor CabalmailClient {
         authService: AuthService,
         apiClient: ApiClient,
         imapClient: ImapClient,
-        smtpClient: SmtpClient,
         addressCache: AddressCache,
         envelopeCache: EnvelopeCache,
         bodyCache: MessageBodyCache,
@@ -185,13 +168,12 @@ public actor CabalmailClient {
         spotlightIndexer: SpotlightIndexer?,
         rssStore: RssStore?,
         rssSync: RssSyncEngine?,
-        monitorNetworkPath: Bool
+        observeReachability: Bool
     ) {
         self.configuration = configuration
         self.authService = authService
         self.apiClient = apiClient
         self.imapClient = imapClient
-        self.smtpClient = smtpClient
         self.addressCache = addressCache
         self.envelopeCache = envelopeCache
         self.bodyCache = bodyCache
@@ -209,11 +191,7 @@ public actor CabalmailClient {
             let cache = envelopeCache
             Task { await spotlightIndexer.bind(to: cache) }
         }
-        if monitorNetworkPath {
-            let imap = imapClient
-            self.pathMonitor = NetworkPathMonitor {
-                Task { await imap.invalidate() }
-            }
+        if observeReachability {
             let reach = Reachability()
             self.reachability = reach
             // Sender closure retries the same `/send` Lambda the foreground
@@ -229,7 +207,6 @@ public actor CabalmailClient {
             self.sendQueue = queue
             Task { await queue.bind(reachability: reach.changes()) }
         } else {
-            self.pathMonitor = nil
             self.reachability = nil
             self.sendQueue = nil
         }

@@ -16,7 +16,8 @@ name: Lint
 #   - Python:    pylint over lambda/api and lambda/counter (from app.yml),
 #                plus the lambda/api/_shared unittest suites (new for the PR
 #                gate; no deploy workflow runs them).
-#   - Swift:     swiftlint --strict (from apple.yml).
+#   - Swift:     swiftlint --strict (from apple.yml; apple.yml's own
+#                pull_request run builds and tests).
 #   - React:     eslint (new for the PR gate; the deploy path only builds).
 #   - Rust:      cargo xtask ci (new for the PR gate; there is no Linux deploy
 #                workflow yet — the Phase 2 linux.yml will invoke this same
@@ -292,20 +293,25 @@ jobs:
   # ---------------------------------------------------------------------------
   # Swift. swiftlint --strict, the same gate apple.yml runs on its macOS leg.
   # SwiftLint parses the sources directly, so no xcodegen/project generation is
-  # needed here. macOS runner because that is where swiftlint is available.
+  # needed here. This is the fast lint signal; apple.yml's pull_request run is
+  # the build-and-test gate. Same `xcode-27` image as apple.yml, so both lint
+  # with the same swiftlint and a rule can't pass here and fail there.
   # ---------------------------------------------------------------------------
   swift:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: install-swiftlint
-      # The macos-15 image may preinstall swiftlint; only install when missing
+      # The image may preinstall swiftlint; only install when missing
       # so the step stays quiet (and doesn't emit a brew "already installed"
-      # annotation). Same pattern as apple.yml.
-      run: brew list swiftlint >/dev/null 2>&1 || brew install swiftlint
+      # annotation). Same pattern as apple.yml, including untapping the
+      # image's unused aws/tap, which newer Homebrew warns about on every call.
+      run: |
+        brew untap aws/tap >/dev/null 2>&1 || true
+        brew list swiftlint >/dev/null 2>&1 || brew install swiftlint
     - name: swiftlint
       working-directory: apple
       run: swiftlint lint --strict --quiet

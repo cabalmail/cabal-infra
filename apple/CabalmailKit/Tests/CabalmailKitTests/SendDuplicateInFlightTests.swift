@@ -99,11 +99,14 @@ final class SendDuplicateInFlightTests: XCTestCase {
         let outbox = try Outbox(directory: directory, maxAttempts: 2)
         _ = try await outbox.enqueue(Self.makeMessage(subject: "claimed for a while"))
         let refusals = RefusalCounter()
-        let queue = SendQueue(outbox: outbox) { _ in
+        let clock = TestClock()
+        let queue = SendQueue(outbox: outbox, now: { clock.now }, sender: { _ in
             await refusals.bump()
             throw CabalmailError.sendInFlight
-        }
+        })
         for pass in 1...4 {
+            // Step past the backoff a deferred entry still waits out.
+            clock.advance(by: 3600)
             await queue.kickDrain()
             try await waitUntil { await refusals.count >= pass }
         }

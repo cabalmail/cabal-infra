@@ -29,6 +29,9 @@ struct CabalmailApp: App {
                 // iPadOS instead of dropping to the home screen (no-op on
                 // other platforms; see MainSceneActivation.swift).
                 .recordsMainSceneSession()
+                // Gives this window the identity its menu commands are aimed
+                // at, so a second window ignores them (MainWindowCommandScope).
+                .mainWindowCommandScope(appState)
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
@@ -82,7 +85,7 @@ struct CabalmailApp: App {
                     // drained by `ComposeRequestRouter`'s initial `.task`
                     // on the signed-in root.
                     if let mailto = MailtoURL(url) {
-                        appState.requestCompose(seed: mailto.draft())
+                        appState.requestCompose(seed: mailto.draft(), in: appState.lastActiveMainWindow)
                     }
                 }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
@@ -103,12 +106,7 @@ struct CabalmailApp: App {
             // Cmd+, through its `Settings {}` scene), so we claim the standard
             // app-settings slot and route it to the same tick the sidebar gear
             // bumps. Surfaces in the iPadOS hardware-keyboard menu.
-            CommandGroup(replacing: .appSettings) {
-                Button("Settings...") {
-                    appState.requestSettings()
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
+            SettingsMenuCommand(appState: appState)
         }
         // iPadOS, visionOS, and an open iPhone Duo open compose as a real
         // scene; a single-window host ignores the group because
@@ -117,5 +115,21 @@ struct CabalmailApp: App {
         // moment the host gains windows (Stage Manager, iPad, unfolding a
         // Duo).
         ComposeWindowScene(appState: appState, preferences: preferences)
+    }
+}
+
+/// Settings sheet shortcut (⌘,) in the iPadOS hardware-keyboard menu, aimed
+/// at the focused main window so a second window does not open its own sheet.
+private struct SettingsMenuCommand: Commands {
+    let appState: AppState
+    @FocusedValue(\.commandWindowID) private var focusedWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings...") {
+                appState.requestSettings(in: appState.menuCommandTarget(focused: focusedWindow))
+            }
+            .keyboardShortcut(",", modifiers: .command)
+        }
     }
 }

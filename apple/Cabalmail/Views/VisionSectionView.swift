@@ -89,7 +89,7 @@ struct VisionSectionView: View {
             if folder != nil, old?.path != folder?.path, selection == .folders { selection = .mail }
         }
         // ⌘, opens Settings — its own tab here, rather than the iPad sheet.
-        .onChange(of: appState.settingsRequestTick) { _, _ in
+        .onWindowCommand(appState.settingsRequestTick) {
             selection = .settings
         }
         // The resume session remembers which section the user was in; Mail

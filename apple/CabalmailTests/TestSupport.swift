@@ -201,11 +201,6 @@ actor FakeImapClient: ImapClient {
         return 0
     }
 
-    // Lifecycle no-ops — the view model may touch these harmlessly.
-    func connectAndAuthenticate() async throws {}
-    func disconnect() async {}
-    func invalidate() async {}
-
     // Everything below is off the bulk paths: trap.
     func listFolders() async throws -> [Folder] { try trap() }
     func createFolder(name: String, parent: String?) async throws { try trapVoid() }
@@ -222,9 +217,6 @@ actor FakeImapClient: ImapClient {
         return statusResult
     }
     func envelopes(
-        folder: String, range: ClosedRange<UInt32>, sort: SortCriterion
-    ) async throws -> [Envelope] { try trap() }
-    func envelopes(
         folder: String, offset: UInt32, limit: UInt32, sort: SortCriterion
     ) async throws -> [Envelope] { try trap() }
     func topEnvelopes(
@@ -237,8 +229,6 @@ actor FakeImapClient: ImapClient {
         return topEnvelopesResult
     }
     func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage { try trap() }
-    func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data { try trap() }
-    func append(folder: String, message: Data, flags: Set<Flag>) async throws { try trapVoid() }
 
     private func trap<T>() throws -> T {
         throw CabalmailError.protocolError("FakeImapClient: unexpected call")
@@ -264,16 +254,7 @@ actor NullAuthService: AuthService {
     func confirmForgotPassword(username: String, code: String, newPassword: String) async throws {}
     func signOut() async throws {}
     func currentIdToken() async throws -> String { "test-token" }
-    func currentImapCredentials() async throws -> ImapCredentials {
-        ImapCredentials(username: "tester", password: "secret")
-    }
     func currentTokens() async -> AuthTokens? { nil }
-}
-
-struct NullSmtpClient: SmtpClient {
-    func send(_ message: OutgoingMessage) async throws {
-        throw CabalmailError.protocolError("NullSmtpClient: unexpected send")
-    }
 }
 
 /// HTTP transport that refuses every request — nothing in these tests may
@@ -314,7 +295,6 @@ enum TestFixtures {
                 transport: transport
             ),
             imapClient: imap,
-            smtpClient: NullSmtpClient(),
             addressCache: AddressCache(),
             envelopeCache: try EnvelopeCache(directory: tmp.appendingPathComponent("e")),
             bodyCache: try MessageBodyCache(directory: tmp.appendingPathComponent("b")),

@@ -25,8 +25,7 @@ struct LiveRulesBackend: RulesBackend {
     }
 
     func listFolders() async throws -> [Folder] {
-        try await client.imapClient.connectAndAuthenticate()
-        return try await client.imapClient.listFolders()
+        try await client.imapClient.listFolders()
     }
 
     func createFolder(name: String, parent: String?) async throws {

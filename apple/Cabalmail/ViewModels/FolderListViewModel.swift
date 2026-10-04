@@ -61,7 +61,6 @@ final class FolderListViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            try await client.imapClient.connectAndAuthenticate()
             let all = try await client.imapClient.listFolders()
             folders = sortForSidebar(all)
             errorMessage = nil
@@ -96,7 +95,6 @@ final class FolderListViewModel {
         let target = !folder.isSubscribed
         applySubscription(path: folder.path, to: target)
         do {
-            try await client.imapClient.connectAndAuthenticate()
             if target {
                 try await client.imapClient.subscribe(path: folder.path)
             } else {
@@ -141,7 +139,6 @@ final class FolderListViewModel {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return false }
         do {
-            try await client.imapClient.connectAndAuthenticate()
             try await client.imapClient.createFolder(name: trimmed, parent: parent)
             try? await client.imapClient.subscribe(
                 path: fullPath(for: trimmed, parent: parent)
@@ -165,7 +162,6 @@ final class FolderListViewModel {
     func deleteFolder(_ folder: Folder) async -> Bool {
         guard canDelete(folder) else { return false }
         do {
-            try await client.imapClient.connectAndAuthenticate()
             try await client.imapClient.deleteFolder(path: folder.path)
             folders.removeAll { $0.path == folder.path }
             errorMessage = nil
@@ -212,7 +208,6 @@ final class FolderListViewModel {
     func emptyTrash() async {
         let path = FolderTree.trashPath
         do {
-            try await client.imapClient.connectAndAuthenticate()
             try await client.imapClient.emptyTrash(folder: path)
             try? await client.envelopeCache.invalidate(folder: path)
             appState.setFolderCounts(folderPath: path, unread: 0, total: 0)

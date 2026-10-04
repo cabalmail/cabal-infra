@@ -11,8 +11,12 @@ import SwiftUI
 /// Mailbox menu's ⌥⌘T, so a user who learned them on mail has them on feeds.
 /// Two menus on one chord are only safe if exactly one is enabled at a time:
 /// `SharedChordPolicy` gives the chord to the section in front.
+///
+/// Each command is aimed at the focused main window (`MainWindowCommandScope`),
+/// so a second window's sidebar and list leave it alone.
 struct FeedsMenuCommands: Commands {
     let appState: AppState
+    @FocusedValue(\.commandWindowID) private var focusedWindow
 
     var body: some Commands {
         let itemsLive = SharedChordPolicy.feedItemsLive(
@@ -22,43 +26,44 @@ struct FeedsMenuCommands: Commands {
             appState.feedMenuAvailability, activeSection: appState.activeSection
         )
         CommandMenu("Feeds") {
-            Button("Subscribe to Feed…") { appState.requestFeedCommand(.subscribe) }
+            Button("Subscribe to Feed…") { appState.requestFeedCommand(.subscribe, in: target) }
                 .keyboardShortcut("n", modifiers: [.command, .option])
                 .disabled(!available)
-            Button("New Feed Folder…") { appState.requestFeedCommand(.newFolder) }
+            Button("New Feed Folder…") { appState.requestFeedCommand(.newFolder, in: target) }
                 .disabled(!available)
             Divider()
-            Button("Import OPML…") { appState.requestFeedCommand(.importOpml) }
+            Button("Import OPML…") { appState.requestFeedCommand(.importOpml, in: target) }
                 .disabled(!available)
-            Button("Export OPML…") { appState.requestFeedCommand(.exportOpml) }
+            Button("Export OPML…") { appState.requestFeedCommand(.exportOpml, in: target) }
                 .disabled(!available)
             Divider()
-            Button("Refresh Feeds") { appState.requestFeedCommand(.refresh) }
+            Button("Refresh Feeds") { appState.requestFeedCommand(.refresh, in: target) }
                 .disabled(!available)
             Divider()
             // Acts on the selected list row, else the open item; the list
             // answers (`FeedItemListView.handleFeedCommand`) and no-ops with
             // neither, which is exactly when the item is dimmed.
-            Button("Mark as Read/Unread") { appState.requestFeedCommand(.toggleRead) }
+            Button("Mark as Read/Unread") { appState.requestFeedCommand(.toggleRead, in: target) }
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(!itemsLive)
-            Button("Flag/Unflag") { appState.requestFeedCommand(.toggleFlag) }
+            Button("Flag/Unflag") { appState.requestFeedCommand(.toggleFlag, in: target) }
                 .keyboardShortcut("8", modifiers: [.command, .shift])
                 .disabled(!itemsLive)
             // The current feed scope, through the list's own confirmation.
-            Button("Mark All as Read") { appState.requestFeedCommand(.markAllRead) }
+            Button("Mark All as Read") { appState.requestFeedCommand(.markAllRead, in: target) }
                 .keyboardShortcut("t", modifiers: [.command, .option])
                 .disabled(!markAllLive)
             Divider()
             // The feed tree's Expand all / Collapse all, reachable from the
             // menu bar whichever pane has focus (the Mailbox menu carries the
             // mail tree's pair).
-            Button("Expand All Folders") { appState.requestSidebarTree(.expandAllFeedFolders) }
+            Button("Expand All Folders") { appState.requestSidebarTree(.expandAllFeedFolders, in: target) }
                 .disabled(!available)
-            Button("Collapse All Folders") { appState.requestSidebarTree(.collapseAllFeedFolders) }
+            Button("Collapse All Folders") { appState.requestSidebarTree(.collapseAllFeedFolders, in: target) }
                 .disabled(!available)
         }
     }
 
     private var available: Bool { appState.status == .signedIn }
+    private var target: UUID? { appState.menuCommandTarget(focused: focusedWindow) }
 }

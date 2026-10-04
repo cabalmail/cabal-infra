@@ -272,7 +272,7 @@ struct FolderListView: View {
         .onChange(of: allCountsWalkKey, initial: true) { _, _ in
             walkAllCountsIfNeeded()
         }
-        .onChange(of: appState.sidebarTreeCommandTick) { _, _ in
+        .onWindowCommand(appState.sidebarTreeCommandTick) {
             guard let command = appState.pendingSidebarTreeCommand else { return }
             applySidebarTreeCommand(command)
         }
