@@ -20,6 +20,19 @@ extension FolderListView {
         }
     }
 
+    /// An app opened offline draws the saved folder list. When the device's
+    /// connection comes back, fetch the real one and its counts, the way a
+    /// manual reload would; until now that took the Reload button.
+    func reloadWhenBackOnline() async {
+        #if canImport(Network)
+        guard let reachability = appState.client?.reachability else { return }
+        for await reachable in reachability.changes() where reachable {
+            guard model?.isShowingSavedCopy == true else { continue }
+            await manualRefresh()
+        }
+        #endif
+    }
+
     /// Wide-sidebar header row (New / filter / Reload), shown below the
     /// Folders/Addresses tabs on iPad-regular and macOS. Lifted here so the
     /// main `FolderListView` body stays under the type-body-length cap.

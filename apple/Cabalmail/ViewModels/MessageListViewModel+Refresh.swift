@@ -28,6 +28,7 @@ extension MessageListViewModel {
         filterTab = sticky
         await Task {
             await self.hydrateFromCache()
+            await self.seedSavedCounts()
             await self.refresh()
             if sticky != .all { await self.applyFilter(sticky) }
         }.value
@@ -44,6 +45,22 @@ extension MessageListViewModel {
     func refreshFromPull() async {
         await Task { await self.refresh() }.value
     }
+
+    /// Starts the pills from the counts the last successful STATUS saved,
+    /// possibly in an earlier launch, so a list opened offline doesn't read 0
+    /// over its cached rows. `unseen` and `flagged` take them directly, so
+    /// optimistic deltas move them as usual; the All count goes to
+    /// `savedMessageCount` rather than `totalMessages`. The first STATUS that
+    /// answers replaces all three (`applyStatusCounts`).
+    func seedSavedCounts() async {
+        guard !isSearchScope, let saved = await client.savedFolderStatus(path: folder.path) else { return }
+        unseen = max(0, saved.unseen ?? 0)
+        flagged = max(0, saved.flagged ?? 0)
+        savedMessageCount = saved.messages.map { max(0, $0) }
+    }
+
+    /// The All pill's folder count: the saved one until a STATUS answers.
+    var allCount: Int { savedMessageCount ?? Int(totalMessages) }
 
     /// Capture the server-sourced counts from a STATUS reply: `totalMessages`
     /// (the All pill and the pagination gate) plus the Unread/Flagged pill
@@ -76,7 +93,14 @@ extension MessageListViewModel {
         totalMessages = messages
         unseen = fetchedUnseen
         flagged = fetchedFlagged
-        if !mayPredateRemoval { publishFolderCounts(status) }
+        savedMessageCount = nil
+        if !mayPredateRemoval {
+            publishFolderCounts(status)
+        } else if !isSearchScope {
+            // `client.folderStatus` saved this reply as it came, but it may
+            // count a message already removed here: save what is shown.
+            appState.savedFolderCounts.countChanged(folder.path, unread: unseen, total: Int(totalMessages))
+        }
         return serverMessages
     }
 
@@ -191,6 +215,7 @@ extension MessageListViewModel {
         totalMessages = 0
         unseen = 0
         flagged = 0
+        savedMessageCount = nil
         hasMore = true
         sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
