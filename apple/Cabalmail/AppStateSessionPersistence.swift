@@ -13,10 +13,10 @@ extension AppState {
     /// extension, which asks its native handler for it so the user never
     /// types the server twice (ExtensionControlDomainStore).
     var controlDomain: String {
-        get { UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? "" }
+        get { sessionEnvironment.lastSessionDefaults.string(forKey: "cabalmail.controlDomain") ?? "" }
         set {
-            UserDefaults.standard.set(newValue, forKey: "cabalmail.controlDomain")
-            ExtensionControlDomainStore.publish(newValue)
+            sessionEnvironment.lastSessionDefaults.set(newValue, forKey: "cabalmail.controlDomain")
+            sessionEnvironment.publishControlDomain(newValue)
         }
     }
 
@@ -24,7 +24,7 @@ extension AppState {
     /// persisted here — `CognitoAuthService` holds them in the data-protection
     /// keychain via `KeychainSecureStore`.
     var lastUsername: String {
-        get { UserDefaults.standard.string(forKey: "cabalmail.lastUsername") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "cabalmail.lastUsername") }
+        get { sessionEnvironment.lastSessionDefaults.string(forKey: "cabalmail.lastUsername") ?? "" }
+        set { sessionEnvironment.lastSessionDefaults.set(newValue, forKey: "cabalmail.lastUsername") }
     }
 }
