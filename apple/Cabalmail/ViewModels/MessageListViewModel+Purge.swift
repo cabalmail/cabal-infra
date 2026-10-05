@@ -72,7 +72,8 @@ extension MessageListViewModel {
             envelopes.append(contentsOf: condemned)
             envelopes.sort(by: envelopeOrder)
             adjustTotalMessages(by: condemned.count)
-            if unreadCount > 0 {
+            // Not once the session has ended (#1851).
+            if unreadCount > 0, appState.acceptsCounts(from: client) {
                 appState.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: unreadCount)
             }
             errorMessage = error.localizedDescription

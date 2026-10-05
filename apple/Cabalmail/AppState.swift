@@ -833,7 +833,9 @@ extension AppState {
     /// answers during or after a sign-out would otherwise write the last
     /// account's counts back after the reset, where the next account starts
     /// from them and saves their totals as its own (#1848). Every writer of a
-    /// count it fetched checks this after the fetch.
+    /// count it fetched checks this after the fetch, and so does every
+    /// unread change that lands after a server call: a revert when the call
+    /// fails, or a change applied once it answers (#1851).
     func acceptsCounts(from client: CabalmailClient) -> Bool {
         !teardownGate.hasEnded(client)
     }
