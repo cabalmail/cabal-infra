@@ -27,7 +27,7 @@ turbine = "1.2.1"
 # 4.x requires Gradle 9 (this project is on Gradle 9 / AGP 9).
 tripletPlay = "4.1.1"
 # Markdown → HTML for the compose body (Phase 5). Pure Kotlin/JVM, no UI.
-jetbrainsMarkdown = "0.7.14"
+jetbrainsMarkdown = "0.7.16"
 # Background new-mail sync (Phase 7).
 work = "2.12.0"
 # Push (docs/1.x/android-push-notifications.md). No google-services plugin —
