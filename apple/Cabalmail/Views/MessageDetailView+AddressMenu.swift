@@ -1,5 +1,6 @@
 import SwiftUI
 import CabalmailKit
+import CabalmailUI
 
 // Per-address context menu for the detail header (From / To / Cc) plus the
 // wrapping recipient layout it attaches to. Lifted out of the main file so

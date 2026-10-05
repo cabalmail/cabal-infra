@@ -1,5 +1,6 @@
 import SwiftUI
 import CabalmailKit
+import CabalmailUI
 
 /// Pure helpers split off from `FolderListView` so the main struct body
 /// stays under the SwiftLint type-body cap. Extensions on the same type

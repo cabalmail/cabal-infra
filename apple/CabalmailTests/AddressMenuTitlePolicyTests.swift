@@ -1,6 +1,7 @@
 import XCTest
 import CabalmailKit
 @testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for #1702.
 //

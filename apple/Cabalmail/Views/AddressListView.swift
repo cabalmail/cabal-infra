@@ -1,5 +1,6 @@
 import SwiftUI
 import CabalmailKit
+import CabalmailUI
 
 /// Address sidebar (Phase 5 of the folder/address polish plan).
 ///

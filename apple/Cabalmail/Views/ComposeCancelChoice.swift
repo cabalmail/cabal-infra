@@ -1,4 +1,5 @@
 import SwiftUI
+import CabalmailUI
 
 /// The three outcomes of tapping Cancel in the composer, in the order the
 /// confirmation dialog offers them.

@@ -22,14 +22,14 @@ import SwiftUI
 ///
 /// macOS presents the same dialogs as alerts, which draw every button and
 /// map Escape onto the cancel-roled one, so there the role is worth having.
-enum ConfirmationDialogPolicy {
+public enum ConfirmationDialogPolicy {
 
     /// The role for the button that backs out of a confirmation dialog
     /// without performing its action.
-    static func backOutRole(on platform: HostPlatform) -> ButtonRole? {
+    public static func backOutRole(on platform: HostPlatform) -> ButtonRole? {
         platform == .macOS ? .cancel : nil
     }
 
     /// `backOutRole(on:)` for the platform this build is compiled for.
-    static var backOutRole: ButtonRole? { backOutRole(on: .current) }
+    public static var backOutRole: ButtonRole? { backOutRole(on: .current) }
 }

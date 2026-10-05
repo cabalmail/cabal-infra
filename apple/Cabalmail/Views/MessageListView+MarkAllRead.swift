@@ -1,5 +1,6 @@
 import SwiftUI
 import CabalmailKit
+import CabalmailUI
 
 // Mark All as Read for the folder the list is showing (cross-media plan,
 // Phase 1): the toolbar's More menu entry, the Mailbox menu's ⌥⌘T arriving

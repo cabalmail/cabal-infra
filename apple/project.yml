@@ -49,12 +49,37 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
 
 targets:
+  # The app layer the iOS/iPadOS/visionOS and macOS apps share: views, view
+  # models and app state, compiled once as the `CabalmailUI` module. A
+  # static library linked only by the two apps, so each app process holds
+  # one copy of it, and the hosted test bundles reach that copy through
+  # BUNDLE_LOADER instead of linking their own. It imports CabalmailKit
+  # without linking it for the same reason: the apps link the Kit once, and
+  # a second copy breaks `as? CabalmailError` casts (see the
+  # CabalmailKitTestSupport target in CabalmailKit/Package.swift).
+  #
+  # Membership is the folder: a new file under CabalmailUI/ is in both apps.
+  # As a project target it inherits `SWIFT_STRICT_CONCURRENCY: complete`
+  # above, which a package target would not. What stays in the app targets
+  # is what only one platform has: the entry points, Info.plists,
+  # entitlements and asset catalogs, the App Intents (iOS), and the menus
+  # and Settings window (macOS).
+  CabalmailUI:
+    type: library.static
+    supportedDestinations: [iOS, iPadOS, visionOS, macOS]
+    sources:
+      - path: CabalmailUI
+    dependencies:
+      - package: CabalmailKit
+        link: false
+
   Cabalmail:
     type: application
     supportedDestinations: [iOS, iPadOS, visionOS]
     sources:
       - path: Cabalmail
     dependencies:
+      - target: CabalmailUI
       - package: CabalmailKit
       # Embed the watch companion app in the iOS product only. A visionOS
       # archive of this same target cannot contain a watch app (watches
@@ -167,6 +192,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail
         TARGETED_DEVICE_FAMILY: "1,2,7"   # iPhone, iPad, visionOS
+        # Load every object file in the CabalmailUI archive, not only those
+        # the app's own code names. The linker otherwise skips an archive
+        # member nothing references by symbol, and with it any protocol
+        # conformance that member declares, which Swift looks up at run time.
+        # This keeps the link what it was when these sources compiled into
+        # the app directly. The hosted test bundle relies on it too: it
+        # resolves the module's internal symbols against this binary.
+        OTHER_LDFLAGS: ["$(inherited)", "-force_load", "$(BUILT_PRODUCTS_DIR)/libCabalmailUI.a"]
         MARKETING_VERSION: "0.6.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
@@ -234,6 +267,7 @@ targets:
           - Assets.xcassets
           - AppIcon.icon
     dependencies:
+      - target: CabalmailUI
       - package: CabalmailKit
       # Notification Service Extension, macOS flavor: same enrichment
       # source as the iOS target's extension, compiled into a separate
@@ -319,6 +353,8 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: CabalmailMac/CabalmailMac.entitlements
+        # See the Cabalmail target's matching setting.
+        OTHER_LDFLAGS: ["$(inherited)", "-force_load", "$(BUILT_PRODUCTS_DIR)/libCabalmailUI.a"]
       configs:
         # See the Cabalmail target's matching block for why these settings
         # live here instead of on the xcodebuild command line. CI injects
@@ -346,8 +382,8 @@ targets:
       # for. Leaving the watch outside the policy is what let its two
       # confirmation dialogs keep the cancel role after the other nine
       # dropped it (#1207).
-      - path: Cabalmail/Views/HostPlatform.swift
-      - path: Cabalmail/Views/ConfirmationDialogPolicy.swift
+      - path: CabalmailUI/Platform/HostPlatform.swift
+      - path: CabalmailUI/Platform/ConfirmationDialogPolicy.swift
     dependencies:
       - package: CabalmailKit
     info:
@@ -640,6 +676,10 @@ targets:
       - path: CabalmailKit/Tests/CabalmailKitTestSupport
     dependencies:
       - target: CabalmailMac
+      # Imported, not linked: the host app carries the module (see the
+      # CabalmailUI target), and a second copy here would split its types.
+      - target: CabalmailUI
+        link: false
       - package: CabalmailKit
     settings:
       base:

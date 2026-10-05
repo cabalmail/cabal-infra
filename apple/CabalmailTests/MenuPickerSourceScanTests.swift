@@ -179,7 +179,7 @@ final class MenuPickerSourceScanTests: XCTestCase {
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
         var found: [String: String] = [:]
-        for target in ["Cabalmail", "CabalmailMac"] {
+        for target in ["Cabalmail", "CabalmailUI", "CabalmailMac"] {
             let root = apple.appendingPathComponent(target)
             guard let walker = FileManager.default.enumerator(
                 at: root,

@@ -92,7 +92,7 @@ final class ColorTokenSourceScanTests: XCTestCase {
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
         var found: [String: String] = [:]
-        for target in ["Cabalmail", "CabalmailMac", "CabalmailWatch"] {
+        for target in ["Cabalmail", "CabalmailUI", "CabalmailMac", "CabalmailWatch"] {
             let root = apple.appendingPathComponent(target)
             guard let walker = FileManager.default.enumerator(
                 at: root,

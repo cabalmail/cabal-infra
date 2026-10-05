@@ -1,5 +1,6 @@
 import SwiftUI
 import CabalmailKit
+import CabalmailUI
 
 /// Mirrors the outbox's failed entries (sends that ran out of retries) into
 /// view state for `FailedSendBanner`. Owned by `SignedInRootView`, which

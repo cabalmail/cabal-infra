@@ -1,5 +1,6 @@
 import SwiftUI
 import CabalmailKit
+import CabalmailUI
 
 /// Envelope list for a single folder. Selection is lifted to the parent so
 /// the split view can bind the detail pane to it.

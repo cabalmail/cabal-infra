@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 @testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1201: every `confirmationDialog` in the app
 // that still gave its back-out button `role: .cancel` rendered on iPhone as
@@ -159,7 +160,7 @@ final class ConfirmationDialogRoleTests: XCTestCase {
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
         var found: [String: String] = [:]
-        for target in ["Cabalmail", "CabalmailMac", "CabalmailWatch"] {
+        for target in ["Cabalmail", "CabalmailUI", "CabalmailMac", "CabalmailWatch"] {
             let root = apple.appendingPathComponent(target)
             guard let walker = FileManager.default.enumerator(
                 at: root,

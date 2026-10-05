@@ -1,5 +1,6 @@
 import Foundation
 import CabalmailKit
+import CabalmailUI
 
 /// How a whole address is drawn in a *menu row* — the compose From menu's
 /// per-address buttons and the Default From picker's rows.

@@ -242,7 +242,7 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
     /// by path: `ContentView.swift` exists in two targets, so filenames are not
     /// unique keys here.
     private static func rowCallSites() throws -> [String] {
-        let roots = ["Cabalmail", "CabalmailMac"]
+        let roots = ["Cabalmail", "CabalmailUI", "CabalmailMac"]
         var sites: [String] = []
         for root in roots {
             let base = apple.appendingPathComponent(root)

@@ -1,5 +1,6 @@
 import SwiftUI
 import CabalmailKit
+import CabalmailUI
 
 /// Message detail pane — headers block, body renderer, attachment strip.
 ///
