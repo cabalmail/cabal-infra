@@ -14,11 +14,13 @@ public enum OfflineLaunch {
     /// service's `SessionInvalidationMonitor`). A refresh that never reached
     /// Cognito says nothing about the session, so it passes too: the caller
     /// wires the session with the keychain tokens, and the first call made
-    /// back online refreshes for real.
+    /// back online refreshes for real. So does a refresh Cognito throttled or
+    /// failed internally (#1828), which used to end the launch on the
+    /// sign-in form with Cognito's error text.
     public static func validateStoredSession(_ authService: any AuthService) async throws {
         do {
             _ = try await authService.currentIdToken()
-        } catch let error as CabalmailError where error.isUnreachable {
+        } catch let error as CabalmailError where error.isUnreachable || error.isTransientRefusal {
             return
         }
     }
@@ -34,5 +36,13 @@ extension CabalmailError {
         default:
             return false
         }
+    }
+
+    /// Cognito answered but declined for now: it throttled the call or
+    /// failed on its side. Like no answer at all, that says nothing about
+    /// the session.
+    var isTransientRefusal: Bool {
+        guard case .server(let code, _) = self else { return false }
+        return code == "TooManyRequestsException" || code == "InternalErrorException"
     }
 }

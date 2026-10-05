@@ -36,7 +36,7 @@ enum GlobalSearchFieldHost: Equatable {
 enum GlobalSearchFieldPlacement {
     /// - Parameters:
     ///   - isWideSidebar: whether this is a wide layout (macOS, regular-width
-    ///     iPad, visionOS) rather than compact iPhone.
+    ///     iPad) rather than compact iPhone.
     ///   - columnScopedToolbar: whether the message-list column draws its own
     ///     navigation bar at column width (UIKit's split controller) rather
     ///     than sharing a window-wide one.
@@ -47,8 +47,12 @@ enum GlobalSearchFieldPlacement {
 
     /// Whether the running platform gives the message-list column its own
     /// column-width navigation bar. iPadOS does; macOS's toolbar spans the
-    /// window, and visionOS keeps the ornament-hosted bar the field has always
-    /// ridden there.
+    /// window. On visionOS the answer is currently moot: neither reader takes
+    /// its wide branch there, since visionOS never builds `MailRootView`
+    /// (`VisionSectionView` gives search its own tab) and its message list
+    /// leaves `showsSettingsGear` false, so `FolderSwitchPlacement` picks the
+    /// title menu regardless. False keeps a future wide visionOS layout on
+    /// the shared-bar defaults.
     static var platformColumnScopedToolbar: Bool {
         #if os(iOS)
         true

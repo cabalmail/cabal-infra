@@ -6,7 +6,6 @@ import SwiftUI
 import UserNotifications
 import CabalmailKit
 #if os(macOS)
-import OSLog
 import ServiceManagement
 #endif
 
@@ -54,10 +53,6 @@ struct NotificationSettingsSection: View {
     // status item `CabalmailMacApp` declares.
     @State private var loginItemStatus = SMAppService.mainApp.status
     @AppStorage(menuBarExtraDefaultsKey) private var showInMenuBar = true
-    private let residencyLog = Logger(
-        subsystem: "com.cabalmail.Cabalmail",
-        category: "login-item"
-    )
     #endif
 
     var body: some View {
@@ -189,9 +184,7 @@ struct NotificationSettingsSection: View {
                 } catch {
                     let verb = newValue ? "register" : "unregister"
                     let reason = error.localizedDescription
-                    residencyLog.error(
-                        "Login item \(verb, privacy: .public) failed: \(reason, privacy: .public)"
-                    )
+                    CabalmailLog.error("login-item", "Login item \(verb) failed: \(reason)")
                 }
                 loginItemStatus = SMAppService.mainApp.status
             }

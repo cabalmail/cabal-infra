@@ -181,6 +181,10 @@ public struct ReadingPositionCache: Codable, Equatable, Sendable {
 /// settings — never the account-scoped, server-synced preferences: this
 /// state is inherently per install. Cleared on sign-out so the next account
 /// on the device starts fresh.
+///
+/// `@unchecked Sendable` for `defaults`: `UserDefaults` is documented
+/// thread-safe but Foundation does not mark it `Sendable`. The coders are
+/// configured in `init` and never mutated afterwards.
 public final class ResumeSessionStore: @unchecked Sendable {
     public static let sessionKey = "cabalmail.resume.session"
     public static let positionsKey = "cabalmail.resume.positions"

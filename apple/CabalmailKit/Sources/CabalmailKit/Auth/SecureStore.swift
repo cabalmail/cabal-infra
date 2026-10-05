@@ -1,10 +1,11 @@
 import Foundation
+import Synchronization
 #if canImport(Security)
 import Security
 #endif
 
 /// Minimal key/value store for secrets that the Apple client must persist
-/// across launches — Cognito tokens and the IMAP/SMTP password.
+/// across launches — the Cognito tokens.
 ///
 /// Extracted behind a protocol so unit tests can inject `InMemorySecureStore`
 /// without linking the Security framework's kSecClass side effects into the
@@ -26,28 +27,22 @@ public extension SecureStore {
     }
 }
 
-/// In-memory store used by tests. Not thread-safe — tests drive it from a
-/// single task, and `Sendable` conformance is satisfied by the reference
-/// semantics of the underlying `NSMutableDictionary`.
-public final class InMemorySecureStore: SecureStore, @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [String: Data] = [:]
+/// In-memory store used by tests. Thread-safe: the entries live in a `Mutex`.
+public final class InMemorySecureStore: SecureStore {
+    private let storage = Mutex<[String: Data]>([:])
 
     public init() {}
 
     public func set(_ value: Data, forKey key: String) throws {
-        lock.lock(); defer { lock.unlock() }
-        storage[key] = value
+        storage.withLock { $0[key] = value }
     }
 
     public func get(_ key: String) throws -> Data? {
-        lock.lock(); defer { lock.unlock() }
-        return storage[key]
+        storage.withLock { $0[key] }
     }
 
     public func remove(_ key: String) throws {
-        lock.lock(); defer { lock.unlock() }
-        storage.removeValue(forKey: key)
+        _ = storage.withLock { $0.removeValue(forKey: key) }
     }
 }
 
@@ -136,6 +131,7 @@ public struct KeychainSecureStore: SecureStore {
 /// clear them exhaustively.
 public enum SecureStoreKey {
     public static let authTokens = "auth.tokens"
+    /// No longer written; kept so stores from older builds can be scrubbed.
     public static let imapUsername = "imap.username"
     /// No longer written; kept so stores from older builds can be scrubbed.
     public static let imapPassword = "imap.password"

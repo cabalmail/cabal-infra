@@ -6,7 +6,7 @@ import CabalmailKit
 struct MessageListView: View {
     /// What this list shows — a folder or the global search surface. Drives the
     /// title, the top-inset chrome (filter pills vs. search-result banner), and
-    /// whether the folder lifecycle (initial load / IDLE / 60s poll) runs.
+    /// whether the folder lifecycle (initial load / watcher / 60s poll) runs.
     let scope: MessageListScope
     /// Parent-owned view model for `.search` scope (so the search input —
     /// `.searchable` on iPhone, the sidebar field on iPad/macOS — can bind the
@@ -259,6 +259,9 @@ struct MessageListView: View {
         .overlay {
             searchResultsPlaceholder(model: model, visibleRowCount: visible.count)
         }
+        // Inside the safe-area insets below, so it sits above the bulk
+        // action bar rather than on it.
+        .overlay(alignment: .bottom) { skippedNoticeBanner(model: model) }
         // A search/filter list that empties out from under the user (every
         // loaded Unread row marked read, say) has no rows left to fire the
         // near-end prefetch, so kick the next page from here instead. The
@@ -471,7 +474,7 @@ extension MessageListView {
         }
     }
 
-    /// Lifecycle: initial load + IDLE watcher start, the 60-second
+    /// Lifecycle: initial load + change watcher start, the 60-second
     /// fallback refresh, and watcher teardown.
     private var lifecycleLayer: some View {
         presentationLayer
@@ -479,7 +482,7 @@ extension MessageListView {
             if model == nil, let client = appState.client {
                 if isSearchScope {
                     // Parent owns the search model (its query is bound by the
-                    // external search input). No folder load / IDLE here — it
+                    // external search input). No folder load / watcher here — it
                     // populates only when a search runs.
                     model = injectedSearchModel
                 } else {
@@ -499,19 +502,27 @@ extension MessageListView {
                     initialLoadComplete = true
                     applyPendingRestoreWhenReady()
                 }
+            } else if !isSearchScope {
+                // Back on screen with the model it kept (a reader pushed over
+                // the list and popped): `.onDisappear` stopped the watcher,
+                // so start it again (#1816; a no-op while one is running),
+                // and refresh for whatever arrived while the list was away,
+                // which the new watcher counts as already there.
+                await model?.startWatching()
+                await model?.refresh()
             }
         }
         .onAppear {
             hasAppeared = true
             applyPendingRestoreWhenReady()
         }
-        // Wall-clock fallback refresh. IDLE usually pushes new mail within
-        // seconds, but long-lived IDLE sockets can stall silently (iOS
-        // suspends idle connections, cellular handoffs drop the stream,
-        // NAT/middleboxes time out TCP after a few minutes). Polling every
-        // 60 seconds while the list is on screen guarantees the user sees
-        // new mail without pull-to-refresh. `.task` cancels automatically
-        // on `.onDisappear`, so the timer stops with the watcher.
+        // Wall-clock fallback refresh. The change watcher reacts only when a
+        // folder-status poll shows `UIDNEXT` advancing or the count dropping,
+        // so it misses changes those numbers don't show, such as read or flag
+        // changes made on another device, and goes quiet while it backs off
+        // from a failing API. A full refresh every 60 seconds while the list
+        // is on screen catches those. `.task` cancels automatically on
+        // `.onDisappear`, so the timer stops with the watcher.
         .task {
             // Folder-only fallback poll; the search surface has no folder to
             // re-STATUS and re-running the active search on a timer isn't wanted.
@@ -523,11 +534,11 @@ extension MessageListView {
             }
         }
         .onDisappear {
-            // Tear down the IDLE watcher when the folder drops off-screen.
+            // Tear down the change watcher when the folder drops off-screen.
             // The view is rebuilt (via `.id(folder.path)` in MailRootView)
             // when the user picks another folder, so `startWatching` in the
-            // new instance's `.task` starts a fresh IDLE session against the
-            // new mailbox.
+            // new instance's `.task` starts a fresh watcher on the new
+            // mailbox; the same view coming back starts one again too.
             let model = model
             Task { await model?.stopWatching() }
         }
@@ -550,7 +561,7 @@ extension MessageListView {
             // arrow.clockwise toolbar button) get hard-reload semantics
             // — wipe in-memory state before refresh — so the user has a
             // reliable escape from any stale-state bug the merge path
-            // doesn't catch. The IDLE watcher and the 60s timer keep
+            // doesn't catch. The change watcher and the 60s timer keep
             // hitting `refresh()` directly; they fire too often to be
             // discarding cached envelopes on every tick.
             Task { await model?.hardReload() }
@@ -633,7 +644,7 @@ extension MessageListView {
         .onChange(of: appState.lastEnvelopeFlagChange) { _, signal in
             // Detail view toggled \Seen (or another flag in the future).
             // Apply it directly to the matching row so the bold styling +
-            // unread dot flip without waiting for the next IDLE refresh.
+            // unread dot flip without waiting for the next refresh.
             // Other folders ignore the signal.
             guard let signal, signal.folderPath == folder.path else { return }
             model?.applyFlagChange(

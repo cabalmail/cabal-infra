@@ -58,6 +58,17 @@ public extension MimePart {
         return !contentType.isMultipart
     }
 
+    /// The part to show as the message body for `mimeType` (`text/plain` or
+    /// `text/html`): the first such part in tree order that the sender did
+    /// not mark `Content-Disposition: attachment`. A `notes.txt` or
+    /// `page.html` attachment is listed by `attachmentPlan()`; taking it as
+    /// the body showed it as the message, quoted it in replies and indexed
+    /// it for Spotlight (#1812). `fetch_message` extracts the body the same
+    /// way.
+    func bodyPart(mimeType: String) -> MimePart? {
+        firstPart { $0.contentType.mimeType == mimeType && $0.contentDisposition?.isAttachment != true }
+    }
+
     /// Classify this part tree into downloadable attachments and inline
     /// `cid:` images. See `MimeAttachmentPlan` for the rules.
     func attachmentPlan() -> MimeAttachmentPlan {

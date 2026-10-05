@@ -1,11 +1,12 @@
 import Foundation
+import Synchronization
 #if canImport(MetricKit)
 import MetricKit
 #endif
 
-/// Opt-in crash & hang collector — funnels MetricKit diagnostic payloads
-/// into `DebugLogStore` so the Settings → Debug Log view shows them after
-/// the next launch.
+/// Opt-in crash & hang collector — logs MetricKit diagnostic payloads through
+/// `CabalmailLog`, so the Settings → Debug Log view shows them after the next
+/// launch and the unified log records them.
 ///
 /// The plan calls for MetricKit over a third-party SDK. MetricKit delivers
 /// both metrics (daily) and *diagnostics* (per-payload) via
@@ -16,7 +17,7 @@ import MetricKit
 ///
 /// Activated by `CabalmailClient.setCrashReportingEnabled(_:)` — off by
 /// default because the plan marks it opt-in.
-public final class MetricKitCollector: NSObject, @unchecked Sendable {
+public final class MetricKitCollector: NSObject, Sendable {
     /// Process-lifetime singleton. MetricKit subscription is global to the
     /// process (`MXMetricManager.shared`), so the subscriber object must
     /// outlive any per-session object that toggles it.
@@ -34,7 +35,9 @@ public final class MetricKitCollector: NSObject, @unchecked Sendable {
     public static let shared = MetricKitCollector()
 
     private let store: DebugLogStore
-    private var isActive = false
+    /// Held across the subscribe / unsubscribe call, so a `start` and a `stop`
+    /// on different threads can't both act on the same reading of it.
+    private let isActive = Mutex(false)
 
     public init(store: DebugLogStore = .shared) {
         self.store = store
@@ -42,17 +45,21 @@ public final class MetricKitCollector: NSObject, @unchecked Sendable {
 
     public func start() {
         #if canImport(MetricKit) && !os(visionOS)
-        guard !isActive else { return }
-        MXMetricManager.shared.add(self)
-        isActive = true
+        isActive.withLock { isActive in
+            guard !isActive else { return }
+            MXMetricManager.shared.add(self)
+            isActive = true
+        }
         #endif
     }
 
     public func stop() {
         #if canImport(MetricKit) && !os(visionOS)
-        guard isActive else { return }
-        MXMetricManager.shared.remove(self)
-        isActive = false
+        isActive.withLock { isActive in
+            guard isActive else { return }
+            MXMetricManager.shared.remove(self)
+            isActive = false
+        }
         #endif
     }
 
@@ -69,34 +76,32 @@ extension MetricKitCollector: MXMetricManagerSubscriber {
         // Metrics (daily rollups) aren't useful without an ingestion
         // endpoint; log that a payload arrived so debug users can verify
         // MetricKit is firing, and stop there.
-        let store = store
         for payload in payloads {
             let snippet = "metrics payload \(payload.timeStampBegin)→\(payload.timeStampEnd)"
-            Task { await store.log(.info, "MetricKit", snippet) }
+            CabalmailLog.record(.info, "MetricKit", snippet, into: store)
         }
     }
 
     public func didReceive(_ payloads: [MXDiagnosticPayload]) {
-        let store = store
         for payload in payloads {
             for crash in payload.crashDiagnostics ?? [] {
                 let message = "crash: \(crash.terminationReason ?? "(unknown)") " +
                     "sig=\(crash.signal?.stringValue ?? "?") " +
                     "exc=\(crash.exceptionType?.stringValue ?? "?")"
-                Task { await store.log(.error, "MetricKit", message) }
+                CabalmailLog.record(.error, "MetricKit", message, into: store)
             }
             for hang in payload.hangDiagnostics ?? [] {
                 let duration = hang.hangDuration.converted(to: .seconds).value
                 let message = "hang: \(String(format: "%.2fs", duration))"
-                Task { await store.log(.warn, "MetricKit", message) }
+                CabalmailLog.record(.warn, "MetricKit", message, into: store)
             }
             for cpu in payload.cpuExceptionDiagnostics ?? [] {
                 let message = "cpu exception: totalCPUTime=\(cpu.totalCPUTime) totalSampledTime=\(cpu.totalSampledTime)"
-                Task { await store.log(.warn, "MetricKit", message) }
+                CabalmailLog.record(.warn, "MetricKit", message, into: store)
             }
             for disk in payload.diskWriteExceptionDiagnostics ?? [] {
                 let message = "disk write exception: totalWritesCaused=\(disk.totalWritesCaused)"
-                Task { await store.log(.warn, "MetricKit", message) }
+                CabalmailLog.record(.warn, "MetricKit", message, into: store)
             }
         }
     }

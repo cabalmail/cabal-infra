@@ -136,8 +136,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 ///
 /// A named seam rather than a bare `await MainActor.run` at the call site, so
 /// the rule is stated once and a test can drive it from a background task.
-/// It lives in this file rather than its own because the macOS target lists
-/// its sources file by file, and a new file is silently left out of it.
 enum PushActionCompletion {
     /// Runs the system's completion handler on the main actor.
     static func finish(_ completionHandler: @escaping @Sendable () -> Void) async {

@@ -75,7 +75,7 @@ extension MessageListViewModel {
             if unreadCount > 0 {
                 appState.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: unreadCount)
             }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
         // Purged rows leave any active selection; like `moveMessages`,
         // UIDs outside the set stay selected.

@@ -78,9 +78,11 @@ struct FeedRootView: View {
         }
         .task(id: selectedItem?.subscriptionId) { await resolveSubscription() }
         .task {
-            // Once per process (the coordinator guards it): reopen the scope
-            // the session ended in. The item, if still in the store, is
-            // parked for the scope handler above.
+            // Reopen the scope the session is in: the launch snapshot on the
+            // first landing in the process, the live session for a view
+            // rebuilt after it (`NavStateCoordinator.restoreSource`). The
+            // item, if still in the store, is parked for the scope handler
+            // above.
             guard selectedScope == nil,
                   let scope = await appState.navCoordinator?.consumeFeedsLaunchTarget()
             else { return }

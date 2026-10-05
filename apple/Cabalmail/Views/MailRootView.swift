@@ -103,7 +103,7 @@ struct MailRootView: View {
     /// `InspectorPresentationPolicy` for the iPhone Duo case this guards.
     @State private var addressInspectorRequested = false
     /// Persisted width of the message-list (content) column in the wide
-    /// (regular-width iPad / visionOS) three-column layout. `NavigationSplitView`
+    /// (regular-width iPad) three-column layout. `NavigationSplitView`
     /// doesn't report where a user drags the native list-reader divider, so the
     /// column is pinned to this width and a `ColumnResizeHandle` on its trailing
     /// edge drives it — letting the chosen split survive cold launches. macOS
@@ -157,6 +157,11 @@ struct MailRootView: View {
     /// sidebar column reports a compact size class even on a regular-width iPad.
     #if !os(macOS)
     @Environment(\.showsSettingsGear) private var showsSettingsGear
+    #endif
+    /// This main window's identity, so the folder panel's Settings gear opens
+    /// Settings in this window rather than in every one (`MainWindowCommandScope`).
+    #if os(iOS)
+    @Environment(\.commandWindowID) private var commandWindowID
     #endif
     var isWideSidebar: Bool {
         #if os(macOS)
@@ -311,7 +316,7 @@ struct MailRootView: View {
             #endif
         } content: {
             // Pin the list column to its persisted width and hang the drag
-            // handle on its trailing edge (wide iPad/visionOS only); macOS
+            // handle on its trailing edge (wide iPad only); macOS
             // bounds and remembers its native column instead, and compact
             // passes through untouched. See `resizableContentColumn`.
             resizableContentColumn(decoratedContentColumn)
@@ -478,14 +483,11 @@ struct MailRootView: View {
         // keeping the sidebar free for folders (and, later, feeds). Hidden by
         // default; the toolbar `at` button (wide layouts) toggles it. Tapping
         // an address copies it to the pasteboard.
-        // `.inspector` is the native trailing sidebar on iOS/macOS; visionOS
-        // lacks it, so the same toggle drives a sheet there instead.
-        #if os(visionOS)
-        .sheet(isPresented: $addressInspectorPresented) {
-            AddressListView(externalFilter: $addressListFilter)
-                .environment(appState)
-        }
-        #else
+        // `.inspector` is the native trailing sidebar on iOS/macOS. The SDK
+        // marks it unavailable on visionOS, which never builds `MailRootView`
+        // (`SignedInRootView` routes it to `VisionSectionView`), so it is
+        // compiled out there rather than given a stand-in.
+        #if !os(visionOS)
         .inspector(isPresented: addressInspectorBinding) {
             AddressListView(externalFilter: $addressListFilter)
                 .addressInspectorWidth(isPresented: addressInspectorPresented)
@@ -524,7 +526,7 @@ extension MailRootView {
         )
     }
 
-    /// Toolbar host for the search field (macOS / visionOS): a stated width so
+    /// Toolbar host for the search field (macOS): a stated width so
     /// it right-aligns cleanly above the message-list column rather than
     /// stretching, capped to the column — less its fixed sibling buttons and
     /// the folder-switch menu at the section's leading edge — so it can't
@@ -688,7 +690,7 @@ extension MailRootView {
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
-                                appState.requestSettings()
+                                appState.requestSettings(in: commandWindowID)
                             } label: {
                                 Image(systemName: "gearshape")
                                     .accessibilityLabel("Settings")
@@ -721,7 +723,7 @@ private let readerColumnMinWidth = ListColumnWidth.readerFloor
 
 extension MailRootView {
     /// Whether the list column is pinned to a user-set width and shows the drag
-    /// handle. True only on the wide regular-width iPad / visionOS layout:
+    /// handle. True only on the wide regular-width iPad layout:
     /// compact collapses to a stack (a fixed width would fight the collapse) and
     /// macOS resizes with its native divider, remembering the width without a
     /// pin (`ListColumnWidth`).
@@ -896,7 +898,7 @@ extension MailRootView {
     }
 
     /// Pins the content column to the persisted width and overlays the drag
-    /// handle, but only on the wide iPad/visionOS layout. macOS keeps its
+    /// handle, but only on the wide iPad layout. macOS keeps its
     /// native resizable dividers and instead bounds the column so the reading
     /// pane can't be starved, opening it at the width it was last left at
     /// (`ListColumnWidth`); compact iPhone, where that policy passes through,

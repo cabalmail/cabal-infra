@@ -90,17 +90,22 @@ promote:
 # invocations (xcodegen generate, swiftlint --strict, xcodebuild per platform)
 # and carries the Xcode-select / arch caveats - see its header. macOS + full
 # Xcode only; deliberately not folded into any aggregate target.
-#   make apple            # generate + lint + build macos/ios/visionos (all)
+#   make apple            # generate + lint + build macos/ios/visionos/watchos (all)
 #   make apple-lint       # swiftlint --strict only
 #   make apple-kit-test   # xcodebuild test for CabalmailKit
-.PHONY: apple apple-lint apple-macos apple-ios apple-visionos apple-kit-test
+#   make apple-test       # Kit + both app-layer test suites
+.PHONY: apple apple-lint apple-macos apple-ios apple-visionos apple-watchos apple-kit-test apple-app-test apple-ios-app-test apple-test
 
 apple:          ; ./scripts/build-apple.sh all
 apple-lint:     ; ./scripts/build-apple.sh lint
 apple-macos:    ; ./scripts/build-apple.sh macos
 apple-ios:      ; ./scripts/build-apple.sh ios
 apple-visionos: ; ./scripts/build-apple.sh visionos
+apple-watchos:  ; ./scripts/build-apple.sh watchos
 apple-kit-test: ; ./scripts/build-apple.sh kit-test
+apple-app-test: ; ./scripts/build-apple.sh app-test
+apple-ios-app-test: ; ./scripts/build-apple.sh ios-app-test
+apple-test:     ; ./scripts/build-apple.sh test
 
 # --- Brand logo assets -----------------------------------------------------
 # Regenerate every logo derivative (Apple icons, Android Play Store icon, React

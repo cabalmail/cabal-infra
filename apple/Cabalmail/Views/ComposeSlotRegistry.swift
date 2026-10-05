@@ -38,6 +38,9 @@ final class ComposeSlotRegistry {
     /// Indices currently backing an open composer.
     private var occupied: Set<Int> = []
 
+    /// Sign-outs this process has seen; see `mayCompose(_:closedOn:)`.
+    private(set) var session = 0
+
     init() {}
 
     /// Lowest free slot, parked with `seed`. Recycling the lowest index
@@ -51,19 +54,36 @@ final class ComposeSlotRegistry {
         return ComposeSlot(index: index)
     }
 
-    /// Replaces the seed of an already-open slot. The `mailto:` handler
-    /// needs this: the system spawns the window before the URL arrives,
-    /// so the seed lands after the slot does.
+    /// Replaces the seed of an already-open slot, should a `mailto:` link
+    /// land in a window that has one. On macOS the system spawns a window
+    /// for each link, which has no slot and keeps its seed itself (see
+    /// `seed(forWindowWith:ownSeed:)`).
     func reseed(_ slot: ComposeSlot, with seed: Draft) {
         occupied.insert(slot.index)
         seeds[slot.index] = seed
     }
 
     /// The seed a slot should be composing from, or nil when the slot was
-    /// never handed out in this process — a scene the system restored at
-    /// launch is the case that matters.
+    /// never handed out in this process: a scene restored at launch with its
+    /// value, on a platform that restores one (macOS does not).
     func seed(for slot: ComposeSlot) -> Draft? {
         seeds[slot.index]
+    }
+
+    /// What a compose window shows. A window opened with a slot composes
+    /// from that slot's seed. A window without one composes from `ownSeed`,
+    /// which it keeps for itself, and never from a slot's. Those are the
+    /// windows this process did not open: a scene restored at launch (macOS
+    /// brings it back with no value) or one the system spawned for a
+    /// `mailto:` link.
+    ///
+    /// They used to fall back to slot 0. SwiftUI keeps a dismissed window
+    /// mounted, so every such window the user had closed rebuilt and started
+    /// a hidden composer whenever slot 0 was handed out again, and each one
+    /// saved that draft to Drafts every minute until the app quit.
+    func seed(forWindowWith slot: ComposeSlot?, ownSeed: Draft) -> Draft {
+        guard let slot else { return ownSeed }
+        return seed(for: slot) ?? Self.restoredSeed(for: slot)
     }
 
     /// Frees the index. The seed stays parked; the next `acquire` of this
@@ -74,6 +94,37 @@ final class ComposeSlotRegistry {
 
     /// Number of composers currently holding a slot.
     var openCount: Int { occupied.count }
+
+    // MARK: - Closed windows across a sign-out
+
+    /// What a compose window's composer closed on.
+    struct ClosedCompose: Equatable {
+        let session: Int
+        let seedID: UUID
+    }
+
+    func closedCompose(for seed: Draft) -> ClosedCompose {
+        ClosedCompose(session: session, seedID: seed.id)
+    }
+
+    /// Called at sign-out, including the one an expired session forces.
+    func endSession() {
+        session += 1
+    }
+
+    /// Whether a compose window may build a composer for `seed`.
+    ///
+    /// SwiftUI keeps a closed window mounted and rebuilds its composer when
+    /// the session comes back after a sign-out, including one forced by an
+    /// expired session. Every closed window then started a hidden composer
+    /// from the seed it closed on, saving it to Drafts every minute. A
+    /// window that never closed always may. A closed one may in the session
+    /// it closed in, so it keeps drawing its composer on its way out, and
+    /// for a new seed, which is its slot being handed out again.
+    func mayCompose(_ seed: Draft, closedOn closed: ClosedCompose?) -> Bool {
+        guard let closed else { return true }
+        return closed.session == session || closed.seedID != seed.id
+    }
 
     /// Seed a restored scene composes from when this process never handed
     /// out its slot. Derived from the index rather than freshly minted so

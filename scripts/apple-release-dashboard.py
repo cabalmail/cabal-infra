@@ -37,7 +37,6 @@ HTML (handy for sharing a snapshot or debugging).
 
 import argparse
 import concurrent.futures
-import html
 import json
 import os
 import re
@@ -1508,23 +1507,6 @@ document.getElementById('stats').innerHTML = [
 ].map(([l,n])=>`<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
 /* ---------- feature matrix ---------- */
-function laneCell(app, laneData){
-  const cols = LANES.map(l=>{
-    const d = laneData[l];
-    if(!d){
-      // Beta lane may not exist for macOS at all — show a subtle dash.
-      return `<div class="lanecol"><span class="lanelabel">${LANE_LABEL[l]}</span><span class="lane-none">—</span></div>`;
-    }
-    return `<div class="lanecol">`+
-      `<span class="lanelabel">${LANE_LABEL[l]}</span>`+
-      pill(d.status_label, d.status_role)+
-      `<span class="lanebuild">#${esc(d.build_number)}</span>`+
-      `</div>`;
-  }).join('');
-  return `<div class="laneapp"><span class="dot ${app}"></span></div>`+
-         `<div style="display:flex;gap:10px">${cols}</div>`;
-}
-
 function renderFeatures(){
   const p = document.getElementById('panel-features');
   let html = '';

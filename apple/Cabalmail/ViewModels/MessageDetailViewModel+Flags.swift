@@ -39,7 +39,7 @@ extension MessageDetailViewModel {
         } catch {
             isSeen = previous
             onFlagChanged?(.seen, previous)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -73,7 +73,7 @@ extension MessageDetailViewModel {
         } catch {
             isFlagged = previous
             onFlagChanged?(.flagged, previous)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -98,7 +98,7 @@ extension MessageDetailViewModel {
         } catch {
             if wasTagged { keywordSlots.insert(slot) } else { keywordSlots.remove(slot) }
             onFlagChanged?(.keyword(slot), wasTagged)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 }

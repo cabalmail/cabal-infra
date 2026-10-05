@@ -114,7 +114,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         webView.allowsBackForwardNavigationGestures = true
         #endif
         pageURL = url

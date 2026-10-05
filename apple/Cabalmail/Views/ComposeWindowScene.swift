@@ -70,7 +70,7 @@ struct ComposeWindowScene: Scene {
 
     var body: some Scene {
         WindowGroup("New Message", id: composeWindowID, for: ComposeSlot.self) { $slot in
-            ComposeWindowContent(slot: slot ?? ComposeSlot(index: 0))
+            ComposeWindowContent(slot: slot)
                 .environment(appState)
                 .environment(preferences)
                 // A scene is its own appearance root — the main window's
@@ -80,21 +80,6 @@ struct ComposeWindowScene: Scene {
                 // (#1460). Every scene pins it for itself; see
                 // AppearancePolicy.
                 .themedAppearance(preferences.theme)
-                .onOpenURL { url in
-                    // On macOS the main window group declines external
-                    // events (`handlesExternalEvents(matching: [])`, see
-                    // CabalmailMacApp) so a mailto: click routes here:
-                    // the system spawns a compose window with a default
-                    // slot and delivers the URL to it. Park the seed under
-                    // that slot; without this the window opens with blank
-                    // To/Subject fields.
-                    if let mailto = MailtoURL(url) {
-                        appState.composeSlots.reseed(
-                            slot ?? ComposeSlot(index: 0),
-                            with: mailto.draft()
-                        )
-                    }
-                }
                 // A mailto: click can cold-launch the app straight into
                 // this scene, in which case the main window's `.task` —
                 // the usual `restoreIfPossible` call site — may not have
@@ -118,34 +103,62 @@ struct ComposeWindowScene: Scene {
 /// restores a compose scene before the user has signed back in we
 /// degrade to a placeholder rather than crashing on a missing client.
 private struct ComposeWindowContent: View {
-    let slot: ComposeSlot
+    /// Nil for a window this process did not open: a scene the system
+    /// restored at launch, or one it spawned for a `mailto:` link.
+    let slot: ComposeSlot?
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.dismissWindow) private var dismissWindow
 
-    /// What this slot is composing right now. A slot the system restored
-    /// at launch was never handed out by this process, so it falls back to
-    /// an index-derived blank draft rather than a fresh one — a seed whose
-    /// identity changed per body evaluation would rebuild the composer on
-    /// every redraw.
+    /// The seed a window without a slot composes from. Held per window so
+    /// it shares nothing with a slot the registry can hand out, and in
+    /// `@State` so its identity is stable across body evaluations — one that
+    /// changed per evaluation would rebuild the composer on every redraw.
+    @State private var ownSeed = Draft()
+
+    /// Set when this window's composer closes; see
+    /// `ComposeSlotRegistry.mayCompose(_:closedOn:)`.
+    @State private var closedOn: ComposeSlotRegistry.ClosedCompose?
+
+    /// What this window is composing right now; see
+    /// `ComposeSlotRegistry.seed(forWindowWith:ownSeed:)`.
     private var seed: Draft {
-        appState.composeSlots.seed(for: slot)
-            ?? ComposeSlotRegistry.restoredSeed(for: slot)
+        appState.composeSlots.seed(forWindowWith: slot, ownSeed: ownSeed)
     }
 
     var body: some View {
-        if let client = appState.client {
+        composer.onOpenURL { url in
+            // On macOS the main window group declines external events
+            // (`handlesExternalEvents(matching: [])`, see CabalmailMacApp)
+            // so a mailto: click routes here: the system spawns a compose
+            // window with no slot and delivers the URL to it. Without this
+            // the window opens with blank To/Subject fields.
+            guard let mailto = MailtoURL(url) else { return }
+            if let slot {
+                appState.composeSlots.reseed(slot, with: mailto.draft())
+            } else {
+                ownSeed = mailto.draft()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var composer: some View {
+        if let client = appState.client, appState.composeSlots.mayCompose(seed, closedOn: closedOn) {
             ComposeView(model: ComposeViewModel(
                 seed: seed,
                 client: client,
                 draftStore: client.draftStore,
                 preferences: preferences,
                 onClose: {
+                    closedOn = appState.composeSlots.closedCompose(for: seed)
                     // Free the slot before dismissing so the next composer
                     // can recycle this window instead of minting a
-                    // presentation SwiftUI will never release.
-                    appState.composeSlots.release(slot)
+                    // presentation SwiftUI will never release. A window
+                    // without a slot holds none, and must not free one a
+                    // composer elsewhere is using.
+                    if let slot { appState.composeSlots.release(slot) }
                     // iPadOS shows the home screen when the frontmost
                     // scene is dismissed with no sibling activated; bring
                     // the main mail scene forward first so closing compose
@@ -165,7 +178,7 @@ private struct ComposeWindowContent: View {
             .id(seed.id)
             .environment(appState)
             .environment(preferences)
-        } else {
+        } else if appState.client == nil {
             ContentUnavailableView(
                 "Sign in required",
                 systemImage: "person.crop.circle.badge.exclamationmark",
@@ -173,6 +186,10 @@ private struct ComposeWindowContent: View {
                     "Sign in from the main Cabalmail window to compose a message."
                 )
             )
+        } else {
+            // Closed before the last sign-out, and only still here because
+            // SwiftUI keeps closed windows mounted: nothing to compose.
+            Color.clear
         }
     }
 }

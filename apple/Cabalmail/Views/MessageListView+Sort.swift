@@ -22,7 +22,10 @@ extension MessageListView {
             Image(systemName: "arrow.up.arrow.down")
                 .accessibilityLabel("Sort")
         }
-        .disabled(model == nil)
+        // Off during a search: the server lists results newest first and
+        // can't order them otherwise (#1822).
+        .disabled(model?.sortApplies != true)
+        .help(model?.sortApplies == false ? "Search results are listed newest first" : "Sort")
         .accessibilityIdentifier("list.sort")
         // macOS keeps the AppKit menu it built the first time this `Menu`
         // was opened — checkmarks and row titles included — so the identity

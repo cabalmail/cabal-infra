@@ -9,8 +9,8 @@ import CabalmailKit
 // (folder, uid); the durable Message-ID is recovered from the envelope cache
 // at routing time so the existing `navigateRequest` machinery can fall back
 // to its Message-ID match if another client has since moved the message.
-// Compiled into the iOS/visionOS and macOS app targets (listed explicitly in
-// the CabalmailMac sources — see project.yml).
+// Compiled into the iOS/visionOS and macOS app targets (CabalmailMac takes
+// all of Cabalmail/ minus its exclude list — see project.yml).
 extension AppState {
     /// Entry point for `.onContinueUserActivity(CSSearchableItemActionType)`.
     func handleSpotlightActivity(_ activity: NSUserActivity) {

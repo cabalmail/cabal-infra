@@ -282,11 +282,11 @@ final class SimDriveTests: XCTestCase {
             return "activated"
         case "env":
             for pair in args {
-                guard let eq = pair.firstIndex(of: "=") else {
+                guard let separator = pair.firstIndex(of: "=") else {
                     throw DriveError("env expects KEY=VALUE, got '\(pair)'")
                 }
-                pendingLaunchEnvironment[String(pair[..<eq])] =
-                    String(pair[pair.index(after: eq)...])
+                pendingLaunchEnvironment[String(pair[..<separator])] =
+                    String(pair[pair.index(after: separator)...])
             }
             return "env set for next launch (\(pendingLaunchEnvironment.count) keys)"
         case "dump":
@@ -919,30 +919,6 @@ final class SimDriveTests: XCTestCase {
         return query
     }
 
-    /// A parsed query: what to match on, and whether to look in the target
-    /// app or in the system-UI process (`sysid:` / `systext:`).
-    private struct ParsedQuery {
-        enum Kind { case identifier, label }
-        let kind: Kind
-        let value: String
-        let isSystem: Bool
-
-        init?(_ raw: String) {
-            var rest = raw
-            isSystem = rest.hasPrefix("sys")
-            if isSystem { rest = String(rest.dropFirst(3)) }
-            if rest.hasPrefix("id:") {
-                kind = .identifier
-                value = String(rest.dropFirst(3))
-            } else if rest.hasPrefix("text:") {
-                kind = .label
-                value = String(rest.dropFirst(5))
-            } else {
-                return nil
-            }
-        }
-    }
-
     private func element(for query: String, requireExistence: Bool = true) throws -> XCUIElement {
         guard let parsed = ParsedQuery(query) else {
             throw DriveError(
@@ -1125,5 +1101,29 @@ final class SimDriveTests: XCTestCase {
         let tmpURL = outURL.appendingPathExtension("tmp")
         try? data.write(to: tmpURL)
         try? FileManager.default.moveItem(at: tmpURL, to: outURL)
+    }
+}
+
+/// A parsed query: what to match on, and whether to look in the target
+/// app or in the system-UI process (`sysid:` / `systext:`).
+private struct ParsedQuery {
+    enum Kind { case identifier, label }
+    let kind: Kind
+    let value: String
+    let isSystem: Bool
+
+    init?(_ raw: String) {
+        var rest = raw
+        isSystem = rest.hasPrefix("sys")
+        if isSystem { rest = String(rest.dropFirst(3)) }
+        if rest.hasPrefix("id:") {
+            kind = .identifier
+            value = String(rest.dropFirst(3))
+        } else if rest.hasPrefix("text:") {
+            kind = .label
+            value = String(rest.dropFirst(5))
+        } else {
+            return nil
+        }
     }
 }

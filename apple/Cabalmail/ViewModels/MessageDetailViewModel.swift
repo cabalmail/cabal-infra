@@ -16,6 +16,8 @@ final class MessageDetailViewModel {
     // can reach them.
     let client: CabalmailClient
     let preferences: Preferences
+    /// This reader's own folder for attachment files (`AttachmentFolders`).
+    @ObservationIgnored private let attachmentDirectory = AttachmentFolders.make()
 
     var isLoading = false
     var errorMessage: String?
@@ -89,10 +91,11 @@ final class MessageDetailViewModel {
     func requestPrint() { printRequestTick += 1 }
 
     /// In-flight body fetch (#403). Owned by the model so SwiftUI's `.task`
-    /// double-fire can't cancel it. Not torn down by `onDisappear()` — that
-    /// callback is unreliable on iPhone (phantom fires mid-push); the Task
-    /// runs to completion and the model deallocates naturally if the view
-    /// is truly gone.
+    /// double-fire can't cancel it. Deliberately not cancelled when the view
+    /// disappears: `.onDisappear` is unreliable on iPhone (SwiftUI fires it
+    /// mid-push for phantom view instances that aren't going away), so the
+    /// Task runs to completion and the model deallocates naturally if the
+    /// view is truly gone.
     private var loadTask: Task<Void, Never>?
 
     /// Hook for the view to relay flag changes to the list view model so the
@@ -154,14 +157,10 @@ final class MessageDetailViewModel {
         self.readerMode = preferences.defaultBodyRenderMode == .reader
     }
 
-    // swiftlint:disable:next function_body_length
     func load() async {
-        let uid = envelope.uid
-        let startedAt = Date()
-        BodyFetchLog.loadEnter(uid: uid)
-        // #403: SwiftUI fires `.onDisappear` mid-push transition, cancelling
-        // this Task before `.onAppear` re-fires and spawns the live one.
-        // Short-circuit so the cancelled Task doesn't paint an error screen.
+        // Defensive (#403): nothing in the view cancels `loadTask` any more
+        // (see its doc), but a Task that arrives here cancelled must not
+        // paint an error screen.
         if Task.isCancelled { return }
         errorMessage = nil
         isLoading = true
@@ -171,45 +170,36 @@ final class MessageDetailViewModel {
         defer {
             isLoading = false
             if completed { hasAttemptedLoad = true }
-            let hasBody = htmlBody != nil || plainText != nil
-            BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil, hasBody: hasBody)
         }
         // One automatic retry on transient `URLError.cancelled`.
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
-            let attemptNumber = 2 - attemptsRemaining
-            BodyFetchLog.loadAttempt(uid: uid, attempt: attemptNumber)
             do {
                 let bytes = try await fetchBodyBytes()
                 let tree = MimeParser.parse(bytes)
                 try await hydrate(from: tree)
                 errorMessage = nil
-                BodyFetchLog.loadSuccess(uid: uid, attempt: attemptNumber, bytes: bytes.count)
                 donateBodyToSpotlight()
                 scheduleMarkAsReadIfNeeded()
                 completed = true
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
-                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
                 if Task.isCancelled { return }
                 if attemptsRemaining > 0 { continue }
                 errorMessage = "Couldn't load message body."
                 completed = true
                 return
             } catch let urlError as URLError {
-                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
                 errorMessage = urlError.localizedDescription
                 completed = true
                 return
             } catch is CancellationError {
-                BodyFetchLog.loadCancellation(uid: uid, attempt: attemptNumber)
                 if Task.isCancelled { return }
                 errorMessage = "Couldn't load message body."
                 completed = true
                 return
             } catch {
-                BodyFetchLog.loadOther(uid: uid, attempt: attemptNumber, error: error)
                 errorMessage = error.localizedDescription
                 completed = true
                 return
@@ -239,25 +229,17 @@ final class MessageDetailViewModel {
         }
     }
 
-    /// Deliberately a near no-op. `.onDisappear` is unreliable as a "user
-    /// truly left" signal on iPhone: SwiftUI fires it mid-push for phantom
-    /// view instances that aren't actually going away (#403), so the
-    /// body-fetch `loadTask` isn't cancelled here — the model deallocates
-    /// naturally when the view is genuinely gone.
-    func onDisappear() {
-        BodyFetchLog.disappear(uid: envelope.uid, hadTask: loadTask != nil)
-    }
-
     /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
+    /// `loadTask` is cleared when it finishes, so after a failed load a
+    /// reader that appears again fetches again rather than staying on the
+    /// error until Retry is tapped (#1815).
     func startLoadIfNeeded() {
-        let uid = envelope.uid
-        BodyFetchLog.startGate(uid: uid, hasHTML: htmlBody != nil,
-                               hasPlain: plainText != nil,
-                               isLoading: isLoading, hasTask: loadTask != nil)
         guard htmlBody == nil, plainText == nil, !isLoading else { return }
         if let existing = loadTask, !existing.isCancelled { return }
-        BodyFetchLog.startSpawn(uid: uid)
-        loadTask = Task { @MainActor [weak self] in await self?.load() }
+        loadTask = Task { @MainActor [weak self] in
+            await self?.load()
+            self?.loadTask = nil
+        }
     }
 
     func toggleRemoteContent() {
@@ -322,7 +304,7 @@ final class MessageDetailViewModel {
                 isSeen = false
             }
             onMoveFailed?(!wasSeen)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
             onFailure?(error)
         }
     }
@@ -361,7 +343,7 @@ final class MessageDetailViewModel {
             await confirmRemoval()
         } catch {
             onMoveFailed?(false)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
             onFailure?(error)
         }
     }
@@ -426,29 +408,15 @@ extension MessageDetailViewModel {
 
 private extension MessageDetailViewModel {
     func fetchBodyBytes() async throws -> Data {
-        let uidValidity = try await currentUIDValidity()
-        if let cached = await client.bodyCache.fetch(
-            folder: folder.path,
-            uidValidity: uidValidity,
-            uid: envelope.uid
-        ) {
-            return cached
-        }
-        let raw = try await client.imapClient.fetchBody(folder: folder.path, uid: envelope.uid)
-        try await client.bodyCache.store(
-            folder: folder.path,
-            uidValidity: uidValidity,
-            uid: envelope.uid,
-            bytes: raw.bytes
-        )
-        return raw.bytes
+        try await client.rawMessage(folder: folder.path, uid: envelope.uid)
     }
 
     func hydrate(from root: MimePart) async throws {
-        if let plain = root.firstPart(where: { $0.contentType.mimeType == "text/plain" }) {
+        // Parts marked as attachments are never the body (#1812).
+        if let plain = root.bodyPart(mimeType: "text/plain") {
             plainText = plain.textContent()
         }
-        if let html = root.firstPart(where: { $0.contentType.mimeType == "text/html" }) {
+        if let html = root.bodyPart(mimeType: "text/html") {
             htmlBody = html.textContent()
         }
         rootHeaders = root.headers
@@ -463,9 +431,10 @@ private extension MessageDetailViewModel {
         // silently fail to render. See `MimePart.inlineImageDataURL`.
         let plan = root.attachmentPlan()
         inlineImages = plan.inlineImages
+        var fileNames = AttachmentFileNamer()
         attachments = try plan.attachments.map { item in
             let filename = item.filename ?? "attachment-\(UUID().uuidString).bin"
-            let url = try writeToTmp(data: item.data, filename: filename)
+            let url = try writeToTmp(data: item.data, filename: fileNames.name(for: filename))
             return Attachment(
                 id: item.contentID ?? url.lastPathComponent,
                 filename: filename,
@@ -476,15 +445,12 @@ private extension MessageDetailViewModel {
         }
     }
 
-    /// Writes a decoded part to the app's temp directory. Phase-7 polish can
-    /// replace this with a size-bounded managed directory; for Phase 4 we
-    /// rely on the OS sweeping `/tmp` between launches.
+    /// Writes a decoded part, under a name from `AttachmentFileNamer`, to this
+    /// reader's own temp folder (`attachmentDirectory`). Sign-out deletes
+    /// it; otherwise the OS sweeps the temp directory between launches.
     func writeToTmp(data: Data, filename: String) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cabalmail-attachments-\(envelope.uid)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let safeName = filename.replacingOccurrences(of: "/", with: "_")
-        let url = directory.appendingPathComponent(safeName)
+        try FileManager.default.createDirectory(at: attachmentDirectory, withIntermediateDirectories: true)
+        let url = attachmentDirectory.appendingPathComponent(filename)
         try data.write(to: url, options: .atomic)
         return url
     }

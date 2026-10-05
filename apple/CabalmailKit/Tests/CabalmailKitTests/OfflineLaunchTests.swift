@@ -26,7 +26,7 @@ final class OfflineLaunchTests: XCTestCase {
             tokenType: "Bearer",
             expiresAt: Date().addingTimeInterval(-3600)
         )
-        try await service.adopt(tokens: expired, username: "alice")
+        try await service.adopt(tokens: expired)
         return service
     }
 
@@ -51,6 +51,39 @@ final class OfflineLaunchTests: XCTestCase {
         } catch let error as CabalmailError {
             XCTAssertEqual(error, .authExpired)
         }
+    }
+
+    /// Cognito throttling the refresh, or failing on its side, says nothing
+    /// about the session either (#1828).
+    func testThrottledOrFailedRefreshPasses() async throws {
+        for code in ["TooManyRequestsException", "InternalErrorException"] {
+            let http = RecordingHTTPTransport(responses: [(Self.refusal(code), 400)])
+            let service = try await serviceWithExpiredToken(transport: http)
+            try await OfflineLaunch.validateStoredSession(service)
+            let tokens = await service.currentTokens()
+            XCTAssertEqual(tokens?.idToken, "OLD-ID", "\(code): the stored tokens are kept as they were")
+        }
+    }
+
+    /// A refusal that is about the user still ends the launch.
+    func testAnotherRefusalStillThrows() async throws {
+        let http = RecordingHTTPTransport(responses: [(Self.refusal("UserNotFoundException"), 400)])
+        let service = try await serviceWithExpiredToken(transport: http)
+        do {
+            try await OfflineLaunch.validateStoredSession(service)
+            XCTFail("expected the refusal to throw")
+        } catch let error as CabalmailError {
+            guard case .server(let code, _) = error else {
+                return XCTFail("unexpected error \(error)")
+            }
+            XCTAssertEqual(code, "UserNotFoundException")
+        }
+    }
+
+    private static func refusal(_ code: String) -> Data {
+        Data("""
+        {"__type":"com.amazonaws.cognito.identity.model#\(code)","message":"refused"}
+        """.utf8)
     }
 
     func testMissingTokensStillThrowNotSignedIn() async {
