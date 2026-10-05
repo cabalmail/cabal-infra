@@ -16,11 +16,14 @@ public enum TestFixtures {
 
     /// Full client around the fake IMAP transport. Caches land in a
     /// per-invocation temp directory (the bulk paths prune them; empty
-    /// caches make that a no-op).
+    /// caches make that a no-op). The default folder-state cache has no
+    /// directory and saves nothing; pass one with a directory to test what
+    /// the client reads back from it.
     public static func makeClient(
         imap: FakeImapClient,
         transport: HTTPTransport = NullHTTPTransport(),
-        addressCache: AddressCache = AddressCache()
+        addressCache: AddressCache = AddressCache(),
+        folderStateCache: FolderStateCache = FolderStateCache()
     ) throws -> CabalmailClient {
         let config = makeConfiguration()
         let auth = NullAuthService()
@@ -39,7 +42,8 @@ public enum TestFixtures {
             envelopeCache: try EnvelopeCache(directory: tmp.appendingPathComponent("e")),
             bodyCache: try MessageBodyCache(directory: tmp.appendingPathComponent("b")),
             draftStore: try DraftStore(directory: tmp.appendingPathComponent("d")),
-            outbox: try Outbox(directory: tmp.appendingPathComponent("o"))
+            outbox: try Outbox(directory: tmp.appendingPathComponent("o")),
+            folderStateCache: folderStateCache
         )
     }
 
