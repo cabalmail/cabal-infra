@@ -28,6 +28,7 @@ extension MessageListViewModel {
         filterTab = sticky
         await Task {
             await self.hydrateFromCache()
+            await self.seedSavedCounts()
             await self.refresh()
             if sticky != .all { await self.applyFilter(sticky) }
         }.value
@@ -44,6 +45,22 @@ extension MessageListViewModel {
     func refreshFromPull() async {
         await Task { await self.refresh() }.value
     }
+
+    /// Starts the pills from the counts the last successful STATUS saved,
+    /// possibly in an earlier launch, so a list opened offline doesn't read 0
+    /// over its cached rows. `unseen` and `flagged` take them directly, so
+    /// optimistic deltas move them as usual; the All count goes to
+    /// `savedMessageCount` rather than `totalMessages`. The first STATUS that
+    /// answers replaces all three (`applyStatusCounts`).
+    func seedSavedCounts() async {
+        guard !isSearchScope, let saved = await client.savedFolderStatus(path: folder.path) else { return }
+        unseen = max(0, saved.unseen ?? 0)
+        flagged = max(0, saved.flagged ?? 0)
+        savedMessageCount = saved.messages.map { max(0, $0) }
+    }
+
+    /// The All pill's folder count: the saved one until a STATUS answers.
+    var allCount: Int { savedMessageCount ?? Int(totalMessages) }
 
     /// Capture the server-sourced counts from a STATUS reply: `totalMessages`
     /// (the All pill and the pagination gate) plus the Unread/Flagged pill
@@ -76,7 +93,18 @@ extension MessageListViewModel {
         totalMessages = messages
         unseen = fetchedUnseen
         flagged = fetchedFlagged
-        if !mayPredateRemoval { publishFolderCounts(status) }
+        savedMessageCount = nil
+        // A reply for a session that has started ending is the last
+        // account's: it reaches neither the sidebar nor the saved counts
+        // (#1848).
+        guard appState.acceptsCounts(from: client) else { return serverMessages }
+        if !mayPredateRemoval {
+            publishFolderCounts(status)
+        } else if !isSearchScope {
+            // `client.folderStatus` saved this reply as it came, but it may
+            // count a message already removed here: save what is shown.
+            appState.savedFolderCounts.countChanged(folder.path, unread: unseen, total: Int(totalMessages))
+        }
         return serverMessages
     }
 
@@ -161,16 +189,16 @@ extension MessageListViewModel {
     /// arrow.clockwise button route through this path so the user has a
     /// way to escape stale state (e.g., a search that populated the
     /// list with foreign-folder UIDs the regular refresh's UID-range
-    /// pruning can't catch). The IDLE watcher and the 60-second wall-
+    /// pruning can't catch). The change watcher and the 60-second wall-
     /// clock fallback intentionally keep calling `refresh()` directly —
     /// they fire often, and the merge path is the cheap "fold new mail
     /// in" loop the cache is designed around. Hard reload stays on the
     /// manual paths the user explicitly invokes.
     ///
-    /// Invalidating the on-disk snapshot here matters because
-    /// `applyRefreshPage` only reconciles the top page, and only while
-    /// the list still fits in it — once paginated it prunes nothing, and
-    /// even when it does prune it touches the top page alone. Foreign-
+    /// Invalidating the on-disk snapshot here matters because a refresh
+    /// prunes the snapshot only of rows it can prove gone: `applyRefreshPage`
+    /// while the list still fits the top page, and a window re-read
+    /// (`+Reconcile`) only within what it read. Foreign-
     /// folder UIDs that leaked into the cache (historically through
     /// pagination during search) sit in the paginated tail, so without an
     /// explicit invalidate they'd survive every subsequent refresh and re-
@@ -179,22 +207,52 @@ extension MessageListViewModel {
     /// unrelated phantom never reached the fetch path far enough to
     /// land a body in it.
     func hardReload() async {
-        dbg("hardReload")
         // Search scope has no folder cache to wipe; a force-reload just re-runs
         // the active search (or no-ops when nothing is searched).
         if isSearchScope {
-            if isSearchActive { await runSearch(resetFilterTab: false, preserveDepth: true) }
+            if isSearchActive { await refreshSearch() }
             return
         }
+        // Ask the server before dropping anything. Offline the wipe used to
+        // run anyway: the list emptied, and with the snapshot went the
+        // folder's rows for every later offline launch and its Spotlight
+        // entries (#1796).
+        guard let probe = await probeBeforeReset() else { return }
         try? await client.envelopeCache.invalidate(folder: folder.path)
         envelopes.removeAll()
         totalMessages = 0
         unseen = 0
         flagged = 0
+        savedMessageCount = nil
         hasMore = true
         sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
-        await refresh()
+        await refresh(prefetched: probe)
+    }
+
+    /// A STATUS already asked for, and when, for `refresh(prefetched:)`.
+    struct PrefetchedStatus {
+        let status: FolderStatus
+        let askedAt: ContinuousClock.Instant
+    }
+
+    /// Asks the server for this folder's STATUS before a reset that drops the
+    /// list (`hardReload`, `setSort`). Nil, with the error shown, when it
+    /// can't be reached: the caller then keeps the list as it is (#1796).
+    /// Raises `isLoading` for the wait, so the list shows its spinner, the
+    /// Refresh button stays disabled and no page loads in between; the
+    /// refresh that follows lowers it, or this does if there is none.
+    func probeBeforeReset() async -> PrefetchedStatus? {
+        isLoading = true
+        let askedAt = ContinuousClock.now
+        do {
+            let status = try await client.folderStatus(path: folder.path, flagged: true)
+            return PrefetchedStatus(status: status, askedAt: askedAt)
+        } catch {
+            isLoading = false
+            errorMessage = error.localizedDescription
+            return nil
+        }
     }
 
     /// Apply the in-flight-write shields to a freshly fetched page so a
@@ -206,7 +264,7 @@ extension MessageListViewModel {
     /// and the cache persist run through this so memory and disk stay in
     /// agreement. The optimistic flags are read back from the current
     /// in-memory `envelopes`, which is where the write paths stash them.
-    private func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
+    func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
         let detailFlagWrites = appState.pendingFlagWriteUIDs[folder.path] ?? []
         let detailMoves = appState.pendingMoveUIDs[folder.path] ?? []
         let confirmedGone = appState.confirmedRemovalUIDs(folderPath: folder.path)
@@ -240,16 +298,13 @@ extension MessageListViewModel {
     /// include these too." Shielded so an in-flight local write survives a
     /// concurrent refresh (see `shieldFetched`).
     func mergeFetched(_ fetched: [Envelope]) {
-        let before = envelopes.count
         var byUID: [UInt32: Envelope] = Dictionary(
             uniqueKeysWithValues: envelopes.map { ($0.uid, $0) }
         )
         for envelope in shieldFetched(fetched) {
             byUID[envelope.uid] = envelope
         }
-        let mergeStart = nowMs()
         envelopes = byUID.values.sorted(by: envelopeOrder)
-        dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count) sortMs=\(Int(nowMs() - mergeStart))")
     }
 
     /// Fetches the page immediately above the window and prepends it, then
@@ -281,9 +336,9 @@ extension MessageListViewModel {
             }
             hasTrimmedFront = windowStart > 0
             hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
-            dbg("loadPrev off=\(offset) fetched=\(fetched.count) windowStart=\(windowStart) hasMore=\(hasMore)")
         } catch {
-            dbg("loadPrev ERROR \(error)")
+            // Best-effort: a failed page leaves the window as it was, and the
+            // next scroll toward the top asks again.
         }
     }
 
@@ -319,7 +374,6 @@ extension MessageListViewModel {
             hasTrimmedFront = staged.start > 0
             hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
             bottomPrefetch = nil
-            dbg("loadWindow adopt-prefetch around=\(absoluteIndex) start=\(staged.start)")
             return
         }
         let total = Int(totalMessages)
@@ -344,9 +398,9 @@ extension MessageListViewModel {
             envelopes = fetched.sorted(by: envelopeOrder)
             hasTrimmedFront = start > 0
             hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
-            dbg("loadWindow around=\(absoluteIndex) start=\(start) fetched=\(fetched.count)")
         } catch {
-            dbg("loadWindow ERROR \(error)")
+            // Best-effort: the rows stay placeholders until the next jump or
+            // scroll asks for them again.
         }
     }
 
@@ -410,9 +464,8 @@ extension MessageListViewModel {
             guard !Task.isCancelled, !fetched.isEmpty,
                   sortAtKickoff == sortCriterion, total == totalMessages else { return }
             bottomPrefetch = BottomPrefetch(start: start, total: total, envelopes: fetched.sorted(by: envelopeOrder))
-            dbg("bottomPrefetch staged start=\(start) n=\(fetched.count) total=\(total)")
         } catch {
-            dbg("bottomPrefetch ERROR \(error)")
+            // Best-effort (see above): End takes the normal round trip.
         }
     }
 
@@ -435,11 +488,11 @@ extension MessageListViewModel {
     ///   * Not yet paginated (the whole list fits in the top page) ->
     ///     reconcile against the fetch; a missing row was moved/expunged
     ///     out from under us, so prune it and deletes reflect promptly.
-    ///   * Paginated past the top page -> suppress pruning entirely; the
+    ///   * Paginated past the top page -> suppress pruning here; the
     ///     fetch can't see the tail and the client can't place tail rows
-    ///     against it, so a delete surfaces on the next hard reload /
-    ///     folder switch instead. Same trade the non-default sorts already
-    ///     took, and far better than collapsing a scrolled list to the top.
+    ///     against it. A delete made elsewhere is caught instead by the
+    ///     counts (`planWindow` in `+Reconcile`), which re-reads the window
+    ///     by position rather than collapsing a scrolled list to the top.
     ///   * ...UNLESS the fetch now spans the whole folder. When STATUS
     ///     reports no more messages than we just fetched (`fetched.count >=
     ///     totalMessages`), the top page IS the entire folder, so any loaded
@@ -459,12 +512,13 @@ extension MessageListViewModel {
     /// safe -- and it has to be the server's own 0, not the `?? 0` default
     /// `applyStatusCounts` falls back to, or a STATUS that dropped the
     /// field would wipe a live list. Hence `serverReportsEmpty`.
+    @discardableResult
     func applyRefreshPage(
         _ fetched: [Envelope],
         uidNext: UInt32,
         uidValidity: UInt32,
         serverReportsEmpty: Bool = false
-    ) async throws {
+    ) async throws -> Bool {
         // The top page is authoritative over the loaded rows when either the
         // window still fits in one top page, or the fetch spans the whole
         // (possibly shrunken) folder -- see the doc comment above. The
@@ -474,8 +528,9 @@ extension MessageListViewModel {
         let windowFitsTopPage = UInt32(envelopes.count) <= pageSize
         let fetchSpansFolder = UInt32(fetched.count) >= totalMessages
             && UInt32(envelopes.count) > totalMessages
+        let licensed = (!fetched.isEmpty || serverReportsEmpty) && (windowFitsTopPage || fetchSpansFolder)
         let disappeared: [UInt32]
-        if !fetched.isEmpty || serverReportsEmpty, windowFitsTopPage || fetchSpansFolder {
+        if licensed {
             let fetchedUIDs = Set(fetched.map(\.uid))
             // A row we're removing ourselves is exempt: a refresh landing in
             // the moment between a dispose's move committing and the row
@@ -487,7 +542,6 @@ extension MessageListViewModel {
         } else {
             disappeared = []
         }
-        dbg("applyRefreshPage disappeared=\(disappeared.count) fetched=\(fetched.count)")
         if !disappeared.isEmpty {
             let gone = Set(disappeared)
             envelopes.removeAll { gone.contains($0.uid) }
@@ -518,5 +572,6 @@ extension MessageListViewModel {
             uidNext: uidNext,
             into: folder.path
         )
+        return licensed
     }
 }

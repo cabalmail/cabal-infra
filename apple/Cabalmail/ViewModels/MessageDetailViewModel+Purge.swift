@@ -52,7 +52,7 @@ extension MessageDetailViewModel {
             await confirmRemoval()
         } catch {
             onMoveFailed?(false)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
             onFailure?(error)
         }
     }

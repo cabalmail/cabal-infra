@@ -31,6 +31,11 @@ final class SearchSourceFolderTests: XCTestCase {
             "zeta0802",
             "the second row keeps its own mailbox rather than inheriting the first row's"
         )
+        XCTAssertEqual(
+            index.folders(for: TestFixtures.makeEnvelope(uid: 1, messageId: "<zeta@example.com>")),
+            ["zeta0802"],
+            "rows the key tells apart are not ambiguous on their own"
+        )
     }
 
     func testSameMessageFiledInTwoFoldersResolvesByUID() {
@@ -61,8 +66,10 @@ final class SearchSourceFolderTests: XCTestCase {
             SearchedEnvelope(envelope: TestFixtures.makeEnvelope(uid: 3), folder: "zeta0802"),
         ])
         // Nothing tells these two apart, so first-in-server-order wins --
-        // best effort, but not a trap.
+        // best effort, but not a trap -- and the index says there were two,
+        // so the bulk guard leaves them alone.
         XCTAssertEqual(index.folder(for: TestFixtures.makeEnvelope(uid: 3)), "Archive")
+        XCTAssertEqual(index.folders(for: TestFixtures.makeEnvelope(uid: 3)), ["Archive", "zeta0802"])
         // A row whose Message-ID isn't in the index still resolves by UID.
         XCTAssertEqual(
             index.folder(for: TestFixtures.makeEnvelope(uid: 3, messageId: "<late@example.com>")),
@@ -184,7 +191,7 @@ final class SearchSourceFolderTests: XCTestCase {
         let collided = model.envelopes.filter { $0.uid == 1 }
         XCTAssertEqual(collided.count, 2)
         XCTAssertTrue(collided.allSatisfy { !$0.flags.contains(.seen) }, "neither UID-1 row changes")
-        XCTAssertNotNil(model.errorMessage, "the user is told why some rows were left alone")
+        XCTAssertNotNil(model.skippedNotice, "the user is told why some rows were left alone")
     }
 
     func testBulkFlagSkipsCollidingUIDs() async throws {
@@ -196,7 +203,7 @@ final class SearchSourceFolderTests: XCTestCase {
         let calls = await imap.flagCalls
         XCTAssertTrue(calls.isEmpty)
         XCTAssertTrue(model.envelopes.allSatisfy { !$0.flags.contains(.flagged) })
-        XCTAssertNotNil(model.errorMessage)
+        XCTAssertNotNil(model.skippedNotice)
     }
 
     func testBulkMoveSkipsCollidingUIDsAndMovesTheRest() async throws {
@@ -212,7 +219,7 @@ final class SearchSourceFolderTests: XCTestCase {
         XCTAssertEqual(calls.first?.uids, [2])
         XCTAssertEqual(model.envelopes.map(\.uid), [1, 1], "both UID-1 rows stay put")
         XCTAssertEqual(model.selectedUIDs, [1], "the rows left in place stay selected")
-        XCTAssertNotNil(model.errorMessage)
+        XCTAssertNotNil(model.skippedNotice)
     }
 
     func testBulkDisposeLeavesCollidingUIDsInPlace() async throws {

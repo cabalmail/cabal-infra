@@ -37,7 +37,7 @@
     <!--
         Keychain sharing with the NSE. The app's own identifier stays FIRST:
         items stored without an explicit access group default to the first
-        entry, so existing Cognito-token / IMAP-password items keep landing
+        entry, so the Cognito-token items keep landing
         in the app-private group exactly as before this entitlement existed.
         Only `PushEnrichmentStore` targets the shared group, explicitly.
     -->

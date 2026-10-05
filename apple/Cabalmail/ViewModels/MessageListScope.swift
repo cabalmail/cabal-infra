@@ -3,11 +3,11 @@ import CabalmailKit
 /// What a `MessageListViewModel` / `MessageListView` is showing.
 ///
 /// - `.folder` is the classic per-folder mailbox view: STATUS-driven counts,
-///   positional pagination, the IDLE watcher, the on-disk envelope snapshot,
+///   positional pagination, the change watcher, the on-disk envelope snapshot,
 ///   and the All / Unread / Flagged filter pills.
 /// - `.search` is the global, cross-folder search surface. It has no anchor
-///   folder, runs no folder lifecycle (no STATUS / pagination / IDLE / 60s
-///   poll), and populates `envelopes` only via `runSearch`. Per-row source
+///   folder, runs no folder lifecycle (no STATUS / pagination / watcher /
+///   60s poll), and populates `envelopes` only via `runSearch`. Per-row source
 ///   folders come from `sourceFolderIndex`, so dispose / flag / move / read
 ///   still route to each result's true mailbox.
 ///

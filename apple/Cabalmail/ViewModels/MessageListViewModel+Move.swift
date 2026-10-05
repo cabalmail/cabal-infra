@@ -47,7 +47,7 @@ extension MessageListViewModel {
                 appState.applyUnreadDelta(folderPath: source, delta: 1)
                 appState.applyUnreadDelta(folderPath: destination, delta: -1)
             }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -57,11 +57,29 @@ extension MessageListViewModel {
     /// bulk selection are dropped from `selectedUIDs` afterwards so the
     /// action bar's count stays truthful; bulk mode itself is left as the
     /// user set it (a drag isn't a "done selecting" signal).
+    ///
+    /// A UID the request carries more than once is a bare-UID selection that
+    /// spans rows from different folders (`dragItems(for:model:)` adds every
+    /// loaded row whose UID is selected), which is the bulk actions' case, so
+    /// it gets their cross-folder guard and stays put. A UID carried once
+    /// names its one row, as a single-row drag does, and stays unguarded like
+    /// a swipe; for copies the source-folder index can't tell apart that row
+    /// carries the first copy's folder, as the swipe and the reader do, until
+    /// selection keys on folder plus UID.
     func applyMoveRequest(_ request: MessageMoveRequest) async {
-        let grouping = Dictionary(grouping: request.items, by: \.sourceFolder)
+        let query = submittedQuery
+        let repeated = Set(Dictionary(grouping: request.items, by: \.uid).filter { $0.value.count > 1 }.keys)
+        let guarded = unambiguous(repeated)
+        let skipped = repeated.subtracting(guarded.kept)
+        let items = request.items.filter { !skipped.contains($0.uid) }
+        let grouping = Dictionary(grouping: items, by: \.sourceFolder)
             .mapValues { $0.map(\.uid) }
         await performMove(uidsBySource: grouping, to: request.destination, markSeenFirst: false)
+        // Every dragged UID leaves the selection, skipped ones included: a
+        // lone skipped UID left selected would open its first copy in the
+        // wide layouts' reader, a message the drag didn't move.
         selectedUIDs.subtract(request.items.map(\.uid))
+        if request.items.count > 1 { settleSkippedNotice(guarded.notice, searchedFor: query) }
     }
 
     /// Shared optimistic move used by the bulk-action bar and the drag-and-
@@ -130,7 +148,7 @@ extension MessageListViewModel {
                     source: source, destination: destination, snapshot: snapshot,
                     unread: unreadBySource[source] ?? 0, markSeenFirst: markSeenFirst
                 )
-                errorMessage = "\(error)"
+                errorMessage = error.localizedDescription
             }
         }
     }

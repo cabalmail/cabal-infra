@@ -6,12 +6,12 @@ import CabalmailKit
 /// cap; same `@MainActor` extension as the rest of the view model.
 @MainActor
 extension MessageListViewModel {
-    /// Optimistic flag toggle. Updates the in-memory envelope before the
-    /// server round trip so the swipe action and context-menu commands feel
-    /// instant; reverts the change if `setFlags` fails so the row goes back
-    /// to the truthful state. Mirrors the same shape used by
-    /// `MessageDetailViewModel.setSeen` so a future "mark all" can land on
-    /// the same primitive.
+    /// Optimistic flag toggle for one row. Updates the in-memory envelope
+    /// before the server round trip so the swipe action and context-menu
+    /// commands feel instant; reverts the change, and any unread-badge
+    /// delta, if `setFlags` fails so the row goes back to the truthful
+    /// state. Selections take their own path (`setSeen(_:uids:)` and
+    /// `setFlagged(_:uids:)` in the bulk extension).
     func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
         let source = sourceFolder(for: envelope)
         applyOptimisticFlag(uid: envelope.uid, flag: flag, add: add)
@@ -45,7 +45,7 @@ extension MessageListViewModel {
             if unreadDelta != 0 {
                 appState.applyUnreadDelta(folderPath: source, delta: -unreadDelta)
             }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -86,6 +86,11 @@ extension MessageListViewModel {
     func adjustTotalMessages(by delta: Int) {
         guard !isSearchActive, delta != 0 else { return }
         totalMessages = UInt32(max(0, Int(totalMessages) + delta))
+        // The removal is this list's own, so the next STATUS mustn't read it
+        // as a change made elsewhere (`WindowAnchor`).
+        if let anchor = alignment.anchor {
+            alignment.anchor?.total = UInt32(max(0, Int(anchor.total) + delta))
+        }
     }
 
     /// Leg of the two-stage row-disposal animation a row is currently in.
@@ -215,7 +220,7 @@ extension MessageListViewModel {
             if wasUnread {
                 appState.applyUnreadDelta(folderPath: source, delta: 1)
             }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 

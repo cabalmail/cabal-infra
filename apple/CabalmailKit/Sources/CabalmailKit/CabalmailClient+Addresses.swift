@@ -12,9 +12,33 @@ extension CabalmailClient {
         if !forceRefresh, let cached = await addressCache.get() {
             return cached
         }
+        let generation = await addressCache.generation
         let fresh = try await apiClient.listAddresses()
-        await addressCache.set(fresh)
+        await addressCache.set(fresh, ifUnchangedSince: generation)
         return fresh
+    }
+
+    /// The addresses compose may send from: `addresses(forceRefresh:)`, or,
+    /// when the server can't be reached, the list the last successful fetch
+    /// saved, possibly in an earlier launch (`isSavedCopy` true). Without
+    /// that copy an offline compose had no From to offer, so nothing could
+    /// be queued unless a default From was set, and a reply went out from
+    /// that default instead of the address the message was sent to.
+    ///
+    /// The fallback takes the failures that queue a send (`shouldQueue`), so
+    /// whenever Send would go to the outbox there is an address to send it
+    /// from. A saved copy can be out of date, missing an address created
+    /// since on another device: callers must not treat an address it leaves
+    /// out as gone.
+    public func addressesForSending(
+        forceRefresh: Bool = false
+    ) async throws -> (addresses: [Address], isSavedCopy: Bool) {
+        do {
+            return (try await addresses(forceRefresh: forceRefresh), false)
+        } catch let error as CabalmailError where Self.shouldQueue(error) {
+            guard let saved = await addressCache.lastKnown() else { throw error }
+            return (saved, true)
+        }
     }
 
     /// Apex domains the signed-in user is entitled to mint addresses on.
@@ -53,7 +77,7 @@ extension CabalmailClient {
             tld: tld,
             publicKey: publicKey
         )
-        await addressCache.invalidate()
+        await addressCache.invalidate(removing: address)
     }
 
     /// Suspends an address (withdraws its DNS records; the address itself is

@@ -1,15 +1,23 @@
 # SwiftLint configuration for the Apple client.
-# Kept intentionally permissive while the scaffold is small; tighten in later
-# phases once there is real code to lint.
+# CI runs `swiftlint lint --strict --quiet` from this directory (lint.yml and
+# apple.yml), so every warning fails the build. Every directory that holds
+# Swift compiled into a shipped target is listed, plus the test suites and
+# the SimDrive simulator driver; Tools/SimDrive/.swiftlint.yml relaxes the
+# size rules for that tool.
 
 included:
   - Cabalmail
   - CabalmailMac
   - CabalmailWatch
+  # Compiled into both Notification Service Extensions (iOS and macOS).
+  - CabalmailNotificationService
+  # Compiled into both Safari web extensions (iOS and macOS).
+  - CabalmailMacWebExtension
   - CabalmailKit/Sources
   - CabalmailKit/Tests
   - CabalmailTests
   - CabalmailiOSTests
+  - Tools/SimDrive
 
 excluded:
   - build
@@ -45,10 +53,29 @@ identifier_name:
     - id
     - to
     - cc
-    # IMAP wire-level status codes; renaming would hurt readability at
-    # call sites that compare against these constants.
+    # `AuthMethodSeverity.ok`, the verdict a passing auth method's chip
+    # shows; a longer name would read worse at the `switch` sites.
     - ok
-    - no
+
+# One logging front door: `CabalmailLog` writes the unified log and the in-app
+# Debug Log together, and NSLog or a hand-made `os.Logger` reaches only one of
+# them. The notification extensions don't link the Kit, so they keep their own.
+custom_rules:
+  no_nslog:
+    name: "NSLog"
+    regex: '\bNSLog\s*\('
+    match_kinds: identifier
+    message: "Log through CabalmailLog, which writes the unified log and the Debug Log"
+    severity: warning
+  no_direct_os_logger:
+    name: "Direct os.Logger"
+    regex: '\bLogger\s*\(\s*subsystem\s*:'
+    match_kinds: identifier
+    excluded:
+      - "CabalmailKit/Sources/CabalmailKit/Logging/CabalmailLog\\.swift$"
+      - "CabalmailNotificationService/"
+    message: "Log through CabalmailLog, which writes the unified log and the Debug Log"
+    severity: warning
 
 type_name:
   min_length: 3

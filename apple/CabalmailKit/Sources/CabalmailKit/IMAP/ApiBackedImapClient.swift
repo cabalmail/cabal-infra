@@ -14,8 +14,11 @@ import Foundation
 ///   * No IDLE — `idle(folder:)` polls `/folder_status` every
 ///     `pollInterval` seconds and yields `.exists(uidNext)` whenever the
 ///     folder's `UIDNEXT` advances (or `.expunge(0)` when the message count
-///     drops). `MailboxWatcher` already coalesces bursts and applies
-///     reconnect backoff, so callers see the same observable contract.
+///     drops). The first poll runs before the stream is returned, so an
+///     unreachable API fails the open the way a refused IMAP connection
+///     would. `MailboxWatcher` applies the reconnect backoff and
+///     `MessageListViewModel` coalesces bursts, so callers see the same
+///     observable contract.
 ///   * SEARCH is mediated by the `/search_envelopes` Lambda — clients
 ///     pass a structured `SearchQuery` and receive envelopes plus a
 ///     pagination cursor in a single round trip. The raw-IMAP-syntax
@@ -184,11 +187,27 @@ public actor ApiBackedImapClient: ImapClient {
         let api = self.api
         let host = self.host
         let interval = self.pollInterval
+        // The first poll runs here, before the stream exists, so an
+        // unreachable API fails the open itself. `MailboxWatcher` resets its
+        // reconnect backoff whenever an open succeeds; with this poll inside
+        // the stream every open succeeded, and a list left open offline
+        // retried every 2 s instead of backing off (#1797). A planned
+        // maintenance window still opens: the stream polls quietly until the
+        // roll is over.
+        let baseline: ApiFolderStatus?
+        do {
+            baseline = try await api.folderStatus(host: host, folder: folder)
+        } catch let error as CabalmailError {
+            guard case .maintenance = error else { throw error }
+            baseline = nil
+        }
         return AsyncThrowingStream { continuation in
             let task = Task {
-                var lastUidNext: UInt32?
-                var lastMessages: Int?
+                var lastUidNext = baseline?.uidNext
+                var lastMessages = baseline?.messages
                 while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                    if Task.isCancelled { break }
                     do {
                         let status = try await api.folderStatus(host: host, folder: folder)
                         if let uidNext = status.uidNext, lastUidNext != nil, uidNext > (lastUidNext ?? 0) {
@@ -206,10 +225,12 @@ public actor ApiBackedImapClient: ImapClient {
                             // churning MailboxWatcher reconnects for a window
                             // that clears itself in a minute or two.
                         } else {
-                            // Surface a transient error and let MailboxWatcher
-                            // apply its reconnect backoff. A persistent failure
-                            // (e.g. 401 → authExpired) finishes the stream and
-                            // the watcher tears itself down.
+                            // Any other failure ends the stream, and
+                            // MailboxWatcher reopens it after its backoff. A
+                            // failure that persists (offline, an expired
+                            // session) then fails the reopen's first poll
+                            // above, so the backoff doubles toward its cap
+                            // rather than the watcher stopping.
                             continuation.finish(throwing: error)
                             return
                         }
@@ -217,7 +238,6 @@ public actor ApiBackedImapClient: ImapClient {
                         continuation.finish(throwing: error)
                         return
                     }
-                    try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 }
                 continuation.finish()
             }

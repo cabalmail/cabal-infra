@@ -131,9 +131,10 @@ final class ComposeSlotRegistryTests: XCTestCase {
     }
 
     func testReseedOccupiesASlotTheProcessNeverHandedOut() {
-        // A mailto: cold launch spawns the window itself; the URL arrives
-        // afterwards and must not leave the slot free for a second
-        // composer to claim underneath it.
+        // Should a link land in a window restored with its slot (macOS
+        // restores none), this process never handed that slot out;
+        // reseeding must not leave it free for a second composer to claim
+        // underneath the window.
         let registry = ComposeSlotRegistry()
 
         registry.reseed(ComposeSlot(index: 0), with: Draft(subject: "mailto"))
@@ -159,6 +160,88 @@ final class ComposeSlotRegistryTests: XCTestCase {
         XCTAssertEqual(first.id, again.id)
         XCTAssertNotEqual(first.id, other.id)
         XCTAssertTrue(first.isEmpty)
+    }
+
+    // MARK: - Windows without a slot
+
+    func testWindowsWithoutASlotIgnoreTheSlotsTheRegistryHandsOut() {
+        // The stage soak's Drafts loop. macOS restores a compose window
+        // with no value; two were restored, cancelled, and the next reply
+        // took slot 0. Both closed windows, still mounted, read slot 0, so
+        // each rebuilt a hidden composer for the reply that saved it to
+        // Drafts every minute. Each must keep composing its own seed.
+        let registry = ComposeSlotRegistry()
+        let restored = [Draft(), Draft()]
+
+        let reply = registry.acquire(seed: Draft(subject: "Re: probe"))
+
+        for own in restored {
+            XCTAssertEqual(registry.seed(forWindowWith: nil, ownSeed: own).id, own.id)
+        }
+        XCTAssertEqual(registry.seed(forWindowWith: reply, ownSeed: Draft()).subject, "Re: probe")
+    }
+
+    func testAWindowWithASlotComposesFromTheRegistry() {
+        let registry = ComposeSlotRegistry()
+        let own = Draft(subject: "never shown")
+
+        let slot = registry.acquire(seed: Draft(subject: "forward"))
+
+        XCTAssertEqual(registry.seed(forWindowWith: slot, ownSeed: own).subject, "forward")
+        // Restored with its value (macOS restores none) and never handed
+        // out here: the stable index-derived blank, not the window's own seed.
+        let restored = ComposeSlot(index: 5)
+        XCTAssertEqual(
+            registry.seed(forWindowWith: restored, ownSeed: own).id,
+            ComposeSlotRegistry.restoredSeed(for: restored).id
+        )
+    }
+
+    // MARK: - Closed windows across a sign-out
+
+    func testAClosedWindowComposesNothingOnceTheSessionComesBack() {
+        // A closed window stays mounted, and signing back in (an expired
+        // session forces it) rebuilt its composer, hidden, from the reply it
+        // closed on; that composer saved the reply to Drafts every minute.
+        let registry = ComposeSlotRegistry()
+        let reply = Draft(subject: "Re: sent")
+        let closed = registry.closedCompose(for: reply)
+
+        registry.endSession()
+
+        XCTAssertFalse(registry.mayCompose(reply, closedOn: closed))
+    }
+
+    func testAClosingWindowKeepsItsComposerWithinTheSession() {
+        // Refusing here would blank the window while it animates out.
+        let registry = ComposeSlotRegistry()
+        let reply = Draft(subject: "Re: closing")
+
+        XCTAssertTrue(registry.mayCompose(reply, closedOn: registry.closedCompose(for: reply)))
+    }
+
+    func testAClosedWindowComposesAgainWhenItsSlotIsHandedOut() throws {
+        // The reused window builds the new composer while still hidden, so
+        // a new seed is the only signal it is being opened again.
+        let registry = ComposeSlotRegistry()
+        let slot = registry.acquire(seed: Draft(subject: "Re: sent"))
+        let closed = registry.closedCompose(for: try XCTUnwrap(registry.seed(for: slot)))
+        registry.release(slot)
+        registry.endSession()
+
+        let reused = registry.acquire(seed: Draft(subject: "Re: next"))
+
+        XCTAssertEqual(reused, slot)
+        XCTAssertTrue(registry.mayCompose(try XCTUnwrap(registry.seed(for: reused)), closedOn: closed))
+    }
+
+    func testAWindowLeftOpenComesBackAfterSigningIn() {
+        let registry = ComposeSlotRegistry()
+        let open = Draft(subject: "Re: still typing")
+
+        registry.endSession()
+
+        XCTAssertTrue(registry.mayCompose(open, closedOn: nil))
     }
 
     // MARK: - Window value shape

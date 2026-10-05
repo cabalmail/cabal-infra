@@ -245,7 +245,7 @@ private enum PushHandoff {
                     forInfoDictionaryKey: "AppIdentifierPrefix") as? String,
                 !prefix.isEmpty
             else {
-                nseLog.error("keychain: group-less read failed (\(status)) and no AppIdentifierPrefix for the explicit retry")
+                nseLog.error("keychain: group-less read failed (\(status)), no AppIdentifierPrefix to retry with")
                 return nil
             }
             query[kSecAttrAccessGroup as String] = prefix + "com.cabalmail.shared"
@@ -255,7 +255,7 @@ private enum PushHandoff {
             nseLog.error("keychain: shared-group read failed (\(status))")
             return nil
         }
-        guard let payload = try? JSONDecoder().decode(TokenPayload.self, from: data)
+        guard let payload = try? JSONDecoder().decode(PushTokenPayload.self, from: data)
         else { return nil }
         // 60s of leeway: a token the API would reject mid-flight isn't
         // worth the round trip; clock skew smaller than that still tries.
@@ -265,15 +265,16 @@ private enum PushHandoff {
         }
         return payload.idToken
     }
+}
 
-    /// Mirror of `PushEnrichmentStore.TokenPayload`'s wire shape.
-    private struct TokenPayload: Decodable {
-        let idToken: String
-        let expiresAt: Date
+/// Mirror of CabalmailKit's `PushTokenPayload` wire shape (the extension
+/// doesn't link the Kit).
+private struct PushTokenPayload: Decodable {
+    let idToken: String
+    let expiresAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case idToken = "id_token"
-            case expiresAt = "expires_at"
-        }
+    enum CodingKeys: String, CodingKey {
+        case idToken = "id_token"
+        case expiresAt = "expires_at"
     }
 }

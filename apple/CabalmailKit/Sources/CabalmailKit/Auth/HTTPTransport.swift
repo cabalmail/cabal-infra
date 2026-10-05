@@ -34,15 +34,37 @@ public protocol HTTPTransport: Sendable {
 ///    UIs see a readable message instead of the verbose NSError dump.
 public struct URLSessionHTTPTransport: HTTPTransport {
     public let session: URLSession
+    #if canImport(UIKit) && !os(watchOS)
+    let backgroundTasks: BackgroundTaskCalls
+    #endif
 
     public init(session: URLSession = .shared) {
         self.session = session
+        #if canImport(UIKit) && !os(watchOS)
+        self.backgroundTasks = .live
+        #endif
     }
 
+    #if canImport(UIKit) && !os(watchOS)
+    /// Test seam: records the background tasks `perform` begins and ends.
+    init(session: URLSession, backgroundTasks: BackgroundTaskCalls) {
+        self.session = session
+        self.backgroundTasks = backgroundTasks
+    }
+    #endif
+
     public func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let assertion = await BackgroundActivityAssertion.begin()
+        let assertion = await beginBackgroundActivity()
         defer { assertion.end() }
         return try await performWithRetry(request)
+    }
+
+    private func beginBackgroundActivity() async -> BackgroundActivityAssertion {
+        #if canImport(UIKit) && !os(watchOS)
+        await BackgroundActivityAssertion.begin(using: backgroundTasks)
+        #else
+        await BackgroundActivityAssertion.begin()
+        #endif
     }
 
     private func performWithRetry(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -100,18 +122,20 @@ struct BackgroundActivityAssertion: Sendable {
     private let token: BackgroundActivityToken
     #endif
 
+    #if canImport(UIKit) && !os(watchOS)
     /// Begins a new background-task assertion. The hop to the main actor
     /// is awaited so the assertion is active before the URLSession data
     /// task is enqueued; without that ordering the task could race a
     /// suspension that fires before UIKit registers the assertion.
-    static func begin() async -> BackgroundActivityAssertion {
-        #if canImport(UIKit) && !os(watchOS)
-        let token = await BackgroundActivityToken.begin()
+    static func begin(using calls: BackgroundTaskCalls = .live) async -> BackgroundActivityAssertion {
+        let token = await BackgroundActivityToken.begin(using: calls)
         return BackgroundActivityAssertion(token: token)
-        #else
-        return BackgroundActivityAssertion()
-        #endif
     }
+    #else
+    static func begin() async -> BackgroundActivityAssertion {
+        BackgroundActivityAssertion()
+    }
+    #endif
 
     func end() {
         #if canImport(UIKit) && !os(watchOS)
@@ -121,33 +145,61 @@ struct BackgroundActivityAssertion: Sendable {
 }
 
 #if canImport(UIKit) && !os(watchOS)
+/// The two UIKit calls behind a background-task assertion, injectable so a
+/// test can see whether every task begun is ended.
+struct BackgroundTaskCalls: Sendable {
+    let begin: @MainActor @Sendable (
+        _ expiration: @escaping @MainActor @Sendable () -> Void
+    ) -> UIBackgroundTaskIdentifier
+    let end: @MainActor @Sendable (UIBackgroundTaskIdentifier) -> Void
+
+    static let live = BackgroundTaskCalls(
+        begin: { expiration in
+            UIApplication.shared.beginBackgroundTask(withName: "Cabalmail HTTP", expirationHandler: expiration)
+        },
+        end: { UIApplication.shared.endBackgroundTask($0) }
+    )
+}
+
 /// Holds the `UIBackgroundTaskIdentifier` from `beginBackgroundTask` so
 /// `BackgroundActivityAssertion` can stay a value type. Reference identity
 /// lets the UIKit expiration handler reach the same token the caller's
 /// `end()` will use, so a system-fired expiration and a caller-driven end
-/// converge on the same id without double-ending.
-final class BackgroundActivityToken: @unchecked Sendable {
+/// converge on the same id without double-ending. Main-actor isolated, like the
+/// UIKit calls it wraps, so `taskID` is only ever touched on main.
+@MainActor
+final class BackgroundActivityToken {
+    private let calls: BackgroundTaskCalls
     private var taskID: UIBackgroundTaskIdentifier = .invalid
 
-    @MainActor
-    static func begin() -> BackgroundActivityToken {
-        let token = BackgroundActivityToken()
-        token.taskID = UIApplication.shared.beginBackgroundTask(withName: "Cabalmail HTTP") { [weak token] in
+    private init(calls: BackgroundTaskCalls) {
+        self.calls = calls
+    }
+
+    static func begin(using calls: BackgroundTaskCalls) -> BackgroundActivityToken {
+        let token = BackgroundActivityToken(calls: calls)
+        // Weak is enough here: the task is open only while something still
+        // holds the token, the caller's assertion or the hop in `end()`.
+        token.taskID = calls.begin { [weak token] in
             token?.endOnMain()
         }
         return token
     }
 
-    func end() {
-        Task { @MainActor [weak self] in self?.endOnMain() }
+    /// Ends the task from any isolation. The hop to main holds the token
+    /// strongly: the caller's assertion is usually its last owner and is gone
+    /// as soon as this returns, before the hop runs, so a weak capture found
+    /// nothing to end and every request left its background task open until
+    /// iOS expired it, which terminates the app (#1843).
+    nonisolated func end() {
+        Task { @MainActor in self.endOnMain() }
     }
 
-    @MainActor
     private func endOnMain() {
         guard taskID != .invalid else { return }
         let captured = taskID
         taskID = .invalid
-        UIApplication.shared.endBackgroundTask(captured)
+        calls.end(captured)
     }
 }
 #endif

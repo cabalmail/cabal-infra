@@ -181,15 +181,14 @@ targets:
         "ASSETCATALOG_COMPILER_APPICON_NAME[sdk=xros*]": AppIconVision
         "ASSETCATALOG_COMPILER_APPICON_NAME[sdk=xrsimulator*]": AppIconVision
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        # The entitlements file ships empty by default — the only iOS
-        # entitlement Cabalmail has ever needed is the Apple-managed
-        # `com.apple.developer.mail-client`, which a fork enables by
-        # adding the key once Apple has approved the request. See the
-        # file's own comment, and the "Setting Cabalmail as the
-        # default mail handler" section of `docs/apple.md`, for the
-        # rollout. Wiring this empty file from day one means a fork
-        # only edits the entitlements file, not `project.yml`, when
-        # approval lands.
+        # The iOS entitlements: the Apple-managed
+        # `com.apple.developer.mail-client` (a fork removes it until Apple
+        # approves its own request; see the file's comment and the
+        # "Setting Cabalmail as the default mail handler" section of
+        # `docs/apple.md`), push, the App Group shared with the
+        # Notification Service Extension and the Safari web extension, the
+        # keychain group shared with the NSE, and the associated domain for
+        # Password AutoFill.
         CODE_SIGN_ENTITLEMENTS: Cabalmail/Cabalmail.entitlements
       configs:
         # Manual-signing settings live ON THE APP TARGET ONLY, not in the
@@ -217,53 +216,23 @@ targets:
     platform: macOS
     sources:
       - path: CabalmailMac
-      # Phase 4 share: the SwiftUI views, view models, and app state are
-      # platform-agnostic (with `#if os(macOS)` toggles where they diverge)
-      # so both app targets compile them from the iOS target's source tree.
-      # Per Phase 1 the binaries stay separate; only the Swift sources are
-      # shared. Revisit at Phase 7 if macOS needs substantially different
-      # view code.
-      - path: Cabalmail/ContentView.swift
-      - path: Cabalmail/AppState.swift
-      - path: Cabalmail/AppState+ConfirmedRemovals.swift
-      - path: Cabalmail/AppStateSignals.swift
-      - path: Cabalmail/NavStateCoordinator.swift
-      # The local resume-session layer of the coordinator (per-install
-      # session record + reading positions; docs/1.x/resume-session-plan.md).
-      - path: Cabalmail/NavStateCoordinator+Session.swift
-      - path: Cabalmail/NavStateCoordinator+ServerCursor.swift
-      # Spotlight tap routing (shared AppState extension; both app entries
-      # attach the .onContinueUserActivity handler that calls into it).
-      - path: Cabalmail/SpotlightRouting.swift
-      - path: Cabalmail/PreferencesSyncCoordinator.swift
-      - path: Cabalmail/Pasteboard.swift
-      # Shared with AppState.swift: the no-op stub branch compiles here
-      # (WatchConnectivity is iOS-only). See WatchSessionBridge.swift.
-      - path: Cabalmail/WatchSessionBridge.swift
-      # Publishes the control domain to the App Group for the embedded
-      # Safari extension (compiled into the appex too).
-      - path: Cabalmail/ExtensionControlDomainStore.swift
-      # The private-link token rows the appex resolves (#1765).
-      - path: Cabalmail/PrivateLinkTokenStore.swift
-      - path: Cabalmail/AppStateSessionPersistence.swift
-      # Session lifecycle: the client-construction helpers and the expiry
-      # teardown the Kit's session-invalidation signal lands on (#1703).
-      - path: Cabalmail/AppStateSession.swift
-      # Feed reader session flows (RSS plan, phase 5d): the periodic refresh.
-      - path: Cabalmail/AppState+Feeds.swift
-      # Folder-subscription set mutators, read by the message list's
-      # unsubscribed-folder banner gate.
-      - path: Cabalmail/AppState+Subscriptions.swift
-      # The search model both iOS layout trees share (#1654); the stored
-      # property is in AppState.swift, the accessor here.
-      - path: Cabalmail/AppState+Search.swift
-      # Push notifications (phase 6, macOS parity): one implementation for
-      # both platforms — each file carries an `#if os(iOS)` / `#else`
-      # (AppKit) branch around the small platform seams.
-      - path: Cabalmail/AppDelegate.swift
-      - path: Cabalmail/PushRegistrar.swift
-      - path: Cabalmail/Views
-      - path: Cabalmail/ViewModels
+      # The Mac app compiles the iOS target's source tree too: the SwiftUI
+      # views, view models, and app state are platform-agnostic, with
+      # `#if os(macOS)` toggles where they diverge. The binaries stay
+      # separate; only the Swift sources are shared. A new file under
+      # Cabalmail/ is therefore in both apps unless it is excluded here.
+      # The excludes are what the Mac target must not take: the iOS
+      # `@main` (CabalmailMac has its own), the App Intents (iOS-only for
+      # now), and the iOS target's Info.plist, entitlements, and asset
+      # catalogs (CabalmailMac carries its own of each).
+      - path: Cabalmail
+        excludes:
+          - CabalmailApp.swift
+          - "Intents/**"
+          - Info.plist
+          - "*.entitlements"
+          - Assets.xcassets
+          - AppIcon.icon
     dependencies:
       - package: CabalmailKit
       # Notification Service Extension, macOS flavor: same enrichment
@@ -360,12 +329,11 @@ targets:
           PROVISIONING_PROFILE_SPECIFIER: "$(MAC_APP_STORE_PROFILE_UUID)"
 
   # Watch companion app, scoped to the address lifecycle (create / list /
-  # revoke) — mail reading stays on the other platforms. Deliberately NOT
-  # embedded in the iOS app yet: embedding adds the watch app to the iOS
-  # archive's signing inputs (every App Store upload would need the watch
-  # provisioning profile), so that lands with the watch signing/TestFlight
-  # work. Until then the target builds and runs in the simulator via its
-  # own scheme and CI leg.
+  # revoke) — mail reading stays on the other platforms. Embedded in the
+  # iOS app (the destination-filtered `CabalmailWatch` dependency on the
+  # Cabalmail target), so it ships inside the iOS archive and every iOS
+  # App Store upload carries the watch provisioning profile. It also has
+  # its own scheme and an unsigned CI build leg.
   CabalmailWatch:
     type: application
     platform: watchOS
@@ -670,6 +638,10 @@ targets:
     platform: macOS
     sources:
       - path: CabalmailTests
+      # The test doubles this bundle shares with the Kit's own tests,
+      # compiled here rather than linked: see the CabalmailKitTestSupport
+      # target in CabalmailKit/Package.swift for why.
+      - path: CabalmailKit/Tests/CabalmailKitTestSupport
     dependencies:
       - target: CabalmailMac
       - package: CabalmailKit

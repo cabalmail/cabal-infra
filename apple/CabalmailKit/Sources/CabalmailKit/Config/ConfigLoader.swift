@@ -81,6 +81,9 @@ private extension CabalmailError {
 /// `UserDefaults`. `config.json` is public and per deployment, not per
 /// account, so it is not cleared on sign-out: the next sign-in against the
 /// same domain is served the same file anyway.
+///
+/// `@unchecked Sendable` for its one stored property: `UserDefaults` is
+/// documented thread-safe but Foundation does not mark it `Sendable`.
 public final class ConfigurationCache: @unchecked Sendable {
     public static let keyPrefix = "cabalmail.config."
 

@@ -103,7 +103,7 @@ public actor CognitoAuthService: AuthService {
 
     /// Mid-sign-in MFA challenge state. Cognito hands back an opaque
     /// `Session` that `RespondToAuthChallenge` must echo; the username rides
-    /// along so it can be persisted only once the challenge succeeds.
+    /// along because the challenge response must echo `USERNAME` too.
     /// Memory-only by design: a relaunch mid-challenge restarts the sign-in.
     private struct PendingChallenge {
         let method: MfaMethod
@@ -130,10 +130,11 @@ public actor CognitoAuthService: AuthService {
         self.secureStore = secureStore
         self.clock = clock
         self.sessionInvalidation = sessionInvalidation
-        // Builds before this one stored the user's Cognito password for the
-        // direct IMAP/SMTP stack, which nothing live reads any more. Scrub
-        // any copy left behind; a no-op once it is gone.
+        // Older builds stored the user's Cognito password and username for
+        // the direct IMAP/SMTP stack, which no longer exists. Scrub any copy
+        // left behind; a no-op once they are gone.
         try? secureStore.remove(SecureStoreKey.imapPassword)
+        try? secureStore.remove(SecureStoreKey.imapUsername)
     }
 
     // MARK: - Sign-in flow
@@ -166,15 +167,8 @@ public actor CognitoAuthService: AuthService {
             return .mfaCodeRequired(method)
         }
         let tokens = try parseAuthResult(response)
-        try complete(tokens: tokens, username: username)
-        return .signedIn
-    }
-
-    /// Persists the session. The password is deliberately not stored: the
-    /// refresh token is what keeps the session alive.
-    fileprivate func complete(tokens: AuthTokens, username: String) throws {
         try persist(tokens: tokens)
-        try secureStore.setString(username, forKey: SecureStoreKey.imapUsername)
+        return .signedIn
     }
 
     public func signUp(
@@ -252,9 +246,8 @@ public actor CognitoAuthService: AuthService {
     /// bootstrap, where the paired iPhone hands its session over via a
     /// `WatchHandoff`. The API-backed clients only need `currentIdToken()`,
     /// which refreshes off the adopted refresh token.
-    public func adopt(tokens: AuthTokens, username: String) throws {
+    public func adopt(tokens: AuthTokens) throws {
         try persist(tokens: tokens)
-        try secureStore.setString(username, forKey: SecureStoreKey.imapUsername)
     }
 
     // MARK: - Token access
@@ -285,14 +278,25 @@ public actor CognitoAuthService: AuthService {
 
     // MARK: - Internal
 
+    /// Persists the session. Only the tokens are stored, never the password
+    /// or username: the refresh token is what keeps the session alive.
     private func persist(tokens: AuthTokens) throws {
         let data = try JSONEncoder().encode(tokens)
         try secureStore.set(data, forKey: SecureStoreKey.authTokens)
     }
 
+    /// The stored session, or nil. A stored blob that no longer decodes
+    /// (corrupt, or written by a build with a different `AuthTokens` shape)
+    /// is removed and treated as no session, so the next launch shows the
+    /// sign-in form with the session-expired note instead of the same raw
+    /// decoding error on every launch (#1806).
     private func loadTokens() throws -> AuthTokens? {
         guard let data = try secureStore.get(SecureStoreKey.authTokens) else { return nil }
-        return try JSONDecoder().decode(AuthTokens.self, from: data)
+        guard let tokens = try? JSONDecoder().decode(AuthTokens.self, from: data) else {
+            try? secureStore.remove(SecureStoreKey.authTokens)
+            return nil
+        }
+        return tokens
     }
 
     // MARK: - Cognito IdP wire
@@ -400,10 +404,13 @@ extension CognitoAuthService {
         ]
         // A wrong code surfaces as CodeMismatchException from `call`;
         // Cognito keeps the challenge session valid for a bounded number
-        // of retries, so `pendingChallenge` is kept until success.
-        let response = try await call("RespondToAuthChallenge", body: body)
+        // of retries, so `pendingChallenge` is kept until success. The
+        // password was already accepted, so a NotAuthorizedException here
+        // means the challenge session itself has expired (Cognito allows
+        // three minutes), not a wrong password (#1807).
+        let response = try await call("RespondToAuthChallenge", body: body, notAuthorized: .authExpired)
         let tokens = try parseAuthResult(response)
-        try complete(tokens: tokens, username: pending.username)
+        try persist(tokens: tokens)
         pendingChallenge = nil
     }
 

@@ -43,7 +43,10 @@ jobs:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         OPT_OUT: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
-      # Scoped to shipped client code - not Tests/, project.yml, or apple/*.md -
-      # to keep the gate off PRs with no user-facing Apple surface. Keep in
-      # sync with the apple_src filter in lint.yml.
-      run: ./.github/scripts/check-client-changelog.sh Apple '^apple/(Cabalmail|CabalmailMac|CabalmailKit/Sources)/'
+      # Scoped to shipped client code - the app, watch, and extension targets
+      # plus the Kit's sources; not Tests/, Tools/, scripts/, project.yml, or
+      # apple/*.md - to keep the gate off PRs with no user-facing Apple
+      # surface. The script applies this with `grep -E` (no lookahead), so
+      # each shipped directory is listed by name; a new target directory
+      # needs adding here.
+      run: ./.github/scripts/check-client-changelog.sh Apple '^apple/(Cabalmail|CabalmailMac|CabalmailWatch|CabalmailNotificationService|CabalmailMacNotificationService|CabalmailWebExtension|CabalmailMacWebExtension|CabalmailKit/Sources)/'

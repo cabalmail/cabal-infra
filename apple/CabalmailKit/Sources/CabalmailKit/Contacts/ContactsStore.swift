@@ -1,5 +1,6 @@
 import Contacts
 import Foundation
+import Synchronization
 
 /// Local-only read access to the system address book. Backs the
 /// "supplement received-mail addresses with the user's own name for
@@ -92,14 +93,18 @@ public actor LiveContactsStore: ContactsStore {
     private var allEntriesCache: [RecipientSuggestion]?
     /// Token for the `CNContactStoreDidChange` subscription, registered on
     /// first `allEntries` call rather than in `init` so a store nobody asks
-    /// for a snapshot from never observes anything.
-    private var storeChangeObserver: (any NSObjectProtocol)?
+    /// for a snapshot from never observes anything. In a `Mutex` rather than
+    /// a plain actor property because the nonisolated `deinit` must reach it
+    /// to unregister, and the token's type is not `Sendable`.
+    private let storeChangeObserver = Mutex<(any NSObjectProtocol)?>(nil)
 
     public init() {}
 
     deinit {
-        if let storeChangeObserver {
-            NotificationCenter.default.removeObserver(storeChangeObserver)
+        storeChangeObserver.withLock { token in
+            if let token {
+                NotificationCenter.default.removeObserver(token)
+            }
         }
     }
 
@@ -136,13 +141,15 @@ public actor LiveContactsStore: ContactsStore {
     /// selection as well as for edits to the book itself, so one
     /// subscription covers both.
     private func observeStoreChanges() {
-        guard storeChangeObserver == nil else { return }
-        storeChangeObserver = NotificationCenter.default.addObserver(
-            forName: .CNContactStoreDidChange,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            Task { await self?.invalidateAllEntries() }
+        storeChangeObserver.withLock { token in
+            guard token == nil else { return }
+            token = NotificationCenter.default.addObserver(
+                forName: .CNContactStoreDidChange,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                Task { await self?.invalidateAllEntries() }
+            }
         }
     }
 

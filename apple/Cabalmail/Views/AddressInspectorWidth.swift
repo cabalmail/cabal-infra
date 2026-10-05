@@ -85,8 +85,9 @@ extension View {
     /// the panel and the search-field policy that has to account for it read
     /// their widths from the same place; on macOS it also opens the panel at
     /// the width it was last left at (`AddressInspectorWidthPolicy`).
-    /// `isPresented` is the inspector's presentation state. (visionOS presents
-    /// the panel as a sheet instead and never calls this.)
+    /// `isPresented` is the inspector's presentation state. (Compiled out on
+    /// visionOS, where the inspector APIs are unavailable and the one caller,
+    /// `MailRootView`, is never built.)
     @ViewBuilder
     func addressInspectorWidth(isPresented: Bool) -> some View {
         #if os(macOS)

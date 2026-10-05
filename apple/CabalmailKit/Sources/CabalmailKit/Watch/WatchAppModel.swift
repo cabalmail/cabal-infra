@@ -96,7 +96,7 @@ public final class WatchAppModel {
         let auth = CognitoAuthService(configuration: configuration, secureStore: secureStore)
         return WatchSession(
             apiClient: URLSessionApiClient(configuration: configuration, authService: auth),
-            adopt: { tokens, username in try await auth.adopt(tokens: tokens, username: username) }
+            adopt: { tokens, _ in try await auth.adopt(tokens: tokens) }
         )
     }
 

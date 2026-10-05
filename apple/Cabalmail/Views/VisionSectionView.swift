@@ -158,7 +158,9 @@ struct VisionSectionView: View {
         let model = FolderListViewModel(client: client, appState: appState)
         await model.loadFolderList()
         let folders = model.folders
-        guard !folders.isEmpty else { return }
+        // A saved copy drawn offline can lag the server; reconcile against a
+        // live list only.
+        guard !folders.isEmpty, !model.isShowingSavedCopy else { return }
         loadedFolders = folders
         let inbox = folders.first { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame } ?? folders.first
         // Swap the fetched folder into the provisional selection so the

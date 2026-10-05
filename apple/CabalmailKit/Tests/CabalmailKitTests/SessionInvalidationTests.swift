@@ -17,37 +17,16 @@ final class SessionInvalidationTests: XCTestCase {
         )
     }
 
-    /// Collects yields off the monitor's stream. The observation task is
-    /// started before the exercise and drained after it, so a signal that
-    /// never arrives fails as a count rather than hanging the suite.
-    private actor Collector {
-        private(set) var count = 0
-        func record() { count += 1 }
-    }
-
-    private func observe(_ monitor: SessionInvalidationMonitor) -> (Collector, Task<Void, Never>) {
-        let collector = Collector()
-        let task = Task {
-            for await _ in monitor.events() {
-                await collector.record()
-            }
-        }
-        return (collector, task)
-    }
-
-    /// Gives the observation task a turn to consume what was yielded. The
-    /// stream is unbuffered from the yielding side's perspective, so a plain
-    /// read of `count` immediately after the throw can race.
-    private func settle() async {
-        for _ in 0..<10 {
-            await Task.yield()
-        }
-    }
+    // Each test subscribes to the monitor before the exercise and counts what
+    // the stream has buffered afterwards (`bufferedCount`). `sessionDidExpire`
+    // yields before the throw it accompanies, so the count is exact once the
+    // call has returned. An observer task that had to be given turns (ten
+    // `Task.yield()`s) to consume the yield raced the assertion on a loaded CI
+    // runner and read 0 for a signal that had been sent.
 
     func testSecondUnauthorizedAnnouncesOnceAndStillThrows() async throws {
         let monitor = SessionInvalidationMonitor()
-        let (collector, task) = observe(monitor)
-        await settle()
+        let events = monitor.events()
 
         let http = RecordingHTTPTransport(responses: [
             (Data("unauth".utf8), 401),
@@ -67,16 +46,13 @@ final class SessionInvalidationTests: XCTestCase {
             XCTAssertEqual(error, .authExpired)
         }
 
-        await settle()
-        let count = await collector.count
+        let count = await bufferedCount(events)
         XCTAssertEqual(count, 1)
-        task.cancel()
     }
 
     func testRefreshedUnauthorizedDoesNotAnnounce() async throws {
         let monitor = SessionInvalidationMonitor()
-        let (collector, task) = observe(monitor)
-        await settle()
+        let events = monitor.events()
 
         // 401 then 200: the refresh worked and the replay succeeded. This is
         // the ordinary silent-refresh path and it must stay silent.
@@ -94,10 +70,8 @@ final class SessionInvalidationTests: XCTestCase {
         let addresses = try await client.listAddresses()
         XCTAssertTrue(addresses.isEmpty)
 
-        await settle()
-        let count = await collector.count
+        let count = await bufferedCount(events)
         XCTAssertEqual(count, 0)
-        task.cancel()
     }
 
     /// The common case: the request dies before it is ever sent, because
@@ -105,8 +79,7 @@ final class SessionInvalidationTests: XCTestCase {
     /// `.authExpired`; this is the announcement riding on it).
     func testRefusedRefreshAnnounces() async throws {
         let monitor = SessionInvalidationMonitor()
-        let (collector, task) = observe(monitor)
-        await settle()
+        let events = monitor.events()
 
         let initialTokens = """
         {
@@ -138,9 +111,9 @@ final class SessionInvalidationTests: XCTestCase {
 
         _ = try await service.signIn(username: "alice", password: "hunter2")
         clockRef.value = Date(timeIntervalSince1970: 1_100)
-        await settle()
-        let afterSignIn = await collector.count
+        let afterSignIn = await bufferedCount(events)
         XCTAssertEqual(afterSignIn, 0, "A live sign-in must not announce an expiry")
+        let refreshEvents = monitor.events()
 
         do {
             _ = try await service.currentIdToken()
@@ -149,18 +122,15 @@ final class SessionInvalidationTests: XCTestCase {
             XCTAssertEqual(error, .authExpired)
         }
 
-        await settle()
-        let count = await collector.count
+        let count = await bufferedCount(refreshEvents)
         XCTAssertEqual(count, 1)
-        task.cancel()
     }
 
     /// A fresh token needs no refresh, so nothing announces — the guard that
     /// keeps the signal off every ordinary request.
     func testLiveSessionNeverAnnounces() async throws {
         let monitor = SessionInvalidationMonitor()
-        let (collector, task) = observe(monitor)
-        await settle()
+        let events = monitor.events()
 
         let http = RecordingHTTPTransport(responses: [(Data("[]".utf8), 200)])
         let client = URLSessionApiClient(
@@ -171,9 +141,7 @@ final class SessionInvalidationTests: XCTestCase {
         )
         _ = try await client.listAddresses()
 
-        await settle()
-        let count = await collector.count
+        let count = await bufferedCount(events)
         XCTAssertEqual(count, 0)
-        task.cancel()
     }
 }

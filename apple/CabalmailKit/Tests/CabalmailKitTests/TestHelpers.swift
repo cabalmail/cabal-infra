@@ -1,98 +1,55 @@
 import Foundation
-@testable import CabalmailKit
+import CabalmailKitTestSupport
 
-// MARK: - HTTP fake
+// The shared test doubles live in the CabalmailKitTestSupport target, which
+// the app-layer bundles link too, so there is one copy of each. Naming them
+// here makes them visible to every file in this bundle without each file
+// importing the support module.
 
-struct ScriptedHTTPTransport: HTTPTransport {
-    typealias Handler = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
-    let handler: Handler
+typealias ScriptedHTTPTransport = CabalmailKitTestSupport.ScriptedHTTPTransport
+typealias RecordingHTTPTransport = CabalmailKitTestSupport.RecordingHTTPTransport
+typealias NullHTTPTransport = CabalmailKitTestSupport.NullHTTPTransport
+typealias UnreachableTransport = CabalmailKitTestSupport.UnreachableTransport
+typealias StubAuthService = CabalmailKitTestSupport.StubAuthService
+typealias NullAuthService = CabalmailKitTestSupport.NullAuthService
+typealias FakeImapClient = CabalmailKitTestSupport.FakeImapClient
+typealias TestFixtures = CabalmailKitTestSupport.TestFixtures
+typealias TestClock = CabalmailKitTestSupport.TestClock
 
-    init(handler: @escaping Handler) {
-        self.handler = handler
-    }
+let defaultWaitTimeout = CabalmailKitTestSupport.defaultWaitTimeout
 
-    func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        try await handler(request)
-    }
+/// Forwards to the shared `waitUntil`, keeping the caller's file and line so
+/// a timeout fails at the test that waited.
+func waitUntil(
+    timeout: TimeInterval = defaultWaitTimeout,
+    file: StaticString = #filePath,
+    line: UInt = #line,
+    _ condition: @escaping () async throws -> Bool
+) async throws {
+    try await CabalmailKitTestSupport.waitUntil(timeout: timeout, file: file, line: line, condition)
 }
 
-/// Records every request and replies from a FIFO queue of canned responses.
-actor RecordingHTTPTransport: HTTPTransport {
-    private var responses: [(Data, Int)]
-    private(set) var requests: [URLRequest] = []
-
-    init(responses: [(Data, Int)]) {
-        self.responses = responses
-    }
-
-    func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        requests.append(request)
-        guard !responses.isEmpty else {
-            throw CabalmailError.transport("RecordingHTTPTransport ran out of responses")
-        }
-        let (data, status) = responses.removeFirst()
-        let response = HTTPURLResponse(
-            url: request.url!,
-            statusCode: status,
-            httpVersion: "HTTP/1.1",
-            headerFields: nil
-        )!
-        return (data, response)
-    }
+/// Forwards to the shared `bufferedCount`.
+func bufferedCount<Element: Sendable>(_ stream: AsyncStream<Element>) async -> Int {
+    await CabalmailKitTestSupport.bufferedCount(stream)
 }
 
-// MARK: - Auth fake
-
-/// AuthService double with scripted behavior. Every method is no-op by
-/// default; tests can seed a fixed ID token.
-actor StubAuthService: AuthService {
-    var tokens: AuthTokens?
-    var idTokenCallCount = 0
-    var forcedRefreshCount = 0
-
-    init(
-        tokens: AuthTokens? = AuthTokens(
-            idToken: "idtoken",
-            accessToken: "access",
-            refreshToken: "refresh",
-            expiresAt: Date().addingTimeInterval(3600)
-        )
-    ) {
-        self.tokens = tokens
+/// Whether `stream` ends on its own, without this side cancelling it: true
+/// once its producer finishes it, false if it is still open after `timeout`.
+/// For lifetime tests, where "the owner went away" should finish the stream.
+func finishesWithoutCancelling<Element: Sendable>(
+    _ stream: AsyncStream<Element>,
+    timeout: TimeInterval = defaultWaitTimeout
+) async -> Bool {
+    let drain = Task { () -> Bool in
+        for await _ in stream {}
+        return !Task.isCancelled
     }
-
-    func signIn(username: String, password: String) async throws -> SignInResult {
-        .signedIn
+    let deadline = Task {
+        try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+        drain.cancel()
     }
-
-    func submitMfaCode(_ code: String) async throws {}
-    func totpEnabled() async throws -> Bool { false }
-    func beginTotpEnrollment() async throws -> String { "STUBSECRET" }
-    func confirmTotpEnrollment(code: String) async throws {}
-    func disableTotp() async throws {}
-
-    func signUp(username: String, password: String, email: String?, phone: String?) async throws {}
-    func confirmSignUp(username: String, code: String) async throws {}
-    func resendConfirmationCode(username: String) async throws {}
-    func forgotPassword(username: String) async throws {}
-    func confirmForgotPassword(username: String, code: String, newPassword: String) async throws {}
-
-    func signOut() async throws {
-        tokens = nil
-    }
-
-    func currentIdToken() async throws -> String {
-        idTokenCallCount += 1
-        guard let tokens else { throw CabalmailError.notSignedIn }
-        return tokens.idToken
-    }
-
-    func refreshIdToken(replacing rejected: String?) async throws -> String {
-        forcedRefreshCount += 1
-        return try await currentIdToken()
-    }
-
-    func currentTokens() async -> AuthTokens? {
-        tokens
-    }
+    let finished = await drain.value
+    deadline.cancel()
+    return finished
 }

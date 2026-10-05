@@ -13,7 +13,9 @@ import CabalmailKit
 //   * `setSort(_:)` is the one entry point UI calls when the user picks
 //     a different sort. It wipes in-memory state (sort is a top-of-list
 //     reshuffle, not a filter — pagination state is per-sort) and
-//     re-fetches the top page in the new order.
+//     re-fetches the top page in the new order. The menu is off during a
+//     search (`sortApplies`); a pick whose probe a search overtook is only
+//     recorded, for the folder view the search returns to.
 //
 // The Lambda sort happens server-side: `ApiBackedImapClient.envelopes`
 // and `topEnvelopes` pass `sortCriterion`'s wire form to `/list_messages`,
@@ -22,16 +24,53 @@ import CabalmailKit
 // just-fetched envelopes and the post-paginate re-shuffle when older
 // pages arrive.
 extension MessageListViewModel {
+    /// Whether the sort menu means anything for the rows shown. Search
+    /// results (a pill's included) come from the server newest first, and
+    /// `SearchQuery` can't ask for another order; sorting the loaded rows
+    /// here would reshuffle them under the user as each later page landed.
+    /// So the menu is off during a search, rather than offering an order the
+    /// rows don't take (#1822).
+    var sortApplies: Bool { !isSearchScope && !isSearchActive }
+
     /// Switch the active sort and reload. No-op when the criterion
     /// doesn't change so UI repeat-clicks don't burn a refresh.
     func setSort(_ criterion: SortCriterion) async {
         guard sortCriterion != criterion else { return }
-        dbg("setSort \(criterion.field)")
+        // Set at once, so the menu shows it and a second pick builds on it.
+        let previous = sortCriterion
         sortCriterion = criterion
+        var probe: PrefetchedStatus?
+        if !isSearchScope {
+            // The new order comes from the server, so ask it before dropping
+            // the list. Offline the wipe used to run anyway and leave the list
+            // empty (#1796); now the list stays, and the order goes back
+            // unless a newer pick has replaced it. Cached rows can't stand in:
+            // they're a window of the old order, and merged with the new
+            // order's first page they'd leave gaps in it.
+            guard let answered = await probeBeforeReset() else {
+                if sortCriterion == criterion { sortCriterion = previous }
+                return
+            }
+            // A newer pick arrived during the wait, and does the reset itself.
+            guard sortCriterion == criterion else { return }
+            probe = answered
+        }
+        // A search started while the probe was out (a pill, say). Its results
+        // keep the server's order (see `sortApplies`), so the pick is kept for
+        // the folder view the search returns to: wiping the rows to re-run
+        // the search would only cut a deep result set back to one page. The
+        // probe's counts are applied rather than dropped (#1822).
+        if isSearchActive {
+            if let probe {
+                _ = applyStatusCounts(probe.status, mayPredateRemoval: removalMayPostdate(probe.askedAt))
+            }
+            isLoading = false
+            return
+        }
         envelopes.removeAll()
         sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
-        await refresh()
+        await refresh(prefetched: probe)
         // Re-stage the bottom window in the new order (resetWindow dropped the
         // old one) so End stays instant after a re-sort.
         scheduleBottomPrefetch()

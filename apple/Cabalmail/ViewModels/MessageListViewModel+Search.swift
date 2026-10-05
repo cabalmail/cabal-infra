@@ -18,7 +18,7 @@ extension MessageListViewModel {
     /// returns envelopes plus per-row source folders in a single round
     /// trip. Cross-folder results populate `sourceFolderIndex` so
     /// dispose / flag operations route per-row to the correct mailbox.
-    func runSearch(resetFilterTab: Bool = true, preserveDepth: Bool = false) async {
+    func runSearch(resetFilterTab: Bool = true, preserveDepth: Bool = false, rerun: Bool = false) async {
         // A text search is "All" mode -- its loaded results drive the pill
         // counts. A pill-driven search (`selectFilter`) and the in-place
         // refresh of an active search pass false to keep the pill's `filterTab`.
@@ -30,7 +30,9 @@ extension MessageListViewModel {
             if filterTab != .all { searchFilters = MessageSearchFilters() }
             filterTab = .all
         }
-        let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
+        // A refresh re-runs the search that was submitted, not whatever has
+        // been typed into the field since (#1821).
+        let trimmed = rerun ? submittedQuery : searchQuery.trimmingCharacters(in: .whitespaces)
         // Nothing to match on drops back to the folder view. "This folder
         // only" alone is not something to match on (see `hasNoPredicate`):
         // a sidebar pick empties the query and then moves the anchor, so
@@ -57,6 +59,7 @@ extension MessageListViewModel {
         // mid-flight checks its cursor is still current before appending,
         // so this reset makes it drop a page that belongs to the outgoing
         // result set.
+        let priorCursor = searchNextCursor
         searchNextCursor = nil
         isLoading = true
         defer { isLoading = false }
@@ -81,6 +84,9 @@ extension MessageListViewModel {
             guard submittedQuery == trimmed, searchFilters == filters else { return }
             envelopes = result.envelopes.map(\.envelope)
             sourceFolderIndex = SearchSourceFolderIndex(result.envelopes)
+            // A fresh search's rows are not the ones the note was about; the
+            // in-place refresh of the same search (`preserveDepth`) keeps it.
+            if !preserveDepth { skippedNotice = nil }
             searchTotalEstimate = result.totalEstimate
             searchTruncated = result.truncated
             searchFoldersSearched = result.foldersSearched
@@ -91,7 +97,13 @@ extension MessageListViewModel {
             // Same staleness rule: an ended search's failure is not worth a
             // banner over the folder view the user is now looking at.
             guard submittedQuery == trimmed, searchFilters == filters else { return }
-            errorMessage = "\(error)"
+            // Nor is a refresh's whose task was cancelled (#1816); its rows
+            // are still the loaded ones, so they keep their cursor.
+            guard !Task.isCancelled else {
+                if rerun { searchNextCursor = priorCursor }
+                return
+            }
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -133,7 +145,7 @@ extension MessageListViewModel {
             // Same staleness check: an error from a fetch the user has
             // already navigated away from isn't worth a banner.
             guard isSearchActive, searchNextCursor == cursor else { return }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -155,6 +167,29 @@ extension MessageListViewModel {
         searchTotalEstimate = page.totalEstimate
         searchTruncated = searchTruncated || page.truncated
         searchNextCursor = page.nextCursor
+    }
+
+    /// A refresh of the active search: the folder's counts from STATUS
+    /// first (a pill is a search, and its counts and the sidebar badge would
+    /// otherwise stop moving until it is left, or read 0 after a hard reload
+    /// zeroed them, #1819), then the submitted search again at the depth
+    /// already paged in. `prefetched` is a STATUS the caller already asked
+    /// for (`hardReload`), used rather than asked for again.
+    func refreshSearch(prefetched: PrefetchedStatus? = nil) async {
+        if !isSearchScope {
+            let startedAt = prefetched?.askedAt ?? ContinuousClock.now
+            let status: FolderStatus?
+            if let prefetched {
+                status = prefetched.status
+            } else {
+                status = try? await client.folderStatus(path: folder.path, flagged: true)
+            }
+            if let status {
+                _ = applyStatusCounts(status, mayPredateRemoval: removalMayPostdate(startedAt))
+            }
+        }
+        guard !Task.isCancelled else { return }
+        await runSearch(resetFilterTab: false, preserveDepth: true, rerun: true)
     }
 
     /// Row identity for the append dedupe. Folder + UID pins a row to its
@@ -216,7 +251,6 @@ extension MessageListViewModel {
     /// them in this folder, helper.py raises `KeyError`). Same pattern
     /// as `setSort(_:)`.
     func clearSearch() async {
-        dbg("clearSearch")
         searchQuery = ""
         submittedQuery = ""
         searchFilters = MessageSearchFilters()
@@ -226,6 +260,7 @@ extension MessageListViewModel {
         filterTab = .all
         isSearchActive = false
         sourceFolderIndex = SearchSourceFolderIndex()
+        skippedNotice = nil
         searchTotalEstimate = 0
         searchTruncated = false
         searchFoldersSearched = []
@@ -234,6 +269,7 @@ extension MessageListViewModel {
         totalMessages = 0
         unseen = 0
         flagged = 0
+        savedMessageCount = nil
         hasMore = true
         resetWindow()
         // Folder scope drops back to the folder view; the global search
@@ -241,6 +277,15 @@ extension MessageListViewModel {
         // "type to search" state.
         guard !isSearchScope else { return }
         await refresh()
+        // Offline the refresh can't answer, and the list used to stay empty
+        // (#1796): the saved counts come back, and under the default order
+        // the folder's cached rows too, as `loadInitial` starts from. The
+        // snapshot is a window of that order; under another it would leave
+        // gaps once the server answers.
+        if envelopes.isEmpty, errorMessage != nil {
+            if sortCriterion == .default { await hydrateFromCache() }
+            await seedSavedCounts()
+        }
     }
 
     /// Resolves the IMAP mailbox that owns `envelope`. In folder mode
@@ -250,6 +295,15 @@ extension MessageListViewModel {
     /// right mailbox.
     func sourceFolder(for envelope: Envelope) -> String {
         sourceFolderIndex.folder(for: envelope) ?? folder.path
+    }
+
+    /// Every mailbox a row like `envelope` came from: one for an ordinary
+    /// row, more for the same message filed in several folders under one
+    /// UID (mail sent to yourself, in INBOX and Sent), whose rows the index
+    /// can't tell apart and `sourceFolder(for:)` can only name the first of.
+    func sourceFolders(for envelope: Envelope) -> Set<String> {
+        let folders = sourceFolderIndex.folders(for: envelope)
+        return folders.isEmpty ? [folder.path] : Set(folders)
     }
 
     /// The folder "This folder only" narrows to. Folder scope is its own

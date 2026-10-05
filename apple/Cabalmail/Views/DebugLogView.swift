@@ -33,7 +33,7 @@ struct DebugLogView: View {
                         Label("Share…", systemImage: "square.and.arrow.up")
                     }
                     Button(role: .destructive) {
-                        Task { await DebugLogStore.shared.clear() }
+                        DebugLogStore.shared.clear()
                         entries = []
                     } label: {
                         Label("Clear", systemImage: "trash")
@@ -124,11 +124,11 @@ struct DebugLogView: View {
     /// bounded even when a runaway loop logs thousands of lines per minute.
     private func tailLog() async {
         let store = DebugLogStore.shared
-        let snapshot = await store.snapshot()
+        let snapshot = store.snapshot()
         entries = snapshot
         streamTask?.cancel()
         streamTask = Task { @MainActor in
-            let stream = await store.newEntries()
+            let stream = store.newEntries()
             for await entry in stream {
                 if Task.isCancelled { break }
                 entries.append(entry)

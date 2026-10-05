@@ -30,7 +30,7 @@ struct FeedItemDetailView: View {
             }
         }
         .navigationTitle((model?.subscription ?? subscription)?.displayTitle ?? "Feed")
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         // Build the model from `.onAppear`, not `.task`: on an iPhone-compact
