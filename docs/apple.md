@@ -993,12 +993,14 @@ Rules that keep the module working:
   resources. Shared code looks assets up by name (`Image("CabalmailMark")`
   resolves against the app bundle) rather than through generated asset
   symbols, which exist only in the app modules.
-- **Three files are also compiled by path into other targets**, which do
+- **Four files are also compiled by path into other targets**, which do
   not link the library: `Platform/HostPlatform.swift` and
   `Platform/ConfirmationDialogPolicy.swift` into the watch app, and
-  `Platform/Services/ExtensionControlDomainStore.swift` into both Safari
-  web extensions. Moving one means updating its path in `project.yml`, and
-  none of them may import `CabalmailUI`.
+  `Platform/Services/ExtensionControlDomainStore.swift` and
+  `Platform/Services/PrivateLinkTokenStore.swift` into both Safari web
+  extensions. Moving one means updating its path in `project.yml` (and,
+  for the token store, in `extensions/shared/test/privateLink.test.ts`,
+  which reads it), and none of them may import `CabalmailUI`.
 
 The module is sorted into feature folders, at most two levels deep.
 Loose files in a feature folder are shared by that feature's subfolders.
@@ -1029,7 +1031,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
 | `Platform/` | Small per-OS adapters: host platform, confirmation-dialog roles, the pasteboard |
-| `Platform/Services/` | Push (the app delegate and `PushRegistrar`), the watch hand-off, the Safari extension control-domain store |
+| `Platform/Services/` | Push (the app delegate and `PushRegistrar`), the watch hand-off, the stores the Safari extension reads (control domain, private-link tokens) |
 
 A file belongs in `Shared/` only if it knows nothing about any one
 feature, or if several features use it without carrying one feature's
