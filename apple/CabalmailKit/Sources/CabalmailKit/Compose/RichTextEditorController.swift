@@ -12,6 +12,11 @@ import AppKit
 import UIKit
 #endif
 
+/// Text-alignment value carried in `RichTextEditorController.Selection`.
+/// Lifted out of `Selection` so it can be referenced by the SwiftUI toolbar
+/// without nesting two levels deep (SwiftLint's `nesting` rule).
+public enum RichTextAlignment: String, Sendable { case left, center, right }
+
 /// Owns the WKWebView that backs the rich-text composer surface, exposing an
 /// async Swift API around the JS bridge defined in `editor-bridge.js`.
 ///
@@ -25,11 +30,6 @@ import UIKit
 /// main thread; bridge callbacks are dispatched on main as well. The Kit
 /// compiles under complete concurrency checking (Package.swift), and WebKit's
 /// annotations satisfy it without a `@preconcurrency` import.
-/// Text-alignment value carried in `RichTextEditorController.Selection`.
-/// Lifted out of `Selection` so it can be referenced by the SwiftUI toolbar
-/// without nesting two levels deep (SwiftLint's `nesting` rule).
-public enum RichTextAlignment: String, Sendable { case left, center, right }
-
 @MainActor
 public final class RichTextEditorController: NSObject {
     /// Snapshot of the toolbar-relevant state of the editor's current
