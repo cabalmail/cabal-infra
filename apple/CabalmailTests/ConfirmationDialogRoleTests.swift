@@ -84,6 +84,7 @@ final class ConfirmationDialogRoleTests: XCTestCase {
         // so dropping a small one back out of the scan would not move it —
         // and a target outside the scan is how #1207 happened.
         for probe in [
+            "Cabalmail/CabalmailApp.swift",
             "CabalmailUI/Shell/ContentView.swift",
             "CabalmailMac/CabalmailMacApp.swift",
             "CabalmailWatch/ContentView.swift",

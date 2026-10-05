@@ -29,6 +29,7 @@ final class ColorTokenSourceScanTests: XCTestCase {
             "floor: an empty or mis-rooted scan would pass everything vacuously"
         )
         for probe in [
+            "Cabalmail/CabalmailApp.swift",
             "CabalmailUI/Shell/ContentView.swift",
             "CabalmailMac/CabalmailMacApp.swift",
             "CabalmailWatch/ContentView.swift",

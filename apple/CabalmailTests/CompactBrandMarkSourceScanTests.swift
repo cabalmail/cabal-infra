@@ -77,17 +77,20 @@ final class CompactBrandMarkSourceScanTests: XCTestCase {
     /// hand is what would let a tab drift from the others.
     func testOnlyTheSharedModifierBuildsTheToolbarItem() throws {
         var offenders: [String] = []
+        var scanned = 0
         let viewsDir = Self.apple.appendingPathComponent("CabalmailUI").path
         let views = try XCTUnwrap(FileManager.default.subpaths(atPath: viewsDir))
         for file in views
         where file.hasSuffix(".swift") && (file as NSString).lastPathComponent != "SidebarBranding.swift" {
             let body = try Self.source("CabalmailUI/\(file)")
+            scanned += 1
             // The macOS sidebar hosts the mark directly (no toolbar), which is
             // the one hand-placed CabalmailMark that is not a title stand-in.
             if body.contains("ToolbarItem(placement: .principal)") && body.contains("CabalmailMark(") {
                 offenders.append(file)
             }
         }
+        XCTAssertGreaterThan(scanned, 40, "floor: an empty or mis-rooted walk would pass vacuously")
         XCTAssertEqual(offenders, [], "build the mark-as-title through brandMarkTitle / compactBrandMarkTitle")
     }
 
