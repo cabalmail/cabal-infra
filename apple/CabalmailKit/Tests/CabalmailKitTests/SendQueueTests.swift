@@ -106,7 +106,11 @@ final class SendQueueTests: XCTestCase {
             throw CabalmailError.network("down again")
         })
         await queue.kickDrain()
+        // The queue records a failed attempt, and the backoff it starts, only
+        // after the sender throws, so wait for the outbox rather than the
+        // sender's counter (#1858).
         try await waitUntil { await calls.count == 1 }
+        try await waitUntil { (try await outbox.list().first?.attempts ?? 0) == 1 }
 
         for _ in 0..<5 {
             clock.advance(by: 1)
@@ -119,6 +123,7 @@ final class SendQueueTests: XCTestCase {
         clock.advance(by: SendQueue.Backoff.standard.base)
         await queue.kickDrain()
         try await waitUntil { await calls.count == 2 }
+        try await waitUntil { (try await outbox.list().first?.attempts ?? 0) == 2 }
         let entries = try await outbox.list()
         XCTAssertEqual(entries.first?.attempts, 2)
         await queue.stop()
