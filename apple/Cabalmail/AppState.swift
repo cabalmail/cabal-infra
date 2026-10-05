@@ -720,6 +720,9 @@ extension AppState {
         // A deliberate sign-out is its own explanation; `handleSessionExpiry`
         // re-sets this after calling through here.
         signedOutReason = nil
+        // Before the reset, so a count this session's work fetches from here
+        // on is dropped rather than written back over it (#1848).
+        if let client { teardownGate.markEnded(client) }
         forgetAccountState()
         guard let client else { status = .signedOut; return }
         await endSession(of: client, cursor: navCoordinator)
@@ -825,6 +828,16 @@ extension AppState {
 // primary class body stays under SwiftLint's `type_body_length` cap.
 @MainActor
 extension AppState {
+    /// Whether counts fetched through `client` still belong to the account
+    /// on screen: false once its session has started ending. A STATUS that
+    /// answers during or after a sign-out would otherwise write the last
+    /// account's counts back after the reset, where the next account starts
+    /// from them and saves their totals as its own (#1848). Every writer of a
+    /// count it fetched checks this after the fetch.
+    func acceptsCounts(from client: CabalmailClient) -> Bool {
+        !teardownGate.hasEnded(client)
+    }
+
     /// Replace the unread count for one folder. Called after an
     /// authoritative `STATUS (UNSEEN)` when the caller doesn't have the
     /// total in hand (e.g. an optimistic delta-based recovery path).
