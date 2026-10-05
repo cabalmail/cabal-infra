@@ -5,7 +5,7 @@ import CabalmailKit
 
 /// Speakable errors for App Intents. Siri reads `localizedStringResource`
 /// aloud, so every case is a full sentence — the intent-side analogue of
-/// `AppState.message(for:)`.
+/// `SignInErrorText.message(for:)`.
 enum IntentError: Error, CustomLocalizedStringResourceConvertible {
     case notSignedIn
     case message(String)

@@ -16,10 +16,8 @@ final class MessageDetailViewModel {
     // can reach them.
     let client: CabalmailClient
     let preferences: Preferences
-    /// This reader's own folder for attachment files. One folder per UID let
-    /// same-UID messages in two folders overwrite each other's files (#1813).
-    @ObservationIgnored private let attachmentDirectory = FileManager.default.temporaryDirectory
-        .appendingPathComponent("cabalmail-attachments-\(UUID().uuidString)", isDirectory: true)
+    /// This reader's own folder for attachment files (`AttachmentFolders`).
+    @ObservationIgnored private let attachmentDirectory = AttachmentFolders.make()
 
     var isLoading = false
     var errorMessage: String?
@@ -457,8 +455,8 @@ private extension MessageDetailViewModel {
     }
 
     /// Writes a decoded part, under a name from `AttachmentFileNamer`, to this
-    /// reader's own temp folder (`attachmentDirectory`). The OS sweeps the
-    /// temp directory between launches; nothing deletes the folder sooner.
+    /// reader's own temp folder (`attachmentDirectory`). Sign-out deletes
+    /// it; otherwise the OS sweeps the temp directory between launches.
     func writeToTmp(data: Data, filename: String) throws -> URL {
         try FileManager.default.createDirectory(at: attachmentDirectory, withIntermediateDirectories: true)
         let url = attachmentDirectory.appendingPathComponent(filename)

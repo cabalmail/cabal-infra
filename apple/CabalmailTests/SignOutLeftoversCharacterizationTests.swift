@@ -3,14 +3,14 @@ import CabalmailKit
 @testable import Cabalmail
 
 /// Workstream 0.8 characterization suite, with a wired session (sign-in
-/// through `SessionHarness`): what `AppState.signOut()` leaves in place
-/// (#1825, the form pre-fill), alongside `SignOutCharacterizationTests`,
-/// which pins what it tears down. `SessionTeardownCharacterizationTests`
-/// pins the same leftovers for a sign-out with no client; these show the
-/// teardown past the no-client guard does not reach them either. The
-/// rearchitecture (workstream 1.3) moves per-account state into a session
-/// that ends as a whole, so most of these are expected to change there (the
-/// preferences scope is the deliberate exception).
+/// through `SessionHarness`): what `AppState.signOut()` leaves in place (the
+/// form pre-fill, the command ticks, the preferences scope) and the
+/// per-account state it now clears (#1825), alongside
+/// `SignOutCharacterizationTests`, which pins what it tears down.
+/// `SessionTeardownCharacterizationTests` pins the same for a sign-out with
+/// no client. The rearchitecture (workstream 1.3) moves per-account state
+/// into a session that ends as a whole, so the leftovers are expected to
+/// change there (the preferences scope is the deliberate exception).
 @MainActor
 final class SignOutLeftoversCharacterizationTests: XCTestCase {
     private var harness: SessionHarness!
@@ -39,14 +39,11 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
         XCTAssertEqual(Array(harness.events[mark...]), ["sessionWillEnd tokens=stored", "sessionDidEnd tokens=gone"])
     }
 
-    /// Pins current behaviour, which looks like a defect: with a client too,
-    /// the per-folder counts and the subscribed paths outlive the sign-out,
-    /// so the next account's sidebar starts from them until its first STATUS
-    /// walk and folder list land. The saved-counts bookkeeping, by contrast,
-    /// is reset with a client (its seeded paths and its cache), and the badge
-    /// count comes down though the sidebar's INBOX count does not.
-    /// Tracked in #1825.
-    func testSignOutWithAClientLeavesTheFolderCountsAndSubscriptions() async throws {
+    /// The per-folder counts and the subscribed paths go with the session,
+    /// along with the saved-counts bookkeeping and the badge count (#1825).
+    /// They used to outlive it, so the next account's sidebar started from
+    /// them until its first STATUS walk and folder list landed.
+    func testSignOutWithAClientClearsTheFolderCountsAndSubscriptions() async throws {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         state.setFolderCounts(folderPath: "INBOX", unread: 4, total: 30)
@@ -57,38 +54,60 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
 
         await state.signOut()
 
-        XCTAssertEqual(state.folderUnreadCounts, ["INBOX": 4, "Archive": 3])
-        XCTAssertEqual(state.folderTotalCounts, ["INBOX": 30, "Archive": 40])
-        XCTAssertEqual(state.subscribedFolderPaths, ["INBOX", "Archive"])
+        XCTAssertEqual(state.folderUnreadCounts, [:])
+        XCTAssertEqual(state.folderTotalCounts, [:])
+        XCTAssertNil(state.subscribedFolderPaths)
         XCTAssertEqual(state.inboxUnreadCount, 0)
         XCTAssertEqual(state.savedFolderCounts.seededPaths, [])
         XCTAssertNil(state.savedFolderCounts.cache)
     }
 
-    /// Pins current behaviour, which looks like a minor defect: the removal
-    /// and in-flight shields are keyed by folder path and UID, not by
-    /// account, and survive the sign-out. A confirmed removal shields for a
-    /// minute, so an account signing in within that window has its own
-    /// INBOX UID 5 dropped by the INBOX list's refresh merges until the entry
-    /// ages out (`shieldFetched` treats it as stale). A leftover in-flight
-    /// move also makes the next account's Archive list withhold its STATUS
-    /// counts from the sidebar until the old move resolves; the in-flight
-    /// entries clear only when their write does.
-    /// Tracked in #1825.
-    func testSignOutWithAClientLeavesTheRemovalAndInFlightShields() async {
+    /// The removal and in-flight shields are keyed by folder path and UID,
+    /// not by account, so they go with the session (#1825). Surviving it, a
+    /// confirmed removal shielded for a minute, so an account signing in
+    /// within that window had its own INBOX UID 5 dropped by the INBOX
+    /// list's refresh merges until the entry aged out, and a leftover
+    /// in-flight move made the next account's Archive list withhold its
+    /// STATUS counts from the sidebar until the old move resolved.
+    func testSignOutWithAClientClearsTheRemovalAndInFlightShields() async {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         state.recordConfirmedRemovals(folderPath: "INBOX", uids: [5])
         state.setFlagWrite(folderPath: "INBOX", uid: 6, inFlight: true)
         state.setMoveInFlight(folderPath: "Archive", uid: 7, inFlight: true)
-        let removals = state.confirmedRemovals
+        XCTAssertEqual(state.confirmedRemovalUIDs(folderPath: "INBOX"), [5], "precondition")
 
         await state.signOut()
 
-        XCTAssertEqual(state.confirmedRemovals, removals)
-        XCTAssertEqual(state.confirmedRemovalUIDs(folderPath: "INBOX"), [5])
-        XCTAssertEqual(state.pendingFlagWriteUIDs, ["INBOX": [6]])
-        XCTAssertEqual(state.pendingMoveUIDs, ["Archive": [7]])
+        XCTAssertEqual(state.confirmedRemovals, [:])
+        XCTAssertEqual(state.confirmedRemovalUIDs(folderPath: "INBOX"), [])
+        XCTAssertEqual(state.pendingFlagWriteUIDs, [:])
+        XCTAssertEqual(state.pendingMoveUIDs, [:])
+    }
+
+    /// Every reader's attachment folder goes with the session (#1813). Each
+    /// reader writes its own, and Forward reads the files after the reader
+    /// has closed, so sign-out is where they are removed; until then the OS
+    /// swept them only between launches, and the next account could open the
+    /// last one's files. Other temp files stay.
+    func testSignOutRemovesEveryReadersAttachmentFolder() async throws {
+        await SignOutSuiteSteps.signIn(harness)
+        let manager = FileManager.default
+        let readers = [AttachmentFolders.make(), AttachmentFolders.make()]
+        for folder in readers {
+            try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+            try Data("scan".utf8).write(to: folder.appendingPathComponent("scan.pdf"))
+        }
+        let other = manager.temporaryDirectory.appendingPathComponent("not-an-attachment-\(UUID().uuidString)")
+        try Data("keep".utf8).write(to: other)
+        defer { try? manager.removeItem(at: other) }
+
+        await harness.appState.signOut()
+
+        for folder in readers {
+            XCTAssertFalse(manager.fileExists(atPath: folder.path), folder.lastPathComponent)
+        }
+        XCTAssertTrue(manager.fileExists(atPath: other.path))
     }
 
     /// With a client as without one, the command ticks, their window target

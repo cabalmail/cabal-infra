@@ -6,8 +6,8 @@ import CabalmailKit
 /// Characterization suite for workstream 0.8 of the rearchitecture proposal,
 /// second half (the first is `SessionLifecycleCharacterizationTests`): where a
 /// Spotlight tap waits while no session is wired, and what a sign-out with no
-/// client stops and leaves behind (#1703). The refactor moves all of this
-/// into a per-account session, so these record it as it is today.
+/// client stops, clears (#1825) and leaves behind (#1703). The refactor moves
+/// all of this into a per-account session, so these record it as it is today.
 ///
 /// A sign-out with no client is the first part of every sign-out, and it is
 /// also reachable on its own: the macOS Settings scene is always available,
@@ -60,26 +60,32 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.pendingSpotlightRef, parked)
     }
 
-    /// Pins current behaviour, which may be a minor defect: neither `signOut()`
-    /// nor `handleSessionExpiry()` clears the slot, which is not tied to an
-    /// account, so the parked ref is replayed into whichever account signs in
-    /// next. Waiting for a session is the slot's documented job (the
-    /// cold-launch handoff). A sign-out with a client also clears the
-    /// Spotlight index, so a tap for another account mostly arises after a
-    /// force-quit or a failed restore; a no-client sign-out that keeps the ref
-    /// is reachable from macOS Settings while signed out.
-    /// Tracked in #1825.
-    func testSignOutWithNoClientKeepsTheParkedRef() async {
+    /// The slot is not tied to an account, so a sign-out drops what it holds
+    /// rather than replay it into whichever account signs in next (#1825).
+    /// Waiting for a session is the slot's documented job (the cold-launch
+    /// handoff); a sign-out ends the wait. A different-user sign-in drops a
+    /// ref parked after it (`SpotlightSignInTests`).
+    func testSignOutWithNoClientDropsTheParkedRef() async {
         let state = AppState()
-        state.status = .restoring
+        state.status = .signingIn
         state.routeSpotlightRef(parked)
 
         await state.signOut()
-        XCTAssertEqual(state.pendingSpotlightRef, parked, "a deliberate sign-out keeps it")
 
+        XCTAssertNil(state.pendingSpotlightRef)
+    }
+
+    /// An expiry ends the wait through the same teardown.
+    func testAnExpiryDropsTheParkedRef() async {
+        let state = AppState()
         state.status = .signedIn
+        state.routeSpotlightRef(parked)
+        XCTAssertEqual(state.pendingSpotlightRef, parked, "precondition: no session is wired")
+
         await state.handleSessionExpiry()
-        XCTAssertEqual(state.pendingSpotlightRef, parked, "an expiry keeps it")
+
+        XCTAssertNil(state.pendingSpotlightRef)
+        XCTAssertEqual(state.signedOutReason, .sessionExpired)
     }
 
     // MARK: - What a sign-out with no client stops, and what it leaves
@@ -102,27 +108,24 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.inboxUnreadCount, 0, "the badge count comes down")
         XCTAssertTrue(feedPoll.isCancelled, "the feed poller stops")
         XCTAssertNil(state.feedRefreshTask)
-        // Pins current behaviour, which looks like a defect: the sidebar's
-        // INBOX count is not reset with the badge count. Nothing shows it
-        // while signed out, but the next session starts from it until its
-        // STATUS walk, and `FolderListViewModel.seedSavedCounts` only seeds a
-        // folder whose count is nil, so offline it also blocks that seed.
-        XCTAssertEqual(state.folderUnreadCounts["INBOX"], 2)
+        // The sidebar's INBOX count comes down with the badge count (#1825).
+        // The next session used to start from it until its STATUS walk, and
+        // `FolderListViewModel.seedSavedCounts` seeds only a folder whose
+        // count is nil, so offline it also blocked that seed.
+        XCTAssertNil(state.folderUnreadCounts["INBOX"])
     }
 
-    /// Pins current behaviour, which looks like a defect: the folder counts
-    /// and the subscribed paths outlive a sign-out. With a client too: the
-    /// teardown past the guard resets `savedFolderCounts` but not these, so
-    /// the next account's sidebar starts from them until its first STATUS
-    /// walk and folder list land.
+    /// The folder counts, the subscribed paths and the saved-counts
+    /// bookkeeping go with every sign-out, client or not (#1825). They used
+    /// to outlive it, so the next account's sidebar started from them until
+    /// its first STATUS walk and folder list landed.
     ///
-    /// The toast also survives, but that is not a defect: every production
-    /// writer goes through `showToast`, which clears it after 4-10 s, and only
+    /// The toast survives, which is not a defect: every production writer
+    /// goes through `showToast`, which clears it after 4-10 s, and only
     /// `SignedInRootView` draws it. It could reappear only if the user signed
     /// back in within that window. The long duration here keeps the timer
     /// from racing the assertion.
-    /// Tracked in #1825.
-    func testSignOutWithNoClientLeavesTheFolderStateAndToastInPlace() async {
+    func testSignOutWithNoClientClearsTheFolderStateButLeavesTheToast() async {
         let state = AppState()
         state.status = .signedIn
         state.folderUnreadCounts = ["Archive": 3]
@@ -134,10 +137,10 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
 
         await state.signOut()
 
-        XCTAssertEqual(state.folderUnreadCounts, ["Archive": 3])
-        XCTAssertEqual(state.folderTotalCounts, ["Archive": 40])
-        XCTAssertEqual(state.subscribedFolderPaths, ["INBOX", "Archive"])
-        XCTAssertEqual(state.savedFolderCounts.seededPaths, ["Archive"], "reset only with a client")
+        XCTAssertEqual(state.folderUnreadCounts, [:])
+        XCTAssertEqual(state.folderTotalCounts, [:])
+        XCTAssertNil(state.subscribedFolderPaths)
+        XCTAssertEqual(state.savedFolderCounts.seededPaths, [])
         XCTAssertEqual(state.toast, toast, "sign-out leaves the toast to its own timer")
     }
 

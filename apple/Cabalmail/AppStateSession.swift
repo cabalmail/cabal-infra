@@ -41,16 +41,58 @@ extension AppState {
     /// so there is exactly one teardown rather than two that can drift — the
     /// difference is the reason, which the sign-in form then explains.
     ///
-    /// Idempotent via the status check: the Kit announces once per
+    /// Acts only on a live session (#1826): the Kit announces once per
     /// invalidation, but a signal that lands after the user has already
     /// signed out must not put "your session expired" on a form they asked
-    /// for.
+    /// for, and from any other state there is no session to expire. A
+    /// teardown already running ends the session anyway. The reason is set
+    /// only if nothing has moved the status on since, and no Sign Out the
+    /// user chose joined the teardown (#1829).
     func handleSessionExpiry() async {
-        guard status != .signedOut else { return }
+        guard status == .signedIn, !teardownGate.isTearingDown else { return }
+        let requests = teardownGate.signOutRequests
         await signOut()
+        guard status == .signedOut, teardownGate.signOutRequests == requests + 1 else { return }
         signedOutReason = .sessionExpired
     }
 
+    /// The part of a sign-out that needs the session's client, in order: push
+    /// deregistration and the Intents bridge while the Cognito session still
+    /// works (`authService.signOut()` wipes the tokens), the per-feed site
+    /// data, the cached mail, the tokens, the watch's copy and the resume
+    /// state. Also ends a session a restore built but did not wire.
+    func endSession(of client: CabalmailClient, cursor: NavStateCoordinator?) async {
+        await sessionEnvironment.hooks.sessionWillEnd()
+        // Per-feed site data (publisher logins) lives in WebKit, out of the
+        // Kit's reach: drop it while the feed store still knows the stores.
+        FeedWebStorage.drop(uuids: (try? await client.rssStore?.allDataStoreUuids()) ?? [])
+        // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
+        // dropping the session so the next account to sign in on this device
+        // can't read the previous user's messages from the shared on-disk
+        // cache.
+        await client.clearLocalData()
+        try? await client.authService.signOut()
+        // Tell the watch to drop its copy of the credentials too.
+        sessionEnvironment.hooks.sessionDidEnd()
+        // Forget this install's resume session and reading positions too, so
+        // the next account on the device doesn't inherit them.
+        cursor?.clearLocalState()
+    }
+
+    /// Ends a session the launch restore built but never wired, because the
+    /// user signed out while it was being built (#1827). Its cursor is built
+    /// only to clear the resume state this launch would have restored.
+    func endUnwiredSession(_ client: CabalmailClient) async {
+        await endSession(of: client, cursor: sessionEnvironment.makeNavCoordinator(client))
+    }
+
+    /// Removes a stored session's tokens and IMAP credentials without a
+    /// client: what restore does when Cognito refuses the refresh.
+    static func removeStoredSession(from secureStore: SecureStore) {
+        try? secureStore.remove(SecureStoreKey.authTokens)
+        try? secureStore.remove(SecureStoreKey.imapUsername)
+        try? secureStore.remove(SecureStoreKey.imapPassword)
+    }
 }
 
 // MARK: - Client construction helpers

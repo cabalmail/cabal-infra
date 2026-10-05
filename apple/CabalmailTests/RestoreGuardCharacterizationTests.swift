@@ -175,17 +175,18 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
 
     // MARK: - The client and the status
 
-    /// The `client == nil` guard on its own. A stray cancel (#1826) says
-    /// `.signedOut` while the session stays wired, which the status guard
-    /// lets through; the client guard stops it, so no second client is built
-    /// and wired over the live one. Nothing puts `.signedIn` back either.
-    func testTheClientGuardStopsARestoreOnceAStrayCancelSaysSignedOut() async throws {
+    /// The `client == nil` guard on its own: a status that says `.signedOut`
+    /// while the session stays wired passes the status guard, and the client
+    /// guard stops it, so no second client is built and wired over the live
+    /// one. Nothing puts `.signedIn` back either. The stray submit and
+    /// cancel of #1826 used to produce exactly that status; they are now
+    /// ignored off the code form, so the test writes it directly.
+    func testTheClientGuardStopsARestoreWhileAClientIsWired() async throws {
         harness.seedLastSession()
         try await harness.seedTokens()
         await harness.appState.restoreIfPossible()
         let client = try XCTUnwrap(harness.appState.client)
-        harness.appState.cancelMfaChallenge()
-        XCTAssertEqual(harness.appState.status, .signedOut, "precondition: the stray cancel")
+        harness.appState.status = .signedOut
 
         await harness.appState.restoreIfPossible()
 
@@ -214,8 +215,7 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
     /// password sign-in waits for its second factor wires whatever session
     /// the keychain still holds (one an offline launch kept) over the code
     /// form. The parked challenge's client is abandoned; a code submitted
-    /// afterwards meets `.signedIn` and flips to `.signedOut` without a
-    /// teardown.
+    /// afterwards meets `.signedIn` and is ignored.
     /// Tracked in #1826.
     func testRestoreFromTheCodeFormWiresTheStoredSessionOverIt() async throws {
         harness.seedLastSession()

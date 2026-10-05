@@ -54,6 +54,9 @@ final class AppState {
     /// error text, and the teardown happens here exactly once.
     @ObservationIgnored var sessionExpiryTask: Task<Void, Never>?
 
+    /// Orders sign-out against sign-in and the launch restore (#1827, #1829).
+    @ObservationIgnored let teardownGate = SessionTeardownGate()
+
     /// Inline error for the second-factor form (wrong code, expired
     /// challenge). Kept separate from `Status.error` so a mistyped code
     /// doesn't bounce the user back to the password form.
@@ -360,6 +363,7 @@ final class AppState {
     let bimiCache = BimiUrlCache()
 
     func signIn(controlDomain: String, username: String, password: String) async {
+        await teardownGate.awaitTeardown()
         status = .signingIn
         mfaError = nil
         pendingMfa = nil
@@ -386,7 +390,7 @@ final class AppState {
                 client: newClient, controlDomain: controlDomain, username: username
             )
         } catch let error as CabalmailError {
-            status = .error(message(for: error))
+            status = .error(SignInErrorText.message(for: error))
         } catch {
             status = .error(error.localizedDescription)
         }
@@ -438,6 +442,7 @@ final class AppState {
     /// this is a no-op, so `.task` can call it without worrying about
     /// SwiftUI's lifecycle re-firing it.
     func restoreIfPossible() async {
+        await teardownGate.awaitTeardown()
         guard client == nil else { return }
         switch status {
         case .signingIn, .restoring, .signedIn:
@@ -458,42 +463,71 @@ final class AppState {
         }
 
         status = .restoring
+        let generation = teardownGate.beginRestore()
+        defer { teardownGate.endRestore() }
+        var built: CabalmailClient?
         do {
             // Offline, the last good config.json stands in for the fetch so
             // the cached mail, Outbox and feeds stay reachable at launch.
             let configuration = try await sessionEnvironment.loadConfiguration(domain)
             let newClient = try sessionEnvironment.makeClient(configuration, secureStore, sessionInvalidation)
+            built = newClient
             // Validates the keychain contents: a fresh ID token passes; an
             // expired one triggers a silent refresh; an expired / revoked
             // refresh throws `.authExpired` (Cognito's
-            // `NotAuthorizedException`). A refresh that can't reach Cognito
-            // passes, so cached mail is readable offline.
+            // `NotAuthorizedException`). A refresh that can't reach Cognito,
+            // or that Cognito throttles, passes, so cached mail is readable
+            // offline.
             try await OfflineLaunch.validateStoredSession(newClient.authService)
+            // A sign-out meanwhile is waiting for this restore to finish:
+            // end the session it asked to end rather than wire it (#1827).
+            guard teardownGate.generation == generation else {
+                await endUnwiredSession(newClient)
+                return
+            }
             // Restore is the common launch path, so this is what keeps the
             // watch's session copy and the device's `/push_register` row
             // fresh across app launches (see `wireSession`).
             await wireSession(client: newClient, username: username)
-        } catch let error as CabalmailError {
-            switch error {
-            case .authExpired, .invalidCredentials, .notSignedIn:
-                // Refresh token is gone — clear the keychain so a stale
-                // token doesn't keep tripping the sign-in form.
-                try? secureStore.remove(SecureStoreKey.authTokens)
-                try? secureStore.remove(SecureStoreKey.imapUsername)
-                try? secureStore.remove(SecureStoreKey.imapPassword)
-                signedOutReason = .sessionExpired
-                status = .signedOut
-            case .network, .transport, .cancelled, .notConfigured:
-                // Transient — leave the keychain alone. The sign-in form
-                // will show but pre-filled, and a retry (or a later launch)
-                // has a chance to recover without forcing the user to
-                // re-enter their password.
-                status = .signedOut
-            default:
-                status = .error(message(for: error))
-            }
         } catch {
+            let signedOut = teardownGate.generation != generation
+            await restoreFailed(error, client: built, secureStore: secureStore, signedOut: signedOut)
+        }
+    }
+
+    /// The catch arms of `restoreIfPossible`. `signedOut`: a sign-out came
+    /// in while the restore ran and is waiting for it, so its failure no
+    /// longer decides anything; what the sign-out would have removed goes.
+    private func restoreFailed(
+        _ error: Error, client built: CabalmailClient?, secureStore: SecureStore, signedOut: Bool
+    ) async {
+        if signedOut {
+            if let built {
+                await endUnwiredSession(built)
+            } else {
+                Self.removeStoredSession(from: secureStore)
+            }
+            return
+        }
+        guard let error = error as? CabalmailError else {
             status = .error(error.localizedDescription)
+            return
+        }
+        switch error {
+        case .authExpired, .invalidCredentials, .notSignedIn:
+            // Refresh token is gone — clear the keychain so a stale
+            // token doesn't keep tripping the sign-in form.
+            Self.removeStoredSession(from: secureStore)
+            signedOutReason = .sessionExpired
+            status = .signedOut
+        case .network, .transport, .cancelled, .notConfigured:
+            // Transient — leave the keychain alone. The sign-in form
+            // will show but pre-filled, and a retry (or a later launch)
+            // has a chance to recover without forcing the user to
+            // re-enter their password.
+            status = .signedOut
+        default:
+            status = .error(SignInErrorText.message(for: error))
         }
     }
 
@@ -533,39 +567,6 @@ final class AppState {
             // Best-effort: if the STATUS call fails (transient network
             // blip, IMAP reconnection) the prior badge value stays put
             // until the next poll succeeds.
-        }
-    }
-
-    private func message(for error: CabalmailError) -> String {
-        // Most cases fall through to a canned or "prefix: detail" format;
-        // split into two switches so neither exceeds the cyclomatic cap.
-        if let canned = cannedMessage(for: error) { return canned }
-        switch error {
-        case .network(let detail):              return "Network error: \(detail)"
-        case .transport(let detail):            return "Transport error: \(detail)"
-        case .protocolError(let text):          return "Protocol error: \(text)"
-        case .server(_, let text):              return "Server error: \(text)"
-        case .decoding(let text):               return "Response error: \(text)"
-        default:                                return "\(error)"
-        }
-    }
-
-    private func cannedMessage(for error: CabalmailError) -> String? {
-        switch error {
-        case .invalidCredentials: return "Incorrect username or password."
-        case .notConfigured:      return "Control domain is invalid."
-        case .authExpired:        return "Session expired. Please sign in again."
-        case .cancelled:          return "Cancelled."
-        case .notSignedIn:        return "Not signed in."
-        // Planned IMAP redeploy: show the API's friendly copy verbatim, no
-        // "Server error:" prefix.
-        case .maintenance(let message): return message
-        // A Cognito trigger rejected the sign-in (e.g. the MFA-enrollment
-        // gate). The Kit has already stripped Cognito's trigger wrapper;
-        // what remains is the trigger's own user-facing copy, so show it
-        // verbatim like .maintenance above.
-        case .server(code: "UserLambdaValidationException", message: let message): return message
-        default:                  return nil
         }
     }
 }
@@ -705,7 +706,13 @@ extension AppState {
 // MARK: - Session wiring
 
 extension AppState {
+    /// Ends the session. One teardown at a time: a second call waits for the
+    /// first, and a restore in flight finishes first (`SessionTeardownGate`).
     func signOut() async {
+        await teardownGate.signOut { [self] in await tearDownSession() }
+    }
+
+    private func tearDownSession() async {
         stopInboxBadgePolling()
         stopFeedRefreshPolling()
         sessionExpiryTask?.cancel()
@@ -713,34 +720,34 @@ extension AppState {
         // A deliberate sign-out is its own explanation; `handleSessionExpiry`
         // re-sets this after calling through here.
         signedOutReason = nil
+        forgetAccountState()
         guard let client else { status = .signedOut; return }
-        // Push deregistration and the Intents bridge, while the Cognito
-        // session still works: `authService.signOut()` below wipes the tokens.
-        await sessionEnvironment.hooks.sessionWillEnd()
-        // Per-feed site data (publisher logins) lives in WebKit, out of the
-        // Kit's reach: drop it while the feed store still knows the stores.
-        FeedWebStorage.drop(uuids: (try? await client.rssStore?.allDataStoreUuids()) ?? [])
-        // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
-        // dropping the session so the next account to sign in on this device
-        // can't read the previous user's messages from the shared on-disk
-        // cache.
-        await client.clearLocalData()
-        try? await client.authService.signOut()
-        // Tell the watch to drop its copy of the credentials too.
-        sessionEnvironment.hooks.sessionDidEnd()
-        // Forget this install's resume session and reading positions too, so
-        // the next account on the device doesn't inherit them.
-        self.navCoordinator?.clearLocalState()
+        await endSession(of: client, cursor: navCoordinator)
         // Same turn as dropping the client, so no closed compose window
         // builds a composer for the next session in between.
         composeSlots.endSession()
         self.client = nil
-        savedFolderCounts.reset()
         self.navCoordinator = nil
         self.searchModelStore = nil
         self.prefsCoordinator?.stop()
         self.prefsCoordinator = nil
         self.status = .signedOut
+    }
+
+    /// What this process knows about the account, with or without a client:
+    /// the next account must start from none of it (#1825). The totals
+    /// matter beyond the sidebar: `setUnreadCount` saves the folder's total
+    /// from here into the session's saved folder state.
+    private func forgetAccountState() {
+        folderUnreadCounts = [:]
+        folderTotalCounts = [:]
+        subscribedFolderPaths = nil
+        savedFolderCounts.reset()
+        confirmedRemovals = [:]
+        pendingFlagWriteUIDs = [:]
+        pendingMoveUIDs = [:]
+        pendingSpotlightRef = nil
+        AttachmentFolders.removeAll()
     }
 
     /// Shared tail of `signIn` and `restoreIfPossible`: installs the client,
@@ -994,9 +1001,11 @@ extension AppState {
     /// same session wiring as a challenge-free sign-in; a wrong code stays
     /// on the code form (Cognito allows a bounded number of retries against
     /// the same challenge session); an expired challenge falls back to the
-    /// password form.
+    /// password form. Only the code form submits: in any other state there is
+    /// no challenge, and a session may be wired (#1826).
     func submitMfaCode(_ code: String) async {
-        guard case .mfaCodeRequired(let method) = status, let pending = pendingMfa else {
+        guard case .mfaCodeRequired(let method) = status else { return }
+        guard let pending = pendingMfa else {
             status = .signedOut
             return
         }
@@ -1017,7 +1026,7 @@ extension AppState {
             // Anything else (challenge session expired, throttled, ...)
             // restarts from the password form with the standard message.
             pendingMfa = nil
-            status = .error(message(for: error))
+            status = .error(SignInErrorText.message(for: error))
         } catch {
             pendingMfa = nil
             status = .error(error.localizedDescription)
@@ -1025,8 +1034,10 @@ extension AppState {
     }
 
     /// Abandons a pending second-factor challenge and returns to the
-    /// password form.
+    /// password form. A no-op off the code form, where it would show the
+    /// password form over whatever is there (#1826).
     func cancelMfaChallenge() {
+        guard case .mfaCodeRequired = status else { return }
         pendingMfa = nil
         mfaError = nil
         status = .signedOut
@@ -1042,6 +1053,9 @@ extension AppState {
         // cached mail before the new session populates it.
         if !lastUsername.isEmpty, lastUsername != username {
             await newClient.clearLocalData()
+            // A Spotlight result parked while signed out was indexed for the
+            // last account (#1825).
+            pendingSpotlightRef = nil
         }
         self.controlDomain = controlDomain
         self.lastUsername = username

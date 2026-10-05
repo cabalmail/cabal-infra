@@ -164,65 +164,117 @@ final class RestoreCharacterizationTests: XCTestCase {
 
     // MARK: - Session calls that land mid-restore
 
-    /// Pins current behaviour, which looks like a defect: restore has no
-    /// cancellation. A sign-out while the configuration loads finds no
-    /// client, so it only flips the status and leaves the tokens stored, and
-    /// the restore then wires the session it was building over the
-    /// signed-out state: a sign-out that does not sign out. Reachable on
-    /// macOS: the Settings window (Cmd-,) is its own scene, which
-    /// `ContentView`'s status switch never gates; it opens on Account, whose
-    /// Sign Out button is unconditional; and a slow network keeps the splash
-    /// up, since `ConfigLoader` tries the network before its cached copy.
-    /// Tracked in #1827.
-    func testASignOutWhileRestoringIsOverriddenWhenTheRestoreLands() async throws {
+    /// A sign-out while the configuration loads waits for the restore, which
+    /// then ends the session it built rather than wire it: the sign-out
+    /// hooks run while the tokens are still stored, the tokens go, and the
+    /// sign-in form shows with no reason (#1827). It used to find no client,
+    /// flip the status and leave the tokens stored, and the restore then
+    /// wired the session over it: a sign-out that did not sign out.
+    /// Reachable on macOS: the Settings window (Cmd-,) is its own scene,
+    /// which `ContentView`'s status switch never gates; it opens on Account,
+    /// whose Sign Out button is unconditional; and a slow network keeps the
+    /// splash up, since `ConfigLoader` tries the network before its cached
+    /// copy.
+    func testASignOutWhileRestoringEndsTheSessionTheRestoreBuilt() async throws {
         harness.seedLastSession()
         try await harness.seedTokens()
         let restore = await startHeldRestore()
 
-        await harness.appState.signOut()
-        XCTAssertEqual(harness.appState.status, .signedOut, "precondition")
+        let signOut = try await startSignOut()
+        XCTAssertEqual(harness.appState.status, .restoring, "the sign-out waits for the restore")
 
         harness.releaseConfigurationLoad()
         await restore.value
+        await signOut.value
 
+        XCTAssertEqual(harness.appState.status, .signedOut)
+        XCTAssertNil(harness.appState.signedOutReason)
+        XCTAssertNil(harness.appState.client)
+        XCTAssertNil(harness.appState.navCoordinator)
+        XCTAssertNil(harness.appState.sessionExpiryTask, "nothing observes a session that never started")
+        XCTAssertEqual(harness.events, Self.loaded + [
+            "makeClient", "sessionWillEnd tokens=stored", "sessionDidEnd tokens=gone",
+        ])
+        XCTAssertFalse(harness.hasStoredTokens)
+    }
+
+    /// Signing back in after that sign-out waits for the restore to end, so
+    /// the restore's teardown of the session it built cannot remove the
+    /// tokens the sign-in stores: the stored tokens are one keychain item
+    /// (#1827).
+    func testASignInAfterASignOutWhileRestoringWaitsForTheRestoreToEnd() async throws {
+        harness.seedLastSession()
+        try await harness.seedTokens()
+        let restore = await startHeldRestore()
+        let signOut = try await startSignOut()
+        await harness.cognito.script(.passwordSignIn, .tokens(id: "ID-2"))
+        let appState = harness.appState
+        let signIn = Task {
+            await appState.signIn(controlDomain: Self.domain, username: "alice", password: SignInScript.password)
+        }
+        // Let the sign-in get as far as it can while the restore is held.
+        for _ in 0..<20 { await Task.yield() }
+
+        harness.releaseConfigurationLoad()
+        await restore.value
+        await signOut.value
+        await signIn.value
+
+        XCTAssertEqual(harness.events, Self.loaded + [
+            "makeClient", "sessionWillEnd tokens=stored", "sessionDidEnd tokens=gone",
+        ] + SignInScript.clientBuilt + SignInScript.wired("alice"))
         XCTAssertEqual(harness.appState.status, .signedIn)
-        XCTAssertNotNil(harness.appState.client)
-        XCTAssertEqual(harness.events, Self.wired, "the sign-out ran no hook: there was no client")
+        let tokens = await harness.appState.client?.authService.currentTokens()
+        XCTAssertEqual(tokens?.idToken, "ID-2")
         XCTAssertTrue(harness.hasStoredTokens)
     }
 
-    /// Pins current behaviour, which looks like a (latent) defect: an expiry
-    /// handled mid-restore signs out with a reason, then the restore wires
-    /// the session anyway and leaves the stale reason set under `.signedIn`.
-    /// No observer is subscribed during a restore (`sessionExpiryTask` lives
-    /// from `wireSession` to `signOut`), so only a direct call gets here.
-    /// `SessionLifecycleCharacterizationTests`'
-    /// `testAnExpiryWhileRestoringSignsOutWithAReason` pins the expiry's own
-    /// effect, which is consistent; this pins the restore in flight
-    /// overriding it.
-    /// Tracked in #1826.
-    func testAnExpiryWhileRestoringIsOverriddenAndItsReasonOutlivesIt() async throws {
+    /// When the restore that a sign-out waits for fails before it has a
+    /// client (here, no configuration offline), the stored tokens still go:
+    /// the transient arm would have kept them for a later launch, but the
+    /// user asked to sign out (#1827).
+    func testASignOutWhileARestoreFailsRemovesTheStoredTokens() async throws {
+        harness.seedLastSession()
+        try await harness.seedTokens()
+        harness.configurationResult = .failure(CabalmailError.network("offline"))
+        let restore = await startHeldRestore()
+
+        let signOut = try await startSignOut()
+        harness.releaseConfigurationLoad()
+        await restore.value
+        await signOut.value
+
+        XCTAssertEqual(harness.appState.status, .signedOut)
+        XCTAssertNil(harness.appState.signedOutReason)
+        XCTAssertEqual(harness.events, Self.loaded, "no client, so no session hooks")
+        XCTAssertFalse(harness.hasStoredTokens)
+    }
+
+    /// An expiry handled mid-restore is ignored: no session is live yet, and
+    /// the restore answers for its own refused refresh. It used to sign out
+    /// with a reason, and the restore then wired the session anyway under
+    /// that stale reason (#1826). No observer is subscribed during a restore
+    /// (`sessionExpiryTask` lives from `wireSession` to `signOut`), so only a
+    /// direct call gets here.
+    func testAnExpiryWhileRestoringIsIgnored() async throws {
         harness.seedLastSession()
         try await harness.seedTokens()
         let restore = await startHeldRestore()
 
         await harness.appState.handleSessionExpiry()
-        XCTAssertEqual(harness.appState.status, .signedOut, "precondition")
+        XCTAssertEqual(harness.appState.status, .restoring)
 
         harness.releaseConfigurationLoad()
         await restore.value
 
         XCTAssertEqual(harness.appState.status, .signedIn)
-        XCTAssertEqual(harness.appState.signedOutReason, .sessionExpired)
+        XCTAssertNil(harness.appState.signedOutReason)
     }
 
     /// Restore never clears `signedOutReason` (only `signIn` and `signOut`
-    /// do), so one left from earlier survives a successful restore. Benign
-    /// today, unlike the expiry mid-restore above, where the restore undoes
-    /// the sign-out the reason explains: the reason shows only on the sign-in
-    /// form, and every way back to the form from `.signedIn`, except the
-    /// stray submit or cancel of #1826, goes through `signOut()`, which
-    /// clears it first.
+    /// do), so one left from earlier survives a successful restore. Benign:
+    /// the reason shows only on the sign-in form, and every way back to the
+    /// form from `.signedIn` goes through `signOut()`, which clears it first.
     func testASuccessfulRestoreLeavesAnEarlierReasonInPlace() async throws {
         harness.seedLastSession()
         try await harness.seedTokens()
@@ -235,6 +287,15 @@ final class RestoreCharacterizationTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Starts a sign-out and returns once it has been recorded, i.e. with its
+    /// teardown waiting.
+    private func startSignOut() async throws -> Task<Void, Never> {
+        let appState = harness.appState
+        let signOut = Task { await appState.signOut() }
+        try await waitUntilOnMainActor { appState.teardownGate.isTearingDown }
+        return signOut
+    }
 
     /// Starts a restore whose configuration load parks, and returns once the
     /// load has arrived, i.e. with the restore suspended inside it.

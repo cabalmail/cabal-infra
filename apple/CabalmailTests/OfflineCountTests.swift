@@ -131,6 +131,26 @@ final class OfflineCountTests: XCTestCase {
         XCTAssertEqual(model.flagged, 0)
     }
 
+    /// An unread count saved after a sign-out carries no total from the
+    /// account that left (#1825). `setUnreadCount` saves the total `AppState`
+    /// holds for the folder, and before sign-out cleared the counts that
+    /// was the last account's, written into the next account's saved state.
+    func testAnUnreadCountAfterASignOutSavesNoTotalFromTheLastAccount() async throws {
+        let appState = AppState()
+        appState.status = .signedIn
+        appState.setFolderCounts(folderPath: "INBOX", unread: 9, total: 500)
+        await appState.signOut()
+
+        // The next account's session, whose own INBOX holds 22.
+        let cache = await fixture.savedState()
+        appState.savedFolderCounts.cache = cache
+        appState.setUnreadCount(folderPath: "INBOX", count: 1)
+        try await eventually { await cache.lastKnownStatus(for: "INBOX")?.unseen == 1 }
+
+        let inbox = await cache.lastKnownStatus(for: "INBOX")
+        XCTAssertEqual(inbox?.messages, 22)
+    }
+
     /// The first STATUS that answers replaces the saved counts.
     func testLiveStatusReplacesTheSavedCounts() async throws {
         let client = try fixture.makeClient(folderState: await fixture.savedState(), transport: FolderServerTransport())

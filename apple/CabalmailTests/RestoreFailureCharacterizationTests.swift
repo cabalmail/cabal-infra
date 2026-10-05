@@ -9,7 +9,8 @@ import CabalmailKit
 ///
 /// - the offline launch (#1779): a configuration load that cannot reach the
 ///   network stays signed out keeping the tokens, and a refresh that cannot
-///   reach Cognito still wires the session;
+///   reach Cognito, or that Cognito throttles or fails (#1828), still wires
+///   the session;
 /// - the refused refresh (#1288): Cognito's `NotAuthorizedException` on
 ///   REFRESH_TOKEN_AUTH is an expired session, which clears the three
 ///   keychain keys and sets the reason the sign-in form explains (#1703);
@@ -94,10 +95,12 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
         XCTAssertTrue(harness.clients.isEmpty)
     }
 
-    /// Any other `CabalmailError` lands on `.error` with `message(for:)`'s
+    /// Any other `CabalmailError` lands on `.error` with `SignInErrorText`'s
     /// text, keeping the tokens; `.error` lets the next restore run in full.
     /// A Cognito trigger's rejection shows verbatim like maintenance copy, and
-    /// a case with no text of its own falls back to its Swift description.
+    /// a case with no text of its own falls back to its localized
+    /// description. That fallback used to be the raw enum (`sendInFlight`),
+    /// like the action errors #1814 fixed.
     func testOtherCabalmailErrorsFromTheLoadEndOnTheErrorStatusWithTheirText() async throws {
         try await harness.seedTokens()
         let cases: [(CabalmailError, String)] = [
@@ -106,7 +109,7 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
             (.protocolError("odd"), "Protocol error: odd"),
             (.maintenance(message: "Back at noon."), "Back at noon."),
             (.server(code: "UserLambdaValidationException", message: "Set up MFA."), "Set up MFA."),
-            (.sendInFlight, "sendInFlight"),
+            (.sendInFlight, CabalmailError.sendInFlight.localizedDescription),
         ]
         for (error, text) in cases {
             harness.configurationResult = .failure(error)
@@ -281,20 +284,36 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
-    /// Pins current behaviour, which looks like a defect: any refusal other
-    /// than `NotAuthorizedException` (a throttle, Cognito's own outage) is
-    /// neither unreachable nor an expiry, so a launch whose session is still
-    /// good, and whose cached mail would be readable, lands on the error form
-    /// instead of the offline launch. The tokens stay, so the next launch
-    /// tries again.
-    /// Tracked in #1828.
-    func testAnotherCognitoRefusalEndsOnTheErrorStatusKeepingTheTokens() async throws {
+    /// A refresh Cognito throttles or fails on its side says nothing about
+    /// the session, so the launch goes on like the offline launch: the
+    /// session is wired over the stored tokens, and the first call made
+    /// later refreshes for real (#1828). It used to end on the error form
+    /// with Cognito's text ("Server error: Rate exceeded").
+    func testAThrottledOrFailedRefreshLaunchesLikeTheOfflineLaunch() async throws {
+        for code in ["TooManyRequestsException", "InternalErrorException"] {
+            let mark = harness.events.count
+            try await harness.seedTokens(expiresIn: -60)
+            await harness.cognito.script(.refresh, .error(type: code, message: "Rate exceeded"))
+
+            await harness.appState.restoreIfPossible()
+
+            XCTAssertEqual(harness.appState.status, .signedIn, code)
+            XCTAssertNil(harness.appState.signedOutReason, code)
+            XCTAssertTrue(harness.hasStoredTokens, code)
+            XCTAssertEqual(Array(harness.events[mark...]), Self.wired, code)
+            await harness.appState.signOut()
+        }
+    }
+
+    /// A refusal that is about the account still lands on the error form,
+    /// keeping the tokens for the next launch.
+    func testARefusalAboutTheAccountEndsOnTheErrorStatusKeepingTheTokens() async throws {
         try await harness.seedTokens(expiresIn: -60)
-        await harness.cognito.script(.refresh, .error(type: "TooManyRequestsException", message: "Rate exceeded"))
+        await harness.cognito.script(.refresh, .error(type: "UserNotFoundException", message: "User does not exist."))
 
         await harness.appState.restoreIfPossible()
 
-        XCTAssertEqual(harness.appState.status, .error("Server error: Rate exceeded"))
+        XCTAssertEqual(harness.appState.status, .error("Server error: User does not exist."))
         XCTAssertNil(harness.appState.signedOutReason)
         XCTAssertTrue(harness.hasStoredTokens)
         XCTAssertNil(harness.appState.client)
