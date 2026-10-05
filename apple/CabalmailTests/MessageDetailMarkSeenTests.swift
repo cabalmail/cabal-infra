@@ -88,13 +88,11 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         XCTAssertEqual(recorder.flagChanges.count, 1)
     }
 
-    /// The revert writes `"\(error)"` -- the raw enum description, unlike
-    /// `load()`'s `localizedDescription`. The body view hides `errorMessage`
-    /// once a body has loaded, so today the user sees only the icon revert.
-    /// Pins current behaviour, which looks like a defect: it is the raw enum
-    /// dump #940 replaced elsewhere, waiting for any view that shows it.
-    /// Tracked in #1814.
-    func testAFailedMarkSeenRevertsAndSetsTheRawErrorDescription() async throws {
+    /// The revert writes the error's user copy (`localizedDescription`), as
+    /// `load()` does. Before #1814 it wrote `"\(error)"`, the raw enum dump
+    /// #940 replaced elsewhere. The body view hides `errorMessage` once a body
+    /// has loaded, so today the user sees only the icon revert.
+    func testAFailedMarkSeenRevertsAndSetsTheErrorText() async throws {
         let imap = FakeImapClient()
         let failure = CabalmailError.network("offline")
         await imap.scriptFlagResults([.failure(failure)])
@@ -111,8 +109,8 @@ final class MessageDetailMarkSeenTests: XCTestCase {
             RelayRecorder.FlagChange(flag: .seen, added: true),
             RelayRecorder.FlagChange(flag: .seen, added: false),
         ])
-        XCTAssertEqual(model.errorMessage, #"network("offline")"#)
-        XCTAssertNotEqual(model.errorMessage, failure.localizedDescription)
+        XCTAssertEqual(model.errorMessage, failure.localizedDescription)
+        XCTAssertEqual(model.errorMessage, "Couldn't reach the server. offline.")
         XCTAssertEqual(model.plainText, MessageDetailMimeFixture.alternativePlain, "the body stays")
     }
 

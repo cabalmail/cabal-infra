@@ -274,7 +274,7 @@ struct NewAddressSheet: View {
             await onCreate(address)
             dismiss()
         } catch let error as CabalmailError {
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         } catch {
             errorMessage = error.localizedDescription
         }

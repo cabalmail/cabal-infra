@@ -149,7 +149,7 @@ struct NewAddressView: View {
             created = "\(username)@\(subdomain).\(domain)"
         } catch let error as CabalmailError {
             WKInterfaceDevice.current().play(.failure)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         } catch {
             WKInterfaceDevice.current().play(.failure)
             errorMessage = error.localizedDescription

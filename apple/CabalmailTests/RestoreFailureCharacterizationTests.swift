@@ -16,8 +16,8 @@ import CabalmailKit
 /// - the chain after an offline launch, where the first call's refused
 ///   refresh reaches the session observer and tears the session down;
 /// - the other catch arms: transient errors keep the tokens, any other
-///   `CabalmailError` lands on `.error` with its mapped text, and anything
-///   else (a corrupt token blob, #1806) on its raw `localizedDescription`.
+///   `CabalmailError` lands on `.error` with its mapped text, and a corrupt
+///   token blob is cleared and reads as an expired session (#1806).
 ///
 /// `RestoreGuardCharacterizationTests` pins the guards and
 /// `RestoreCharacterizationTests` the successful paths;
@@ -334,45 +334,35 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
 
     // MARK: - Not a CabalmailError
 
-    /// Pins current behaviour, which looks like a defect: a token blob that
-    /// no longer decodes passes restore's presence check, then surfaces on
-    /// the error form as the raw decoding error. The blob is kept, so every
-    /// launch after it (a new `AppState` over the same keychain) lands on
-    /// the same text until the user signs in again.
-    /// Tracked in #1806.
-    func testACorruptTokenBlobEndsOnTheRawDecodingErrorEveryLaunch() async throws {
-        let blob = Data("not a token pair".utf8)
-        try harness.secureStore.set(blob, forKey: SecureStoreKey.authTokens)
-        let expected = decodingErrorText(blob)
+    /// A token blob that no longer decodes (corrupt, or written by a build
+    /// with another `AuthTokens` shape) is cleared and reads as no session,
+    /// so restore lands on the sign-in form with the session-expired note and
+    /// the username kept, and the next launch starts clean (#1806). Before,
+    /// it surfaced as the raw decoding error and the blob was kept, so every
+    /// launch ended on the same text until the user signed in again.
+    func testACorruptTokenBlobIsClearedAndEndsOnTheExpiredSessionForm() async throws {
+        try harness.secureStore.set(Data("not a token pair".utf8), forKey: SecureStoreKey.authTokens)
 
         await harness.appState.restoreIfPossible()
 
-        XCTAssertEqual(harness.appState.status, .error(expected))
-        XCTAssertNil(harness.appState.signedOutReason)
+        XCTAssertEqual(harness.appState.status, .signedOut)
+        XCTAssertEqual(harness.appState.signedOutReason, .sessionExpired)
+        XCTAssertEqual(harness.appState.lastUsername, "alice", "the form keeps the username")
         XCTAssertEqual(harness.events, Self.built)
-        XCTAssertEqual(try harness.secureStore.get(SecureStoreKey.authTokens), blob)
+        XCTAssertNil(try harness.secureStore.get(SecureStoreKey.authTokens))
         let trail = await harness.cognito.trail
-        XCTAssertEqual(trail, [], "it fails reading the keychain, before any refresh")
+        XCTAssertEqual(trail, [], "nothing is refreshed")
 
         let relaunched = AppState()
         relaunched.sessionEnvironment = harness.appState.sessionEnvironment
         await relaunched.restoreIfPossible()
 
-        XCTAssertEqual(relaunched.status, .error(expected))
-        XCTAssertEqual(harness.events, Self.built + Self.built)
-        XCTAssertEqual(try harness.secureStore.get(SecureStoreKey.authTokens), blob)
+        XCTAssertEqual(relaunched.status, .signedOut)
+        XCTAssertNil(relaunched.signedOutReason, "the next launch finds no stored session")
+        XCTAssertEqual(harness.events, Self.built + ["makeSecureStore"])
     }
 
     // MARK: - Helpers
-
-    private func decodingErrorText(_ blob: Data) -> String {
-        do {
-            _ = try JSONDecoder().decode(AuthTokens.self, from: blob)
-            return "decoded"
-        } catch {
-            return error.localizedDescription
-        }
-    }
 
     private func seedImapCredentials() throws {
         try harness.secureStore.setString("alice", forKey: SecureStoreKey.imapUsername)
