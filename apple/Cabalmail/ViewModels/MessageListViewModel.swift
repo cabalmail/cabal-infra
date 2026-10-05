@@ -369,8 +369,11 @@ final class MessageListViewModel {
         keyScrollTask = nil
         bottomPrefetchTask?.cancel()
         bottomPrefetchTask = nil
-        await watcher?.stop()
+        // Let go of the watcher before waiting for it to stop, so a list back
+        // on screen in the meantime starts a fresh one (`startWatching`).
+        let stopping = watcher
         watcher = nil
+        await stopping?.stop()
     }
 
     private func handleWatcherChanged() async {
@@ -392,7 +395,7 @@ final class MessageListViewModel {
         // search keeps the result set fresh against any concurrent
         // mailbox churn.
         if isSearchActive {
-            await runSearch(resetFilterTab: false, preserveDepth: true)
+            await refreshSearch(prefetched: prefetched)
             return
         }
         // Search scope with no active search has nothing to refresh — and no
@@ -445,6 +448,10 @@ final class MessageListViewModel {
                                     serverReportsEmpty: status.messages == 0)
             errorMessage = nil
         } catch {
+            // A refresh whose task was cancelled (the 60-second poll's, the
+            // watcher's, when the list leaves the screen) has nothing to
+            // report; "cancelled" would stay on a list that is fine (#1816).
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
     }

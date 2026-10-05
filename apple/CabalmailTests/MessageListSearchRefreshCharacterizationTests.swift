@@ -12,8 +12,9 @@ import CabalmailKit
 /// explicitly. The folder-mode half is `MessageListRefreshCharacterizationTests`.
 ///
 /// Protects 8863f0bb (the sticky pill replays on open, after the STATUS),
-/// the clear-search rebuild from STATUS and the top page, and #1796's probe
-/// on the sort path. A test whose name ends in `Weakness` pins a known
+/// the clear-search rebuild from STATUS and the top page, a pill's refresh
+/// taking its counts from STATUS (#1819), and a sort pick leaving a search's
+/// rows alone (#1822). A test whose name ends in `Weakness` pins a known
 /// shortcoming on purpose so the refactor can flip it deliberately; it is a
 /// record, not a spec. The shared set-up lives in
 /// `RefreshCharacterizationFixture.swift`.
@@ -51,11 +52,11 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
         XCTAssertFalse(model.isLoading)
     }
 
-    /// Pins a known weakness: while a pill is active, a background refresh
-    /// re-runs the pill's search and sends no STATUS, so the pill counts and
-    /// the sidebar badge stay where they were however the folder changed.
-    /// Tracked in #1819.
-    func testPillActiveRefreshReRunsTheSearchAndSendsNoStatusWeakness() async throws {
+    /// While a pill is active, a background refresh asks for STATUS before
+    /// it re-runs the pill's search, so the pill counts and the sidebar badge
+    /// follow the folder. Fixed in #1819; this test pinned the missing STATUS
+    /// until then.
+    func testPillActiveRefreshTakesTheCountsFromStatusAndReRunsTheSearch() async throws {
         let model = try await fixture.makeModel()
         await fixture.imap.scriptSearch(fixture.searchResult(fixture.rows([8, 6])))
         await fixture.scriptRefresh(messages: 9, page: [9, 8, 7, 6], unseen: 5)
@@ -71,21 +72,21 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
         XCTAssertEqual(searches.last?.folder, fixture.folderPath)
         let statuses = await fixture.statusCalls()
         let tops = await fixture.topPageCalls()
-        XCTAssertTrue(statuses.isEmpty, "no STATUS while a pill is active")
-        XCTAssertTrue(tops.isEmpty)
-        XCTAssertEqual(model.unseen, 2, "so the Unread count is stale; the server says 5")
+        XCTAssertEqual(statuses, ["Work flagged=true"], "STATUS for the counts")
+        XCTAssertTrue(tops.isEmpty, "but no top page under the pill")
+        XCTAssertEqual(model.unseen, 5, "the Unread count follows the server")
         XCTAssertEqual(model.filterTab, .unread)
         XCTAssertEqual(model.envelopes.map(\.uid), [8, 6])
     }
 
     // MARK: - Sort change during a search
 
-    /// Pins a known weakness: a sort picked while a search (or a pill) is
-    /// showing still probes STATUS, then drops that answer -- the counts are
-    /// neither applied nor zeroed -- and re-runs the search, whose rows keep
-    /// the server's order rather than the order just picked.
-    /// Tracked in #1822.
-    func testSortChangeDuringASearchKeepsTheServersOrderWeakness() async throws {
+    /// The menu is off during a search (`sortApplies`), so this is the model
+    /// left to itself: a sort picked while a search (or a pill) is showing
+    /// is recorded for the folder view, and the probe's counts are applied.
+    /// The results keep the server's order, and there is no re-run. Fixed in
+    /// #1822; this test pinned the probe thrown away until then.
+    func testSortChangeDuringASearchKeepsTheResultsAndTakesTheCounts() async throws {
         let model = try await fixture.makeModel()
         let serverOrder = [
             TestFixtures.makeEnvelope(uid: 1, subject: "Charlie"),
@@ -99,13 +100,14 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
 
         await model.setSort(subjectOrder)
 
-        XCTAssertEqual(model.sortCriterion, subjectOrder)
-        XCTAssertEqual(model.envelopes.map(\.uid), [1, 3, 2], "by subject it would be [3, 2, 1]")
+        XCTAssertEqual(model.sortCriterion, subjectOrder, "kept for the folder view")
+        XCTAssertEqual(model.envelopes.map(\.uid), [1, 3, 2], "the server's order")
         let statuses = await fixture.statusCalls()
-        XCTAssertEqual(statuses, ["Work flagged=true"], "the probe still goes out")
-        XCTAssertEqual(model.unseen, 2, "and its answer (5 unread) is dropped")
+        XCTAssertEqual(statuses, ["Work flagged=true"], "the probe")
+        XCTAssertEqual(model.unseen, 5, "whose counts are applied")
+        XCTAssertNil(model.errorMessage)
         let searches = await fixture.imap.searchCalls
-        XCTAssertEqual(searches.count, 2)
+        XCTAssertEqual(searches.count, 1, "and no re-run")
         let tops = await fixture.topPageCalls()
         let pages = await fixture.pageCalls()
         XCTAssertTrue(tops.isEmpty)
@@ -113,36 +115,33 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
         XCTAssertFalse(model.isLoading)
     }
 
-    /// Pins a known weakness on the same path: `setSort` empties the rows
-    /// before the re-run, whose depth is `max(rows, one page)`, so a search
-    /// paged in to 100 rows comes back as one page of 50. A plain refresh of
-    /// the same search re-walks to the depth already loaded
-    /// (`SearchPagingTests.testInPlaceRefreshRewalksToLoadedDepth`).
-    /// Tracked in #1822.
-    func testSortChangeDuringADeepSearchCollapsesItToOnePageWeakness() async throws {
+    /// On the same path, a search paged in to 100 rows keeps all 100 when a
+    /// sort is picked, rather than coming back as one page of 50. Fixed in
+    /// #1822; this test pinned the cut until then.
+    func testSortChangeDuringADeepSearchKeepsEveryRowPagedIn() async throws {
         let model = try await fixture.makeModel()
         let newer = fixture.rows(fixture.newestFirst(100, through: 51))
         let older = fixture.rows(fixture.newestFirst(50, through: 1))
         await fixture.imap.scriptSearchPages([
             fixture.searchResult(newer, cursor: "c1"),
             fixture.searchResult(older),
-            // What a re-run from the top would get, page by page.
-            fixture.searchResult(newer, cursor: "r1"),
-            fixture.searchResult(older),
         ])
         await model.selectFilter(.unread)
         await model.loadMoreSearchResults()
         XCTAssertEqual(model.envelopes.count, 100)
-        await fixture.scriptRefresh(messages: 100, page: [100])
+        await fixture.scriptRefresh(messages: 100, page: [100], unseen: 100)
 
         await model.setSort(subjectOrder)
 
-        XCTAssertEqual(model.envelopes.count, 50, "the 100 rows paged in come back as one page")
-        XCTAssertEqual(model.searchNextCursor, "r1")
+        XCTAssertEqual(model.envelopes.count, 100, "every row paged in stays")
+        XCTAssertEqual(model.envelopes.map(\.uid), fixture.newestFirst(100, through: 1), "in the server's order")
+        XCTAssertEqual(model.sortCriterion, subjectOrder)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertNil(model.searchNextCursor)
+        let statuses = await fixture.statusCalls()
+        XCTAssertEqual(statuses, ["Work flagged=true"], "the probe")
         let searches = await fixture.imap.searchCalls
-        XCTAssertEqual(searches.count, 3, "the re-run asked for one page, not the two loaded")
-        XCTAssertNil(searches.last?.cursor)
-        XCTAssertEqual(searches.last?.limit, 50)
+        XCTAssertEqual(searches.count, 2, "the pill's page and the one scrolled in; no re-run")
     }
 
     // MARK: - Leaving a search
