@@ -226,6 +226,9 @@ struct SignInView: View {
                 mfaCode = ""
                 appState.cancelMfaChallenge()
             }
+            // While a code is being checked, Back would show the password
+            // form over a sign-in that may still complete (#1826).
+            .disabled(isSubmittingMfa)
             .accessibilityIdentifier("mfa.back")
             Spacer()
             if isSubmittingMfa {
@@ -249,6 +252,7 @@ struct SignInView: View {
             mfaCode = ""
             appState.cancelMfaChallenge()
         }
+        .disabled(isSubmittingMfa)
         .accessibilityIdentifier("mfa.back")
         #endif
     }

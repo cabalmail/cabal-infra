@@ -279,11 +279,12 @@ final class SignInCharacterizationTests: XCTestCase {
 /// Characterization suite for workstream 0.8: a sign-in that starts while a
 /// session is already wired. `signIn` has no guard for it (restore has one: it
 /// returns while a client is wired). SignInView is its only caller and is
-/// shown only while signed out, so the app reaches this only through #1826's
-/// status-only exits (a stray `submitMfaCode` or `cancelMfaChallenge` puts the
-/// sign-in form over a client that is still wired). The per-account session
-/// manager will own exactly this case (an account added beside another), so
-/// what happens to the first session is pinned: nothing ends it.
+/// shown only while signed out. #1826's status-only exits (a stray
+/// `submitMfaCode` or `cancelMfaChallenge` put the sign-in form over a client
+/// that was still wired) were the app's way here, and both are now ignored
+/// off the code form. The per-account session manager will own exactly this
+/// case (an account added beside another), so what happens to the first
+/// session is pinned: nothing ends it.
 ///
 /// The harness builds each client over a cache directory of its own, where
 /// production builds every client over one shared Application Support

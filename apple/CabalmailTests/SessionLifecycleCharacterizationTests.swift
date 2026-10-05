@@ -17,11 +17,13 @@ import CabalmailKit
 ///   idempotence both launch-restore call sites rely on. The signed-in no-op
 ///   is not pinned: production is never `.signedIn` without a client, so it
 ///   returns at the `client == nil` guard, which needs a client to reach.
-/// - `submitMfaCode(_:)` with no challenge parked, and `cancelMfaChallenge()`.
-///   The parked-challenge halves (mismatch, success) are pinned through the
-///   seam by `SignInMfaCharacterizationTests`.
+/// - `submitMfaCode(_:)` with no challenge parked, and `cancelMfaChallenge()`,
+///   on and off the code form (#1826). The parked-challenge halves
+///   (mismatch, success) are pinned through the seam by
+///   `SignInMfaCharacterizationTests`.
 /// - `handleSessionExpiry()` from the states `SessionExpiryTeardownTests`
-///   leaves out (#1703); that suite covers `.signedIn` and `.signedOut`.
+///   leaves out (#1703); that suite covers `.signedIn` and `.signedOut`. It
+///   acts only on a live session (#1826).
 ///
 /// `SessionObserverCharacterizationTests` below pins the observer that calls
 /// `handleSessionExpiry()`; `SessionTeardownCharacterizationTests` pins what a
@@ -92,26 +94,23 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.signedOutReason, .sessionExpired, "the guard's exit writes status only")
     }
 
-    /// Any state that is not the code form takes the same exit; an error's
-    /// text is dropped for the blank form.
-    func testSubmittingFromAnErrorDropsItForTheBlankForm() async {
+    /// Off the code form there is no challenge to answer, so a submit does
+    /// nothing: an error's text stays for the user to read (#1826).
+    func testSubmittingFromAnErrorIsIgnored() async {
         let state = AppState()
         state.status = .error("Network error: offline")
 
         await state.submitMfaCode("123456")
 
-        XCTAssertEqual(state.status, .signedOut)
+        XCTAssertEqual(state.status, .error("Network error: offline"))
     }
 
-    /// Pins current behaviour, which looks like a latent defect: the guard's
-    /// exit writes `status` and nothing else, so a submit that arrives once a
-    /// session is wired shows the sign-in form over a session that keeps
-    /// running (with a client, the client would stay wired too). SignInView
-    /// cannot send one today: it offers the form only in `.mfaCodeRequired`
-    /// and guards re-entry. The session observer and the feed poller stand in
-    /// for the session: no `signOut()` ran, so both are still running.
-    /// Tracked in #1826.
-    func testAStraySubmitWhileSignedInFlipsStatusWithoutATeardown() async throws {
+    /// A submit that arrives once a session is wired is ignored. It used to
+    /// write `.signedOut` and nothing else, showing the sign-in form over a
+    /// session that kept running (#1826). The session observer and the feed
+    /// poller stand in for the session: both are still running, and the
+    /// status still says so.
+    func testAStraySubmitWhileSignedInIsIgnored() async throws {
         let state = AppState()
         state.status = .signedIn
         state.observeSessionInvalidation()
@@ -122,8 +121,8 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
 
         await state.submitMfaCode("123456")
 
-        XCTAssertEqual(state.status, .signedOut)
-        XCTAssertFalse(observer.isCancelled, "no teardown ran")
+        XCTAssertEqual(state.status, .signedIn)
+        XCTAssertFalse(observer.isCancelled)
         XCTAssertNotNil(state.sessionExpiryTask)
         XCTAssertFalse(feedPoll.isCancelled, "the feed poller keeps polling")
         XCTAssertNotNil(state.feedRefreshTask)
@@ -145,11 +144,9 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.signedOutReason, .sessionExpired, "backing out writes no reason of its own")
     }
 
-    /// Pins current behaviour, which looks like a latent defect: the same
-    /// status-only exit as the stray submit above. The Back button that calls
-    /// this exists only on the code form, so the app cannot reach it today.
-    /// Tracked in #1826.
-    func testCancellingWhileSignedInFlipsStatusWithoutATeardown() throws {
+    /// Like the stray submit above, a cancel off the code form is ignored
+    /// rather than putting the password form over a live session (#1826).
+    func testCancellingWhileSignedInIsIgnored() throws {
         let state = AppState()
         state.status = .signedIn
         state.observeSessionInvalidation()
@@ -160,72 +157,66 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
 
         state.cancelMfaChallenge()
 
-        XCTAssertEqual(state.status, .signedOut)
-        XCTAssertFalse(observer.isCancelled, "no teardown ran")
+        XCTAssertEqual(state.status, .signedIn)
+        XCTAssertFalse(observer.isCancelled)
         XCTAssertFalse(feedPoll.isCancelled, "the feed poller keeps polling")
+    }
+
+    /// From an error, a cancel leaves the error's text in place.
+    func testCancellingFromAnErrorIsIgnored() {
+        let state = AppState()
+        state.status = .error("Network error: offline")
+        state.mfaError = Self.mismatch
+
+        state.cancelMfaChallenge()
+
+        XCTAssertEqual(state.status, .error("Network error: offline"))
+        XCTAssertEqual(state.mfaError, Self.mismatch)
     }
 
     // MARK: - Expiry from the states SessionExpiryTeardownTests leaves out
 
-    /// Pins current behaviour, which looks like a defect: the guard excludes
-    /// only `.signedOut`, so an expiry replaces an unrelated error's text with
-    /// "your session expired" although no session was live. The observer runs
-    /// only between `wireSession` and `signOut`, so today only a direct call
-    /// reaches this state.
-    /// Tracked in #1826.
-    func testAnExpiryFromAnErrorSignsOutWithAReason() async {
-        await assertExpirySignsOutWithAReason(from: .error("Network error: offline"))
+    /// An expiry acts only on a live session (#1826). From an error it used
+    /// to replace the error's text with "your session expired" although no
+    /// session was live.
+    func testAnExpiryFromAnErrorIsIgnored() async {
+        await assertExpiryIsIgnored(from: .error("Network error: offline"), on: AppState())
     }
 
-    /// Pins current behaviour, which looks like a defect: the same guard lets
-    /// an expiry take down the code form, though no session exists until the
-    /// code is accepted.
-    /// Tracked in #1826.
-    func testAnExpiryFromTheCodeFormSignsOutWithAReason() async {
-        await assertExpirySignsOutWithAReason(from: .mfaCodeRequired(.totp))
-    }
-
-    /// `signOut()` never touches `mfaError`, so the code form's error outlives
-    /// the expiry. Unseen today: the form is gone, and `signIn` clears the
-    /// error before the next challenge.
-    func testAnExpiryFromTheCodeFormLeavesItsErrorBehind() async {
+    /// It used to take down the code form, though no session exists until
+    /// the code is accepted (#1826). The form's error stays with it.
+    func testAnExpiryFromTheCodeFormIsIgnored() async {
         let state = AppState()
-        state.status = .mfaCodeRequired(.sms)
         state.mfaError = Self.mismatch
-
-        await state.handleSessionExpiry()
-
+        await assertExpiryIsIgnored(from: .mfaCodeRequired(.totp), on: state)
         XCTAssertEqual(state.mfaError, Self.mismatch)
     }
 
-    /// Matches what restore's own expiry branch produces (`.signedOut` with
-    /// `.sessionExpired`), so this one is consistent rather than a quirk.
-    func testAnExpiryWhileRestoringSignsOutWithAReason() async {
-        await assertExpirySignsOutWithAReason(from: .restoring)
+    /// A restore handles its own refused refresh (the `.authExpired` arm),
+    /// and no observer listens while it runs, so an expiry has nothing to
+    /// end.
+    func testAnExpiryWhileRestoringIsIgnored() async {
+        await assertExpiryIsIgnored(from: .restoring, on: AppState())
     }
 
-    /// Pins current behaviour, which looks like a defect: an expiry during a
-    /// sign-in signs out with a reason, and the sign-in in flight would then
-    /// wire `.signedIn` over it with the reason still set, because only
-    /// `signIn`'s synchronous prologue and `signOut` clear it (`wireSession`
-    /// never does).
-    /// Tracked in #1826.
-    func testAnExpiryWhileSigningInSignsOutWithAReason() async {
-        await assertExpirySignsOutWithAReason(from: .signingIn)
+    /// It used to sign out with a reason that outlived the sign-in in flight,
+    /// which then wired `.signedIn` under "your session expired" (#1826).
+    func testAnExpiryWhileSigningInIsIgnored() async {
+        await assertExpiryIsIgnored(from: .signingIn, on: AppState())
     }
 
-    private func assertExpirySignsOutWithAReason(
+    private func assertExpiryIsIgnored(
         from status: AppState.Status,
+        on state: AppState,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        let state = AppState()
         state.status = status
 
         await state.handleSessionExpiry()
 
-        XCTAssertEqual(state.status, .signedOut, "expiry from \(status)", file: file, line: line)
-        XCTAssertEqual(state.signedOutReason, .sessionExpired, file: file, line: line)
+        XCTAssertEqual(state.status, status, "expiry from \(status)", file: file, line: line)
+        XCTAssertNil(state.signedOutReason, file: file, line: line)
     }
 
     /// Stands in for a session poller: runs until cancelled.
