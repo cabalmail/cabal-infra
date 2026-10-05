@@ -42,7 +42,8 @@ extension MessageListViewModel {
             )
         } catch {
             applyOptimisticFlag(uid: envelope.uid, flag: flag, add: !add)
-            if unreadDelta != 0 {
+            // Not once the session has ended (#1851).
+            if unreadDelta != 0, appState.acceptsCounts(from: client) {
                 appState.applyUnreadDelta(folderPath: source, delta: -unreadDelta)
             }
             errorMessage = error.localizedDescription
@@ -217,7 +218,7 @@ extension MessageListViewModel {
             if dropped {
                 restoreEnvelope(envelope, at: originalIndex)
             }
-            if wasUnread {
+            if wasUnread, appState.acceptsCounts(from: client) {
                 appState.applyUnreadDelta(folderPath: source, delta: 1)
             }
             errorMessage = error.localizedDescription

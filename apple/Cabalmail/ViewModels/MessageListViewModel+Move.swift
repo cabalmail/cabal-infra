@@ -43,7 +43,8 @@ extension MessageListViewModel {
             await confirmRemoval(from: source, uids: [envelope.uid])
         } catch {
             restoreEnvelope(envelope, at: originalIndex)
-            if wasUnread {
+            // Not once the session has ended (#1851).
+            if wasUnread, appState.acceptsCounts(from: client) {
                 appState.applyUnreadDelta(folderPath: source, delta: 1)
                 appState.applyUnreadDelta(folderPath: destination, delta: -1)
             }
@@ -167,6 +168,8 @@ extension MessageListViewModel {
         envelopes.append(contentsOf: restored)
         envelopes.sort(by: envelopeOrder)
         adjustTotalMessages(by: restored.count)
+        // Not once the session has ended (#1851).
+        guard appState.acceptsCounts(from: client) else { return }
         appState.applyUnreadDelta(folderPath: source, delta: unread)
         if !markSeenFirst {
             appState.applyUnreadDelta(folderPath: destination, delta: -unread)
@@ -196,7 +199,7 @@ extension MessageListViewModel {
             for envelope in restored {
                 applyOptimisticFlag(uid: envelope.uid, flag: .seen, add: true)
             }
-        } else {
+        } else if appState.acceptsCounts(from: client) {
             let unread = restored.filter { !$0.flags.contains(.seen) }.count
             appState.applyUnreadDelta(folderPath: source, delta: unread)
             appState.applyUnreadDelta(folderPath: destination, delta: -unread)

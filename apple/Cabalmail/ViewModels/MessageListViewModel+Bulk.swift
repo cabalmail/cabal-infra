@@ -163,7 +163,8 @@ extension MessageListViewModel {
                 flag: .seen, add: shouldBeSeen, prior: prior
             )
             let transitions = transitionsByFolder[source]?.intersection(applied).count ?? 0
-            if transitions > 0 {
+            // The STORE answered: not once the session has ended (#1851).
+            if transitions > 0, appState.acceptsCounts(from: client) {
                 appState.applyUnreadDelta(
                     folderPath: source,
                     delta: shouldBeSeen ? -transitions : transitions

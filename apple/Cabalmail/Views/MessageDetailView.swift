@@ -255,51 +255,7 @@ struct MessageDetailView: View {
                     client: client,
                     preferences: preferences
                 )
-                // Relay flag changes (\Seen toggles) up to AppState so the
-                // list view's `.onChange` handler can flip the row's bold
-                // styling and unread dot without waiting for the next
-                // refresh.
-                let folderPath = folder.path
-                let uid = envelope.uid
-                newModel.onFlagChanged = { [weak appState] flag, added in
-                    appState?.signalFlagChange(
-                        folderPath: folderPath,
-                        uid: uid,
-                        flag: flag,
-                        added: added
-                    )
-                }
-                // Bracket each flag write so the list shields the optimistic
-                // flag from a refresh that lands before the write resolves
-                // (the cross-view analogue of the list's own pending-flag
-                // shield). Folder-keyed so a UID collision across mailboxes
-                // can't mis-shield an unrelated row.
-                newModel.onFlagWriteInFlight = { [weak appState] inFlight in
-                    appState?.setFlagWrite(
-                        folderPath: folderPath,
-                        uid: uid,
-                        inFlight: inFlight
-                    )
-                }
-                // Likewise bracket archive / trash / move so the list keeps
-                // the optimistically-pruned row gone until the move resolves,
-                // rather than letting a mid-move refresh resurrect it.
-                newModel.onMoveInFlight = { [weak appState] inFlight in
-                    appState?.setMoveInFlight(
-                        folderPath: folderPath,
-                        uid: uid,
-                        inFlight: inFlight
-                    )
-                }
-                // ...and past it: once the server confirms, keep the message
-                // out of any refresh that was already in flight.
-                newModel.onMoveConfirmed = { [weak appState] in
-                    appState?.recordConfirmedRemovals(folderPath: folderPath, uids: [uid])
-                }
-                // ...or, if the server refuses, put the pruned row back.
-                newModel.onMoveFailed = { [weak appState] markUnread in
-                    appState?.signalRemovalFailed(folderPath: folderPath, uid: uid, markUnread: markUnread)
-                }
+                Self.relayOutcomes(of: newModel, to: appState)
                 model = newModel
                 activeModel = newModel
             }
@@ -387,3 +343,61 @@ struct MessageDetailView: View {
 // `MessageDetailView+Toolbar.swift`, and the header block in
 // `MessageDetailView+Header.swift`, so this file stays under SwiftLint's
 // 400-line file_length cap.
+
+extension MessageDetailView {
+    /// Relays a reader's flag and move outcomes to `appState`, for the
+    /// message list and the folder counts. A static seam so the late-change
+    /// guards can be tested without hosting the view.
+    static func relayOutcomes(of model: MessageDetailViewModel, to appState: AppState) {
+        // Relay flag changes (\Seen toggles) up to AppState so the
+        // list view's `.onChange` handler can flip the row's bold
+        // styling and unread dot without waiting for the next
+        // refresh.
+        let folderPath = model.folder.path
+        let uid = model.envelope.uid
+        let client = model.client
+        // The flag and move callbacks below can also fire once the
+        // write fails, after the session has ended: not then (#1851).
+        model.onFlagChanged = { [weak appState] flag, added in
+            guard appState?.acceptsCounts(from: client) == true else { return }
+            appState?.signalFlagChange(
+                folderPath: folderPath,
+                uid: uid,
+                flag: flag,
+                added: added
+            )
+        }
+        // Bracket each flag write so the list shields the optimistic
+        // flag from a refresh that lands before the write resolves
+        // (the cross-view analogue of the list's own pending-flag
+        // shield). Folder-keyed so a UID collision across mailboxes
+        // can't mis-shield an unrelated row.
+        model.onFlagWriteInFlight = { [weak appState] inFlight in
+            appState?.setFlagWrite(
+                folderPath: folderPath,
+                uid: uid,
+                inFlight: inFlight
+            )
+        }
+        // Likewise bracket archive / trash / move so the list keeps
+        // the optimistically-pruned row gone until the move resolves,
+        // rather than letting a mid-move refresh resurrect it.
+        model.onMoveInFlight = { [weak appState] inFlight in
+            appState?.setMoveInFlight(
+                folderPath: folderPath,
+                uid: uid,
+                inFlight: inFlight
+            )
+        }
+        // ...and past it: once the server confirms, keep the message
+        // out of any refresh that was already in flight.
+        model.onMoveConfirmed = { [weak appState] in
+            appState?.recordConfirmedRemovals(folderPath: folderPath, uids: [uid])
+        }
+        // ...or, if the server refuses, put the pruned row back.
+        model.onMoveFailed = { [weak appState] markUnread in
+            guard appState?.acceptsCounts(from: client) == true else { return }
+            appState?.signalRemovalFailed(folderPath: folderPath, uid: uid, markUnread: markUnread)
+        }
+    }
+}
