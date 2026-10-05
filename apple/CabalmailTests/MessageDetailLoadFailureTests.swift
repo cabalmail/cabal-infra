@@ -261,14 +261,12 @@ final class MessageDetailLoadFailureTests: XCTestCase {
         XCTAssertEqual(fetches.count, 1)
     }
 
-    /// Only Retry retries: once the reader's load task has run, a later
-    /// `startLoadIfNeeded()` (the view appearing again) finds the finished
-    /// task and returns, even though the first attempt failed. Pins current
-    /// behaviour, which looks like a defect: the method's doc says it is a
-    /// no-op only when "loaded or in flight", and after a failure it is
-    /// neither (a finished task is never `isCancelled`).
-    /// Tracked in #1815.
-    func testStartLoadIfNeededAfterAFailedAttemptDoesNotLoadAgain() async throws {
+    /// After a failed load, a later `startLoadIfNeeded()` (the view appearing
+    /// again) fetches again rather than leaving the error until Retry is
+    /// tapped (#1815): the load task is cleared when it finishes. Before, the
+    /// finished task, which is never `isCancelled`, blocked every later start.
+    /// Once a load has succeeded, appearing again fetches nothing.
+    func testStartLoadIfNeededAfterAFailedAttemptLoadsAgain() async throws {
         let (model, imap) = try await makeReader(bodies: [
             .failure(CabalmailError.network("offline")),
             .success(MessageDetailMimeFixture.alternative),
@@ -278,18 +276,16 @@ final class MessageDetailLoadFailureTests: XCTestCase {
         assertFailedOpen(model, message: "Couldn't reach the server. offline.")
 
         model.startLoadIfNeeded()
-        await MessageDetailLoadFixture.drainMainActor()
+        try await waitUntilOnMainActor { model.plainText != nil }
 
-        // A second load would have cleared the error and set `isLoading` in
-        // its first, synchronous step.
-        assertFailedOpen(model, message: "Couldn't reach the server. offline.")
-        let afterAppear = await imap.fetchBodyCalls
-        XCTAssertEqual(afterAppear.count, 1)
-
-        // The scripted success is still waiting for an explicit load.
-        await model.load()
         XCTAssertEqual(model.plainText, MessageDetailMimeFixture.alternativePlain)
-        let afterRetry = await imap.fetchBodyCalls
-        XCTAssertEqual(afterRetry.count, 2)
+        XCTAssertNil(model.errorMessage)
+        let afterAppear = await imap.fetchBodyCalls
+        XCTAssertEqual(afterAppear.count, 2)
+
+        model.startLoadIfNeeded()
+        await MessageDetailLoadFixture.drainMainActor()
+        let afterLoaded = await imap.fetchBodyCalls
+        XCTAssertEqual(afterLoaded.count, 2, "a loaded reader does not fetch again")
     }
 }

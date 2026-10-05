@@ -115,25 +115,13 @@ struct MessageDragPayload: Codable, Transferable {
     }
 }
 
-/// The raw RFC 5322 bytes of one message, through the reader's body cache:
-/// a message that has been read is served from disk, anything else is
-/// fetched and cached the way the reader would have. The same three steps as
-/// `MessageDetailViewModel.fetchBodyBytes`, for a caller that has no
-/// detail model — a drag that lifts from the list.
+/// The raw RFC 5322 bytes of one message for a drag that lifts from the
+/// list, which has no detail model: the same `CabalmailClient.rawMessage`
+/// the reader opens through, so the two share the body cache and its
+/// offline and failed-write behaviour.
 enum MessageRawSource {
     static func bytes(client: CabalmailClient, folder: String, uid: UInt32) async throws -> Data {
-        let uidValidity: UInt32
-        if let snapshot = await client.envelopeCache.snapshot(for: folder) {
-            uidValidity = snapshot.uidValidity
-        } else {
-            uidValidity = try await client.imapClient.status(path: folder).uidValidity ?? 0
-        }
-        if let cached = await client.bodyCache.fetch(folder: folder, uidValidity: uidValidity, uid: uid) {
-            return cached
-        }
-        let raw = try await client.imapClient.fetchBody(folder: folder, uid: uid)
-        try await client.bodyCache.store(folder: folder, uidValidity: uidValidity, uid: uid, bytes: raw.bytes)
-        return raw.bytes
+        try await client.rawMessage(folder: folder, uid: uid)
     }
 }
 

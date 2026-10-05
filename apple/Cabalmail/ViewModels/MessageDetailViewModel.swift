@@ -230,10 +230,16 @@ final class MessageDetailViewModel {
     }
 
     /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
+    /// `loadTask` is cleared when it finishes, so after a failed load a
+    /// reader that appears again fetches again rather than staying on the
+    /// error until Retry is tapped (#1815).
     func startLoadIfNeeded() {
         guard htmlBody == nil, plainText == nil, !isLoading else { return }
         if let existing = loadTask, !existing.isCancelled { return }
-        loadTask = Task { @MainActor [weak self] in await self?.load() }
+        loadTask = Task { @MainActor [weak self] in
+            await self?.load()
+            self?.loadTask = nil
+        }
     }
 
     func toggleRemoteContent() {
@@ -402,22 +408,7 @@ extension MessageDetailViewModel {
 
 private extension MessageDetailViewModel {
     func fetchBodyBytes() async throws -> Data {
-        let uidValidity = try await currentUIDValidity()
-        if let cached = await client.bodyCache.fetch(
-            folder: folder.path,
-            uidValidity: uidValidity,
-            uid: envelope.uid
-        ) {
-            return cached
-        }
-        let raw = try await client.imapClient.fetchBody(folder: folder.path, uid: envelope.uid)
-        try await client.bodyCache.store(
-            folder: folder.path,
-            uidValidity: uidValidity,
-            uid: envelope.uid,
-            bytes: raw.bytes
-        )
-        return raw.bytes
+        try await client.rawMessage(folder: folder.path, uid: envelope.uid)
     }
 
     func hydrate(from root: MimePart) async throws {
