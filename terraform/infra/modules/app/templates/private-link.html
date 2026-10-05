@@ -2,13 +2,21 @@
 <!-- Private-link redirector (docs/1.x/browser-extension-plan.md, Phase 7).
 
      The Cabalmail clients open this page with the target URL in the
-     fragment (#<url-encoded target>); fragments never reach the server or
-     CDN, so the target is never logged upstream. When the Cabalmail browser
-     extension is active it intercepts the navigation before this page's
-     script matters, re-opens the target in a private window, closes this
-     tab, and scrubs the history entry. This page is the graceful
-     degradation for every other case: extension absent, disabled, or not
-     yet granted private-browsing access. -->
+     fragment; fragments never reach the server or CDN, so the target is
+     never logged upstream. When the Cabalmail browser extension is active
+     it intercepts the navigation before this page's script matters,
+     re-opens the target in a private window and closes this tab. It also
+     scrubs this page's history entry where the browser offers a `history`
+     API -- Chrome does, WebKit does not (#1765), which is why the macOS
+     app sends Safari an opaque token in the fragment instead of the
+     target: the entry Safari keeps then says a private window was opened
+     and not what was opened.
+
+     So the fragment is either a url-encoded target or a 32-hex-character
+     token, and this page is the graceful degradation for every case where
+     nothing intercepted it: extension absent, disabled, or not yet granted
+     private-browsing access. With a token there is no link to offer --
+     only the Cabalmail app can resolve one -- so it says so instead. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -42,10 +50,25 @@
   <script>
     (function () {
       var display = document.getElementById('target-display');
+      var explain = document.getElementById('explain');
       var open = document.getElementById('open-link');
       var copy = document.getElementById('copy-link');
       var raw = window.location.hash.slice(1);
       if (!raw) { return; }
+      // An opaque token, not the link: the form the macOS app uses for
+      // Safari (#1765). Nothing here can resolve it, and it is a key to
+      // the link for as long as it lives, so it is never displayed --
+      // which is the whole point of this form reaching history instead of
+      // the target. Same alphabet and length as PrivateLinkTokenStore's
+      // newToken() and the extension's PRIVATE_LINK_TOKEN.
+      if (/^[0-9a-f]{32}$/.test(raw)) {
+        explain.textContent = "The Cabalmail extension didn't pick this link"
+          + " up, so it couldn't be opened in a private window. For your"
+          + " privacy this page doesn't carry the link itself \u2014 open it"
+          + " again from Cabalmail once the extension is enabled.";
+        display.hidden = true;
+        return;
+      }
       var target;
       try { target = decodeURIComponent(raw); } catch (e) { target = raw; }
       // Only plain web URLs may be rendered as a clickable anchor: parse

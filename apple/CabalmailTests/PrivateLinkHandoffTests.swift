@@ -89,4 +89,43 @@ final class PrivateLinkHandoffTests: XCTestCase {
         let url = try XCTUnwrap(redirector("http://plain.example/"))
         XCTAssertEqual(url.fragment, "http%3A%2F%2Fplain.example%2F")
     }
+
+    // MARK: - Fragment form (#1765)
+
+    func testTokenFormOnlyWhenSafariIsDefaultAndOurExtensionIsEnabled() {
+        // The token is resolvable only by the appex embedded in this app,
+        // reached over `sendNativeMessage` from Safari. Anywhere else a
+        // token would leave the fallback page with nothing to show.
+        XCTAssertEqual(
+            PrivateLinkHandoff.fragmentForm(isSafariDefault: true, availability: true), .token
+        )
+        XCTAssertEqual(
+            PrivateLinkHandoff.fragmentForm(isSafariDefault: true, availability: false), .target
+        )
+        // `queryAvailability()` answers an optimistic `true` for a
+        // non-Safari default precisely because it cannot ask; that `true`
+        // must not select the token form.
+        XCTAssertEqual(
+            PrivateLinkHandoff.fragmentForm(isSafariDefault: false, availability: true), .target
+        )
+        // Cache not primed yet: the form that works everywhere.
+        XCTAssertEqual(
+            PrivateLinkHandoff.fragmentForm(isSafariDefault: true, availability: nil), .target
+        )
+    }
+
+    func testTokenRedirectorCarriesTheTokenAndNothingElse() throws {
+        let token = "0123456789abcdef0123456789abcdef"
+        let url = try XCTUnwrap(
+            PrivateLinkHandoff.redirectorURL(forToken: token, controlDomain: "admin.cabalmail.example")
+        )
+        XCTAssertEqual(url.absoluteString, "https://admin.cabalmail.example/private-link#" + token)
+        XCTAssertEqual(url.fragment, token)
+    }
+
+    func testTokenRedirectorNeedsAControlDomain() {
+        XCTAssertNil(
+            PrivateLinkHandoff.redirectorURL(forToken: "abc", controlDomain: "not a domain")
+        )
+    }
 }
