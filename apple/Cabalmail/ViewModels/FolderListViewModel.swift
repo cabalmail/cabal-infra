@@ -124,6 +124,7 @@ final class FolderListViewModel {
     /// set, which can be newer than the saved STATUS.
     private func seedSavedCounts() async {
         let saved = await client.savedFolderStatuses()
+        guard appState.acceptsCounts(from: client) else { return }
         let recounted = folders.filter { $0.isSubscribed || AppState.isInbox($0.path) }
         for folder in recounted where appState.folderUnreadCounts[folder.path] == nil {
             guard let status = saved[folder.path], let unread = status.unseen,
@@ -259,7 +260,9 @@ final class FolderListViewModel {
         do {
             try await client.imapClient.emptyTrash(folder: path)
             try? await client.envelopeCache.invalidate(folder: path)
-            appState.setFolderCounts(folderPath: path, unread: 0, total: 0)
+            if appState.acceptsCounts(from: client) {
+                appState.setFolderCounts(folderPath: path, unread: 0, total: 0)
+            }
             appState.requestRefresh()
             errorMessage = nil
         } catch {
@@ -348,6 +351,9 @@ final class FolderListViewModel {
         guard let status = try? await client.folderStatus(path: path) else {
             return nil
         }
+        // A reply for a session that has started ending is the last
+        // account's (#1848).
+        guard appState.acceptsCounts(from: client) else { return status }
         let unread = status.unseen ?? 0
         let total = status.messages ?? 0
         appState.setFolderCounts(folderPath: path, unread: unread, total: total)

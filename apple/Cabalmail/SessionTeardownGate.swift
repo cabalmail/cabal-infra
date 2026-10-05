@@ -18,6 +18,9 @@ import Foundation
 /// - A count of sign-out requests, so an expiry's teardown knows whether the
 ///   user also asked to sign out while it ran and leaves the sign-in form
 ///   without the "session expired" note (#1829).
+/// - The sessions that have ended, held weakly, so work a session started
+///   that answers once it is ending cannot write back what the sign-out
+///   cleared (#1848).
 ///
 /// The teardown runs in a task of its own, so it finishes even when the
 /// caller's task is cancelled: an expiry's teardown starts on the session
@@ -29,6 +32,7 @@ final class SessionTeardownGate {
     private var teardown: Task<Void, Never>?
     private var restoresInFlight = 0
     private var restoreWaiters: [CheckedContinuation<Void, Never>] = []
+    private var endedSessions: [EndedSession] = []
 
     /// A teardown is running; a sign-out now joins it.
     var isTearingDown: Bool { teardown != nil }
@@ -81,8 +85,26 @@ final class SessionTeardownGate {
         }
     }
 
+    /// Records that `session` (a session's client) is ending. Called before
+    /// the teardown clears the account's state.
+    func markEnded(_ session: AnyObject) {
+        endedSessions.removeAll { $0.session == nil }
+        endedSessions.append(EndedSession(session: session))
+    }
+
+    /// Whether `session` has been marked ended.
+    func hasEnded(_ session: AnyObject) -> Bool {
+        endedSessions.contains { $0.session === session }
+    }
+
     private func awaitRestores() async {
         guard restoresInFlight > 0 else { return }
         await withCheckedContinuation { restoreWaiters.append($0) }
     }
+}
+
+/// Weak, so the list never keeps an ended session's client alive, and a
+/// freed client's slot cannot match a new one.
+private struct EndedSession {
+    weak var session: AnyObject?
 }
