@@ -1,3 +1,4 @@
+import Synchronization
 import XCTest
 @testable import CabalmailKit
 
@@ -137,31 +138,24 @@ final class HTTPTransportTests: XCTestCase {
 /// come first (one per attempt) so a `[failure, response]` script verifies
 /// retry-then-success cleanly.
 final class ScriptedURLProtocol: URLProtocol {
-    private static let lock = NSLock()
-    private static var failures: [URLError] = []
-    private static var responses: [(Data, Int)] = []
-    private static var calls: Int = 0
+    private struct Script {
+        var failures: [URLError] = []
+        var responses: [(Data, Int)] = []
+        var calls = 0
+    }
+
+    private static let state = Mutex(Script())
 
     static func script(failures: [URLError] = [], responses: [(Data, Int)] = []) {
-        lock.lock()
-        self.failures = failures
-        self.responses = responses
-        self.calls = 0
-        lock.unlock()
+        state.withLock { $0 = Script(failures: failures, responses: responses) }
     }
 
     static func reset() {
-        lock.lock()
-        failures.removeAll()
-        responses.removeAll()
-        calls = 0
-        lock.unlock()
+        state.withLock { $0 = Script() }
     }
 
     static var callCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return calls
+        state.withLock { $0.calls }
     }
 
     // URLProtocol's class methods are `class func`; `static` would not
@@ -172,20 +166,16 @@ final class ScriptedURLProtocol: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        Self.lock.lock()
-        Self.calls += 1
         // Failures drain first so a `[failure, response]` script verifies
         // retry-then-success. Only fall through to the response queue once
         // the scripted failures are exhausted — otherwise the retry attempt
         // races against an already-popped success entry.
-        let failure: URLError? = Self.failures.isEmpty ? nil : Self.failures.removeFirst()
-        let response: (Data, Int)?
-        if failure == nil, !Self.responses.isEmpty {
-            response = Self.responses.removeFirst()
-        } else {
-            response = nil
+        let (failure, response) = Self.state.withLock { script -> (URLError?, (Data, Int)?) in
+            script.calls += 1
+            if !script.failures.isEmpty { return (script.failures.removeFirst(), nil) }
+            if !script.responses.isEmpty { return (nil, script.responses.removeFirst()) }
+            return (nil, nil)
         }
-        Self.lock.unlock()
 
         if let failure {
             client?.urlProtocol(self, didFailWithError: failure)

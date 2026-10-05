@@ -1,5 +1,21 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.2
 import PackageDescription
+
+/// Compiler settings shared by every target in the package.
+///
+/// - Swift 5 language mode with complete concurrency checking: the checking
+///   the app targets get from `SWIFT_STRICT_CONCURRENCY: complete` in
+///   project.yml, which never reaches a package target.
+/// - Every warning is an error, so a concurrency diagnostic fails the build on
+///   every platform instead of piling up unseen. Deprecations stay warnings:
+///   an Xcode update that deprecates an API the Kit calls should not break a
+///   build nobody changed.
+let checkedSettings: [SwiftSetting] = [
+    .swiftLanguageMode(.v5),
+    .enableUpcomingFeature("StrictConcurrency"),
+    .treatAllWarnings(as: .error),
+    .treatWarning("DeprecatedDeclaration", as: .warning),
+]
 
 let package = Package(
     name: "CabalmailKit",
@@ -34,7 +50,8 @@ let package = Package(
                 // scripts/generate-color-tokens.py; actool compiles it into
                 // the resource bundle so `ColorTokens.*` resolve per appearance.
                 .process("Design/ColorTokens.xcassets"),
-            ]
+            ],
+            swiftSettings: checkedSettings
         ),
         // Test doubles shared with the app-layer test bundle. Deliberately
         // not a product: CabalmailMacTests compiles these same sources itself
@@ -45,15 +62,13 @@ let package = Package(
             name: "CabalmailKitTestSupport",
             dependencies: ["CabalmailKit"],
             path: "Tests/CabalmailKitTestSupport",
-            // The app test bundle compiles these doubles under complete
-            // checking (project.yml), so check them the same way here; the
-            // Kit's own targets get it in workstream 0.7.
-            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
+            swiftSettings: checkedSettings
         ),
         .testTarget(
             name: "CabalmailKitTests",
             dependencies: ["CabalmailKit", "CabalmailKitTestSupport"],
-            path: "Tests/CabalmailKitTests"
+            path: "Tests/CabalmailKitTests",
+            swiftSettings: checkedSettings
         ),
     ]
 )

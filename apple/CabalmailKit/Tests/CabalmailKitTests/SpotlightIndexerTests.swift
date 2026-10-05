@@ -128,9 +128,11 @@ final class SpotlightIndexerTests: XCTestCase {
 
     func testFirstSweepWipesIndexOnceForSchemaChange() async throws {
         let suiteName = "spotlight-tests-\(UUID().uuidString)"
+        // The indexer is an actor and takes its `UserDefaults` into its own
+        // isolation; the test reads the same suite through a second handle.
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let indexer = SpotlightIndexer(index: fake, defaults: defaults)
+        let indexer = SpotlightIndexer(index: fake, defaults: try XCTUnwrap(UserDefaults(suiteName: suiteName)))
         let imap = SweepFakeImapClient(folders: [], envelopesByFolder: [:])
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("cabalmail-spotlight-schema-\(UUID().uuidString)")

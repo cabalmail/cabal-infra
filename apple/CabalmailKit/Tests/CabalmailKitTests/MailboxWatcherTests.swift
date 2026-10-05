@@ -195,7 +195,7 @@ final class MailboxWatcherTests: XCTestCase {
             maxBackoffSeconds: 0.01,
             clock: { _ in }
         )
-        weak var leaked: MailboxWatcher? = watcher
+        weak let leaked: MailboxWatcher? = watcher
         let stream = await watcher!.start()
         watcher = nil
 

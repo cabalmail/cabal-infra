@@ -125,11 +125,12 @@ struct BackgroundActivityAssertion: Sendable {
 /// `BackgroundActivityAssertion` can stay a value type. Reference identity
 /// lets the UIKit expiration handler reach the same token the caller's
 /// `end()` will use, so a system-fired expiration and a caller-driven end
-/// converge on the same id without double-ending.
-final class BackgroundActivityToken: @unchecked Sendable {
+/// converge on the same id without double-ending. Main-actor isolated, like the
+/// UIKit calls it wraps, so `taskID` is only ever touched on main.
+@MainActor
+final class BackgroundActivityToken {
     private var taskID: UIBackgroundTaskIdentifier = .invalid
 
-    @MainActor
     static func begin() -> BackgroundActivityToken {
         let token = BackgroundActivityToken()
         token.taskID = UIApplication.shared.beginBackgroundTask(withName: "Cabalmail HTTP") { [weak token] in
@@ -138,11 +139,10 @@ final class BackgroundActivityToken: @unchecked Sendable {
         return token
     }
 
-    func end() {
+    nonisolated func end() {
         Task { @MainActor [weak self] in self?.endOnMain() }
     }
 
-    @MainActor
     private func endOnMain() {
         guard taskID != .invalid else { return }
         let captured = taskID

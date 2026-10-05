@@ -5,7 +5,7 @@ import Foundation
 // referenced solely from the iOS/macOS/visionOS compose views in the app
 // targets, so compiling it out has no effect on those platforms.
 #if canImport(WebKit)
-@preconcurrency import WebKit
+import WebKit
 #if canImport(AppKit)
 import AppKit
 #elseif canImport(UIKit)
@@ -22,10 +22,9 @@ import UIKit
 /// constructs one controller per draft and tears it down on dismiss.
 ///
 /// Threading: marked `@MainActor` because WKWebView API contracts require the
-/// main thread; bridge callbacks are dispatched on main as well. Swift 6
-/// strict concurrency is satisfied by the `@preconcurrency import WebKit`
-/// (WebKit has not adopted Sendable conformances yet) plus the per-method
-/// `@MainActor` guarantee.
+/// main thread; bridge callbacks are dispatched on main as well. The Kit
+/// compiles under complete concurrency checking (Package.swift), and WebKit's
+/// annotations satisfy it without a `@preconcurrency` import.
 /// Text-alignment value carried in `RichTextEditorController.Selection`.
 /// Lifted out of `Selection` so it can be referenced by the SwiftUI toolbar
 /// without nesting two levels deep (SwiftLint's `nesting` rule).
@@ -367,7 +366,7 @@ extension RichTextEditorController {
         } catch {
             failure = CallFailure(method: method, reason: error.localizedDescription)
         }
-        NSLog("[RichTextEditor] %@ failed: %@", method, failure.reason)
+        CabalmailLog.error("RichTextEditor", "\(method) failed: \(failure.reason)")
         throw failure
     }
 }
@@ -423,7 +422,7 @@ extension RichTextEditorController {
         let message = payload["message"] as? String ?? "unknown script error"
         let source = payload["source"] as? String ?? ""
         let described = source.isEmpty ? message : "\(message) (\(source))"
-        NSLog("[RichTextEditor] bridge script error: %@", described)
+        CabalmailLog.warn("RichTextEditor", "bridge script error: \(described)")
         if isReady {
             onBridgeError?(described)
         } else {
@@ -456,7 +455,7 @@ extension RichTextEditorController {
         let waiters = pendingReadyContinuations
         pendingReadyContinuations.removeAll()
         for continuation in waiters { continuation.resume() }
-        NSLog("[RichTextEditor] bridge unusable: %@", reason)
+        CabalmailLog.error("RichTextEditor", "bridge unusable: \(reason)")
         onBridgeError?(reason)
     }
 
@@ -498,20 +497,22 @@ extension RichTextEditorController {
 // MARK: - WKNavigationDelegate
 
 extension RichTextEditorController: WKNavigationDelegate {
+    // The async form of the requirement, as `HTMLBodyView` uses. Under complete
+    // concurrency checking the completion-handler form no longer matches the
+    // SDK's `@MainActor` handler type, so it would stop being the delegate
+    // method at all and WebKit would allow every navigation.
     public func webView(
         _ webView: WKWebView,
-        decidePolicyFor navigationAction: WKNavigationAction,
-        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
-    ) {
+        decidePolicyFor navigationAction: WKNavigationAction
+    ) async -> WKNavigationActionPolicy {
         // Only allow the initial file:// load of editor.html. Any link click
         // (or window.location assignment) escapes to the user's default
         // browser via the host app, not inside the composer surface.
         if navigationAction.navigationType == .other,
            navigationAction.request.url?.isFileURL == true {
-            decisionHandler(.allow)
-            return
+            return .allow
         }
-        decisionHandler(.cancel)
+        return .cancel
     }
 
     /// The web content process can be jetsammed or crash *after* the bridge

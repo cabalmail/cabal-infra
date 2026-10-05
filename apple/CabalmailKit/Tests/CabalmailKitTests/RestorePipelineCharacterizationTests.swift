@@ -413,7 +413,7 @@ private actor RestoreNetwork: HTTPTransport {
     func answerAPI(_ statuses: [Int]) { apiStatuses = statuses }
     func clearTrail() { trail = [] }
 
-    func body(ofRequest index: Int) throws -> [String: Any] {
+    func body(ofRequest index: Int) throws -> sending [String: Any] {
         let request = try XCTUnwrap(requests.indices.contains(index) ? requests[index] : nil, "no request \(index)")
         return try XCTUnwrap(try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any])
     }

@@ -57,6 +57,26 @@ identifier_name:
     # shows; a longer name would read worse at the `switch` sites.
     - ok
 
+# One logging front door: `CabalmailLog` writes the unified log and the in-app
+# Debug Log together, and NSLog or a hand-made `os.Logger` reaches only one of
+# them. The notification extensions don't link the Kit, so they keep their own.
+custom_rules:
+  no_nslog:
+    name: "NSLog"
+    regex: '\bNSLog\s*\('
+    match_kinds: identifier
+    message: "Log through CabalmailLog, which writes the unified log and the Debug Log"
+    severity: warning
+  no_direct_os_logger:
+    name: "Direct os.Logger"
+    regex: '\bLogger\s*\(\s*subsystem\s*:'
+    match_kinds: identifier
+    excluded:
+      - "CabalmailKit/Sources/CabalmailKit/Logging/CabalmailLog\\.swift$"
+      - "CabalmailNotificationService/"
+    message: "Log through CabalmailLog, which writes the unified log and the Debug Log"
+    severity: warning
+
 type_name:
   min_length: 3
   max_length:

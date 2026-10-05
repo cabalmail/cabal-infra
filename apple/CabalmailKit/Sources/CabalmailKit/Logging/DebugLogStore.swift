@@ -1,21 +1,21 @@
 import Foundation
+import Synchronization
 
-/// Bounded in-memory ring buffer of recent log lines.
+/// Bounded in-memory ring buffer of recent log lines, behind the Settings →
+/// Debug Log screen.
 ///
-/// Phase 7 swaps anonymous `print` / ad-hoc error-message strings for a
-/// structured `DebugLogStore`: every view model, transport, and watcher
-/// pushes `Entry` records here; the Settings → Debug Log screen renders
-/// the most-recent `capacity` entries. Kept in memory — crashes take it
-/// with them — because the logs are a troubleshooting aid, not a durable
-/// audit trail. `MetricKitCollector` funnels MetricKit crash and hang
-/// payloads into the same buffer so the Settings screen shows them too.
+/// `CabalmailLog` writes every line here as well as to the unified log, so
+/// the screen shows what Console would, including MetricKit's crash and hang
+/// payloads (`MetricKitCollector`). Kept in memory — crashes take it with
+/// them — because the logs are a troubleshooting aid, not a durable audit
+/// trail.
 ///
-/// Concurrency: an actor because writes come from every part of the app
-/// (IMAP connection actor, SMTP connection actor, main-actor view models,
-/// background tasks). Observers subscribe via `newEntries` — an
+/// Concurrency: the ring and the subscribers share one `Mutex`, and writes
+/// are synchronous, so lines land in the order they were logged from any
+/// isolation domain. Observers subscribe via `newEntries` — an
 /// `AsyncStream<Entry>` — which keeps SwiftUI views up-to-date without
 /// dragging an `@Observable` across actor boundaries.
-public actor DebugLogStore {
+public final class DebugLogStore: Sendable {
     public enum Level: String, Sendable, Codable, CaseIterable {
         case debug, info, warn, error
     }
@@ -45,26 +45,38 @@ public actor DebugLogStore {
     public static let shared = DebugLogStore()
 
     public let capacity: Int
-    private var buffer: [Entry]
-    private var continuations: [UUID: AsyncStream<Entry>.Continuation] = [:]
+    private let state: Mutex<State>
 
     public init(capacity: Int = 1000) {
         self.capacity = capacity
-        self.buffer = []
-        buffer.reserveCapacity(capacity)
+        self.state = Mutex(State(capacity: capacity))
     }
 
+    deinit {
+        let observers = state.withLock { state in
+            defer { state.continuations.removeAll() }
+            return Array(state.continuations.values)
+        }
+        for continuation in observers {
+            continuation.finish()
+        }
+    }
+
+    /// Adds `entry`, dropping the oldest once the buffer is full, and hands it
+    /// to every subscriber. Subscribers are fed under the same lock, so each
+    /// sees entries in buffer order.
     public func append(_ entry: Entry) {
-        buffer.append(entry)
-        if buffer.count > capacity {
-            buffer.removeFirst(buffer.count - capacity)
-        }
-        for continuation in continuations.values {
-            continuation.yield(entry)
+        state.withLock { state in
+            state.ring.append(entry)
+            for continuation in state.continuations.values {
+                continuation.yield(entry)
+            }
         }
     }
 
-    public func log(
+    /// Buffer-only write for tests; everything else logs through
+    /// `CabalmailLog`, which also reaches the unified log.
+    func log(
         _ level: Level,
         _ category: String,
         _ message: @autoclosure () -> String
@@ -72,10 +84,13 @@ public actor DebugLogStore {
         append(Entry(level: level, category: category, message: message()))
     }
 
-    public func snapshot() -> [Entry] { buffer }
+    /// The buffered entries, oldest first.
+    public func snapshot() -> [Entry] {
+        state.withLock { $0.ring.ordered }
+    }
 
     public func clear() {
-        buffer.removeAll(keepingCapacity: true)
+        state.withLock { $0.ring.removeAll() }
     }
 
     /// Stream of entries appended after subscription. Finishes when the
@@ -83,49 +98,62 @@ public actor DebugLogStore {
     public func newEntries() -> AsyncStream<Entry> {
         AsyncStream { continuation in
             let id = UUID()
-            continuations[id] = continuation
-            // Weak at the stored closure, not inside the `Task`: the
+            state.withLock { $0.continuations[id] = continuation }
+            // Weak at the stored closure, not inside a nested one: the
             // continuation holds this handler and the store holds the
             // continuation, so a strong `self` here retains the store for as
             // long as a subscriber keeps the stream (see `MailboxWatcher`).
             continuation.onTermination = { @Sendable [weak self] _ in
-                Task {
-                    await self?.removeContinuation(id: id)
-                }
+                self?.removeContinuation(id: id)
             }
         }
     }
 
     private func removeContinuation(id: UUID) {
-        continuations.removeValue(forKey: id)
-    }
-}
-
-/// Convenience logger front — fire-and-forget.
-///
-/// Hot callers (parsers, SMTP state machine) use this instead of
-/// `await store.log(...)` every line. The `Task` detach is safe because
-/// `DebugLogStore.append` is a single actor-hop on a bounded buffer; the
-/// ordering between log calls within the same isolation domain matches the
-/// call order because each `Task` created here inherits it.
-public enum CabalmailLog {
-    public static func debug(_ category: String, _ message: @autoclosure @escaping () -> String) {
-        let captured = message()
-        Task { await DebugLogStore.shared.log(.debug, category, captured) }
+        // The removed continuation is returned so it is released after the
+        // lock is, not inside it.
+        _ = state.withLock { $0.continuations.removeValue(forKey: id) }
     }
 
-    public static func info(_ category: String, _ message: @autoclosure @escaping () -> String) {
-        let captured = message()
-        Task { await DebugLogStore.shared.log(.info, category, captured) }
+    private struct State {
+        var ring: Ring
+        var continuations: [UUID: AsyncStream<Entry>.Continuation] = [:]
+
+        init(capacity: Int) {
+            ring = Ring(capacity: capacity)
+        }
     }
 
-    public static func warn(_ category: String, _ message: @autoclosure @escaping () -> String) {
-        let captured = message()
-        Task { await DebugLogStore.shared.log(.warn, category, captured) }
-    }
+    /// Fixed-capacity ring: once full, each append overwrites the oldest
+    /// entry in place instead of shifting the whole buffer.
+    private struct Ring {
+        let capacity: Int
+        private var storage: [Entry] = []
+        /// Index of the oldest entry once `storage` is full.
+        private var head = 0
 
-    public static func error(_ category: String, _ message: @autoclosure @escaping () -> String) {
-        let captured = message()
-        Task { await DebugLogStore.shared.log(.error, category, captured) }
+        init(capacity: Int) {
+            self.capacity = max(capacity, 0)
+            storage.reserveCapacity(self.capacity)
+        }
+
+        mutating func append(_ entry: Entry) {
+            guard capacity > 0 else { return }
+            if storage.count < capacity {
+                storage.append(entry)
+            } else {
+                storage[head] = entry
+                head = (head + 1) % capacity
+            }
+        }
+
+        var ordered: [Entry] {
+            Array(storage[head...] + storage[..<head])
+        }
+
+        mutating func removeAll() {
+            storage.removeAll(keepingCapacity: true)
+            head = 0
+        }
     }
 }

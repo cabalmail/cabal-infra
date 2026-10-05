@@ -165,7 +165,7 @@ def apple_outputs(doc, res):
     lines += ["        default: return flagGray", "        }", "    }", "",
               "    /// The four roles of one accent, by its wire name; unknown names are Forest,",
               "    /// the accent every Apple client pins today.",
-              "    public struct Accent {",
+              "    public struct Accent: Sendable {",
               "        public let foreground: Color", "        public let fill: Color",
               "        public let onFill: Color", "        public let wash: Color", "    }", "",
               "    public static func accent(named name: String) -> Accent {",
@@ -181,7 +181,7 @@ def apple_outputs(doc, res):
     lines += accent_case("default", "forest") + ["        }", "    }", "",
               "    /// A token's light and dark values as CSS hex, for the one place the",
               "    /// app writes colour into a stylesheet (the reader's link colour).",
-              "    public struct TokenHex {",
+              "    public struct TokenHex: Sendable {",
               "        public let light: String", "        public let dark: String", "    }", "",
               "    public enum Hex {"]
     for name in doc["tokens"]:
