@@ -144,6 +144,27 @@ public actor EnvelopeCache {
         if !envelopes.isEmpty { emit(.upserted(envelopes: envelopes, folder: folder)) }
     }
 
+    /// Marks every envelope in the folder's snapshot seen, as Mark All as
+    /// Read just did on the server, so the folder keeps its saved list
+    /// rather than losing it until it is next opened online (#1850). Reports
+    /// only the envelopes it changed. No-op when the folder has no snapshot.
+    public func markAllSeen(folder: String) throws {
+        guard let existing = snapshot(for: folder) else { return }
+        var envelopes = existing.envelopes
+        var changed: [Envelope] = []
+        for (uid, envelope) in envelopes where !envelope.flags.contains(.seen) {
+            let seen = envelope.withFlags(envelope.flags.union([.seen]))
+            envelopes[uid] = seen
+            changed.append(seen)
+        }
+        guard !changed.isEmpty else { return }
+        try write(
+            Snapshot(uidValidity: existing.uidValidity, uidNext: existing.uidNext, envelopes: envelopes),
+            for: folder
+        )
+        emit(.upserted(envelopes: changed, folder: folder))
+    }
+
     /// Drops the given UIDs from the folder's on-disk snapshot. Called by
     /// the view model after a successful `UID MOVE` so the cached mirror
     /// doesn't keep pointing at a message the server no longer has in this
