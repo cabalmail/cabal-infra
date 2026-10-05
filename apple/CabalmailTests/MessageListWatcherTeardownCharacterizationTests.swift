@@ -14,7 +14,7 @@ import CabalmailKit
 // - the cancel of the model-owned paging tasks (16b07580, 563c3fc6,
 //   35105d26, dd885cbf) and of the debounced scroll-settle loader
 //   (efccb400): each drops its page without an error.
-// - a stop mid-refresh, which leaves a cancelled error (a likely defect).
+// - a stop mid-refresh, which cancels it without an error (#1816).
 //
 // Not pinned:
 // - `persistTask`, the 1 s envelope-snapshot debounce `stopWatching` also
@@ -62,8 +62,8 @@ final class MessageListWatcherTeardownCharacterizationTests: XCTestCase {
 
     /// `stopWatching()` clears the watcher, so a later `startWatching()` on
     /// the same model opens a new stream on the folder, and that stream
-    /// refreshes the list. (The view never makes that second call on a model
-    /// it keeps; only a rebuilt view starts watching again.)
+    /// refreshes the list. The view makes that second call when the list
+    /// comes back on screen with the model it kept (#1816).
     func testWatchingStartsAgainAfterAStop() async throws {
         let imap = harness.imap
         await harness.scriptNewMessage()
@@ -85,13 +85,10 @@ final class MessageListWatcherTeardownCharacterizationTests: XCTestCase {
 
     /// A watcher refresh runs inside the watcher's task, so stopping the
     /// watcher cancels the refresh while it is in flight, and no top page is
-    /// fetched. Pins current behaviour, which looks like a defect: the
-    /// cancelled STATUS lands in `errorMessage` as a "Couldn't reach the
-    /// server" banner on a model the view keeps. This is the same
-    /// `network("cancelled")` that `loadInitial` and `refreshFromPull` were
-    /// moved onto unstructured tasks to avoid.
-    /// Tracked in #1816.
-    func testStoppingMidRefreshCancelsItAndLeavesACancelledError() async throws {
+    /// fetched. The cancelled STATUS leaves no "Couldn't reach the server"
+    /// banner on the model the view keeps. Fixed in #1816; this test pinned
+    /// the banner until then.
+    func testStoppingMidRefreshCancelsItWithoutAnError() async throws {
         let imap = harness.imap
         await harness.scriptNewMessage()
         let model = try harness.makeModel()
@@ -103,7 +100,7 @@ final class MessageListWatcherTeardownCharacterizationTests: XCTestCase {
         await imap.releaseHeld(.status)
         try await waitUntilOnMainActor { !model.isLoading }
 
-        XCTAssertEqual(model.errorMessage, CabalmailError.network("cancelled").localizedDescription)
+        XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.envelopes.map(\.uid), [5, 4, 3, 2, 1])
         XCTAssertEqual(model.totalMessages, 5)
         let topCalls = await imap.topEnvelopesCalls

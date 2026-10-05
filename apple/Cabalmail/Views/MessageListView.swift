@@ -502,6 +502,14 @@ extension MessageListView {
                     initialLoadComplete = true
                     applyPendingRestoreWhenReady()
                 }
+            } else if !isSearchScope {
+                // Back on screen with the model it kept (a reader pushed over
+                // the list and popped): `.onDisappear` stopped the watcher,
+                // so start it again (#1816; a no-op while one is running),
+                // and refresh for whatever arrived while the list was away,
+                // which the new watcher counts as already there.
+                await model?.startWatching()
+                await model?.refresh()
             }
         }
         .onAppear {
@@ -530,7 +538,7 @@ extension MessageListView {
             // The view is rebuilt (via `.id(folder.path)` in MailRootView)
             // when the user picks another folder, so `startWatching` in the
             // new instance's `.task` starts a fresh watcher on the new
-            // mailbox.
+            // mailbox; the same view coming back starts one again too.
             let model = model
             Task { await model?.stopWatching() }
         }

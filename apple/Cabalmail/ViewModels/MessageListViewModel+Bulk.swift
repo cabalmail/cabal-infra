@@ -237,7 +237,7 @@ extension MessageListViewModel {
             for uid in uids {
                 applyOptimisticFlag(uid: uid, flag: flag, add: prior[uid] ?? !add)
             }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
             return []
         }
     }

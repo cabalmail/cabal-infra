@@ -45,7 +45,7 @@ extension MessageListViewModel {
             if unreadDelta != 0 {
                 appState.applyUnreadDelta(folderPath: source, delta: -unreadDelta)
             }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -220,7 +220,7 @@ extension MessageListViewModel {
             if wasUnread {
                 appState.applyUnreadDelta(folderPath: source, delta: 1)
             }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 

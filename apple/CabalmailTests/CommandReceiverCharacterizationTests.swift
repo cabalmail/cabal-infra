@@ -124,14 +124,13 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
         await assertNoFolderTraffic(imap)
     }
 
-    /// Pins current behaviour, which looks like a defect: the reload re-runs
-    /// whatever the search field holds now, not the query the user submitted,
-    /// so a term typed but never sent replaces the results on Refresh. On
-    /// the search surface that is the toolbar or menu Refresh (`hardReload`)
-    /// and pull-to-refresh (`refresh()` takes the same `runSearch` path); the
-    /// 60-second poll and IDLE do not run there.
-    /// Tracked in #1821.
-    func testHardReloadOnTheSearchSurfaceRunsTheFieldTextNotTheSubmittedQuery() async throws {
+    /// The reload re-runs the query the user submitted, not whatever the
+    /// search field holds now, so a term typed but never sent doesn't replace
+    /// the results on Refresh; the field keeps what was typed. On the search
+    /// surface that is the toolbar or menu Refresh (`hardReload`) and
+    /// pull-to-refresh (`refresh()` takes the same path). Fixed in #1821;
+    /// this test pinned the field text being run until then.
+    func testHardReloadOnTheSearchSurfaceReRunsTheSubmittedQuery() async throws {
         let imap = FakeImapClient()
         await imap.scriptSearch(page(firstUID: 1, count: 1, cursor: nil))
         let model = try makeSearchModel(imap: imap)
@@ -142,8 +141,9 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
         await model.hardReload()
 
         let calls = await imap.searchCalls
-        XCTAssertEqual(calls.map(\.text), ["invoice", "receipt"])
-        XCTAssertEqual(model.submittedQuery, "receipt")
+        XCTAssertEqual(calls.map(\.text), ["invoice", "invoice"])
+        XCTAssertEqual(model.submittedQuery, "invoice")
+        XCTAssertEqual(model.searchQuery, "receipt", "the field keeps what was typed")
     }
 
     func testHardReloadOnTheSearchSurfaceWithNoSearchDoesNothing() async throws {
