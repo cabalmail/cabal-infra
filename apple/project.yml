@@ -69,7 +69,6 @@ targets:
     supportedDestinations: [iOS, iPadOS, visionOS, macOS]
     sources:
       - path: CabalmailUI
-      - path: Cabalmail/Views/MailRootView.swift  # INTERIM
     dependencies:
       - package: CabalmailKit
         link: false
@@ -85,7 +84,6 @@ targets:
     supportedDestinations: [iOS, iPadOS, visionOS]
     sources:
       - path: Cabalmail
-        excludes: ["Views/MailRootView.swift"]  # INTERIM
     dependencies:
       - target: CabalmailUI
       - package: CabalmailKit

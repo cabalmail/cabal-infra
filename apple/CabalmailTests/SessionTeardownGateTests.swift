@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// `SessionTeardownGate`'s record of ended sessions (#1848): what it
 /// remembers, and that it never keeps a session alive.

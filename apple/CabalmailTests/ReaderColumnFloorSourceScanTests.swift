@@ -8,7 +8,7 @@ import XCTest
 final class ReaderColumnFloorSourceScanTests: XCTestCase {
 
     func testTheDetailColumnDeclaresTheReaderFloor() throws {
-        let body = try Self.source("Cabalmail/Views/MailRootView.swift")
+        let body = try Self.source("CabalmailUI/Shell/MailRootView.swift")
         XCTAssertTrue(
             body.contains(".navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)"),
             "the detail column carries the same floor listColumnMaxWidth keeps for it"

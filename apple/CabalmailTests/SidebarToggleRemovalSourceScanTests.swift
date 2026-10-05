@@ -9,7 +9,7 @@ import XCTest
 final class SidebarToggleRemovalSourceScanTests: XCTestCase {
 
     func testTheSystemSidebarToggleIsRemovedOnBothColumns() throws {
-        let body = try Self.source("Cabalmail/Views/MailRootView.swift")
+        let body = try Self.source("CabalmailUI/Shell/MailRootView.swift")
         XCTAssertTrue(body.contains(".toolbar(removing: .sidebarToggle)"), "sidebar column")
         XCTAssertTrue(body.contains(".toolbar(removing: isWideSidebar ? .sidebarToggle : nil)"), "content column")
     }
