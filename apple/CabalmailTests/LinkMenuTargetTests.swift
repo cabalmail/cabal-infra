@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Parsing tests for the reader's link-menu bridge payloads (the
 /// dictionaries the injected `cabalLink` user script posts on primary

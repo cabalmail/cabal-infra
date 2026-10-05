@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression tests for #736: the first visit to a folder runs `loadInitial()`
 // inside the view's structured `.task`, which SwiftUI can cancel mid-push

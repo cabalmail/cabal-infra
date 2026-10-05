@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Pins the order the launch restore pushes a list and its reader. Pushing
 /// both in one update leaves the compact stack showing a reader that SwiftUI
@@ -9,14 +9,14 @@ import XCTest
 final class LaunchRestoreSequencingSourceScanTests: XCTestCase {
 
     func testTheFeedItemRestoreIsAppliedFromTheListNotTheScopeChange() throws {
-        let body = try Self.source("Cabalmail/Views/FeedRootView.swift")
+        let body = try Self.source("CabalmailUI/Feeds/FeedRootView.swift")
         let scopeHandler = try XCTUnwrap(Self.block(of: ".onChange(of: selectedScope)", in: body))
         XCTAssertFalse(
             scopeHandler.contains("consumeFeedItemRestore"),
             "the scope's onChange must not select the restored item in the same update"
         )
         XCTAssertFalse(body.contains("consumeFeedItemRestore"), "FeedRootView no longer consumes the restore at all")
-        let list = try Self.source("Cabalmail/Views/FeedItemListView.swift")
+        let list = try Self.source("CabalmailUI/Feeds/ItemList/FeedItemListView.swift")
         // Every path waits for the list to have appeared and loaded; only a
         // tapped cross-device feed toast (resume-session plan, Phase C) may
         // replace a selection already on screen.
@@ -36,7 +36,7 @@ final class LaunchRestoreSequencingSourceScanTests: XCTestCase {
     }
 
     func testTheMailRestoreWaitsForTheListToAppearAndLoad() throws {
-        let body = try Self.source("Cabalmail/Views/MessageListView.swift")
+        let body = try Self.source("CabalmailUI/Mail/MessageList/MessageListView.swift")
         XCTAssertTrue(body.contains("guard hasAppeared, initialLoadComplete, let model else { return }"))
         XCTAssertEqual(
             body.components(separatedBy: "applyPendingRestoreWhenReady()").count - 1, 3,

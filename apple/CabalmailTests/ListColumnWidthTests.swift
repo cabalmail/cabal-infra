@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #984: the macOS message-list column declared no
 // width, so macOS 27 sized it from the list's own ideal and charged the

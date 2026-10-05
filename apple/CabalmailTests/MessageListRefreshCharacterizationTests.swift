@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8 (the CabalmailUI module split,
 /// AppState split into per-window navigation and a per-account session, the

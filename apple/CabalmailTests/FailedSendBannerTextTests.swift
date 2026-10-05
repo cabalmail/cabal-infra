@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Pins the wording of the failed-send banner (audit F8): a single failure
 /// names the message, several are counted, and an empty subject still reads

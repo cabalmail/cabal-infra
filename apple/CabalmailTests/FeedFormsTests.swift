@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The pure rules behind the feed management sheets: address normalizing,
 /// change detection for Save, folder picker rows, and health wording.

@@ -1,5 +1,4 @@
 import XCTest
-@testable import Cabalmail
 @testable import CabalmailUI
 
 // Regression coverage for issue #1167: the compose From pop-up drew two

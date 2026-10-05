@@ -1,7 +1,7 @@
 import XCTest
 import SwiftUI
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Pins the folder-picker icon vocabulary that MoveToFolderSheet and
 // NotificationFolderPickerView share through FolderPickerRow.

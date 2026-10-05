@@ -33,7 +33,7 @@ import XCTest
 // covers them now.
 final class AddressListRowWrapSourceScanTests: XCTestCase {
 
-    private static let path = "Cabalmail/Views/AddressListView.swift"
+    private static let path = "CabalmailUI/Addresses/AddressListView.swift"
 
     /// Rule 1: the row draws the wrappable address.
     func testTheRowDrawsTheWrappableAddress() throws {

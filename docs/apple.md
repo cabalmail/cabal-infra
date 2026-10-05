@@ -11,8 +11,12 @@ historical context; this document describes the as-implemented state.
 apple/
   project.yml                # XcodeGen spec (generates Cabalmail.xcodeproj)
   Cabalmail.xcworkspace/     # Workspace referencing the generated project + kit package
-  Cabalmail/                 # iOS / iPadOS / visionOS app target (SwiftUI)
-  CabalmailMac/              # Native macOS app target (SwiftUI)
+  CabalmailUI/               # Shared app layer (views, view models, app state) as one
+                             #   module, linked by both apps; see "Shared app layer" below
+  Cabalmail/                 # iOS / iPadOS / visionOS app target: entry point, App Intents,
+                             #   Info.plist, entitlements, asset catalogs
+  CabalmailMac/              # Native macOS app target: entry point, menus, Settings
+                             #   window, menu-bar extra, asset catalogs
   CabalmailWatch/            # Watch companion app (address management only),
                              #   embedded in the iOS product
   CabalmailKit/              # Shared Swift package — networking, models, auth, caching
@@ -946,13 +950,93 @@ still requires a visionOS device in the loop.
 The roadmap treats macOS as a first-class platform, so the macOS target
 is native rather than Mac Catalyst. `CabalmailMac/` is a separate app
 target with its own `@main`, menu commands, windows, settings, asset
-catalog and entitlements, but it compiles the iOS target's source tree as
-well: the `CabalmailMac` target in `apple/project.yml` takes all of
-`Cabalmail/` minus a short exclude list (the iOS `@main`, the App Intents,
-and the iOS Info.plist, entitlements and asset catalogs). The shared
-views and view models branch with `#if os(macOS)` where the platforms
-diverge, so a new file under `Cabalmail/` lands in both apps unless it is
-added to that exclude list.
+catalog and entitlements. Everything it shares with the iOS app comes
+from the `CabalmailUI` module (below), whose views and view models branch
+with `#if os(macOS)` where the platforms diverge.
+
+### Shared app layer: the `CabalmailUI` module
+
+`apple/CabalmailUI/` holds the app layer the iOS / iPadOS / visionOS and
+macOS apps have in common: every view, view model and piece of app state.
+It is a static library target in `apple/project.yml`, compiled once per
+platform as the Swift module `CabalmailUI`, and it inherits the project's
+`SWIFT_STRICT_CONCURRENCY: complete`. Membership is the folder: a new
+file anywhere under `CabalmailUI/` is in both apps with no `project.yml`
+edit.
+
+What stays in the app targets is what only one platform has:
+`Cabalmail/` keeps the iOS `@main` (`CabalmailApp.swift`), the App
+Intents (Siri and Shortcuts read intent metadata from the app's own
+binary, so they cannot live in a library), the Info.plist, the
+entitlements and the asset catalogs; `CabalmailMac/` keeps the macOS
+`@main`, the menu bar, the Settings window and the menu-bar extra. The
+shared session lifecycle reaches the App Intents through
+`AppIntentsSessionHooks`, which `CabalmailApp` installs at launch.
+
+Rules that keep the module working:
+
+- **Anything an app target uses from `CabalmailUI` is `public`**: the
+  type, the initializer it calls, and each member it reads. Everything
+  else stays `internal`, and the test bundles reach it through
+  `@testable import CabalmailUI`.
+- **One copy of each module per process.** The two apps link the library
+  and `-force_load` it, so every object file reaches the app as it would
+  if the sources were compiled there, including protocol conformances
+  that nothing names by symbol (Swift looks those up at run time, and an
+  archive member nothing references is otherwise left out). `CabalmailUI`
+  imports CabalmailKit without linking it, and `CabalmailMacTests` and
+  `CabalmailiOSTests` depend on `CabalmailUI` with `link: false`: the
+  host app carries both modules, and a second copy splits their types
+  (`as? CabalmailError` casts fail). Any new target that links the
+  library needs the same `-force_load`.
+- **Asset catalogs stay in the app targets.** A static library carries no
+  resources. Shared code looks assets up by name (`Image("CabalmailMark")`
+  resolves against the app bundle) rather than through generated asset
+  symbols, which exist only in the app modules.
+- **Three files are also compiled by path into other targets**, which do
+  not link the library: `Platform/HostPlatform.swift` and
+  `Platform/ConfirmationDialogPolicy.swift` into the watch app, and
+  `Platform/Services/ExtensionControlDomainStore.swift` into both Safari
+  web extensions. Moving one means updating its path in `project.yml`, and
+  none of them may import `CabalmailUI`.
+
+The module is sorted into feature folders, at most two levels deep.
+Loose files in a feature folder are shared by that feature's subfolders.
+
+| Folder | What lives there |
+| --- | --- |
+| `App/` | `AppState` and all of its extension files, and the one-way signal types it passes between the list, the reader and compose |
+| `Session/` | Sign-in, restoring the last session, signing out: the sign-in screen and its error wording, teardown ordering |
+| `Navigation/` | `NavStateCoordinator` (resume, restore and the cross-device cursor) and Spotlight routing |
+| `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
+| `Shell/` | How a window is laid out: the sign-in / signed-in router, the iPhone tab bar, the iPad and Mac split view (`MailRootView`), the Vision Pro tabs, the layout and column policies, the per-window theme |
+| `Shell/Columns/` | Column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
+| `Mail/` | Mail pieces used by more than one mail column: drag and drop, Move to Folder, the sender avatar, the authentication line |
+| `Mail/Store/` | Mail state the folder list, message list and reader share: saved folder counts, Mark All as Read |
+| `Mail/Folders/` | The folder sidebar and its view model, filters, rows, New Folder |
+| `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu |
+| `Mail/Reader/` | `MessageDetailView`, `MessageDetailViewModel` and their extension files: the header, the toolbar and its policies, attachments, calendar invites, View Source |
+| `Mail/Search/` | The search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
+| `Feeds/` | The Feeds tab root, the feed change bus, feed health and per-feed web storage |
+| `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
+| `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
+| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (router, slot registry, scene) |
+| `Addresses/` | The address list, its view model, New Address, address titles in menus |
+| `Rules/` | The rule list, the rule editor and its view model |
+| `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
+| `Shared/Chrome/` | Feature-neutral chrome: filter pills, count badges, sidebar header and filter rows, toolbar priority, branding |
+| `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout |
+| `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
+| `Shared/Banners/` | Toasts and where banners sit |
+| `Platform/` | Small per-OS adapters: host platform, confirmation-dialog roles, the pasteboard |
+| `Platform/Services/` | Push (the app delegate and `PushRegistrar`), the watch hand-off, the Safari extension control-domain store |
+
+A file belongs in `Shared/` only if it knows nothing about any one
+feature, or if several features use it without carrying one feature's
+logic; otherwise it stays with its feature. Platform conditionals
+(`#if os`) are still spread through the feature folders; new
+layout-level branches belong in `Shell/` and new OS adapters in
+`Platform/`.
 
 ### Runtime configuration: published `config.json`
 
@@ -1124,12 +1208,12 @@ best-effort expunges the Drafts copy once delivery succeeds.
   `In-Reply-To` / `References` threading, reply-all deduplication /
   self-exclusion, and the "default From to the original's addressee" rule
   that makes the on-the-fly-From idiom reusable across a whole thread.
-- `Cabalmail/Views/ComposeView.swift` renders the SwiftUI form. From
+- `CabalmailUI/Compose/ComposeView.swift` renders the SwiftUI form. From
   picker's first menu item is always "**Create new address…**" (matches
   `docs/README.md`'s primary-action framing). Attachments land via
   `PhotosPicker` (images) and `fileImporter` (arbitrary documents);
   mime-type derived from `UTType` for file imports.
-- `Cabalmail/Views/NewAddressSheet.swift` mirrors the React app's
+- `CabalmailUI/Addresses/NewAddressSheet.swift` mirrors the React app's
   `Addresses/Request.jsx` — username / subdomain / domain / optional
   comment, with a **Random** button that seeds alphanumerics so the
   mint-an-address flow stays a one-tap affordance.

@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// `SortMenuPolicy`: what the message list's sort menu offers, which row
 /// each group marks, and the identity that makes macOS redraw it.

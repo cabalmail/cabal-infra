@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1084: the compose `WindowGroup` was keyed
 // by the seed `Draft`, and every session mints a fresh `UUID`, so SwiftUI

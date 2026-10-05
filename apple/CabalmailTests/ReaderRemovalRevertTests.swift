@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // A dispose, move or purge started from the reader prunes the list row before
 // the server answers. When the server refused, the row used to stay gone (and

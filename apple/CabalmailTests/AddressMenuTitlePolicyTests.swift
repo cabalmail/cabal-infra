@@ -1,6 +1,5 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
 @testable import CabalmailUI
 
 // Regression coverage for #1702.
@@ -69,7 +68,7 @@ final class AddressMenuTitlePolicyTests: XCTestCase {
     /// address on macOS.
     func testBothMenuRowSitesRouteThroughThePolicy() throws {
         let sources = try Self.viewSources()
-        for path in ["Cabalmail/Views/FromPicker.swift", "Cabalmail/Views/SettingsDetailViews.swift"] {
+        for path in ["CabalmailUI/Compose/FromPicker.swift", "CabalmailUI/Settings/SettingsDetailViews.swift"] {
             let code = Self.code(in: try XCTUnwrap(sources[path], "\(path) is missing from the corpus"))
             XCTAssertTrue(
                 code.contains("AddressMenuTitlePolicy.rowTitle("),
@@ -82,7 +81,7 @@ final class AddressMenuTitlePolicyTests: XCTestCase {
     /// one — both take the policy's title. #1597's verification caught a fix
     /// that covered only one of them.
     func testBothComposeMenuBranchesTakeThePolicysTitle() throws {
-        let code = Self.code(in: try XCTUnwrap(Self.viewSources()["Cabalmail/Views/FromPicker.swift"]))
+        let code = Self.code(in: try XCTUnwrap(Self.viewSources()["CabalmailUI/Compose/FromPicker.swift"]))
         XCTAssertTrue(code.contains("Label(menuTitle(address), systemImage: \"checkmark\")"))
         XCTAssertTrue(code.contains("Text(menuTitle(address))"))
         XCTAssertEqual(
@@ -94,7 +93,7 @@ final class AddressMenuTitlePolicyTests: XCTestCase {
     /// The From field's own label is NOT a menu row: it is wrapping SwiftUI
     /// text with no type-to-select, and it keeps the treatment (#1597).
     func testTheFromFieldLabelKeepsTheWrappableAddress() throws {
-        let code = Self.code(in: try XCTUnwrap(Self.viewSources()["Cabalmail/Views/FromPicker.swift"]))
+        let code = Self.code(in: try XCTUnwrap(Self.viewSources()["CabalmailUI/Compose/FromPicker.swift"]))
         XCTAssertTrue(
             code.contains("Text(AddressDisplay.wrappable(fromAddress))"),
             "the From field label wraps, so it still needs the break opportunities (#1597)"
@@ -121,7 +120,7 @@ final class AddressMenuTitlePolicyTests: XCTestCase {
         let sources = try Self.viewSources()
         XCTAssertGreaterThanOrEqual(sources.count, 20, "the view corpus did not load")
         XCTAssertTrue(
-            sources["Cabalmail/Views/AddressMenuTitlePolicy.swift"]?.contains("rowMayCarryBreaks") == true,
+            sources["CabalmailUI/Addresses/AddressMenuTitlePolicy.swift"]?.contains("rowMayCarryBreaks") == true,
             "the policy itself is missing from the corpus"
         )
     }
@@ -149,7 +148,7 @@ final class AddressMenuTitlePolicyTests: XCTestCase {
         let apple = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
-        let root = apple.appendingPathComponent("Cabalmail/Views")
+        let root = apple.appendingPathComponent("CabalmailUI")
         var found: [String: String] = [:]
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
             return found

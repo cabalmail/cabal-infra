@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// #1318: a selected folder row's icon was pinned to `Color.white` on the
 /// touch platforms, on the premise that "iPadOS sidebar selection paints the

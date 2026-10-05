@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #838: the cancel-compose dialog offered
 // "Discard Draft" and "Save Draft", with the *cancel* role on Save Draft.

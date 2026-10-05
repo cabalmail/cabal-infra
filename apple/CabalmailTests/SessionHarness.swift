@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// One test's world for `AppState`'s session lifecycle (sign-in, MFA,
 /// restore, sign-out), driven through its `SessionEnvironment` seam for the

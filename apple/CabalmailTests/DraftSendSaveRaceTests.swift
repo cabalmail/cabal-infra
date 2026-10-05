@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1198: a Send that coincided with the
 // 60-second server autosave left the autosaved Drafts copy on the server

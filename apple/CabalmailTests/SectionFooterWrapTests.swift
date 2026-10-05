@@ -11,13 +11,13 @@ final class SectionFooterWrapTests: XCTestCase {
     /// file name — two targets can carry the same name, and the clean one
     /// would silently overwrite the offending one).
     private static let footerFiles = [
-        "Cabalmail/Views/RulesView.swift",
-        "Cabalmail/Views/RuleEditorView.swift",
-        "Cabalmail/Views/RuleEditorExtras.swift",
-        "Cabalmail/Views/SettingsDetailViews.swift",
-        "Cabalmail/Views/NotificationSettingsSection.swift",
-        "Cabalmail/Views/SearchFiltersSheet.swift",
-        "Cabalmail/Views/AcknowledgementsView.swift"
+        "CabalmailUI/Rules/RulesView.swift",
+        "CabalmailUI/Rules/RuleEditorView.swift",
+        "CabalmailUI/Rules/RuleEditorExtras.swift",
+        "CabalmailUI/Settings/SettingsDetailViews.swift",
+        "CabalmailUI/Settings/NotificationSettingsSection.swift",
+        "CabalmailUI/Mail/Search/SearchFiltersSheet.swift",
+        "CabalmailUI/Settings/AcknowledgementsView.swift"
     ]
 
     func testEverySectionFooterOptsOutOfTheSingleLineProposal() throws {

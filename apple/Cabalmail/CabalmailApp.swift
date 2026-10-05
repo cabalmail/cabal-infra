@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreSpotlight
 import CabalmailKit
+import CabalmailUI
 
 /// App entry point for the iOS / iPadOS / visionOS target.
 ///
@@ -21,6 +22,21 @@ struct CabalmailApp: App {
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UserDefaultsPreferenceStore())
     @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        #if os(iOS)
+        // The App Intents live in this target, so the shared session
+        // lifecycle reaches them through these hooks. Installed here, before
+        // the first `.task` can restore a session.
+        AppIntentsSessionHooks.sessionDidStart = { appState in
+            IntentBridge.shared.sessionDidStart(appState: appState)
+            CabalmailAppShortcuts.updateAppShortcutParameters()
+        }
+        AppIntentsSessionHooks.sessionWillEnd = {
+            IntentBridge.shared.sessionWillEnd()
+        }
+        #endif
+    }
 
     var body: some Scene {
         WindowGroup {

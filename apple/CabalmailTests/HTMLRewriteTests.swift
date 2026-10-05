@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Covers the viewport meta both render paths depend on (without it WebKit
 /// lays messages out at 980pt and scales them down) and the `cid:` rewriting

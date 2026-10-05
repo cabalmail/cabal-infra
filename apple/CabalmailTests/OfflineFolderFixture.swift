@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// `/list_folders` and `/folder_status` answering as the server last did.
 struct FolderServerTransport: HTTPTransport {

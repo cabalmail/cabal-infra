@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for #901.
 //
@@ -26,12 +26,12 @@ import XCTest
 final class SwipeActionContainerSourceScanTests: XCTestCase {
 
     /// The row wrapper and the one file that builds rows with it.
-    private static let rowSource = "Cabalmail/Views/SwipeActionRow.swift"
-    private static let listSource = "Cabalmail/Views/MessageListView+Selection.swift"
+    private static let rowSource = "CabalmailUI/Mail/MessageList/SwipeActionRow.swift"
+    private static let listSource = "CabalmailUI/Mail/MessageList/MessageListView+Selection.swift"
     /// Hosts the Delete Forever confirmation.
-    private static let listViewSource = "Cabalmail/Views/MessageListView.swift"
+    private static let listViewSource = "CabalmailUI/Mail/MessageList/MessageListView.swift"
     /// The 27 path's trackpad half on iPadOS.
-    private static let trackpadSource = "Cabalmail/Views/TrackpadSwipe.swift"
+    private static let trackpadSource = "CabalmailUI/Mail/MessageList/TrackpadSwipe.swift"
 
     /// The 27 path exists and is availability-gated, so the pre-27 floor keeps
     /// compiling. Both edges are wired on it: a path that revealed only one

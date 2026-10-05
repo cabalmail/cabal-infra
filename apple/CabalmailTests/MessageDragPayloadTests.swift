@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The message drag's two faces: the private move type the sidebar folders
 /// decode, and the `.eml` a single message offers to other apps (#1650).

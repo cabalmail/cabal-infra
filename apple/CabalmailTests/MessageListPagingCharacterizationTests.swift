@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8: the folder list's sliding-window
 /// paging, as it stands before the app layer moves into CabalmailUI and mail

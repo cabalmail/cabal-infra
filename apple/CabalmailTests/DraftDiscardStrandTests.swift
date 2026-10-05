@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1081: discarding a draft that had been
 // resumed out of the Drafts reader left the row, the reader and — the

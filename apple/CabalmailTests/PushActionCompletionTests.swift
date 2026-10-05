@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// UIKit answers `didReceive`'s completion handler by refreshing the window
 /// scene's snapshot and state-restoration archive, which asserts the main

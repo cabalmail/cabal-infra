@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Defect 11 of the 2026-10 rearchitecture audit: menu commands and drag-
 /// moves reached every mounted list and reader in every main window. A

@@ -1,0 +1,413 @@
+import SwiftUI
+import CabalmailKit
+
+/// Address sidebar (Phase 5 of the folder/address polish plan).
+///
+/// Mirrors `FolderListView`'s shape: two sections (Favorites on top when
+/// non-empty, then All addresses inclusive), per-row swipe + context-menu
+/// affordances to toggle the favorite flag. Tapping an address copies it
+/// to the pasteboard, and a row drags as plain text — the list is a
+/// management/grab surface, not a message-list filter.
+struct AddressListView: View {
+    @Environment(AppState.self) private var appState
+    @State private var model: AddressesViewModel?
+    @State private var filterQuery: String = ""
+    @State private var isRefreshing = false
+    // Drives the "Request new address" sheet from the toolbar `+` button.
+    @State private var showNewAddressSheet = false
+    // Address staged for revocation by a row's swipe / context menu,
+    // confirmed before the (irreversible) API call.
+    @State private var pendingRevoke: Address?
+    // Address staged for suspension. Reinstating is harmless (it republishes
+    // DNS records) and fires directly, so only suspend is staged here.
+    @State private var pendingSuspend: Address?
+    /// When set, the parent (the wide macOS / iPad-regular sidebar) owns the
+    /// filter field — rendered below the section tabs — and this view filters by
+    /// it instead of showing its own top-of-sidebar `.searchable`. Nil keeps the
+    /// self-contained searchable (compact, standalone).
+    var externalFilter: Binding<String>?
+    /// The filter text actually in effect: the parent's when injected, else the
+    /// view's own `.searchable` query.
+    private var activeFilterText: String { externalFilter?.wrappedValue ?? filterQuery }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Wide sidebar (iPad-regular / macOS): New / Reload flank the filter
+            // below the Folders/Addresses tabs. Compact keeps them in the toolbar.
+            if let externalFilter {
+                SidebarListHeaderRow(
+                    newAction: { showNewAddressSheet = true },
+                    newDisabled: false,
+                    newAccessibilityLabel: "Request new address",
+                    newIdentifier: "address.new",
+                    filterText: externalFilter,
+                    filterPrompt: "Filter addresses",
+                    isRefreshing: isRefreshing,
+                    refreshDisabled: isRefreshing || model == nil,
+                    refreshAccessibilityLabel: "Refresh addresses",
+                    refreshIdentifier: "address.refresh",
+                    refreshAction: { Task { await manualRefresh() } }
+                )
+            }
+            addressList
+        }
+    }
+
+    private var addressList: some View {
+        List {
+            if let model {
+                if model.isLoading && model.addresses.isEmpty {
+                    ProgressView("Loading addresses…")
+                }
+                if let errorMessage = model.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(ColorTokens.dangerFg)
+                }
+                let favorites = filteredAddresses(model.favorites)
+                let all = filteredAddresses(model.addresses)
+                if !model.favorites.isEmpty {
+                    Section("Favorites") {
+                        ForEach(favorites, id: \.address) { address in
+                            addressRow(address, model: model)
+                        }
+                    }
+                    Section("All addresses") {
+                        ForEach(all, id: \.address) { address in
+                            addressRow(address, model: model)
+                        }
+                    }
+                } else {
+                    ForEach(all, id: \.address) { address in
+                        addressRow(address, model: model)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Addresses")
+        #if !os(macOS)
+        // In the compact Addresses tab the Cabalmail mark stands in for the
+        // title, as on the Mail tab; the wide sidebar's inspector keeps the
+        // text (see `SidebarBranding.swift`).
+        .compactBrandMarkTitle(accessibilityTitle: "Addresses")
+        #endif
+        .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter addresses")
+        .toolbar {
+            // Compact keeps New / Reload in the toolbar; the wide sidebar moves
+            // them into SidebarListHeaderRow beside the filter (externalFilter is
+            // non-nil only on the wide layout).
+            if externalFilter == nil {
+                ToolbarItem {
+                    Button {
+                        showNewAddressSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .accessibilityLabel("Request new address")
+                    }
+                    .accessibilityIdentifier("address.new")
+                }
+                ToolbarItem {
+                    Button {
+                        Task { await manualRefresh() }
+                    } label: {
+                        RefreshActivityIcon(isLoading: isRefreshing)
+                            .accessibilityLabel("Refresh addresses")
+                    }
+                    .disabled(isRefreshing || model == nil)
+                    .accessibilityIdentifier("address.refresh")
+                }
+            }
+        }
+        .refreshable {
+            await model?.refresh(force: true)
+        }
+        .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
+        .confirmationDialog(
+            revokeDialogTitle,
+            isPresented: revokeDialogBinding,
+            titleVisibility: .visible,
+            presenting: pendingRevoke,
+            actions: revokeDialogActions,
+            message: revokeDialogMessage
+        )
+        .confirmationDialog(
+            suspendDialogTitle,
+            isPresented: suspendDialogBinding,
+            titleVisibility: .visible,
+            presenting: pendingSuspend,
+            actions: suspendDialogActions,
+            message: suspendDialogMessage
+        )
+        .task {
+            if model == nil, let client = appState.client {
+                let newModel = AddressesViewModel(client: client)
+                model = newModel
+                await newModel.refresh()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var newAddressSheet: some View {
+        NewAddressSheet(
+            domains: appState.client?.configuration.domains ?? [],
+            onCreate: { address in
+                await model?.onAddressCreated()
+                appState.showToast(.addressCreated(address))
+            }
+        )
+        .environment(appState)
+    }
+
+    private func manualRefresh() async {
+        guard let model, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await model.refresh(force: true)
+    }
+
+    private func filteredAddresses(_ addresses: [Address]) -> [Address] {
+        let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return addresses }
+        return addresses.filter { address in
+            address.address.lowercased().contains(needle)
+                || (address.comment?.lowercased().contains(needle) ?? false)
+        }
+    }
+}
+
+// Row construction and the confirmation-dialog plumbing live in a same-file
+// extension so the primary struct body stays under SwiftLint's
+// type_body_length cap (same split as MessageListView and its +Rows/+Bulk
+// files, kept in-file here so the `private` state remains reachable).
+extension AddressListView {
+    // MARK: - Revoke confirmation plumbing
+
+    private var revokeDialogTitle: String {
+        if let address = pendingRevoke {
+            return AddressDisplay.revokeTitle(address.address)
+        }
+        return "Revoke address?"
+    }
+
+    private var revokeDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingRevoke != nil },
+            set: { isPresented in
+                if !isPresented { pendingRevoke = nil }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func revokeDialogActions(for address: Address) -> some View {
+        Button("Revoke", role: .destructive) {
+            let target = address
+            pendingRevoke = nil
+            Task {
+                // Same confirmation the reader's per-address menu raises,
+                // and the same one this screen's create path raises — the
+                // row pruning on its own left the list's revoke as the one
+                // silent copy of the action (#1454). A failure still shows
+                // up as the model's error banner, not as this toast.
+                if await model?.revoke(target) == true {
+                    appState.showToast(.addressRevoked(target.address))
+                }
+            }
+        }
+        Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
+            pendingRevoke = nil
+        }
+    }
+
+    @ViewBuilder
+    private func revokeDialogMessage(for address: Address) -> some View {
+        Text(AddressDisplay.revokeMessage(address.address))
+            .accessibilityLabel("Mail sent to \(address.address) will be rejected. This can't be undone.")
+    }
+
+    // MARK: - Suspend confirmation plumbing
+
+    private var suspendDialogTitle: String {
+        if let address = pendingSuspend {
+            return AddressDisplay.suspendTitle(address.address)
+        }
+        return "Suspend address?"
+    }
+
+    private var suspendDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingSuspend != nil },
+            set: { isPresented in
+                if !isPresented { pendingSuspend = nil }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func suspendDialogActions(for address: Address) -> some View {
+        Button("Suspend") {
+            let target = address
+            pendingSuspend = nil
+            Task { await model?.setSuspended(target, to: true) }
+        }
+        Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
+            pendingSuspend = nil
+        }
+    }
+
+    @ViewBuilder
+    private func suspendDialogMessage(for address: Address) -> some View {
+        Text(AddressDisplay.suspendMessage(address.address))
+            .accessibilityLabel("""
+            The DNS records for \(address.address) will be removed and inbound mail \
+            will stop being deliverable. The address is kept and can be reinstated \
+            at any time.
+            """)
+    }
+
+    @ViewBuilder
+    private func suspendToggleButton(_ address: Address, model: AddressesViewModel) -> some View {
+        Button {
+            if address.suspended {
+                Task { await model.setSuspended(address, to: false) }
+            } else {
+                pendingSuspend = address
+            }
+        } label: {
+            Label(
+                address.suspended ? "Reinstate" : "Suspend",
+                systemImage: address.suspended ? "play.circle" : "pause.circle"
+            )
+        }
+        .accessibilityIdentifier("address.suspend")
+    }
+
+    @ViewBuilder
+    private func addressRow(_ address: Address, model: AddressesViewModel) -> some View {
+        Button {
+            copyAddress(address)
+        } label: {
+            row(for: address)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // The address as plain text, for a drop into another app: on an open
+        // iPhone Duo (and an iPad) Safari can sit beside this list, so a
+        // freshly minted address goes straight into a signup form without
+        // the copy / switch / paste round trip. `.draggable` coexists with
+        // the row's tap (see `MessageDrag.swift`); the swipe actions are
+        // horizontal pans, a drag starts from a press-and-hold.
+        .draggable(address.address)
+        .accessibilityLabel("Copy \(address.address)")
+            // Two edges so neither side outgrows a narrow sidebar pane, and
+            // the full-swipe default is the reversible action (suspend /
+            // reinstate), not revoke. First button listed = full-swipe action.
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                suspendToggleButton(address, model: model)
+                    .tint(ColorTokens.warningFill)
+                Button(role: .destructive) {
+                    pendingRevoke = address
+                } label: {
+                    Label("Revoke", systemImage: "xmark.bin")
+                }
+                .accessibilityIdentifier("address.revoke")
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button {
+                    Task { await model.toggleFavorite(address) }
+                } label: {
+                    Label(
+                        address.favorite ? "Unfavorite" : "Favorite",
+                        systemImage: address.favorite ? "star.slash" : "star"
+                    )
+                }
+                .tint(address.favorite ? Color.gray : ColorTokens.flaggedFill)
+                .accessibilityIdentifier("address.favorite")
+            }
+            // `.contain` keeps the revealed swipe buttons individually
+            // reachable — see the subtree-merge trap in
+            // docs/0.11.x/apple-testability-and-accessibility.md.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("address.row.\(address.address)")
+            .contextMenu {
+                rowContextMenu(address, model: model)
+            }
+    }
+
+    @ViewBuilder
+    private func rowContextMenu(_ address: Address, model: AddressesViewModel) -> some View {
+        Button {
+            copyAddress(address)
+        } label: {
+            Label("Copy Address", systemImage: "doc.on.doc")
+        }
+        Button {
+            Task { await model.toggleFavorite(address) }
+        } label: {
+            Label(
+                address.favorite ? "Unfavorite" : "Favorite",
+                systemImage: address.favorite ? "star.slash" : "star.fill"
+            )
+        }
+        suspendToggleButton(address, model: model)
+        Button(role: .destructive) {
+            pendingRevoke = address
+        } label: {
+            Label("Revoke", systemImage: "xmark.bin")
+        }
+    }
+
+    private func copyAddress(_ address: Address) {
+        copyToPasteboard(address.address)
+        appState.showToast(.addressCopied(address.address), duration: 7)
+    }
+
+    /// One address row.
+    ///
+    /// The address is drawn through `AddressDisplay.wrappable`: an address is
+    /// one unbreakable token, so a row narrow enough to wrap one has no legal
+    /// break and the layout engine hyphenates, drawing a character the address
+    /// does not contain — measured as `…@longsubdomain-` / `probe0915…` on
+    /// iPhone and `b2f6s4mx@r8g3h5ne.ca-` / `bal-mail.net` in the iPad
+    /// inspector (#1587), the same mechanism #1547 fixed on the watch's
+    /// confirmations. The zero-width spaces move breaks that are correct
+    /// today as well — an address whose own hyphen the breaker could reach now
+    /// fills the line instead — which is the trade-off that routine documents;
+    /// a drawn character the reader would have to know to discard is the worse
+    /// of the two.
+    ///
+    /// The raw address is what the row hands on: the button's
+    /// `accessibilityLabel` and both Copy paths read `address.address`, and
+    /// the label here pins it for the `children: .contain` subtree.
+    @ViewBuilder
+    private func row(for address: Address) -> some View {
+        HStack {
+            Image(systemName: address.favorite ? "star.fill" : "at")
+                // The asset-catalog accent, pinned like the folder icons
+                // (see `iconForeground` in FolderListView+Helpers.swift):
+                // `Color.accentColor` follows the macOS system accent when
+                // that isn't "multicolor", leaving the icons off-brand.
+                .foregroundStyle(address.favorite ? ColorTokens.flaggedFg : ColorTokens.accentForestFg)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AddressDisplay.wrappable(address.address))
+                    .foregroundStyle(address.suspended ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                    .accessibilityLabel(address.address)
+                if address.suspended {
+                    Text("Suspended")
+                        .font(.caption2)
+                        .foregroundStyle(ColorTokens.warningFg)
+                }
+                if let comment = address.comment, !comment.isEmpty {
+                    Text(comment)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        #if os(visionOS)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+        #endif
+    }
+}

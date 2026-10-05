@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The mail sidebar's filter pills replaced the Subscribed / All folders
 // sections. These pin the pill semantics (two independent toggles; both

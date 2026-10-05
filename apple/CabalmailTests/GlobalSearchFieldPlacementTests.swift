@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The #1047 rework put the global search field in the message-list column's
 /// toolbar on every wide layout. On iPadOS that column draws its own UIKit

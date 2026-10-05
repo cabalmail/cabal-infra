@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Pins the rule behind "window or sheet" for compose. It used to be the
 /// device idiom (iPad → window, iPhone → sheet), which Apple's iPhone Duo

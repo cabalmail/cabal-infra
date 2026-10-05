@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The source-level half of the colour-token adoption (docs/1.x/color-tokens-plan.md).
 //
@@ -29,7 +29,7 @@ final class ColorTokenSourceScanTests: XCTestCase {
             "floor: an empty or mis-rooted scan would pass everything vacuously"
         )
         for probe in [
-            "Cabalmail/ContentView.swift",
+            "CabalmailUI/Shell/ContentView.swift",
             "CabalmailMac/CabalmailMacApp.swift",
             "CabalmailWatch/ContentView.swift",
         ] {

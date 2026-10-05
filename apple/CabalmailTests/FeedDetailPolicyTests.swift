@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// What the feed reader opens first, from the subscription's stored
 /// preferences (D6 clarification: "show article" opens the publisher's page).

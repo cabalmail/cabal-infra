@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #993: on visionOS the filter pills rendered as
 // a bare "All / Unread / Flagged" with no numbers. The counts were in the view

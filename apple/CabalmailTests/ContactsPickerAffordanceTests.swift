@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Issue #1003: the compose Contacts buttons rendered in full accent green
 /// while `.disabled(candidates.isEmpty)` held them inert, and an unauthorized

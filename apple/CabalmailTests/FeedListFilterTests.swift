@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The feed sidebar's one pill: Unread toggles, and off is every feed. No
 // All pill — it only restated "Unread off".

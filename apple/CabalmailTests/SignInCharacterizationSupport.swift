@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// What the workstream 0.8 sign-in characterization suites
 /// (`SignInCharacterizationTests.swift`, `SignInMfaCharacterizationTests.swift`)

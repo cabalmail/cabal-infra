@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Pins who may open the addresses inspector. The framework writes the
 /// `.inspector(isPresented:)` binding on its own when an iPhone Duo unfolds

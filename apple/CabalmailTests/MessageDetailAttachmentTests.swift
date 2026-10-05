@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// What the reader takes as the message body and where it writes attachment
 /// files, for workstream 0.8. Two fixes are protected here:

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The regular-width iOS layout drives folders through its own floating
 /// panel and collapses the real sidebar column to zero width, so the

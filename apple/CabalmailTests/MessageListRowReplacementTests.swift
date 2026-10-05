@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The model half of handing a full-swiped row's slot a new row (see
 // `MessageListViewModel+RowReplacement.swift`): which slots get one and when.

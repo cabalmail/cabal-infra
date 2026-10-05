@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// `RulesViewModel` behavior against a scripted `RulesBackend`: load,
 /// debounced whole-set saves, the validation gate, optimistic-concurrency

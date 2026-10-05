@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Characterization suite for workstream 0.8: pins how `MessageListViewModel`
 // drives `MailboxWatcher` today (`startWatching`, `stopWatching`,

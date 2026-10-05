@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The tab the compact section tree opens on. It is seeded from the resume
 /// session every time the tree is built — at launch and again whenever the

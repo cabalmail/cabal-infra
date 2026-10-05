@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1217: on iPadOS regular width, picking a
 // folder in the sidebar while a search was showing did nothing visible. The

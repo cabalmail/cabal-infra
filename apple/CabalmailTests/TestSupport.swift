@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The shared test doubles (FakeImapClient, the auth and transport doubles,
 // the Kit-only fixtures, waitUntil) live in

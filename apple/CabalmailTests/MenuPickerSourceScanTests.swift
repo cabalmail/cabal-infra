@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1508.
 //
@@ -41,7 +41,7 @@ final class MenuPickerSourceScanTests: XCTestCase {
         // The menus that hold a picker today. A new one appearing here is
         // not a failure; a new one appearing in `submenus` is.
         XCTAssertEqual(
-            inventory, ["Cabalmail/Views/FeedItemListView+FilterBar.swift": 1],
+            inventory, ["CabalmailUI/Feeds/ItemList/FeedItemListView+FilterBar.swift": 1],
             "menu-picker inventory moved — check the new one is inline (#1508)"
         )
         XCTAssertEqual(

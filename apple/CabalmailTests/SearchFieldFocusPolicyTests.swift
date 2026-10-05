@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Issue #1425: the Search tab opened with nothing focused, so typing a term
 /// cost two taps. The second one carried no information — the tab has exactly

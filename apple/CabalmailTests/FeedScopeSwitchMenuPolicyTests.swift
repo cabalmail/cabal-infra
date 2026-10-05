@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The scope-switch menu behind the feed list's title (cross-media plan,
 /// Phase 1): All Feeds first, then the folder tree flattened depth-first

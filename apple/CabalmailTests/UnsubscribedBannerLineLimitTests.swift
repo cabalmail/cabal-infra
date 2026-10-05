@@ -1,7 +1,7 @@
 import XCTest
 import AppKit
 import SwiftUI
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for #1355.
 //

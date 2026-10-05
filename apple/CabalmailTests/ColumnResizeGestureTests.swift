@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1075: the message-list column's resize handle
 // was a 22pt hit-testable strip pinned inside the trailing edge, so it claimed

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// A compose window must always have a mail scene to land on when it
 /// closes (#1688): iOS will not dismiss an app's last scene, and a compose
@@ -10,7 +10,7 @@ import XCTest
 final class ComposeWindowOrphanSourceScanTests: XCTestCase {
 
     func testClosingComposeAsksForAMailSceneWhenNoneIsRecorded() throws {
-        let body = try Self.source("Cabalmail/Views/MainSceneActivation.swift")
+        let body = try Self.source("CabalmailUI/Compose/Windows/MainSceneActivation.swift")
         XCTAssertTrue(body.contains("UISceneSessionActivationRequest(role: .windowApplication)"))
         XCTAssertFalse(body.contains("guard let session else { return }"), "no silent no-op without a main scene")
     }

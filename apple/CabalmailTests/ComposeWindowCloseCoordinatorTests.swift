@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Pins the one property of the close intercept that the source comments
 /// around it lean on: `windowShouldClose` never lets AppKit close the window

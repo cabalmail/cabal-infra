@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Pins which toolbar items ask the bar to keep them when it overflows —
 /// on an iPhone Duo's vertical strip, or a crowded macOS window. Nothing
@@ -8,7 +8,7 @@ import XCTest
 final class ToolbarVisibilitySourceScanTests: XCTestCase {
 
     func testComposeKeepsItsPlaceInTheListBar() throws {
-        let body = try Self.source("Cabalmail/Views/MessageListView.swift")
+        let body = try Self.source("CabalmailUI/Mail/MessageList/MessageListView.swift")
         // One per platform branch: the macOS Compose + Reload group and the
         // touch platforms' lone Compose item.
         XCTAssertEqual(
@@ -26,7 +26,7 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
             + "                        .keepsInBarFirst()"
         XCTAssertTrue(body.contains(ranked))
         XCTAssertEqual(body.components(separatedBy: ".keepsInBarFirst()").count - 1, 1)
-        let helper = try Self.source("Cabalmail/Views/ToolbarVisibility.swift")
+        let helper = try Self.source("CabalmailUI/Shared/Chrome/ToolbarVisibility.swift")
         XCTAssertTrue(helper.contains("ToolbarItemVisibilityPriority(higherThan: .high)"))
         XCTAssertEqual(
             helper.components(separatedBy: "#if (os(iOS) || os(macOS)) && compiler(>=6.4)").count - 1, 2,
@@ -50,7 +50,7 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         // `.high` does not exist before iOS 27 / macOS 26.1 and is
         // unavailable on visionOS; the helper must degrade to the item
         // itself rather than gate the call sites one by one.
-        let body = try Self.source("Cabalmail/Views/ToolbarVisibility.swift")
+        let body = try Self.source("CabalmailUI/Shared/Chrome/ToolbarVisibility.swift")
         XCTAssertTrue(body.contains("if #available(iOS 27.0, macOS 26.1, *)"))
         XCTAssertTrue(body.contains("visibilityPriority(.high)"))
         // Both guards: the runtime `#available` and the toolchain `#if`,

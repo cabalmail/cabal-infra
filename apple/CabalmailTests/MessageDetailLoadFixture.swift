@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Shared fixture for the reader-open characterization suites of workstream
 // 0.8 (`MessageDetailViewModel.load()`, the body cache it reads and fills,

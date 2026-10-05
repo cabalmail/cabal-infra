@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The reader column's floor has to reach UIKit's split controller, or it
 /// applies its own (about 540 pt) and floats the list over the reader on
@@ -16,7 +16,7 @@ final class ReaderColumnFloorSourceScanTests: XCTestCase {
     }
 
     func testTheRootFeedsTheMeasuredWidthToThePolicy() throws {
-        let body = try Self.source("Cabalmail/Views/SignedInRootView.swift")
+        let body = try Self.source("CabalmailUI/Shell/SignedInRootView.swift")
         XCTAssertTrue(body.contains("measuredWidth: measuredWidth"))
     }
 

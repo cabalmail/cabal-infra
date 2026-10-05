@@ -1,6 +1,6 @@
 import XCTest
 import CoreGraphics
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The toolbar search field used a hard-coded 260pt width. A toolbar item is
 /// not clipped to its own column, so once the column was narrower than that,

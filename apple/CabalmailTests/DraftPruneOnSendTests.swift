@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #837: sending a draft from inside the app
 // left the row sitting in the Drafts list for 60–80s. `/send` discards the

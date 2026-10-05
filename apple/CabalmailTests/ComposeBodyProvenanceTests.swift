@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Regression coverage for issue #1091: a message that went out carrying two
 /// different bodies.

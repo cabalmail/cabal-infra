@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression tests for #737: the All/Unread/Flagged filter-pill counts read
 // `unseen` / `flagged`, which only STATUS used to write — so a flag or read

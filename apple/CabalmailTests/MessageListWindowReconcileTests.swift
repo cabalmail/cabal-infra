@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The loaded window has to stay lined up with the server's positions when
 /// the folder changes elsewhere (#1817, #1818). Each test drives a real

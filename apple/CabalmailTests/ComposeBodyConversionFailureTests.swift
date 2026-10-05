@@ -1,7 +1,7 @@
 import XCTest
 import WebKit
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Compose behaviour when one body conversion fails on a live editor bridge.
 ///

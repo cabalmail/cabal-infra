@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Deleting the folder the sidebar has selected used to leave the selection
 /// pointing at it, so the message-list column kept requesting a path the
