@@ -190,7 +190,7 @@ public actor FakeImapClient: ImapClient {
     // only arrives once the dispose has finished. `holdNext(_:)` parks the
     // next such call, `awaitHeld(_:)` waits for it to arrive, and
     // `releaseHeld(_:)` lets it answer with whatever is scripted by then.
-    public enum HeldCall: Hashable, Sendable { case move, status, topEnvelopes, envelopes, fetchBody, setFlags }
+    public enum HeldCall: Hashable, Sendable { case move, status, topEnvelopes, envelopes, fetchBody, setFlags, purge }
     private var callsToHold: Set<HeldCall> = []
     private var heldCalls: [HeldCall: CheckedContinuation<Void, Never>] = [:]
     private var heldCallArrivals: [HeldCall: CheckedContinuation<Void, Never>] = [:]
@@ -258,6 +258,7 @@ public actor FakeImapClient: ImapClient {
 
     public func purge(folder: String, uids: [UInt32]) async throws {
         purgeCalls.append(PurgeCall(folder: folder, uids: Set(uids)))
+        await parkIfHeld(.purge)
         if !purgeResults.isEmpty {
             try purgeResults.removeFirst().get()
         }

@@ -55,6 +55,38 @@ final class FolderMarkAllReadTests: XCTestCase {
         XCTAssertEqual(appState.refreshRequestTick, ticks, "nothing changed, so nothing to reload")
     }
 
+    /// A folder marked from the sidebar while another is on screen keeps
+    /// its saved list, every row read, so a list opened on it offline shows
+    /// its messages (#1850). The snapshot used to be deleted, and nothing
+    /// rebuilt it until the folder was next opened online.
+    func testAFolderNotOnScreenKeepsItsSavedListMarkedRead() async throws {
+        let imap = FakeImapClient()
+        await imap.scriptMarkFolderReadResults([.success(2)])
+        let client = try TestFixtures.makeClient(imap: imap)
+        try await client.envelopeCache.merge(
+            envelopes: [
+                TestFixtures.makeEnvelope(uid: 1),
+                TestFixtures.makeEnvelope(uid: 2, flags: [.flagged]),
+            ],
+            uidValidity: 7, uidNext: 3, into: "Archive"
+        )
+        let appState = AppState()
+        let sidebar = FolderListViewModel(client: client, appState: appState)
+
+        await sidebar.markAllRead(folderPath: "Archive")
+
+        let list = MessageListViewModel(
+            folder: Folder(path: "Archive", attributes: [], isSubscribed: false),
+            client: client,
+            preferences: Preferences(store: InMemoryPreferenceStore()),
+            appState: appState
+        )
+        await list.hydrateFromCache()
+        XCTAssertEqual(list.envelopes.map(\.uid).sorted(), [1, 2])
+        XCTAssertTrue(list.envelopes.allSatisfy { $0.flags.contains(.seen) })
+        XCTAssertTrue(list.envelopes.first { $0.uid == 2 }?.flags.contains(.flagged) == true)
+    }
+
     /// The message list's own entry (toolbar More menu, Mailbox ⌥⌘T) runs
     /// the same routine for the folder it shows.
     func testTheMessageListEntryMarksItsOwnFolder() async throws {

@@ -499,6 +499,8 @@ targets:
     sources:
       - path: CabalmailMacWebExtension/SafariWebExtensionHandler.swift
       - path: CabalmailUI/Platform/Services/ExtensionControlDomainStore.swift
+      # The private-link token rows the appex resolves (#1765).
+      - path: CabalmailUI/Platform/Services/PrivateLinkTokenStore.swift
       - path: ../extensions/safari/CabalmailExtension/Resources
         buildPhase: resources
     info:
@@ -610,6 +612,8 @@ targets:
       # tree (the appex does not link CabalmailUI): the appex reads what
       # AppState publishes.
       - path: CabalmailUI/Platform/Services/ExtensionControlDomainStore.swift
+      # The private-link token rows the appex resolves (#1765).
+      - path: CabalmailUI/Platform/Services/PrivateLinkTokenStore.swift
       - path: ../extensions/safari/CabalmailExtension/Resources
         buildPhase: resources
     info:

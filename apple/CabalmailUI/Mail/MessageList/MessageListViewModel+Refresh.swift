@@ -94,6 +94,10 @@ extension MessageListViewModel {
         unseen = fetchedUnseen
         flagged = fetchedFlagged
         savedMessageCount = nil
+        // A reply for a session that has started ending is the last
+        // account's: it reaches neither the sidebar nor the saved counts
+        // (#1848).
+        guard appState.acceptsCounts(from: client) else { return serverMessages }
         if !mayPredateRemoval {
             publishFolderCounts(status)
         } else if !isSearchScope {

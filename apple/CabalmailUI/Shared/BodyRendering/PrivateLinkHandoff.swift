@@ -8,6 +8,13 @@
 // fragment, which browsers never send to a server, so the admin origin
 // never sees or logs it.
 //
+// On Safari the fragment carries an opaque token instead, resolved by the
+// embedded appex out of the App Group (`PrivateLinkTokenStore`, #1765):
+// WebKit implements no `history` API, so the extension cannot remove the
+// redirector's normal-window history entry there, and an entry carrying
+// the target would defeat the point of opening privately. See
+// `fragmentForm` for why that form is chosen for Safari only.
+//
 // Whether the row is offered at all depends on whether anything will catch
 // the redirector. When Safari is the default browser, the app can ask —
 // the extension is embedded in this very bundle (OQ9), which is the one
@@ -44,6 +51,42 @@ public enum PrivateLinkHandoff {
             )
         else { return nil }
         return URL(string: "https://admin.\(domain)/private-link#\(encoded)")
+    }
+
+    /// The redirector URL whose fragment is an opaque token rather than the
+    /// target (#1765). The token is minted into the App Group by
+    /// `PrivateLinkTokenStore` and resolved by the embedded appex, so the
+    /// target never enters a URL -- and so never enters the history entry
+    /// Safari has no API to remove.
+    static func redirectorURL(forToken token: String, controlDomain: String) -> URL? {
+        guard let domain = normalizedControlDomain(controlDomain) else { return nil }
+        return URL(string: "https://admin.\(domain)/private-link#\(token)")
+    }
+
+    /// Which form the fragment takes.
+    enum FragmentForm {
+        /// The target itself, percent-encoded. Every browser's extension
+        /// can read it, and Chrome deletes the entry afterwards.
+        case target
+        /// An opaque token, resolved over `sendNativeMessage`.
+        case token
+    }
+
+    /// The token form is only resolvable where a native host answers
+    /// `resolve-private-link`, which is Safari with *our embedded* appex
+    /// enabled and nowhere else: Chrome has no registered host, and the
+    /// standalone Safari host's handler does not answer that message. A
+    /// token the extension cannot resolve would leave the fallback page
+    /// with nothing to show at all, so the gate is deliberately narrow.
+    ///
+    /// `availability` is `isAvailable`'s cache, which is the enablement of
+    /// the embedded appex exactly when Safari is the default browser --
+    /// `queryAvailability()` returns an optimistic `true` for any other
+    /// default precisely because it cannot ask, and that `true` must not
+    /// select the token form. An unprimed cache (`nil`) picks the target
+    /// form, which works everywhere.
+    static func fragmentForm(isSafariDefault: Bool, availability: Bool?) -> FragmentForm {
+        isSafariDefault && availability == true ? .token : .target
     }
 
     /// Reduce what the app stores as the control domain to the bare apex
@@ -124,10 +167,23 @@ public enum PrivateLinkHandoff {
 
     /// Hand `target` to the browser via the redirector. Returns false when
     /// there was nothing valid to open.
+    ///
+    /// The target-form URL is built first either way: it is what validates
+    /// the scheme and the control domain, and it is the fallback whenever
+    /// the token form is unavailable (no App Group container in an
+    /// unsigned build, say).
     @discardableResult
+    @MainActor
     static func open(_ target: URL, controlDomain: String) -> Bool {
-        guard let url = redirectorURL(for: target, controlDomain: controlDomain) else {
+        guard let fragmentURL = redirectorURL(for: target, controlDomain: controlDomain) else {
             return false
+        }
+        var url = fragmentURL
+        if fragmentForm(isSafariDefault: defaultBrowserIsSafari(), availability: isAvailable)
+            == .token,
+            let token = PrivateLinkTokenStore.mint(target),
+            let tokenURL = redirectorURL(forToken: token, controlDomain: controlDomain) {
+            url = tokenURL
         }
         NSWorkspace.shared.open(url)
         return true

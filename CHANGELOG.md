@@ -5,6 +5,206 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.24.0] - 2026-10-05
+
+### Changed
+- Apple: **Debug Log lines arrive in order, and reach Console.** Each line
+  used to reach Settings → Debug Log a moment after it was written, so
+  lines written close together could appear out of order. They now land
+  in the order they were written, and the composer's errors, which went
+  only to the system log, show there too. Every line also goes to the
+  system log under the `com.cabalmail.Cabalmail` subsystem, with its text
+  marked private, so Console shows it only while a debugger is attached
+  or once private data is enabled for that subsystem.
+- Apple: **The message list and reader stop writing diagnostic logs.**
+  Both wrote a line to the system log at each step of loading a page of
+  mail or opening a message, where a sysdiagnose could pick it up. The
+  logging was left over from bugs that have since been fixed, and it is
+  now taken out.
+
+### Fixed
+- Apple: **Closed compose windows no longer keep saving to Drafts.** On
+  macOS, a compose window restored at launch or opened from a mailto: link
+  stayed alive invisibly after you closed it. The next message you wrote
+  was then also saved to Drafts from that hidden window every minute, with
+  only the quoted text, until the app quit, and a mailto: draft you had
+  discarded could come back. Signing back in after a sign-out or an expired
+  session did the same with the last message each closed window had shown.
+  Closed windows now stay empty.
+- Apple: **The iPad Settings gear opens Settings in one window.** With two
+  iPad windows open, the gear on the folder panel opened Settings in every
+  window at once. It now opens it only in the window you tapped, like the
+  Settings menu command.
+- Apple: **The app opens when the sign-in service is busy.** If the sign-in
+  service throttled or failed the session refresh at launch, the app stopped
+  on the sign-in form with the service's error, such as "Server error: Rate
+  exceeded". It now opens your mail from the device, as it does offline, and
+  refreshes the session later.
+- Apple: **Readable errors when a list action fails.** A failed swipe,
+  flag, move, bulk action, purge or search in the message list showed
+  internal text such as `network("offline")`; it now shows the same message
+  as everywhere else, such as "Couldn't reach the server. offline."
+- Apple: **No "cancelled" banner after leaving a list mid-refresh.** A
+  background refresh still running when you left a message list, for
+  instance to open a message, left "Couldn't reach the server. cancelled."
+  at the top of the list when you came back. On iPhone, leaving the list
+  also stopped it watching for new mail until the folder was reopened, so
+  new mail only arrived with the once-a-minute refresh. The list now
+  refreshes when you come back to it and starts watching again.
+- Apple: **Long message lists stay in step with changes made elsewhere.** In
+  a folder of more than 50 messages, a message deleted or moved on another
+  device could stay in the list as a dead row, and the next page then
+  skipped a real message; the dead row also came back after switching
+  folders or relaunching. New mail arriving while you were scrolled deep did
+  the same when you scrolled back up. The list now notices when its messages
+  have moved on the server and reloads the rows around where you are, and
+  forgets a deleted message on the device once a reload confirms it is gone.
+- Apple: **Back waits while a verification code is checked.** Back to sign in
+  is unavailable while the code you entered is being verified, so the password
+  form can no longer appear over a sign-in that then completes.
+- Apple: **A sign-in code entered too late says the session expired.** A
+  two-factor code sent after the three minutes the sign-in allows was
+  reported as "Incorrect username or password." although the password had
+  been accepted. The form now says the session expired and to sign in again.
+- Apple: **Your folders and message counts are shown while offline.** The
+  folder list and each folder's message counts are now kept on the device.
+  An app opened without a connection shows your folders and their unread
+  badges in the sidebar, the folder menu above the message list still
+  switches between them, and the All, Unread and Flagged counts above the
+  list show the folder's counts as last seen. Before, the sidebar's Mail
+  section was empty and those counts read 0. The folder list now also
+  reloads by itself when the connection comes back, instead of waiting for
+  Reload.
+- Apple: **Your addresses are available to compose while offline.** The
+  address list is now kept on the device, so a message written without a
+  connection can be sent from any of your addresses and wait in the outbox.
+  Before, an app opened offline had no addresses to offer, so an account
+  with no default From address could not send at all, and a reply written
+  offline went out from your default address instead of the address the
+  original message was sent to.
+- Apple: **Refresh no longer empties the message list while offline.** On
+  macOS, Refresh with no connection cleared the list and deleted the
+  folder's saved copy, so its messages stayed gone until the connection came
+  back, on the next launch too. Refresh and a change of sort order now leave
+  the list as it is when the server can't be reached, and leaving a search
+  or the Unread or Flagged filter offline brings the folder's saved messages
+  and counts back instead of an empty list.
+- Apple: **Unread and Flagged counts keep up while a filter is on.** With
+  the Unread or Flagged filter showing, new mail didn't move the filter
+  counts or the folder's sidebar badge, and after Refresh the filter counts
+  read 0. They now follow the folder.
+- Apple: **Readable errors for failed actions.** Marking a message read or
+  flagged, deleting or moving it from the reader, loading compose's From
+  addresses, sending, creating an address (also on Apple Watch) and the Siri
+  and Shortcuts actions could show an internal error code such as
+  `network("offline")`. They now show the same plain wording as the rest of
+  the app, such as "Couldn't reach the server."
+- Apple: **Attachments stay attachments in the reader.** A `.txt` file
+  attached to an HTML message showed as the message's plain text, and an
+  `.html` file attached to a plain message showed as the message itself; the
+  reply quoted it and Spotlight indexed it. Parts sent as attachments are now
+  only listed as attachments, as the web app already did. Separately, two
+  messages in different folders could share attachment files, so opening or
+  forwarding one message's attachment could use the other message's file,
+  and two attachments with the same name showed as one. Each reader now keeps
+  its own attachment files, under names that never collide.
+- Apple: **Opening a message is more forgiving offline and after a
+  failure.** A message whose text was already on the device could fail to
+  open offline, with "Couldn't reach the server.", when it was opened from a
+  search or a folder whose list had not been loaded; it now opens from the
+  device. Dragging such a message out works the same way. A message whose
+  text arrived but could not be saved on the device no longer fails to open.
+  And a message that failed to load now tries again when you come back to
+  it, instead of staying on the error until Retry.
+- Apple: **Requests hand back their background time.** On iPhone, iPad
+  and Vision Pro, each request to the server asked iOS for extra time to
+  finish in case the app went to the background, and never handed that
+  time back. Once the app was in the background and the time ran out,
+  iOS could end the app, so it started over when you came back to it.
+  Each request now hands the time back as soon as it finishes.
+- Apple: **Refresh and sort respect the search you ran.** Refresh on the
+  search screen searched for whatever was typed in the field, even if it
+  hadn't been submitted; it now re-runs the search you submitted. The sort
+  menu stayed available during a search, though search results always come
+  newest first, and choosing a sort there cut a long search back to its
+  first 50 results. The menu is now unavailable while a search or the
+  Unread or Flagged filter is showing, and the folder's own sort is kept for
+  when you leave the search.
+- Apple: **Bulk actions on search results no longer change the wrong copy
+  of mail you sent yourself.** A message you send yourself is filed in both
+  Inbox and Sent, and in a small mailbox the two copies can share an ID.
+  Marking read or unread, flagging, moving, archiving, or deleting a
+  selection that held one of them in a search across folders changed only
+  one copy, which could be the one you weren't looking at. Dragging a
+  selection to a folder did the same, and also moved both of two different
+  messages that shared an ID. Those copies are now left unchanged like other
+  results that share an ID. The note saying so stays pinned at the bottom
+  of the list however far it is scrolled, until you dismiss it or act
+  again, and it now tells you to act on them from their own folders, since
+  the reader opens only the first of two identical copies.
+- Apple: **Signing out leaves nothing for the next account.** The sidebar's
+  folder counts and subscribed folders, a Spotlight result tapped while
+  signed out, and the files of attachments you opened now go when you sign
+  out. The next account to sign in on the device used to start from the last
+  one's counts until its own arrived, could be taken to a message the last
+  account's search result pointed at, and could open the last account's
+  attachment files.
+- Apple: **Folder counts that arrive while you sign out are dropped.** A
+  folder's message counts that the server sent while sign-out was still
+  under way (on a slow network, for example) could appear in the sidebar of
+  the next account to sign in on the device, and that account could then
+  save the last account's message total as its own for offline use.
+- Apple: **Sign Out always signs out.** On the Mac, Sign Out in Settings
+  while the app was still opening (on a slow network) left you signed in, and
+  the mailbox appeared anyway. Sign Out now waits for the opening to finish
+  and ends that session. Signing out, or back in, while the app was ending an
+  expired session could also run the sign-out twice, show "session expired"
+  on a sign-out you chose, or sign the new session straight back out.
+- Apple: **An unreadable saved session no longer blocks every launch.** If
+  the sign-in saved on the device could not be read (damaged, or saved in an
+  older format), every launch stopped on "The data couldn't be read because
+  it isn't in the correct format." until the user signed in again. The app
+  now discards it and opens the sign-in form with your username filled in and
+  a note that the session expired.
+- Apple: **Rule fields, flag reordering, and the feed reader on visionOS
+  match iPhone.** On visionOS, a mail rule's condition and forward-address
+  fields now leave the first letter lowercase, and the forward-address
+  field brings up the email keyboard. The Flags settings page gains the
+  Edit button for reordering flags, the feed reader shows its title inline
+  in the bar, and an article's page goes back and forward with a swipe, as
+  on iPhone and iPad.
+- Apple: **A message list left open offline stops retrying every 2
+  seconds.** The list checks its folder for new mail by polling the
+  server. When the server could not be reached, it tried again every 2
+  seconds for as long as the list stayed on screen. It now waits longer
+  after each failed try, up to a minute, and resumes its normal checks as
+  soon as the server answers.
+- **Messages in nested folders open on iPhone, iPad and Mac.**
+  `/fetch_message` signed its link to the raw message for the folder path
+  the client sent (`Parent/Child`), but the message is cached under the
+  server's own path (`Parent.Child`), so for any message in a nested folder
+  the link pointed at nothing. The Apple reader loads every body through that
+  link and showed a server error instead, and the web app's View source
+  failed the same way. The link now points at the cached copy.
+
+### Security
+- Apple: **Your username is no longer kept in the Keychain.** Signing in,
+  and the watch picking up the iPhone's session, also saved your username
+  in the Keychain for the direct IMAP/SMTP connection the app no longer
+  has. Nothing read it any more. The app no longer saves it, and the first
+  launch after updating deletes any copy an earlier build left behind.
+- **Admin app's `axios` dependency bumped to 1.20.0.** Resolves seven high
+  severity advisories affecting versions before 1.20.0: a Node HTTP adapter
+  prototype-pollution gadget enabling request socket hijack (CVE-2026-101905),
+  an unenforced `maxRedirects: 0` in the fetch adapter enabling redirect-based
+  SSRF (CVE-2026-101907), a ReDoS in the `data:` URL parser (CVE-2026-101903),
+  a ReDoS in proxy-bypass host normalization reachable via a redirect
+  `Location` header (CVE-2026-101906), a prototype-pollution gadget in
+  `toFormData` options (CVE-2026-101909), an HTTP/2 adapter that bypassed
+  configured DNS lookup and proxy controls (CVE-2026-101898), and an
+  unhandled `error` event during HTTP/2 session initialization that could
+  crash the process (CVE-2026-101901).
+
 ## [1.23.0] - 2026-10-04
 
 ### Added
