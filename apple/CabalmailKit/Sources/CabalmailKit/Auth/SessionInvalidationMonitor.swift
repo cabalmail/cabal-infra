@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// One-way announcement that the stored session is dead.
 ///
@@ -16,21 +17,21 @@ import Foundation
 /// behaviour. It is the Apple twin of Android's `AppContainer.authExpired`
 /// flow (issue #1476).
 ///
-/// Concurrency follows `Reachability`: continuations are held under a lock so
-/// any isolation domain can yield into them.
-public final class SessionInvalidationMonitor: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuations: [UUID: AsyncStream<Void>.Continuation] = [:]
+/// Concurrency follows `Reachability`: the continuations live in a `Mutex`,
+/// so any isolation domain can yield into them.
+public final class SessionInvalidationMonitor: Sendable {
+    private let continuations = Mutex<[UUID: AsyncStream<Void>.Continuation]>([:])
 
     public init() {}
 
     deinit {
-        lock.lock()
-        for continuation in continuations.values {
+        let observers = continuations.withLock { continuations in
+            defer { continuations.removeAll() }
+            return Array(continuations.values)
+        }
+        for continuation in observers {
             continuation.finish()
         }
-        continuations.removeAll()
-        lock.unlock()
     }
 
     /// Async stream yielding once per invalidation. Unlike `Reachability`
@@ -40,11 +41,12 @@ public final class SessionInvalidationMonitor: @unchecked Sendable {
     public func events() -> AsyncStream<Void> {
         AsyncStream { continuation in
             let id = UUID()
-            lock.lock()
-            continuations[id] = continuation
-            lock.unlock()
-            continuation.onTermination = { @Sendable _ in
-                self.removeContinuation(id: id)
+            continuations.withLock { $0[id] = continuation }
+            // Weak, as in `Reachability`: the continuation stores this
+            // handler, so a strong `self` keeps the monitor alive for as long
+            // as a subscriber holds the stream (#1809).
+            continuation.onTermination = { @Sendable [weak self] _ in
+                self?.removeContinuation(id: id)
             }
         }
     }
@@ -54,17 +56,18 @@ public final class SessionInvalidationMonitor: @unchecked Sendable {
     /// (a 401 that a refresh cures) — a signal there would sign the user out
     /// mid-session.
     public func sessionDidExpire() {
-        lock.lock()
-        let observers = Array(continuations.values)
-        lock.unlock()
+        let observers = continuations.withLock { Array($0.values) }
         for continuation in observers {
             continuation.yield(())
         }
     }
 
+    /// How many streams are subscribed; for tests.
+    var subscriberCount: Int {
+        continuations.withLock { $0.count }
+    }
+
     private func removeContinuation(id: UUID) {
-        lock.lock()
-        continuations.removeValue(forKey: id)
-        lock.unlock()
+        _ = continuations.withLock { $0.removeValue(forKey: id) }
     }
 }

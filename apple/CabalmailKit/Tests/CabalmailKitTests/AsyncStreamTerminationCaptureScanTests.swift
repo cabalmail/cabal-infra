@@ -22,11 +22,12 @@ final class AsyncStreamTerminationCaptureScanTests: XCTestCase {
     private enum SelfCapture: String {
         /// The handler's own capture list weakens `self` — the fixed shape.
         case weakHandler
-        /// The handler holds `self` strongly, deliberately: removal is
-        /// synchronous under a lock, so there is no `Task` to weaken, and the
-        /// handler (with its strong `self`) lives only as long as the stream
-        /// it belongs to. `Reachability` is per-client, `SessionInvalidation`
-        /// `Monitor` is one per `AppState`; both outlive their subscribers.
+        /// The handler holds `self` strongly. No site does any more:
+        /// `Reachability` and `SessionInvalidationMonitor` did, on the grounds
+        /// that both outlive their subscribers, until #1809 found a signed-out
+        /// session's `Reachability` kept alive by a stream it still fed. A new
+        /// strong handler fails the inventory below and needs that argument
+        /// made again.
         case strongHandler
         /// The handler never mentions `self` — it cancels a captured `Task`.
         case noSelf
@@ -39,13 +40,13 @@ final class AsyncStreamTerminationCaptureScanTests: XCTestCase {
     /// expected to carry. Asserted as an INVENTORY, so a new stream site shows
     /// up here rather than being silently exempt from the offender check.
     private static let expected: [String: SelfCapture] = [
-        "Auth/SessionInvalidationMonitor.swift": .strongHandler,
+        "Auth/SessionInvalidationMonitor.swift": .weakHandler,
         "Cache/EnvelopeCache.swift": .weakHandler,
         "IMAP/ApiBackedImapClient.swift": .noSelf,
         "IMAP/MailboxWatcher.swift": .weakHandler,
         "Logging/DebugLogStore.swift": .weakHandler,
         "Outbox/Outbox.swift": .weakHandler,
-        "Reachability.swift": .strongHandler,
+        "Reachability.swift": .weakHandler,
     ]
 
     /// The rule, stated over the whole package: no stored handler defers its

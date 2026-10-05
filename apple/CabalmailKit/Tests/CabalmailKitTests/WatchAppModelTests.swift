@@ -102,7 +102,7 @@ final class WatchAppModelTests: XCTestCase {
     private func makeDefaults() -> UserDefaults {
         let suite = "cabalmail.watch.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        addTeardownBlock { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         return defaults
     }
 

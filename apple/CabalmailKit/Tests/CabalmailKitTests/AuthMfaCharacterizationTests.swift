@@ -372,49 +372,29 @@ final class SessionInvalidationMonitorCharacterizationTests: XCTestCase {
         XCTAssertEqual(registeredStreams(monitor), 0, "a stream nobody keeps unregisters at once")
     }
 
-    /// Pins current behaviour, which looks like a defect: the stream's
-    /// termination handler captures the monitor strongly, so a monitor with a
-    /// live subscriber is never released, and the `deinit` that finishes every
-    /// stream never runs while one is subscribed. A subscriber's stream ends
-    /// only when the subscriber cancels it. Harmless while the app owns one
-    /// monitor for the process; a session-owned monitor would leak with its
-    /// observer. (`Reachability` captures the same way; the Kit's other
-    /// stream owners use `[weak self]` there.)
-    /// Tracked in #1809.
-    func testLiveSubscriptionKeepsTheMonitorAlive() {
+    /// #1809, fixed in workstream 0.7. The stream's termination handler holds
+    /// the monitor weakly, so a subscriber keeps only its stream: releasing the
+    /// monitor's last owner frees it, and its `deinit` finishes every live
+    /// stream, so the subscriber's loop ends rather than outliving the
+    /// session. Until 0.7 this pinned the reverse (the subscription held the
+    /// monitor until the subscriber cancelled), as `Reachability` did.
+    func testLiveSubscriptionDoesNotKeepTheMonitorAlive() async {
         weak var subscribed: SessionInvalidationMonitor?
-        weak var unsubscribed: SessionInvalidationMonitor?
-        var stream: AsyncStream<Void>?
+        let stream: AsyncStream<Void>
         do {
             let monitor = SessionInvalidationMonitor()
             subscribed = monitor
             stream = monitor.events()
-            let bystander = SessionInvalidationMonitor()
-            unsubscribed = bystander
         }
-        XCTAssertNil(unsubscribed, "negative control: a monitor nobody holds is released")
-        XCTAssertNotNil(subscribed, "the subscription holds its monitor")
-        XCTAssertNotNil(stream)
-
-        stream = nil
-        XCTAssertNil(subscribed, "dropping the stream ends the subscription and frees the monitor")
+        XCTAssertNil(subscribed, "the subscription held its monitor (#1809)")
+        let finishedByTheMonitor = await finishesWithoutCancelling(stream)
+        XCTAssertTrue(finishedByTheMonitor, "releasing the monitor did not finish its live stream")
     }
 
-    /// The monitor exposes no count, so this reads its stored dictionary
-    /// through `Mirror`; a renamed or reshaped property fails here rather than
-    /// turning the assertion into a no-op. A failure right after the storage
-    /// is reshaped means this probe needs rewriting against the new storage,
-    /// not that unregistration broke; never just edit the label to pass.
-    private func registeredStreams(
-        _ monitor: SessionInvalidationMonitor,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> Int {
-        let child = Mirror(reflecting: monitor).children.first { $0.label == "continuations" }
-        guard let streams = child?.value as? [UUID: AsyncStream<Void>.Continuation] else {
-            XCTFail("SessionInvalidationMonitor no longer stores `continuations`", file: file, line: line)
-            return -1
-        }
-        return streams.count
+    /// Read through the monitor's test-only count. A failure right after the
+    /// storage is reshaped means this probe needs rewriting against the new
+    /// storage, not that unregistration broke; never just edit it to pass.
+    private func registeredStreams(_ monitor: SessionInvalidationMonitor) -> Int {
+        monitor.subscriberCount
     }
 }

@@ -2,21 +2,41 @@ import XCTest
 @testable import CabalmailKit
 
 final class DebugLogStoreTests: XCTestCase {
-    func testAppendRespectsCapacity() async {
+    func testAppendRespectsCapacity() {
         let store = DebugLogStore(capacity: 3)
         for index in 0..<5 {
-            await store.append(DebugLogStore.Entry(
+            store.append(DebugLogStore.Entry(
                 level: .info, category: "test", message: "line \(index)"
             ))
         }
-        let snapshot = await store.snapshot()
+        let snapshot = store.snapshot()
         XCTAssertEqual(snapshot.count, 3)
         XCTAssertEqual(snapshot.map(\.message), ["line 2", "line 3", "line 4"])
     }
 
-    func testNewEntriesStreamsAppends() async throws {
+    /// The ring overwrites in place once full; the snapshot still reads
+    /// oldest first across the wrap, and again after a clear.
+    func testSnapshotStaysOldestFirstAcrossTheWrap() {
+        let store = DebugLogStore(capacity: 4)
+        for index in 0..<11 {
+            store.log(.info, "ring", "line \(index)")
+        }
+        XCTAssertEqual(store.snapshot().map(\.message), ["line 7", "line 8", "line 9", "line 10"])
+
+        store.clear()
+        store.log(.info, "ring", "after")
+        XCTAssertEqual(store.snapshot().map(\.message), ["after"])
+    }
+
+    func testZeroCapacityKeepsNothing() {
+        let store = DebugLogStore(capacity: 0)
+        store.log(.info, "ring", "dropped")
+        XCTAssertTrue(store.snapshot().isEmpty)
+    }
+
+    func testNewEntriesStreamsAppends() async {
         let store = DebugLogStore(capacity: 10)
-        let stream = await store.newEntries()
+        let stream = store.newEntries()
         let received = Task { () -> [String] in
             var collected: [String] = []
             for await entry in stream {
@@ -25,14 +45,48 @@ final class DebugLogStoreTests: XCTestCase {
             }
             return collected
         }
-        // Small async yield so the subscription is in place before we
-        // fire writes. Without this the continuation setup can race the
-        // first `append` and drop it.
-        try await Task.sleep(nanoseconds: 10_000_000)
-        await store.log(.info, "cat", "one")
-        await store.log(.warn, "cat", "two")
+        // `newEntries` registers before it returns, so nothing logged from
+        // here on can miss the subscriber.
+        store.log(.info, "cat", "one")
+        store.log(.warn, "cat", "two")
         let collected = await received.value
         XCTAssertEqual(collected, ["one", "two"])
+    }
+
+    /// Writers on many threads at once: every line lands, each writer's lines
+    /// keep their own order, and a subscriber sees exactly the buffer's order.
+    func testConcurrentWritersKeepTheirOrderAndSubscribersMatchTheBuffer() async {
+        let writers = 8
+        let linesEach = 50
+        let store = DebugLogStore(capacity: writers * linesEach)
+        let stream = store.newEntries()
+        let streamed = Task { () -> [String] in
+            var collected: [String] = []
+            for await entry in stream {
+                collected.append(entry.message)
+                if collected.count == writers * linesEach { break }
+            }
+            return collected
+        }
+
+        await withTaskGroup(of: Void.self) { group in
+            for writer in 0..<writers {
+                group.addTask {
+                    for line in 0..<linesEach {
+                        store.log(.info, "w\(writer)", "\(writer):\(line)")
+                    }
+                }
+            }
+        }
+
+        let buffered = store.snapshot().map(\.message)
+        XCTAssertEqual(buffered.count, writers * linesEach)
+        for writer in 0..<writers {
+            let own = buffered.filter { $0.hasPrefix("\(writer):") }
+            XCTAssertEqual(own, (0..<linesEach).map { "\(writer):\($0)" }, "writer \(writer)'s lines reordered")
+        }
+        let delivered = await streamed.value
+        XCTAssertEqual(delivered, buffered, "the subscriber saw a different order from the buffer")
     }
 
     /// #1761, the same shape as `MailboxWatcherTests`' leak case: the store
@@ -42,8 +96,8 @@ final class DebugLogStoreTests: XCTestCase {
     /// strong `self` in the handler to be formed at all.
     func testStoreDeallocatesWhileASubscriberStillHoldsTheStream() async throws {
         var store: DebugLogStore? = DebugLogStore(capacity: 4)
-        weak var leaked: DebugLogStore? = store
-        let stream = await store!.newEntries()
+        weak let leaked: DebugLogStore? = store
+        let stream = store!.newEntries()
         store = nil
 
         var released = false
@@ -61,11 +115,20 @@ final class DebugLogStoreTests: XCTestCase {
         withExtendedLifetime(stream) {}
     }
 
-    func testClearEmptiesBuffer() async {
+    /// Releasing the store finishes its live streams, so a Debug Log view
+    /// tailing a store that went away stops instead of waiting forever.
+    func testReleasingTheStoreFinishesItsStreams() async {
+        var store: DebugLogStore? = DebugLogStore(capacity: 4)
+        let stream = store!.newEntries()
+        store = nil
+        let finished = await finishesWithoutCancelling(stream)
+        XCTAssertTrue(finished, "the stream outlived its store")
+    }
+
+    func testClearEmptiesBuffer() {
         let store = DebugLogStore(capacity: 10)
-        await store.log(.info, "cat", "one")
-        await store.clear()
-        let snapshot = await store.snapshot()
-        XCTAssertTrue(snapshot.isEmpty)
+        store.log(.info, "cat", "one")
+        store.clear()
+        XCTAssertTrue(store.snapshot().isEmpty)
     }
 }

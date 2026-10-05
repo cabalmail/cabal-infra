@@ -33,3 +33,23 @@ func waitUntil(
 func bufferedCount<Element: Sendable>(_ stream: AsyncStream<Element>) async -> Int {
     await CabalmailKitTestSupport.bufferedCount(stream)
 }
+
+/// Whether `stream` ends on its own, without this side cancelling it: true
+/// once its producer finishes it, false if it is still open after `timeout`.
+/// For lifetime tests, where "the owner went away" should finish the stream.
+func finishesWithoutCancelling<Element: Sendable>(
+    _ stream: AsyncStream<Element>,
+    timeout: TimeInterval = defaultWaitTimeout
+) async -> Bool {
+    let drain = Task { () -> Bool in
+        for await _ in stream {}
+        return !Task.isCancelled
+    }
+    let deadline = Task {
+        try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+        drain.cancel()
+    }
+    let finished = await drain.value
+    deadline.cancel()
+    return finished
+}
