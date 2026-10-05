@@ -118,6 +118,15 @@ public actor CognitoAuthService: AuthService {
     /// starting its own, so a burst of 401s costs one `InitiateAuth`.
     private var inFlightRefresh: Task<AuthTokens, Error>?
 
+    /// Set by `signOut()`: this service's session is over. Every session on
+    /// the device stores its tokens in the same keychain item, so once the
+    /// next account signs in that item holds the next account's tokens, and
+    /// a request the ended session's work started then would go out as that
+    /// account (#1852). From here on the service reads no tokens, so such a
+    /// request fails with `.notSignedIn` before it is sent. A later sign-in
+    /// or `adopt` on the same service starts a session again.
+    private var ended = false
+
     public init(
         configuration: Configuration,
         transport: HTTPTransport = URLSessionHTTPTransport(),
@@ -167,6 +176,7 @@ public actor CognitoAuthService: AuthService {
             return .mfaCodeRequired(method)
         }
         let tokens = try parseAuthResult(response)
+        ended = false
         try persist(tokens: tokens)
         return .signedIn
     }
@@ -233,6 +243,7 @@ public actor CognitoAuthService: AuthService {
     }
 
     public func signOut() async throws {
+        ended = true
         pendingChallenge = nil
         // A refresh still in flight must not write tokens back after this.
         inFlightRefresh?.cancel()
@@ -247,6 +258,7 @@ public actor CognitoAuthService: AuthService {
     /// `WatchHandoff`. The API-backed clients only need `currentIdToken()`,
     /// which refreshes off the adopted refresh token.
     public func adopt(tokens: AuthTokens) throws {
+        ended = false
         try persist(tokens: tokens)
     }
 
@@ -291,7 +303,7 @@ public actor CognitoAuthService: AuthService {
     /// sign-in form with the session-expired note instead of the same raw
     /// decoding error on every launch (#1806).
     private func loadTokens() throws -> AuthTokens? {
-        guard let data = try secureStore.get(SecureStoreKey.authTokens) else { return nil }
+        guard !ended, let data = try secureStore.get(SecureStoreKey.authTokens) else { return nil }
         guard let tokens = try? JSONDecoder().decode(AuthTokens.self, from: data) else {
             try? secureStore.remove(SecureStoreKey.authTokens)
             return nil
@@ -410,6 +422,7 @@ extension CognitoAuthService {
         // three minutes), not a wrong password (#1807).
         let response = try await call("RespondToAuthChallenge", body: body, notAuthorized: .authExpired)
         let tokens = try parseAuthResult(response)
+        ended = false
         try persist(tokens: tokens)
         pendingChallenge = nil
     }
