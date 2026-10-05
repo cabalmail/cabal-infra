@@ -158,6 +158,11 @@ struct MailRootView: View {
     #if !os(macOS)
     @Environment(\.showsSettingsGear) private var showsSettingsGear
     #endif
+    /// This main window's identity, so the folder panel's Settings gear opens
+    /// Settings in this window rather than in every one (`MainWindowCommandScope`).
+    #if os(iOS)
+    @Environment(\.commandWindowID) private var commandWindowID
+    #endif
     var isWideSidebar: Bool {
         #if os(macOS)
         return true
@@ -685,7 +690,7 @@ extension MailRootView {
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
-                                appState.requestSettings()
+                                appState.requestSettings(in: commandWindowID)
                             } label: {
                                 Image(systemName: "gearshape")
                                     .accessibilityLabel("Settings")

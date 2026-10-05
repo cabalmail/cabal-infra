@@ -20,6 +20,8 @@ enum FolderMarkAllRead {
     static func perform(folderPath: String, client: CabalmailClient, appState: AppState) async throws -> Int {
         let flipped = try await client.imapClient.markFolderRead(folder: folderPath)
         try? await client.envelopeCache.invalidate(folder: folderPath)
+        // Signed out meanwhile: the badge is the last account's (#1848).
+        guard appState.acceptsCounts(from: client) else { return flipped }
         if let total = appState.folderTotalCounts[folderPath] {
             appState.setFolderCounts(folderPath: folderPath, unread: 0, total: total)
         } else {

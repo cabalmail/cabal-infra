@@ -47,7 +47,8 @@ extension MessageListView {
 
     private func refreshFolderStatus() async {
         guard let client = appState.client else { return }
-        if let status = try? await client.imapClient.status(path: folder.path) {
+        if let status = try? await client.imapClient.status(path: folder.path),
+           appState.acceptsCounts(from: client) {
             appState.setFolderCounts(
                 folderPath: folder.path,
                 unread: status.unseen ?? 0,
