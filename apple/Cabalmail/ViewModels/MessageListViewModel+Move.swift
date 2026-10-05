@@ -47,7 +47,7 @@ extension MessageListViewModel {
                 appState.applyUnreadDelta(folderPath: source, delta: 1)
                 appState.applyUnreadDelta(folderPath: destination, delta: -1)
             }
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -148,7 +148,7 @@ extension MessageListViewModel {
                     source: source, destination: destination, snapshot: snapshot,
                     unread: unreadBySource[source] ?? 0, markSeenFirst: markSeenFirst
                 )
-                errorMessage = "\(error)"
+                errorMessage = error.localizedDescription
             }
         }
     }

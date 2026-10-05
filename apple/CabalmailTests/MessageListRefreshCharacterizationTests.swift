@@ -115,16 +115,14 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
 
     /// The negative control for the pull test, and the path the view's
     /// 60-second poll takes (it calls `refresh()` directly from its `.task`).
-    /// The IDLE watcher's refresh runs inside `watcherTask`, which
-    /// `stopWatching()` cancels when the list disappears, so it takes the
-    /// same path. Pins current behaviour, which looks like a defect: a
-    /// refresh in flight when its task is cancelled (the list leaves the
-    /// screen, for instance under a pushed reader) paints "cancelled" over
-    /// the list, which the view keeps in `@State` and shows again on return
-    /// -- the #736 / #403 class that `loadInitial` and `refreshFromPull` were
-    /// moved off.
-    /// Tracked in #1816.
-    func testAPlainRefreshInACancelledTaskShowsCancelledWeakness() async throws {
+    /// The watcher's refresh runs inside `watcherTask`, which `stopWatching()`
+    /// cancels when the list disappears, so it takes the same path. A refresh
+    /// in flight when its task is cancelled (the list leaves the screen, for
+    /// instance under a pushed reader) is dropped without painting
+    /// "cancelled" over the list, which the view would keep in `@State` and
+    /// show again on return. Fixed in #1816; this test pinned the banner
+    /// until then.
+    func testAPlainRefreshInACancelledTaskPaintsNoError() async throws {
         let model = try await fixture.makeModel(loaded: [1], total: 1)
         await fixture.scriptRefresh(messages: 2, page: [2, 1])
 
@@ -132,8 +130,7 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         poll.cancel()
         await poll.value
 
-        let shown = try XCTUnwrap(model.errorMessage, "a cancelled refresh paints an error")
-        XCTAssertTrue(shown.contains("cancelled"), shown)
+        XCTAssertNil(model.errorMessage, "a cancelled refresh has nothing to report")
         XCTAssertEqual(model.envelopes.map(\.uid), [1])
     }
 

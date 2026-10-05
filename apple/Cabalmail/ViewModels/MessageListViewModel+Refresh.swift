@@ -206,7 +206,7 @@ extension MessageListViewModel {
         // Search scope has no folder cache to wipe; a force-reload just re-runs
         // the active search (or no-ops when nothing is searched).
         if isSearchScope {
-            if isSearchActive { await runSearch(resetFilterTab: false, preserveDepth: true) }
+            if isSearchActive { await refreshSearch() }
             return
         }
         // Ask the server before dropping anything. Offline the wipe used to

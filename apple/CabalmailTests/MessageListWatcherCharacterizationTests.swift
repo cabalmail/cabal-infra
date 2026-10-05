@@ -14,8 +14,8 @@ import CabalmailKit
 // - the change-driven auto-refresh from the Phase 7 client (52b4c039): one
 //   change stream per folder list and none on the global search surface
 //   (32f398c5). Every `.changed` tick runs the ordinary `refresh()`, which
-//   leaves a trimmed deep window in place (64794213) and re-runs an active
-//   pill search instead of asking for STATUS.
+//   leaves a trimmed deep window in place (64794213) and, with a pill on,
+//   asks STATUS for the counts and then re-runs the pill's search (#1819).
 // - the Phase 7 reconnect as the list sees it: a failed stream is reopened
 //   and the list keeps refreshing through it. #1797's open-failure backoff
 //   (b039d2d6) is pinned in the Kit's MailboxWatcherTests, not here.
@@ -315,18 +315,12 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelope(at: 300)?.uid, 701, "the server holds UID 701 at index 300")
     }
 
-    /// Pins current behaviour, which looks like a defect: while the Unread or
-    /// Flagged pill is showing, a change event re-runs the pill's search and
-    /// sends no STATUS. The pill counts and this list's push to the sidebar
-    /// badge (#1064) stay where they were until something else moves them:
-    /// an optimistic delta, a manual sidebar refresh, or (for the app icon
-    /// only) AppState's 60 s badge poller.
-    ///
-    /// The absence is read once the re-run search has landed. Today the
-    /// refresh returns right there, which orders the read; a STATUS added
-    /// after the search would race it.
-    /// Tracked in #1819.
-    func testAnEventWhileAPillIsActiveRerunsTheSearchAndLeavesTheCountsStale() async throws {
+    /// While the Unread or Flagged pill is showing, a change event asks for
+    /// STATUS and then re-runs the pill's search, so the pill counts and this
+    /// list's push to the sidebar badge (#1064) follow the folder. STATUS
+    /// goes first, so its counts have landed by the time the re-run search
+    /// arrives. Fixed in #1819; this test pinned the stale counts until then.
+    func testAnEventWhileAPillIsActiveTakesFreshCountsAndRerunsTheSearch() async throws {
         let imap = harness.imap
         await harness.scriptNewMessage()
         await imap.scriptSearch(SearchResult(
@@ -355,10 +349,10 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         try await waitUntilOnMainActor { !model.isLoading }
 
         let statusCalls = await imap.statusCalls
-        XCTAssertTrue(statusCalls.isEmpty, "no STATUS, so no fresh counts")
-        XCTAssertEqual(model.unseen, 3, "the scripted STATUS would have said 0")
-        XCTAssertEqual(model.totalMessages, 5, "the scripted STATUS would have said 6")
-        XCTAssertNil(model.appState.folderUnreadCounts["INBOX"], "nothing is pushed to the sidebar badge")
+        XCTAssertEqual(statusCalls.count, 1, "STATUS for the counts")
+        XCTAssertEqual(model.unseen, 0, "as the scripted STATUS says")
+        XCTAssertEqual(model.totalMessages, 6)
+        XCTAssertEqual(model.appState.folderUnreadCounts["INBOX"], 0, "and pushed to the sidebar badge")
         XCTAssertEqual(model.envelopes.map(\.uid), [4])
         XCTAssertEqual(model.filterTab, .unread)
     }
