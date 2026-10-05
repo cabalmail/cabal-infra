@@ -160,33 +160,31 @@ final class RestorePipelineCharacterizationTests: XCTestCase {
         XCTAssertEqual(try harness.storedTokens(), expired)
     }
 
-    /// Pins current behaviour, which looks like a defect: a corrupt or
-    /// old-format token blob is never cleared. The raw `DecodingError` is not
-    /// a `CabalmailError`, so `OfflineLaunch` rethrows it and AppState's
-    /// catch-all lands on `.error(localizedDescription)` ("The data couldn't
-    /// be read ...") and keeps the keychain. Its precheck finds the blob
-    /// again next launch, so every launch ends the same way until an
-    /// interactive sign-in overwrites it. (`currentTokens()` swallows the same
-    /// error with `try?`, so the two accessors disagree.) Any change to
-    /// `AuthTokens`' `Codable` shape would put every upgraded user here.
-    /// Tracked in #1806.
-    func testCorruptTokenBlobThrowsAnErrorThatIsNotACabalmailError() async throws {
+    /// A corrupt or old-format token blob is removed and reads as no stored
+    /// session: `currentIdToken` throws `.notSignedIn`, which AppState's
+    /// restore shows as an expired session on the sign-in form, username
+    /// kept (#1806). Before, the raw `DecodingError` escaped `OfflineLaunch`,
+    /// AppState showed "The data couldn't be read ..." and kept the blob, so
+    /// every launch ended the same way until an interactive sign-in, and a
+    /// change to `AuthTokens`' `Codable` shape would have put every upgraded
+    /// user there.
+    func testCorruptTokenBlobIsClearedAndReadsAsNotSignedIn() async throws {
         let blob = Data("not a token pair".utf8)
         try harness.keychain.set(blob, forKey: SecureStoreKey.authTokens)
         let announcements = harness.monitor.events()
 
         do {
             try await harness.restore()
-            XCTFail("expected the blob to fail to decode")
-        } catch is CabalmailError {
-            XCTFail("a corrupt blob surfaces as the raw decoding error, not a CabalmailError")
+            XCTFail("expected restore to find no usable session")
+        } catch CabalmailError.notSignedIn {
+            // expected
         } catch {
-            XCTAssertTrue(error is DecodingError, "got \(type(of: error))")
+            XCTFail("expected .notSignedIn, got \(error)")
         }
 
         let trail = await harness.network.trail
         XCTAssertEqual(trail, ["GET config.json"])
-        XCTAssertEqual(try harness.keychain.get(SecureStoreKey.authTokens), blob)
+        XCTAssertNil(try harness.keychain.get(SecureStoreKey.authTokens))
         let count = await bufferedCount(announcements)
         XCTAssertEqual(count, 0)
     }

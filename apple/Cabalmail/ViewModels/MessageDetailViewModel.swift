@@ -306,7 +306,7 @@ final class MessageDetailViewModel {
                 isSeen = false
             }
             onMoveFailed?(!wasSeen)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
             onFailure?(error)
         }
     }
@@ -345,7 +345,7 @@ final class MessageDetailViewModel {
             await confirmRemoval()
         } catch {
             onMoveFailed?(false)
-            errorMessage = "\(error)"
+            errorMessage = error.localizedDescription
             onFailure?(error)
         }
     }
