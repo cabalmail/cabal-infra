@@ -1,3 +1,4 @@
+import Synchronization
 import XCTest
 @testable import CabalmailKit
 
@@ -455,23 +456,21 @@ private actor RestoreNetwork: HTTPTransport {
 
 /// A keychain whose writes can be made to fail the way `KeychainSecureStore`
 /// reports an OSStatus: as `.transport`.
-private final class WriteFailingSecureStore: SecureStore, @unchecked Sendable {
+private final class WriteFailingSecureStore: SecureStore {
     let base = InMemorySecureStore()
-    private let lock = NSLock()
-    private var failing = false
-    private var failures = 0
+    private let state = Mutex((failing: false, failures: 0))
 
     var failWrites: Bool {
-        get { lock.withLock { failing } }
-        set { lock.withLock { failing = newValue } }
+        get { state.withLock { $0.failing } }
+        set { state.withLock { $0.failing = newValue } }
     }
 
-    var failedWrites: Int { lock.withLock { failures } }
+    var failedWrites: Int { state.withLock { $0.failures } }
 
     func set(_ value: Data, forKey key: String) throws {
-        let fail = lock.withLock { () -> Bool in
-            if failing { failures += 1 }
-            return failing
+        let fail = state.withLock { state -> Bool in
+            if state.failing { state.failures += 1 }
+            return state.failing
         }
         if fail { throw CabalmailError.transport("Keychain write failed (-25308)") }
         try base.set(value, forKey: key)

@@ -1,3 +1,4 @@
+import Synchronization
 import XCTest
 @testable import CabalmailKit
 
@@ -417,7 +418,12 @@ final class AuthServiceMfaTests: XCTestCase {
 }
 
 /// Tiny mutable box used to advance the clock inside a @Sendable closure.
-final class ClockReference: @unchecked Sendable {
-    var value: Date
-    init(value: Date) { self.value = value }
+final class ClockReference: Sendable {
+    private let storage: Mutex<Date>
+    init(value: Date) { storage = Mutex(value) }
+
+    var value: Date {
+        get { storage.withLock { $0 } }
+        set { storage.withLock { $0 = newValue } }
+    }
 }
