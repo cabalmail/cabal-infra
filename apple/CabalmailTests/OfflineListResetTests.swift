@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// #1796: with the server out of reach, Refresh, a sort change and leaving a
 /// search used to empty the message list, and Refresh also deleted the

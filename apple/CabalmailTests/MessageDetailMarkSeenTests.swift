@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8: mark-as-read when the reader
 /// opens a message.

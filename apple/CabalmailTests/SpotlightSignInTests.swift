@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// A Spotlight result tapped while signed out parks on `pendingSpotlightRef`
 /// until a session is wired. The index holds the last signed-in account's

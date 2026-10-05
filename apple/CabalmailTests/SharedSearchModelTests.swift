@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The search model both iOS layout trees share (#1654): one per client for
 /// the life of the process, so the query and results survive a layout swap.

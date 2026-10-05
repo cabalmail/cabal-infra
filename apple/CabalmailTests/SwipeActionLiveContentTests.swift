@@ -1,7 +1,7 @@
 import XCTest
 import AppKit
 import SwiftUI
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for the finding behind the 1.22.3 revert (#901, #1747).
 //

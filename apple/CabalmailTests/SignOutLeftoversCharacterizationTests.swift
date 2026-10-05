@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Workstream 0.8 characterization suite, with a wired session (sign-in
 /// through `SessionHarness`): what `AppState.signOut()` leaves in place (the

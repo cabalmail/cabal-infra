@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #843: an optimistic prune dropped the
 // envelope but left `totalMessages` (the last STATUS count) untouched. The

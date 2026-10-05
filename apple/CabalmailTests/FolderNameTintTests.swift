@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// #1297: colouring folder names by unread state took the sidebar from
 /// ~14:1 to 1.52:1 on the selected row and 4.00:1 on caught-up rows.

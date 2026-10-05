@@ -24,7 +24,7 @@ import XCTest
 // and the statement is what makes it legal — so both are pinned here.
 final class ContentColumnWidthDeferralSourceScanTests: XCTestCase {
 
-    private static let path = "Cabalmail/Views/MailRootView.swift"
+    private static let path = "CabalmailUI/Shell/MailRootView.swift"
 
     func testTheMacWriteWaitsForTheDefaultRunLoopMode() throws {
         let arm = try Self.macArm(in: Self.code(in: try Self.source()))

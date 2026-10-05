@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The feed reader's toolbar order is shared between the live toolbar and
 /// the macOS empty pane's stand-ins; pin it so a reorder in one place is a

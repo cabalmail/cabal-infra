@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Regression coverage for issue #903: tapping "Save Draft" with the From
 /// picker still on "Select an address…" dismissed the composer exactly as if

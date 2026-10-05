@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Expand all / Collapse all on the two sidebar trees: each persists its
 // collapsed set, so the affordances are "empty set" and "every node that

@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Scroll-driven search pagination. A fresh search (pill or text) loads one
 // page and pages in the rest as the list scrolls, replacing the old eager

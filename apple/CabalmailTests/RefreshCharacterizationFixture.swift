@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Shared set-up for the workstream 0.8 refresh characterization suites
 /// (`MessageListRefreshCharacterizationTests` and

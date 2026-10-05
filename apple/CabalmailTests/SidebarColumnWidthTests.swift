@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #983: the macOS folder sidebar came up at
 // SwiftUI's own default column width, which the tester measured at 144pt with

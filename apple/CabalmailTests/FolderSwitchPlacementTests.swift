@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for #1626, second pass.
 //
@@ -55,7 +55,7 @@ final class FolderSwitchPlacementTests: XCTestCase {
     /// with it: the header *is* the folder name, and the title region is the
     /// width this fix reclaims.
     func testTheTouchBranchDrawsBothHosts() throws {
-        let body = try Self.source("Cabalmail/Views/MessageListView+FolderSwitch.swift")
+        let body = try Self.source("CabalmailUI/Mail/MessageList/MessageListView+FolderSwitch.swift")
         XCTAssertTrue(body.contains("switch folderSwitchHost {"))
         let titleMenu = "case .titleMenu:\n"
             + "                content.toolbarTitleMenu { folderSwitchMenuItems }"
@@ -73,7 +73,7 @@ final class FolderSwitchPlacementTests: XCTestCase {
     /// The header menu is the Mac's menu with a different host, so a driver
     /// (and an assistive client) reads one affordance on both.
     func testTheHeaderMenuMatchesTheMacsIdentity() throws {
-        let body = try Self.source("Cabalmail/Views/MessageListView+FolderSwitch.swift")
+        let body = try Self.source("CabalmailUI/Mail/MessageList/MessageListView+FolderSwitch.swift")
         XCTAssertEqual(
             body.components(separatedBy: #"accessibilityIdentifier("list.folderSwitch")"#).count - 1, 2,
             "the iPad header menu and the Mac toolbar menu share the identifier"
@@ -88,7 +88,7 @@ final class FolderSwitchPlacementTests: XCTestCase {
     /// If that ever stops being true, the bar needs a fourth ranked item.
     @MainActor
     func testMarkAllAsReadHasARouteOffTheBar() throws {
-        let sidebar = try Self.source("Cabalmail/Views/FolderListView+Helpers.swift")
+        let sidebar = try Self.source("CabalmailUI/Mail/Folders/FolderListView+Helpers.swift")
         XCTAssertTrue(
             sidebar.contains("markAllRead(folderPath: folder.path)"),
             "the folder list's own menu is the More menu's second home (#1626)"
@@ -105,7 +105,7 @@ final class FolderSwitchPlacementTests: XCTestCase {
 
     /// Floor: a mis-rooted read finds nothing and passes everything above.
     func testTheSourceIsReadable() throws {
-        let body = try Self.source("Cabalmail/Views/MessageListView+FolderSwitch.swift")
+        let body = try Self.source("CabalmailUI/Mail/MessageList/MessageListView+FolderSwitch.swift")
         XCTAssertTrue(body.contains("extension MessageListView {"))
     }
 

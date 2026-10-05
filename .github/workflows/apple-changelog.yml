@@ -49,4 +49,4 @@ jobs:
       # surface. The script applies this with `grep -E` (no lookahead), so
       # each shipped directory is listed by name; a new target directory
       # needs adding here.
-      run: ./.github/scripts/check-client-changelog.sh Apple '^apple/(Cabalmail|CabalmailMac|CabalmailWatch|CabalmailNotificationService|CabalmailMacNotificationService|CabalmailWebExtension|CabalmailMacWebExtension|CabalmailKit/Sources)/'
+      run: ./.github/scripts/check-client-changelog.sh Apple '^apple/(Cabalmail|CabalmailUI|CabalmailMac|CabalmailWatch|CabalmailNotificationService|CabalmailMacNotificationService|CabalmailWebExtension|CabalmailMacWebExtension|CabalmailKit/Sources)/'

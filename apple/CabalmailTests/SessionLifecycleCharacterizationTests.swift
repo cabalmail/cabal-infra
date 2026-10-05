@@ -1,7 +1,7 @@
 import XCTest
 import Observation
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8 of the rearchitecture proposal.
 /// `AppState` is about to split into per-window navigation and a per-account

@@ -31,7 +31,7 @@ import XCTest
 // hyphen too (on iPhone and in the iPad inspector, though not on macOS 27).
 final class NewAddressPreviewWrapSourceScanTests: XCTestCase {
 
-    private static let path = "Cabalmail/Views/NewAddressSheet.swift"
+    private static let path = "CabalmailUI/Addresses/NewAddressSheet.swift"
 
     /// Rule 1: both branches draw the preview through `wrappable`.
     func testThePreviewDrawsTheWrappableAddress() throws {

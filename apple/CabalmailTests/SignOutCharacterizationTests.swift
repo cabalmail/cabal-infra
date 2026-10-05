@@ -1,7 +1,7 @@
 import XCTest
 import Observation
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Workstream 0.8 characterization suite: `AppState.signOut()` with a wired
 /// session, the teardown past the no-client guard that

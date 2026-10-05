@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8 of the 2026-10 rearchitecture
 /// proposal: the guards at the top of `AppState.restoreIfPossible()`, through

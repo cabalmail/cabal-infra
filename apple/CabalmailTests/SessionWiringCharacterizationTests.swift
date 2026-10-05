@@ -1,7 +1,7 @@
 import XCTest
 import Observation
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Workstream 0.8 characterization suite: what `AppState.wireSession` builds
 /// and starts once a sign-in has tokens, what `refreshWatchSession()` hands

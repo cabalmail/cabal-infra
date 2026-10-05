@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Issue #1419: a search that covered only the subscribed folders answered
 /// "No matches" for a message sitting in Sent, and the only thing on screen

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1370: focusing the compose body scrolled
 // the form not at all, so the keyboard and its input-accessory bar covered
@@ -202,7 +202,7 @@ final class ComposeBodyScrollPolicyTests: XCTestCase {
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
         return try String(
-            contentsOf: apple.appendingPathComponent("Cabalmail/Views/ComposeView.swift"),
+            contentsOf: apple.appendingPathComponent("CabalmailUI/Compose/ComposeView.swift"),
             encoding: .utf8
         )
     }

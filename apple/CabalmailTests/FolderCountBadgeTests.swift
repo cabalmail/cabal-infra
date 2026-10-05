@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The one count-badge rule both sidebars read (cross-media plan, Phase 1):
 /// mail folder rows and feed rows show the same thing for the same

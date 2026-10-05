@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Pins the address row's drag wiring. Nothing renders a drag in a unit
 /// test, so this scans the source: every address row advertises the raw
@@ -10,7 +10,7 @@ import XCTest
 final class AddressRowDragSourceScanTests: XCTestCase {
 
     func testAddressRowsDragTheRawAddressAsPlainText() throws {
-        let body = try Self.source("Cabalmail/Views/AddressListView.swift")
+        let body = try Self.source("CabalmailUI/Addresses/AddressListView.swift")
         XCTAssertTrue(
             body.contains(".draggable(address.address)"),
             "the address row is draggable as the raw address string"
@@ -23,7 +23,7 @@ final class AddressRowDragSourceScanTests: XCTestCase {
 
     func testCorpusIsReadable() throws {
         XCTAssertTrue(
-            try Self.source("Cabalmail/Views/AddressListView.swift").contains("import SwiftUI"),
+            try Self.source("CabalmailUI/Addresses/AddressListView.swift").contains("import SwiftUI"),
             "AddressListView.swift did not load — the scan would be vacuous"
         )
     }

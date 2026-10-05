@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Unread changes from a message action that land after its server call,
 /// once the session that made them has ended (#1851): the revert when a

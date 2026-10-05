@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The message list's All / Unread / Flagged counts offline come from the
 /// counts saved by live STATUS replies and by changes made on this device.

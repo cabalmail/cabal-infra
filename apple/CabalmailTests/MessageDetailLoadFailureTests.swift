@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8: how `MessageDetailViewModel`
 /// fails to open a message today, and how it starts, de-duplicates, retries

@@ -1,7 +1,7 @@
 import XCTest
 import SwiftUI
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1460.
 //
@@ -64,7 +64,7 @@ final class SceneAppearanceSourceScanTests: XCTestCase {
             sceneFiles,
             [
                 "Cabalmail/CabalmailApp.swift": 1,
-                "Cabalmail/Views/ComposeWindowScene.swift": 1,
+                "CabalmailUI/Compose/Windows/ComposeWindowScene.swift": 1,
                 "CabalmailMac/CabalmailMacApp.swift": 3,
             ],
             "scene inventory moved — check the new scene pins the theme (#1460)"
@@ -86,7 +86,7 @@ final class SceneAppearanceSourceScanTests: XCTestCase {
             offenders.append(name)
         }
         XCTAssertEqual(
-            offenders.sorted(), ["Cabalmail/Views/AppearancePolicy.swift"],
+            offenders.sorted(), ["CabalmailUI/Shell/AppearancePolicy.swift"],
             "ask .themedAppearance(_:) rather than mapping the theme again (#1460)"
         )
     }
@@ -150,7 +150,7 @@ final class SceneAppearanceSourceScanTests: XCTestCase {
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
         var found: [String: String] = [:]
-        for target in ["Cabalmail", "CabalmailMac"] {
+        for target in ["Cabalmail", "CabalmailUI", "CabalmailMac"] {
             let root = apple.appendingPathComponent(target)
             guard let walker = FileManager.default.enumerator(
                 at: root,

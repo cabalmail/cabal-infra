@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Multi-feed rows name the feed: the subscription's title when the catalog
 /// knows it, the article's host as the fallback, nothing when neither helps.

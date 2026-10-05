@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// `FlagMenuPolicy`: which rows the reader's flag menu offers, and the
 /// identity that makes macOS redraw it (#1329 — the AppKit menu is

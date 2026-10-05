@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Counts that a session's own work fetches but that only answer once the
 /// session is ending (#1848). Sign-out clears the folder counts before it

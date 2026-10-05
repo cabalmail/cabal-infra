@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #985: the Message menu left Reply, Reply All,
 // Forward, Mark as Read/Unread, Flag/Unflag and Move to Folder… enabled with

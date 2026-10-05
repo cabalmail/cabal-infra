@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import CabalmailKit
+import CabalmailUI
 
 /// macOS Settings window: General preferences.
 ///

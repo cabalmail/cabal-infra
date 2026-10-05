@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Mark All as Read for a mail folder (cross-media plan, decision 6): one
 /// `/mark_folder_read` call through the IMAP client, then the client-side

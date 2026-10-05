@@ -16,7 +16,7 @@ import XCTest
 // its identifier), and neither half alone passes.
 final class FolderSwitchMenuStyleSourceScanTests: XCTestCase {
 
-    private static let path = "Cabalmail/Views/MessageListView+FolderSwitch.swift"
+    private static let path = "CabalmailUI/Mail/MessageList/MessageListView+FolderSwitch.swift"
 
     func testTheMacMenuIsBorderless() throws {
         let menu = try Self.macMenu(in: Self.code(in: try Self.source()))

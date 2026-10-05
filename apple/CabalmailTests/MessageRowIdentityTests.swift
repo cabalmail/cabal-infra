@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Search results span folders, and an IMAP UID is unique only within one,
 // so the list's row identity can't be the UID alone: two matches sharing a

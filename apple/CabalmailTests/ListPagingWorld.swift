@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// One paging test's world for the workstream 0.8 characterization suites of
 /// the folder list's sliding-window paging (MessageListPagingCharacterizationTests,

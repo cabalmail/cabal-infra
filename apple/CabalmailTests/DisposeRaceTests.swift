@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Rapid swipe-to-dispose, and the races around it (reported 2026-09-29, after
 // #901: swiping the next message in a triage rhythm revealed the actions on

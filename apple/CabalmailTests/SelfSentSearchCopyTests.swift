@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // One message filed in two folders under the same UID: mail you send
 // yourself lands in INBOX and in Sent with one Message-ID, and in a small

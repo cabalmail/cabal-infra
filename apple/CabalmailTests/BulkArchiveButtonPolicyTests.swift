@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1164: the bulk action bar's first button
 // drew "Archive" over an archivebox glyph but dispatched the account's

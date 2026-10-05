@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // SwiftUI names the main window's split for AppKit's autosave, and on macOS 27
 // AppKit restored the message list from it short by the sidebar's width: a

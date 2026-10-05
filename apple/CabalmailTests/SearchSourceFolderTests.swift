@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Cross-folder search rows and the mailbox each one belongs to. IMAP UIDs
 // are unique only within a folder, so a result set spanning folders can

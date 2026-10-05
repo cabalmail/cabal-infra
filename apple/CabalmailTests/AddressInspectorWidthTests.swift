@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // SwiftUI opens the addresses inspector at its preferred width every time it
 // is shown, so a width the user dragged it to was gone as soon as the panel

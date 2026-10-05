@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The fan-out between the feed reader, list, and sidebar models: a post
 /// reaches every live subscriber, a released owner falls out, and the

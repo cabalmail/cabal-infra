@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #871: the reader's header block was pinned to
 // 15% of the pane's height. A ScrollView is greedy along its scroll axis, so

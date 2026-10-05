@@ -1,6 +1,6 @@
 import WebKit
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The reader's scroll bridge against a real `WKWebView`: with page-content
 /// JavaScript disabled, the app-injected user script must still observe

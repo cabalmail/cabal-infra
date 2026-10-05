@@ -51,15 +51,15 @@ final class AddressPickerWrapSourceScanTests: XCTestCase {
     }
 
     private static let expected: [String: Expectation] = [
-        "Cabalmail/Views/FromPicker.swift": Expectation(
+        "CabalmailUI/Compose/FromPicker.swift": Expectation(
             wrappable: 1,
             menuTitles: 2,
             rawLabels: [".accessibilityLabel(fromAddress)", ".accessibilityLabel(address.address)"]
         ),
-        "Cabalmail/Views/RuleEditorExtras.swift": Expectation(
+        "CabalmailUI/Rules/RuleEditorExtras.swift": Expectation(
             wrappable: 1, menuTitles: 0, rawLabels: [".accessibilityLabel(address)"]
         ),
-        "Cabalmail/Views/SettingsDetailViews.swift": Expectation(
+        "CabalmailUI/Settings/SettingsDetailViews.swift": Expectation(
             wrappable: 0, menuTitles: 1, rawLabels: [".accessibilityLabel(address.address)"]
         ),
     ]
@@ -125,9 +125,11 @@ final class AddressPickerWrapSourceScanTests: XCTestCase {
 
     /// Floor: a mis-rooted read finds nothing and passes everything above.
     func testTheSourcesAreReadable() throws {
-        XCTAssertTrue(try Self.source("Cabalmail/Views/FromPicker.swift").contains("struct FromPicker: View"))
-        XCTAssertTrue(try Self.source("Cabalmail/Views/RuleEditorExtras.swift").contains("struct ForwardAddressList"))
-        XCTAssertTrue(try Self.source("Cabalmail/Views/SettingsDetailViews.swift").contains(#"Picker("Default From""#))
+        XCTAssertTrue(try Self.source("CabalmailUI/Compose/FromPicker.swift").contains("struct FromPicker: View"))
+        XCTAssertTrue(try Self.source("CabalmailUI/Rules/RuleEditorExtras.swift").contains("struct ForwardAddressList"))
+        XCTAssertTrue(
+            try Self.source("CabalmailUI/Settings/SettingsDetailViews.swift").contains(#"Picker("Default From""#)
+        )
     }
 
     // MARK: - Corpus

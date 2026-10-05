@@ -49,12 +49,43 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
 
 targets:
+  # The app layer the iOS/iPadOS/visionOS and macOS apps share: views, view
+  # models and app state, compiled once as the `CabalmailUI` module. A
+  # static library linked only by the two apps, so each app process holds
+  # one copy of it, and the hosted test bundles reach that copy through
+  # BUNDLE_LOADER instead of linking their own. It imports CabalmailKit
+  # without linking it for the same reason: the apps link the Kit once, and
+  # a second copy breaks `as? CabalmailError` casts (see the
+  # CabalmailKitTestSupport target in CabalmailKit/Package.swift).
+  #
+  # Membership is the folder: a new file under CabalmailUI/ is in both apps.
+  # As a project target it inherits `SWIFT_STRICT_CONCURRENCY: complete`
+  # above, which a package target would not. What stays in the app targets
+  # is what only one platform has: the entry points, Info.plists,
+  # entitlements and asset catalogs, the App Intents (iOS), and the menus
+  # and Settings window (macOS).
+  CabalmailUI:
+    type: library.static
+    supportedDestinations: [iOS, iPadOS, visionOS, macOS]
+    sources:
+      - path: CabalmailUI
+    dependencies:
+      - package: CabalmailKit
+        link: false
+    settings:
+      base:
+        # No Objective-C code imports this module, and the header-copy
+        # script phase XcodeGen otherwise adds for a Swift static library
+        # trips the user-script sandbox (ENABLE_USER_SCRIPT_SANDBOXING).
+        SWIFT_INSTALL_OBJC_HEADER: NO
+
   Cabalmail:
     type: application
     supportedDestinations: [iOS, iPadOS, visionOS]
     sources:
       - path: Cabalmail
     dependencies:
+      - target: CabalmailUI
       - package: CabalmailKit
       # Embed the watch companion app in the iOS product only. A visionOS
       # archive of this same target cannot contain a watch app (watches
@@ -148,7 +179,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         # App-private drag type for dragging messages onto sidebar folders
-        # (see Cabalmail/Views/MessageDrag.swift). Declaring it as an
+        # (see CabalmailUI/Mail/MessageDrag.swift). Declaring it as an
         # exported type lets Launch Services recognize the identifier so the
         # runtime doesn't warn; `.ownProcess` visibility on the item provider
         # keeps the drag from ever leaving the app, so it only needs to
@@ -167,6 +198,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail
         TARGETED_DEVICE_FAMILY: "1,2,7"   # iPhone, iPad, visionOS
+        # Load every object file in the CabalmailUI archive, not only those
+        # the app's own code names. The linker otherwise skips an archive
+        # member nothing references by symbol, and with it any protocol
+        # conformance that member declares, which Swift looks up at run time.
+        # This keeps the link what it was when these sources compiled into
+        # the app directly. The hosted test bundle relies on it too: it
+        # resolves the module's internal symbols against this binary.
+        OTHER_LDFLAGS: ["$(inherited)", "-force_load", "$(BUILT_PRODUCTS_DIR)/libCabalmailUI.a"]
         MARKETING_VERSION: "0.6.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
@@ -216,24 +255,8 @@ targets:
     platform: macOS
     sources:
       - path: CabalmailMac
-      # The Mac app compiles the iOS target's source tree too: the SwiftUI
-      # views, view models, and app state are platform-agnostic, with
-      # `#if os(macOS)` toggles where they diverge. The binaries stay
-      # separate; only the Swift sources are shared. A new file under
-      # Cabalmail/ is therefore in both apps unless it is excluded here.
-      # The excludes are what the Mac target must not take: the iOS
-      # `@main` (CabalmailMac has its own), the App Intents (iOS-only for
-      # now), and the iOS target's Info.plist, entitlements, and asset
-      # catalogs (CabalmailMac carries its own of each).
-      - path: Cabalmail
-        excludes:
-          - CabalmailApp.swift
-          - "Intents/**"
-          - Info.plist
-          - "*.entitlements"
-          - Assets.xcassets
-          - AppIcon.icon
     dependencies:
+      - target: CabalmailUI
       - package: CabalmailKit
       # Notification Service Extension, macOS flavor: same enrichment
       # source as the iOS target's extension, compiled into a separate
@@ -319,6 +342,8 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: CabalmailMac/CabalmailMac.entitlements
+        # See the Cabalmail target's matching setting.
+        OTHER_LDFLAGS: ["$(inherited)", "-force_load", "$(BUILT_PRODUCTS_DIR)/libCabalmailUI.a"]
       configs:
         # See the Cabalmail target's matching block for why these settings
         # live here instead of on the xcodebuild command line. CI injects
@@ -340,14 +365,14 @@ targets:
     sources:
       - path: CabalmailWatch
       # The two view-level rules the watch dialogs have to obey, compiled
-      # from the iOS target's source tree exactly as CabalmailMac compiles
-      # its share of it. Named file by file rather than by directory: the
-      # rest of Cabalmail/Views is mail UI the watch has no counterpart
-      # for. Leaving the watch outside the policy is what let its two
-      # confirmation dialogs keep the cancel role after the other nine
-      # dropped it (#1207).
-      - path: Cabalmail/Views/HostPlatform.swift
-      - path: Cabalmail/Views/ConfirmationDialogPolicy.swift
+      # from the shared CabalmailUI tree into the watch's own module (the
+      # watch does not link CabalmailUI). Named file by file rather than by
+      # directory: the rest of CabalmailUI is mail UI the watch has no
+      # counterpart for. Leaving the watch outside the policy is what let
+      # its two confirmation dialogs keep the cancel role after the other
+      # nine dropped it (#1207).
+      - path: CabalmailUI/Platform/HostPlatform.swift
+      - path: CabalmailUI/Platform/ConfirmationDialogPolicy.swift
     dependencies:
       - package: CabalmailKit
     info:
@@ -471,9 +496,9 @@ targets:
     platform: iOS
     sources:
       - path: CabalmailMacWebExtension/SafariWebExtensionHandler.swift
-      - path: Cabalmail/ExtensionControlDomainStore.swift
+      - path: CabalmailUI/Platform/Services/ExtensionControlDomainStore.swift
       # The private-link token rows the appex resolves (#1765).
-      - path: Cabalmail/PrivateLinkTokenStore.swift
+      - path: CabalmailUI/Platform/Services/PrivateLinkTokenStore.swift
       - path: ../extensions/safari/CabalmailExtension/Resources
         buildPhase: resources
     info:
@@ -581,11 +606,12 @@ targets:
     platform: macOS
     sources:
       - path: CabalmailMacWebExtension/SafariWebExtensionHandler.swift
-      # Shared with the app targets (WatchSessionBridge.swift pattern):
-      # the appex reads what AppState publishes.
-      - path: Cabalmail/ExtensionControlDomainStore.swift
+      # Compiled into the appex's own module from the shared CabalmailUI
+      # tree (the appex does not link CabalmailUI): the appex reads what
+      # AppState publishes.
+      - path: CabalmailUI/Platform/Services/ExtensionControlDomainStore.swift
       # The private-link token rows the appex resolves (#1765).
-      - path: Cabalmail/PrivateLinkTokenStore.swift
+      - path: CabalmailUI/Platform/Services/PrivateLinkTokenStore.swift
       - path: ../extensions/safari/CabalmailExtension/Resources
         buildPhase: resources
     info:
@@ -644,6 +670,10 @@ targets:
       - path: CabalmailKit/Tests/CabalmailKitTestSupport
     dependencies:
       - target: CabalmailMac
+      # Imported, not linked: the host app carries the module (see the
+      # CabalmailUI target), and a second copy here would split its types.
+      - target: CabalmailUI
+        link: false
       - package: CabalmailKit
     settings:
       base:
@@ -668,6 +698,9 @@ targets:
       - path: CabalmailiOSTests
     dependencies:
       - target: Cabalmail
+      # Imported, not linked, as in CabalmailMacTests.
+      - target: CabalmailUI
+        link: false
       - package: CabalmailKit
     settings:
       base:

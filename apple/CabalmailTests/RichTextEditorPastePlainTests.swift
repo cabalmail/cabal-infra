@@ -1,7 +1,7 @@
 import XCTest
 import WebKit
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Paste-without-formatting (⌘⇧V) behaviour of the editor page.
 ///

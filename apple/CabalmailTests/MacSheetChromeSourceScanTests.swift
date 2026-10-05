@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issues #1484 and #1501 (and the other half of
 // #1063).
@@ -28,9 +28,9 @@ final class MacSheetChromeSourceScanTests: XCTestCase {
     /// The sheets the shared chrome exists for: the two "create X" sheets
     /// (#1484) and the search Filters sheet (#1501).
     private static let formSheets = [
-        "Cabalmail/Views/NewAddressSheet.swift",
-        "Cabalmail/Views/NewFolderSheet.swift",
-        "Cabalmail/Views/SearchFiltersSheet.swift",
+        "CabalmailUI/Addresses/NewAddressSheet.swift",
+        "CabalmailUI/Mail/Folders/NewFolderSheet.swift",
+        "CabalmailUI/Mail/Search/SearchFiltersSheet.swift",
     ]
 
     /// Each form sheet routes its macOS layout through `MacSheetForm`, and
@@ -174,9 +174,12 @@ final class MacSheetChromeSourceScanTests: XCTestCase {
         let apple = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
-        let views = apple.appendingPathComponent("Cabalmail/Views")
+        let views = apple.appendingPathComponent("CabalmailUI")
         var found: [String: String] = [:]
-        for url in try FileManager.default.contentsOfDirectory(at: views, includingPropertiesForKeys: nil)
+        guard let walker = FileManager.default.enumerator(at: views, includingPropertiesForKeys: nil) else {
+            return found
+        }
+        for case let url as URL in walker
         where url.pathExtension == "swift" && url.lastPathComponent.hasSuffix("Sheet.swift") {
             let key = url.standardizedFileURL.path
                 .replacingOccurrences(of: apple.standardizedFileURL.path + "/", with: "")

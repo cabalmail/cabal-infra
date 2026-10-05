@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The unsubscribed-folder banner used to gate on the selected `Folder`
 /// value's `isSubscribed`, which is a default — not a fact — whenever the

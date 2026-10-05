@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The sidebar's sections used to leave both the expand/collapse control and
 // the row gating to `Section(_:isExpanded:)`. macOS and visionOS honoured the

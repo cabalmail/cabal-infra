@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// `ReaderOptionMenuPolicy`: what the reader's mark-read and dispose option
 /// menus offer, and the identity that makes macOS redraw them (#1337 — the

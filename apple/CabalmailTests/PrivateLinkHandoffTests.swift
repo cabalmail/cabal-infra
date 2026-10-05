@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The redirector URL the "Open in Private Window" row hands to the browser
 /// (`PrivateLinkHandoff`). The fragment has to survive

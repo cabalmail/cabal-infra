@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The feed list's filter pill is sticky per scope: the list opens on the
 /// pill stored for its feed, folder, or the all-feeds preference, and a

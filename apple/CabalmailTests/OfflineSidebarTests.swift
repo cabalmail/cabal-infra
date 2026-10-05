@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// An app opened without a connection must still draw the sidebar's folders
 /// and badges from what an earlier launch saved, and give way to the live

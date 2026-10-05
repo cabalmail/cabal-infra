@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Pins the cache-eviction contract the reader's dispose / move / purge
 // paths share: once the server confirms the message has left the folder,

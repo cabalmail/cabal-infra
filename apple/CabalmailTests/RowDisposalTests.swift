@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The swipe-to-dispose row animation: a disposed row fades at full height,
 // then collapses to zero, and only then leaves `envelopes`. The timing is

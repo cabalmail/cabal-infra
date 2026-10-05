@@ -17,7 +17,7 @@ import XCTest
 // the eviction in place: Settings lives on the floating folder panel now, and
 // the column's bar carries the folder toggle alone.
 final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
-    private static let path = "Cabalmail/Views/MailRootView.swift"
+    private static let path = "CabalmailUI/Shell/MailRootView.swift"
 
     /// The rule: nothing in the message-list column's toolbar block builds a
     /// gear. Re-adding one there re-creates the overflow this issue is about.

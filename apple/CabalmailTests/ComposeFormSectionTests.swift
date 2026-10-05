@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #858: a photo picked in the iPhone composer
 // left no trace on screen — no chip, no count, no way to remove it — because

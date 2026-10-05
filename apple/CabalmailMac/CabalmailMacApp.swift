@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreSpotlight
 import CabalmailKit
+import CabalmailUI
 
 /// Stable identifier for the main mail window's `WindowGroup`, shared
 /// with the menu-bar extra's "Open Cabalmail" item so both target the

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The App Group row table behind the opaque-token form of the
 /// private-link handoff (#1765). The container itself is unavailable to

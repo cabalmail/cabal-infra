@@ -1,7 +1,7 @@
 import XCTest
 import SwiftUI
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // A full swipe to Archive must not leave the next message covered (reported
 // 2026-09-30 on iOS; macOS has it too).

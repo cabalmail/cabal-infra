@@ -1,6 +1,6 @@
 import XCTest
 import CoreGraphics
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The reader header lays recipients out with `FlowLayout`. A recipient
 /// wider than the pane used to be placed at its unclamped ideal width and

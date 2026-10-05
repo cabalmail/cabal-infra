@@ -1,6 +1,7 @@
 #if os(iOS)
 import AppIntents
 import CabalmailKit
+import CabalmailUI
 
 /// "Check my Cabalmail inbox." Speaks the unread count and the newest
 /// unread senders, and returns the count so Shortcuts can build on it.
