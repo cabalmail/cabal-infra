@@ -8,9 +8,11 @@ import CabalmailKit
 /// One routine for the three surfaces that offer it — the sidebar folder's
 /// context menu (`FolderListViewModel`), the message list's overflow menu and
 /// the Mailbox menu (`MessageListViewModel`) — so the after-effects can never
-/// drift: the folder's envelope-cache snapshot is dropped (its rows carry the
-/// old `\Seen` state), the sidebar badge zeroes its unread while keeping the
-/// total, and the visible list hard-reloads so the rows re-render read.
+/// drift: the folder's envelope-cache snapshot is marked read to match, the
+/// sidebar badge zeroes its unread while keeping the total, and the visible
+/// list hard-reloads so the rows re-render read. The snapshot is rewritten
+/// rather than dropped: dropped, a folder not on screen had no saved list
+/// until it was next opened online, so offline it showed no messages (#1850).
 /// Modelled on `FolderListViewModel.emptyTrash()`.
 @MainActor
 enum FolderMarkAllRead {
@@ -19,7 +21,7 @@ enum FolderMarkAllRead {
     @discardableResult
     static func perform(folderPath: String, client: CabalmailClient, appState: AppState) async throws -> Int {
         let flipped = try await client.imapClient.markFolderRead(folder: folderPath)
-        try? await client.envelopeCache.invalidate(folder: folderPath)
+        try? await client.envelopeCache.markAllSeen(folder: folderPath)
         // Signed out meanwhile: the badge is the last account's (#1848).
         guard appState.acceptsCounts(from: client) else { return flipped }
         if let total = appState.folderTotalCounts[folderPath] {

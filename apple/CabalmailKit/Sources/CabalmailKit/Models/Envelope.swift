@@ -162,6 +162,30 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
 }
 
 extension Envelope {
+    /// Returns a copy with `flags` in place of its own.
+    public func withFlags(_ flags: Set<Flag>) -> Envelope {
+        Envelope(
+            uid: uid,
+            messageId: messageId,
+            date: date,
+            subject: subject,
+            from: from,
+            sender: sender,
+            replyTo: replyTo,
+            to: to,
+            cc: cc,
+            bcc: bcc,
+            inReplyTo: inReplyTo,
+            references: references,
+            flags: flags,
+            internalDate: internalDate,
+            size: size,
+            hasAttachments: hasAttachments,
+            isImportant: isImportant,
+            authResults: authResults
+        )
+    }
+
     /// Returns a copy with the RFC 5322 threading identity replaced.
     ///
     /// Used by the open-message reply path: a cached or pre-rollout
