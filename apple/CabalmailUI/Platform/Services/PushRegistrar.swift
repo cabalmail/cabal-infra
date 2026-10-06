@@ -76,28 +76,39 @@ enum PushSettings {
     /// `/`-delimited folder paths for the `.custom` scope.
     static let chosenFoldersKey = "cabalmail.push.chosenFolders"
 
-    static var isUserDisabled: Bool {
-        UserDefaults.standard.bool(forKey: disabledKey)
+    // The `defaults` parameters are `PushRegistrar`'s, which is
+    // `.standard` everywhere but the tests.
+
+    static var isUserDisabled: Bool { isUserDisabled(in: .standard) }
+
+    static func isUserDisabled(in defaults: UserDefaults) -> Bool {
+        defaults.bool(forKey: disabledKey)
     }
 
-    static func setUserDisabled(_ disabled: Bool) {
-        UserDefaults.standard.set(disabled, forKey: disabledKey)
+    static func setUserDisabled(_ disabled: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(disabled, forKey: disabledKey)
     }
 
-    static var folderScope: PushFolderScope {
-        UserDefaults.standard.string(forKey: folderScopeKey)
+    static var folderScope: PushFolderScope { folderScope(in: .standard) }
+
+    static func folderScope(in defaults: UserDefaults) -> PushFolderScope {
+        defaults.string(forKey: folderScopeKey)
             .flatMap(PushFolderScope.init(rawValue:)) ?? .inboxOnly
     }
 
     /// Defaults to INBOX so the "Choose folders" list opens with the one
     /// folder everyone expects preselected.
-    static var chosenFolders: [String] {
-        UserDefaults.standard.stringArray(forKey: chosenFoldersKey) ?? ["INBOX"]
+    static var chosenFolders: [String] { chosenFolders(in: .standard) }
+
+    static func chosenFolders(in defaults: UserDefaults) -> [String] {
+        defaults.stringArray(forKey: chosenFoldersKey) ?? ["INBOX"]
     }
 
-    static func setScope(_ scope: PushFolderScope, chosenFolders: [String]) {
-        UserDefaults.standard.set(scope.rawValue, forKey: folderScopeKey)
-        UserDefaults.standard.set(chosenFolders, forKey: chosenFoldersKey)
+    static func setScope(
+        _ scope: PushFolderScope, chosenFolders: [String], in defaults: UserDefaults = .standard
+    ) {
+        defaults.set(scope.rawValue, forKey: folderScopeKey)
+        defaults.set(chosenFolders, forKey: chosenFoldersKey)
     }
 
     /// The explicit `enabled_folders` value every `/push_register` call
@@ -105,12 +116,35 @@ enum PushSettings {
     /// deterministic after each registration rather than relying on the
     /// Lambda's preserve-stored-value behavior. `[]` is the server's
     /// "inbox only" reset; `["*"]` is all folders.
-    static var enabledFolders: [String] {
-        switch folderScope {
+    static func enabledFolders(in defaults: UserDefaults) -> [String] {
+        switch folderScope(in: defaults) {
         case .inboxOnly: return []
         case .all: return ["*"]
-        case .custom: return chosenFolders
+        case .custom: return chosenFolders(in: defaults)
         }
+    }
+}
+
+/// The calls `PushRegistrar` makes on `UNUserNotificationCenter`. A seam so
+/// the app-layer tests never prompt for permission, post a notification or
+/// remove the delivered ones: their host is the real app, whose notification
+/// center is the one these calls would reach.
+@MainActor
+struct PushNotificationCenter {
+    var requestAuthorization: @MainActor (UNAuthorizationOptions) async -> Bool
+    var add: @MainActor (sending UNNotificationRequest) async throws -> Void
+    var removeAllDeliveredNotifications: @MainActor () -> Void
+
+    static var live: PushNotificationCenter {
+        PushNotificationCenter(
+            requestAuthorization: { options in
+                (try? await UNUserNotificationCenter.current().requestAuthorization(options: options)) ?? false
+            },
+            add: { request in try await UNUserNotificationCenter.current().add(request) },
+            removeAllDeliveredNotifications: {
+                UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+            }
+        )
     }
 }
 
@@ -172,8 +206,16 @@ final class PushRegistrar {
     private var pendingToken: String?
 
     /// A tapped notification that arrived before sign-in / restore
-    /// completed; routed once the session is wired.
+    /// completed; routed once the session is wired, unless the session is
+    /// another account's (`forgetOtherAccount`) or ends first.
     private var pendingOpen: PushMessageRef?
+
+    /// The notification center, the defaults the registrar's keys and
+    /// `PushSettings` live in, and the NSE's shared containers: the real ones
+    /// everywhere but the app-layer tests.
+    private let notificationCenter: PushNotificationCenter
+    private let defaults: UserDefaults
+    private let enrichmentStore: PushEnrichmentStore
 
     /// UserDefaults key for the token most recently accepted by
     /// `/push_register` — i.e. what sign-out must deregister.
@@ -181,6 +223,20 @@ final class PushRegistrar {
     /// Cached archive-folder path resolved by `archiveFolderPath(using:)`.
     /// A Settings-visible override is deferred to the preferences phase.
     static let archiveFolderKey = "cabalmail.push.archiveFolder"
+    /// UserDefaults key for the account (`username@controlDomain`) of the
+    /// last session that started, kept across sign-outs and launches: the
+    /// account whose notifications may still be delivered (#1872).
+    static let lastAccountKey = "cabalmail.push.lastSessionAccount"
+
+    init(
+        notificationCenter: PushNotificationCenter = .live,
+        defaults: UserDefaults = .standard,
+        enrichmentStore: PushEnrichmentStore = PushEnrichmentStore()
+    ) {
+        self.notificationCenter = notificationCenter
+        self.defaults = defaults
+        self.enrichmentStore = enrichmentStore
+    }
 
     /// Registers the `MAIL_MESSAGE` category the dispatch Lambda stamps on
     /// every payload. Called once at launch from `AppDelegate`.
@@ -205,17 +261,14 @@ final class PushRegistrar {
     func sessionDidStart(appState: AppState, client: CabalmailClient) {
         self.appState = appState
         self.client = client
-        PushEnrichmentStore().updateAPIURL(client.configuration.invokeUrl)
+        forgetOtherAccount("\(appState.lastUsername)@\(appState.controlDomain)")
+        enrichmentStore.updateAPIURL(client.configuration.invokeUrl)
         // Honor the user's master toggle: once notifications are off, a
         // launch neither re-prompts nor re-registers — only `enablePush`
         // (the Settings toggle) restarts the pipeline.
-        if !PushSettings.isUserDisabled {
+        if !PushSettings.isUserDisabled(in: defaults) {
             Task {
-                let center = UNUserNotificationCenter.current()
-                let granted = (try? await center.requestAuthorization(
-                    options: [.alert, .badge, .sound]
-                )) ?? false
-                guard granted else { return }
+                guard await notificationCenter.requestAuthorization([.alert, .badge, .sound]) else { return }
                 Platform.registerForRemoteNotifications()
             }
         }
@@ -229,6 +282,22 @@ final class PushRegistrar {
         }
     }
 
+    /// A notification names its message only by folder and UID, which mean
+    /// something only in the account it was delivered for (#1872). When a
+    /// session starts for another account than the last one, what the last
+    /// one left goes before anything is replayed: a tap parked while no
+    /// session was wired, and the notifications still delivered, whose
+    /// actions would otherwise run against this account. The same account
+    /// keeps both. With no account remembered (the first session since this
+    /// was added), nothing is dropped. A control domain holds no `@`, so
+    /// `account` names one pair.
+    private func forgetOtherAccount(_ account: String) {
+        defer { defaults.set(account, forKey: Self.lastAccountKey) }
+        guard let last = defaults.string(forKey: Self.lastAccountKey), last != account else { return }
+        pendingOpen = nil
+        notificationCenter.removeAllDeliveredNotifications()
+    }
+
     /// Called with the hex-encoded APNs token — on every launch (the
     /// system re-delivers it) and whenever APNs rotates it. Every
     /// registration carries the explicit current folder scope
@@ -238,7 +307,7 @@ final class PushRegistrar {
         // The system can re-deliver a token after the user flipped the
         // master toggle off (e.g. a rotation callback racing the toggle);
         // registering it would silently re-enable pushes.
-        guard !PushSettings.isUserDisabled else { return }
+        guard !PushSettings.isUserDisabled(in: defaults) else { return }
         guard let client else {
             pendingToken = tokenHex
             return
@@ -251,7 +320,7 @@ final class PushRegistrar {
                 forInfoDictionaryKey: "CFBundleShortVersionString"
             ) as? String ?? "0",
             locale: Locale.current.identifier,
-            enabledFolders: PushSettings.enabledFolders
+            enabledFolders: PushSettings.enabledFolders(in: defaults)
         )
         Task {
             do {
@@ -262,11 +331,11 @@ final class PushRegistrar {
                 // flag set, no later launch would ever clean it up. This
                 // Task is main-actor (class isolation), so the flag read is
                 // ordered after any toggle that landed during the await.
-                if PushSettings.isUserDisabled {
+                if PushSettings.isUserDisabled(in: defaults) {
                     try? await client.apiClient.deregisterPushDevice(token: tokenHex)
                     return
                 }
-                UserDefaults.standard.set(tokenHex, forKey: Self.lastTokenKey)
+                defaults.set(tokenHex, forKey: Self.lastTokenKey)
             } catch {
                 // Best-effort: a failed registration means no pushes until
                 // the next launch retries, never a broken sign-in.
@@ -279,21 +348,26 @@ final class PushRegistrar {
     /// *before* the Cognito tokens are wiped — `/push_deregister` needs an
     /// authenticated call like every other endpoint.
     func sessionWillEnd() async {
+        // The session's notifications, and a tap parked for it, name messages
+        // only by folder and UID: whoever signs in next must not act on them
+        // (#1872).
+        pendingOpen = nil
+        notificationCenter.removeAllDeliveredNotifications()
         defer {
             client = nil
             appState = nil
             // Drop the NSE's mirrored credentials alongside the session
             // (also cleared by the mirroring store when the tokens are
             // removed; doing it here too keeps the edge explicit).
-            PushEnrichmentStore().clear()
+            enrichmentStore.clear()
         }
         guard
             let client,
-            let token = UserDefaults.standard.string(forKey: Self.lastTokenKey)
+            let token = defaults.string(forKey: Self.lastTokenKey)
         else { return }
         do {
             try await client.apiClient.deregisterPushDevice(token: token)
-            UserDefaults.standard.removeObject(forKey: Self.lastTokenKey)
+            defaults.removeObject(forKey: Self.lastTokenKey)
         } catch {
             // Best-effort: a row we fail to remove here is pruned by
             // push_dispatch the next time APNs rejects its token, and a
@@ -313,12 +387,8 @@ extension PushRegistrar {
     /// false when the OS permission is (or just was) denied, so the toggle
     /// can reflect the real system state instead of lying.
     func enablePush() async -> Bool {
-        let center = UNUserNotificationCenter.current()
-        let granted = (try? await center.requestAuthorization(
-            options: [.alert, .badge, .sound]
-        )) ?? false
-        guard granted else { return false }
-        PushSettings.setUserDisabled(false)
+        guard await notificationCenter.requestAuthorization([.alert, .badge, .sound]) else { return false }
+        PushSettings.setUserDisabled(false, in: defaults)
         Platform.registerForRemoteNotifications()
         return true
     }
@@ -329,15 +399,15 @@ extension PushRegistrar {
     /// the server stops dispatching immediately rather than at next APNs
     /// rejection.
     func disablePush() async {
-        PushSettings.setUserDisabled(true)
+        PushSettings.setUserDisabled(true, in: defaults)
         pendingToken = nil
         guard
             let client = await activeClient(),
-            let token = UserDefaults.standard.string(forKey: Self.lastTokenKey)
+            let token = defaults.string(forKey: Self.lastTokenKey)
         else { return }
         do {
             try await client.apiClient.deregisterPushDevice(token: token)
-            UserDefaults.standard.removeObject(forKey: Self.lastTokenKey)
+            defaults.removeObject(forKey: Self.lastTokenKey)
         } catch {
             // Best-effort, same posture as sessionWillEnd: a row we fail to
             // remove is pruned by push_dispatch on the next APNs rejection.
@@ -349,10 +419,10 @@ extension PushRegistrar {
     /// re-registers the stored token so the server row picks it up without
     /// waiting for the next launch (the `/push_register` upsert is cheap).
     func updateFolderScope(_ scope: PushFolderScope, chosenFolders: [String]) {
-        PushSettings.setScope(scope, chosenFolders: chosenFolders)
+        PushSettings.setScope(scope, chosenFolders: chosenFolders, in: defaults)
         guard
-            !PushSettings.isUserDisabled,
-            let token = UserDefaults.standard.string(forKey: Self.lastTokenKey)
+            !PushSettings.isUserDisabled(in: defaults),
+            let token = defaults.string(forKey: Self.lastTokenKey)
         else { return }
         deviceTokenDidChange(token)
     }
@@ -428,7 +498,7 @@ extension PushRegistrar {
     /// `LIST (SPECIAL-USE)` isn't exposed by the API-backed client, so the
     /// name is the best signal available; nil means "no archive folder".
     private func archiveFolderPath(using client: CabalmailClient) async -> String? {
-        if let cached = UserDefaults.standard.string(forKey: Self.archiveFolderKey) {
+        if let cached = defaults.string(forKey: Self.archiveFolderKey) {
             return cached
         }
         guard
@@ -437,7 +507,7 @@ extension PushRegistrar {
                 $0.path.caseInsensitiveCompare("Archive") == .orderedSame
             })
         else { return nil }
-        UserDefaults.standard.set(archive.path, forKey: Self.archiveFolderKey)
+        defaults.set(archive.path, forKey: Self.archiveFolderKey)
         return archive.path
     }
 }
@@ -486,7 +556,7 @@ extension PushRegistrar {
             if let resolvedUid { msgRef["uid"] = Int(resolvedUid) }
             if let messageID = ref.messageID { msgRef["msg_id"] = messageID }
             content.userInfo = ["msgRef": msgRef]
-            try await UNUserNotificationCenter.current().add(
+            try await notificationCenter.add(
                 UNNotificationRequest(
                     identifier: UUID().uuidString,
                     content: content,
@@ -514,7 +584,7 @@ extension PushRegistrar {
         if let messageID = ref.messageID { msgRef["msg_id"] = messageID }
         content.userInfo = ["msgRef": msgRef]
         do {
-            try await UNUserNotificationCenter.current().add(
+            try await notificationCenter.add(
                 UNNotificationRequest(
                     identifier: UUID().uuidString,
                     content: content,
@@ -565,7 +635,7 @@ extension PushRegistrar {
     /// way. Returns nil when signed out.
     private func activeClient() async -> CabalmailClient? {
         if let client { return client }
-        let domain = UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? ""
+        let domain = defaults.string(forKey: "cabalmail.controlDomain") ?? ""
         guard !domain.isEmpty else { return nil }
         let store = AppState.makeSecureStore()
         guard (try? store.get(SecureStoreKey.authTokens)) != nil else { return nil }
