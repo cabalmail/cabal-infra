@@ -199,13 +199,11 @@ struct AvatarView: View {
             return
         }
         guard !Task.isCancelled, !sender.host.isEmpty else { return }
-        // Resolve through the shared session cache so the same domain isn't
+        // Resolve through the shared cache so the same domain isn't
         // re-fetched as list rows recycle (the detail view benefits too).
-        // The error reaches the cache so a failed lookup isn't remembered as
-        // "no logo" (#1889); the cache answers nil for it either way.
-        let url = await appState.bimiCache.url(forDomain: sender.host) { domain in
-            try await apiClient.fetchBimiURL(senderDomain: domain)
-        }
+        // The cache makes the call itself, so a failed lookup can't reach it
+        // as an answer of "no logo" (#1889).
+        let url = await appState.bimiCache.url(forDomain: sender.host, using: apiClient)
         guard !Task.isCancelled else { return }
         bimiURL = url
     }
