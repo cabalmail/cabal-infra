@@ -221,39 +221,6 @@ public final class AppState {
     var lastDraftReplaced: DraftReplacedSignal?
     private var draftReplacedTick = 0
 
-    /// Messages with a flag write in flight from the detail view (keyed by
-    /// ref: IMAP UIDs are only unique within a mailbox, so a bare UID set
-    /// would let a pending write in one folder shield an unrelated row with
-    /// the same UID in another). `MessageListViewModel.shieldFetched` reads
-    /// this so a refresh that lands mid-write can't revert the detail view's
-    /// optimistic flag - the cross-view analogue of the list's own
-    /// `pendingFlagRefs`. The detail view brackets each write via
-    /// `setFlagWrite(_:inFlight:)`. Read directly at merge time (never from
-    /// a view body), so observation tracking is irrelevant here.
-    private(set) var pendingFlagWriteRefs: Set<MessageRef> = []
-
-    /// Messages the detail view has optimistically removed (archive / trash /
-    /// move) but whose server move is still in flight. The detail view prunes
-    /// the list row up front via `signalDisposed`; without this
-    /// `MessageListViewModel.shieldFetched` would let a refresh that lands
-    /// before the move completes resurrect the row (the source folder still
-    /// returns the UID). The cross-view analogue of the list's own
-    /// `pendingRemovedRefs`; bracketed via `setMoveInFlight(_:inFlight:)`.
-    private(set) var pendingMoveRefs: Set<MessageRef> = []
-
-    /// Messages the server has confirmed gone from their folder -- a list or
-    /// reader dispose, move or purge landed -- with when that was confirmed.
-    /// The shields above end when a move resolves, but a refresh already in
-    /// flight can still answer with the folder as it was before the move and
-    /// put the message back (the list then shifts under the user's pointer).
-    /// IMAP never reuses a UID within a mailbox, so a fetch that still
-    /// carries one of these is stale by definition, and
-    /// `MessageListViewModel.shieldFetched` drops it. Entries age out after
-    /// `confirmedRemovalWindow`, longer than any request can stay in flight.
-    /// Read at merge time only, like `pendingMoveRefs`.
-    /// Maintained by the methods in `AppState+ConfirmedRemovals.swift`.
-    var confirmedRemovals: [MessageRef: ContinuousClock.Instant] = [:]
-
     /// True while a message-row drag is in flight on a wide-screen layout.
     /// `MailRootView`'s sidebar watches this to temporarily reveal the
     /// folder list as a drop target when the user is on the Addresses tab,
@@ -272,7 +239,8 @@ public final class AppState {
     var moveRequestTick = 0
 
     /// The mail state the folder list, message list, reader and composer
-    /// share (`MailSessionStore`): the folder counts. One for the life of
+    /// share (`MailSessionStore`): the folder counts and the shields that
+    /// keep a refresh from undoing a write in flight. One for the life of
     /// this `AppState`, reset in place at sign-out (`forgetAccountState`).
     /// A `let`, so nothing observes the reference; views observe the
     /// store's own properties through it.
@@ -297,8 +265,8 @@ public final class AppState {
     // The selection-scoped request bumpers live in the "Message-menu
     // selection intents" extension below (SwiftLint type-body budget), and
     // the cross-view signal senders (`signalDisposed`, `signalFlagChange`,
-    // `signalReadAdvance`, `markAnswered`, and the in-flight shields) in
-    // the "Cross-view signals" extension below, for the same budget.
+    // `signalReadAdvance`, `markAnswered`) in the "Cross-view signals"
+    // extension below, for the same budget.
 
     /// Publishes a toast and auto-clears it after `duration`. The task lives
     /// outside structured concurrency because the caller's scope (usually a
@@ -564,8 +532,8 @@ public final class AppState {
 // MARK: - Cross-view signals
 
 // Senders for the one-way detail → list signals declared in the class body
-// above (their tick counters and in-flight shield maps stay there — stored
-// properties can't live in an extension). Split out for the same SwiftLint
+// above (their tick counters stay there — stored properties can't live in
+// an extension). Split out for the same SwiftLint
 // type-body budget as the other extensions in this file.
 extension AppState {
     func signalDisposed(_ ref: MessageRef) {
@@ -612,9 +580,9 @@ extension AppState {
     func markAnswered(_ ref: MessageRef) {
         signalFlagChange(ref, flag: .answered, added: true)
         guard let client else { return }
-        setFlagWrite(ref, inFlight: true)
+        mailStore.shields.setFlagWrite(ref, inFlight: true)
         Task {
-            defer { setFlagWrite(ref, inFlight: false) }
+            defer { mailStore.shields.setFlagWrite(ref, inFlight: false) }
             try? await client.imapClient.setFlags(
                 folder: ref.folder,
                 uids: [ref.uid],
@@ -644,40 +612,6 @@ extension AppState {
             advance: advance,
             tick: readAdvanceTick
         )
-    }
-
-    /// Mark a detail-view flag write as in flight (`true`, when the STORE is
-    /// dispatched) or resolved (`false`, on success or failure). While a
-    /// message is in flight the list's merge keeps the optimistic flag
-    /// instead of the fetched one; clearing it lets the next refresh carry
-    /// server truth. Safe to call `false` for a message that was never
-    /// inserted (a no-op removal).
-    func setFlagWrite(_ ref: MessageRef, inFlight: Bool) {
-        if inFlight {
-            pendingFlagWriteRefs.insert(ref)
-        } else {
-            pendingFlagWriteRefs.remove(ref)
-        }
-    }
-
-    /// Mark a detail-view archive / trash / move as in flight (`true`, before
-    /// the server move) or resolved (`false`, on success or failure). While a
-    /// message is in flight the list's merge keeps the optimistically-pruned
-    /// row gone; clearing it lets the next refresh re-add the row if the move
-    /// failed, or confirm its absence if it succeeded. Safe to call `false`
-    /// for a message that was never inserted (a no-op removal).
-    func setMoveInFlight(_ ref: MessageRef, inFlight: Bool) {
-        if inFlight {
-            pendingMoveRefs.insert(ref)
-        } else {
-            pendingMoveRefs.remove(ref)
-        }
-    }
-
-    /// True while a detail-view move out of `folderPath` is in flight: a
-    /// STATUS of that folder may still count the message.
-    func hasMoveInFlight(folderPath: String) -> Bool {
-        pendingMoveRefs.contains { $0.folder == folderPath }
     }
 }
 
@@ -721,9 +655,6 @@ extension AppState {
     /// across sessions, and why, is said there.
     private func forgetAccountState() {
         mailStore.forgetAccount()
-        confirmedRemovals = [:]
-        pendingFlagWriteRefs = []
-        pendingMoveRefs = []
         pendingSpotlightRef = nil
         AttachmentFolders.removeAll()
     }

@@ -116,8 +116,8 @@ extension MessageListViewModel {
     /// server confirmed one after `startedAt`.
     func removalMayPostdate(_ startedAt: ContinuousClock.Instant) -> Bool {
         !pendingRemovedRefs.isEmpty
-            || appState.hasMoveInFlight(folderPath: folder.path)
-            || appState.removalConfirmed(folderPath: folder.path, after: startedAt)
+            || appState.mailStore.shields.hasMoveInFlight(folderPath: folder.path)
+            || appState.mailStore.shields.removalConfirmed(folderPath: folder.path, after: startedAt)
     }
 
     /// Push the same STATUS reply at the sidebar badge. The badge and the
@@ -268,23 +268,23 @@ extension MessageListViewModel {
     /// The page is this folder's, so its rows come back placed in it
     /// (`placedInFolder(_:)`).
     func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
-        let confirmedGone = appState.confirmedRemovalRefs(folderPath: folder.path)
+        let confirmedGone = appState.mailStore.shields.confirmedRemovalRefs(folderPath: folder.path)
         return placedInFolder(fetched).compactMap { fetchedEnvelope in
             let ref = rowRef(for: fetchedEnvelope)
             // A row optimistically removed by either this view model
             // (`pendingRemovedRefs`) or the detail view (shared
-            // `appState.pendingMoveRefs`) stays gone until the move resolves --
+            // `appState.mailStore.shields.pendingMoveRefs`) stays gone until the move resolves --
             // and after that, a message the server confirmed gone stays gone
             // for good: IMAP never reuses a UID within a mailbox, so a fetch
             // that still carries it was answered before the move landed.
             if pendingRemovedRefs.contains(ref)
-                || appState.pendingMoveRefs.contains(ref)
+                || appState.mailStore.shields.pendingMoveRefs.contains(ref)
                 || confirmedGone.contains(ref) { return nil }
             // A flag write in flight from either this view model
             // (`pendingFlagRefs`) or the detail view (shared
-            // `appState.pendingFlagWriteRefs`) shields the row's flags.
+            // `appState.mailStore.shields.pendingFlagWriteRefs`) shields the row's flags.
             let flagWriteInFlight = pendingFlagRefs.contains(ref)
-                || appState.pendingFlagWriteRefs.contains(ref)
+                || appState.mailStore.shields.pendingFlagWriteRefs.contains(ref)
             if flagWriteInFlight, let local = envelope(for: ref) {
                 return rebuildEnvelope(fetchedEnvelope, flags: local.flags)
             }

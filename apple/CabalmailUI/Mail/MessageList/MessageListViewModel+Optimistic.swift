@@ -229,12 +229,12 @@ extension MessageListViewModel {
 
     /// The server confirmed `uids` gone from `folder` (a dispose, move or
     /// purge succeeded): record it so a refresh that was already in flight
-    /// can't bring them back (see `AppState.confirmedRemovals`), then prune
+    /// can't bring them back (see `MessageShields.confirmedRemovals`), then prune
     /// the caches. Called only on success, while the messages are still in
     /// `pendingRemovedRefs`, so the two shields overlap rather than leave a
     /// gap between them.
     func confirmRemoval(from folder: String, uids: [UInt32]) async {
-        appState.recordConfirmedRemovals(uids.map { MessageRef(folder: folder, uid: $0) })
+        appState.mailStore.shields.recordConfirmedRemovals(uids.map { MessageRef(folder: folder, uid: $0) })
         await pruneCachesAfter(move: folder, uids: uids)
     }
 
@@ -301,7 +301,7 @@ extension MessageListViewModel {
     /// are dropped here, which keeps the stash to in-flight moves. A prune
     /// with no move behind it (a send-from-draft) isn't kept.
     func stashForReaderRevert(_ envelope: Envelope, at index: Int) {
-        let inFlight = appState.pendingMoveRefs
+        let inFlight = appState.mailStore.shields.pendingMoveRefs
         readerPrunedEnvelopes = readerPrunedEnvelopes.filter { inFlight.contains($0.key) }
         let ref = rowRef(for: envelope)
         guard inFlight.contains(ref) else { return }

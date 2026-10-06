@@ -286,7 +286,7 @@ final class MessageListViewModel {
     /// view model issued. While a message sits here `mergeFetched` keeps the
     /// optimistic flags rather than letting a stale fetch revert them. Flag
     /// writes that originate in the detail view are tracked separately, in
-    /// the shared `AppState.pendingFlagWriteRefs` (its write lifecycle lives
+    /// the shared `MessageShields.pendingFlagWriteRefs` (its write lifecycle lives
     /// in the detail view model); `shieldFetched` consults both.
     var pendingFlagRefs: Set<MessageRef> = []
 
@@ -416,7 +416,7 @@ final class MessageListViewModel {
                     try? await client.bodyCache.invalidate(folder: folder.path)
                     envelopes = []
                     resetWindow()
-                    appState.clearConfirmedRemovals(folderPath: folder.path)
+                    appState.mailStore.shields.clearConfirmedRemovals(folderPath: folder.path)
                     generation = alignment.generation
                 }
                 self.uidValidity = fresh

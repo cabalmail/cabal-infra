@@ -113,7 +113,7 @@ final class MessageDetailViewModel {
     /// Brackets an in-flight flag write so the list can shield its optimistic
     /// flag from a concurrent refresh: `true` when the STORE is dispatched,
     /// `false` when it resolves (success or failure). Wired to
-    /// `AppState.setFlagWrite` in `MessageDetailView`; left nil in tests and
+    /// `MessageShields.setFlagWrite` in `MessageDetailView`; left nil in tests and
     /// in the dispose path (the row leaves the list, so there's nothing to
     /// shield). Same decoupling rationale as `onFlagChanged`.
     var onFlagWriteInFlight: ((Bool) -> Void)?
@@ -121,7 +121,7 @@ final class MessageDetailViewModel {
     /// Brackets an in-flight archive / trash / move so the list can shield the
     /// optimistically-pruned row from a refresh that lands before the move
     /// resolves: `true` when the move is dispatched, `false` when it resolves
-    /// (success or failure). Wired to `AppState.setMoveInFlight` in
+    /// (success or failure). Wired to `MessageShields.setMoveInFlight` in
     /// `MessageDetailView`; nil in tests. Same decoupling rationale as
     /// `onFlagChanged`.
     var onMoveInFlight: ((Bool) -> Void)?
@@ -130,7 +130,7 @@ final class MessageDetailViewModel {
     /// (never on failure), so the list can keep the message out of any
     /// refresh that was already in flight when the move landed -- the shield
     /// `onMoveInFlight` holds ends at that moment. Wired to
-    /// `AppState.recordConfirmedRemovals` in `MessageDetailView`; nil in
+    /// `MessageShields.recordConfirmedRemovals` in `MessageDetailView`; nil in
     /// tests.
     var onMoveConfirmed: (() -> Void)?
 

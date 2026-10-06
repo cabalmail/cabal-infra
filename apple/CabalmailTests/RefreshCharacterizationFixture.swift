@@ -18,6 +18,9 @@ final class RefreshCharacterizationFixture {
     let folderPath = "Work"
     let imap = FakeImapClient()
     let appState = AppState()
+    /// The models' shared mail state: the counts they publish and the shields
+    /// they read.
+    var mailStore: MailSessionStore { appState.mailStore }
     private var scratchRoots: [URL] = []
 
     func removeScratch() {

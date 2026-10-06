@@ -4,7 +4,8 @@ import CabalmailKit
 
 /// The mail state the folder list, message list, reader and composer share
 /// for the signed-in account, in parts that each own a piece of it:
-/// `counts`, the folder badges and the Inbox count behind the app badge.
+/// `counts`, the folder badges and the Inbox count behind the app badge, and
+/// `shields`, what keeps a list refresh from undoing a write made elsewhere.
 ///
 /// `AppState` owns one (`mailStore`) for its whole life and resets it in place
 /// at sign-out (`forgetAccount()`), so a view model, or a reader callback that
@@ -13,6 +14,7 @@ import CabalmailKit
 @MainActor
 public final class MailSessionStore {
     public let counts = MailCounts()
+    let shields = MessageShields()
 
     /// The session lifecycle's record of which clients' sessions have ended
     /// (`AppState.teardownGate`, which marks a client ended before sign-out
@@ -39,5 +41,6 @@ public final class MailSessionStore {
     /// account starts from none of it (#1825).
     func forgetAccount() {
         counts.reset()
+        shields.reset()
     }
 }

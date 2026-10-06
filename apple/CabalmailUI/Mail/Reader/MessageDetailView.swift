@@ -372,18 +372,18 @@ extension MessageDetailView {
         // shield). Keyed by ref so a UID collision across mailboxes
         // can't mis-shield an unrelated row.
         model.onFlagWriteInFlight = { [weak appState] inFlight in
-            appState?.setFlagWrite(ref, inFlight: inFlight)
+            appState?.mailStore.shields.setFlagWrite(ref, inFlight: inFlight)
         }
         // Likewise bracket archive / trash / move so the list keeps
         // the optimistically-pruned row gone until the move resolves,
         // rather than letting a mid-move refresh resurrect it.
         model.onMoveInFlight = { [weak appState] inFlight in
-            appState?.setMoveInFlight(ref, inFlight: inFlight)
+            appState?.mailStore.shields.setMoveInFlight(ref, inFlight: inFlight)
         }
         // ...and past it: once the server confirms, keep the message
         // out of any refresh that was already in flight.
         model.onMoveConfirmed = { [weak appState] in
-            appState?.recordConfirmedRemovals([ref])
+            appState?.mailStore.shields.recordConfirmedRemovals([ref])
         }
         // ...or, if the server refuses, put the pruned row back.
         model.onMoveFailed = { [weak appState] markUnread in

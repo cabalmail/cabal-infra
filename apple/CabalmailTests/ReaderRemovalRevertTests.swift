@@ -47,7 +47,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
             list?.applyFlagChange(openRef, flag: flag, added: added)
         }
         reader.onMoveInFlight = { [weak appState] inFlight in
-            appState?.setMoveInFlight(openRef, inFlight: inFlight)
+            appState?.mailStore.shields.setMoveInFlight(openRef, inFlight: inFlight)
         }
         reader.onMoveFailed = { [weak list] markUnread in
             list?.restorePrunedEnvelope(openRef, markUnread: markUnread)
