@@ -67,8 +67,8 @@ enum SignInScript {
     /// The client returned is not the one appended to `world.clients`.
     @MainActor
     static func seatClients(of world: SessionHarness, over mail: SignInCachedMail) {
-        let build = world.appState.sessionEnvironment.makeClient
-        world.appState.sessionEnvironment.makeClient = { configuration, store, monitor in
+        let build = world.appState.sessionManager.sessionEnvironment.makeClient
+        world.appState.sessionManager.sessionEnvironment.makeClient = { configuration, store, monitor in
             let built = try build(configuration, store, monitor)
             return CabalmailClient(
                 configuration: built.configuration,

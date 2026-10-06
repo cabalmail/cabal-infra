@@ -146,7 +146,7 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
 
         try await harness.seedTokens()
         try seedImapCredentials()
-        harness.appState.signedOutReason = nil
+        harness.appState.sessionManager.signedOutReason = nil
         harness.configurationResult = .success(harness.configuration)
         harness.makeClientFailure = CabalmailError.invalidCredentials
 
@@ -197,7 +197,7 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
         try await harness.seedTokens(id: "ID-1", expiresIn: -60)
         let blob = try harness.secureStore.get(SecureStoreKey.authTokens)
         await harness.cognito.script(.refresh, .unreachable)
-        let announcements = harness.appState.sessionInvalidation.events()
+        let announcements = harness.appState.sessionManager.sessionInvalidation.events()
 
         await harness.appState.restoreIfPossible()
 
@@ -222,7 +222,7 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
         try await harness.seedTokens(expiresIn: -60)
         try seedImapCredentials()
         await harness.cognito.script(.refresh, .error(type: "NotAuthorizedException", message: "revoked"))
-        let announcements = harness.appState.sessionInvalidation.events()
+        let announcements = harness.appState.sessionManager.sessionInvalidation.events()
 
         await harness.appState.restoreIfPossible()
 
@@ -234,12 +234,12 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
         XCTAssertEqual(harness.events, Self.built, "no session hook runs")
         XCTAssertEqual(harness.clients.count, 1)
         XCTAssertNil(harness.appState.client)
-        XCTAssertNil(harness.appState.sessionExpiryTask, "nothing in AppState was listening")
+        XCTAssertNil(harness.appState.sessionManager.sessionExpiryTask, "nothing in AppState was listening")
         let trail = await harness.cognito.trail
         XCTAssertEqual(trail, [Self.refresh])
         let count = await bufferedCount(announcements)
         XCTAssertEqual(count, 1, "the Kit announced the expiry")
-        let late = await bufferedCount(harness.appState.sessionInvalidation.events())
+        let late = await bufferedCount(harness.appState.sessionManager.sessionInvalidation.events())
         XCTAssertEqual(late, 0, "and nothing replays it")
     }
 
@@ -248,7 +248,7 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
     func testAnExpiredTokenWithNoRefreshTokenTakesTheExpiryArmWithoutCognito() async throws {
         try await harness.seedTokens(expiresIn: -60, refresh: nil)
         try seedImapCredentials()
-        let announcements = harness.appState.sessionInvalidation.events()
+        let announcements = harness.appState.sessionManager.sessionInvalidation.events()
 
         await harness.appState.restoreIfPossible()
 
@@ -267,7 +267,7 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
     /// the form explains an expiry, though nothing announced one.
     func testTokensThatVanishMidRestoreTakeTheExpiryArmWithoutAnAnnouncement() async throws {
         try await harness.seedTokens()
-        let announcements = harness.appState.sessionInvalidation.events()
+        let announcements = harness.appState.sessionManager.sessionInvalidation.events()
         harness.holdNextConfigurationLoad()
         let appState = harness.appState
         let restore = Task { await appState.restoreIfPossible() }
@@ -344,7 +344,7 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
         }
 
         XCTAssertNil(harness.appState.client)
-        XCTAssertNil(harness.appState.sessionExpiryTask)
+        XCTAssertNil(harness.appState.sessionManager.sessionExpiryTask)
         XCTAssertFalse(harness.hasStoredTokens)
         XCTAssertEqual(harness.events, Self.wired + ["sessionWillEnd tokens=stored", "sessionDidEnd tokens=gone"])
         let trail = await harness.cognito.trail
@@ -373,7 +373,7 @@ final class RestoreFailureCharacterizationTests: XCTestCase {
         XCTAssertEqual(trail, [], "nothing is refreshed")
 
         let relaunched = AppState()
-        relaunched.sessionEnvironment = harness.appState.sessionEnvironment
+        relaunched.sessionManager.sessionEnvironment = harness.appState.sessionManager.sessionEnvironment
         await relaunched.restoreIfPossible()
 
         XCTAssertEqual(relaunched.status, .signedOut)

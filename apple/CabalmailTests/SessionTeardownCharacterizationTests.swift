@@ -67,7 +67,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     /// ref parked after it (`SpotlightSignInTests`).
     func testSignOutWithNoClientDropsTheParkedRef() async {
         let state = AppState()
-        state.status = .signingIn
+        state.sessionManager.status = .signingIn
         state.routeSpotlightRef(parked)
 
         await state.signOut()
@@ -78,11 +78,11 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     /// An expiry ends the wait through the same teardown.
     func testAnExpiryDropsTheParkedRef() async {
         let state = AppState()
-        state.status = .signedIn
+        state.sessionManager.status = .signedIn
         state.routeSpotlightRef(parked)
         XCTAssertEqual(state.pendingSpotlightRef, parked, "precondition: no session is wired")
 
-        await state.handleSessionExpiry()
+        await state.sessionManager.handleSessionExpiry()
 
         XCTAssertNil(state.pendingSpotlightRef)
         XCTAssertEqual(state.signedOutReason, .sessionExpired)
@@ -93,12 +93,12 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     /// The work before the no-client guard runs on every sign-out.
     func testSignOutWithNoClientStillStopsThePollersAndClearsTheReason() async {
         let state = AppState()
-        state.status = .signedIn
-        state.signedOutReason = .sessionExpired
+        state.sessionManager.status = .signedIn
+        state.sessionManager.signedOutReason = .sessionExpired
         state.mailStore.counts.applyUnreadDelta(folderPath: "INBOX", delta: 2)
         let feedPoll = Task<Void, Never> { try? await Task.sleep(for: .seconds(3600)) }
         defer { feedPoll.cancel() }
-        state.feedRefreshTask = feedPoll
+        state.sessionManager.pollers.feedRefreshTask = feedPoll
         XCTAssertEqual(state.mailStore.counts.inboxUnreadCount, 2, "precondition")
 
         await state.signOut()
@@ -107,7 +107,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertNil(state.signedOutReason, "a deliberate sign-out explains nothing")
         XCTAssertEqual(state.mailStore.counts.inboxUnreadCount, 0, "the badge count comes down")
         XCTAssertTrue(feedPoll.isCancelled, "the feed poller stops")
-        XCTAssertNil(state.feedRefreshTask)
+        XCTAssertNil(state.sessionManager.pollers.feedRefreshTask)
         // The sidebar's INBOX count comes down with the badge count (#1825).
         // The next session used to start from it until its STATUS walk, and
         // `FolderListViewModel.seedSavedCounts` seeds only a folder whose
@@ -127,7 +127,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     /// from racing the assertion.
     func testSignOutWithNoClientClearsTheFolderStateButLeavesTheToast() async {
         let state = AppState()
-        state.status = .signedIn
+        state.sessionManager.status = .signedIn
         state.mailStore.counts.folderUnreadCounts = ["Archive": 3]
         state.mailStore.counts.folderTotalCounts = ["Archive": 40]
         state.mailStore.counts.setSubscribedFolders(["INBOX", "Archive"])
@@ -151,7 +151,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         let state = AppState()
         let window = UUID()
         let seed = Draft(subject: "parked by a mailto: link")
-        state.status = .signedIn
+        state.sessionManager.status = .signedIn
         Self.bumpEveryCommand(on: state, seed: seed, window: window)
         let ticks = Self.ticks(of: state)
         XCTAssertFalse(ticks.contains(0), "precondition: every tick was bumped")
@@ -177,8 +177,8 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     /// password form does not show it, and `signIn` clears it.
     func testSignOutFromTheCodeFormLeavesItsErrorBehind() async {
         let state = AppState()
-        state.status = .mfaCodeRequired(.totp)
-        state.mfaError = Self.mismatch
+        state.sessionManager.status = .mfaCodeRequired(.totp)
+        state.sessionManager.mfaError = Self.mismatch
 
         await state.signOut()
 

@@ -15,7 +15,7 @@ import CabalmailKit
 @MainActor
 final class SavedFolderCounts {
     /// The session client's `folderStateCache`; nil when signed out. Set by
-    /// `AppState.wireSession`, or by a test.
+    /// `SessionManager.wireSession`, or by a test.
     var cache: FolderStateCache?
 
     /// Folders whose counts in `MailCounts` came from saved state and haven't

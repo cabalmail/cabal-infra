@@ -48,7 +48,7 @@ final class SessionHarness {
     init() throws {
         defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         configurationResult = .success(configuration)
-        appState.sessionEnvironment = environment()
+        appState.sessionManager.sessionEnvironment = environment()
     }
 
     func tearDown() async {

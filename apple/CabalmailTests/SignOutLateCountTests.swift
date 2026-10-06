@@ -148,7 +148,7 @@ final class SignOutLateCountTests: XCTestCase {
         let client = try fixture.makeClient(folderState: await fixture.savedState())
         let state = AppState()
         let sidebar = FolderListViewModel(client: client, mailStore: state.mailStore)
-        state.teardownGate.markEnded(client)
+        state.sessionManager.teardownGate.markEnded(client)
 
         await sidebar.loadFolderList()
 
@@ -229,8 +229,8 @@ final class SignOutLateCountTests: XCTestCase {
 
     private func holdFirstSessionWillEnd() -> LateCountHookGate {
         let gate = LateCountHookGate(arrival: expectation(description: "the teardown reached sessionWillEnd"))
-        let original = harness.appState.sessionEnvironment.hooks.sessionWillEnd
-        harness.appState.sessionEnvironment.hooks.sessionWillEnd = {
+        let original = harness.appState.sessionManager.sessionEnvironment.hooks.sessionWillEnd
+        harness.appState.sessionManager.sessionEnvironment.hooks.sessionWillEnd = {
             await gate.holdFirstCall()
             await original()
         }

@@ -62,9 +62,9 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
         line: UInt = #line
     ) async {
         let state = AppState()
-        state.status = status
-        state.signedOutReason = .sessionExpired
-        state.mfaError = Self.sentinelError
+        state.sessionManager.status = status
+        state.sessionManager.signedOutReason = .sessionExpired
+        state.sessionManager.mfaError = Self.sentinelError
 
         await state.restoreIfPossible()
 
@@ -73,7 +73,9 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.mfaError, Self.sentinelError, file: file, line: line)
         XCTAssertNil(state.client, file: file, line: line)
         XCTAssertNil(state.navCoordinator, file: file, line: line)
-        XCTAssertNil(state.sessionExpiryTask, "no observer without a wired session", file: file, line: line)
+        XCTAssertNil(
+            state.sessionManager.sessionExpiryTask, "no observer without a wired session", file: file, line: line
+        )
     }
 
     // MARK: - Second factor with no challenge parked
@@ -83,9 +85,9 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
     /// before the code form's error is cleared, and leaves the reason alone.
     func testSubmittingWithNoChallengeParkedReturnsToThePasswordForm() async {
         let state = AppState()
-        state.status = .mfaCodeRequired(.totp)
-        state.mfaError = Self.mismatch
-        state.signedOutReason = .sessionExpired
+        state.sessionManager.status = .mfaCodeRequired(.totp)
+        state.sessionManager.mfaError = Self.mismatch
+        state.sessionManager.signedOutReason = .sessionExpired
 
         await state.submitMfaCode("123456")
 
@@ -98,7 +100,7 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
     /// nothing: an error's text stays for the user to read (#1826).
     func testSubmittingFromAnErrorIsIgnored() async {
         let state = AppState()
-        state.status = .error("Network error: offline")
+        state.sessionManager.status = .error("Network error: offline")
 
         await state.submitMfaCode("123456")
 
@@ -112,20 +114,20 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
     /// status still says so.
     func testAStraySubmitWhileSignedInIsIgnored() async throws {
         let state = AppState()
-        state.status = .signedIn
-        state.observeSessionInvalidation()
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
+        state.sessionManager.status = .signedIn
+        state.sessionManager.observeSessionInvalidation()
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
         let feedPoll = Self.parkedTask()
-        state.feedRefreshTask = feedPoll
+        state.sessionManager.pollers.feedRefreshTask = feedPoll
         defer { observer.cancel(); feedPoll.cancel() }
 
         await state.submitMfaCode("123456")
 
         XCTAssertEqual(state.status, .signedIn)
         XCTAssertFalse(observer.isCancelled)
-        XCTAssertNotNil(state.sessionExpiryTask)
+        XCTAssertNotNil(state.sessionManager.sessionExpiryTask)
         XCTAssertFalse(feedPoll.isCancelled, "the feed poller keeps polling")
-        XCTAssertNotNil(state.feedRefreshTask)
+        XCTAssertNotNil(state.sessionManager.pollers.feedRefreshTask)
     }
 
     /// `pendingMfa` is private and only `signIn` sets it, so that this clears
@@ -133,9 +135,9 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
     /// can. The reason is left alone.
     func testCancellingTheChallengeClearsItsErrorAndSignsOut() {
         let state = AppState()
-        state.status = .mfaCodeRequired(.sms)
-        state.mfaError = Self.mismatch
-        state.signedOutReason = .sessionExpired
+        state.sessionManager.status = .mfaCodeRequired(.sms)
+        state.sessionManager.mfaError = Self.mismatch
+        state.sessionManager.signedOutReason = .sessionExpired
 
         state.cancelMfaChallenge()
 
@@ -148,11 +150,11 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
     /// rather than putting the password form over a live session (#1826).
     func testCancellingWhileSignedInIsIgnored() throws {
         let state = AppState()
-        state.status = .signedIn
-        state.observeSessionInvalidation()
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
+        state.sessionManager.status = .signedIn
+        state.sessionManager.observeSessionInvalidation()
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
         let feedPoll = Self.parkedTask()
-        state.feedRefreshTask = feedPoll
+        state.sessionManager.pollers.feedRefreshTask = feedPoll
         defer { observer.cancel(); feedPoll.cancel() }
 
         state.cancelMfaChallenge()
@@ -165,8 +167,8 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
     /// From an error, a cancel leaves the error's text in place.
     func testCancellingFromAnErrorIsIgnored() {
         let state = AppState()
-        state.status = .error("Network error: offline")
-        state.mfaError = Self.mismatch
+        state.sessionManager.status = .error("Network error: offline")
+        state.sessionManager.mfaError = Self.mismatch
 
         state.cancelMfaChallenge()
 
@@ -187,7 +189,7 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
     /// the code is accepted (#1826). The form's error stays with it.
     func testAnExpiryFromTheCodeFormIsIgnored() async {
         let state = AppState()
-        state.mfaError = Self.mismatch
+        state.sessionManager.mfaError = Self.mismatch
         await assertExpiryIsIgnored(from: .mfaCodeRequired(.totp), on: state)
         XCTAssertEqual(state.mfaError, Self.mismatch)
     }
@@ -211,9 +213,9 @@ final class SessionLifecycleCharacterizationTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        state.status = status
+        state.sessionManager.status = status
 
-        await state.handleSessionExpiry()
+        await state.sessionManager.handleSessionExpiry()
 
         XCTAssertEqual(state.status, status, "expiry from \(status)", file: file, line: line)
         XCTAssertNil(state.signedOutReason, file: file, line: line)
@@ -244,25 +246,25 @@ final class SessionObserverCharacterizationTests: XCTestCase {
     /// shows what keeps a doubly heard signal to one teardown.
     func testObservingAgainCancelsAndEndsTheFirstObserver() async throws {
         let state = AppState()
-        state.status = .signedIn
-        state.observeSessionInvalidation()
-        let first = try XCTUnwrap(state.sessionExpiryTask)
+        state.sessionManager.status = .signedIn
+        state.sessionManager.observeSessionInvalidation()
+        let first = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
 
-        state.observeSessionInvalidation()
-        let second = try XCTUnwrap(state.sessionExpiryTask)
+        state.sessionManager.observeSessionInvalidation()
+        let second = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
 
         XCTAssertTrue(first.isCancelled, "signing back in must not leave two observers")
         XCTAssertFalse(second.isCancelled)
         await awaitEnd(of: first)
 
-        state.sessionInvalidation.sessionDidExpire()
+        state.sessionManager.sessionInvalidation.sessionDidExpire()
         // The teardown cancels its own observer, so its end is the moment the
         // state is final.
         await awaitEnd(of: second)
 
         XCTAssertEqual(state.status, .signedOut)
         XCTAssertEqual(state.signedOutReason, .sessionExpired)
-        XCTAssertNil(state.sessionExpiryTask)
+        XCTAssertNil(state.sessionManager.sessionExpiryTask)
     }
 
     /// Each observer subscribes synchronously, so a signal sent before the
@@ -275,22 +277,22 @@ final class SessionObserverCharacterizationTests: XCTestCase {
     /// whether Observation skips an unchanged write.
     func testASignalBufferedBeforeObservingAgainTearsDownOnceBecauseOfTheGuard() async throws {
         let state = AppState()
-        state.status = .signedIn
-        state.signedOutReason = .sessionExpired
+        state.sessionManager.status = .signedIn
+        state.sessionManager.signedOutReason = .sessionExpired
         let reasonWrites = ReasonWriteCounter(watching: state)
-        state.observeSessionInvalidation()
-        let first = try XCTUnwrap(state.sessionExpiryTask)
-        state.observeSessionInvalidation()
-        let second = try XCTUnwrap(state.sessionExpiryTask)
+        state.sessionManager.observeSessionInvalidation()
+        let first = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
+        state.sessionManager.observeSessionInvalidation()
+        let second = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
 
-        state.sessionInvalidation.sessionDidExpire()
+        state.sessionManager.sessionInvalidation.sessionDidExpire()
         await awaitEnd(of: first)
         await awaitEnd(of: second)
 
         XCTAssertEqual(reasonWrites.count, 2, "one teardown: two observers heard, the guard turned one away")
         XCTAssertEqual(state.status, .signedOut)
         XCTAssertEqual(state.signedOutReason, .sessionExpired)
-        XCTAssertNil(state.sessionExpiryTask)
+        XCTAssertNil(state.sessionManager.sessionExpiryTask)
     }
 
     /// Pins that a sign-out cancels the observer and that it ends, so no later
@@ -298,13 +300,13 @@ final class SessionObserverCharacterizationTests: XCTestCase {
     /// to assert about a later signal without waiting for a non-event.
     func testSignOutCancelsAndEndsTheObserver() async throws {
         let state = AppState()
-        state.status = .signedIn
-        state.observeSessionInvalidation()
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
+        state.sessionManager.status = .signedIn
+        state.sessionManager.observeSessionInvalidation()
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
 
         await state.signOut()
 
-        XCTAssertNil(state.sessionExpiryTask)
+        XCTAssertNil(state.sessionManager.sessionExpiryTask)
         XCTAssertTrue(observer.isCancelled)
         await awaitEnd(of: observer)
     }

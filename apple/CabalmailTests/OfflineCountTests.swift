@@ -139,7 +139,7 @@ final class OfflineCountTests: XCTestCase {
     /// was the last account's, written into the next account's saved state.
     func testAnUnreadCountAfterASignOutSavesNoTotalFromTheLastAccount() async throws {
         let appState = AppState()
-        appState.status = .signedIn
+        appState.sessionManager.status = .signedIn
         appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 9, total: 500)
         await appState.signOut()
 

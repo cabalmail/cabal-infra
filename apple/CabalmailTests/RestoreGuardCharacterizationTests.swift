@@ -60,8 +60,8 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
         for (domain, username) in [("", ""), ("", "alice"), (Self.domain, "")] {
             let label = "domain '\(domain)', username '\(username)'"
             harness.seedLastSession(controlDomain: domain, username: username)
-            harness.appState.status = .error("earlier")
-            harness.appState.signedOutReason = .sessionExpired
+            harness.appState.sessionManager.status = .error("earlier")
+            harness.appState.sessionManager.signedOutReason = .sessionExpired
 
             await harness.appState.restoreIfPossible()
 
@@ -107,8 +107,8 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
     /// Tracked in #1826.
     func testWithoutStoredTokensRestoreWipesAnErrorAfterOneStoreRead() async {
         harness.seedLastSession()
-        harness.appState.status = .error("earlier")
-        harness.appState.signedOutReason = .sessionExpired
+        harness.appState.sessionManager.status = .error("earlier")
+        harness.appState.sessionManager.signedOutReason = .sessionExpired
 
         await harness.appState.restoreIfPossible()
 
@@ -140,7 +140,7 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
         XCTAssertEqual(harness.clients.count, 1)
 
         await harness.cognito.script(.mfaAnswer, .tokens(id: "ID-MFA", refresh: "REFRESH"))
-        harness.appState.status = .mfaCodeRequired(.totp)
+        harness.appState.sessionManager.status = .mfaCodeRequired(.totp)
         await harness.appState.submitMfaCode("123456")
 
         XCTAssertEqual(harness.appState.status, .signedIn)
@@ -158,9 +158,11 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
     func testAStoreThatCannotBeReadCountsAsNoTokensAndKeepsThem() async throws {
         harness.seedLastSession()
         try await harness.seedTokens()
-        let makeStore = harness.appState.sessionEnvironment.makeSecureStore
-        harness.appState.sessionEnvironment.makeSecureStore = { UnreadableSecureStore(base: makeStore()) }
-        harness.appState.status = .error("earlier")
+        let makeStore = harness.appState.sessionManager.sessionEnvironment.makeSecureStore
+        harness.appState.sessionManager.sessionEnvironment.makeSecureStore = {
+            UnreadableSecureStore(base: makeStore())
+        }
+        harness.appState.sessionManager.status = .error("earlier")
 
         await harness.appState.restoreIfPossible()
 
@@ -186,7 +188,7 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
         try await harness.seedTokens()
         await harness.appState.restoreIfPossible()
         let client = try XCTUnwrap(harness.appState.client)
-        harness.appState.status = .signedOut
+        harness.appState.sessionManager.status = .signedOut
 
         await harness.appState.restoreIfPossible()
 
@@ -202,7 +204,7 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
     func testRestoreFromTheErrorStatusRunsInFull() async throws {
         harness.seedLastSession()
         try await harness.seedTokens()
-        harness.appState.status = .error("an earlier failure")
+        harness.appState.sessionManager.status = .error("an earlier failure")
 
         await harness.appState.restoreIfPossible()
 

@@ -42,15 +42,15 @@ final class SignOutReentrancyCharacterizationTests: XCTestCase {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         let gate = holdFirstSessionWillEnd()
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
         let mark = harness.events.count
 
-        state.sessionInvalidation.sessionDidExpire()
+        state.sessionManager.sessionInvalidation.sessionDidExpire()
         await fulfillment(of: [gate.arrival], timeout: defaultWaitTimeout)
         XCTAssertEqual(state.status, .signedIn, "mid-teardown, the app still reads as signed in")
         XCTAssertNotNil(state.client)
         let signOut = Task { await state.signOut() }
-        try await waitUntilOnMainActor { state.teardownGate.signOutRequests == 2 }
+        try await waitUntilOnMainActor { state.sessionManager.teardownGate.signOutRequests == 2 }
         XCTAssertEqual(state.status, .signedIn, "the user's sign-out waits for the expiry's")
         gate.release()
         await signOut.value
@@ -74,11 +74,11 @@ final class SignOutReentrancyCharacterizationTests: XCTestCase {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         let gate = holdFirstSessionWillEnd()
-        let staleObserver = try XCTUnwrap(state.sessionExpiryTask)
-        state.sessionInvalidation.sessionDidExpire()
+        let staleObserver = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
+        state.sessionManager.sessionInvalidation.sessionDidExpire()
         await fulfillment(of: [gate.arrival], timeout: defaultWaitTimeout)
         let signOut = Task { await state.signOut() }
-        try await waitUntilOnMainActor { state.teardownGate.signOutRequests == 2 }
+        try await waitUntilOnMainActor { state.sessionManager.teardownGate.signOutRequests == 2 }
         let mark = harness.events.count
         await harness.cognito.script(.passwordSignIn, .tokens(id: "ID-2"))
         let signIn = Task {
@@ -103,9 +103,9 @@ final class SignOutReentrancyCharacterizationTests: XCTestCase {
         XCTAssertNil(state.signedOutReason)
         XCTAssertTrue(harness.hasStoredTokens, "the new session's tokens survive")
         XCTAssertTrue(state.client === harness.clients.last)
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
         XCTAssertFalse(observer.isCancelled, "the new session's observer listens")
-        let feedPoll = try XCTUnwrap(state.feedRefreshTask)
+        let feedPoll = try XCTUnwrap(state.sessionManager.pollers.feedRefreshTask)
         XCTAssertFalse(feedPoll.isCancelled)
     }
 
@@ -115,8 +115,8 @@ final class SignOutReentrancyCharacterizationTests: XCTestCase {
     /// until the gate is released; later calls pass straight through.
     private func holdFirstSessionWillEnd() -> HookGate {
         let gate = HookGate(arrival: expectation(description: "a teardown reached sessionWillEnd"))
-        let original = harness.appState.sessionEnvironment.hooks.sessionWillEnd
-        harness.appState.sessionEnvironment.hooks.sessionWillEnd = {
+        let original = harness.appState.sessionManager.sessionEnvironment.hooks.sessionWillEnd
+        harness.appState.sessionManager.sessionEnvironment.hooks.sessionWillEnd = {
             await gate.holdFirstCall()
             await original()
         }
