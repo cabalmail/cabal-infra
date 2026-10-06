@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.26.0] - 2026-10-06
+
+### Changed
+- Apple: **Shared mail state moved into one store.** The folder unread and
+  total counts, the Inbox count behind the app badge, and the bookkeeping
+  that keeps the message list, the reader and the composer in step now
+  live in one mail store instead of the app's top-level state. Nothing
+  should look or behave differently; anything that does is a bug worth
+  reporting.
+
+### Fixed
+- Apple: **Notifications stay with the account they arrived for.** Signing
+  out now clears the app's delivered notifications, so their Mark as Read
+  and Archive buttons can no longer act on the next account's messages, and
+  a notification tapped before sign-in finished opens only if the same
+  account signs in. Before, both carried over to whichever account signed in
+  next.
+
+### Security
+- **source-map-js 1.2.2.** Patches an event-loop denial of service through
+  indexed source-map section offsets (CVE-2026-93749) in the build-time
+  dependency trees of the admin app and the browser extensions.
+
 ## [1.25.1] - 2026-10-06
 
 ### Fixed
