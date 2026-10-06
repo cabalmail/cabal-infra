@@ -6,6 +6,20 @@ One row per (user, device token); push_dispatch fans a wake signal out to
 every row it finds for the recipient, routing Apple rows to APNs and android
 rows to FCM. See docs/0.11.x/push-notifications.md and
 docs/1.x/android-push-notifications.md.
+
+A device token belongs to one app install, which is signed in to one account
+at a time, so registering a token also removes any other account's row for
+it. Without that, a sign-out whose /push_deregister failed (offline, say) left
+the old account's row behind, and its pushes kept reaching the device after
+the next account signed in, where their actions ran against that account's
+messages (#1883). Rows carry the sign-in time (the ID token's auth_time) of
+the session that last registered them, and only an older sign-in's row is
+removed: a register request from the previous account that arrives late
+cannot remove the row of the account signed in after it.
+
+Token ownership is not proven: an account that registers a token another
+account uses removes that account's row until its app next registers. Device
+tokens are never shown to other users, so this is accepted.
 '''
 import datetime
 import json
@@ -45,6 +59,10 @@ MAX_ENABLED_FOLDERS = 100
 FOLDER_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 
 MAX_INFO_LENGTH = 64
+
+# The table's index on device_token alone, for finding other accounts' rows
+# for a token being registered (terraform/infra/modules/table/main.tf).
+DEVICE_TOKEN_INDEX = 'by_device_token'
 
 
 def _validate_enabled_folders(value):
@@ -91,9 +109,62 @@ def _info_field(body, key):
     return value[:MAX_INFO_LENGTH]
 
 
+def _auth_time(claims):
+    '''The caller's sign-in time, epoch seconds: the ID token's auth_time,
+    which a token refresh keeps. 0 when the token carries none.'''
+    try:
+        return int(claims.get('auth_time'))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _remove_other_accounts(user, device_token, auth_time):
+    '''Deletes other accounts' rows for `device_token` whose sign-in is older
+    than the caller's (or unrecorded). Best-effort: the caller's own
+    registration has already succeeded, and a failed lookup or delete (the
+    index still building after a deploy, say) only leaves a stale row for the
+    next registration to remove, so it is logged, never raised.'''
+    query = {
+        'IndexName': DEVICE_TOKEN_INDEX,
+        'KeyConditionExpression': '#t = :t',
+        'ExpressionAttributeNames': {'#t': 'device_token'},
+        'ExpressionAttributeValues': {':t': device_token},
+    }
+    try:
+        while True:
+            page = table.query(**query)
+            for item in page.get('Items', []):
+                if item.get('user') != user:
+                    _remove_row(item['user'], device_token, auth_time)
+            if 'LastEvaluatedKey' not in page:
+                return
+            query['ExclusiveStartKey'] = page['LastEvaluatedKey']
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        print(f'[push-register] stale-row cleanup failed: {err}')
+
+
+def _remove_row(owner, device_token, auth_time):
+    '''Deletes `owner`'s row for the token unless a sign-in no older than the
+    caller's registered it. A refusal (that newer row) or a failed delete is
+    logged and skipped, so one row can't stop the rest.'''
+    try:
+        table.delete_item(
+            Key={'user': owner, 'device_token': device_token},
+            ConditionExpression='attribute_not_exists(#at) OR #at < :at',
+            ExpressionAttributeNames={'#at': 'auth_time'},
+            ExpressionAttributeValues={':at': auth_time},
+        )
+        print('[push-register] removed another account\'s row for this token')
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        print(f'[push-register] kept another account\'s row for this token: {err}')
+
+
 def handler(event, _context):
-    '''Upserts the caller's device-token row.'''
-    user = event['requestContext']['authorizer']['claims']['cognito:username']
+    '''Upserts the caller's device-token row and removes other accounts' rows
+    for the same token.'''
+    claims = event['requestContext']['authorizer']['claims']
+    user = claims['cognito:username']
+    auth_time = _auth_time(claims)
     try:
         body = json.loads(event.get('body') or '{}')
     except (TypeError, ValueError):
@@ -142,6 +213,10 @@ def handler(event, _context):
         ':now': now,
     }
     removes = ['#lf']
+    if auth_time:
+        names['#at'] = 'auth_time'
+        sets.append('#at = :at')
+        values[':at'] = auth_time
     # '#ef' joins names only when an expression uses it: DynamoDB rejects the
     # whole update ("Value provided in ExpressionAttributeNames unused") if an
     # alias appears without a reference, which is the common key-absent case.
@@ -164,4 +239,5 @@ def handler(event, _context):
         )
     except Exception as err:  # pylint: disable=broad-exception-caught
         return {'statusCode': 500, 'body': json.dumps({'Error': str(err)})}
+    _remove_other_accounts(user, device_token, auth_time)
     return {'statusCode': 200, 'body': json.dumps({'status': 'registered'})}

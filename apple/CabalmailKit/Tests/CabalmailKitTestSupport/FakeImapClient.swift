@@ -95,6 +95,16 @@ public actor FakeImapClient: ImapClient {
         statusResults.append(results)
     }
 
+    /// Lets `status` answer even when its caller's task was cancelled while
+    /// it was held: the reply had already arrived before the cancel and was
+    /// only waiting to resume. Off by default, which models the cancel
+    /// reaching the request first.
+    private var statusAnswersAfterCancellation = false
+
+    public func answerStatusAfterCancellation() {
+        statusAnswersAfterCancellation = true
+    }
+
     /// Pages (or failures) for the next `envelopes(offset:)` calls.
     public func scriptEnvelopesResults(_ results: [Result<[Envelope], Error>]) {
         envelopesResults.append(results)
@@ -284,7 +294,7 @@ public actor FakeImapClient: ImapClient {
         // Mirror the production transport: a URLSession data task whose
         // surrounding Task is cancelled fails with `URLError.cancelled`,
         // which `URLSessionHTTPTransport` normalizes to `network(...)`.
-        if Task.isCancelled { throw CabalmailError.network("cancelled") }
+        if Task.isCancelled, !statusAnswersAfterCancellation { throw CabalmailError.network("cancelled") }
         if let scripted = statusResults.next() { return try scripted.get() }
         guard let statusResult else { return try trap() }
         return statusResult

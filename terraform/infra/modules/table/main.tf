@@ -90,6 +90,11 @@ resource "aws_dynamodb_table" "rate_limits" {
 * push_dispatch. Rows are re-created by the app on every launch, so the data
 * is fully reconstructible and deliberately outside the backup plan (matching
 * cabal-user-preferences).
+*
+* by_device_token lets push_register find other accounts' rows for a token it
+* is registering and remove them: one app install is signed in to one account
+* at a time, and a row left by a failed sign-out deregistration would
+* otherwise keep sending that account's pushes to the device (#1883).
 */
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
@@ -108,6 +113,16 @@ resource "aws_dynamodb_table" "push_tokens" {
     name = "device_token"
     type = "S"
   }
+
+  global_secondary_index {
+    name = "by_device_token"
+    key_schema {
+      attribute_name = "device_token"
+      key_type       = "HASH"
+    }
+    projection_type = "KEYS_ONLY"
+  }
+
   server_side_encryption {
     enabled = true
   }

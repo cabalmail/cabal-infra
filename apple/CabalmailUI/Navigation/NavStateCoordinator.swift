@@ -181,6 +181,7 @@ public final class NavStateCoordinator {
         listScroll = cursor.listScroll
         messageScroll = cursor.messageScroll
         messageAnchor = cursor.messageAnchor
+        messageFraction = cursor.messageFraction
         restoreTick += 1
         pendingRestore = PendingRestore(
             folderPath: cursor.folder,
@@ -288,7 +289,12 @@ public final class NavStateCoordinator {
     /// Records that the user opened a message in `folderPath`. A freshly-opened
     /// message starts at the top as far as the *server* cursor knows — the
     /// reader consults the local position cache for where it really was.
+    /// This install only echoes a UIDVALIDITY it was handed, and only beside
+    /// the message it came with: a restore's stays while the cursor still
+    /// names the restored message (its list selecting it records it again),
+    /// and any other message clears it (#1873).
     func recordMessage(folderPath: String, uid: UInt32, messageID: String?) {
+        if folder != folderPath || self.uid != uid { uidValidity = nil }
         folder = folderPath
         self.uid = uid
         self.messageID = messageID
@@ -341,6 +347,7 @@ public final class NavStateCoordinator {
         messageID = nil
         messageScroll = nil
         messageAnchor = nil
+        messageFraction = nil
         session.clearMessage()
         scheduleSessionSave()
         scheduleSave()
@@ -412,7 +419,7 @@ public final class NavStateCoordinator {
 // cursor and the resume record keep their own (folder, uid, Message-ID)
 // fields, so these forward to the field-wise forms. The ref's UIDVALIDITY is
 // never written into the cursor: it carries the one a restore primed it
-// with, or none, as it always has.
+// with while it still names that message, or none.
 extension NavStateCoordinator {
     /// Records that the user opened the message `ref` names.
     func recordMessage(_ ref: MessageRef) {
