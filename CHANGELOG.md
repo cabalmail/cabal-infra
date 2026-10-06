@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.27.1] - 2026-10-06
+
+### Fixed
+- Apple: **Badge after signing out.** Signing out while the Inbox count was
+  being refreshed could put the signed-out account's unread count back on
+  the app badge and the Mac menu-bar count, where it stayed until the next
+  sign-in. The badge now stays cleared.
+- Apple: **Sender logos come back after an offline start.** A logo lookup
+  that failed because the app was offline was remembered as "no logo" until
+  the app was relaunched, even across signing out and back in. A failed
+  lookup is now asked again the next time that sender's avatar is drawn, so
+  logos return as rows are scrolled into view or a message is opened.
+- Apple: **Notification Archive after switching accounts.** The Archive
+  button on a new-mail notification remembered the first account's archive
+  folder and kept using it after signing in to another account on the same
+  device. It now always moves the message to Archive, the same folder the
+  in-app archive uses.
+- Apple: **Cross-device resume position.** In a few cases, after jumping to
+  a message in the folder already open (from the resume prompt, a
+  notification, Spotlight or Siri), or after closing a message, the
+  position offered to your other devices could still carry the reading
+  position of the message read before. It now carries only the reading
+  position of the message it names.
+- **Another account's notifications after a failed sign-out.** If signing
+  out could not reach the server (offline, say), the device stayed
+  registered for that account's pushes, and after another account signed
+  in on the same device those notifications kept arriving, with Mark as
+  Read and Archive acting on the new account's mail. Registering a device
+  for push now removes any other account's registration of it, using a
+  new `by_device_token` index on `cabal-push-tokens`.
+
 ## [1.27.0] - 2026-10-06
 
 ### Changed
