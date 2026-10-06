@@ -31,21 +31,21 @@ final class WiredSessionExpiryCharacterizationTests: XCTestCase {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         let reasons = ReasonLog()
-        let original = state.sessionEnvironment.hooks.sessionDidEnd
-        state.sessionEnvironment.hooks.sessionDidEnd = { [weak state] in
+        let original = state.sessionManager.sessionEnvironment.hooks.sessionDidEnd
+        state.sessionManager.sessionEnvironment.hooks.sessionDidEnd = { [weak state] in
             reasons.atDidEnd.append(state?.signedOutReason)
             original()
         }
-        state.signedOutReason = .sessionExpired
+        state.sessionManager.signedOutReason = .sessionExpired
         let mark = harness.events.count
 
-        await state.handleSessionExpiry()
+        await state.sessionManager.handleSessionExpiry()
 
         XCTAssertEqual(reasons.atDidEnd, [nil], "signOut cleared the reason before its hooks ran")
         XCTAssertEqual(state.signedOutReason, .sessionExpired)
         XCTAssertEqual(state.status, .signedOut)
         XCTAssertNil(state.client)
-        XCTAssertNil(state.sessionExpiryTask)
+        XCTAssertNil(state.sessionManager.sessionExpiryTask)
         XCTAssertEqual(Array(harness.events[mark...]), ["sessionWillEnd tokens=stored", "sessionDidEnd tokens=gone"])
     }
 
@@ -61,19 +61,19 @@ final class WiredSessionExpiryCharacterizationTests: XCTestCase {
     func testASecondExpiryAfterTheTeardownChangesNothing() async throws {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
-        state.sessionInvalidation.sessionDidExpire()
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
+        state.sessionManager.sessionInvalidation.sessionDidExpire()
         await SignOutSuiteSteps.awaitEnd(of: observer, in: self)
         let events = harness.events
-        let probe = state.sessionInvalidation.events()
+        let probe = state.sessionManager.sessionInvalidation.events()
         let reasonWrites = ReasonWriteTally(watching: state)
 
-        state.sessionInvalidation.sessionDidExpire()
+        state.sessionManager.sessionInvalidation.sessionDidExpire()
         let heard = await bufferedCount(probe)
-        await state.handleSessionExpiry()
+        await state.sessionManager.handleSessionExpiry()
 
         XCTAssertEqual(heard, 1, "the announcement went out")
-        XCTAssertNil(state.sessionExpiryTask, "with no observer of AppState's left to hear it")
+        XCTAssertNil(state.sessionManager.sessionExpiryTask, "with no observer of AppState's left to hear it")
         XCTAssertEqual(reasonWrites.count, 0, "the status guard returned before signOut()")
         XCTAssertEqual(harness.events, events)
         XCTAssertEqual(harness.clients.count, 1)
@@ -89,7 +89,7 @@ final class WiredSessionExpiryCharacterizationTests: XCTestCase {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         let client = try XCTUnwrap(state.client)
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
         try await harness.seedTokens(id: "ID-STALE", expiresIn: -60)
         await harness.cognito.script(.refresh, .error(type: "NotAuthorizedException", message: "Token expired"))
         let mark = harness.events.count

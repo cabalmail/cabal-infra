@@ -88,7 +88,7 @@ final class PushAccountSwitchTests: XCTestCase {
         await registrar.handleNotificationAction(identifier: "OPEN", ref: ref)
         let appState = harness.appState
         let signOut = Task { await appState.signOut() }
-        try await waitUntilOnMainActor { appState.teardownGate.isTearingDown }
+        try await waitUntilOnMainActor { appState.sessionManager.teardownGate.isTearingDown }
         harness.releaseConfigurationLoad()
         await restore.value
         await signOut.value
@@ -156,10 +156,10 @@ final class PushAccountSwitchTests: XCTestCase {
     /// harness's own recording of the hooks is not needed here.
     private func drive(_ world: SessionHarness, with registrar: PushRegistrar) {
         registrars[ObjectIdentifier(world)] = registrar
-        world.appState.sessionEnvironment.hooks.sessionDidStart = { appState, client in
+        world.appState.sessionManager.sessionEnvironment.hooks.sessionDidStart = { appState, client in
             registrar.sessionDidStart(appState: appState, client: client)
         }
-        world.appState.sessionEnvironment.hooks.sessionWillEnd = {
+        world.appState.sessionManager.sessionEnvironment.hooks.sessionWillEnd = {
             await registrar.sessionWillEnd()
         }
     }

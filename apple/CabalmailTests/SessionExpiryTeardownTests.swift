@@ -14,9 +14,9 @@ import CabalmailKit
 final class SessionExpiryTeardownTests: XCTestCase {
     func testExpirySignalSignsOutWithAReason() async {
         let state = AppState()
-        state.status = .signedIn
+        state.sessionManager.status = .signedIn
 
-        await state.handleSessionExpiry()
+        await state.sessionManager.handleSessionExpiry()
 
         XCTAssertEqual(state.status, .signedOut, "the mail shell has to come down")
         XCTAssertEqual(
@@ -29,16 +29,16 @@ final class SessionExpiryTeardownTests: XCTestCase {
     /// which was telling the truth about a value nobody updated.
     func testStatusIsNoLongerSignedInAfterAnExpiry() async {
         let state = AppState()
-        state.status = .signedIn
-        await state.handleSessionExpiry()
+        state.sessionManager.status = .signedIn
+        await state.sessionManager.handleSessionExpiry()
         XCTAssertNotEqual(state.status, .signedIn)
     }
 
     /// A deliberate Sign Out is its own explanation — the form stays blank.
     func testDeliberateSignOutCarriesNoReason() async {
         let state = AppState()
-        state.status = .signedIn
-        await state.handleSessionExpiry()
+        state.sessionManager.status = .signedIn
+        await state.sessionManager.handleSessionExpiry()
         XCTAssertEqual(state.signedOutReason, .sessionExpired, "precondition")
 
         await state.signOut()
@@ -52,10 +52,10 @@ final class SessionExpiryTeardownTests: XCTestCase {
     /// onto a form the user asked for.
     func testASignalAfterSignOutIsANoOp() async {
         let state = AppState()
-        state.status = .signedOut
-        state.signedOutReason = nil
+        state.sessionManager.status = .signedOut
+        state.sessionManager.signedOutReason = nil
 
-        await state.handleSessionExpiry()
+        await state.sessionManager.handleSessionExpiry()
 
         XCTAssertNil(state.signedOutReason)
     }
@@ -66,9 +66,9 @@ final class SessionExpiryTeardownTests: XCTestCase {
     /// two ends are not actually connected; this is what says they are.
     func testARefusedRequestTearsTheSessionDown() async throws {
         let state = AppState()
-        state.status = .signedIn
-        state.observeSessionInvalidation()
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
+        state.sessionManager.status = .signedIn
+        state.sessionManager.observeSessionInvalidation()
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
 
         let api = URLSessionApiClient(
             configuration: Configuration(
@@ -79,7 +79,7 @@ final class SessionExpiryTeardownTests: XCTestCase {
             ),
             authService: NullAuthService(),
             transport: TwoUnauthorizedTransport(),
-            sessionInvalidation: state.sessionInvalidation
+            sessionInvalidation: state.sessionManager.sessionInvalidation
         )
 
         do {
@@ -103,11 +103,11 @@ final class SessionExpiryTeardownTests: XCTestCase {
     /// lines below, this one opens the gap on every run.
     func testASignalBeforeTheObserverFirstRunsIsNotLost() async throws {
         let state = AppState()
-        state.status = .signedIn
-        state.observeSessionInvalidation()
-        let observer = try XCTUnwrap(state.sessionExpiryTask)
+        state.sessionManager.status = .signedIn
+        state.sessionManager.observeSessionInvalidation()
+        let observer = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
 
-        state.sessionInvalidation.sessionDidExpire()
+        state.sessionManager.sessionInvalidation.sessionDidExpire()
 
         await awaitTeardown(by: observer)
         XCTAssertEqual(state.status, .signedOut)
@@ -132,8 +132,8 @@ final class SessionExpiryTeardownTests: XCTestCase {
     /// typing, they have read it.
     func testSubmittingTheFormClearsTheReason() async {
         let state = AppState()
-        state.status = .signedIn
-        await state.handleSessionExpiry()
+        state.sessionManager.status = .signedIn
+        await state.sessionManager.handleSessionExpiry()
         XCTAssertEqual(state.signedOutReason, .sessionExpired, "precondition")
 
         // No control domain resolves here, so this fails at `ConfigLoader`

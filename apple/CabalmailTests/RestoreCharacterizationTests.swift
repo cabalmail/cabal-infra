@@ -74,7 +74,9 @@ final class RestoreCharacterizationTests: XCTestCase {
         XCTAssertEqual(harness.clients.count, 1)
         XCTAssertTrue(harness.appState.client === harness.clients.first)
         XCTAssertNotNil(harness.appState.navCoordinator)
-        XCTAssertNotNil(harness.appState.sessionExpiryTask, "the session observer starts with the session")
+        XCTAssertNotNil(
+            harness.appState.sessionManager.sessionExpiryTask, "the session observer starts with the session"
+        )
         XCTAssertNil(harness.appState.signedOutReason)
         XCTAssertEqual(try storedTokens(), before, "the stored pair is untouched")
         let trail = await harness.cognito.trail
@@ -107,7 +109,7 @@ final class RestoreCharacterizationTests: XCTestCase {
         harness.seedLastSession()
         try await harness.seedTokens(id: "ID-1", expiresIn: -60)
         await harness.cognito.script(.refresh, .tokens(id: "ID-2", refresh: nil))
-        let announcements = harness.appState.sessionInvalidation.events()
+        let announcements = harness.appState.sessionManager.sessionInvalidation.events()
 
         await harness.appState.restoreIfPossible()
 
@@ -191,7 +193,7 @@ final class RestoreCharacterizationTests: XCTestCase {
         XCTAssertNil(harness.appState.signedOutReason)
         XCTAssertNil(harness.appState.client)
         XCTAssertNil(harness.appState.navCoordinator)
-        XCTAssertNil(harness.appState.sessionExpiryTask, "nothing observes a session that never started")
+        XCTAssertNil(harness.appState.sessionManager.sessionExpiryTask, "nothing observes a session that never started")
         XCTAssertEqual(harness.events, Self.loaded + [
             "makeClient", "sessionWillEnd tokens=stored", "sessionDidEnd tokens=gone",
         ])
@@ -261,7 +263,7 @@ final class RestoreCharacterizationTests: XCTestCase {
         try await harness.seedTokens()
         let restore = await startHeldRestore()
 
-        await harness.appState.handleSessionExpiry()
+        await harness.appState.sessionManager.handleSessionExpiry()
         XCTAssertEqual(harness.appState.status, .restoring)
 
         harness.releaseConfigurationLoad()
@@ -278,7 +280,7 @@ final class RestoreCharacterizationTests: XCTestCase {
     func testASuccessfulRestoreLeavesAnEarlierReasonInPlace() async throws {
         harness.seedLastSession()
         try await harness.seedTokens()
-        harness.appState.signedOutReason = .sessionExpired
+        harness.appState.sessionManager.signedOutReason = .sessionExpired
 
         await harness.appState.restoreIfPossible()
 
@@ -293,7 +295,7 @@ final class RestoreCharacterizationTests: XCTestCase {
     private func startSignOut() async throws -> Task<Void, Never> {
         let appState = harness.appState
         let signOut = Task { await appState.signOut() }
-        try await waitUntilOnMainActor { appState.teardownGate.isTearingDown }
+        try await waitUntilOnMainActor { appState.sessionManager.teardownGate.isTearingDown }
         return signOut
     }
 

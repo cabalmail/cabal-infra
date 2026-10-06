@@ -48,6 +48,13 @@ public actor CabalmailClient {
     nonisolated let sendQueue: SendQueue?
     #endif
 
+    /// The task feeding `spotlightIndexer` from the envelope cache's change
+    /// stream; `shutdown()` cancels it. Nil when there is no indexer.
+    private nonisolated let spotlightBinding: Task<Void, Never>?
+
+    /// Set by `shutdown()`.
+    public private(set) var isShutDown = false
+
     /// Opt-in crash / hang reporter. Starts disabled — the Settings toggle
     /// calls `setCrashReportingEnabled(_:)` to flip it. This is the
     /// process-wide `MetricKitCollector.shared`: MetricKit subscription is
@@ -79,6 +86,7 @@ public actor CabalmailClient {
         self.outbox = outbox
         self.folderStateCache = folderStateCache
         self.spotlightIndexer = nil
+        self.spotlightBinding = nil
         self.rss = nil
         self.rssStore = nil
         self.rssSync = nil
@@ -194,11 +202,13 @@ public actor CabalmailClient {
         self.rssSync = rssSync
         self.metricKitCollector = .shared
         if let spotlightIndexer {
-            // Feed the indexer from the envelope cache's change stream for
-            // the client's whole lifetime; the stream finishes when the
-            // cache deallocates, ending this task with the session.
+            // Feed the indexer from the envelope cache's change stream until
+            // `shutdown()` cancels this task. The task holds the cache, so
+            // the stream does not end on its own while the process runs.
             let cache = envelopeCache
-            Task { await spotlightIndexer.bind(to: cache) }
+            self.spotlightBinding = Task { await spotlightIndexer.bind(to: cache) }
+        } else {
+            self.spotlightBinding = nil
         }
         if observeReachability {
             let reach = Reachability()
@@ -221,6 +231,21 @@ public actor CabalmailClient {
         }
     }
     #endif
+
+    /// Stops what the client runs on its own once the app lets it go: the
+    /// send queue's drains (`SendQueue.stop()`), so a client nobody holds
+    /// can't drain the outbox the app's current client drains, and the
+    /// Spotlight feed. API calls, the caches and the outbox itself keep
+    /// working for anyone still holding the client; a message `send(_:)`
+    /// queues afterwards stays queued. Idempotent.
+    public func shutdown() async {
+        guard !isShutDown else { return }
+        isShutDown = true
+        spotlightBinding?.cancel()
+        #if canImport(Network)
+        await sendQueue?.stop()
+        #endif
+    }
 
     // MARK: - Higher-level flows
 

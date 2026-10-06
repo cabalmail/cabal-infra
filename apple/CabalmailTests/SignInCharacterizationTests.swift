@@ -50,8 +50,8 @@ final class SignInCharacterizationTests: XCTestCase {
     /// `SignInMfaCharacterizationTests.testANewSignInDropsAParkedChallenge`.)
     func testSigningInShowsWhileTheConfigurationLoadsWithTheFormStateCleared() async {
         await world.cognito.script(.passwordSignIn, .tokens(id: "ID-A"))
-        world.appState.signedOutReason = .sessionExpired
-        world.appState.mfaError = "left over from a code form"
+        world.appState.sessionManager.signedOutReason = .sessionExpired
+        world.appState.sessionManager.mfaError = "left over from a code form"
         world.holdNextConfigurationLoad()
 
         let signIn = Task { await self.signIn() }
@@ -83,7 +83,7 @@ final class SignInCharacterizationTests: XCTestCase {
         XCTAssertEqual(world.clients.count, 1)
         XCTAssertTrue(world.appState.client === world.clients.first, "the client it built is the one wired")
         XCTAssertNotNil(world.appState.navCoordinator)
-        let observer = try XCTUnwrap(world.appState.sessionExpiryTask, "the session observer runs")
+        let observer = try XCTUnwrap(world.appState.sessionManager.sessionExpiryTask, "the session observer runs")
         XCTAssertFalse(observer.isCancelled)
         XCTAssertNil(world.appState.signedOutReason)
         XCTAssertNil(world.appState.mfaError)
@@ -268,7 +268,7 @@ final class SignInCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.status, .error(text), file: file, line: line)
         XCTAssertNil(state.client, "nothing is wired", file: file, line: line)
         XCTAssertNil(state.navCoordinator, file: file, line: line)
-        XCTAssertNil(state.sessionExpiryTask, "no session observer", file: file, line: line)
+        XCTAssertNil(state.sessionManager.sessionExpiryTask, "no session observer", file: file, line: line)
         XCTAssertEqual(world.events, expected, "no session hook ran", file: file, line: line)
         XCTAssertFalse(world.hasStoredTokens, "no tokens", file: file, line: line)
         XCTAssertNil(world.defaults.string(forKey: SignInScript.domainKey), file: file, line: line)
@@ -308,7 +308,7 @@ final class SignInOverASessionCharacterizationTests: XCTestCase {
     /// still wired and observed, under `.signingIn`.
     func testTheFirstSessionStaysWiredWhileTheSecondSignInLoads() async throws {
         let first = try await signInFirst()
-        let observer = try XCTUnwrap(world.appState.sessionExpiryTask)
+        let observer = try XCTUnwrap(world.appState.sessionManager.sessionExpiryTask)
         await world.cognito.script(.passwordSignIn, .tokens(id: "ID-B"))
         world.holdNextConfigurationLoad()
 
@@ -334,7 +334,7 @@ final class SignInOverASessionCharacterizationTests: XCTestCase {
     func testASecondSignInReplacesTheSessionWithoutEndingTheFirst() async throws {
         let first = try await signInFirst()
         let firstNavigation = try XCTUnwrap(world.appState.navCoordinator)
-        let firstObserver = try XCTUnwrap(world.appState.sessionExpiryTask)
+        let firstObserver = try XCTUnwrap(world.appState.sessionManager.sessionExpiryTask)
         let firstMail = SignInCachedMail(of: first)
         try await firstMail.seed()
         let before = world.events.count
@@ -348,7 +348,7 @@ final class SignInOverASessionCharacterizationTests: XCTestCase {
         XCTAssertFalse(world.appState.client === first)
         XCTAssertFalse(world.appState.navCoordinator === firstNavigation)
         XCTAssertTrue(firstObserver.isCancelled, "observing again replaced the first observer")
-        XCTAssertEqual(world.appState.sessionExpiryTask?.isCancelled, false)
+        XCTAssertEqual(world.appState.sessionManager.sessionExpiryTask?.isCancelled, false)
         await firstMail.assertPresent(true)
         let tokens = await world.appState.client?.authService.currentTokens()
         XCTAssertEqual(tokens?.idToken, "ID-B", "the second sign-in's tokens replaced the first's")
@@ -387,7 +387,7 @@ final class SignInOverASessionCharacterizationTests: XCTestCase {
     /// Tracked in #1826.
     func testAFailedSignInOverASessionShowsAnErrorWhileTheSessionStaysWired() async throws {
         let first = try await signInFirst()
-        let observer = try XCTUnwrap(world.appState.sessionExpiryTask)
+        let observer = try XCTUnwrap(world.appState.sessionManager.sessionExpiryTask)
         let before = world.events.count
         await world.cognito.script(.passwordSignIn, .error(type: "NotAuthorizedException"))
 

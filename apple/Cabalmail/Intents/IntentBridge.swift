@@ -11,31 +11,35 @@ import CabalmailUI
 /// fire while the app is foregrounded, backgrounded, or not launched at all,
 /// so they can't reach the SwiftUI-owned `AppState` through the environment.
 ///
-/// `AppState.wireSession` hands the session in via `sessionDidStart`; when no
-/// session is wired (a background intent on a cold process), `activeClient()`
-/// bootstraps a client from the persisted control domain and keychain tokens —
-/// the same recipe as the push action-handler's cold-launch path.
+/// Intents borrow the session manager's client (`SessionManager.borrowClient()`):
+/// the wired session's, or on a cold background launch the stored account's,
+/// which the manager builds once, from the cached config.json and with the
+/// expiry monitor, and which the next launch restore adopts. `CabalmailApp`
+/// hands the manager in before any scene exists. The session's start and end
+/// reach the bridge through `AppIntentsSessionHooks`.
 @MainActor
 final class IntentBridge {
     static let shared = IntentBridge()
 
+    /// The process's session manager, handed in by `CabalmailApp.init`.
+    private var sessions: SessionManager?
+
     /// Set by `sessionDidStart`; navigation targets (`navCoordinator`) hang
     /// off it. Weak — the bridge outlives any session.
     private(set) weak var appState: AppState?
-
-    /// Client bootstrapped for a background intent on a process with no
-    /// wired session. Cached so a burst of intents doesn't rebuild it;
-    /// dropped as soon as a real session starts or ends.
-    private var bootstrapClient: CabalmailClient?
 
     /// A folder-open request that arrived before sign-in / restore completed
     /// (an OpenFolderIntent cold launch); routed once the session is wired,
     /// mirroring `PushRegistrar.pendingOpen`.
     private var pendingFolderPath: String?
 
+    /// Called once, before any scene and so before any intent can run.
+    func attach(_ sessions: SessionManager) {
+        self.sessions = sessions
+    }
+
     func sessionDidStart(appState: AppState) {
         self.appState = appState
-        bootstrapClient = nil
         if let path = pendingFolderPath {
             pendingFolderPath = nil
             requestOpenFolder(path)
@@ -44,7 +48,6 @@ final class IntentBridge {
 
     func sessionWillEnd() {
         appState = nil
-        bootstrapClient = nil
         pendingFolderPath = nil
     }
 
@@ -59,29 +62,20 @@ final class IntentBridge {
         coordinator.navigateRequest = NavState(folder: path, clientID: coordinator.clientID)
     }
 
-    /// The session client, or a cached/bootstrapped one when no session is
-    /// wired. Auth refresh happens through the normal client path either
-    /// way. Throws `IntentError.notSignedIn` when signed out so Siri reads
-    /// a sensible sentence instead of a raw error.
+    /// The client an intent works through, borrowed from the session manager.
+    /// Auth refresh happens through the normal client path. Throws
+    /// `IntentError.notSignedIn` when signed out, so Siri reads a sensible
+    /// sentence instead of a raw error, and a friendly wrapper of whatever
+    /// building the client threw.
     func activeClient() async throws -> CabalmailClient {
-        if let client = appState?.client { return client }
-        if let bootstrapClient { return bootstrapClient }
-        let domain = UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? ""
-        guard !domain.isEmpty else { throw IntentError.notSignedIn }
-        let store = AppState.makeSecureStore()
-        guard (try? store.get(SecureStoreKey.authTokens)) != nil else { throw IntentError.notSignedIn }
+        let borrowed: CabalmailClient?
         do {
-            let configuration = try await ConfigLoader.load(controlDomain: domain)
-            let client = try CabalmailClient.make(
-                configuration: configuration,
-                secureStore: store,
-                cacheDirectory: AppState.makeCacheDirectory()
-            )
-            bootstrapClient = client
-            return client
+            borrowed = try await sessions?.borrowClient()
         } catch {
             throw IntentError.friendly(error)
         }
+        guard let borrowed else { throw IntentError.notSignedIn }
+        return borrowed
     }
 }
 #endif
