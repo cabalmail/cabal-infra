@@ -228,9 +228,6 @@ public final class PushRegistrar {
     /// UserDefaults key for the token most recently accepted by
     /// `/push_register` — i.e. what sign-out must deregister.
     static let lastTokenKey = "cabalmail.push.lastRegisteredToken"
-    /// Cached archive-folder path resolved by `archiveFolderPath(using:)`.
-    /// A Settings-visible override is deferred to the preferences phase.
-    static let archiveFolderKey = "cabalmail.push.archiveFolder"
     /// UserDefaults key for the account (`username@controlDomain`) of the
     /// last session that started, kept across sign-outs and launches: the
     /// account whose notifications may still be delivered (#1872).
@@ -463,21 +460,18 @@ extension PushRegistrar {
             }
         case "ARCHIVE":
             guard let message = ref?.messageRef else { return }
-            await withBackgroundTask(named: "cabal.push.archive") { [weak self] client in
-                guard let destination = await self?.archiveFolderPath(using: client) else {
-                    // No Archive folder on this account: creating one on
-                    // demand is deliberately not this path's job, so the
-                    // action degrades to a logged no-op.
-                    CabalmailLog.warn("Push", "archive action skipped: no Archive folder")
-                    return
-                }
+            await withBackgroundTask(named: "cabal.push.archive") { client in
                 // Archive == read, in one round trip (server marks `\Seen`
                 // before moving) — this runs on the notification action's
                 // brief background budget, so the fewer calls the better.
+                // The destination is the in-app archive's: Dovecot creates
+                // `Archive` for every mailbox, so it needs no lookup, and no
+                // remembered path can outlive the account it came from
+                // (#1882).
                 try await client.imapClient.move(
                     folder: message.folder,
                     uids: [message.uid],
-                    destination: destination,
+                    destination: DisposeAction.archive.destinationFolder,
                     markSeen: true
                 )
             }
@@ -505,24 +499,6 @@ extension PushRegistrar {
             uid: ref.uid,
             clientID: coordinator.clientID
         )
-    }
-
-    /// Resolves the archive destination: the cached path if the user has
-    /// archived before, else the folder conventionally named "Archive".
-    /// `LIST (SPECIAL-USE)` isn't exposed by the API-backed client, so the
-    /// name is the best signal available; nil means "no archive folder".
-    private func archiveFolderPath(using client: CabalmailClient) async -> String? {
-        if let cached = defaults.string(forKey: Self.archiveFolderKey) {
-            return cached
-        }
-        guard
-            let folders = try? await client.imapClient.listFolders(),
-            let archive = folders.first(where: {
-                $0.path.caseInsensitiveCompare("Archive") == .orderedSame
-            })
-        else { return nil }
-        defaults.set(archive.path, forKey: Self.archiveFolderKey)
-        return archive.path
     }
 }
 
