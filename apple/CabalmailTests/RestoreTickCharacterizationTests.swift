@@ -149,6 +149,7 @@ final class RestoreTickCharacterizationTests: XCTestCase {
             folderPath: "INBOX", uid: 5, messageID: "<five@example.com>",
             position: ReadingPosition(anchor: "i3|0", fraction: 0.4), atTop: false
         )
+        XCTAssertEqual(coordinator.workingCursor?.messageFraction, 0.4, "precondition: the message left has one")
 
         coordinator.scheduleRestore(for: NavState(
             folder: "Archive", messageID: "<nine@example.com>", uid: 9, uidValidity: 77,
@@ -164,6 +165,7 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(working.messageScroll, 120)
         XCTAssertNil(working.messageAnchor, "the old message's anchor is replaced")
         XCTAssertNil(working.messageFraction, "so is its fraction")
+        XCTAssertNil(working.requestBody["msg_fraction"])
         XCTAssertEqual(working.clientID, "this-install", "a restore is saved as this install's own")
 
         coordinator.scheduleRestore(for: NavState(
@@ -201,9 +203,10 @@ final class RestoreTickCharacterizationTests: XCTestCase {
     }
 
     /// Closing the restored message (back to its list) leaves a folder
-    /// cursor with none of that message's fields: no UIDVALIDITY and no
-    /// reading fraction, matching the offset and anchor it already cleared.
-    func testClosingTheMessageClearsItsUIDValidityAndFraction() throws {
+    /// cursor with no reading fraction, matching the offset and anchor it
+    /// already cleared. (The folder's UIDVALIDITY may stay: it is the
+    /// folder's, and the next message opened clears it.)
+    func testClosingTheMessageClearsItsFraction() throws {
         let coordinator = try makeCoordinator()
         defer { coordinator.flushSession() }
         coordinator.scheduleRestore(for: NavState(
@@ -217,8 +220,8 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(working.folder, "Archive")
         XCTAssertNil(working.uid)
         XCTAssertNil(working.messageID)
-        XCTAssertNil(working.uidValidity)
         XCTAssertNil(working.messageAnchor)
         XCTAssertNil(working.messageFraction)
+        XCTAssertNil(working.requestBody["msg_fraction"])
     }
 }

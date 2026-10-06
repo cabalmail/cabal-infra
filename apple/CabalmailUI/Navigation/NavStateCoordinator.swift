@@ -289,9 +289,10 @@ public final class NavStateCoordinator {
     /// Records that the user opened a message in `folderPath`. A freshly-opened
     /// message starts at the top as far as the *server* cursor knows — the
     /// reader consults the local position cache for where it really was.
-    /// The UIDVALIDITY a restore primed stays only while the cursor still
-    /// names the restored message (its list selecting it records it again);
-    /// any other message clears it, since it was never this one's (#1873).
+    /// This install only echoes a UIDVALIDITY it was handed, and only beside
+    /// the message it came with: a restore's stays while the cursor still
+    /// names the restored message (its list selecting it records it again),
+    /// and any other message clears it (#1873).
     func recordMessage(folderPath: String, uid: UInt32, messageID: String?) {
         if folder != folderPath || self.uid != uid { uidValidity = nil }
         folder = folderPath
@@ -344,7 +345,6 @@ public final class NavStateCoordinator {
         guard folder == folderPath, uid != nil || messageID != nil else { return }
         uid = nil
         messageID = nil
-        uidValidity = nil
         messageScroll = nil
         messageAnchor = nil
         messageFraction = nil

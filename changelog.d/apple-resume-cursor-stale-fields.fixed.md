@@ -1,5 +1,6 @@
-- Apple: **Resume position after jumping to a message.** Opening a message
-  from a notification, Spotlight, Siri or the resume prompt could hand your
-  other devices the reading position of the message you had been reading
-  before it, so resuming there opened the new message part-way down. The
-  jumped-to message now starts from its own position.
+- Apple: **Cross-device resume position.** In a few cases, after jumping to
+  a message in the folder already open (from the resume prompt, a
+  notification, Spotlight or Siri), or after closing a message, the
+  position offered to your other devices could still carry the reading
+  position of the message read before. It now carries only the reading
+  position of the message it names.
