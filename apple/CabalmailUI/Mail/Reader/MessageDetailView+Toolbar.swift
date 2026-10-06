@@ -215,10 +215,7 @@ extension MessageDetailView {
             onSuccess: {
                 // Fires before the server round trip so the list selection
                 // advances and the row vanishes instantly.
-                appState.signalDisposed(
-                    folderPath: folder.path,
-                    uid: envelope.uid
-                )
+                appState.signalDisposed(messageRef)
             },
             onFailure: { error in
                 // The model has already had the list put the row back;
@@ -239,10 +236,7 @@ extension MessageDetailView {
         Task {
             await model.purge(
                 onSuccess: {
-                    appState.signalDisposed(
-                        folderPath: folder.path,
-                        uid: envelope.uid
-                    )
+                    appState.signalDisposed(messageRef)
                 },
                 onFailure: { error in
                     appState.showToast(Toast(

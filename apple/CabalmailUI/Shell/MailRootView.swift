@@ -39,14 +39,6 @@ struct MailRootView: View {
     /// rows with the fetched value and `Folder` equality spans attributes and
     /// subscription, so a stand-in never earns the row highlight (#1535).
     @State var loadedFolders: [Folder] = []
-    /// Override for the message detail's folder context when the selected
-    /// envelope is a cross-folder search result. `MessageListView` reports
-    /// the source folder via `onSearchResultSelected`; we wrap it in a
-    /// synthetic `Folder` so `MessageDetailView`'s mark-read / archive /
-    /// move operations target the message's true mailbox rather than the
-    /// sidebar's current selection. Nil for same-folder rows and folder-
-    /// mode lists, so `detailFolder` falls back to `selectedFolder`.
-    @State var crossFolderDetail: Folder?
     /// How many messages the list currently has selected, reported by
     /// `MessageListView` on wide/keyboard layouts. Drives the "N messages
     /// selected" reading-pane placeholder when a multi-selection is active;
@@ -180,10 +172,11 @@ struct MailRootView: View {
         )
     }
 
-    /// Folder that drives `MessageDetailView`. Cross-folder search results
-    /// override the sidebar selection; everything else uses it directly.
+    /// Folder that drives `MessageDetailView`: the selected row's own, so a
+    /// cross-folder search result opens against its true mailbox; the
+    /// sidebar's otherwise (`MessageFolderPolicy`).
     var detailFolder: Folder? {
-        crossFolderDetail ?? selectedFolder
+        MessageFolderPolicy.folder(for: selectedEnvelope, in: selectedFolder)
     }
 
     /// Whether the content column should show search results rather than the
@@ -249,14 +242,11 @@ struct MailRootView: View {
                 // Global search owns the content column while the search field
                 // is engaged. Stable `.id` so it isn't torn down per keystroke;
                 // the detail column still reads the selected message, against
-                // the result's true mailbox via `crossFolderDetail`.
+                // the result's true mailbox (`detailFolder`).
                 MessageListView(
                     scope: .search,
                     injectedSearchModel: searchModel,
                     selection: $selectedEnvelope,
-                    onSearchResultSelected: { sourceFolderPath in
-                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                    },
                     onSelectionCountChanged: { listSelectionCount = $0 }
                 )
                 .id("search")
@@ -266,9 +256,6 @@ struct MailRootView: View {
                 MessageListView(
                     scope: .folder(selectedFolder),
                     selection: $selectedEnvelope,
-                    onSearchResultSelected: { sourceFolderPath in
-                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                    },
                     onSelectionCountChanged: { listSelectionCount = $0 },
                     // A pick from the list's folder-switch menu goes through
                     // the same binding as a sidebar tap, so it ends a global
@@ -385,7 +372,6 @@ struct MailRootView: View {
             // message selection and don't re-record the cursor.
             guard old?.path != folder?.path else { return }
             selectedEnvelope = nil
-            crossFolderDetail = nil
             listSelectionCount = 0
             // Search's "This folder only" narrows to the sidebar selection
             // (#1510), including programmatic writes that land mid-search.
@@ -417,11 +403,10 @@ struct MailRootView: View {
             // anchor the cursor to.
             if !isSearching, let folderPath = selectedFolder?.path {
                 if let envelope {
-                    appState.navCoordinator?.recordMessage(
-                        folderPath: folderPath,
-                        uid: envelope.uid,
-                        messageID: envelope.messageId
-                    )
+                    // Anchored to the sidebar's folder: a row from another
+                    // folder is not this folder's cursor.
+                    let ref = envelope.ref(defaultFolder: folderPath)
+                    if ref.folder == folderPath { appState.navCoordinator?.recordMessage(ref) }
                 } else {
                     appState.navCoordinator?.recordNoMessage(folderPath: folderPath)
                 }

@@ -154,6 +154,11 @@ extension NavStateCoordinator {
         positions.position(for: ReadingPositionKey.mail(messageID: messageID, folder: folderPath, uid: uid))
     }
 
+    /// The saved reading position for `ref`'s message.
+    func readingPosition(for ref: MessageRef) -> ReadingPosition? {
+        positions.position(for: ReadingPositionKey.mail(ref))
+    }
+
     /// Stores (or, at the top of the body, clears) the reading position for
     /// `key`. A no-op when nothing changed, so the reader's capture stream
     /// doesn't churn the store.

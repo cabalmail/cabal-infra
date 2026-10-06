@@ -73,11 +73,7 @@ extension MessageDetailView {
     /// flag but leaves the user on the message they navigated to.
     private func markRead(model: MessageDetailViewModel, advance: MarkReadAdvance) {
         Task { await model.setSeen(true) }
-        appState.signalReadAdvance(
-            folderPath: folder.path,
-            uid: envelope.uid,
-            advance: advance
-        )
+        appState.signalReadAdvance(messageRef, advance: advance)
     }
 
     /// The rows the menu offers, read here so the enclosing body observes

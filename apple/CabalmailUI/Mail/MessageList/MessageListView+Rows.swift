@@ -31,7 +31,7 @@ extension MessageListView {
         orderedVisible: [Envelope]
     ) -> some View {
         let bulkMode = model.bulkMode
-        let isChecked = model.selectedUIDs.contains(envelope.uid)
+        let isChecked = model.isSelected(envelope)
         withRowContextMenu(for: envelope, model: model) {
             Group {
                 // Selection mode first, on every touch layout: the checkbox
@@ -97,7 +97,7 @@ extension MessageListView {
     }
 
     /// The wide-layout single-selection row: a UID-tagged `MessageRow` whose
-    /// highlight follows `selectedUIDs`. Multi-select does NOT come through
+    /// highlight follows `selectedRefs`. Multi-select does NOT come through
     /// here — `bulkMode` takes the checkbox branch above. On iOS it also
     /// carries the hardware-keyboard shift / command-click handling SwiftUI
     /// doesn't wire into the native list there; plain taps fall through to the
@@ -130,16 +130,11 @@ extension MessageListView {
     /// carries just that message - matching Finder / Mail, where grabbing an
     /// unselected item drags only it. This now covers both the native multi-
     /// select highlight (shift / command-click) and the touch checkbox flow,
-    /// since both populate `selectedUIDs`. Each item is tagged with its owning
-    /// mailbox via `sourceFolder(for:)` so a cross-folder search selection
-    /// still routes every UID back to the right source folder on drop.
+    /// since both populate `selectedRefs`. Each item is the row's own ref, so
+    /// a cross-folder search selection routes every message back to its own
+    /// folder on drop. The rule lives on the model so it can be tested.
     private func dragItems(for envelope: Envelope, model: MessageListViewModel) -> [MessageDragItem] {
-        if model.selectedUIDs.count > 1, model.selectedUIDs.contains(envelope.uid) {
-            return model.envelopes
-                .filter { model.selectedUIDs.contains($0.uid) }
-                .map { MessageDragItem(uid: $0.uid, sourceFolder: model.sourceFolder(for: $0)) }
-        }
-        return [MessageDragItem(uid: envelope.uid, sourceFolder: model.sourceFolder(for: envelope))]
+        model.dragItems(liftedFrom: envelope)
     }
 
     /// Wraps a virtualized row in `.draggable` on wide layouts so it can be
@@ -249,20 +244,20 @@ extension MessageListView {
             }
         } else {
             Button {
-                Task { await model.disposeMessages(uids: [envelope.uid], action: .archive) }
+                Task { await model.disposeMessages(refs: [model.rowRef(for: envelope)], action: .archive) }
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
         }
         if model.isTrashFolder {
             Button(role: .destructive) {
-                purgeCandidate = PurgeCandidate(uids: [envelope.uid])
+                purgeCandidate = PurgeCandidate(refs: [model.rowRef(for: envelope)])
             } label: {
                 purgeActionLabel
             }
         } else {
             Button(role: .destructive) {
-                Task { await model.disposeMessages(uids: [envelope.uid], action: .trash) }
+                Task { await model.disposeMessages(refs: [model.rowRef(for: envelope)], action: .trash) }
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -332,7 +327,7 @@ extension MessageListView {
                 role: .destructive,
                 identifier: "message.swipe.dispose"
             ) {
-                purgeCandidate = PurgeCandidate(uids: [envelope.uid])
+                purgeCandidate = PurgeCandidate(refs: [model.rowRef(for: envelope)])
             }
         case .restore:
             // Restore puts the message back in the inbox rather than

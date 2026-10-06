@@ -81,7 +81,8 @@ private struct IndexedList: View {
                 ForEach(0..<max(Int(model.totalMessages), model.envelopes.count), id: \.self) { index in
                     if index < model.envelopes.count {
                         let uid = model.envelopes[index].uid
-                        DisposingRow(model: model, uid: uid, rowHeight: SwipeTestHarness.rowHeight) {
+                        let ref = model.rowRef(for: model.envelopes[index])
+                        DisposingRow(model: model, ref: ref, rowHeight: SwipeTestHarness.rowHeight) {
                             SwipeActionRow(
                                 height: SwipeTestHarness.rowHeight, contentID: uid, rowBackground: .clear,
                                 leading: nil,

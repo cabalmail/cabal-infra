@@ -16,6 +16,11 @@ import CabalmailKit
 struct MessageDetailView: View {
     let folder: Folder
     let envelope: Envelope
+    /// The message shown: `envelope` in `folder`, which the host takes from
+    /// the selected row. What the toolbar's signals name.
+    var messageRef: MessageRef {
+        MessageRef(folder: folder.path, uid: envelope.uid, messageId: envelope.messageId)
+    }
 
     // Properties reached by sibling extensions in `+Toolbar` and `+Compose`
     // are kept at internal (default) access. `private` in this struct
@@ -353,51 +358,37 @@ extension MessageDetailView {
         // list view's `.onChange` handler can flip the row's bold
         // styling and unread dot without waiting for the next
         // refresh.
-        let folderPath = model.folder.path
-        let uid = model.envelope.uid
+        let ref = model.ref
         let client = model.client
         // The flag and move callbacks below can also fire once the
         // write fails, after the session has ended: not then (#1851).
         model.onFlagChanged = { [weak appState] flag, added in
             guard appState?.acceptsCounts(from: client) == true else { return }
-            appState?.signalFlagChange(
-                folderPath: folderPath,
-                uid: uid,
-                flag: flag,
-                added: added
-            )
+            appState?.signalFlagChange(ref, flag: flag, added: added)
         }
         // Bracket each flag write so the list shields the optimistic
         // flag from a refresh that lands before the write resolves
         // (the cross-view analogue of the list's own pending-flag
-        // shield). Folder-keyed so a UID collision across mailboxes
+        // shield). Keyed by ref so a UID collision across mailboxes
         // can't mis-shield an unrelated row.
         model.onFlagWriteInFlight = { [weak appState] inFlight in
-            appState?.setFlagWrite(
-                folderPath: folderPath,
-                uid: uid,
-                inFlight: inFlight
-            )
+            appState?.setFlagWrite(ref, inFlight: inFlight)
         }
         // Likewise bracket archive / trash / move so the list keeps
         // the optimistically-pruned row gone until the move resolves,
         // rather than letting a mid-move refresh resurrect it.
         model.onMoveInFlight = { [weak appState] inFlight in
-            appState?.setMoveInFlight(
-                folderPath: folderPath,
-                uid: uid,
-                inFlight: inFlight
-            )
+            appState?.setMoveInFlight(ref, inFlight: inFlight)
         }
         // ...and past it: once the server confirms, keep the message
         // out of any refresh that was already in flight.
         model.onMoveConfirmed = { [weak appState] in
-            appState?.recordConfirmedRemovals(folderPath: folderPath, uids: [uid])
+            appState?.recordConfirmedRemovals([ref])
         }
         // ...or, if the server refuses, put the pruned row back.
         model.onMoveFailed = { [weak appState] markUnread in
             guard appState?.acceptsCounts(from: client) == true else { return }
-            appState?.signalRemovalFailed(folderPath: folderPath, uid: uid, markUnread: markUnread)
+            appState?.signalRemovalFailed(ref, markUnread: markUnread)
         }
     }
 }

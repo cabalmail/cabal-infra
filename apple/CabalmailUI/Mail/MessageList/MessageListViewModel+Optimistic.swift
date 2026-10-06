@@ -10,15 +10,16 @@ extension MessageListViewModel {
     /// before the server round trip so the swipe action and context-menu
     /// commands feel instant; reverts the change, and any unread-badge
     /// delta, if `setFlags` fails so the row goes back to the truthful
-    /// state. Selections take their own path (`setSeen(_:uids:)` and
-    /// `setFlagged(_:uids:)` in the bulk extension).
+    /// state. Selections take their own path (`setSeen(_:refs:)` and
+    /// `setFlagged(_:refs:)` in the bulk extension).
     func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
-        let source = sourceFolder(for: envelope)
-        applyOptimisticFlag(uid: envelope.uid, flag: flag, add: add)
+        let ref = rowRef(for: envelope)
+        let source = ref.folder
+        applyOptimisticFlag(ref, flag: flag, add: add)
         // Shield the optimistic flag from a concurrent refresh until our own
         // write resolves; the next refresh after that carries server truth.
-        pendingFlagUIDs.insert(envelope.uid)
-        defer { pendingFlagUIDs.remove(envelope.uid) }
+        pendingFlagRefs.insert(ref)
+        defer { pendingFlagRefs.remove(ref) }
         // Mirror the optimistic flag flip onto the source folder's unread
         // count when `.seen` changes — adding `.seen` to an unread message
         // drops one from the badge, removing it adds one back. Only fires
@@ -36,12 +37,12 @@ extension MessageListViewModel {
         do {
             try await client.imapClient.setFlags(
                 folder: source,
-                uids: [envelope.uid],
+                uids: [ref.uid],
                 flags: [flag],
                 operation: add ? .add : .remove
             )
         } catch {
-            applyOptimisticFlag(uid: envelope.uid, flag: flag, add: !add)
+            applyOptimisticFlag(ref, flag: flag, add: !add)
             // Not once the session has ended (#1851).
             if unreadDelta != 0, appState.acceptsCounts(from: client) {
                 appState.applyUnreadDelta(folderPath: source, delta: -unreadDelta)
@@ -50,12 +51,12 @@ extension MessageListViewModel {
         }
     }
 
-    func applyOptimisticFlag(uid: UInt32, flag: Flag, add: Bool) {
-        guard let index = envelopes.firstIndex(where: { $0.uid == uid }) else { return }
-        var flags = envelopes[index].flags
+    func applyOptimisticFlag(_ ref: MessageRef, flag: Flag, add: Bool) {
+        guard let position = index(of: ref) else { return }
+        var flags = envelopes[position].flags
         let flipped = flags.contains(flag) != add
         if add { flags.insert(flag) } else { flags.remove(flag) }
-        envelopes[index] = rebuildEnvelope(envelopes[index], flags: flags)
+        envelopes[position] = rebuildEnvelope(envelopes[position], flags: flags)
         // Keep the Unread/Flagged pill counts in step with the optimistic row
         // state — STATUS only corrects them on the next refresh, so without
         // this the pills lag every flag/read change until a server round trip.
@@ -148,16 +149,17 @@ extension MessageListViewModel {
     /// open for the deletion it announced, and only a new row lets go of that
     /// (see `replaceRows(showing:)`).
     func dispose(_ envelope: Envelope) async {
-        guard pendingRemovedUIDs.insert(envelope.uid).inserted else { return }
-        defer { pendingRemovedUIDs.remove(envelope.uid) }
+        let ref = rowRef(for: envelope)
+        guard pendingRemovedRefs.insert(ref).inserted else { return }
+        defer { pendingRemovedRefs.remove(ref) }
 
         let destination = preferences.disposeAction.destinationFolder
-        let source = sourceFolder(for: envelope)
+        let source = ref.folder
         let wasUnread = !envelope.flags.contains(.seen)
         // Where the swipe happened. A refresh that adds mail above the row
         // during the animation moves the message down a slot, but the row
         // that was swiped -- and held open -- stays where it was.
-        let swipedSlot = slotIndex(of: envelope.uid)
+        let swipedSlot = slotIndex(of: ref)
         // Start the row animation but deliberately DON'T await it before the
         // move: a swipe landing just as the app is backgrounded has only a
         // brief window to reach the network, so the request goes out first and
@@ -166,7 +168,7 @@ extension MessageListViewModel {
         // swiped twice, and holding it in place keeps every absolute row index
         // stable -- the index-addressed list would otherwise shift the rows
         // below instantly.
-        let disposal = beginRowDisposal(uid: envelope.uid)
+        let disposal = beginRowDisposal(ref)
         // Optimistic count drop for the source folder: the dispose path
         // marks the message `\Seen` before moving, so an unread message
         // both loses its unread state AND leaves the folder. One -1 covers
@@ -183,7 +185,7 @@ extension MessageListViewModel {
         // brief window to reach the network, so halving the calls makes the
         // archive far likelier to commit in time.
         let client = self.client
-        let uid = envelope.uid
+        let uid = ref.uid
         let move = Task {
             try await client.imapClient.move(
                 folder: source, uids: [uid], destination: destination, markSeen: wasUnread
@@ -202,14 +204,14 @@ extension MessageListViewModel {
         // height, in a row of its own rather than the swiped one. A disposal
         // cancelled mid-fade never reached `.collapsing`; its message stays,
         // in a new row, and clearing the phase brings it back.
-        let originalIndex = envelopes.firstIndex { $0.uid == uid }
-        let dropped = rowDisposalPhases[uid] == .collapsing && originalIndex != nil
-        replaceRows(showing: [uid], alsoAt: swipedSlot.map { [$0] } ?? [])
-        if dropped {
-            envelopes.removeAll { $0.uid == uid }
+        let originalIndex = index(of: ref)
+        let dropped = rowDisposalPhases[ref] == .collapsing && originalIndex != nil
+        replaceRows(showing: [ref], alsoAt: swipedSlot.map { [$0] } ?? [])
+        if dropped, let originalIndex {
+            envelopes.remove(at: originalIndex)
             adjustTotalMessages(by: -1)
         }
-        endRowDisposal(uid: uid)
+        endRowDisposal(ref)
 
         do {
             try await move.value
@@ -228,11 +230,11 @@ extension MessageListViewModel {
     /// The server confirmed `uids` gone from `folder` (a dispose, move or
     /// purge succeeded): record it so a refresh that was already in flight
     /// can't bring them back (see `AppState.confirmedRemovals`), then prune
-    /// the caches. Called only on success, while the UIDs are still in
-    /// `pendingRemovedUIDs`, so the two shields overlap rather than leave a
+    /// the caches. Called only on success, while the messages are still in
+    /// `pendingRemovedRefs`, so the two shields overlap rather than leave a
     /// gap between them.
     func confirmRemoval(from folder: String, uids: [UInt32]) async {
-        appState.recordConfirmedRemovals(folderPath: folder, uids: uids)
+        appState.recordConfirmedRemovals(uids.map { MessageRef(folder: folder, uid: $0) })
         await pruneCachesAfter(move: folder, uids: uids)
     }
 
@@ -248,15 +250,15 @@ extension MessageListViewModel {
     /// list it isn't even a row removal, just every slot below re-pointing at
     /// the next envelope, with no transition of any kind — which invites a
     /// second swipe on whatever slid into the vacated position.
-    func beginRowDisposal(uid: UInt32) -> Task<Void, Never> {
-        rowDisposalPhases[uid] = .fading
+    func beginRowDisposal(_ ref: MessageRef) -> Task<Void, Never> {
+        rowDisposalPhases[ref] = .fading
         return Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.rowFadeDuration))
             // A cancellation here means the write failed and the caller is
             // restoring the row, so the collapse must not fire. `endRowDisposal`
             // owns clearing the phase.
             guard !Task.isCancelled, let self else { return }
-            rowDisposalPhases[uid] = .collapsing
+            rowDisposalPhases[ref] = .collapsing
             try? await Task.sleep(for: .seconds(Self.rowCollapseDuration))
         }
     }
@@ -272,8 +274,8 @@ extension MessageListViewModel {
     /// left `envelopes` (housekeeping — the row is gone) and on the failure
     /// path, where it's the whole revert: the envelope never left, so dropping
     /// the phase snaps the row back to full height and opacity.
-    func endRowDisposal(uid: UInt32) {
-        rowDisposalPhases[uid] = nil
+    func endRowDisposal(_ ref: MessageRef) {
+        rowDisposalPhases[ref] = nil
     }
 
     /// Reinsert an envelope previously removed by an optimistic move or
@@ -281,7 +283,7 @@ extension MessageListViewModel {
     /// index; falls back to re-sorting by the active order if the list has
     /// shifted (e.g. a refresh fired during the in-flight move).
     func restoreEnvelope(_ envelope: Envelope, at originalIndex: Int?) {
-        guard !envelopes.contains(where: { $0.uid == envelope.uid }) else { return }
+        guard index(of: rowRef(for: envelope)) == nil else { return }
         if let originalIndex, originalIndex <= envelopes.count {
             envelopes.insert(envelope, at: originalIndex)
         } else {
@@ -293,19 +295,20 @@ extension MessageListViewModel {
         adjustTotalMessages(by: 1)
     }
 
-    /// Keeps a row `pruneEnvelope(uid:)` is about to drop, if the reader's
+    /// Keeps a row `pruneEnvelope(_:)` is about to drop, if the reader's
     /// move for it is still in flight, so `restorePrunedEnvelope` can bring
     /// it back should the move fail. Entries whose move has since resolved
     /// are dropped here, which keeps the stash to in-flight moves. A prune
     /// with no move behind it (a send-from-draft) isn't kept.
     func stashForReaderRevert(_ envelope: Envelope, at index: Int) {
-        let inFlight = appState.pendingMoveUIDs[folder.path] ?? []
+        let inFlight = appState.pendingMoveRefs
         readerPrunedEnvelopes = readerPrunedEnvelopes.filter { inFlight.contains($0.key) }
-        guard inFlight.contains(envelope.uid) else { return }
-        readerPrunedEnvelopes[envelope.uid] = (envelope, index)
+        let ref = rowRef(for: envelope)
+        guard inFlight.contains(ref) else { return }
+        readerPrunedEnvelopes[ref] = (envelope, index)
     }
 
-    /// Undo `pruneEnvelope(uid:)` after the reader's dispose, move or purge
+    /// Undo `pruneEnvelope(_:)` after the reader's dispose, move or purge
     /// failed on the server: the row comes back where it was, with the
     /// folder total and Unread pill adjustments the prune made. `markUnread`
     /// is set when the reader's dispose had marked an unread message read;
@@ -314,11 +317,11 @@ extension MessageListViewModel {
     ///
     /// The failure normally arrives after the prune. If it beat it (both
     /// signals in one update), the row is still here: it is remembered in
-    /// `readerFailedUIDs` so the prune skips it. A UID this list never had
-    /// loaded is left alone, as its prune left the counts alone.
-    func restorePrunedEnvelope(uid: UInt32, markUnread: Bool = false) {
-        if let stashed = readerPrunedEnvelopes.removeValue(forKey: uid) {
-            guard !envelopes.contains(where: { $0.uid == uid }) else { return }
+    /// `readerFailedRefs` so the prune skips it. A message this list never
+    /// had loaded is left alone, as its prune left the counts alone.
+    func restorePrunedEnvelope(_ ref: MessageRef, markUnread: Bool = false) {
+        if let stashed = readerPrunedEnvelopes.removeValue(forKey: ref) {
+            guard index(of: ref) == nil else { return }
             var envelope = stashed.envelope
             if markUnread {
                 envelope = rebuildEnvelope(envelope, flags: envelope.flags.subtracting([.seen]))
@@ -328,38 +331,19 @@ extension MessageListViewModel {
                 unseen += 1
             }
             invalidateBottomPrefetch()
-        } else if envelopes.contains(where: { $0.uid == uid }) {
-            readerFailedUIDs.insert(uid)
+        } else if index(of: ref) != nil {
+            readerFailedRefs.insert(ref)
             if markUnread {
-                applyOptimisticFlag(uid: uid, flag: .seen, add: false)
+                applyOptimisticFlag(ref, flag: .seen, add: false)
             }
         }
     }
 
-    /// Rebuilds an `Envelope` value with a different flag set. `Envelope`
-    /// has no mutating accessor, so we copy every field through the public
-    /// initializer; the cost is only paid on flag toggles and the call
-    /// site keeps `setFlag` readable.
+    /// Rebuilds an `Envelope` value with a different flag set, keeping
+    /// every other field — the row's folder included, so the rebuilt row
+    /// still names its own message. The cost is only paid on flag toggles
+    /// and the call site keeps `setFlag` readable.
     func rebuildEnvelope(_ source: Envelope, flags: Set<Flag>) -> Envelope {
-        Envelope(
-            uid: source.uid,
-            messageId: source.messageId,
-            date: source.date,
-            subject: source.subject,
-            from: source.from,
-            sender: source.sender,
-            replyTo: source.replyTo,
-            to: source.to,
-            cc: source.cc,
-            bcc: source.bcc,
-            inReplyTo: source.inReplyTo,
-            references: source.references,
-            flags: flags,
-            internalDate: source.internalDate,
-            size: source.size,
-            hasAttachments: source.hasAttachments,
-            isImportant: source.isImportant,
-            authResults: source.authResults
-        )
+        source.withFlags(flags)
     }
 }

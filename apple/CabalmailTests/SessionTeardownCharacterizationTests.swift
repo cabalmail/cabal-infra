@@ -201,8 +201,8 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         state.requestFeedCommand(.refresh)
         state.requestSidebarTree(.expandAllFolders)
         state.requestMove(items: [MessageDragItem(uid: 9, sourceFolder: "INBOX")], to: "Archive", from: nil)
-        state.signalRemovalFailed(folderPath: "INBOX", uid: 8)
-        state.signalDisposed(folderPath: "INBOX", uid: 9)
+        state.signalRemovalFailed(MessageRef(folder: "INBOX", uid: 8))
+        state.signalDisposed(MessageRef(folder: "INBOX", uid: 9))
         state.requestSettings()
         state.noteActiveMainWindow(window)
         // Last, so its window is the recorded target.

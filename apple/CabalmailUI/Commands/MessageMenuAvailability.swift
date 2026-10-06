@@ -3,7 +3,7 @@ import SwiftUI
 /// Which `Message` menu commands can currently do anything.
 ///
 /// The menu's commands dispatch through `AppState` tick counters, and the
-/// surfaces that consume them act on `shortcutTargetUIDs` (the multi-select
+/// surfaces that consume them act on `shortcutTargetRefs` (the multi-select
 /// set, else the reading-pane message, else nothing) or — for the reply
 /// family — on the open message in `MessageDetailView`. Nothing selected
 /// means every one of them is a no-op, so the menu advertised seven live
@@ -29,7 +29,7 @@ struct MessageMenuAvailability: Equatable {
 
     /// Mark as Read/Unread, Flag/Unflag and Move act on the selection, and
     /// fall back to the open message when the list has no selection of its
-    /// own — matching `shortcutTargetUIDs`.
+    /// own — matching `shortcutTargetRefs`.
     var canActOnSelection: Bool { selectedCount > 0 || hasOpenMessage }
 
     /// Which surface installs the window-scoped Cmd+Delete equivalent.

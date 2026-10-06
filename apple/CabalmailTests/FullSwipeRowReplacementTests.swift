@@ -94,7 +94,7 @@ final class FullSwipeRowReplacementTests: XCTestCase {
             moveFails ? model.errorMessage != nil : model.envelopes.map(\.uid) == [2, 3, 4]
         }
         XCTAssertTrue(settled, "the full swipe never ran the Archive action; the harness isn't reaching the swipe")
-        let idle = try await harness.eventually { model.rowDisposalPhases.isEmpty && model.pendingRemovedUIDs.isEmpty }
+        let idle = try await harness.eventually { model.rowDisposalPhases.isEmpty && model.pendingRemovedRefs.isEmpty }
         XCTAssertTrue(idle, "the dispose never finished")
         try await harness.pause(milliseconds: 500)
         return (model, rows)
@@ -158,7 +158,7 @@ private struct SlotList: View {
     @ViewBuilder
     private func row(_ index: Int) -> some View {
         if let envelope = model.envelope(at: index) {
-            DisposingRow(model: model, uid: envelope.uid, rowHeight: SwipeTestHarness.rowHeight) {
+            DisposingRow(model: model, ref: model.rowRef(for: envelope), rowHeight: SwipeTestHarness.rowHeight) {
                 SwipeActionRow(
                     height: SwipeTestHarness.rowHeight, contentID: envelope.uid, rowBackground: .clear,
                     leading: nil,

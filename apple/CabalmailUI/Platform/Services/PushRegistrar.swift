@@ -40,6 +40,13 @@ struct PushMessageRef: Sendable {
         let rawMessageID = ref["msg_id"] as? String
         self.messageID = (rawMessageID?.isEmpty ?? true) ? nil : rawMessageID
     }
+
+    /// The pushed message, when the payload named it by UID. A payload whose
+    /// UID never resolved names it by Message-ID alone, which only the open
+    /// route can follow. The payload carries no UIDVALIDITY.
+    var messageRef: MessageRef? {
+        uid.map { MessageRef(folder: folder, uid: $0, messageId: messageID) }
+    }
 }
 
 /// The user's folder-scope choice for new-mail pushes (Notifications
@@ -361,17 +368,17 @@ extension PushRegistrar {
     func handleNotificationAction(identifier: String, ref: PushMessageRef?) async {
         switch identifier {
         case "MARK_READ":
-            guard let ref, let uid = ref.uid else { return }
+            guard let message = ref?.messageRef else { return }
             await withBackgroundTask(named: "cabal.push.markRead") { client in
                 try await client.imapClient.setFlags(
-                    folder: ref.folder,
-                    uids: [uid],
+                    folder: message.folder,
+                    uids: [message.uid],
                     flags: [.seen],
                     operation: .add
                 )
             }
         case "ARCHIVE":
-            guard let ref, let uid = ref.uid else { return }
+            guard let message = ref?.messageRef else { return }
             await withBackgroundTask(named: "cabal.push.archive") { [weak self] client in
                 guard let destination = await self?.archiveFolderPath(using: client) else {
                     // No Archive folder on this account: creating one on
@@ -384,8 +391,8 @@ extension PushRegistrar {
                 // before moving) — this runs on the notification action's
                 // brief background budget, so the fewer calls the better.
                 try await client.imapClient.move(
-                    folder: ref.folder,
-                    uids: [uid],
+                    folder: message.folder,
+                    uids: [message.uid],
                     destination: destination,
                     markSeen: true
                 )

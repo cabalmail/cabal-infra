@@ -330,14 +330,13 @@ struct ComposeView: View {
                     // autosave replaces the copy under a new UID and the
                     // open list is still rendering the old one (#1071).
                     appState.signalDisposed(
-                        folderPath: "Drafts",
-                        uids: model.supersededDraftUIDs
+                        model.supersededDraftUIDs.map { MessageRef(folder: FolderTree.draftsPath, uid: $0) }
                     )
                     // A reply left the device (or the outbox owns it now):
                     // mark the original `\Answered` so the list's replied
                     // arrow appears without waiting for a refresh.
                     if let folder = model.replySourceFolder, let uid = model.replySourceUid {
-                        appState.markAnswered(folderPath: folder, uid: uid)
+                        appState.markAnswered(MessageRef(folder: folder, uid: uid))
                     }
                     // Surface the outcome as a toast on the shared AppState
                     // so the user sees confirmation after the sheet dismisses.

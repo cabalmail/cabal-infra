@@ -16,8 +16,9 @@ extension MessageListViewModel {
     /// Phase 5 of `docs/0.9.x/imap-search-plan.md` switched the wire
     /// path off the raw IMAP-SEARCH passthrough; the structured contract
     /// returns envelopes plus per-row source folders in a single round
-    /// trip. Cross-folder results populate `sourceFolderIndex` so
-    /// dispose / flag operations route per-row to the correct mailbox.
+    /// trip. Each row keeps its folder (`SearchedEnvelope` places the
+    /// envelope in it), so dispose / flag operations route per-row to the
+    /// correct mailbox.
     func runSearch(resetFilterTab: Bool = true, preserveDepth: Bool = false, rerun: Bool = false) async {
         // A text search is "All" mode -- its loaded results drive the pill
         // counts. A pill-driven search (`selectFilter`) and the in-place
@@ -82,11 +83,7 @@ extension MessageListViewModel {
             // user has already ended (#1536). Same staleness rule
             // `loadMoreSearchResults` applies to its cursor.
             guard submittedQuery == trimmed, searchFilters == filters else { return }
-            envelopes = result.envelopes.map(\.envelope)
-            sourceFolderIndex = SearchSourceFolderIndex(result.envelopes)
-            // A fresh search's rows are not the ones the note was about; the
-            // in-place refresh of the same search (`preserveDepth`) keeps it.
-            if !preserveDepth { skippedNotice = nil }
+            envelopes = distinctRows(result.envelopes, after: [])
             searchTotalEstimate = result.totalEstimate
             searchTruncated = result.truncated
             searchFoldersSearched = result.foldersSearched
@@ -154,16 +151,7 @@ extension MessageListViewModel {
     /// re-deliver a row from the previous page, and a duplicate would draw
     /// as a repeated row.
     private func appendSearchPage(_ page: SearchResult) {
-        var seen = Set(envelopes.map {
-            PageRowKey(folder: sourceFolder(for: $0), uid: $0.uid, messageID: $0.messageId)
-        })
-        let fresh = page.envelopes.filter {
-            seen.insert(
-                PageRowKey(folder: $0.folder, uid: $0.envelope.uid, messageID: $0.envelope.messageId)
-            ).inserted
-        }
-        envelopes.append(contentsOf: fresh.map(\.envelope))
-        sourceFolderIndex.add(fresh)
+        envelopes.append(contentsOf: distinctRows(page.envelopes, after: envelopes))
         searchTotalEstimate = page.totalEstimate
         searchTruncated = searchTruncated || page.truncated
         searchNextCursor = page.nextCursor
@@ -192,13 +180,15 @@ extension MessageListViewModel {
         await runSearch(resetFilterTab: false, preserveDepth: true, rerun: true)
     }
 
-    /// Row identity for the append dedupe. Folder + UID pins a row to its
-    /// mailbox (cross-folder results reuse UIDs); Message-ID separates the
-    /// same-message-filed-twice shape the source-folder index documents.
-    private struct PageRowKey: Hashable {
-        let folder: String
-        let uid: UInt32
-        let messageID: String?
+    /// `rows`' envelopes, each placed in its own folder, minus any message
+    /// `loaded` or an earlier row already holds. A message is one ref
+    /// (folder + UID), however many pages deliver it: the date-based cursor
+    /// can re-deliver a row across a page boundary, inside a chunked walk as
+    /// well as between load-more pages, and the list draws each ref as one
+    /// row (`MessageRowIdentity`).
+    private func distinctRows(_ rows: [SearchedEnvelope], after loaded: [Envelope]) -> [Envelope] {
+        var seen = Set(loaded.map { rowRef(for: $0) })
+        return rows.filter { seen.insert($0.ref).inserted }.map(\.envelope)
     }
 
     /// Drive a filter pill. Unread / Flagged run a fresh folder-scoped server
@@ -259,8 +249,6 @@ extension MessageListViewModel {
         // can't strand a highlighted pill over a plain folder view.
         filterTab = .all
         isSearchActive = false
-        sourceFolderIndex = SearchSourceFolderIndex()
-        skippedNotice = nil
         searchTotalEstimate = 0
         searchTruncated = false
         searchFoldersSearched = []
@@ -286,24 +274,6 @@ extension MessageListViewModel {
             if sortCriterion == .default { await hydrateFromCache() }
             await seedSavedCounts()
         }
-    }
-
-    /// Resolves the IMAP mailbox that owns `envelope`. In folder mode
-    /// and in single-folder searches this is always `folder.path`; in
-    /// cross-folder search mode the per-row entry from
-    /// `sourceFolderIndex` wins so dispose / flag operations target the
-    /// right mailbox.
-    func sourceFolder(for envelope: Envelope) -> String {
-        sourceFolderIndex.folder(for: envelope) ?? folder.path
-    }
-
-    /// Every mailbox a row like `envelope` came from: one for an ordinary
-    /// row, more for the same message filed in several folders under one
-    /// UID (mail sent to yourself, in INBOX and Sent), whose rows the index
-    /// can't tell apart and `sourceFolder(for:)` can only name the first of.
-    func sourceFolders(for envelope: Envelope) -> Set<String> {
-        let folders = sourceFolderIndex.folders(for: envelope)
-        return folders.isEmpty ? [folder.path] : Set(folders)
     }
 
     /// The folder "This folder only" narrows to. Folder scope is its own

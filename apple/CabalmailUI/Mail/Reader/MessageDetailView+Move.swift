@@ -27,8 +27,7 @@ extension MessageDetailView {
 
     func performMove(to destination: String) async {
         guard let model else { return }
-        let sourceFolderPath = folder.path
-        let movedUID = envelope.uid
+        let movedRef = messageRef
         await model.move(
             to: destination,
             onSuccess: {
@@ -36,10 +35,7 @@ extension MessageDetailView {
                 // and advances selection to the next unread message — same
                 // optimistic UX, just routed through `signalDisposed` since
                 // the row is gone from the source folder either way.
-                appState.signalDisposed(
-                    folderPath: sourceFolderPath,
-                    uid: movedUID
-                )
+                appState.signalDisposed(movedRef)
             },
             onFailure: { error in
                 appState.showToast(Toast(

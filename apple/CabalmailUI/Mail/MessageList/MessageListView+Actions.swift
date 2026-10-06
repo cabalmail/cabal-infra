@@ -1,32 +1,32 @@
 import SwiftUI
 import CabalmailKit
 
-/// UID set captured for a "Move to folder…" sheet driven by the
+/// Messages captured for a "Move to folder…" sheet driven by the
 /// selection context menu or the Cmd+M shortcut. Identifiable wrapper
 /// so `.sheet(item:)` reuses the same presentation machinery as
 /// `envelopeToMove`; the id is per-presentation, never read beyond it.
 struct SelectionMoveCandidate: Identifiable {
-    let uids: Set<UInt32>
+    let refs: Set<MessageRef>
     let id = UUID()
 }
 
-/// UID set staged for the "Delete Forever?" confirmation inside Trash —
+/// Messages staged for the "Delete Forever?" confirmation inside Trash —
 /// a one-element set from the row swipe / menu, the whole selection from
 /// the selection menu, action bar, or Cmd+Delete. Identifiable for the
 /// same reason as `SelectionMoveCandidate`.
 struct PurgeCandidate: Identifiable {
-    let uids: Set<UInt32>
+    let refs: Set<MessageRef>
     let id = UUID()
 }
 
-/// UID set staged for the large-selection dispose confirmation: an
+/// Messages staged for the large-selection dispose confirmation: an
 /// archive/trash dispose of `largeDisposeThreshold`-or-more messages
 /// pauses on an "are you sure" dialog before it runs (Phase 3 of
 /// docs/0.11.x/multi-select-bulk-operations.md). Smaller disposes commit
 /// immediately, and non-destructive bulk ops (move, flag, read) never
 /// confirm at any size.
 struct DisposeCandidate: Identifiable {
-    let uids: Set<UInt32>
+    let refs: Set<MessageRef>
     let action: DisposeAction
     /// Leave selection / edit mode once the dispose commits — set by the
     /// bulk action bar, whose flow ends with the bar dismissing. The
@@ -53,15 +53,15 @@ extension MessageListView {
     /// are offered, not just the configured default.
     @ViewBuilder
     func selectionContextMenu(
-        for uids: Set<UInt32>,
+        for refs: Set<MessageRef>,
         model: MessageListViewModel
     ) -> some View {
-        if !uids.isEmpty {
-            let chosen = model.envelopes.filter { uids.contains($0.uid) }
+        if !refs.isEmpty {
+            let chosen = model.loadedRows(refs)
             let hasUnflagged = chosen.contains { !$0.flags.contains(.flagged) }
             let hasUnread = chosen.contains { !$0.flags.contains(.seen) }
             Button {
-                Task { await model.setFlagged(hasUnflagged, uids: uids) }
+                Task { await model.setFlagged(hasUnflagged, refs: refs) }
             } label: {
                 Label(
                     hasUnflagged ? "Flag" : "Unflag",
@@ -69,7 +69,7 @@ extension MessageListView {
                 )
             }
             Button {
-                Task { await model.setSeen(hasUnread, uids: uids) }
+                Task { await model.setSeen(hasUnread, refs: refs) }
             } label: {
                 Label(
                     hasUnread ? "Mark as Read" : "Mark as Unread",
@@ -77,11 +77,11 @@ extension MessageListView {
                 )
             }
             Button {
-                moveCandidate = SelectionMoveCandidate(uids: uids)
+                moveCandidate = SelectionMoveCandidate(refs: refs)
             } label: {
                 Label("Move to folder…", systemImage: "folder")
             }
-            selectionDisposeItems(for: uids, model: model)
+            selectionDisposeItems(for: refs, model: model)
         }
     }
 
@@ -89,7 +89,7 @@ extension MessageListView {
     /// `selectionContextMenu` under SwiftLint's body-length cap.
     @ViewBuilder
     private func selectionDisposeItems(
-        for uids: Set<UInt32>,
+        for refs: Set<MessageRef>,
         model: MessageListViewModel
     ) -> some View {
         // Inside Archive the archive item has nowhere to send the
@@ -97,13 +97,13 @@ extension MessageListView {
         // move, hence no large-selection confirmation.
         if model.archiveIntent == .restore {
             Button {
-                restoreSelection(uids: uids, model: model)
+                restoreSelection(refs: refs, model: model)
             } label: {
                 restoreActionLabel
             }
         } else {
             Button {
-                requestDispose(uids: uids, action: .archive, exitBulk: false, model: model)
+                requestDispose(refs: refs, action: .archive, exitBulk: false, model: model)
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
@@ -113,13 +113,13 @@ extension MessageListView {
         // confirmation as the row swipe, for the whole set.
         if model.isTrashFolder {
             Button(role: .destructive) {
-                purgeCandidate = PurgeCandidate(uids: uids)
+                purgeCandidate = PurgeCandidate(refs: refs)
             } label: {
                 purgeActionLabel
             }
         } else {
             Button(role: .destructive) {
-                requestDispose(uids: uids, action: .trash, exitBulk: false, model: model)
+                requestDispose(refs: refs, action: .trash, exitBulk: false, model: model)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -127,7 +127,7 @@ extension MessageListView {
     }
 
     /// Destination picker for a context-menu / Cmd+M move. Mirrors
-    /// `bulkMoveSheet` but carries its own UID set, so a move invoked
+    /// `bulkMoveSheet` but carries its own messages, so a move invoked
     /// on a right-clicked-but-unselected row doesn't drag the user's
     /// selection along with it.
     @ViewBuilder
@@ -139,7 +139,7 @@ extension MessageListView {
                 onSelect: { destination in
                     moveCandidate = nil
                     if let model {
-                        Task { await model.moveMessages(uids: candidate.uids, to: destination.path) }
+                        Task { await model.moveMessages(refs: candidate.refs, to: destination.path) }
                     }
                 },
                 onCancel: { moveCandidate = nil }
@@ -152,39 +152,35 @@ extension MessageListView {
     /// click here), else the reading-pane selection (compact iPhone
     /// with a hardware keyboard), else nothing — the menu bump no-ops,
     /// matching the Reply-with-no-message convention.
-    private func shortcutTargetUIDs(model: MessageListViewModel) -> Set<UInt32> {
-        if !model.selectedUIDs.isEmpty { return model.selectedUIDs }
-        if let selection { return [selection.uid] }
+    private func shortcutTargetRefs(model: MessageListViewModel) -> Set<MessageRef> {
+        if !model.selectedRefs.isEmpty { return model.selectedRefs }
+        if let selection { return [model.rowRef(for: selection)] }
         return []
     }
 
     /// Cmd+T. Mixed selections resolve like the bulk bar: any unread
     /// message means "mark all read", otherwise "mark all unread".
     func toggleSeenOnSelection(model: MessageListViewModel) {
-        let uids = shortcutTargetUIDs(model: model)
-        guard !uids.isEmpty else { return }
-        let hasUnread = model.envelopes.contains {
-            uids.contains($0.uid) && !$0.flags.contains(.seen)
-        }
-        Task { await model.setSeen(hasUnread, uids: uids) }
+        let refs = shortcutTargetRefs(model: model)
+        guard !refs.isEmpty else { return }
+        let hasUnread = model.loadedRows(refs).contains { !$0.flags.contains(.seen) }
+        Task { await model.setSeen(hasUnread, refs: refs) }
     }
 
     /// Cmd+Shift+8 (Cmd+*). Any unflagged message means "flag all",
     /// otherwise "unflag all".
     func toggleFlaggedOnSelection(model: MessageListViewModel) {
-        let uids = shortcutTargetUIDs(model: model)
-        guard !uids.isEmpty else { return }
-        let hasUnflagged = model.envelopes.contains {
-            uids.contains($0.uid) && !$0.flags.contains(.flagged)
-        }
-        Task { await model.setFlagged(hasUnflagged, uids: uids) }
+        let refs = shortcutTargetRefs(model: model)
+        guard !refs.isEmpty else { return }
+        let hasUnflagged = model.loadedRows(refs).contains { !$0.flags.contains(.flagged) }
+        Task { await model.setFlagged(hasUnflagged, refs: refs) }
     }
 
     /// Cmd+M. Opens the destination picker for the current selection.
     func moveSelection(model: MessageListViewModel) {
-        let uids = shortcutTargetUIDs(model: model)
-        guard !uids.isEmpty else { return }
-        moveCandidate = SelectionMoveCandidate(uids: uids)
+        let refs = shortcutTargetRefs(model: model)
+        guard !refs.isEmpty else { return }
+        moveCandidate = SelectionMoveCandidate(refs: refs)
     }
 
     /// Cmd+Delete with a multi-selection, fired by the invisible window-
@@ -195,15 +191,15 @@ extension MessageListView {
     /// Trash it stages the delete-forever confirmation like every other
     /// purge surface, and inside Archive it restores.
     func disposeSelection(model: MessageListViewModel) {
-        let uids = shortcutTargetUIDs(model: model)
-        guard !uids.isEmpty else { return }
+        let refs = shortcutTargetRefs(model: model)
+        guard !refs.isEmpty else { return }
         switch model.disposeIntent {
         case .purge:
-            purgeCandidate = PurgeCandidate(uids: uids)
+            purgeCandidate = PurgeCandidate(refs: refs)
         case .restore:
-            restoreSelection(uids: uids, model: model)
+            restoreSelection(refs: refs, model: model)
         case .move(let action):
-            requestDispose(uids: uids, action: action, exitBulk: false, model: model)
+            requestDispose(refs: refs, action: action, exitBulk: false, model: model)
         }
     }
 
@@ -212,9 +208,9 @@ extension MessageListView {
     /// commits straight through rather than routing via `requestDispose`'s
     /// large-selection confirmation, and it carries unread state with the
     /// messages instead of marking them `\Seen`.
-    func restoreSelection(uids: Set<UInt32>, model: MessageListViewModel) {
-        guard !uids.isEmpty else { return }
-        Task { await model.moveMessages(uids: uids, to: FolderTree.inboxPath) }
+    func restoreSelection(refs: Set<MessageRef>, model: MessageListViewModel) {
+        guard !refs.isEmpty else { return }
+        Task { await model.moveMessages(refs: refs, to: FolderTree.inboxPath) }
     }
 
     /// Selection size at which a dispose asks first. Large enough that
@@ -226,14 +222,14 @@ extension MessageListView {
     /// context menu, Cmd+Delete): a large selection stages the
     /// confirmation dialog, a small one commits immediately.
     func requestDispose(
-        uids: Set<UInt32>,
+        refs: Set<MessageRef>,
         action: DisposeAction,
         exitBulk: Bool,
         model: MessageListViewModel
     ) {
-        guard !uids.isEmpty else { return }
-        let candidate = DisposeCandidate(uids: uids, action: action, exitBulk: exitBulk)
-        if uids.count >= Self.largeDisposeThreshold {
+        guard !refs.isEmpty else { return }
+        let candidate = DisposeCandidate(refs: refs, action: action, exitBulk: exitBulk)
+        if refs.count >= Self.largeDisposeThreshold {
             disposeCandidate = candidate
         } else {
             commitDispose(candidate, model: model)
@@ -242,9 +238,9 @@ extension MessageListView {
 
     /// Runs a staged (or immediately-committed) dispose. Selection /
     /// edit mode drops right away when requested — the candidate holds
-    /// its own UID copy, so clearing the live selection is safe.
+    /// its own copy of the refs, so clearing the live selection is safe.
     func commitDispose(_ candidate: DisposeCandidate, model: MessageListViewModel) {
-        Task { await model.disposeMessages(uids: candidate.uids, action: candidate.action) }
+        Task { await model.disposeMessages(refs: candidate.refs, action: candidate.action) }
         if candidate.exitBulk {
             model.exitBulkMode()
             endSelectionMode()
@@ -274,10 +270,12 @@ extension MessageListView {
     /// the user was reading is left exactly where it was.
     func handleDraftReplaced(_ replacement: DraftReplacement) {
         guard let model else { return }
+        // Drafts is one folder, so the replacement's UIDs name its rows.
+        let draft = { (uid: UInt32) in MessageRef(folder: folder.path, uid: uid) }
         for uid in replacement.retiredUIDs {
-            model.pruneEnvelope(uid: uid)
+            model.pruneEnvelope(draft(uid))
         }
-        let displayed = isWideLayout ? model.selectedUIDs.first : selection?.uid
+        let displayed = isWideLayout ? model.selectedRefs.first?.uid : selection?.uid
         Task { @MainActor in
             await model.refresh()
             let target: Envelope?
@@ -294,10 +292,10 @@ extension MessageListView {
                 // A survivor the policy saw but the lookup misses can only
                 // mean the window moved under a concurrent refresh; letting
                 // the reader go is the same right answer as `.dismiss`.
-                target = model.envelopes.first { $0.uid == uid }
+                target = model.envelope(for: draft(uid))
             }
             if isWideLayout {
-                model.selectedUIDs = target.map { [$0.uid] } ?? []
+                model.selectedRefs = target.map { [model.rowRef(for: $0)] } ?? []
             } else {
                 selection = target
             }

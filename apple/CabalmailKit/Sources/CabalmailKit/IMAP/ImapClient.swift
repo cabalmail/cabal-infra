@@ -252,13 +252,22 @@ public extension ImapClient {
 /// result set can route to the right mailbox; single-folder results set
 /// `folder` to the query's folder so callers can treat the field as
 /// always-present.
+///
+/// The envelope is placed in that folder (`Envelope.folder`), so a row
+/// taken out of the result still names its own message (`Envelope.ref`).
 public struct SearchedEnvelope: Sendable, Hashable {
     public let envelope: Envelope
     public let folder: String
 
     public init(envelope: Envelope, folder: String) {
-        self.envelope = envelope
+        self.envelope = envelope.inFolder(folder)
         self.folder = folder
+    }
+
+    /// The row's identity. The search wire carries no UIDVALIDITY, so
+    /// neither does the ref.
+    public var ref: MessageRef {
+        MessageRef(folder: folder, uid: envelope.uid, messageId: envelope.messageId)
     }
 }
 

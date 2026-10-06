@@ -27,6 +27,10 @@ public enum FolderTree {
     /// invert their addressing when acting inside it - see `ReplyBuilder`.
     public static let sentPath = "Sent"
 
+    /// Where `/save_draft` keeps the server copies of drafts. A
+    /// `DraftServerRef` names a message here.
+    public static let draftsPath = "Drafts"
+
     /// DFS through the `/`-delimited tree formed by `path`s, emitting peers
     /// alphabetically and children directly under their parent. Intermediate
     /// path segments that aren't themselves in `input` are skipped - we
