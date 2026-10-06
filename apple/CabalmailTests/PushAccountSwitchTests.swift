@@ -135,6 +135,52 @@ final class PushAccountSwitchTests: XCTestCase {
         XCTAssertEqual(center.removals, 1, "bob's session start removed alice's notifications")
     }
 
+    // MARK: - Archive destination (#1882)
+
+    /// Where earlier builds remembered the first archive folder they found,
+    /// for every account after it: a case-insensitive match for "Archive" on
+    /// the folder list, so a folder like `archive` listed ahead of Dovecot's
+    /// `Archive` was the one kept.
+    private static let legacyArchiveFolderKey = "cabalmail.push.archiveFolder"
+
+    /// An earlier build's remembered folder (alice's `archive`) is in the
+    /// defaults; bob signs in on the same device and archives from a
+    /// notification. His message goes to Archive, the folder the in-app
+    /// archive uses: nothing remembered from another account is consulted.
+    func testArchiveAfterAnAccountSwitchMovesToTheNewAccountsArchive() async throws {
+        let registrar = try XCTUnwrap(registrar(of: harness))
+        registrar.attach(harness.appState.sessionManager)
+        await signIn(harness, as: "alice")
+        defaults.set("archive", forKey: Self.legacyArchiveFolderKey)
+        await harness.appState.signOut()
+        await signIn(harness, as: "bob")
+
+        await registrar.handleNotificationAction(identifier: "ARCHIVE", ref: ref)
+
+        let moves = await harness.imap.moveCalls
+        XCTAssertEqual(moves.map(\.destination), ["Archive"])
+        XCTAssertEqual(moves.map(\.folder), ["INBOX"])
+        XCTAssertEqual(moves.map(\.uids), [[4271]])
+        XCTAssertEqual(moves.map(\.markSeen), [true])
+    }
+
+    /// The same on a cold background launch, where nothing is wired and the
+    /// action borrows the stored account's client: bob's Archive goes to
+    /// Archive whatever an earlier account left in the defaults.
+    func testArchiveOnABackgroundLaunchMovesToTheStoredAccountsArchive() async throws {
+        let registrar = try XCTUnwrap(registrar(of: harness))
+        registrar.attach(harness.appState.sessionManager)
+        defaults.set("archive", forKey: Self.legacyArchiveFolderKey)
+        harness.seedLastSession(username: "bob")
+        try await harness.seedTokens()
+
+        await registrar.handleNotificationAction(identifier: "ARCHIVE", ref: ref)
+
+        let moves = await harness.imap.moveCalls
+        XCTAssertEqual(moves.map(\.destination), ["Archive"])
+        XCTAssertNotEqual(harness.appState.status, .signedIn, "precondition: no session was wired")
+    }
+
     // MARK: - Helpers
 
     private var registrars: [ObjectIdentifier: PushRegistrar] = [:]
