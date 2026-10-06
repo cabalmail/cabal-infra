@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The coordinator's local resume layer (`NavStateCoordinator+Session`): what
 /// a launch lands on, how navigation is recorded into the session record and

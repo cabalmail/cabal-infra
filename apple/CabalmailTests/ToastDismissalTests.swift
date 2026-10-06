@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Issue #1426: the launch resume offer covered the filter pills and clipped
 /// the first message row, and nothing the user could do would get rid of it —

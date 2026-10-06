@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8: the bottom-window prefetch that
 /// makes the first End / jump-to-bottom instant (dd885cbf). `loadInitial`

@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Regression coverage for issue #1138: with a signature configured, typing
 /// into the Rich Text pane and then deleting it all left the composer

@@ -32,7 +32,7 @@ import XCTest
 // fails `testTheWarningTakesItsWrappedHeight` by name.
 final class AuthWarningWrapSourceScanTests: XCTestCase {
 
-    private static let path = "Cabalmail/Views/AuthResultsLine.swift"
+    private static let path = "CabalmailUI/Mail/AuthResultsLine.swift"
 
     /// The rule: the warning label asks for the height its wrapped text
     /// needs. `horizontal: true` would be a different (and wrong) view — it

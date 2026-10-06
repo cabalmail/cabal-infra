@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Phase 5 of docs/0.11.x/multi-select-bulk-operations.md: selection-set
 // mutations, optimistic bulk state on success, rollback on failure, and

@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Regression coverage for issue #1132: with a signature configured, every
 /// new message the user opened and abandoned raised the "Discard draft?"

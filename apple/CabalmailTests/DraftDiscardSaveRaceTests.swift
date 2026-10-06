@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1163: pressing "Discard Draft" while the
 // 60-second server autosave was mid-round-trip left the discarded draft on

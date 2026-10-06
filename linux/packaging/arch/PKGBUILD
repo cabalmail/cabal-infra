@@ -25,6 +25,11 @@ url='https://github.com/cabalmail/cabal-infra'
 license=('AGPL-3.0-or-later')
 depends=('glib2' 'gtk4' 'libadwaita')
 makedepends=('blueprint-compiler' 'git' 'glib2-devel' 'go-md2man' 'rust')
+# Arch's makepkg.conf builds C with -flto=auto, so the aws-lc objects the kit's
+# TLS stack compiles are GCC LTO bytecode, which Rust's linker cannot resolve:
+# every aws_lc_* symbol comes up undefined. The Rust side is unaffected by the
+# flag either way.
+options=('!lto')
 
 # The composer renders Markdown inside a WebKit view with the same bytes the
 # React and Apple clients use, so a message round-trips identically wherever it

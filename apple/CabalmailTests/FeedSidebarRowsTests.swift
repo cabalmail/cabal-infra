@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The Feeds sidebar's tree rules (RSS plan, phase 5b): folder order,
 /// nesting, collapse, unread roll-up, and the filter.

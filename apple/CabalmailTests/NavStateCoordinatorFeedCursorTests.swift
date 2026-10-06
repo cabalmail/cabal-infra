@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The coordinator's feed cursor (resume-session plan, Phase C): what an
 /// open feed item makes the cross-device cursor, how its reading position

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The new-folder sheet's input lives in `NewFolderForm`, held by the view
 // that presents the sheet — the sheet's own state doesn't survive SwiftUI

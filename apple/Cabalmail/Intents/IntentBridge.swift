@@ -5,6 +5,7 @@
 #if os(iOS)
 import Foundation
 import CabalmailKit
+import CabalmailUI
 
 /// Session access for App Intents, modeled on `PushRegistrar`: intents can
 /// fire while the app is foregrounded, backgrounded, or not launched at all,

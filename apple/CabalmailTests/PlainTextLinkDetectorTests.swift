@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Linkification of plain-text message bodies (issue #765): the `text/plain`
 /// path used to render a bare `Text`, so URLs in it were inert while the HTML

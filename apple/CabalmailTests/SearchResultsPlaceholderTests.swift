@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Issue #1027: with a term typed but not submitted, the results area went
 /// blank — pixel-identical to a search that had run and matched nothing, on a

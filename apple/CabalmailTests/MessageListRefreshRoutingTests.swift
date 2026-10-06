@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The refresh-routing fixes (#1816, #1819, #1821, #1822, #1814) beyond the
 /// characterization tests they flipped: the watcher coming back with the
@@ -53,8 +53,10 @@ final class MessageListRefreshRoutingTests: XCTestCase {
     /// because no test here renders the list; the model behaviour it relies
     /// on is the test above and the teardown suite's restart test.
     func testTheListStartsItsWatcherAgainWhenItReappears() throws {
-        let source = try String(contentsOf: Self.apple.appendingPathComponent("Cabalmail/Views/MessageListView.swift"),
-                                encoding: .utf8)
+        let source = try String(
+            contentsOf: Self.apple.appendingPathComponent("CabalmailUI/Mail/MessageList/MessageListView.swift"),
+            encoding: .utf8
+        )
         let reappear = try XCTUnwrap(source.range(of: "} else if !isSearchScope {"), "the re-appear branch")
         let tail = String(source[reappear.upperBound...].prefix(600))
         let start = try XCTUnwrap(tail.range(of: "await model?.startWatching()"), "starts the watcher again")

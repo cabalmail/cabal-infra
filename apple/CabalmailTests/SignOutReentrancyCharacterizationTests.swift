@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Workstream 0.8 characterization suite: what happens when a second
 /// sign-out, or a sign-in, arrives while an expiry's teardown is under way.

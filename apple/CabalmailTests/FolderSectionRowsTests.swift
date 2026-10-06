@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The sidebar draws its folders through two sections over two different
 // lists (Subscribed is a subset of All folders; the filter narrows both),

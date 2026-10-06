@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8: the raw RFC 5322 bytes behind
 /// View Source (`MessageDetailViewModel.rawSourceBytes()`) and the list's

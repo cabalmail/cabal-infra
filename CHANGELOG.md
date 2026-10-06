@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.25.0] - 2026-10-06
+
+### Added
+- **Deployment descriptor for the Linux client.** `cabalmail-kit` fetches
+  `https://{control_domain}/config.json` and decodes it into a `Deployment`
+  carrying the mail domains, API endpoint, and Cognito pool. It refuses a
+  descriptor whose API endpoint is not HTTPS or that names a different control
+  domain from the one it was fetched from. Each fetch is cached at
+  `$XDG_CACHE_HOME/cabalmail/deployment.json`, and the cache answers only when
+  the deployment cannot be reached, times out, or answers with a retryable
+  status. Every kit request goes through one HTTP client: `reqwest` on rustls
+  with the system trust store, HTTPS only on every redirect, and bounded by
+  timeouts. The Arch package builds with LTO off, which the TLS library's C
+  code requires. A new workspace check fails if the kit's descriptor fixture
+  drifts from the keys Terraform's `config.json` template and `domains` module
+  write.
+
+### Changed
+- Apple: **Shared app code moved into one module.** The iPhone, iPad,
+  Vision Pro and Mac apps now build their shared screens, view models and
+  app state from a single `CabalmailUI` module, sorted into folders by
+  feature, instead of each app compiling the same loose source files.
+  Nothing should look or behave differently; anything that does is a bug
+  worth reporting.
+
+### Fixed
+- Apple: **Mark All as Read keeps a folder's messages for offline use.**
+  Marking every message in a folder read deleted the folder's saved list,
+  so a folder marked from the sidebar while another was on screen showed no
+  messages offline until it was next opened online, and its messages
+  dropped out of Spotlight. The saved list is now kept, marked read.
+- Apple: **Unread changes that finish after you sign out are dropped.** If
+  a move, archive, flag change, delete or bulk mark-as-read was still on its
+  way to the server when you signed out, its effect on the unread counts
+  could land on the next account to sign in on the device and be saved as
+  that account's own counts for offline use.
+
+### Security
+- Apple: **A signed-out session can no longer act as the next account.**
+  Work still running from a session when you signed out (on a slow
+  connection, a message still loading, for example) could send its next
+  request with the credentials of the account that signed in after it, such
+  as marking that account's message with the same number in the same folder
+  read. A session that has signed out now sends nothing more.
+- Apple: **Private links stop leaving the address in Safari's history.**
+  "Open in Private Window" hands the browser a redirector page and relied on
+  the extension deleting that page's history entry afterwards -- but Safari's
+  extension engine implements no history API, so on Safari the entry stayed,
+  with the link readable in it. The macOS app now gives Safari an opaque token
+  instead and the extension gets the address from the app's shared container,
+  so any entry left behind records that a private window was opened and not
+  what was opened. Chrome, which does delete the entry, is unchanged.
+
 ## [1.24.0] - 2026-10-05
 
 ### Changed

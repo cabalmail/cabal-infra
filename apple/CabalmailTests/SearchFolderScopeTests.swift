@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // "This folder only" on the global search surface (#1510). The surface's own
 // folder is a sentinel, so the toggle was hidden there — the only place the

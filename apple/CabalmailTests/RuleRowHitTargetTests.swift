@@ -18,7 +18,7 @@ final class RuleRowHitTargetTests: XCTestCase {
     private static let controls = ["Toggle(", "Menu {", "Button(", "Button {", "enabledToggle"]
 
     func testMacRulesRowKeepsItsControlsOutOfTheLinkLabel() throws {
-        let source = try Self.macOSSource(of: "Cabalmail/Views/RulesView.swift")
+        let source = try Self.macOSSource(of: "CabalmailUI/Rules/RulesView.swift")
         let labels = Self.navigationLinkLabels(in: source)
         XCTAssertFalse(labels.isEmpty, "no NavigationLink label found — has the rules list been rewritten?")
         for label in labels {

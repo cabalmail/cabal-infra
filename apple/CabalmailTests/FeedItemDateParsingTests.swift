@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// `FeedItemDate` swapped its two hoisted `ISO8601DateFormatter`s for
 /// `Date.ISO8601FormatStyle` to clear the Swift 6 concurrency-safety error a

@@ -1,7 +1,7 @@
 import XCTest
 import SwiftUI
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// `FlagPaletteEntryBindings`: the palette editor's accessors stay total
 /// once the entry they address is gone (#1340 — index-capturing bindings

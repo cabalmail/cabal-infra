@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1201: every `confirmationDialog` in the app
 // that still gave its back-out button `role: .cancel` rendered on iPhone as
@@ -84,7 +84,8 @@ final class ConfirmationDialogRoleTests: XCTestCase {
         // so dropping a small one back out of the scan would not move it —
         // and a target outside the scan is how #1207 happened.
         for probe in [
-            "Cabalmail/ContentView.swift",
+            "Cabalmail/CabalmailApp.swift",
+            "CabalmailUI/Shell/ContentView.swift",
             "CabalmailMac/CabalmailMacApp.swift",
             "CabalmailWatch/ContentView.swift",
         ] {
@@ -137,8 +138,8 @@ final class ConfirmationDialogRoleTests: XCTestCase {
     /// their destructive control (#1207). The scan covers that target now,
     /// and the policy is compiled into it.
     private static let allowed = [
-        "Cabalmail/Views/RichTextToolbar.swift": 1,
-        "Cabalmail/Views/SignInView.swift": 2,
+        "CabalmailUI/Compose/Editor/RichTextToolbar.swift": 1,
+        "CabalmailUI/Session/SignInView.swift": 2,
     ]
 
     /// `force_try` is on in tests, so this throws rather than asserting the
@@ -159,7 +160,7 @@ final class ConfirmationDialogRoleTests: XCTestCase {
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
         var found: [String: String] = [:]
-        for target in ["Cabalmail", "CabalmailMac", "CabalmailWatch"] {
+        for target in ["Cabalmail", "CabalmailUI", "CabalmailMac", "CabalmailWatch"] {
             let root = apple.appendingPathComponent(target)
             guard let walker = FileManager.default.enumerator(
                 at: root,

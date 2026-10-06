@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1083: with the Drafts folder open, saving a
 // brand-new message left the list unchanged until the status poll got round

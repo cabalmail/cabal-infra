@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import CabalmailKit
+import CabalmailUI
 
 /// Opens a fresh compose window from a macOS command surface.
 ///

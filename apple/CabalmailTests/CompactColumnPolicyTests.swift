@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #844: sending a draft from inside the reader
 // on iPhone left the user on the "No message selected / Pick a message from

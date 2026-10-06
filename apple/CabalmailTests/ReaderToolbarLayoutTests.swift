@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #911: the reader's bottom bar carried seven
 // items, which the iOS 27 SDK no longer draws — it folded the tail into its

@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The management model against a scripted client and a real (temporary)
 /// store: every mutation lands on the server first, then in the store, and

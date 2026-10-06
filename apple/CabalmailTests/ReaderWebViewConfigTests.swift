@@ -1,6 +1,6 @@
 import WebKit
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The reader web view's privacy posture: everything here is a setting whose
 /// default leaks something (page JS, persistent site data, or — via link

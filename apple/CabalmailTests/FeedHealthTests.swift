@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The sidebar's health badge: quiet below three failures, a warning from
 /// three, stopped at twenty or when the fetcher dead-lettered the feed.

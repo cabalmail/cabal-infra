@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Issue #1703: a session that lapsed while the app was running left it in a
 /// cached mail shell — the list drew "Your session expired. Sign in again."
@@ -152,7 +152,7 @@ final class SessionExpiryTeardownTests: XCTestCase {
 /// seam — so this scan is what keeps the two ends connected. Reverting the
 /// `Section` in `SignInView` fails `testTheFormDrawsTheReason` by name.
 final class SignInReasonSourceScanTests: XCTestCase {
-    private static let path = "Cabalmail/Views/SignInView.swift"
+    private static let path = "CabalmailUI/Session/SignInView.swift"
 
     func testTheFormDrawsTheReason() throws {
         let code = Self.code(in: try Self.source())

@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The Feeds menu's item commands (cross-media plan, Phase 1) follow the rule
 // #985 set for the Message menu: enabled iff there is something to act on.

@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #836: opening a message in Drafts used to
 // ADD "Edit Draft" to the reader toolbar, taking the iPhone bottom bar to

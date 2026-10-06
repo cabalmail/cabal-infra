@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8: `AppState.signIn`, driven end
 /// to end through `SessionHarness`. Workstream 1.3 replaces AppState's

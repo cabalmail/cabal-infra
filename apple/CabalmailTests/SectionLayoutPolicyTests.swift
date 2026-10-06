@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Pins the rule behind the iOS section layout. Two regressions live here:
 ///

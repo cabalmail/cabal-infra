@@ -170,6 +170,37 @@ impl From<AuthFailure> for CabalmailError {
     }
 }
 
+/// A `reqwest` failure is a transport failure unless the kit's own client
+/// policy refused the request: a plain-HTTP URL or a redirect to one
+/// ([`crate::http`]), which the same server will send again and a retry cannot
+/// fix. Status codes arrive as responses, not errors, since nothing calls
+/// `error_for_status`; and bodies are decoded with `serde_json` after they are
+/// read, so `reqwest`'s own decode errors never arise.
+///
+/// A certificate the trust store rejects stays a transport failure on purpose.
+/// The common cause on a laptop is a captive portal intercepting the
+/// connection, which is exactly the case that clears on its own.
+///
+/// The detail is the whole source chain: `reqwest`'s own message is "error
+/// sending request for url (...)", and the reason — a refused connection, a
+/// failed handshake — is further down.
+impl From<reqwest::Error> for CabalmailError {
+    fn from(error: reqwest::Error) -> Self {
+        let mut detail = error.to_string();
+        let mut source = std::error::Error::source(&error);
+        while let Some(cause) = source {
+            detail.push_str(": ");
+            detail.push_str(&cause.to_string());
+            source = cause.source();
+        }
+        if error.is_redirect() || error.is_builder() {
+            Self::Protocol(detail)
+        } else {
+            Self::Network(detail)
+        }
+    }
+}
+
 /// A plain sentence plus whatever the lower layer had to say. Detail arrives
 /// as a fragment ("connection reset by peer") as often as a sentence, so it
 /// gets a full stop; an empty one is dropped rather than leaving the copy

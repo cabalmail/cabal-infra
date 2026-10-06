@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1078: saving a draft the user had opened
 // from the Drafts list dropped the edit that was just saved.

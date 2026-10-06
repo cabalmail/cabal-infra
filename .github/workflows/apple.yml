@@ -273,8 +273,8 @@ jobs:
   # -----------------------------------------------------------------------
   # App-layer unit tests (view models, app state) — the CabalmailMacTests
   # bundle hosted by CabalmailMac. macOS-only by design: the mac target
-  # compiles the same shared Cabalmail/ViewModels sources as the iOS app,
-  # and a native macOS test run skips the simulator boot entirely.
+  # links the same shared CabalmailUI module as the iOS app, and a native
+  # macOS test run skips the simulator boot entirely.
   # -----------------------------------------------------------------------
   app-test:
     name: Test app layer (macOS)

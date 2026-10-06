@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1162: with every macOS window closed — the
 // state the menu-bar residency exists to make ordinary — File ▸ New Message

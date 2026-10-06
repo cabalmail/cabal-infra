@@ -1,7 +1,7 @@
 import XCTest
 import SwiftUI
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The rapid-dispose rhythm on the real rows (reported 2026-09-29): dispose the
 // top message, and the next one slides up under the pointer as the disposed

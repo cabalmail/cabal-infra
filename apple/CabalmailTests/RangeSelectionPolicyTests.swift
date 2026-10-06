@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // #1768: a shift-click after command-clicking replaced the whole selection
 // with the range, discarding every row picked with command outside it. The

@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Compose opened without a connection must still offer the addresses the
 /// account can send from, or nothing can be queued for the outbox unless a

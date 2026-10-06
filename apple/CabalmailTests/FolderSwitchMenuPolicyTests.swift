@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The folder-switch menu behind the message list's folder name: subscribed
 /// folders at the top level, the rest under an "Other folders" submenu, the

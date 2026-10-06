@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The reader's toolbar toggles are sticky per feed: a flip writes the
 /// feed's default through `FeedDefaultsPersisting`, so the next item in the

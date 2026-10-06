@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for the macOS Drafts loop found in the 2026-10 stage
 // soak.
@@ -25,7 +25,7 @@ import XCTest
 final class ComposeWindowSlotSourceScanTests: XCTestCase {
 
     func testClosedWindowsAskBeforeComposingAcrossASignOut() throws {
-        let scene = try Self.code(Self.source("Cabalmail/Views/ComposeWindowScene.swift"))
+        let scene = try Self.code(Self.source("CabalmailUI/Compose/Windows/ComposeWindowScene.swift"))
         XCTAssertTrue(
             scene.contains("appState.composeSlots.mayCompose(seed, closedOn: closedOn)"),
             "the composer must be gated on the window's close"
@@ -34,12 +34,12 @@ final class ComposeWindowSlotSourceScanTests: XCTestCase {
             scene.contains("closedOn = appState.composeSlots.closedCompose(for: seed)"),
             "onClose must record the close"
         )
-        let signOut = try Self.code(Self.source("Cabalmail/AppState.swift"))
+        let signOut = try Self.code(Self.source("CabalmailUI/App/AppState.swift"))
         XCTAssertTrue(signOut.contains("composeSlots.endSession()"), "sign-out must end the compose session")
     }
 
     func testSlotlessWindowsHaveNoSlotFallback() throws {
-        let scene = try Self.code(Self.source("Cabalmail/Views/ComposeWindowScene.swift"))
+        let scene = try Self.code(Self.source("CabalmailUI/Compose/Windows/ComposeWindowScene.swift"))
         XCTAssertEqual(
             try Self.slotLiterals(in: scene), 0,
             "a window without a slot must not borrow one: it would follow that slot's seed while closed"

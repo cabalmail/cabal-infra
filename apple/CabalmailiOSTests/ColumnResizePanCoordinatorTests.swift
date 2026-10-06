@@ -1,7 +1,7 @@
 #if os(iOS)
 import UIKit
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The recognizer-lifetime half of the column resize handle, which is the
 /// case that prompted #1112: `ColumnResizePanCoordinator` is inside an

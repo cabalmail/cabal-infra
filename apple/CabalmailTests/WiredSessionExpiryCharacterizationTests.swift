@@ -1,7 +1,7 @@
 import XCTest
 import Observation
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Workstream 0.8 characterization suite: `handleSessionExpiry()` with a
 /// wired session (#1703). `SessionExpiryTeardownTests` and

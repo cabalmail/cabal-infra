@@ -1,12 +1,7 @@
 import SwiftUI
 import AppKit
 import CabalmailKit
-
-/// UserDefaults key backing the "Show in menu bar" toggle (default on).
-/// Written by the Notifications settings section and read by
-/// `CabalmailMacApp` through its `MenuBarExtra(isInserted:)` binding, so
-/// flipping the toggle inserts or removes the status item immediately.
-let menuBarExtraDefaultsKey = "showMenuBarExtra"
+import CabalmailUI
 
 /// Content of the Cabalmail status-item menu (Mac residency).
 ///

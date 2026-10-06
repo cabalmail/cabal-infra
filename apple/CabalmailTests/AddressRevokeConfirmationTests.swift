@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// #1454: revoking an address from the Addresses list raised no confirmation,
 /// while the same action from the reader's per-address menu raises

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The status banners moved from the top of the window to the bottom in #1426,
 // so what this file pins moved with them.

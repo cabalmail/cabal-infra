@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The after-dispose advance policies (`advanceTarget(after:following:)` and
 /// its per-policy helpers) against the list order the view model holds.

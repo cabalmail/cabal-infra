@@ -2,7 +2,7 @@
 import SwiftUI
 import UIKit
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// A trackpad two-finger swipe revealed nothing on iPadOS 27's message list.
 ///

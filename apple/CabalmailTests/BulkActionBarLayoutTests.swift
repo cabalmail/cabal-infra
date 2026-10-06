@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issue #1343: the bulk action bar draws inside the
 // message-list column, which on macOS is 220 pt until the window passes
@@ -156,7 +156,7 @@ final class BulkActionBarLayoutTests: XCTestCase {
             .deletingLastPathComponent()   // CabalmailTests
             .deletingLastPathComponent()   // apple
         return try String(
-            contentsOf: apple.appendingPathComponent("Cabalmail/Views/MessageListView+Bulk.swift"),
+            contentsOf: apple.appendingPathComponent("CabalmailUI/Mail/MessageList/MessageListView+Bulk.swift"),
             encoding: .utf8
         )
     }

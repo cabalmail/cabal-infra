@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression coverage for issues #845 and #897: a composer that opens
 // populated was titled "New Message". #845 covered the resumed Drafts copy

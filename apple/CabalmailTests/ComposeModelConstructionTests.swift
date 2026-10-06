@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// Opening one compose surface must build exactly one `ComposeViewModel`
 /// — each one owns a `RichTextEditorController` and its `WKWebView`, and

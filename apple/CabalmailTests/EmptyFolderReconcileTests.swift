@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // Regression tests for #939: a draft deleted server-side stayed in the
 // Drafts list indefinitely — the pills read "All, 0" beside the row, and

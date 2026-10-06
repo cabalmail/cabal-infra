@@ -1,0 +1,275 @@
+import Foundation
+import CabalmailKit
+
+// Multi-select / UID-set action plumbing. Lives in a sibling extension
+// so the main view-model file stays under SwiftLint's 400-line cap.
+// The UID-set primitives (`setSeen(_:uids:)`, `setFlagged(_:uids:)`,
+// `moveMessages(uids:to:)`, `disposeMessages(uids:action:)`) serve the
+// bulk-action bar, the selection context menu, and the keyboard
+// shortcuts; each is a thin wrapper over the existing UID-array wire
+// calls (`setFlags(uids:)`, `move(uids:)`) plus optimistic in-memory
+// updates that mirror the per-row flows. Cross-folder search results
+// are grouped by source mailbox before the wire call so the server-
+// side move/store routes the UIDs correctly.
+//
+// Selection lifetime: flag toggles (seen / flagged) leave the selection
+// alone so the user can chain operations on the same messages; moves
+// and disposes drop exactly the moved UIDs, since those rows are gone.
+extension MessageListViewModel {
+    /// Toggle edit mode. Leaving edit mode also clears any selection so
+    /// re-entering starts fresh.
+    func toggleBulkMode() {
+        bulkMode.toggle()
+        if !bulkMode { selectedUIDs.removeAll() }
+    }
+
+    func exitBulkMode() {
+        bulkMode = false
+        selectedUIDs.removeAll()
+    }
+
+    /// Leave selection mode without touching the selection. The bulk move /
+    /// dispose paths hand their UIDs to an async `Task` and clear the set
+    /// themselves once it has read them, so the view dropping the mode
+    /// straight after must not clear it here — that would race the read and
+    /// move nothing.
+    func leaveBulkMode() {
+        bulkMode = false
+    }
+
+    /// Flip an envelope's membership in the selection set.
+    func toggleSelection(_ envelope: Envelope) {
+        if selectedUIDs.contains(envelope.uid) {
+            selectedUIDs.remove(envelope.uid)
+        } else {
+            selectedUIDs.insert(envelope.uid)
+        }
+    }
+
+    /// Select every envelope currently passing the active filter tab
+    /// (the visible list). "Select all" without filtering would surprise
+    /// — the user sees only the unread tab, expects to flag those, not
+    /// every read message too.
+    func selectAllVisible() {
+        let visible = envelopes.filter { filterTab.includes($0) }
+        selectedUIDs = Set(visible.map(\.uid))
+    }
+
+    /// Drops UIDs that loaded rows carry from more than one folder. IMAP UIDs
+    /// are unique only within a folder, so a cross-folder search can show
+    /// Archive UID 1 next to `zeta` UID 1, and a bare-UID selection can't say
+    /// which of the two the user picked; acting on both would move or flag a
+    /// message the user never chose. The same goes for one message filed in
+    /// two folders under one UID (mail you send yourself, in INBOX and Sent):
+    /// nothing on the wire tells those rows apart, so `sourceFolder(for:)`
+    /// names the first copy for both, and acting there could change the copy
+    /// the user wasn't looking at. Either way those rows are left alone, and
+    /// the returned `notice` (nil when nothing was skipped) is what the caller
+    /// shows as `skippedNotice`. Folder mode and single-folder searches never
+    /// collide, so this returns `uids` unchanged there. The lasting fix keys
+    /// selection by folder plus UID (the MessageRef work).
+    func unambiguous(_ uids: Set<UInt32>) -> (kept: Set<UInt32>, notice: String?) {
+        var foldersByUID: [UInt32: Set<String>] = [:]
+        for envelope in envelopes where uids.contains(envelope.uid) {
+            foldersByUID[envelope.uid, default: []].formUnion(sourceFolders(for: envelope))
+        }
+        let ambiguous = Set(foldersByUID.filter { $0.value.count > 1 }.keys)
+        guard !ambiguous.isEmpty else { return (uids, nil) }
+        let skipped = envelopes.filter { ambiguous.contains($0.uid) }.count
+        // "Act on them from their own folders", not "open each one": the
+        // reader routes through `sourceFolder(for:)` too, so for copies it
+        // can't tell apart it would open the first copy whichever row was
+        // tapped, and wide layouts open the first row with the UID anyway.
+        let notice = "\(skipped) messages were left unchanged because they share an ID "
+            + "with a result from another folder. Act on them from their own folders."
+        return (uids.subtracting(ambiguous), notice)
+    }
+
+    /// Shows a move's `unambiguous` notice once the move has settled. After
+    /// the round trip, not before: on wide layouts the rows the move drops
+    /// from the selection can take the action bar with them, and the note sits
+    /// on that bar, so setting it first would draw it above the bar and drop
+    /// it a beat later. A search ended or replaced meanwhile owns the list, so
+    /// its rows get no note about the old ones.
+    func settleSkippedNotice(_ notice: String?, searchedFor query: String) {
+        guard submittedQuery == query else { return }
+        skippedNotice = notice
+    }
+
+    /// Group an arbitrary UID set by source folder. Single-folder mode
+    /// and folder-scoped searches collapse to one bucket; cross-folder
+    /// search results may produce several.
+    private func groupedByFolder(_ uids: Set<UInt32>) -> [String: [UInt32]] {
+        let chosen = envelopes.filter { uids.contains($0.uid) }
+        return Dictionary(grouping: chosen, by: { sourceFolder(for: $0) })
+            .mapValues { $0.map(\.uid) }
+    }
+
+    /// Bulk equivalent of `dispose(_:)`, scoped to the selection and to
+    /// the configured dispose destination. Exits edit mode — the rows
+    /// are gone, so the action bar has nothing left to act on.
+    func bulkDispose() async {
+        await disposeMessages(uids: selectedUIDs, action: preferences.disposeAction)
+        exitBulkMode()
+    }
+
+    /// Bulk equivalent of `moveTo(_:destination:)`, scoped to the
+    /// selection. Exits edit mode like `bulkDispose()`.
+    func bulkMove(to destination: String) async {
+        await moveMessages(uids: selectedUIDs, to: destination)
+        exitBulkMode()
+    }
+
+    /// Selection-scoped wrappers for the action bar. Unlike the move /
+    /// dispose paths these deliberately do NOT exit edit mode: the rows
+    /// are still on screen, and keeping the selection lets the user
+    /// chain another action (flag, move) onto the same messages.
+    func bulkSetSeen(_ shouldBeSeen: Bool) async {
+        await setSeen(shouldBeSeen, uids: selectedUIDs)
+    }
+
+    func bulkSetFlagged(_ shouldBeFlagged: Bool) async {
+        await setFlagged(shouldBeFlagged, uids: selectedUIDs)
+    }
+
+    /// \Seen / unset-\Seen for an explicit UID set. Walks the set per-
+    /// source-folder. Optimistically updates the in-memory flags so the
+    /// row styling flips before the wire call lands; rows the server
+    /// rejects (whole-group or `bulkPartialFailure` split) revert to
+    /// their pre-op state. Leaves any active selection intact.
+    func setSeen(_ shouldBeSeen: Bool, uids: Set<UInt32>) async {
+        let (uids, notice) = unambiguous(uids)
+        skippedNotice = notice
+        let grouping = groupedByFolder(uids)
+        let prior = priorFlagState(uids: uids, flag: .seen)
+        // Unread badge tracking — capture the actual transition UIDs per
+        // folder BEFORE the optimistic loop rewrites the flags: marking an
+        // already-read message read must not move the sidebar counter, and
+        // a partial failure must only count transitions that landed.
+        let transitionsByFolder = Dictionary(
+            grouping: envelopes.filter {
+                uids.contains($0.uid) && $0.flags.contains(.seen) != shouldBeSeen
+            },
+            by: { sourceFolder(for: $0) }
+        ).mapValues { Set($0.map(\.uid)) }
+        for uid in uids {
+            applyOptimisticFlag(uid: uid, flag: .seen, add: shouldBeSeen)
+        }
+        pendingFlagUIDs.formUnion(uids)
+        defer { pendingFlagUIDs.subtract(uids) }
+        for (source, groupUIDs) in grouping {
+            let applied = await applyFlagGroup(
+                folder: source, uids: groupUIDs,
+                flag: .seen, add: shouldBeSeen, prior: prior
+            )
+            let transitions = transitionsByFolder[source]?.intersection(applied).count ?? 0
+            // The STORE answered: not once the session has ended (#1851).
+            if transitions > 0, appState.acceptsCounts(from: client) {
+                appState.applyUnreadDelta(
+                    folderPath: source,
+                    delta: shouldBeSeen ? -transitions : transitions
+                )
+            }
+        }
+    }
+
+    /// Flag toggle for an explicit UID set. Mirrors `setSeen` minus the
+    /// unread-count bookkeeping (flagged isn't a count we surface in
+    /// the sidebar).
+    func setFlagged(_ shouldBeFlagged: Bool, uids: Set<UInt32>) async {
+        let (uids, notice) = unambiguous(uids)
+        skippedNotice = notice
+        let grouping = groupedByFolder(uids)
+        let prior = priorFlagState(uids: uids, flag: .flagged)
+        for uid in uids {
+            applyOptimisticFlag(uid: uid, flag: .flagged, add: shouldBeFlagged)
+        }
+        pendingFlagUIDs.formUnion(uids)
+        defer { pendingFlagUIDs.subtract(uids) }
+        for (source, groupUIDs) in grouping {
+            _ = await applyFlagGroup(
+                folder: source, uids: groupUIDs,
+                flag: .flagged, add: shouldBeFlagged, prior: prior
+            )
+        }
+    }
+
+    /// Pre-op flag membership per UID, captured before the optimistic
+    /// rewrite so a rejected row can revert to exactly what it had — a
+    /// blind "apply the opposite" would corrupt rows that already carried
+    /// the target state (e.g. mark-read over an already-read message).
+    private func priorFlagState(uids: Set<UInt32>, flag: Flag) -> [UInt32: Bool] {
+        // Uniquing rather than `uniqueKeysWithValues:`, which traps on a
+        // repeated UID; `unambiguous` has already dropped cross-folder
+        // collisions, so a repeat here is the same row loaded twice.
+        Dictionary(
+            envelopes
+                .filter { uids.contains($0.uid) }
+                .map { ($0.uid, $0.flags.contains(flag)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// One flag-group wire call plus reconciliation: returns the UIDs the
+    /// server actually applied. A `bulkPartialFailure` keeps the succeeded
+    /// rows, reverts the failed ones, and surfaces an "X of Y" message;
+    /// any other error reverts the whole group.
+    private func applyFlagGroup(
+        folder: String,
+        uids: [UInt32],
+        flag: Flag,
+        add: Bool,
+        prior: [UInt32: Bool]
+    ) async -> Set<UInt32> {
+        do {
+            try await client.imapClient.setFlags(
+                folder: folder, uids: uids, flags: [flag],
+                operation: add ? .add : .remove
+            )
+            return Set(uids)
+        } catch CabalmailError.bulkPartialFailure(let succeeded, let failed) {
+            for uid in failed {
+                applyOptimisticFlag(uid: uid, flag: flag, add: prior[uid] ?? !add)
+            }
+            errorMessage = "Updated \(succeeded.count) of \(uids.count) messages. "
+                + "\(failed.count) could not be updated."
+            return succeeded
+        } catch {
+            for uid in uids {
+                applyOptimisticFlag(uid: uid, flag: flag, add: prior[uid] ?? !add)
+            }
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    /// Move an explicit UID set. The optimistic prune / unread
+    /// bookkeeping / per-source revert all live in the shared
+    /// `performMove` (also used by drag-and-drop). Moved UIDs drop out
+    /// of any active selection; UIDs outside the set stay selected, so
+    /// a context-menu move on an unselected row leaves the user's
+    /// selection alone.
+    func moveMessages(uids: Set<UInt32>, to destination: String) async {
+        let query = submittedQuery
+        let (uids, notice) = unambiguous(uids)
+        await performMove(uidsBySource: groupedByFolder(uids), to: destination, markSeenFirst: false)
+        selectedUIDs.subtract(uids)
+        settleSkippedNotice(notice, searchedFor: query)
+    }
+
+    /// Archive or trash an explicit UID set. `action` is a parameter
+    /// rather than the dispose preference so the context menu can offer
+    /// both destinations side by side; marks `\Seen` first to match the
+    /// single-row dispose (archived == read).
+    func disposeMessages(uids: Set<UInt32>, action: DisposeAction) async {
+        let query = submittedQuery
+        let (uids, notice) = unambiguous(uids)
+        await performMove(
+            uidsBySource: groupedByFolder(uids),
+            to: action.destinationFolder,
+            markSeenFirst: true
+        )
+        selectedUIDs.subtract(uids)
+        settleSkippedNotice(notice, searchedFor: query)
+    }
+}

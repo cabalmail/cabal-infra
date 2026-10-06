@@ -1,5 +1,5 @@
 import XCTest
-@testable import Cabalmail
+@testable import CabalmailUI
 
 // The reader's header sets its date, authentication chips, and custom flags
 // in a trailing column once the pane is wide enough, so that a short, wide

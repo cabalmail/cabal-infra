@@ -1,6 +1,6 @@
 import XCTest
 import CabalmailKit
-@testable import Cabalmail
+@testable import CabalmailUI
 
 /// The sidebar badge and the list's Unread chip are the same number shown
 /// twice in one window, but only the sidebar's own refresh re-ran STATUS —
