@@ -40,16 +40,18 @@ extension URLSessionApiClient {
         let data = try await send(request, expectedStatuses: 200..<300)
         // The `/list` Lambda actually returns `{"Items": [...]}` — a thin
         // wrapper over the DynamoDB scan output (see
-        // `lambda/api/list/function.py`). Check that first, with the plain
-        // array and `{"addresses": [...]}` kept as fallbacks in case the
-        // Lambda wire changes.
-        if let wrapped = try? JSONDecoder().decode(ItemsWrapper.self, from: data) {
-            return wrapped.Items
-        }
+        // `lambda/api/list/function.py`). The plain array and
+        // `{"addresses": [...]}` are fallbacks in case the Lambda wire
+        // changes, tried first so that the strict decode is the real shape:
+        // when nothing fits, the error and the log name where an `Items`
+        // reply stopped (`Items[3].subdomain`), not a missing `addresses`.
         if let direct = try? JSONDecoder().decode([Address].self, from: data) {
             return direct
         }
-        return try decodeReply(LowercaseAddressesWrapper.self, from: data, for: request).addresses
+        if let lowercase = try? JSONDecoder().decode(LowercaseAddressesWrapper.self, from: data) {
+            return lowercase.addresses
+        }
+        return try decodeReply(ItemsWrapper.self, from: data, for: request).Items
     }
 
     // The `Items` key is PascalCase because the Lambda emits the shape

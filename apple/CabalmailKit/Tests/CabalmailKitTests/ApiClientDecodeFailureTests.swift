@@ -76,6 +76,24 @@ final class ApiClientDecodeFailureTests: XCTestCase {
         XCTAssertFalse(lines.contains { $0.contains(secret) }, "the reply's content reached the log")
     }
 
+    /// `/list` tries two fallback shapes leniently, so the strict decode is
+    /// the Lambda's real `{"Items": [...]}` and a drifted row is named in the
+    /// log, rather than a missing `addresses` key from the last fallback.
+    func testAnAddressListWithOneDriftedRowLogsTheRowThatStopped() async {
+        let endpoint = Endpoint("listAddresses", .strict("list")) { _ = try await $0.listAddresses() }
+        let body = #"{"Items": [{"address": "a@x.example", "subdomain": "x", "tld": "example"},"#
+            + #" {"address": "b@x.example", "tld": "example"}]}"#
+
+        let error = await Self.error(calling: endpoint, replying: body)
+
+        XCTAssertEqual(error as? CabalmailError, .decoding("list returned an unexpected reply"))
+        let lines = DebugLogStore.shared.snapshot().filter { $0.category == "API" }.map(\.message)
+        XCTAssertTrue(
+            lines.contains("list reply didn't decode as ItemsWrapper: no \"subdomain\" key at Items[1]"),
+            "the log doesn't name the drifted row: \(lines.suffix(3))"
+        )
+    }
+
     /// The table above covers today's endpoints; this keeps a new one from
     /// bringing the bare decode back. The only strict `JSONDecoder` decode in
     /// `API/` is the one inside `decodeReply`. A `try?` is a deliberate
