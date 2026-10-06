@@ -98,6 +98,10 @@ public final class SessionManager {
     /// owns it for the whole process lifetime.
     private var preferences: Preferences?
 
+    /// The client of the second-factor submit in flight, which a cancel
+    /// meanwhile must not shut down: the submit may still wire it.
+    @ObservationIgnored private var mfaSubmitting: CabalmailClient?
+
     public init() {
         pollers.client = { [weak self] in self?.client }
         pollers.inboxUnreadChanged = { [weak self] in self?.owner.inboxUnreadChanged($0) }
@@ -107,9 +111,10 @@ public final class SessionManager {
         await teardownGate.awaitTeardown()
         status = .signingIn
         mfaError = nil
-        pendingMfa = nil
+        abandonPendingMfa()
         // The explanation has been read by the time the user is typing.
         signedOutReason = nil
+        var built: CabalmailClient?
         do {
             // The cache is seeded here so a launch with no network right
             // after this sign-in can still restore (see `restoreIfPossible`).
@@ -117,6 +122,7 @@ public final class SessionManager {
             let newClient = try sessionEnvironment.makeClient(
                 configuration, sessionEnvironment.makeSecureStore(), sessionInvalidation
             )
+            built = newClient
             let result = try await newClient.authService.signIn(username: username, password: password)
             if case .mfaCodeRequired(let method) = result {
                 // Password accepted; tokens arrive only after the code.
@@ -131,8 +137,10 @@ public final class SessionManager {
                 client: newClient, controlDomain: controlDomain, username: username
             )
         } catch let error as CabalmailError {
+            letGo(of: built)
             status = .error(SignInErrorText.message(for: error))
         } catch {
+            letGo(of: built)
             status = .error(error.localizedDescription)
         }
     }
@@ -247,6 +255,7 @@ public final class SessionManager {
             }
             return
         }
+        letGo(of: built)
         guard let error = error as? CabalmailError else {
             status = .error(error.localizedDescription)
             return
@@ -304,6 +313,9 @@ extension SessionManager {
         self.prefsCoordinator?.stop()
         self.prefsCoordinator = nil
         self.status = .signedOut
+        // After every state write: what the client still runs on its own
+        // stops, and nothing about the session changes while it does.
+        await client.shutdown()
     }
 
     /// Shared tail of `signIn` and `restoreIfPossible`: installs the client,
@@ -311,6 +323,8 @@ extension SessionManager {
     /// badge polling, the contacts prompt, push registration (iOS/macOS),
     /// and the watch hand-off.
     private func wireSession(client newClient: CabalmailClient, username: String) async {
+        // A sign-in over a wired session (#1826) replaces its client.
+        let replaced = client
         self.client = newClient
         owner.clientInstalled(newClient)
         self.navCoordinator = sessionEnvironment.makeNavCoordinator(newClient)
@@ -345,7 +359,20 @@ extension SessionManager {
         // and every subscription's new items so the Feeds section is current
         // before the user opens it; then every fifteen minutes.
         pollers.startFeedRefreshPolling()
+        if let replaced, replaced !== newClient { letGo(of: replaced) }
         await pushSessionToWatch(client: newClient, username: username)
+    }
+}
+
+// MARK: - Letting a client go
+
+extension SessionManager {
+    /// A client the manager no longer holds stops what it runs on its own:
+    /// its send queue and its Spotlight feed. Its API calls and caches keep
+    /// working for anyone still holding it. Never the wired client.
+    private func letGo(of dropped: CabalmailClient?) {
+        guard let dropped, dropped !== client else { return }
+        Task { await dropped.shutdown() }
     }
 }
 
@@ -425,6 +452,7 @@ extension SessionManager {
     /// only to clear the resume state this launch would have restored.
     func endUnwiredSession(_ client: CabalmailClient) async {
         await endSession(of: client, cursor: sessionEnvironment.makeNavCoordinator(client))
+        await client.shutdown()
     }
 
     /// Removes a stored session's tokens and IMAP credentials without a
@@ -483,25 +511,32 @@ extension SessionManager {
             return
         }
         mfaError = nil
+        mfaSubmitting = pending.client
         do {
             try await pending.client.authService.submitMfaCode(code)
+            mfaSubmitting = nil
             let ctx = pending
             pendingMfa = nil
             await completeInteractiveSignIn(
                 client: ctx.client, controlDomain: ctx.controlDomain, username: ctx.username
             )
         } catch let error as CabalmailError {
+            mfaSubmitting = nil
             if case .server(let code, _) = error, code == "CodeMismatchException" {
+                // A challenge abandoned while the code was checked is not
+                // coming back for this client.
+                if pendingMfa?.client !== pending.client { letGo(of: pending.client) }
                 status = .mfaCodeRequired(method)
                 mfaError = "That code did not match. Please try again."
                 return
             }
             // Anything else (challenge session expired, throttled, ...)
             // restarts from the password form with the standard message.
-            pendingMfa = nil
+            abandonSubmittedMfa(pending.client)
             status = .error(SignInErrorText.message(for: error))
         } catch {
-            pendingMfa = nil
+            mfaSubmitting = nil
+            abandonSubmittedMfa(pending.client)
             status = .error(error.localizedDescription)
         }
     }
@@ -511,9 +546,23 @@ extension SessionManager {
     /// password form over whatever is there (#1826).
     func cancelMfaChallenge() {
         guard case .mfaCodeRequired = status else { return }
-        pendingMfa = nil
+        abandonPendingMfa()
         mfaError = nil
         status = .signedOut
+    }
+
+    /// Lets the parked challenge's client go, unless a code submitted on it
+    /// is still being checked: that submit may yet wire it, and lets it go
+    /// itself if it fails.
+    private func abandonPendingMfa() {
+        if let parked = pendingMfa?.client, parked !== mfaSubmitting { letGo(of: parked) }
+        pendingMfa = nil
+    }
+
+    /// A failed submit's client goes, whether or not it is still parked.
+    private func abandonSubmittedMfa(_ submitted: CabalmailClient) {
+        if pendingMfa?.client === submitted { pendingMfa = nil }
+        letGo(of: submitted)
     }
 
     /// Shared tail of `signIn` and `submitMfaCode` once tokens exist.
