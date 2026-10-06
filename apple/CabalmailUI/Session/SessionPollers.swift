@@ -4,8 +4,9 @@ import CabalmailKit
 /// The two loops a signed-in session runs: the Inbox badge poller and the
 /// feed reader's periodic refresh. `SessionManager` starts both as it wires a
 /// session and stops both first when it ends one. Each tick reads the
-/// session's current client through `client`, so a tick that lands after the
-/// client is gone finds none and does nothing.
+/// session's current client through `client`, so a tick that starts after the
+/// client is gone finds none and does nothing; a badge tick already waiting
+/// on the server when its loop is stopped drops its count.
 @MainActor
 final class SessionPollers {
     /// The session's client, read on every tick.
@@ -14,7 +15,8 @@ final class SessionPollers {
     /// whose counts push it to the system badge.
     var inboxUnreadChanged: @MainActor (Int) -> Void = { _ in }
 
-    private var inboxBadgeTask: Task<Void, Never>?
+    /// The badge poller's loop; readable so a test can await its last tick.
+    private(set) var inboxBadgeTask: Task<Void, Never>?
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
     var feedRefreshTask: Task<Void, Never>?
     let feedRefreshInterval: UInt64 = 15 * 60 * 1_000_000_000
@@ -50,6 +52,10 @@ final class SessionPollers {
         guard let client = client() else { return }
         do {
             let status = try await client.folderStatus(path: "INBOX")
+            // A STATUS already answered when the sign-out stopped this loop
+            // still resumes here, after the stop reset the badge to 0. Its
+            // count is the ended session's, so it goes nowhere (#1886).
+            guard !Task.isCancelled else { return }
             inboxUnreadChanged(status.unseen ?? 0)
         } catch {
             // Best-effort: if the STATUS call fails (transient network
