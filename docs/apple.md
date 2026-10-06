@@ -823,9 +823,9 @@ open-Internet SMTP via the operator's own SMTP-OUT relay with DKIM
 signing, and inbound mail is delivered through standard SMTP-IN +
 IMAP. There is no proprietary transport. Source code, including the
 mailto: handler and parser, is public at
-https://github.com/cabalmail/cabal-infra (see apple/Cabalmail/
-CabalmailApp.swift and apple/CabalmailKit/Sources/CabalmailKit/
-Compose/MailtoURL.swift).
+https://github.com/cabalmail/cabal-infra (see apple/CabalmailUI/
+Shell/AppRootLifecycle.swift and apple/CabalmailKit/Sources/
+CabalmailKit/Compose/MailtoURL.swift).
 
 Test credentials for the deployment this TestFlight build is built
 against:
@@ -1007,11 +1007,11 @@ Loose files in a feature folder are shared by that feature's subfolders.
 
 | Folder | What lives there |
 | --- | --- |
-| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request |
-| `Session/` | Sign-in, restoring the last session, signing out: the sign-in screen and its error wording, teardown ordering |
+| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the commands and menus, compose hand-off, drag and drop, the search model, contacts, BIMI and `mailStore`; its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
+| `Session/` | The session lifecycle, in `SessionManager`: sign-in and its second factor, restoring the last session, signing out and its ordering (`SessionTeardownGate`), the session's client, cursor, preferences sync and expiry observer, the Inbox badge and feed pollers (`SessionPollers`), and lending the client to the push and App Intents paths (`borrowClient()`, one client per account). `SessionEnvironment` and `SessionHooks` are its seams to the outside; `SessionOwnerHooks` are what a session does to `AppState`'s state. Also the sign-in screen and its error wording |
 | `Navigation/` | `NavStateCoordinator` (resume, restore and the cross-device cursor) and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
-| `Shell/` | How a window is laid out: the sign-in / signed-in router, the iPhone tab bar, the iPad and Mac split view (`MailRootView`), the Vision Pro tabs, the layout and column policies, the per-window theme |
+| `Shell/` | How a window is laid out: the sign-in / signed-in router, the iPhone tab bar, the iPad and Mac split view (`MailRootView`), the Vision Pro tabs, the layout and column policies, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
 | `Shell/Columns/` | Column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
 | `Mail/` | Mail pieces used by more than one mail column: drag and drop, Move to Folder, the sender avatar, the authentication line |
 | `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts and the Inbox count behind the app badge), `MessageShields` (what keeps a refresh from undoing a write made elsewhere) and `MessageSignals` (the one-way signals the reader and composer send the list, and their payload types); also saved folder counts and Mark All as Read |

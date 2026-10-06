@@ -80,6 +80,8 @@ public actor SendQueue {
     /// `stop()` — or superseded by a later one — can't clear or restart the
     /// drain that replaced it.
     private var drainGeneration = 0
+    /// Set by `stop()`, for good: a stopped queue drains nothing again.
+    private var stopped = false
 
     public init(
         outbox: Outbox,
@@ -98,6 +100,7 @@ public actor SendQueue {
     /// state immediately triggers a drain of anything left in the outbox
     /// from a prior session.
     public func bind(reachability: AsyncStream<Bool>) {
+        guard !stopped else { return }
         reachabilityTask?.cancel()
         reachabilityTask = Task { [weak self] in
             for await reachable in reachability {
@@ -113,6 +116,7 @@ public actor SendQueue {
     /// `CabalmailClient.send(_:)` after enqueueing a message so a
     /// reachability signal that already came through gets another shot.
     public func kickDrain() {
+        guard !stopped else { return }
         guard drainTask == nil || drainTask?.isCancelled == true else {
             // A drain is already in flight, and it listed the outbox when it
             // started — a message enqueued since is invisible to it. Dropping
@@ -130,7 +134,15 @@ public actor SendQueue {
         kickDrain()
     }
 
+    /// Stops the queue for good: the drain in flight is cancelled, the
+    /// reachability observer and the retry timer go, and a later kick, bind
+    /// or reconnect starts nothing. What is queued stays in the outbox, and
+    /// an attempt the cancel interrupts writes nothing back to it. The
+    /// owning client's `shutdown()` calls this when the app lets the client
+    /// go, so a client the app no longer holds can't drain an outbox the
+    /// app's current client also drains.
     public func stop() {
+        stopped = true
         drainTask?.cancel()
         drainTask = nil
         pendingKick = false
@@ -233,6 +245,7 @@ public actor SendQueue {
             try? await outbox.remove(id: entry.id)
             CabalmailLog.info("SendQueue", "sent queued message \(entry.id)")
         } catch CabalmailError.sendInFlight {
+            guard !stopped else { return }
             // The API still holds a dedupe claim on this message's Message-Id
             // and can't prove it delivered, so this attempt says nothing about
             // the message's fate. Keep the entry and roll `attempts` back: a
@@ -247,6 +260,10 @@ public actor SendQueue {
                 "deferred \(entry.id): an earlier submission of it is still in flight"
             )
         } catch {
+            // `stop()` cancelled this attempt, so its failure says nothing
+            // about the message, and the outbox may have been wiped since
+            // (a sign-out): writing the entry back would bring it back.
+            guard !stopped else { return }
             entry.lastError = "\(error)"
             let maxAttempts = outbox.maxAttempts
             CabalmailLog.warn(

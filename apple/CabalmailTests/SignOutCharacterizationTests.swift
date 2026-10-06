@@ -48,7 +48,7 @@ final class SignOutCharacterizationTests: XCTestCase {
         await SignOutSuiteSteps.signIn(harness)
         try await waitUntilOnMainActor { self.harness.appState.mailStore.counts.inboxUnreadCount == 7 }
         let client = try XCTUnwrap(harness.appState.client)
-        let feedPoll = try XCTUnwrap(harness.appState.feedRefreshTask)
+        let feedPoll = try XCTUnwrap(harness.appState.sessionManager.pollers.feedRefreshTask)
         try await seedLocalData(in: client)
         seedResumeState()
         let moments = recordTeardownMoments(of: client, store: store)
@@ -123,7 +123,7 @@ final class SignOutCharacterizationTests: XCTestCase {
         seedResumeState()
         let search = state.sharedSearchModel(client: client, preferences: preferences)
         XCTAssertTrue(state.searchModelStore === search, "precondition")
-        state.signedOutReason = .sessionExpired
+        state.sessionManager.signedOutReason = .sessionExpired
 
         await state.signOut()
 
@@ -148,8 +148,8 @@ final class SignOutCharacterizationTests: XCTestCase {
     /// observed. The environment still records `makeSecureStore`.
     private func installProbingStore() -> ProbingSecureStore {
         let store = ProbingSecureStore(base: harness.secureStore)
-        let original = harness.appState.sessionEnvironment.makeSecureStore
-        harness.appState.sessionEnvironment.makeSecureStore = {
+        let original = harness.appState.sessionManager.sessionEnvironment.makeSecureStore
+        harness.appState.sessionManager.sessionEnvironment.makeSecureStore = {
             _ = original()
             return store
         }
@@ -210,12 +210,12 @@ final class SignOutCharacterizationTests: XCTestCase {
     /// test.
     private func recordTeardownMoments(of client: CabalmailClient, store: ProbingSecureStore) -> TeardownMoments {
         let moments = TeardownMoments()
-        let hooks = harness.appState.sessionEnvironment.hooks
-        harness.appState.sessionEnvironment.hooks.sessionWillEnd = { [weak self, weak moments] in
+        let hooks = harness.appState.sessionManager.sessionEnvironment.hooks
+        harness.appState.sessionManager.sessionEnvironment.hooks.sessionWillEnd = { [weak self, weak moments] in
             if let moment = self?.moment(of: client) { moments?.willEnd.append(moment) }
             await hooks.sessionWillEnd()
         }
-        harness.appState.sessionEnvironment.hooks.sessionDidEnd = { [weak self, weak moments] in
+        harness.appState.sessionManager.sessionEnvironment.hooks.sessionDidEnd = { [weak self, weak moments] in
             if let moment = self?.moment(of: client) { moments?.didEnd.append(moment) }
             hooks.sessionDidEnd()
         }
@@ -232,8 +232,8 @@ final class SignOutCharacterizationTests: XCTestCase {
             status: state.status,
             sameClient: state.client === client,
             navWired: state.navCoordinator != nil,
-            observing: state.sessionExpiryTask != nil,
-            feedPolling: state.feedRefreshTask != nil,
+            observing: state.sessionManager.sessionExpiryTask != nil,
+            feedPolling: state.sessionManager.pollers.feedRefreshTask != nil,
             inboxUnread: state.mailStore.counts.inboxUnreadCount,
             hasCachedFiles: cachedFiles(under: client),
             tokensStored: harness.hasStoredTokens,

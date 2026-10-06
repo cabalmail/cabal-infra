@@ -73,7 +73,7 @@ final class SignInMfaCharacterizationTests: XCTestCase {
         XCTAssertEqual(world.clients.count, 1)
         XCTAssertTrue(world.appState.client === world.clients.first)
         XCTAssertNotNil(world.appState.navCoordinator)
-        XCTAssertNotNil(world.appState.sessionExpiryTask)
+        XCTAssertNotNil(world.appState.sessionManager.sessionExpiryTask)
         XCTAssertEqual(world.defaults.string(forKey: SignInScript.domainKey), "cabalmail.example")
         XCTAssertEqual(world.defaults.string(forKey: SignInScript.usernameKey), "alice")
         let tokens = await world.appState.client?.authService.currentTokens()
@@ -231,7 +231,7 @@ final class SignInMfaCharacterizationTests: XCTestCase {
     private func assertNothingWired(file: StaticString = #filePath, line: UInt = #line) async {
         XCTAssertNil(world.appState.client, file: file, line: line)
         XCTAssertNil(world.appState.navCoordinator, file: file, line: line)
-        XCTAssertNil(world.appState.sessionExpiryTask, file: file, line: line)
+        XCTAssertNil(world.appState.sessionManager.sessionExpiryTask, file: file, line: line)
         XCTAssertEqual(world.events, SignInScript.clientBuilt, "no session hook ran", file: file, line: line)
         XCTAssertFalse(world.hasStoredTokens, file: file, line: line)
         XCTAssertNil(world.defaults.string(forKey: SignInScript.domainKey), file: file, line: line)
@@ -244,7 +244,7 @@ final class SignInMfaCharacterizationTests: XCTestCase {
     private func assertChallengeDropped(
         answersSoFar: Int, file: StaticString = #filePath, line: UInt = #line
     ) async {
-        world.appState.status = .mfaCodeRequired(.totp)
+        world.appState.sessionManager.status = .mfaCodeRequired(.totp)
         await world.appState.submitMfaCode("999999")
         XCTAssertEqual(world.appState.status, .signedOut, file: file, line: line)
         let answers = await world.cognito.trail.filter { $0 == "RespondToAuthChallenge" }.count
@@ -398,8 +398,8 @@ private final class WiringProbe {
     private(set) var bodiesWhenWiringBegan: Int?
 
     init(on world: SessionHarness, watching directory: URL) {
-        let makeNavCoordinator = world.appState.sessionEnvironment.makeNavCoordinator
-        world.appState.sessionEnvironment.makeNavCoordinator = { [self] client in
+        let makeNavCoordinator = world.appState.sessionManager.sessionEnvironment.makeNavCoordinator
+        world.appState.sessionManager.sessionEnvironment.makeNavCoordinator = { [self] client in
             let paths = (try? FileManager.default.subpathsOfDirectory(atPath: directory.path)) ?? []
             bodiesWhenWiringBegan = paths.filter { $0.hasSuffix(".eml") }.count
             return makeNavCoordinator(client)

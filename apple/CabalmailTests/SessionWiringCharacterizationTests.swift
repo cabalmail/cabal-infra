@@ -90,15 +90,15 @@ final class SessionWiringCharacterizationTests: XCTestCase {
     /// suspension in between, tears the session down through `signOut()`.
     func testAnAnnouncementTheMomentSignInReturnsTearsTheSessionDown() async throws {
         await SignOutSuiteSteps.signIn(harness)
-        let observer = try XCTUnwrap(harness.appState.sessionExpiryTask)
-        harness.appState.sessionInvalidation.sessionDidExpire()
+        let observer = try XCTUnwrap(harness.appState.sessionManager.sessionExpiryTask)
+        harness.appState.sessionManager.sessionInvalidation.sessionDidExpire()
 
         await SignOutSuiteSteps.awaitEnd(of: observer, in: self)
 
         XCTAssertEqual(harness.appState.status, .signedOut)
         XCTAssertEqual(harness.appState.signedOutReason, .sessionExpired)
         XCTAssertNil(harness.appState.client)
-        XCTAssertNil(harness.appState.sessionExpiryTask)
+        XCTAssertNil(harness.appState.sessionManager.sessionExpiryTask)
         XCTAssertEqual(harness.events, Self.beforeSignedIn + Self.afterSignedIn + Self.teardown)
     }
 
@@ -137,7 +137,7 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         XCTAssertNil(
             harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], "the badge poll does not feed the sidebar"
         )
-        let feedPoll = try XCTUnwrap(harness.appState.feedRefreshTask)
+        let feedPoll = try XCTUnwrap(harness.appState.sessionManager.pollers.feedRefreshTask)
         XCTAssertFalse(feedPoll.isCancelled)
     }
 
@@ -194,7 +194,7 @@ final class SessionWiringCharacterizationTests: XCTestCase {
 
         try await harness.seedTokens(id: "ID-2")
         await harness.appState.refreshWatchSession()
-        harness.appState.lastUsername = "bob"
+        harness.appState.sessionManager.lastUsername = "bob"
         await harness.appState.refreshWatchSession()
 
         XCTAssertEqual(log.pushes.dropFirst(), [
@@ -252,7 +252,7 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         let state = harness.appState
         let firstClient = try XCTUnwrap(state.client)
         let firstCursor = try XCTUnwrap(state.navCoordinator)
-        let firstObserver = try XCTUnwrap(state.sessionExpiryTask)
+        let firstObserver = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
         let firstEvents = harness.events
         await state.signOut()
         await SignOutSuiteSteps.awaitEnd(of: firstObserver, in: self)
@@ -264,11 +264,11 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         XCTAssertTrue(state.client === harness.clients.last)
         XCTAssertFalse(state.client === firstClient, "the old client is not reused")
         XCTAssertFalse(state.navCoordinator === firstCursor)
-        let secondObserver = try XCTUnwrap(state.sessionExpiryTask)
+        let secondObserver = try XCTUnwrap(state.sessionManager.sessionExpiryTask)
         XCTAssertNotEqual(secondObserver, firstObserver)
         XCTAssertEqual(Array(harness.events[mark...]), firstEvents)
 
-        state.sessionInvalidation.sessionDidExpire()
+        state.sessionManager.sessionInvalidation.sessionDidExpire()
         await SignOutSuiteSteps.awaitEnd(of: secondObserver, in: self)
 
         XCTAssertEqual(state.status, .signedOut)
@@ -301,8 +301,9 @@ final class SessionWiringCharacterizationTests: XCTestCase {
     /// Wraps the harness's watch hook to keep what each push carried.
     private func captureWatchPushes() -> WatchPushLog {
         let log = WatchPushLog()
-        let original = harness.appState.sessionEnvironment.hooks.pushSessionToWatch
-        harness.appState.sessionEnvironment.hooks.pushSessionToWatch = { configuration, tokens, username in
+        let original = harness.appState.sessionManager.sessionEnvironment.hooks.pushSessionToWatch
+        let sessions = harness.appState.sessionManager
+        sessions.sessionEnvironment.hooks.pushSessionToWatch = { configuration, tokens, username in
             log.pushes.append(WatchPush(
                 domain: configuration.controlDomain, idToken: tokens.idToken, username: username
             ))
@@ -370,11 +371,11 @@ private final class WiringProbe {
                 state.mailStore.counts.savedFolderCounts.cache === $0.folderStateCache
             } ?? false,
             navWired: state.navCoordinator != nil,
-            observing: state.sessionExpiryTask != nil,
+            observing: state.sessionManager.sessionExpiryTask != nil,
             events: harness.events
         ))
         guard state.status == .signingIn else { return }
-        observerAtSignedIn = state.sessionExpiryTask
-        if announceExpiryOnSignedIn { state.sessionInvalidation.sessionDidExpire() }
+        observerAtSignedIn = state.sessionManager.sessionExpiryTask
+        if announceExpiryOnSignedIn { state.sessionManager.sessionInvalidation.sessionDidExpire() }
     }
 }
