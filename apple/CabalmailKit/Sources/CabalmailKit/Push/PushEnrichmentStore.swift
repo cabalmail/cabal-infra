@@ -53,8 +53,9 @@ public struct PushEnrichmentStore: @unchecked Sendable {
         self.defaults = UserDefaults(suiteName: Self.appGroupID)
     }
 
-    /// Injection point for tests.
-    init(secureStore: SecureStore?, defaults: UserDefaults?) {
+    /// Injection point for tests, the app layer's included: theirs run in
+    /// the real app, whose shared containers `init()` would reach.
+    public init(secureStore: SecureStore?, defaults: UserDefaults?) {
         self.secureStore = secureStore
         self.defaults = defaults
     }
