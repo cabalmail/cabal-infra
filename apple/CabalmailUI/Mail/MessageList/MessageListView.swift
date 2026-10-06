@@ -536,9 +536,9 @@ extension MessageListView {
         }
     }
 
-    /// AppState signal observers: menu / shortcut ticks, detail-view
-    /// dispose and flag signals, selection routing, and drag-and-drop
-    /// move requests.
+    /// Signal observers: `AppState`'s menu / shortcut ticks, the mail
+    /// store's detail-view dispose and flag signals, selection routing, and
+    /// drag-and-drop move requests.
     private var observersLayer: some View {
         lifecycleLayer
         // macOS Commands menu (Mailbox → Refresh) and keyboard shortcuts
