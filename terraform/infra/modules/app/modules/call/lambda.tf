@@ -194,6 +194,7 @@ ${local.cache_object_actions}
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-domain-access",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-rate-limits",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-push-tokens",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-push-tokens/index/by_device_token",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-rules-audit"
             ]
