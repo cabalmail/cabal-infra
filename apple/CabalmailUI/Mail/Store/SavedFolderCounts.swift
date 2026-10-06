@@ -1,7 +1,7 @@
 import Foundation
 import CabalmailKit
 
-/// Keeps `AppState`'s per-folder counts in step with the saved folder state
+/// Keeps `MailCounts`' per-folder counts in step with the saved folder state
 /// (`FolderStateCache`) that an offline launch draws from.
 ///
 /// Two jobs. It writes every count the session learns or changes (a live
@@ -18,7 +18,7 @@ final class SavedFolderCounts {
     /// `AppState.wireSession`, or by a test.
     var cache: FolderStateCache?
 
-    /// Folders whose counts in `AppState` came from saved state and haven't
+    /// Folders whose counts in `MailCounts` came from saved state and haven't
     /// been replaced by a count the session knows for itself.
     private(set) var seededPaths: Set<String> = []
 
@@ -36,7 +36,7 @@ final class SavedFolderCounts {
         return seededPaths
     }
 
-    /// A folder's counts are known: set in `AppState` from a live STATUS or a
+    /// A folder's counts are known: set in `MailCounts` from a live STATUS or a
     /// change with a known result (Mark All as Read, Empty Trash), or shown by
     /// a message list that withheld a STATUS reply as older than its own
     /// counts. Saves them for the next offline launch; the folder is no
@@ -48,7 +48,7 @@ final class SavedFolderCounts {
 
     /// A delta is being applied to a folder's unread count (a message read,
     /// moved or deleted), from `known`, the count before it. Saves the result
-    /// when there was a count to apply it to: from an unknown base, `AppState`
+    /// when there was a count to apply it to: from an unknown base, `MailCounts`
     /// guesses 0, and that guess must not replace a real saved count. A
     /// seeded count stays seeded, since the result is still derived from it.
     func unreadAdjusted(_ folderPath: String, from known: Int?, by delta: Int) {

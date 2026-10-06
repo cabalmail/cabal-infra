@@ -243,7 +243,7 @@ struct ComposeView: View {
                 // signal as Save Draft; the replacement has no survivor, so
                 // the policy drops the reader rather than re-pointing it.
                 if let replacement = model.retiredDraftReplacement {
-                    appState.signalDraftReplaced(
+                    appState.mailStore.signals.signalDraftReplaced(
                         folderPath: "Drafts",
                         replacement: replacement
                     )
@@ -265,7 +265,7 @@ struct ComposeView: View {
                 // first save reports the survivor with nothing retired, and
                 // rides the same refresh into the list (#1083).
                 if didClose, let replacement = model.retiredDraftReplacement {
-                    appState.signalDraftReplaced(
+                    appState.mailStore.signals.signalDraftReplaced(
                         folderPath: "Drafts",
                         replacement: replacement
                     )
@@ -329,14 +329,16 @@ struct ComposeView: View {
                     // Every UID the session held, not just the last: a 60s
                     // autosave replaces the copy under a new UID and the
                     // open list is still rendering the old one (#1071).
-                    appState.signalDisposed(
+                    appState.mailStore.signals.signalDisposed(
                         model.supersededDraftUIDs.map { MessageRef(folder: FolderTree.draftsPath, uid: $0) }
                     )
                     // A reply left the device (or the outbox owns it now):
                     // mark the original `\Answered` so the list's replied
                     // arrow appears without waiting for a refresh.
                     if let folder = model.replySourceFolder, let uid = model.replySourceUid {
-                        appState.markAnswered(MessageRef(folder: folder, uid: uid))
+                        appState.mailStore.markAnswered(
+                            MessageRef(folder: folder, uid: uid), client: appState.client
+                        )
                     }
                     // Surface the outcome as a toast on the shared AppState
                     // so the user sees confirmation after the sheet dismisses.

@@ -127,8 +127,8 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.success(4)])
         let appState = AppState()
-        appState.setFolderCounts(folderPath: "Projects", unread: 4, total: 20)
-        let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), appState: appState)
+        appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 4, total: 20)
+        let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), mailStore: appState.mailStore)
         appState.requestReply(in: windowA)
         let before = appState.refreshRequestTick
 
@@ -149,7 +149,9 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.success(2)])
         let appState = AppState()
-        let model = try TestFixtures.makeModel(imap: imap, envelopes: [], folderPath: "Sent", appState: appState)
+        let model = try TestFixtures.makeModel(
+            imap: imap, envelopes: [], folderPath: "Sent", mailStore: appState.mailStore
+        )
         appState.requestMarkFolderRead(in: windowA)
         XCTAssertFalse(appState.commandReaches(windowB))
 
@@ -167,8 +169,8 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let client = try TestFixtures.makeClient(imap: imap)
         try await client.envelopeCache.store(trashSnapshot(), for: FolderTree.trashPath)
         let appState = AppState()
-        appState.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
-        let model = FolderListViewModel(client: client, appState: appState)
+        appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
+        let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
         appState.requestReply(in: windowA)
         let before = appState.refreshRequestTick
 
@@ -176,8 +178,8 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
 
         let calls = await imap.emptyTrashCalls
         XCTAssertEqual(calls, ["Trash"])
-        XCTAssertEqual(appState.folderUnreadCounts["Trash"], 0)
-        XCTAssertEqual(appState.folderTotalCounts["Trash"], 0)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Trash"], 0)
+        XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["Trash"], 0)
         let snapshot = await client.envelopeCache.snapshot(for: "Trash")
         XCTAssertNil(snapshot, "the cached Trash rows are dropped")
         XCTAssertEqual(appState.refreshRequestTick, before + 1, "exactly one refresh")
@@ -191,8 +193,8 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let client = try TestFixtures.makeClient(imap: imap)
         try await client.envelopeCache.store(trashSnapshot(), for: FolderTree.trashPath)
         let appState = AppState()
-        appState.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
-        let model = FolderListViewModel(client: client, appState: appState)
+        appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
+        let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
         appState.requestReply(in: windowA)
 
         await model.emptyTrash()
@@ -200,8 +202,8 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let calls = await imap.emptyTrashCalls
         XCTAssertEqual(calls, ["Trash"])
         XCTAssertNotNil(model.errorMessage)
-        XCTAssertEqual(appState.folderUnreadCounts["Trash"], 3)
-        XCTAssertEqual(appState.folderTotalCounts["Trash"], 10)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Trash"], 3)
+        XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["Trash"], 10)
         let snapshot = await client.envelopeCache.snapshot(for: "Trash")
         XCTAssertEqual(snapshot?.envelopes.count, 2)
         XCTAssertEqual(appState.refreshRequestTick, 0)

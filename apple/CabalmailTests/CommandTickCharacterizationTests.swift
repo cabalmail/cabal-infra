@@ -107,12 +107,12 @@ final class CommandTickCharacterizationTests: XCTestCase {
             let appState = AppState()
             entry.request(appState, windowA)
             XCTAssertNil(appState.pendingMoveRequest, entry.name)
-            XCTAssertNil(appState.lastDisposedEnvelope, entry.name)
-            XCTAssertNil(appState.lastFailedRemoval, entry.name)
-            XCTAssertNil(appState.lastEnvelopeFlagChange, entry.name)
-            XCTAssertNil(appState.lastReadAdvanceRequest, entry.name)
-            XCTAssertNil(appState.lastDraftReplaced, entry.name)
-            XCTAssertEqual(appState.failedRemovalTick, 0, entry.name)
+            XCTAssertNil(appState.mailStore.signals.lastDisposedEnvelope, entry.name)
+            XCTAssertNil(appState.mailStore.signals.lastFailedRemoval, entry.name)
+            XCTAssertNil(appState.mailStore.signals.lastEnvelopeFlagChange, entry.name)
+            XCTAssertNil(appState.mailStore.signals.lastReadAdvanceRequest, entry.name)
+            XCTAssertNil(appState.mailStore.signals.lastDraftReplaced, entry.name)
+            XCTAssertEqual(appState.mailStore.signals.failedRemovalTick, 0, entry.name)
         }
     }
 

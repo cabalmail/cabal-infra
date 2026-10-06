@@ -46,7 +46,7 @@ final class SignOutCharacterizationTests: XCTestCase {
         let store = installProbingStore()
         await harness.imap.scriptStatusResults([.success(FolderStatus(messages: 40, unseen: 7))])
         await SignOutSuiteSteps.signIn(harness)
-        try await waitUntilOnMainActor { self.harness.appState.inboxUnreadCount == 7 }
+        try await waitUntilOnMainActor { self.harness.appState.mailStore.counts.inboxUnreadCount == 7 }
         let client = try XCTUnwrap(harness.appState.client)
         let feedPoll = try XCTUnwrap(harness.appState.feedRefreshTask)
         try await seedLocalData(in: client)
@@ -137,7 +137,7 @@ final class SignOutCharacterizationTests: XCTestCase {
         XCTAssertNil(state.searchModelStore)
         XCTAssertNil(state.prefsCoordinator)
         XCTAssertNil(preferences.onLocalChange, "the sync was stopped, not just released")
-        XCTAssertNil(state.savedFolderCounts.cache)
+        XCTAssertNil(state.mailStore.counts.savedFolderCounts.cache)
         XCTAssertEqual(state.status, .signedOut)
         XCTAssertNil(state.signedOutReason)
     }
@@ -234,7 +234,7 @@ final class SignOutCharacterizationTests: XCTestCase {
             navWired: state.navCoordinator != nil,
             observing: state.sessionExpiryTask != nil,
             feedPolling: state.feedRefreshTask != nil,
-            inboxUnread: state.inboxUnreadCount,
+            inboxUnread: state.mailStore.counts.inboxUnreadCount,
             hasCachedFiles: cachedFiles(under: client),
             tokensStored: harness.hasStoredTokens,
             resumeStored: ResumeSessionStore(defaults: harness.defaults).loadSession() != nil,

@@ -22,21 +22,21 @@ final class OfflineCountTests: XCTestCase {
     func testLocalCountChangesAreSaved() async throws {
         let cache = await fixture.savedState()
         let appState = AppState()
-        appState.savedFolderCounts.cache = cache
-        appState.setFolderCounts(folderPath: "INBOX", unread: 2, total: 22)
+        appState.mailStore.counts.savedFolderCounts.cache = cache
+        appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 2, total: 22)
 
-        appState.applyUnreadDelta(folderPath: "INBOX", delta: -1)
+        appState.mailStore.counts.applyUnreadDelta(folderPath: "INBOX", delta: -1)
         try await eventually { await cache.lastKnownStatus(for: "INBOX")?.unseen == 1 }
 
-        appState.setUnreadCount(folderPath: "INBOX", count: 0)
+        appState.mailStore.counts.setUnreadCount(folderPath: "INBOX", count: 0)
         try await eventually { await cache.lastKnownStatus(for: "INBOX")?.unseen == 0 }
         let inbox = await cache.lastKnownStatus(for: "INBOX")
         XCTAssertEqual(inbox?.messages, 22)
         XCTAssertEqual(inbox?.flagged, 1, "a local unread change leaves the saved flagged count alone")
 
         // Signed out: nothing more is written.
-        appState.savedFolderCounts.reset()
-        appState.applyUnreadDelta(folderPath: "INBOX", delta: 3)
+        appState.mailStore.counts.savedFolderCounts.reset()
+        appState.mailStore.counts.applyUnreadDelta(folderPath: "INBOX", delta: 3)
         try await Task.sleep(for: .milliseconds(200))
         let after = await cache.lastKnownStatus(for: "INBOX")
         XCTAssertEqual(after?.unseen, 0)
@@ -47,7 +47,7 @@ final class OfflineCountTests: XCTestCase {
     func testLiveCountsAreSavedForTheNextLaunch() async throws {
         let cache = FolderStateCache(directory: fixture.root.appendingPathComponent("folders"))
         let client = try fixture.makeClient(folderState: cache, transport: FolderServerTransport())
-        let sidebar = FolderListViewModel(client: client, appState: AppState())
+        let sidebar = FolderListViewModel(client: client, mailStore: AppState().mailStore)
         await sidebar.loadFolderList()
         await sidebar.refreshSubscribedCounts()
         let projects = await cache.lastKnownStatus(for: "Projects")
@@ -66,10 +66,10 @@ final class OfflineCountTests: XCTestCase {
     func testDeltaOnAnUncountedFolderLeavesTheSavedCount() async throws {
         let cache = await fixture.savedState()
         let appState = AppState()
-        appState.savedFolderCounts.cache = cache
+        appState.mailStore.counts.savedFolderCounts.cache = cache
 
-        appState.applyUnreadDelta(folderPath: "Projects", delta: -1)
-        appState.setFolderCounts(folderPath: "INBOX", unread: 7, total: 22)
+        appState.mailStore.counts.applyUnreadDelta(folderPath: "Projects", delta: -1)
+        appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 7, total: 22)
         try await eventually { await cache.lastKnownStatus(for: "INBOX")?.unseen == 7 }
 
         let projects = await cache.lastKnownStatus(for: "Projects")
@@ -82,8 +82,10 @@ final class OfflineCountTests: XCTestCase {
     func testWithheldStatusSavesTheCountsShown() async throws {
         let cache = await fixture.savedState()
         let appState = AppState()
-        appState.savedFolderCounts.cache = cache
-        let model = fixture.makeListModel(client: try fixture.makeClient(folderState: cache), appState: appState)
+        appState.mailStore.counts.savedFolderCounts.cache = cache
+        let model = fixture.makeListModel(
+            client: try fixture.makeClient(folderState: cache), mailStore: appState.mailStore
+        )
         _ = model.applyStatusCounts(FolderStatus(messages: 22, unseen: 2, flagged: 1))
         // An unread message archived here: the list shows one fewer of each.
         model.totalMessages = 21
@@ -138,13 +140,13 @@ final class OfflineCountTests: XCTestCase {
     func testAnUnreadCountAfterASignOutSavesNoTotalFromTheLastAccount() async throws {
         let appState = AppState()
         appState.status = .signedIn
-        appState.setFolderCounts(folderPath: "INBOX", unread: 9, total: 500)
+        appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 9, total: 500)
         await appState.signOut()
 
         // The next account's session, whose own INBOX holds 22.
         let cache = await fixture.savedState()
-        appState.savedFolderCounts.cache = cache
-        appState.setUnreadCount(folderPath: "INBOX", count: 1)
+        appState.mailStore.counts.savedFolderCounts.cache = cache
+        appState.mailStore.counts.setUnreadCount(folderPath: "INBOX", count: 1)
         try await eventually { await cache.lastKnownStatus(for: "INBOX")?.unseen == 1 }
 
         let inbox = await cache.lastKnownStatus(for: "INBOX")

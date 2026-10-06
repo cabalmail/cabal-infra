@@ -284,7 +284,7 @@ extension FolderListView {
     /// a folder they've already visited.
     func lazyFetchCountIfNeeded(path: String?) {
         guard let path, let model else { return }
-        if appState.folderUnreadCounts[path] != nil { return }
+        if appState.mailStore.counts.folderUnreadCounts[path] != nil { return }
         guard let folder = model.folders.first(where: { $0.path == path }),
               !folder.isSubscribed
         else { return }
@@ -390,7 +390,7 @@ extension FolderListView {
             } label: {
                 Label("Mark All as Read", systemImage: "envelope.open")
             }
-            .disabled(appState.folderUnreadCounts[folder.path] == 0)
+            .disabled(appState.mailStore.counts.folderUnreadCounts[folder.path] == 0)
         }
         if folder.path == FolderTree.trashPath {
             Button(role: .destructive) {

@@ -46,7 +46,7 @@ extension FolderListView {
     func filteredFolders(_ folders: [Folder]) -> [Folder] {
         let byPills = folderFilter.apply(
             to: folders,
-            unreadCounts: appState.folderUnreadCounts,
+            unreadCounts: appState.mailStore.counts.folderUnreadCounts,
             selection: selection?.path
         )
         let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()

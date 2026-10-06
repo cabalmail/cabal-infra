@@ -105,12 +105,14 @@ final class OfflineFolderFixture {
         )
     }
 
-    func makeListModel(client: CabalmailClient, appState: AppState = AppState()) -> MessageListViewModel {
+    func makeListModel(
+        client: CabalmailClient, mailStore: MailSessionStore = AppState().mailStore
+    ) -> MessageListViewModel {
         MessageListViewModel(
             folder: Folder(path: "INBOX", isSubscribed: true),
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: appState
+            mailStore: mailStore
         )
     }
 }

@@ -242,7 +242,7 @@ struct FolderListView: View {
         // state.
         .task {
             if model == nil, let client = appState.client {
-                let newModel = FolderListViewModel(client: client, appState: appState)
+                let newModel = FolderListViewModel(client: client, mailStore: appState.mailStore)
                 model = newModel
                 // Race the inbox STATUS against the folder list so the
                 // inbox badge is correct by the time the user's eyes
@@ -299,8 +299,8 @@ struct FolderListView: View {
         row(
             for: folder,
             badge: countBadgeText(
-                unread: appState.folderUnreadCounts[folder.path],
-                total: appState.folderTotalCounts[folder.path]
+                unread: appState.mailStore.counts.folderUnreadCounts[folder.path],
+                total: appState.mailStore.counts.folderTotalCounts[folder.path]
             ),
             depth: sectionRow.depth,
             hasChildren: sectionRow.hasChildren,
@@ -340,7 +340,7 @@ struct FolderListView: View {
         let isSelected = selection?.path == folder.path
         // Keyed off the unread count itself, not the badge string, which
         // can show totals under the .total/.both display modes.
-        let hasUnread = (appState.folderUnreadCounts[folder.path] ?? 0) > 0
+        let hasUnread = (appState.mailStore.counts.folderUnreadCounts[folder.path] ?? 0) > 0
         HStack {
             if depth > 0 {
                 Spacer().frame(width: CGFloat(depth) * 14)

@@ -30,7 +30,7 @@ extension MessageListViewModel {
         let unreadDelta: Int
         if flag == .seen, envelope.flags.contains(.seen) != add {
             unreadDelta = add ? -1 : 1
-            appState.applyUnreadDelta(folderPath: source, delta: unreadDelta)
+            mailStore.counts.applyUnreadDelta(folderPath: source, delta: unreadDelta)
         } else {
             unreadDelta = 0
         }
@@ -44,8 +44,8 @@ extension MessageListViewModel {
         } catch {
             applyOptimisticFlag(ref, flag: flag, add: !add)
             // Not once the session has ended (#1851).
-            if unreadDelta != 0, appState.acceptsCounts(from: client) {
-                appState.applyUnreadDelta(folderPath: source, delta: -unreadDelta)
+            if unreadDelta != 0, mailStore.acceptsCounts(from: client) {
+                mailStore.counts.applyUnreadDelta(folderPath: source, delta: -unreadDelta)
             }
             errorMessage = error.localizedDescription
         }
@@ -176,7 +176,7 @@ extension MessageListViewModel {
         // disagrees. In cross-folder search mode `source` may differ from
         // `folder.path`; the unread delta routes to the row's true mailbox.
         if wasUnread {
-            appState.applyUnreadDelta(folderPath: source, delta: -1)
+            mailStore.counts.applyUnreadDelta(folderPath: source, delta: -1)
         }
 
         // Mark-seen + move in one round trip (the Lambda adds `\Seen` before
@@ -220,8 +220,8 @@ extension MessageListViewModel {
             if dropped {
                 restoreEnvelope(envelope, at: originalIndex)
             }
-            if wasUnread, appState.acceptsCounts(from: client) {
-                appState.applyUnreadDelta(folderPath: source, delta: 1)
+            if wasUnread, mailStore.acceptsCounts(from: client) {
+                mailStore.counts.applyUnreadDelta(folderPath: source, delta: 1)
             }
             errorMessage = error.localizedDescription
         }
@@ -229,12 +229,12 @@ extension MessageListViewModel {
 
     /// The server confirmed `uids` gone from `folder` (a dispose, move or
     /// purge succeeded): record it so a refresh that was already in flight
-    /// can't bring them back (see `AppState.confirmedRemovals`), then prune
+    /// can't bring them back (see `MessageShields.confirmedRemovals`), then prune
     /// the caches. Called only on success, while the messages are still in
     /// `pendingRemovedRefs`, so the two shields overlap rather than leave a
     /// gap between them.
     func confirmRemoval(from folder: String, uids: [UInt32]) async {
-        appState.recordConfirmedRemovals(uids.map { MessageRef(folder: folder, uid: $0) })
+        mailStore.shields.recordConfirmedRemovals(uids.map { MessageRef(folder: folder, uid: $0) })
         await pruneCachesAfter(move: folder, uids: uids)
     }
 
@@ -301,7 +301,7 @@ extension MessageListViewModel {
     /// are dropped here, which keeps the stash to in-flight moves. A prune
     /// with no move behind it (a send-from-draft) isn't kept.
     func stashForReaderRevert(_ envelope: Envelope, at index: Int) {
-        let inFlight = appState.pendingMoveRefs
+        let inFlight = mailStore.shields.pendingMoveRefs
         readerPrunedEnvelopes = readerPrunedEnvelopes.filter { inFlight.contains($0.key) }
         let ref = rowRef(for: envelope)
         guard inFlight.contains(ref) else { return }

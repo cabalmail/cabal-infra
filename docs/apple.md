@@ -1007,14 +1007,14 @@ Loose files in a feature folder are shared by that feature's subfolders.
 
 | Folder | What lives there |
 | --- | --- |
-| `App/` | `AppState` and all of its extension files, and the one-way signal types it passes between the list, the reader and compose |
+| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request |
 | `Session/` | Sign-in, restoring the last session, signing out: the sign-in screen and its error wording, teardown ordering |
 | `Navigation/` | `NavStateCoordinator` (resume, restore and the cross-device cursor) and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
 | `Shell/` | How a window is laid out: the sign-in / signed-in router, the iPhone tab bar, the iPad and Mac split view (`MailRootView`), the Vision Pro tabs, the layout and column policies, the per-window theme |
 | `Shell/Columns/` | Column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
 | `Mail/` | Mail pieces used by more than one mail column: drag and drop, Move to Folder, the sender avatar, the authentication line |
-| `Mail/Store/` | Mail state the folder list, message list and reader share: saved folder counts, Mark All as Read |
+| `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts and the Inbox count behind the app badge), `MessageShields` (what keeps a refresh from undoing a write made elsewhere) and `MessageSignals` (the one-way signals the reader and composer send the list, and their payload types); also saved folder counts and Mark All as Read |
 | `Mail/Folders/` | The folder sidebar and its view model, filters, rows, New Folder |
 | `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu |
 | `Mail/Reader/` | `MessageDetailView`, `MessageDetailViewModel` and their extension files: the header, the toolbar and its policies, attachments, calendar invites, View Source |

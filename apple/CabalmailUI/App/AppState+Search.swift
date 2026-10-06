@@ -18,7 +18,7 @@ extension AppState {
     /// model, and sign-out drops it with the client.
     func sharedSearchModel(client: CabalmailClient, preferences: Preferences) -> MessageListViewModel {
         if let existing = searchModelStore, existing.client === client { return existing }
-        let model = MessageListViewModel(scope: .search, client: client, preferences: preferences, appState: self)
+        let model = MessageListViewModel(scope: .search, client: client, preferences: preferences, mailStore: mailStore)
         searchModelStore = model
         return model
     }

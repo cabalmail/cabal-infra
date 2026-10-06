@@ -234,10 +234,11 @@ struct MessageDetailView: View {
         // re-consuming, so whichever body type lands first wins.
         .onChange(of: model?.htmlBody) { _, _ in consumeScrollRestoreIfReady() }
         .onChange(of: model?.plainText) { _, _ in consumeScrollRestoreIfReady() }
-        // `appState` is captured explicitly so the four relay closures
+        // `appState` is captured explicitly so the relay closures wired
         // below — which are stored on the view model and so outlive this
-        // body — can keep holding it weakly without the compiler reading
-        // the difference as an accident (`#ImplicitStrongCapture`).
+        // body — can keep holding its mail store weakly without the
+        // compiler reading the difference as an accident
+        // (`#ImplicitStrongCapture`).
         .onAppear { [appState] in
             // Drive the body fetch from `.onAppear` rather than SwiftUI's
             // `.task` modifier. On iPhone-compact NavigationStack push,
@@ -260,7 +261,7 @@ struct MessageDetailView: View {
                     client: client,
                     preferences: preferences
                 )
-                Self.relayOutcomes(of: newModel, to: appState)
+                Self.relayOutcomes(of: newModel, to: appState.mailStore)
                 model = newModel
                 activeModel = newModel
             }
@@ -350,11 +351,11 @@ struct MessageDetailView: View {
 // 400-line file_length cap.
 
 extension MessageDetailView {
-    /// Relays a reader's flag and move outcomes to `appState`, for the
+    /// Relays a reader's flag and move outcomes to `mailStore`, for the
     /// message list and the folder counts. A static seam so the late-change
     /// guards can be tested without hosting the view.
-    static func relayOutcomes(of model: MessageDetailViewModel, to appState: AppState) {
-        // Relay flag changes (\Seen toggles) up to AppState so the
+    static func relayOutcomes(of model: MessageDetailViewModel, to mailStore: MailSessionStore) {
+        // Relay flag changes (\Seen toggles) to the store's signals so the
         // list view's `.onChange` handler can flip the row's bold
         // styling and unread dot without waiting for the next
         // refresh.
@@ -362,33 +363,33 @@ extension MessageDetailView {
         let client = model.client
         // The flag and move callbacks below can also fire once the
         // write fails, after the session has ended: not then (#1851).
-        model.onFlagChanged = { [weak appState] flag, added in
-            guard appState?.acceptsCounts(from: client) == true else { return }
-            appState?.signalFlagChange(ref, flag: flag, added: added)
+        model.onFlagChanged = { [weak mailStore] flag, added in
+            guard mailStore?.acceptsCounts(from: client) == true else { return }
+            mailStore?.signalFlagChange(ref, flag: flag, added: added)
         }
         // Bracket each flag write so the list shields the optimistic
         // flag from a refresh that lands before the write resolves
         // (the cross-view analogue of the list's own pending-flag
         // shield). Keyed by ref so a UID collision across mailboxes
         // can't mis-shield an unrelated row.
-        model.onFlagWriteInFlight = { [weak appState] inFlight in
-            appState?.setFlagWrite(ref, inFlight: inFlight)
+        model.onFlagWriteInFlight = { [weak mailStore] inFlight in
+            mailStore?.shields.setFlagWrite(ref, inFlight: inFlight)
         }
         // Likewise bracket archive / trash / move so the list keeps
         // the optimistically-pruned row gone until the move resolves,
         // rather than letting a mid-move refresh resurrect it.
-        model.onMoveInFlight = { [weak appState] inFlight in
-            appState?.setMoveInFlight(ref, inFlight: inFlight)
+        model.onMoveInFlight = { [weak mailStore] inFlight in
+            mailStore?.shields.setMoveInFlight(ref, inFlight: inFlight)
         }
         // ...and past it: once the server confirms, keep the message
         // out of any refresh that was already in flight.
-        model.onMoveConfirmed = { [weak appState] in
-            appState?.recordConfirmedRemovals([ref])
+        model.onMoveConfirmed = { [weak mailStore] in
+            mailStore?.shields.recordConfirmedRemovals([ref])
         }
         // ...or, if the server refuses, put the pruned row back.
-        model.onMoveFailed = { [weak appState] markUnread in
-            guard appState?.acceptsCounts(from: client) == true else { return }
-            appState?.signalRemovalFailed(ref, markUnread: markUnread)
+        model.onMoveFailed = { [weak mailStore] markUnread in
+            guard mailStore?.acceptsCounts(from: client) == true else { return }
+            mailStore?.signalRemovalFailed(ref, markUnread: markUnread)
         }
     }
 }

@@ -438,7 +438,7 @@ private actor ServerFolder: ImapClient {
 private struct World {
     let server: ServerFolder
     let client: CabalmailClient
-    let appState: AppState
+    let mailStore: MailSessionStore
     let model: MessageListViewModel
 
     /// A folder of `size` opened (its 50-row top page), then scrolled down
@@ -480,25 +480,25 @@ private struct World {
             draftStore: try DraftStore(directory: tmp.appendingPathComponent("d")),
             outbox: try Outbox(directory: tmp.appendingPathComponent("o"))
         )
-        let appState = AppState()
+        let mailStore = AppState().mailStore
         self.server = server
         self.client = client
-        self.appState = appState
-        self.model = Self.makeModel(client: client, appState: appState)
+        self.mailStore = mailStore
+        self.model = Self.makeModel(client: client, mailStore: mailStore)
     }
 
-    private static func makeModel(client: CabalmailClient, appState: AppState) -> MessageListViewModel {
+    private static func makeModel(client: CabalmailClient, mailStore: MailSessionStore) -> MessageListViewModel {
         MessageListViewModel(
             folder: Folder(path: "INBOX", attributes: [], isSubscribed: true),
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: appState
+            mailStore: mailStore
         )
     }
 
     /// A fresh model over the same client: the folder opened again.
     func makeModel() -> MessageListViewModel {
-        Self.makeModel(client: client, appState: appState)
+        Self.makeModel(client: client, mailStore: mailStore)
     }
 
     /// Writes the loaded window to the snapshot now, as the debounced write

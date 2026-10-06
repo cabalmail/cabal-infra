@@ -35,7 +35,7 @@ extension MessageDetailView {
                 // and advances selection to the next unread message — same
                 // optimistic UX, just routed through `signalDisposed` since
                 // the row is gone from the source folder either way.
-                appState.signalDisposed(movedRef)
+                appState.mailStore.signals.signalDisposed(movedRef)
             },
             onFailure: { error in
                 appState.showToast(Toast(

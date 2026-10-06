@@ -46,8 +46,8 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
         XCTAssertFalse(model.isLoading)
         let path = fixture.folderPath
-        XCTAssertEqual(fixture.appState.folderUnreadCounts[path], 2, "the sidebar badge takes the same reply")
-        XCTAssertEqual(fixture.appState.folderTotalCounts[path], 5)
+        XCTAssertEqual(fixture.mailStore.counts.folderUnreadCounts[path], 2, "the sidebar badge takes the same reply")
+        XCTAssertEqual(fixture.mailStore.counts.folderTotalCounts[path], 5)
         let snapshot = await fixture.snapshot(model)
         XCTAssertEqual(snapshot?.uidValidity, 7)
         XCTAssertEqual(snapshot?.uidNext, 6)
@@ -220,7 +220,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         let model = try await fixture.makeModel()
         try await fixture.seedSnapshot(model, uids: [3, 2, 1], uidValidity: 7)
         try await fixture.storeBody(model, uid: 3, uidValidity: 7)
-        fixture.appState.recordConfirmedRemovals([fixture.ref(10)])
+        fixture.mailStore.shields.recordConfirmedRemovals([fixture.ref(10)])
         await fixture.scriptRefresh(messages: 2, page: [11, 10], uidValidity: 9)
         await fixture.imap.holdNext(.status)
 
@@ -244,7 +244,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
             model.envelopes.map(\.uid), [11, 10],
             "UID 10 shows: the old UID space's confirmed removals were cleared"
         )
-        XCTAssertTrue(fixture.appState.confirmedRemovalRefs(folderPath: fixture.folderPath).isEmpty)
+        XCTAssertTrue(fixture.mailStore.shields.confirmedRemovalRefs(folderPath: fixture.folderPath).isEmpty)
         let snapshot = await fixture.snapshot(model)
         XCTAssertEqual(snapshot?.uidValidity, 9)
         XCTAssertEqual(snapshot.map { Set($0.envelopes.keys) }, [11, 10])
@@ -265,7 +265,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
     func testTheFirstUidValidityIsLearnedAndALaterChangeRebuilds() async throws {
         let model = try await fixture.makeModel(loaded: [3, 2, 1], total: 3)
         try await fixture.storeBody(model, uid: 3, uidValidity: 9)
-        fixture.appState.recordConfirmedRemovals([fixture.ref(10)])
+        fixture.mailStore.shields.recordConfirmedRemovals([fixture.ref(10)])
         await fixture.scriptRefresh(messages: 3, page: [], uidValidity: 9)
 
         await model.refresh()
@@ -273,7 +273,8 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelopes.map(\.uid), [3, 2, 1], "nothing was known, so nothing is wiped")
         let keptBody = await fixture.cachedBody(model, uid: 3, uidValidity: 9)
         XCTAssertNotNil(keptBody)
-        XCTAssertEqual(fixture.appState.confirmedRemovalRefs(folderPath: fixture.folderPath), [fixture.ref(10)])
+        XCTAssertEqual(fixture.mailStore.shields.confirmedRemovalRefs(folderPath: fixture.folderPath),
+                       [fixture.ref(10)])
 
         fixture.trimFront(model, to: 200)
         await fixture.scriptRefresh(messages: 2, page: [21, 20], uidValidity: 11)
@@ -284,7 +285,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         XCTAssertEqual(fixture.windowStart(model), 0)
         let wipedBody = await fixture.cachedBody(model, uid: 3, uidValidity: 9)
         XCTAssertNil(wipedBody)
-        XCTAssertTrue(fixture.appState.confirmedRemovalRefs(folderPath: fixture.folderPath).isEmpty)
+        XCTAssertTrue(fixture.mailStore.shields.confirmedRemovalRefs(folderPath: fixture.folderPath).isEmpty)
         let tops = await fixture.topPageCalls()
         XCTAssertEqual(tops.count, 2, "the rebuilt window is top-anchored again, so its top page is fetched")
     }
@@ -299,7 +300,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         let model = try await fixture.makeModel()
         try await fixture.seedSnapshot(model, uids: [3, 2, 1], uidValidity: 7)
         try await fixture.storeBody(model, uid: 3, uidValidity: 7)
-        fixture.appState.recordConfirmedRemovals([fixture.ref(10)])
+        fixture.mailStore.shields.recordConfirmedRemovals([fixture.ref(10)])
         await fixture.scriptRefresh(messages: 3, page: [], uidValidity: reading)
 
         await model.loadInitial()
@@ -309,7 +310,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         XCTAssertEqual(snapshot?.uidValidity, 7, file: file, line: line)
         let body = await fixture.cachedBody(model, uid: 3, uidValidity: 7)
         XCTAssertNotNil(body, file: file, line: line)
-        let removals = fixture.appState.confirmedRemovalRefs(folderPath: fixture.folderPath)
+        let removals = fixture.mailStore.shields.confirmedRemovalRefs(folderPath: fixture.folderPath)
         XCTAssertEqual(removals, [fixture.ref(10)], file: file, line: line)
     }
 
@@ -340,12 +341,12 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelopes.first?.flags, [.seen])
     }
 
-    /// The reader's half (`AppState.pendingFlagWriteRefs`, set while the
+    /// The reader's half (`MessageShields.pendingFlagWriteRefs`, set while the
     /// message view writes \Seen or \Flagged): the list keeps its local
     /// flags through a refresh in the same way.
     func testAReaderFlagWriteInFlightKeepsTheListsLocalFlagsThroughARefresh() async throws {
         let model = try await fixture.makeModel(loaded: [1], flags: [.seen], total: 1)
-        fixture.appState.setFlagWrite(fixture.ref(1), inFlight: true)
+        fixture.mailStore.shields.setFlagWrite(fixture.ref(1), inFlight: true)
         // The server still answers with the message as it was before the write.
         await fixture.scriptRefresh(messages: 1, page: [1], unseen: 1)
 

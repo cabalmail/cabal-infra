@@ -11,7 +11,7 @@ extension MessageListViewModel {
     /// inside `FolderMarkAllRead` is what hard-reloads this very list.
     func markAllRead() async {
         do {
-            try await FolderMarkAllRead.perform(folderPath: folder.path, client: client, appState: appState)
+            try await FolderMarkAllRead.perform(folderPath: folder.path, client: client, mailStore: mailStore)
         } catch {
             errorMessage = error.localizedDescription
         }

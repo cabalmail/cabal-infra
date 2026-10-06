@@ -54,7 +54,7 @@ final class ListWatcherHarness {
             scope: scope,
             client: try makeClient(),
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: AppState()
+            mailStore: AppState().mailStore
         )
         model.envelopes = Self.rows(uids)
         model.totalMessages = UInt32(uids.count)
@@ -352,7 +352,9 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         XCTAssertEqual(statusCalls.count, 1, "STATUS for the counts")
         XCTAssertEqual(model.unseen, 0, "as the scripted STATUS says")
         XCTAssertEqual(model.totalMessages, 6)
-        XCTAssertEqual(model.appState.folderUnreadCounts["INBOX"], 0, "and pushed to the sidebar badge")
+        XCTAssertEqual(
+            model.mailStore.counts.folderUnreadCounts["INBOX"], 0, "and pushed to the sidebar badge"
+        )
         XCTAssertEqual(model.envelopes.map(\.uid), [4])
         XCTAssertEqual(model.filterTab, .unread)
     }

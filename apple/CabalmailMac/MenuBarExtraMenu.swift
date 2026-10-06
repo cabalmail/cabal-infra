@@ -13,7 +13,7 @@ import CabalmailUI
 /// Open / New Message / Quit.
 ///
 /// Deliberately minimal (`.menu` style, plain menu items): the unread
-/// line mirrors the dock badge's `AppState.inboxUnreadCount` (refreshed
+/// line mirrors the dock badge's `MailCounts.inboxUnreadCount` (refreshed
 /// by the existing badge poller), and both window actions route through
 /// the scenes the app already declares. No new data paths — a recent-
 /// messages list waits until envelopes are exposed app-wide.
@@ -56,7 +56,7 @@ struct MenuBarExtraMenu: View {
 
     private var statusLine: String {
         guard appState.client != nil else { return "Not signed in" }
-        switch appState.inboxUnreadCount {
+        switch appState.mailStore.counts.inboxUnreadCount {
         case 0: return "No unread mail"
         case 1: return "1 unread message"
         case let count: return "\(count) unread messages"
