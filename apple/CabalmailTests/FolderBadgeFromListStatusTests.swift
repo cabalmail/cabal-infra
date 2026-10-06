@@ -21,8 +21,10 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
             FolderStatus(messages: 12, unseen: 3, uidValidity: 7, uidNext: 13)
         )
         XCTAssertEqual(model.unseen, 3, "the chip's own count")
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 3, "the sidebar badge disagrees with the chip")
-        XCTAssertEqual(appState.folderTotalCounts["INBOX"], 12)
+        XCTAssertEqual(
+            appState.mailStore.counts.folderUnreadCounts["INBOX"], 3, "the sidebar badge disagrees with the chip"
+        )
+        XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["INBOX"], 12)
     }
 
     func testTheBadgeIsNotOverwrittenByAStatusWithoutCounts() throws {
@@ -30,7 +32,7 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
         // a transient STATUS drops it; the badge must not be handed that
         // guess as if it were a fresh reading.
         let appState = AppState()
-        appState.setFolderCounts(folderPath: "INBOX", unread: 4, total: 9)
+        appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 4, total: 9)
         let model = try TestFixtures.makeModel(
             imap: FakeImapClient(),
             envelopes: [],
@@ -39,8 +41,8 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
         _ = model.applyStatusCounts(
             FolderStatus(messages: nil, unseen: nil, uidValidity: 7, uidNext: 13)
         )
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 4)
-        XCTAssertEqual(appState.folderTotalCounts["INBOX"], 9)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 4)
+        XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["INBOX"], 9)
     }
 
     func testSearchScopeDoesNotPublishAgainstItsSentinelFolder() throws {
@@ -56,6 +58,6 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
         _ = model.applyStatusCounts(
             FolderStatus(messages: 12, unseen: 3, uidValidity: 7, uidNext: 13)
         )
-        XCTAssertTrue(appState.folderUnreadCounts.isEmpty)
+        XCTAssertTrue(appState.mailStore.counts.folderUnreadCounts.isEmpty)
     }
 }

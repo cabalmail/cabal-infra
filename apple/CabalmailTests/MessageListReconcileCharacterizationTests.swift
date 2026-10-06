@@ -46,8 +46,9 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
         XCTAssertFalse(model.isLoading)
         let path = fixture.folderPath
-        XCTAssertEqual(fixture.appState.folderUnreadCounts[path], 2, "the sidebar badge takes the same reply")
-        XCTAssertEqual(fixture.appState.folderTotalCounts[path], 5)
+        let counts = fixture.appState.mailStore.counts
+        XCTAssertEqual(counts.folderUnreadCounts[path], 2, "the sidebar badge takes the same reply")
+        XCTAssertEqual(counts.folderTotalCounts[path], 5)
         let snapshot = await fixture.snapshot(model)
         XCTAssertEqual(snapshot?.uidValidity, 7)
         XCTAssertEqual(snapshot?.uidNext, 6)

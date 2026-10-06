@@ -23,13 +23,13 @@ enum FolderMarkAllRead {
         let flipped = try await client.imapClient.markFolderRead(folder: folderPath)
         try? await client.envelopeCache.markAllSeen(folder: folderPath)
         // Signed out meanwhile: the badge is the last account's (#1848).
-        guard appState.acceptsCounts(from: client) else { return flipped }
-        if let total = appState.folderTotalCounts[folderPath] {
-            appState.setFolderCounts(folderPath: folderPath, unread: 0, total: total)
+        guard appState.mailStore.acceptsCounts(from: client) else { return flipped }
+        if let total = appState.mailStore.counts.folderTotalCounts[folderPath] {
+            appState.mailStore.counts.setFolderCounts(folderPath: folderPath, unread: 0, total: total)
         } else {
             // No STATUS yet for this folder: zero the unread alone rather
             // than invent a total the badge would then draw as `0/0`.
-            appState.setUnreadCount(folderPath: folderPath, count: 0)
+            appState.mailStore.counts.setUnreadCount(folderPath: folderPath, count: 0)
         }
         appState.requestRefresh()
         return flipped

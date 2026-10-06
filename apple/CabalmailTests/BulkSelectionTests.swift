@@ -75,7 +75,7 @@ final class BulkSelectionTests: XCTestCase {
     func testSetSeenAppliesAndStaysOnSuccess() async throws {
         let imap = FakeImapClient()
         let appState = AppState()
-        appState.setUnreadCounts(["INBOX": 5])
+        appState.mailStore.counts.setUnreadCounts(["INBOX": 5])
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)],
@@ -87,7 +87,7 @@ final class BulkSelectionTests: XCTestCase {
         XCTAssertTrue(model.envelopes.allSatisfy { $0.flags.contains(.seen) })
         XCTAssertNil(model.errorMessage)
         // Both rows transitioned unread -> read, so the badge dropped by 2.
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 3)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 3)
         let calls = await imap.flagCalls
         XCTAssertEqual(calls.count, 1)
         XCTAssertEqual(calls.first?.uids, [1, 2])
@@ -98,7 +98,7 @@ final class BulkSelectionTests: XCTestCase {
         // Marking an already-read message read must not move the badge.
         let imap = FakeImapClient()
         let appState = AppState()
-        appState.setUnreadCounts(["INBOX": 5])
+        appState.mailStore.counts.setUnreadCounts(["INBOX": 5])
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: [
@@ -110,7 +110,7 @@ final class BulkSelectionTests: XCTestCase {
 
         await model.setSeen(true, refs: [ref(1), ref(2)])
 
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 4, "only the real transition counts")
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 4, "only the real transition counts")
     }
 
     func testSetSeenRevertsAllOnTotalFailure() async throws {
@@ -119,7 +119,7 @@ final class BulkSelectionTests: XCTestCase {
             .failure(CabalmailError.server(code: "500", message: "unable")),
         ])
         let appState = AppState()
-        appState.setUnreadCounts(["INBOX": 5])
+        appState.mailStore.counts.setUnreadCounts(["INBOX": 5])
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)],
@@ -133,7 +133,7 @@ final class BulkSelectionTests: XCTestCase {
             "a failed group reverts every row"
         )
         XCTAssertNotNil(model.errorMessage)
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 5, "no transition landed")
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 5, "no transition landed")
     }
 
     // MARK: - Partial-failure granularity
@@ -144,7 +144,7 @@ final class BulkSelectionTests: XCTestCase {
             .failure(CabalmailError.bulkPartialFailure(succeeded: [1], failed: [2])),
         ])
         let appState = AppState()
-        appState.setUnreadCounts(["INBOX": 5])
+        appState.mailStore.counts.setUnreadCounts(["INBOX": 5])
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)],
@@ -157,7 +157,7 @@ final class BulkSelectionTests: XCTestCase {
         XCTAssertTrue(byUID[1]!.flags.contains(.seen), "the succeeded row keeps the change")
         XCTAssertFalse(byUID[2]!.flags.contains(.seen), "the failed row reverts")
         XCTAssertEqual(model.errorMessage, "Updated 1 of 2 messages. 1 could not be updated.")
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 4, "only the landed transition counts")
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 4, "only the landed transition counts")
     }
 
     func testPartialFailureRevertRestoresPreOpState() async throws {

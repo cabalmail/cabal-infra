@@ -135,8 +135,8 @@ extension MessageListViewModel {
             )
             let transitions = transitionsByFolder[source]?.intersection(applied).count ?? 0
             // The STORE answered: not once the session has ended (#1851).
-            if transitions > 0, appState.acceptsCounts(from: client) {
-                appState.applyUnreadDelta(
+            if transitions > 0, appState.mailStore.acceptsCounts(from: client) {
+                appState.mailStore.counts.applyUnreadDelta(
                     folderPath: source,
                     delta: shouldBeSeen ? -transitions : transitions
                 )

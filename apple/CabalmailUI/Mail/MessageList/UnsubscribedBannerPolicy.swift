@@ -5,7 +5,7 @@ import CabalmailKit
 /// banner for the folder it is displaying.
 ///
 /// The rule reads the subscription from the LSUB set the sidebar publishes
-/// (`AppState.subscribedFolderPaths`), keyed by path, and only falls back
+/// (`MailCounts.subscribedFolderPaths`), keyed by path, and only falls back
 /// to the `Folder` value's own flag while no list has landed yet. The
 /// `Folder` the list is handed is not always the fetched one: the
 /// resume-position toast, a push-notification tap, Spotlight, and Siri all

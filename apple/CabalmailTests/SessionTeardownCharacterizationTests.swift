@@ -95,24 +95,24 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         let state = AppState()
         state.status = .signedIn
         state.signedOutReason = .sessionExpired
-        state.applyUnreadDelta(folderPath: "INBOX", delta: 2)
+        state.mailStore.counts.applyUnreadDelta(folderPath: "INBOX", delta: 2)
         let feedPoll = Task<Void, Never> { try? await Task.sleep(for: .seconds(3600)) }
         defer { feedPoll.cancel() }
         state.feedRefreshTask = feedPoll
-        XCTAssertEqual(state.inboxUnreadCount, 2, "precondition")
+        XCTAssertEqual(state.mailStore.counts.inboxUnreadCount, 2, "precondition")
 
         await state.signOut()
 
         XCTAssertEqual(state.status, .signedOut)
         XCTAssertNil(state.signedOutReason, "a deliberate sign-out explains nothing")
-        XCTAssertEqual(state.inboxUnreadCount, 0, "the badge count comes down")
+        XCTAssertEqual(state.mailStore.counts.inboxUnreadCount, 0, "the badge count comes down")
         XCTAssertTrue(feedPoll.isCancelled, "the feed poller stops")
         XCTAssertNil(state.feedRefreshTask)
         // The sidebar's INBOX count comes down with the badge count (#1825).
         // The next session used to start from it until its STATUS walk, and
         // `FolderListViewModel.seedSavedCounts` seeds only a folder whose
         // count is nil, so offline it also blocked that seed.
-        XCTAssertNil(state.folderUnreadCounts["INBOX"])
+        XCTAssertNil(state.mailStore.counts.folderUnreadCounts["INBOX"])
     }
 
     /// The folder counts, the subscribed paths and the saved-counts
@@ -128,19 +128,19 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     func testSignOutWithNoClientClearsTheFolderStateButLeavesTheToast() async {
         let state = AppState()
         state.status = .signedIn
-        state.folderUnreadCounts = ["Archive": 3]
-        state.folderTotalCounts = ["Archive": 40]
-        state.setSubscribedFolders(["INBOX", "Archive"])
-        state.savedFolderCounts.markSeeded("Archive")
+        state.mailStore.counts.folderUnreadCounts = ["Archive": 3]
+        state.mailStore.counts.folderTotalCounts = ["Archive": 40]
+        state.mailStore.counts.setSubscribedFolders(["INBOX", "Archive"])
+        state.mailStore.counts.savedFolderCounts.markSeeded("Archive")
         let toast = Toast(kind: .info, message: "Message queued — will send when back online")
         state.showToast(toast, duration: 3600)
 
         await state.signOut()
 
-        XCTAssertEqual(state.folderUnreadCounts, [:])
-        XCTAssertEqual(state.folderTotalCounts, [:])
-        XCTAssertNil(state.subscribedFolderPaths)
-        XCTAssertEqual(state.savedFolderCounts.seededPaths, [])
+        XCTAssertEqual(state.mailStore.counts.folderUnreadCounts, [:])
+        XCTAssertEqual(state.mailStore.counts.folderTotalCounts, [:])
+        XCTAssertNil(state.mailStore.counts.subscribedFolderPaths)
+        XCTAssertEqual(state.mailStore.counts.savedFolderCounts.seededPaths, [])
         XCTAssertEqual(state.toast, toast, "sign-out leaves the toast to its own timer")
     }
 

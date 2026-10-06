@@ -200,7 +200,7 @@ extension AppState {
         failedRemovalTick += 1
         lastFailedRemoval = FailedRemoval(ref: ref, markUnread: markUnread, tick: failedRemovalTick)
         if markUnread {
-            applyUnreadDelta(folderPath: ref.folder, delta: 1)
+            mailStore.counts.applyUnreadDelta(folderPath: ref.folder, delta: 1)
         }
     }
 }

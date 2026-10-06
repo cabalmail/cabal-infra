@@ -46,20 +46,20 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
     func testSignOutWithAClientClearsTheFolderCountsAndSubscriptions() async throws {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
-        state.setFolderCounts(folderPath: "INBOX", unread: 4, total: 30)
-        state.setFolderCounts(folderPath: "Archive", unread: 3, total: 40)
-        state.setSubscribedFolders(["INBOX", "Archive"])
-        state.savedFolderCounts.markSeeded("Lists")
-        XCTAssertEqual(state.inboxUnreadCount, 4, "precondition")
+        state.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 4, total: 30)
+        state.mailStore.counts.setFolderCounts(folderPath: "Archive", unread: 3, total: 40)
+        state.mailStore.counts.setSubscribedFolders(["INBOX", "Archive"])
+        state.mailStore.counts.savedFolderCounts.markSeeded("Lists")
+        XCTAssertEqual(state.mailStore.counts.inboxUnreadCount, 4, "precondition")
 
         await state.signOut()
 
-        XCTAssertEqual(state.folderUnreadCounts, [:])
-        XCTAssertEqual(state.folderTotalCounts, [:])
-        XCTAssertNil(state.subscribedFolderPaths)
-        XCTAssertEqual(state.inboxUnreadCount, 0)
-        XCTAssertEqual(state.savedFolderCounts.seededPaths, [])
-        XCTAssertNil(state.savedFolderCounts.cache)
+        XCTAssertEqual(state.mailStore.counts.folderUnreadCounts, [:])
+        XCTAssertEqual(state.mailStore.counts.folderTotalCounts, [:])
+        XCTAssertNil(state.mailStore.counts.subscribedFolderPaths)
+        XCTAssertEqual(state.mailStore.counts.inboxUnreadCount, 0)
+        XCTAssertEqual(state.mailStore.counts.savedFolderCounts.seededPaths, [])
+        XCTAssertNil(state.mailStore.counts.savedFolderCounts.cache)
     }
 
     /// The removal and in-flight shields are keyed by folder path and UID,

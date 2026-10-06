@@ -112,7 +112,7 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         )
     }
 
-    /// The folder match is exact, unlike `AppState.isInbox`'s
+    /// The folder match is exact, unlike `MailCounts.isInbox`'s
     /// case-insensitive INBOX check.
     func testConsumeMatchesTheFolderPathExactly() throws {
         let coordinator = try makeCoordinator()

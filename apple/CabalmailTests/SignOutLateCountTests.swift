@@ -9,7 +9,7 @@ import CabalmailKit
 /// that outlive the views. A STATUS that answered in that time used to write
 /// the last account's counts back after the reset, so the next account
 /// started from them and saved their totals as its own. Each writer of a
-/// fetched count now asks `AppState.acceptsCounts(from:)` first.
+/// fetched count now asks `MailSessionStore.acceptsCounts(from:)` first.
 ///
 /// Every sign-in starts the badge poller, whose first tick asks the shared
 /// `FakeImapClient` for INBOX's STATUS at once, and the fake answers any
@@ -42,8 +42,8 @@ final class SignOutLateCountTests: XCTestCase {
 
         XCTAssertEqual(midTeardown, [:], "nothing written back while the teardown waits")
         XCTAssertEqual(harness.appState.status, .signedOut)
-        XCTAssertEqual(harness.appState.folderUnreadCounts, [:])
-        XCTAssertEqual(harness.appState.folderTotalCounts, [:])
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts, [:])
+        XCTAssertEqual(harness.appState.mailStore.counts.folderTotalCounts, [:])
     }
 
     /// The next account's unread change saves that account's own total, not
@@ -53,9 +53,9 @@ final class SignOutLateCountTests: XCTestCase {
         try await signIn(as: "bob")
         let cache = FolderStateCache(directory: root.appendingPathComponent("folders"))
         await cache.recordStatus(FolderStatus(messages: 11, unseen: 3), for: "Archive", ifUnchangedSince: 0)
-        harness.appState.savedFolderCounts.cache = cache
+        harness.appState.mailStore.counts.savedFolderCounts.cache = cache
 
-        harness.appState.setUnreadCount(folderPath: "Archive", count: 1)
+        harness.appState.mailStore.counts.setUnreadCount(folderPath: "Archive", count: 1)
         try await eventually { await cache.lastKnownStatus(for: "Archive")?.unseen == 1 }
 
         let saved = await cache.lastKnownStatus(for: "Archive")
@@ -79,8 +79,8 @@ final class SignOutLateCountTests: XCTestCase {
             statusCalls.map(\.path), ["INBOX", "Archive", "INBOX"], "precondition: the held call is the sidebar's"
         )
 
-        XCTAssertNil(harness.appState.folderUnreadCounts["Archive"])
-        XCTAssertNil(harness.appState.folderTotalCounts["Archive"])
+        XCTAssertNil(harness.appState.mailStore.counts.folderUnreadCounts["Archive"])
+        XCTAssertNil(harness.appState.mailStore.counts.folderTotalCounts["Archive"])
     }
 
     /// Negative control: a live session's STATUS is published as before.
@@ -91,8 +91,8 @@ final class SignOutLateCountTests: XCTestCase {
 
         await sidebar.refreshFolderCount(path: "Archive")
 
-        XCTAssertEqual(harness.appState.folderUnreadCounts["Archive"], 3)
-        XCTAssertEqual(harness.appState.folderTotalCounts["Archive"], 40)
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["Archive"], 3)
+        XCTAssertEqual(harness.appState.mailStore.counts.folderTotalCounts["Archive"], 40)
     }
 
     /// The message list's STATUS, published to the sidebar or saved as the
@@ -104,14 +104,14 @@ final class SignOutLateCountTests: XCTestCase {
         await harness.appState.signOut()
         let cache = FolderStateCache(directory: root.appendingPathComponent("folders"))
         await cache.recordStatus(FolderStatus(messages: 11, unseen: 3), for: "Archive", ifUnchangedSince: 0)
-        harness.appState.savedFolderCounts.cache = cache
+        harness.appState.mailStore.counts.savedFolderCounts.cache = cache
 
         _ = list.applyStatusCounts(archive)
         _ = list.applyStatusCounts(archive, mayPredateRemoval: true)
 
         XCTAssertEqual(list.allCount, 40)
-        XCTAssertEqual(harness.appState.folderUnreadCounts, [:])
-        XCTAssertEqual(harness.appState.folderTotalCounts, [:])
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts, [:])
+        XCTAssertEqual(harness.appState.mailStore.counts.folderTotalCounts, [:])
         try await Task.sleep(for: .milliseconds(200))
         let saved = await cache.lastKnownStatus(for: "Archive")
         XCTAssertEqual(saved?.messages, 11, "the saved counts are not the ended session's")
@@ -130,8 +130,8 @@ final class SignOutLateCountTests: XCTestCase {
         try await FolderMarkAllRead.perform(folderPath: "Archive", client: client, appState: harness.appState)
         await sidebar.emptyTrash()
 
-        XCTAssertEqual(harness.appState.folderUnreadCounts, [:])
-        XCTAssertEqual(harness.appState.folderTotalCounts, [:])
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts, [:])
+        XCTAssertEqual(harness.appState.mailStore.counts.folderTotalCounts, [:])
     }
 
     /// The offline sidebar seeds its badges from the saved counts after an
@@ -147,9 +147,9 @@ final class SignOutLateCountTests: XCTestCase {
         await sidebar.loadFolderList()
 
         XCTAssertTrue(sidebar.isShowingSavedCopy, "precondition: the offline path ran")
-        XCTAssertEqual(state.folderUnreadCounts, [:])
-        XCTAssertEqual(state.folderTotalCounts, [:])
-        XCTAssertEqual(state.savedFolderCounts.seededPaths, [])
+        XCTAssertEqual(state.mailStore.counts.folderUnreadCounts, [:])
+        XCTAssertEqual(state.mailStore.counts.folderTotalCounts, [:])
+        XCTAssertEqual(state.mailStore.counts.savedFolderCounts.seededPaths, [])
     }
 
     // MARK: - Helpers
@@ -169,7 +169,7 @@ final class SignOutLateCountTests: XCTestCase {
 
         await releaseTheHeldStatusWithArchive()
         await refresh.value
-        let midTeardown = state.folderUnreadCounts
+        let midTeardown = state.mailStore.counts.folderUnreadCounts
         gate.release()
         await signOut.value
         return midTeardown

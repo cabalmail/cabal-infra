@@ -188,7 +188,7 @@ final class DisposeRaceTests: XCTestCase {
         )
         XCTAssertEqual(model.envelopes.map(\.uid), [4, 3])
         XCTAssertNil(
-            appState.folderTotalCounts[inbox],
+            appState.mailStore.counts.folderTotalCounts[inbox],
             "nor is that stale count pushed to the sidebar badge"
         )
     }

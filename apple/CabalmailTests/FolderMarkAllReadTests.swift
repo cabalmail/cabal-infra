@@ -13,7 +13,7 @@ final class FolderMarkAllReadTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.success(12)])
         let appState = AppState()
-        appState.setFolderCounts(folderPath: "Projects", unread: 12, total: 80)
+        appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 12, total: 80)
         let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), appState: appState)
         let ticks = appState.refreshRequestTick
 
@@ -21,8 +21,10 @@ final class FolderMarkAllReadTests: XCTestCase {
 
         let calls = await imap.markFolderReadCalls
         XCTAssertEqual(calls, ["Projects"])
-        XCTAssertEqual(appState.folderUnreadCounts["Projects"], 0)
-        XCTAssertEqual(appState.folderTotalCounts["Projects"], 80, "the total is not the server's to change here")
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Projects"], 0)
+        XCTAssertEqual(
+            appState.mailStore.counts.folderTotalCounts["Projects"], 80, "the total is not the server's to change here"
+        )
         XCTAssertEqual(appState.refreshRequestTick, ticks + 1, "the visible list re-renders read state")
         XCTAssertNil(model.errorMessage)
     }
@@ -36,22 +38,22 @@ final class FolderMarkAllReadTests: XCTestCase {
 
         await model.markAllRead(folderPath: "Archive")
 
-        XCTAssertEqual(appState.folderUnreadCounts["Archive"], 0)
-        XCTAssertNil(appState.folderTotalCounts["Archive"])
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Archive"], 0)
+        XCTAssertNil(appState.mailStore.counts.folderTotalCounts["Archive"])
     }
 
     func testAFailureSurfacesAndLeavesTheCountsAlone() async throws {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.failure(CabalmailError.network("offline"))])
         let appState = AppState()
-        appState.setFolderCounts(folderPath: "INBOX", unread: 5, total: 40)
+        appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 5, total: 40)
         let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), appState: appState)
         let ticks = appState.refreshRequestTick
 
         await model.markAllRead(folderPath: "INBOX")
 
         XCTAssertNotNil(model.errorMessage)
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 5)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 5)
         XCTAssertEqual(appState.refreshRequestTick, ticks, "nothing changed, so nothing to reload")
     }
 
@@ -93,14 +95,14 @@ final class FolderMarkAllReadTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.success(3)])
         let appState = AppState()
-        appState.setFolderCounts(folderPath: "Sent", unread: 3, total: 9)
+        appState.mailStore.counts.setFolderCounts(folderPath: "Sent", unread: 3, total: 9)
         let model = try TestFixtures.makeModel(imap: imap, envelopes: [], folderPath: "Sent", appState: appState)
 
         await model.markAllRead()
 
         let calls = await imap.markFolderReadCalls
         XCTAssertEqual(calls, ["Sent"])
-        XCTAssertEqual(appState.folderUnreadCounts["Sent"], 0)
-        XCTAssertEqual(appState.folderTotalCounts["Sent"], 9)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Sent"], 0)
+        XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["Sent"], 9)
     }
 }

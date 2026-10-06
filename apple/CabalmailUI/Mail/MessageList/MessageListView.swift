@@ -288,7 +288,7 @@ struct MessageListView: View {
                 // global search surface has no single folder to subscribe to.
                 if !isSearchScope,
                    UnsubscribedBannerPolicy.shouldShow(
-                       folder: folder, subscribedPaths: appState.subscribedFolderPaths
+                       folder: folder, subscribedPaths: appState.mailStore.counts.subscribedFolderPaths
                    ) {
                     unsubscribedFolderBanner(model: model)
                 }

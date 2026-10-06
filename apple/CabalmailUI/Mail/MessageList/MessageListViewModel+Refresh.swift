@@ -97,13 +97,15 @@ extension MessageListViewModel {
         // A reply for a session that has started ending is the last
         // account's: it reaches neither the sidebar nor the saved counts
         // (#1848).
-        guard appState.acceptsCounts(from: client) else { return serverMessages }
+        guard appState.mailStore.acceptsCounts(from: client) else { return serverMessages }
         if !mayPredateRemoval {
             publishFolderCounts(status)
         } else if !isSearchScope {
             // `client.folderStatus` saved this reply as it came, but it may
             // count a message already removed here: save what is shown.
-            appState.savedFolderCounts.countChanged(folder.path, unread: unseen, total: Int(totalMessages))
+            appState.mailStore.counts.savedFolderCounts.countChanged(
+                folder.path, unread: unseen, total: Int(totalMessages)
+            )
         }
         return serverMessages
     }
@@ -131,7 +133,7 @@ extension MessageListViewModel {
         guard !isSearchScope, let unread = status.unseen, let total = status.messages else {
             return
         }
-        appState.setFolderCounts(folderPath: folder.path, unread: unread, total: total)
+        appState.mailStore.counts.setFolderCounts(folderPath: folder.path, unread: unread, total: total)
     }
 
     /// Row onAppear: the list is now rendering this absolute index. A row

@@ -363,7 +363,7 @@ extension MessageDetailView {
         // The flag and move callbacks below can also fire once the
         // write fails, after the session has ended: not then (#1851).
         model.onFlagChanged = { [weak appState] flag, added in
-            guard appState?.acceptsCounts(from: client) == true else { return }
+            guard appState?.mailStore.acceptsCounts(from: client) == true else { return }
             appState?.signalFlagChange(ref, flag: flag, added: added)
         }
         // Bracket each flag write so the list shields the optimistic
@@ -387,7 +387,7 @@ extension MessageDetailView {
         }
         // ...or, if the server refuses, put the pruned row back.
         model.onMoveFailed = { [weak appState] markUnread in
-            guard appState?.acceptsCounts(from: client) == true else { return }
+            guard appState?.mailStore.acceptsCounts(from: client) == true else { return }
             appState?.signalRemovalFailed(ref, markUnread: markUnread)
         }
     }

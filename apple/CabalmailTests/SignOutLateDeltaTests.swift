@@ -103,7 +103,7 @@ final class SignOutLateDeltaTests: XCTestCase {
         reader.onMoveFailed?(true)
         try await Task.sleep(for: .milliseconds(200))
 
-        XCTAssertEqual(harness.appState.folderUnreadCounts["INBOX"], 5)
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 5)
         let saved = await cache.lastKnownStatus(for: "INBOX")
         XCTAssertEqual(saved?.unseen, 5)
     }
@@ -112,12 +112,12 @@ final class SignOutLateDeltaTests: XCTestCase {
     func testALiveReadersCallbacksStillMoveTheCount() async throws {
         try await signIn(as: "alice")
         let reader = try makeReader(over: XCTUnwrap(harness.appState.client))
-        harness.appState.setFolderCounts(folderPath: "INBOX", unread: 5, total: 50)
+        harness.appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 5, total: 50)
 
         reader.onFlagChanged?(.seen, true)
-        XCTAssertEqual(harness.appState.folderUnreadCounts["INBOX"], 4)
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 4)
         reader.onMoveFailed?(true)
-        XCTAssertEqual(harness.appState.folderUnreadCounts["INBOX"], 5)
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 5)
     }
 
     /// Negative control: in a live session the bulk mark read still takes
@@ -125,11 +125,11 @@ final class SignOutLateDeltaTests: XCTestCase {
     func testABulkMarkReadInALiveSessionStillLowersTheCount() async throws {
         try await signIn(as: "alice")
         let list = try makeList(folder: "INBOX", over: XCTUnwrap(harness.appState.client))
-        harness.appState.setFolderCounts(folderPath: "INBOX", unread: 5, total: 50)
+        harness.appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 5, total: 50)
 
         await list.setSeen(true, refs: Set(unread.map { list.rowRef(for: $0) }))
 
-        XCTAssertEqual(harness.appState.folderUnreadCounts["INBOX"], 3)
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 3)
     }
 
     // MARK: - Helpers
@@ -163,7 +163,9 @@ final class SignOutLateDeltaTests: XCTestCase {
 
         let paths = ["INBOX", "Archive", FolderTree.trashPath]
         for path in paths {
-            XCTAssertEqual(harness.appState.folderUnreadCounts[path], 5, "\(path) unread", file: file, line: line)
+            XCTAssertEqual(
+                harness.appState.mailStore.counts.folderUnreadCounts[path], 5, "\(path) unread", file: file, line: line
+            )
             let saved = await cache.lastKnownStatus(for: path)
             XCTAssertEqual(saved?.unseen, 5, "\(path) saved unread", file: file, line: line)
         }
@@ -171,10 +173,10 @@ final class SignOutLateDeltaTests: XCTestCase {
 
     private func giveBobCountsOfHisOwn() async -> FolderStateCache {
         let cache = FolderStateCache(directory: root.appendingPathComponent("folders-\(UUID().uuidString)"))
-        harness.appState.savedFolderCounts.cache = cache
+        harness.appState.mailStore.counts.savedFolderCounts.cache = cache
         for path in ["INBOX", "Archive", FolderTree.trashPath] {
             await cache.recordStatus(FolderStatus(messages: 50, unseen: 5), for: path, ifUnchangedSince: 0)
-            harness.appState.setFolderCounts(folderPath: path, unread: 5, total: 50)
+            harness.appState.mailStore.counts.setFolderCounts(folderPath: path, unread: 5, total: 50)
         }
         return cache
     }

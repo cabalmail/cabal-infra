@@ -30,19 +30,19 @@ final class OfflineSidebarTests: XCTestCase {
         XCTAssertTrue(model.isShowingSavedCopy)
         let message = try XCTUnwrap(model.errorMessage, "the sidebar still says it couldn't reach the server")
         XCTAssertTrue(message.contains("Couldn't reach the server"), message)
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 2)
-        XCTAssertEqual(appState.folderTotalCounts["INBOX"], 22)
-        XCTAssertEqual(appState.folderUnreadCounts["Projects"], 5)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 2)
+        XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["INBOX"], 22)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Projects"], 5)
         XCTAssertNil(
-            appState.folderUnreadCounts["Archive"],
+            appState.mailStore.counts.folderUnreadCounts["Archive"],
             "unsubscribed: no badge until opened, as online, so none is left stale after reconnecting"
         )
         XCTAssertEqual(
-            appState.inboxUnreadCount, 0,
+            appState.mailStore.counts.inboxUnreadCount, 0,
             "the app badge is left alone: it shows what this device last set, which can be newer"
         )
-        XCTAssertEqual(appState.savedFolderCounts.seededPaths, ["INBOX", "Projects"])
-        XCTAssertEqual(appState.subscribedFolderPaths, ["INBOX", "Projects"])
+        XCTAssertEqual(appState.mailStore.counts.savedFolderCounts.seededPaths, ["INBOX", "Projects"])
+        XCTAssertEqual(appState.mailStore.counts.subscribedFolderPaths, ["INBOX", "Projects"])
     }
 
     /// Negative control: with nothing saved, as before, the offline sidebar
@@ -57,7 +57,7 @@ final class OfflineSidebarTests: XCTestCase {
         XCTAssertTrue(model.folders.isEmpty)
         XCTAssertFalse(model.isShowingSavedCopy)
         XCTAssertNotNil(model.errorMessage)
-        XCTAssertTrue(appState.folderUnreadCounts.isEmpty)
+        XCTAssertTrue(appState.mailStore.counts.folderUnreadCounts.isEmpty)
     }
 
     /// A count this session already has from a live STATUS is newer than the
@@ -65,14 +65,14 @@ final class OfflineSidebarTests: XCTestCase {
     /// count must not overwrite it.
     func testSavedBadgesDoNotOverwriteLiveCounts() async throws {
         let appState = AppState()
-        appState.setFolderCounts(folderPath: "INBOX", unread: 9, total: 30)
+        appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 9, total: 30)
         let client = try fixture.makeClient(folderState: await fixture.savedState())
         let model = FolderListViewModel(client: client, appState: appState)
 
         await model.loadFolderList()
 
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 9)
-        XCTAssertEqual(appState.folderUnreadCounts["Projects"], 5)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 9)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Projects"], 5)
     }
 
     /// A live first load isn't a saved copy, and says nothing went wrong.
@@ -135,21 +135,21 @@ final class OfflineSidebarTests: XCTestCase {
 
         await model.loadFolderList()
         XCTAssertTrue(model.isShowingSavedCopy)
-        XCTAssertEqual(appState.folderUnreadCounts["Projects"], 5)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Projects"], 5)
 
         await connectivity.goOnline()
         await model.loadFolderList()
         XCTAssertFalse(model.isShowingSavedCopy)
         XCTAssertNil(model.errorMessage)
-        XCTAssertNil(appState.folderUnreadCounts["Projects"], "seeded badge dropped until the recount")
-        XCTAssertTrue(appState.savedFolderCounts.seededPaths.isEmpty)
+        XCTAssertNil(appState.mailStore.counts.folderUnreadCounts["Projects"], "seeded badge dropped until the recount")
+        XCTAssertTrue(appState.mailStore.counts.savedFolderCounts.seededPaths.isEmpty)
         await model.refreshSubscribedCounts()
-        XCTAssertEqual(appState.folderUnreadCounts["Projects"], 4, "the live count")
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Projects"], 4, "the live count")
 
         await connectivity.goOffline()
         await model.loadFolderList()
         XCTAssertFalse(model.isShowingSavedCopy, "a live list from this session stays")
-        XCTAssertEqual(appState.folderUnreadCounts["Projects"], 4)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Projects"], 4)
     }
 
     /// A live list clears only the badges still seeded: one the message list
@@ -168,15 +168,17 @@ final class OfflineSidebarTests: XCTestCase {
         )
         await model.loadFolderList()
 
-        appState.setFolderCounts(folderPath: "INBOX", unread: 9, total: 30)
-        appState.applyUnreadDelta(folderPath: "Projects", delta: -1)
-        XCTAssertEqual(appState.folderUnreadCounts["Projects"], 4)
+        appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 9, total: 30)
+        appState.mailStore.counts.applyUnreadDelta(folderPath: "Projects", delta: -1)
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Projects"], 4)
 
         await connectivity.goOnline()
         await model.loadFolderList()
 
-        XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 9, "a live count stays")
-        XCTAssertNil(appState.folderUnreadCounts["Projects"], "a count moved from the seed is still the seed's")
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 9, "a live count stays")
+        XCTAssertNil(
+            appState.mailStore.counts.folderUnreadCounts["Projects"], "a count moved from the seed is still the seed's"
+        )
     }
 
     /// Deleting or (un)subscribing a folder on this device updates the saved
