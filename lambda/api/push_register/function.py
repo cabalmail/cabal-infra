@@ -6,6 +6,13 @@ One row per (user, device token); push_dispatch fans a wake signal out to
 every row it finds for the recipient, routing Apple rows to APNs and android
 rows to FCM. See docs/0.11.x/push-notifications.md and
 docs/1.x/android-push-notifications.md.
+
+A device token belongs to one app install, which is signed in to one account
+at a time, so registering a token also removes any other account's row for
+it. Without that, a sign-out whose /push_deregister failed (offline, say) left
+the old account's row behind, and its pushes kept reaching the device after
+the next account signed in, where their actions ran against that account's
+messages (#1883).
 '''
 import datetime
 import json
@@ -45,6 +52,10 @@ MAX_ENABLED_FOLDERS = 100
 FOLDER_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 
 MAX_INFO_LENGTH = 64
+
+# The table's index on device_token alone, for finding other accounts' rows
+# for a token being registered (terraform/infra/modules/table/main.tf).
+DEVICE_TOKEN_INDEX = 'by_device_token'
 
 
 def _validate_enabled_folders(value):
@@ -91,8 +102,35 @@ def _info_field(body, key):
     return value[:MAX_INFO_LENGTH]
 
 
+def _remove_other_accounts(user, device_token):
+    '''Deletes every other account's row for `device_token`. Best-effort: the
+    caller's own registration has already succeeded, and a failed lookup or
+    delete (the index still building after a deploy, say) only leaves a stale
+    row for the next registration to remove, so it is logged, never raised.'''
+    try:
+        query = {
+            'IndexName': DEVICE_TOKEN_INDEX,
+            'KeyConditionExpression': '#t = :t',
+            'ExpressionAttributeNames': {'#t': 'device_token'},
+            'ExpressionAttributeValues': {':t': device_token},
+        }
+        while True:
+            page = table.query(**query)
+            for item in page.get('Items', []):
+                if item.get('user') != user:
+                    table.delete_item(
+                        Key={'user': item['user'], 'device_token': device_token})
+                    print('[push-register] removed another account\'s row for this token')
+            if 'LastEvaluatedKey' not in page:
+                return
+            query['ExclusiveStartKey'] = page['LastEvaluatedKey']
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        print(f'[push-register] stale-row cleanup failed: {err}')
+
+
 def handler(event, _context):
-    '''Upserts the caller's device-token row.'''
+    '''Upserts the caller's device-token row and removes other accounts' rows
+    for the same token.'''
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     try:
         body = json.loads(event.get('body') or '{}')
@@ -164,4 +202,5 @@ def handler(event, _context):
         )
     except Exception as err:  # pylint: disable=broad-exception-caught
         return {'statusCode': 500, 'body': json.dumps({'Error': str(err)})}
+    _remove_other_accounts(user, device_token)
     return {'statusCode': 200, 'body': json.dumps({'status': 'registered'})}

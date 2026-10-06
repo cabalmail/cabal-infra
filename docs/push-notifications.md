@@ -57,7 +57,16 @@ flowchart LR
    off). `push_dispatch` also prunes tokens the push service reports as
    gone (APNs `410 Unregistered`/`BadDeviceToken`; FCM `UNREGISTERED`,
    `INVALID_ARGUMENT`, `SENDER_ID_MISMATCH`), so an uninstalled app stops
-   receiving pushes without operator involvement.
+   receiving pushes without operator involvement. A token belongs to one
+   app install, signed in to one account at a time, so registering it also
+   removes any other account's row for it (found through the table's
+   `by_device_token` index). That clears the row a failed sign-out
+   deregistration leaves behind as soon as the next account's app
+   registers, so the old account's pushes stop reaching the device. The
+   removal is best-effort and never fails the registration. It can't reach
+   another deployment's table: a device that leaves prod offline and signs
+   in to stage keeps getting prod's pushes until it registers with prod
+   again.
 
 What APNs sees per push: the device token it already knows, the app's bundle
 id, an AWS egress IP, and a payload containing only the alert text `"New
