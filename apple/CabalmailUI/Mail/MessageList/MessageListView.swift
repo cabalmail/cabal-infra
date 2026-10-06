@@ -640,10 +640,11 @@ extension MessageListView {
         .onChange(of: appState.mailStore.signals.lastEnvelopeFlagChange) { _, signal in
             // Detail view toggled \Seen (or another flag in the future).
             // Apply it directly to the matching row so the bold styling +
-            // unread dot flip without waiting for the next refresh.
-            // Other folders ignore the signal.
-            guard let signal, signal.ref.folder == folder.path else { return }
-            model?.applyFlagChange(signal.ref, flag: signal.flag, added: signal.added)
+            // unread dot flip without waiting for the next refresh. The
+            // model decides which signals are this list's: its own folder's,
+            // or on the search surface the row's (#1859).
+            guard let signal else { return }
+            model?.applyReaderFlagChange(signal)
         }
         // A folder row in the sidebar received a dropped message (or
         // selection). The drop handler posts the destination + payload on

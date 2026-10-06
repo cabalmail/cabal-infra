@@ -644,6 +644,17 @@ extension MessageListViewModel {
         applyOptimisticFlag(ref, flag: flag, add: added)
     }
 
+    /// The list's half of the reader's flag signal
+    /// (`MessageSignals.lastEnvelopeFlagChange`). A folder list takes only its own
+    /// folder's signals. The search surface's `folder` is a sentinel and its
+    /// rows come from many folders, so it takes the signal for whichever row
+    /// it names, matched by the row's ref (#1859); a signal for a message it
+    /// doesn't list changes nothing.
+    func applyReaderFlagChange(_ signal: EnvelopeFlagChange) {
+        guard isSearchScope || signal.ref.folder == folder.path else { return }
+        applyFlagChange(signal.ref, flag: signal.flag, added: signal.added)
+    }
+
     /// The identity of `envelope`'s row. Every row this model loads carries
     /// its folder (`placedInFolder(_:)`, and `SearchedEnvelope` for search
     /// rows); one that doesn't is taken to be this folder's.
