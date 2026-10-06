@@ -288,7 +288,7 @@ struct MessageListView: View {
                 // global search surface has no single folder to subscribe to.
                 if !isSearchScope,
                    UnsubscribedBannerPolicy.shouldShow(
-                       folder: folder, subscribedPaths: appState.subscribedFolderPaths
+                       folder: folder, subscribedPaths: appState.mailStore.counts.subscribedFolderPaths
                    ) {
                     unsubscribedFolderBanner(model: model)
                 }
@@ -482,7 +482,7 @@ extension MessageListView {
                         scope: scope,
                         client: client,
                         preferences: preferences,
-                        appState: appState
+                        mailStore: appState.mailStore
                     )
                     await model?.loadInitial()
                     await model?.startWatching()
@@ -536,9 +536,9 @@ extension MessageListView {
         }
     }
 
-    /// AppState signal observers: menu / shortcut ticks, detail-view
-    /// dispose and flag signals, selection routing, and drag-and-drop
-    /// move requests.
+    /// Signal observers: `AppState`'s menu / shortcut ticks, the mail
+    /// store's detail-view dispose and flag signals, selection routing, and
+    /// drag-and-drop move requests.
     private var observersLayer: some View {
         lifecycleLayer
         // macOS Commands menu (Mailbox → Refresh) and keyboard shortcuts
@@ -570,7 +570,7 @@ extension MessageListView {
         .onWindowCommand(appState.moveSelectionRequestTick) {
             if let model { moveSelection(model: model) }
         }
-        .onChange(of: appState.lastDisposedEnvelope) { _, signal in
+        .onChange(of: appState.mailStore.signals.lastDisposedEnvelope) { _, signal in
             // Detail view archived / trashed the current message. Advance
             // the split-view selection per the user's after-dispose
             // preference (so the user can keep triaging without bouncing
@@ -609,20 +609,20 @@ extension MessageListView {
                 selection = next
             }
         }
-        .onChange(of: appState.lastFailedRemoval) { _, signal in
+        .onChange(of: appState.mailStore.signals.lastFailedRemoval) { _, signal in
             // The reader's dispose / move / purge failed after the handler
             // above pruned its row: put the row back. The selection stays
             // where the advance left it, as with a failed swipe.
             guard let signal, signal.ref.folder == folder.path else { return }
             model?.restorePrunedEnvelope(signal.ref, markUnread: signal.markUnread)
         }
-        .onChange(of: appState.lastDraftReplaced) { _, signal in
+        .onChange(of: appState.mailStore.signals.lastDraftReplaced) { _, signal in
             // A compose session saved over a Drafts copy this list may be
             // showing. Handler in `+Actions.swift`; other folders ignore it.
             guard let signal, signal.folderPath == folder.path else { return }
             handleDraftReplaced(signal.replacement)
         }
-        .onChange(of: appState.lastReadAdvanceRequest) { _, signal in
+        .onChange(of: appState.mailStore.signals.lastReadAdvanceRequest) { _, signal in
             // Detail view marked the current message read with a move-to
             // option. Advance the selection like the dispose handler above,
             // but never prune (the row is still here, just read now) and
@@ -637,7 +637,7 @@ extension MessageListView {
                 selection = next
             }
         }
-        .onChange(of: appState.lastEnvelopeFlagChange) { _, signal in
+        .onChange(of: appState.mailStore.signals.lastEnvelopeFlagChange) { _, signal in
             // Detail view toggled \Seen (or another flag in the future).
             // Apply it directly to the matching row so the bold styling +
             // unread dot flip without waiting for the next refresh. The

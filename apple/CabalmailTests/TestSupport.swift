@@ -18,13 +18,13 @@ extension TestFixtures {
         imap: FakeImapClient,
         envelopes: [Envelope],
         folderPath: String = "INBOX",
-        appState: AppState = AppState()
+        mailStore: MailSessionStore = AppState().mailStore
     ) throws -> MessageListViewModel {
         let model = MessageListViewModel(
             folder: Folder(path: folderPath, attributes: [], isSubscribed: true),
             client: try makeClient(imap: imap),
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: appState
+            mailStore: mailStore
         )
         // Placed in the folder, as every path that loads rows places them.
         model.envelopes = model.placedInFolder(envelopes)

@@ -59,7 +59,7 @@ extension MessageListView {
         } label: {
             Label("Mark All as Read", systemImage: "envelope.open")
         }
-        .disabled(model == nil || appState.folderUnreadCounts[folder.path] == 0)
+        .disabled(model == nil || appState.mailStore.counts.folderUnreadCounts[folder.path] == 0)
         .accessibilityIdentifier("list.markAllRead")
     }
 }

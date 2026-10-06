@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import UserNotifications
 import CabalmailKit
 
 /// Root observable state for the Cabalmail app.
@@ -55,7 +54,9 @@ public final class AppState {
     @ObservationIgnored var sessionExpiryTask: Task<Void, Never>?
 
     /// Orders sign-out against sign-in and the launch restore (#1827, #1829).
-    @ObservationIgnored let teardownGate = SessionTeardownGate()
+    /// Shared with `mailStore`, whose `acceptsCounts(from:)` answers from the
+    /// sessions this records as ended.
+    @ObservationIgnored let teardownGate: SessionTeardownGate
 
     /// Inline error for the second-factor form (wrong code, expired
     /// challenge). Kept separate from `Status.error` so a mistyped code
@@ -186,73 +187,6 @@ public final class AppState {
     /// handoff consumed by `routePendingSpotlightOpen()` (SpotlightRouting).
     @ObservationIgnored var pendingSpotlightRef: SpotlightMessageRef?
 
-    /// Latest envelope disposed from the detail view. `MessageListView`
-    /// observes this via `.onChange` and prunes the matching UID from its
-    /// in-memory list so the moved message disappears immediately, without
-    /// waiting for the next refresh. `tick` is monotonic so
-    /// re-disposing the same UID (e.g. in a different folder) still fires
-    /// the observer.
-    var lastDisposedEnvelope: DisposedEnvelope?
-    private var disposedTick = 0
-
-    /// Latest reader dispose / move / purge whose server write failed after
-    /// `lastDisposedEnvelope` had already pruned the row. `MessageListView`
-    /// puts the row back. Sent by `signalRemovalFailed` in
-    /// `AppStateSignals.swift`, hence the internal tick.
-    var lastFailedRemoval: FailedRemoval?
-    var failedRemovalTick = 0
-
-    /// Latest envelope-flag change driven from the detail view (currently:
-    /// `\Seen` toggles). `MessageListView` observes this so the row's bold
-    /// styling and unread dot flip the moment the user taps "Mark as read"
-    /// in the detail toolbar, without waiting for the next refresh. `tick`
-    /// is monotonic so a revert (after a server error) still
-    /// fires the observer when the same UID + flag flips back.
-    var lastEnvelopeFlagChange: EnvelopeFlagChange?
-    private var flagChangeTick = 0
-
-    /// Latest mark-read-and-advance driven from the detail view's mark-read
-    /// control. `MessageListView` observes this and moves the selection per
-    /// the carried `MarkReadAdvance`; the `\Seen` flip itself travels on
-    /// `lastEnvelopeFlagChange` as usual.
-    var lastReadAdvanceRequest: ReadAdvanceRequest?
-    private var readAdvanceTick = 0
-    var lastDraftReplaced: DraftReplacedSignal?
-    private var draftReplacedTick = 0
-
-    /// Messages with a flag write in flight from the detail view (keyed by
-    /// ref: IMAP UIDs are only unique within a mailbox, so a bare UID set
-    /// would let a pending write in one folder shield an unrelated row with
-    /// the same UID in another). `MessageListViewModel.shieldFetched` reads
-    /// this so a refresh that lands mid-write can't revert the detail view's
-    /// optimistic flag - the cross-view analogue of the list's own
-    /// `pendingFlagRefs`. The detail view brackets each write via
-    /// `setFlagWrite(_:inFlight:)`. Read directly at merge time (never from
-    /// a view body), so observation tracking is irrelevant here.
-    private(set) var pendingFlagWriteRefs: Set<MessageRef> = []
-
-    /// Messages the detail view has optimistically removed (archive / trash /
-    /// move) but whose server move is still in flight. The detail view prunes
-    /// the list row up front via `signalDisposed`; without this
-    /// `MessageListViewModel.shieldFetched` would let a refresh that lands
-    /// before the move completes resurrect the row (the source folder still
-    /// returns the UID). The cross-view analogue of the list's own
-    /// `pendingRemovedRefs`; bracketed via `setMoveInFlight(_:inFlight:)`.
-    private(set) var pendingMoveRefs: Set<MessageRef> = []
-
-    /// Messages the server has confirmed gone from their folder -- a list or
-    /// reader dispose, move or purge landed -- with when that was confirmed.
-    /// The shields above end when a move resolves, but a refresh already in
-    /// flight can still answer with the folder as it was before the move and
-    /// put the message back (the list then shifts under the user's pointer).
-    /// IMAP never reuses a UID within a mailbox, so a fetch that still
-    /// carries one of these is stale by definition, and
-    /// `MessageListViewModel.shieldFetched` drops it. Entries age out after
-    /// `confirmedRemovalWindow`, longer than any request can stay in flight.
-    /// Read at merge time only, like `pendingMoveRefs`.
-    /// Maintained by the methods in `AppState+ConfirmedRemovals.swift`.
-    var confirmedRemovals: [MessageRef: ContinuousClock.Instant] = [:]
-
     /// True while a message-row drag is in flight on a wide-screen layout.
     /// `MailRootView`'s sidebar watches this to temporarily reveal the
     /// folder list as a drop target when the user is on the Addresses tab,
@@ -270,27 +204,14 @@ public final class AppState {
     // Internal so `requestMove` in the drag-and-drop extension below can bump it.
     var moveRequestTick = 0
 
-    /// Authoritative Inbox unread count, refreshed by the badge poller.
-    /// Exposed as an observable so future views (e.g. a sidebar indicator)
-    /// can mirror what shows on the dock/home-screen badge.
-    public private(set) var inboxUnreadCount: Int = 0
-
-    // Per-folder unread + total counts. The mutators that maintain these
-    // maps live in the "Per-folder unread + total counts" extension below.
-    var folderUnreadCounts: [String: Int] = [:]
-    var folderTotalCounts: [String: Int] = [:]
-    /// Keeps the counts above in step with the saved folder state, for
-    /// offline launches (`SavedFolderCounts`).
-    let savedFolderCounts = SavedFolderCounts()
-    /// Paths of the folders the server's LSUB reports, published by
-    /// `FolderListViewModel` on every folder-list load and subscription
-    /// toggle. `nil` until the first list lands. Keyed by path, like the
-    /// counts above, so a view holding a stand-in `Folder(path:)` (the
-    /// resume-position toast, a push-notification tap, Spotlight, Siri —
-    /// all of which construct one with `isSubscribed` defaulted to `false`)
-    /// can still answer "is this folder subscribed?" truthfully. The
-    /// mutators live in `AppState+Subscriptions.swift`.
-    var subscribedFolderPaths: Set<String>?
+    /// The mail state the folder list, message list, reader and composer
+    /// share (`MailSessionStore`): the folder counts, the shields that keep
+    /// a refresh from undoing a write in flight, and the signals the reader
+    /// and composer send the list. One for the life of
+    /// this `AppState`, reset in place at sign-out (`forgetAccountState`).
+    /// A `let`, so nothing observes the reference; views observe the
+    /// store's own properties through it.
+    public let mailStore: MailSessionStore
     private var inboxBadgeTask: Task<Void, Never>?
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
     // Feed reader poller; the methods live in `AppState+Feeds.swift`.
@@ -309,10 +230,8 @@ public final class AppState {
     func requestForward(in window: UUID? = nil) { commandWindow = window; forwardRequestTick += 1 }
     public func requestSettings(in window: UUID? = nil) { commandWindow = window; settingsRequestTick += 1 }
     // The selection-scoped request bumpers live in the "Message-menu
-    // selection intents" extension below (SwiftLint type-body budget), and
-    // the cross-view signal senders (`signalDisposed`, `signalFlagChange`,
-    // `signalReadAdvance`, `markAnswered`, and the in-flight shields) in
-    // the "Cross-view signals" extension below, for the same budget.
+    // selection intents" extension in `AppStateSignals.swift` (SwiftLint
+    // type-body budget).
 
     /// Publishes a toast and auto-clears it after `duration`. The task lives
     /// outside structured concurrency because the caller's scope (usually a
@@ -394,7 +313,14 @@ public final class AppState {
         }
     }
 
-    public init() {}
+    public init() {
+        let teardownGate = SessionTeardownGate()
+        self.teardownGate = teardownGate
+        mailStore = MailSessionStore(teardownGate: teardownGate)
+        // A data change behind the list (Mark All as Read, Empty Trash)
+        // reaches every window, as `requestRefresh()` with no window does.
+        mailStore.onListRefreshRequested = { [weak self] in self?.requestRefresh() }
+    }
 
     // `signOut()` lives in the "Session wiring" extension below, alongside
     // `wireSession` (SwiftLint type-body budget).
@@ -555,139 +481,19 @@ public final class AppState {
     func stopInboxBadgePolling() {
         inboxBadgeTask?.cancel()
         inboxBadgeTask = nil
-        setInboxUnread(0)
+        mailStore.counts.setInboxUnread(0)
     }
 
     private func refreshInboxUnread() async {
         guard let client else { return }
         do {
             let status = try await client.folderStatus(path: "INBOX")
-            setInboxUnread(status.unseen ?? 0)
+            mailStore.counts.setInboxUnread(status.unseen ?? 0)
         } catch {
             // Best-effort: if the STATUS call fails (transient network
             // blip, IMAP reconnection) the prior badge value stays put
             // until the next poll succeeds.
         }
-    }
-}
-
-// MARK: - Cross-view signals
-
-// Senders for the one-way detail → list signals declared in the class body
-// above (their tick counters and in-flight shield maps stay there — stored
-// properties can't live in an extension). Split out for the same SwiftLint
-// type-body budget as the other extensions in this file.
-extension AppState {
-    func signalDisposed(_ ref: MessageRef) {
-        signalDisposed([ref])
-    }
-
-    /// Multi-message form, for a sender that invalidates more than one row
-    /// at once: a send-from-draft retires every Drafts copy its compose
-    /// session created, not just the newest (#1071). The dispose's unread
-    /// delta has already travelled on `signalFlagChange` from the reader's
-    /// mark-read, so this moves no count.
-    func signalDisposed(_ refs: [MessageRef]) {
-        guard !refs.isEmpty else { return }
-        disposedTick += 1
-        lastDisposedEnvelope = DisposedEnvelope(refs: refs, tick: disposedTick)
-    }
-
-    /// A compose session changed what is in Drafts. The retired UIDs are
-    /// already expunged server-side and the survivor carries the content the
-    /// user just saved, so the list prunes the one and re-points at the
-    /// other (#1078).
-    ///
-    /// A first save retires nothing and only adds: the survivor alone is
-    /// enough to send, because the refresh the list runs on this signal is
-    /// what surfaces the new row instead of leaving it to the 30 s status
-    /// poll (#1083). A signal with neither half is the one that says
-    /// nothing — an empty compose that never reached the server.
-    func signalDraftReplaced(folderPath: String, replacement: DraftReplacement) {
-        guard !replacement.retiredUIDs.isEmpty || replacement.survivingUID != nil else { return }
-        draftReplacedTick += 1
-        lastDraftReplaced = DraftReplacedSignal(
-            folderPath: folderPath,
-            replacement: replacement,
-            tick: draftReplacedTick
-        )
-    }
-
-    /// Marks a replied-to message `\Answered` after its reply sends: signal
-    /// the list optimistically (so the replied arrow appears at once), then
-    /// STORE the flag best-effort. Shielded via `setFlagWrite` so a refresh
-    /// landing mid-write can't revert the row. No revert on failure — unlike
-    /// the detail view's toggles there's no surface left to show an error on
-    /// (the composer is gone), and the next full refresh restores truth.
-    func markAnswered(_ ref: MessageRef) {
-        signalFlagChange(ref, flag: .answered, added: true)
-        guard let client else { return }
-        setFlagWrite(ref, inFlight: true)
-        Task {
-            defer { setFlagWrite(ref, inFlight: false) }
-            try? await client.imapClient.setFlags(
-                folder: ref.folder,
-                uids: [ref.uid],
-                flags: [.answered],
-                operation: .add
-            )
-        }
-    }
-
-    func signalFlagChange(_ ref: MessageRef, flag: Flag, added: Bool) {
-        flagChangeTick += 1
-        lastEnvelopeFlagChange = EnvelopeFlagChange(
-            ref: ref,
-            flag: flag,
-            added: added,
-            tick: flagChangeTick
-        )
-        if flag == .seen {
-            applyUnreadDelta(folderPath: ref.folder, delta: added ? -1 : 1)
-        }
-    }
-
-    func signalReadAdvance(_ ref: MessageRef, advance: MarkReadAdvance) {
-        readAdvanceTick += 1
-        lastReadAdvanceRequest = ReadAdvanceRequest(
-            ref: ref,
-            advance: advance,
-            tick: readAdvanceTick
-        )
-    }
-
-    /// Mark a detail-view flag write as in flight (`true`, when the STORE is
-    /// dispatched) or resolved (`false`, on success or failure). While a
-    /// message is in flight the list's merge keeps the optimistic flag
-    /// instead of the fetched one; clearing it lets the next refresh carry
-    /// server truth. Safe to call `false` for a message that was never
-    /// inserted (a no-op removal).
-    func setFlagWrite(_ ref: MessageRef, inFlight: Bool) {
-        if inFlight {
-            pendingFlagWriteRefs.insert(ref)
-        } else {
-            pendingFlagWriteRefs.remove(ref)
-        }
-    }
-
-    /// Mark a detail-view archive / trash / move as in flight (`true`, before
-    /// the server move) or resolved (`false`, on success or failure). While a
-    /// message is in flight the list's merge keeps the optimistically-pruned
-    /// row gone; clearing it lets the next refresh re-add the row if the move
-    /// failed, or confirm its absence if it succeeded. Safe to call `false`
-    /// for a message that was never inserted (a no-op removal).
-    func setMoveInFlight(_ ref: MessageRef, inFlight: Bool) {
-        if inFlight {
-            pendingMoveRefs.insert(ref)
-        } else {
-            pendingMoveRefs.remove(ref)
-        }
-    }
-
-    /// True while a detail-view move out of `folderPath` is in flight: a
-    /// STATUS of that folder may still count the message.
-    func hasMoveInFlight(folderPath: String) -> Bool {
-        pendingMoveRefs.contains { $0.folder == folderPath }
     }
 }
 
@@ -726,17 +532,11 @@ extension AppState {
     }
 
     /// What this process knows about the account, with or without a client:
-    /// the next account must start from none of it (#1825). The totals
-    /// matter beyond the sidebar: `setUnreadCount` saves the folder's total
-    /// from here into the session's saved folder state.
+    /// the next account must start from none of it (#1825). The mail store
+    /// is reset in place (`MailSessionStore.forgetAccount()`); what it keeps
+    /// across sessions, and why, is said there.
     private func forgetAccountState() {
-        folderUnreadCounts = [:]
-        folderTotalCounts = [:]
-        subscribedFolderPaths = nil
-        savedFolderCounts.reset()
-        confirmedRemovals = [:]
-        pendingFlagWriteRefs = []
-        pendingMoveRefs = []
+        mailStore.forgetAccount()
         pendingSpotlightRef = nil
         AttachmentFolders.removeAll()
     }
@@ -747,7 +547,7 @@ extension AppState {
     /// and the watch hand-off.
     private func wireSession(client newClient: CabalmailClient, username: String) async {
         self.client = newClient
-        savedFolderCounts.cache = newClient.folderStateCache
+        mailStore.counts.savedFolderCounts.cache = newClient.folderStateCache
         self.navCoordinator = sessionEnvironment.makeNavCoordinator(newClient)
         if let preferences {
             // Swap the local settings cache to this account's scoped keys
@@ -802,94 +602,6 @@ extension AppState {
     public func refreshWatchSession() async {
         guard let client else { return }
         await pushSessionToWatch(client: client, username: lastUsername)
-    }
-}
-
-// MARK: - Per-folder unread + total counts
-//
-// Mutators for the `folderUnreadCounts` / `folderTotalCounts` storage declared
-// on the main type above. Subscribed folders' counts get refreshed proactively
-// by `FolderListViewModel`; unsubscribed folders are populated lazily on
-// selection, and the unsubscribed-folder banner's Refresh button writes the
-// freshest values through `setFolderCounts` so the sidebar badge and the
-// message-list view advance together. Kept as a same-file extension so the
-// primary class body stays under SwiftLint's `type_body_length` cap.
-@MainActor
-extension AppState {
-    /// Whether counts fetched through `client` still belong to the account
-    /// on screen: false once its session has started ending. A STATUS that
-    /// answers during or after a sign-out would otherwise write the last
-    /// account's counts back after the reset, where the next account starts
-    /// from them and saves their totals as its own (#1848). Every writer of a
-    /// count it fetched checks this after the fetch, and so does every
-    /// unread change that lands after a server call: a revert when the call
-    /// fails, or a change applied once it answers (#1851).
-    func acceptsCounts(from client: CabalmailClient) -> Bool {
-        !teardownGate.hasEnded(client)
-    }
-
-    /// Replace the unread count for one folder. Called after an
-    /// authoritative `STATUS (UNSEEN)` when the caller doesn't have the
-    /// total in hand (e.g. an optimistic delta-based recovery path).
-    func setUnreadCount(folderPath: String, count: Int) {
-        folderUnreadCounts[folderPath] = max(0, count)
-        savedFolderCounts.countChanged(folderPath, unread: max(0, count), total: folderTotalCounts[folderPath])
-    }
-
-    /// Replace the unread + total counts for one folder in one shot.
-    /// Preferred over `setUnreadCount` whenever a full STATUS reply is
-    /// in hand, so the two maps don't drift.
-    func setFolderCounts(folderPath: String, unread: Int, total: Int) {
-        folderUnreadCounts[folderPath] = max(0, unread)
-        folderTotalCounts[folderPath] = max(0, total)
-        savedFolderCounts.countChanged(folderPath, unread: max(0, unread), total: max(0, total))
-        if Self.isInbox(folderPath) { setInboxUnread(unread) }
-    }
-
-    /// Replace the whole unread map. Used by the folder list view model
-    /// after a full STATUS walk so any folders that have disappeared
-    /// drop out.
-    func setUnreadCounts(_ counts: [String: Int]) {
-        folderUnreadCounts = counts.mapValues { max(0, $0) }
-        if let inbox = counts.first(where: { Self.isInbox($0.key) })?.value {
-            setInboxUnread(inbox)
-        }
-    }
-
-    /// Bump (or reduce) the count for one folder. Clamped at zero so a
-    /// stale +1 from a doubled signal can't make the badge negative.
-    func applyUnreadDelta(folderPath: String, delta: Int) {
-        savedFolderCounts.unreadAdjusted(folderPath, from: folderUnreadCounts[folderPath], by: delta)
-        let current = folderUnreadCounts[folderPath] ?? 0
-        folderUnreadCounts[folderPath] = max(0, current + delta)
-        // Keep the icon badge live. It reads `inboxUnreadCount`, which the
-        // 60s poller refreshes from server STATUS — but that poll can't run
-        // while the app is backgrounded, so an archive done just before
-        // backgrounding used to leave the badge showing the pre-archive
-        // count. Applying the same delta here updates the badge the instant
-        // the action lands; the poller stays the authority that reconciles
-        // any drift on the next foreground.
-        if Self.isInbox(folderPath) { setInboxUnread(inboxUnreadCount + delta) }
-    }
-
-    /// Canonical INBOX match — IMAP's INBOX name is case-insensitive
-    /// (RFC 3501), and folder paths reach these mutators verbatim from the
-    /// server, so compare case-insensitively rather than against a literal.
-    static func isInbox(_ folderPath: String) -> Bool {
-        folderPath.caseInsensitiveCompare("INBOX") == .orderedSame
-    }
-
-    /// Single chokepoint for the Inbox unread count and the system icon
-    /// badge. Every writer — the STATUS poller, optimistic archive/mark-read
-    /// deltas, and full STATUS walks — routes through here so the two never
-    /// diverge. The badge task re-reads `inboxUnreadCount` at execution time
-    /// rather than capturing `count`, so a burst of deltas can't land the
-    /// badge on a stale intermediate value if the tasks run out of order.
-    public func setInboxUnread(_ count: Int) {
-        inboxUnreadCount = max(0, count)
-        Task {
-            try? await UNUserNotificationCenter.current().setBadgeCount(inboxUnreadCount)
-        }
     }
 }
 

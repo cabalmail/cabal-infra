@@ -155,7 +155,7 @@ struct VisionSectionView: View {
             coordinator?.scheduleRestore(for: restore)
         }
         selectedFolder = Folder(path: target.folderPath, isSubscribed: true)
-        let model = FolderListViewModel(client: client, appState: appState)
+        let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
         await model.loadFolderList()
         let folders = model.folders
         // A saved copy drawn offline can lag the server; reconcile against a

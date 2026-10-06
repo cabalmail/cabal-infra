@@ -9,7 +9,7 @@ import CabalmailKit
 // until the next search. The observer now hands the signal to
 // `applyReaderFlagChange`, which on the search surface matches it by the row's
 // ref. Every signal here is sent the way the reader sends it, through
-// `AppState.signalFlagChange` (or the reader itself, wired by
+// `MailSessionStore.signalFlagChange` (or the reader itself, wired by
 // `MessageDetailView.relayOutcomes`), and handed to the list as its observer
 // does.
 @MainActor
@@ -50,7 +50,7 @@ final class SearchReaderFlagSignalTests: XCTestCase {
             scope: .search,
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: appState
+            mailStore: appState.mailStore
         )
         model.searchQuery = "throwaway"
         await model.runSearch()
@@ -65,7 +65,8 @@ final class SearchReaderFlagSignalTests: XCTestCase {
     /// Hands the latest flag signal to `model`, as the list's `.onChange`
     /// observer does.
     private func deliver(_ appState: AppState, to model: MessageListViewModel) throws {
-        model.applyReaderFlagChange(try XCTUnwrap(appState.lastEnvelopeFlagChange, "the reader sent a signal"))
+        let signal = appState.mailStore.signals.lastEnvelopeFlagChange
+        model.applyReaderFlagChange(try XCTUnwrap(signal, "the reader sent a signal"))
     }
 
     func testReadingAResultClearsItsUnreadDot() async throws {
@@ -73,7 +74,7 @@ final class SearchReaderFlagSignalTests: XCTestCase {
         let appState = AppState()
         let model = try await searchModel(imap: imap, appState: appState)
 
-        appState.signalFlagChange(inbox, flag: .seen, added: true)
+        appState.mailStore.signalFlagChange(inbox, flag: .seen, added: true)
         try deliver(appState, to: model)
 
         XCTAssertFalse(try isUnread(inbox, in: model), "the result the reader opened is read")
@@ -86,11 +87,11 @@ final class SearchReaderFlagSignalTests: XCTestCase {
         let appState = AppState()
         let model = try await searchModel(imap: imap, appState: appState)
 
-        appState.signalFlagChange(archive, flag: .seen, added: true)
+        appState.mailStore.signalFlagChange(archive, flag: .seen, added: true)
         try deliver(appState, to: model)
         XCTAssertFalse(try isUnread(archive, in: model))
 
-        appState.signalFlagChange(archive, flag: .seen, added: false)
+        appState.mailStore.signalFlagChange(archive, flag: .seen, added: false)
         try deliver(appState, to: model)
         XCTAssertTrue(try isUnread(archive, in: model), "the reader's Mark as Unread reaches the row too")
     }
@@ -101,7 +102,7 @@ final class SearchReaderFlagSignalTests: XCTestCase {
         let model = try await searchModel(imap: imap, appState: appState)
         let before = model.envelopes
 
-        appState.signalFlagChange(MessageRef(folder: "Drafts", uid: 525), flag: .seen, added: true)
+        appState.mailStore.signalFlagChange(MessageRef(folder: "Drafts", uid: 525), flag: .seen, added: true)
         try deliver(appState, to: model)
 
         XCTAssertEqual(model.envelopes, before)
@@ -120,14 +121,14 @@ final class SearchReaderFlagSignalTests: XCTestCase {
             imap: imap, envelope: result, folderPath: folder.path, markAsRead: .onOpen
         )
         try await fixture.seedSnapshot(reader)
-        MessageDetailView.relayOutcomes(of: reader, to: appState)
+        MessageDetailView.relayOutcomes(of: reader, to: appState.mailStore)
 
         await reader.load()
         try await waitUntil { await !imap.flagCalls.isEmpty }
-        try await waitUntilOnMainActor { appState.lastEnvelopeFlagChange != nil }
+        try await waitUntilOnMainActor { appState.mailStore.signals.lastEnvelopeFlagChange != nil }
         try deliver(appState, to: model)
 
-        XCTAssertEqual(appState.lastEnvelopeFlagChange?.ref, inbox)
+        XCTAssertEqual(appState.mailStore.signals.lastEnvelopeFlagChange?.ref, inbox)
         XCTAssertFalse(try isUnread(inbox, in: model), "back on the results, the opened row is read")
         XCTAssertTrue(try isUnread(sent, in: model))
     }
@@ -140,14 +141,14 @@ final class SearchReaderFlagSignalTests: XCTestCase {
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 525)],
             folderPath: "INBOX",
-            appState: appState
+            mailStore: appState.mailStore
         )
 
-        appState.signalFlagChange(sent, flag: .seen, added: true)
+        appState.mailStore.signalFlagChange(sent, flag: .seen, added: true)
         try deliver(appState, to: model)
         XCTAssertTrue(try isUnread(inbox, in: model), "Sent's UID 525 is not this row")
 
-        appState.signalFlagChange(inbox, flag: .seen, added: true)
+        appState.mailStore.signalFlagChange(inbox, flag: .seen, added: true)
         try deliver(appState, to: model)
         XCTAssertFalse(try isUnread(inbox, in: model))
     }

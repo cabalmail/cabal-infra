@@ -9,7 +9,7 @@ import CabalmailKit
 // Each toggle is optimistic: flip the in-memory flag and signal the list
 // before the STORE, revert both on failure. `onFlagWriteInFlight` brackets
 // the round trip so the list can shield the optimistic flag from a refresh
-// that lands before the write resolves (see `AppState.setFlagWrite` and
+// that lands before the write resolves (see `MessageShields.setFlagWrite` and
 // `MessageListViewModel.shieldFetched`).
 @MainActor
 extension MessageDetailViewModel {

@@ -30,7 +30,9 @@ final class FolderListViewModel {
     var refreshingPaths: Set<String> = []
 
     private let client: CabalmailClient
-    private let appState: AppState
+    /// The session's shared mail state: the sidebar's counts and subscribed
+    /// folders, which this model publishes.
+    private let mailStore: MailSessionStore
     /// Cap concurrent STATUS walks during the subscribed back-fill. The
     /// Lambda is happy to be hit in parallel, but the shared IMAP
     /// connection underneath serializes anyway — keeping this small
@@ -38,9 +40,9 @@ final class FolderListViewModel {
     /// changing real throughput.
     private let subscribedRefreshConcurrency = 4
 
-    init(client: CabalmailClient, appState: AppState) {
+    init(client: CabalmailClient, mailStore: MailSessionStore) {
         self.client = client
-        self.appState = appState
+        self.mailStore = mailStore
     }
 
     /// Manual refresh path (toolbar / pull-to-refresh on the sidebar).
@@ -79,9 +81,9 @@ final class FolderListViewModel {
             // Badges seeded from a saved copy (here, or by visionOS's landing
             // model) go with it, so a recount cut short leaves them blank
             // rather than old. A no-op unless something was seeded.
-            for path in appState.savedFolderCounts.takeSeeded() {
-                appState.folderUnreadCounts[path] = nil
-                appState.folderTotalCounts[path] = nil
+            for path in mailStore.counts.savedFolderCounts.takeSeeded() {
+                mailStore.counts.folderUnreadCounts[path] = nil
+                mailStore.counts.folderTotalCounts[path] = nil
             }
             isShowingSavedCopy = false
             // Publish the LSUB set by path so the message list's
@@ -89,7 +91,7 @@ final class FolderListViewModel {
             // than from whatever `Folder` value the selection happens to hold
             // — a navigate request selects a stand-in `Folder(path:)` whose
             // flag is a default, not a fact.
-            appState.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
+            mailStore.counts.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
             errorMessage = nil
             // Keep the Spotlight indexer's subscription gate current — it
             // also purges the index domains of folders unsubscribed or
@@ -109,7 +111,7 @@ final class FolderListViewModel {
     private func showSavedCopy(_ all: [Folder]) async {
         folders = sortForSidebar(all)
         isShowingSavedCopy = true
-        appState.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
+        mailStore.counts.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
         await seedSavedCounts()
     }
 
@@ -124,14 +126,14 @@ final class FolderListViewModel {
     /// set, which can be newer than the saved STATUS.
     private func seedSavedCounts() async {
         let saved = await client.savedFolderStatuses()
-        guard appState.acceptsCounts(from: client) else { return }
-        let recounted = folders.filter { $0.isSubscribed || AppState.isInbox($0.path) }
-        for folder in recounted where appState.folderUnreadCounts[folder.path] == nil {
+        guard mailStore.acceptsCounts(from: client) else { return }
+        let recounted = folders.filter { $0.isSubscribed || MailCounts.isInbox($0.path) }
+        for folder in recounted where mailStore.counts.folderUnreadCounts[folder.path] == nil {
             guard let status = saved[folder.path], let unread = status.unseen,
                   let total = status.messages else { continue }
-            appState.folderUnreadCounts[folder.path] = max(0, unread)
-            appState.folderTotalCounts[folder.path] = max(0, total)
-            appState.savedFolderCounts.markSeeded(folder.path)
+            mailStore.counts.folderUnreadCounts[folder.path] = max(0, unread)
+            mailStore.counts.folderTotalCounts[folder.path] = max(0, total)
+            mailStore.counts.savedFolderCounts.markSeeded(folder.path)
         }
     }
 
@@ -173,7 +175,7 @@ final class FolderListViewModel {
         // The selection binding still holds the pre-toggle `Folder` value;
         // the published set is what lets the open list's banner follow the
         // toggle without a re-select.
-        appState.setSubscription(folderPath: path, isSubscribed: subscribed)
+        mailStore.counts.setSubscription(folderPath: path, isSubscribed: subscribed)
     }
 
     // MARK: - Create / delete
@@ -260,10 +262,10 @@ final class FolderListViewModel {
         do {
             try await client.imapClient.emptyTrash(folder: path)
             try? await client.envelopeCache.invalidate(folder: path)
-            if appState.acceptsCounts(from: client) {
-                appState.setFolderCounts(folderPath: path, unread: 0, total: 0)
+            if mailStore.acceptsCounts(from: client) {
+                mailStore.counts.setFolderCounts(folderPath: path, unread: 0, total: 0)
             }
-            appState.requestRefresh()
+            mailStore.requestListRefresh()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -276,7 +278,7 @@ final class FolderListViewModel {
     /// `FolderMarkAllRead`'s, shared with the message list's own entry.
     func markAllRead(folderPath: String) async {
         do {
-            try await FolderMarkAllRead.perform(folderPath: folderPath, client: client, appState: appState)
+            try await FolderMarkAllRead.perform(folderPath: folderPath, client: client, mailStore: mailStore)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -353,10 +355,10 @@ final class FolderListViewModel {
         }
         // A reply for a session that has started ending is the last
         // account's (#1848).
-        guard appState.acceptsCounts(from: client) else { return status }
+        guard mailStore.acceptsCounts(from: client) else { return status }
         let unread = status.unseen ?? 0
         let total = status.messages ?? 0
-        appState.setFolderCounts(folderPath: path, unread: unread, total: total)
+        mailStore.counts.setFolderCounts(folderPath: path, unread: unread, total: total)
         return status
     }
 

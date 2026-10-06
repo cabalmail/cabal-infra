@@ -19,7 +19,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
     }
 
     /// A list holding `uids` (all read except `unread`) and a reader open on
-    /// `open`, wired through `appState` like the views wire them.
+    /// `open`, wired through the mail store like the views wire them.
     private func makePair(
         imap: FakeImapClient,
         uids: [UInt32],
@@ -31,7 +31,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
             TestFixtures.makeEnvelope(uid: $0, flags: unread.contains($0) ? [] : [.seen])
         }
         let list = try TestFixtures.makeModel(
-            imap: imap, envelopes: envelopes, folderPath: inbox, appState: appState
+            imap: imap, envelopes: envelopes, folderPath: inbox, mailStore: appState.mailStore
         )
         list.totalMessages = UInt32(uids.count)
         list.unseen = unread.count
@@ -46,8 +46,11 @@ final class ReaderRemovalRevertTests: XCTestCase {
         reader.onFlagChanged = { [weak list] flag, added in
             list?.applyFlagChange(openRef, flag: flag, added: added)
         }
-        reader.onMoveInFlight = { [weak appState] inFlight in
-            appState?.setMoveInFlight(openRef, inFlight: inFlight)
+        // The list holds the store, not `appState`, which goes when this
+        // returns; so does the reader's relay in the app (`relayOutcomes`).
+        let mailStore = appState.mailStore
+        reader.onMoveInFlight = { [weak mailStore] inFlight in
+            mailStore?.shields.setMoveInFlight(openRef, inFlight: inFlight)
         }
         reader.onMoveFailed = { [weak list] markUnread in
             list?.restorePrunedEnvelope(openRef, markUnread: markUnread)

@@ -32,8 +32,8 @@ extension MessageListViewModel {
         pendingRemovedRefs.insert(ref)
         defer { pendingRemovedRefs.remove(ref) }
         if wasUnread {
-            appState.applyUnreadDelta(folderPath: source, delta: -1)
-            appState.applyUnreadDelta(folderPath: destination, delta: 1)
+            mailStore.counts.applyUnreadDelta(folderPath: source, delta: -1)
+            mailStore.counts.applyUnreadDelta(folderPath: destination, delta: 1)
         }
 
         do {
@@ -46,9 +46,9 @@ extension MessageListViewModel {
         } catch {
             restoreEnvelope(envelope, at: originalIndex)
             // Not once the session has ended (#1851).
-            if wasUnread, appState.acceptsCounts(from: client) {
-                appState.applyUnreadDelta(folderPath: source, delta: 1)
-                appState.applyUnreadDelta(folderPath: destination, delta: -1)
+            if wasUnread, mailStore.acceptsCounts(from: client) {
+                mailStore.counts.applyUnreadDelta(folderPath: source, delta: 1)
+                mailStore.counts.applyUnreadDelta(folderPath: destination, delta: -1)
             }
             errorMessage = error.localizedDescription
         }
@@ -122,9 +122,9 @@ extension MessageListViewModel {
         pendingRemovedRefs.formUnion(movingRefs)
         defer { pendingRemovedRefs.subtract(movingRefs) }
         for (source, count) in unreadBySource {
-            appState.applyUnreadDelta(folderPath: source, delta: -count)
+            mailStore.counts.applyUnreadDelta(folderPath: source, delta: -count)
             if !markSeenFirst {
-                appState.applyUnreadDelta(folderPath: destination, delta: count)
+                mailStore.counts.applyUnreadDelta(folderPath: destination, delta: count)
             }
         }
 
@@ -172,10 +172,10 @@ extension MessageListViewModel {
         envelopes.sort(by: envelopeOrder)
         adjustTotalMessages(by: restored.count)
         // Not once the session has ended (#1851).
-        guard appState.acceptsCounts(from: client) else { return }
-        appState.applyUnreadDelta(folderPath: source, delta: unread)
+        guard mailStore.acceptsCounts(from: client) else { return }
+        mailStore.counts.applyUnreadDelta(folderPath: source, delta: unread)
         if !markSeenFirst {
-            appState.applyUnreadDelta(folderPath: destination, delta: -unread)
+            mailStore.counts.applyUnreadDelta(folderPath: destination, delta: -unread)
         }
     }
 
@@ -202,10 +202,10 @@ extension MessageListViewModel {
             for envelope in restored {
                 applyOptimisticFlag(rowRef(for: envelope), flag: .seen, add: true)
             }
-        } else if appState.acceptsCounts(from: client) {
+        } else if mailStore.acceptsCounts(from: client) {
             let unread = restored.filter { !$0.flags.contains(.seen) }.count
-            appState.applyUnreadDelta(folderPath: source, delta: unread)
-            appState.applyUnreadDelta(folderPath: destination, delta: -unread)
+            mailStore.counts.applyUnreadDelta(folderPath: source, delta: unread)
+            mailStore.counts.applyUnreadDelta(folderPath: destination, delta: -unread)
         }
     }
 }

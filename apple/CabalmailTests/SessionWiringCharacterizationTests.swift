@@ -118,7 +118,7 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         coordinator.recordFolder("Archive")
         coordinator.flushSession()
         XCTAssertEqual(ResumeSessionStore(defaults: harness.defaults).loadSession()?.folder, "Archive")
-        XCTAssertTrue(state.savedFolderCounts.cache === client.folderStateCache)
+        XCTAssertTrue(state.mailStore.counts.savedFolderCounts.cache === client.folderStateCache)
     }
 
     /// The badge poller's first tick runs at once: one STATUS on INBOX, whose
@@ -129,12 +129,14 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         await harness.imap.scriptStatusResults([.success(FolderStatus(messages: 40, unseen: 7))])
 
         await SignOutSuiteSteps.signIn(harness)
-        try await waitUntilOnMainActor { self.harness.appState.inboxUnreadCount == 7 }
+        try await waitUntilOnMainActor { self.harness.appState.mailStore.counts.inboxUnreadCount == 7 }
 
         let calls = await harness.imap.statusCalls
         XCTAssertEqual(calls.map(\.path), ["INBOX"], "one tick; the next is a minute away")
         XCTAssertEqual(calls.map(\.flagged), [false])
-        XCTAssertNil(harness.appState.folderUnreadCounts["INBOX"], "the badge poll does not feed the sidebar")
+        XCTAssertNil(
+            harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], "the badge poll does not feed the sidebar"
+        )
         let feedPoll = try XCTUnwrap(harness.appState.feedRefreshTask)
         XCTAssertFalse(feedPoll.isCancelled)
     }
@@ -282,12 +284,12 @@ final class SessionWiringCharacterizationTests: XCTestCase {
             .success(FolderStatus(messages: 41, unseen: 2)),
         ])
         await SignOutSuiteSteps.signIn(harness)
-        try await waitUntilOnMainActor { self.harness.appState.inboxUnreadCount == 7 }
+        try await waitUntilOnMainActor { self.harness.appState.mailStore.counts.inboxUnreadCount == 7 }
         await harness.appState.signOut()
-        XCTAssertEqual(harness.appState.inboxUnreadCount, 0)
+        XCTAssertEqual(harness.appState.mailStore.counts.inboxUnreadCount, 0)
 
         await SignOutSuiteSteps.signIn(harness)
-        try await waitUntilOnMainActor { self.harness.appState.inboxUnreadCount == 2 }
+        try await waitUntilOnMainActor { self.harness.appState.mailStore.counts.inboxUnreadCount == 2 }
 
         let calls = await harness.imap.statusCalls
         XCTAssertEqual(calls.map(\.path), ["INBOX", "INBOX"])
@@ -364,7 +366,9 @@ private final class WiringProbe {
         writes.append(Write(
             leaving: state.status,
             clientWired: client != nil,
-            countsOnClientCache: client.map { state.savedFolderCounts.cache === $0.folderStateCache } ?? false,
+            countsOnClientCache: client.map {
+                state.mailStore.counts.savedFolderCounts.cache === $0.folderStateCache
+            } ?? false,
             navWired: state.navCoordinator != nil,
             observing: state.sessionExpiryTask != nil,
             events: harness.events

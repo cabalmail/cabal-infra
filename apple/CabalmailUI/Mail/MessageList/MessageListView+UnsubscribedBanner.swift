@@ -9,7 +9,7 @@ import CabalmailKit
 /// for the times they do want a current view.
 ///
 /// Whether the folder *is* unsubscribed is decided by
-/// `UnsubscribedBannerPolicy` against `AppState.subscribedFolderPaths`,
+/// `UnsubscribedBannerPolicy` against `MailCounts.subscribedFolderPaths`,
 /// not by `folder.isSubscribed`: the selection can hold a stand-in
 /// `Folder(path:)` (resume-position toast, push-notification tap,
 /// Spotlight, Siri) whose flag is a default, and the banner used to
@@ -48,8 +48,8 @@ extension MessageListView {
     private func refreshFolderStatus() async {
         guard let client = appState.client else { return }
         if let status = try? await client.imapClient.status(path: folder.path),
-           appState.acceptsCounts(from: client) {
-            appState.setFolderCounts(
+           appState.mailStore.acceptsCounts(from: client) {
+            appState.mailStore.counts.setFolderCounts(
                 folderPath: folder.path,
                 unread: status.unseen ?? 0,
                 total: status.messages ?? 0

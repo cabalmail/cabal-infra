@@ -20,7 +20,7 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
             scope: .search,
             client: try TestFixtures.makeClient(imap: imap),
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: AppState()
+            mailStore: AppState().mailStore
         )
     }
 

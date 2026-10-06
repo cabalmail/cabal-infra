@@ -19,19 +19,19 @@ enum FolderMarkAllRead {
     /// Returns how many messages the server flipped. Throws the transport or
     /// Lambda error for the caller to surface in its own `errorMessage`.
     @discardableResult
-    static func perform(folderPath: String, client: CabalmailClient, appState: AppState) async throws -> Int {
+    static func perform(folderPath: String, client: CabalmailClient, mailStore: MailSessionStore) async throws -> Int {
         let flipped = try await client.imapClient.markFolderRead(folder: folderPath)
         try? await client.envelopeCache.markAllSeen(folder: folderPath)
         // Signed out meanwhile: the badge is the last account's (#1848).
-        guard appState.acceptsCounts(from: client) else { return flipped }
-        if let total = appState.folderTotalCounts[folderPath] {
-            appState.setFolderCounts(folderPath: folderPath, unread: 0, total: total)
+        guard mailStore.acceptsCounts(from: client) else { return flipped }
+        if let total = mailStore.counts.folderTotalCounts[folderPath] {
+            mailStore.counts.setFolderCounts(folderPath: folderPath, unread: 0, total: total)
         } else {
             // No STATUS yet for this folder: zero the unread alone rather
             // than invent a total the badge would then draw as `0/0`.
-            appState.setUnreadCount(folderPath: folderPath, count: 0)
+            mailStore.counts.setUnreadCount(folderPath: folderPath, count: 0)
         }
-        appState.requestRefresh()
+        mailStore.requestListRefresh()
         return flipped
     }
 }

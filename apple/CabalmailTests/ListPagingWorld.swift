@@ -81,7 +81,7 @@ final class ListPagingWorld {
             folder: Folder(path: Self.folderPath, isSubscribed: true),
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: AppState()
+            mailStore: AppState().mailStore
         )
         model.envelopes = preloaded
         models.append(model)

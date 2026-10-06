@@ -137,13 +137,16 @@ final class SearchCopyRowActionTests: XCTestCase {
     func testMarkingOneCopyReadMovesOnlyItsFoldersBadge() async throws {
         let imap = FakeImapClient()
         let model = try await searchModel(imap: imap)
-        model.appState.setFolderCounts(folderPath: "INBOX", unread: 3, total: 10)
-        model.appState.setFolderCounts(folderPath: "Sent", unread: 2, total: 10)
+        model.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 3, total: 10)
+        model.mailStore.counts.setFolderCounts(folderPath: "Sent", unread: 2, total: 10)
 
         await model.setSeen(true, refs: [inbox])
 
-        XCTAssertEqual(model.appState.folderUnreadCounts["INBOX"], 2)
-        XCTAssertEqual(model.appState.folderUnreadCounts["Sent"], 2, "Sent's copy was already read and is not touched")
+        XCTAssertEqual(model.mailStore.counts.folderUnreadCounts["INBOX"], 2)
+        XCTAssertEqual(
+            model.mailStore.counts.folderUnreadCounts["Sent"], 2,
+            "Sent's copy was already read and is not touched"
+        )
         XCTAssertTrue(try row(inbox, in: model).flags.contains(.seen))
     }
 
@@ -213,7 +216,7 @@ final class SearchCopyRowActionTests: XCTestCase {
                                                   markAsRead: .onOpen)
         try await fixture.seedSnapshot(reader)
         let appState = AppState()
-        MessageDetailView.relayOutcomes(of: reader, to: appState)
+        MessageDetailView.relayOutcomes(of: reader, to: appState.mailStore)
 
         await reader.load()
         try await waitUntil { await !imap.flagCalls.isEmpty }
@@ -223,6 +226,8 @@ final class SearchCopyRowActionTests: XCTestCase {
         XCTAssertEqual(calls.map(\.folder), ["INBOX", "INBOX"], "mark-read-on-open, then the toolbar's Flag")
         XCTAssertEqual(calls.map(\.uids), [[9], [9]])
         XCTAssertEqual(reader.ref, inbox)
-        XCTAssertEqual(appState.lastEnvelopeFlagChange?.ref, inbox, "the list is told about the INBOX copy")
+        XCTAssertEqual(
+            appState.mailStore.signals.lastEnvelopeFlagChange?.ref, inbox, "the list is told about the INBOX copy"
+        )
     }
 }

@@ -24,7 +24,7 @@ struct InboxStatusIntent: AppIntent {
         }
         // Keep the app's badge state coherent when it's running; the 60s
         // poller reconciles any drift either way.
-        IntentBridge.shared.appState?.setInboxUnread(unread)
+        IntentBridge.shared.appState?.mailStore.counts.setInboxUnread(unread)
         guard unread > 0 else {
             return .result(value: 0, dialog: "Your inbox has no unread messages.")
         }

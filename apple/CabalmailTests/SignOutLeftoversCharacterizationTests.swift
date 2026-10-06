@@ -46,20 +46,20 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
     func testSignOutWithAClientClearsTheFolderCountsAndSubscriptions() async throws {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
-        state.setFolderCounts(folderPath: "INBOX", unread: 4, total: 30)
-        state.setFolderCounts(folderPath: "Archive", unread: 3, total: 40)
-        state.setSubscribedFolders(["INBOX", "Archive"])
-        state.savedFolderCounts.markSeeded("Lists")
-        XCTAssertEqual(state.inboxUnreadCount, 4, "precondition")
+        state.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 4, total: 30)
+        state.mailStore.counts.setFolderCounts(folderPath: "Archive", unread: 3, total: 40)
+        state.mailStore.counts.setSubscribedFolders(["INBOX", "Archive"])
+        state.mailStore.counts.savedFolderCounts.markSeeded("Lists")
+        XCTAssertEqual(state.mailStore.counts.inboxUnreadCount, 4, "precondition")
 
         await state.signOut()
 
-        XCTAssertEqual(state.folderUnreadCounts, [:])
-        XCTAssertEqual(state.folderTotalCounts, [:])
-        XCTAssertNil(state.subscribedFolderPaths)
-        XCTAssertEqual(state.inboxUnreadCount, 0)
-        XCTAssertEqual(state.savedFolderCounts.seededPaths, [])
-        XCTAssertNil(state.savedFolderCounts.cache)
+        XCTAssertEqual(state.mailStore.counts.folderUnreadCounts, [:])
+        XCTAssertEqual(state.mailStore.counts.folderTotalCounts, [:])
+        XCTAssertNil(state.mailStore.counts.subscribedFolderPaths)
+        XCTAssertEqual(state.mailStore.counts.inboxUnreadCount, 0)
+        XCTAssertEqual(state.mailStore.counts.savedFolderCounts.seededPaths, [])
+        XCTAssertNil(state.mailStore.counts.savedFolderCounts.cache)
     }
 
     /// The removal and in-flight shields are keyed by folder path and UID,
@@ -73,17 +73,17 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         let removed = MessageRef(folder: "INBOX", uid: 5)
-        state.recordConfirmedRemovals([removed])
-        state.setFlagWrite(MessageRef(folder: "INBOX", uid: 6), inFlight: true)
-        state.setMoveInFlight(MessageRef(folder: "Archive", uid: 7), inFlight: true)
-        XCTAssertEqual(state.confirmedRemovalRefs(folderPath: "INBOX"), [removed], "precondition")
+        state.mailStore.shields.recordConfirmedRemovals([removed])
+        state.mailStore.shields.setFlagWrite(MessageRef(folder: "INBOX", uid: 6), inFlight: true)
+        state.mailStore.shields.setMoveInFlight(MessageRef(folder: "Archive", uid: 7), inFlight: true)
+        XCTAssertEqual(state.mailStore.shields.confirmedRemovalRefs(folderPath: "INBOX"), [removed], "precondition")
 
         await state.signOut()
 
-        XCTAssertEqual(state.confirmedRemovals, [:])
-        XCTAssertEqual(state.confirmedRemovalRefs(folderPath: "INBOX"), [])
-        XCTAssertEqual(state.pendingFlagWriteRefs, [])
-        XCTAssertEqual(state.pendingMoveRefs, [])
+        XCTAssertEqual(state.mailStore.shields.confirmedRemovals, [:])
+        XCTAssertEqual(state.mailStore.shields.confirmedRemovalRefs(folderPath: "INBOX"), [])
+        XCTAssertEqual(state.mailStore.shields.pendingFlagWriteRefs, [])
+        XCTAssertEqual(state.mailStore.shields.pendingMoveRefs, [])
     }
 
     /// Every reader's attachment folder goes with the session (#1813). Each
