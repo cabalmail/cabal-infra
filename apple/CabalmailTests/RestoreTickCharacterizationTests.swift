@@ -136,12 +136,11 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         XCTAssertGreaterThan(next.tick, cleared.tick, "clearing does not reset the tick")
     }
 
-    /// Pins current behaviour, which looks like an oversight: `scheduleRestore`
-    /// copies every cursor field into the working cursor except
-    /// `messageFraction`, so the fraction recorded for the message the user
-    /// was reading rides along on the restored one until the next record.
-    /// Tracked in #1826.
-    func testScheduleRestorePrimesTheWorkingCursorButKeepsAStaleFraction() throws {
+    /// `scheduleRestore` primes every working-cursor field from the cursor,
+    /// `messageFraction` included, so the fraction recorded for the message
+    /// the user was reading doesn't ride along on the restored one. Until
+    /// #1826 it skipped the fraction and this pinned the stale value.
+    func testScheduleRestorePrimesEveryWorkingCursorFieldIncludingTheFraction() throws {
         let coordinator = try makeCoordinator()
         defer { coordinator.flushSession() }
         coordinator.recordFolder("INBOX")
@@ -164,7 +163,62 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(working.listScroll, 2)
         XCTAssertEqual(working.messageScroll, 120)
         XCTAssertNil(working.messageAnchor, "the old message's anchor is replaced")
-        XCTAssertEqual(working.messageFraction, 0.4, "the old message's fraction is not")
+        XCTAssertNil(working.messageFraction, "so is its fraction")
         XCTAssertEqual(working.clientID, "this-install", "a restore is saved as this install's own")
+
+        coordinator.scheduleRestore(for: NavState(
+            folder: "Archive", messageID: "<nine@example.com>", uid: 9,
+            messageAnchor: "f0.6500", messageFraction: 0.65, clientID: "other-install"
+        ))
+        XCTAssertEqual(coordinator.workingCursor?.messageFraction, 0.65, "a cursor's own fraction is primed")
+    }
+
+    /// #1873: a restore primes the cursor's UIDVALIDITY. The list selecting
+    /// the restored message records it again and keeps it; opening any other
+    /// message, in that folder or another, clears it rather than echoing a
+    /// value that was never that message's.
+    func testARestoredUIDValidityStaysOnlyWithTheRestoredMessage() throws {
+        let coordinator = try makeCoordinator()
+        defer { coordinator.flushSession() }
+        coordinator.scheduleRestore(for: NavState(
+            folder: "Archive", messageID: "<nine@example.com>", uid: 9, uidValidity: 77,
+            clientID: "other-install"
+        ))
+
+        coordinator.recordMessage(folderPath: "Archive", uid: 9, messageID: "<nine@example.com>")
+        XCTAssertEqual(coordinator.workingCursor?.uidValidity, 77, "the restored message keeps it")
+
+        coordinator.recordMessage(folderPath: "Archive", uid: 12, messageID: "<twelve@example.com>")
+        XCTAssertEqual(coordinator.workingCursor?.uid, 12)
+        XCTAssertNil(coordinator.workingCursor?.uidValidity, "another message in the same folder drops it")
+
+        coordinator.scheduleRestore(for: NavState(
+            folder: "Archive", messageID: "<nine@example.com>", uid: 9, uidValidity: 77,
+            clientID: "other-install"
+        ))
+        coordinator.recordMessage(folderPath: "INBOX", uid: 9, messageID: "<inbox-nine@example.com>")
+        XCTAssertNil(coordinator.workingCursor?.uidValidity, "the same UID in another folder drops it too")
+    }
+
+    /// Closing the restored message (back to its list) leaves a folder
+    /// cursor with none of that message's fields: no UIDVALIDITY and no
+    /// reading fraction, matching the offset and anchor it already cleared.
+    func testClosingTheMessageClearsItsUIDValidityAndFraction() throws {
+        let coordinator = try makeCoordinator()
+        defer { coordinator.flushSession() }
+        coordinator.scheduleRestore(for: NavState(
+            folder: "Archive", messageID: "<nine@example.com>", uid: 9, uidValidity: 77,
+            messageAnchor: "i2|0", messageFraction: 0.3, clientID: "other-install"
+        ))
+
+        coordinator.recordNoMessage(folderPath: "Archive")
+
+        let working = try XCTUnwrap(coordinator.workingCursor)
+        XCTAssertEqual(working.folder, "Archive")
+        XCTAssertNil(working.uid)
+        XCTAssertNil(working.messageID)
+        XCTAssertNil(working.uidValidity)
+        XCTAssertNil(working.messageAnchor)
+        XCTAssertNil(working.messageFraction)
     }
 }
