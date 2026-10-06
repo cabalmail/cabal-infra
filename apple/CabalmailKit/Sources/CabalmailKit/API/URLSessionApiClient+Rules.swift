@@ -6,7 +6,7 @@ extension URLSessionApiClient {
     public func listRules() async throws -> RuleSet {
         let request = try await get("/get_rules")
         let data = try await send(request, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(RuleSet.self, from: data)
+        return try decodeReply(RuleSet.self, from: data, for: request)
     }
 
     public func setRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet {
@@ -24,7 +24,7 @@ extension URLSessionApiClient {
             // unverified until compile). Neither is surfaced: RulesValidator
             // flags bad forwards before the PUT, and the folder warning fires
             // for every folder target on every save, so it isn't actionable.
-            return try JSONDecoder().decode(RuleSet.self, from: data)
+            return try decodeReply(RuleSet.self, from: data, for: request)
         } catch CabalmailError.server(let code, let message) where code == "409" {
             throw RuleSetConflictError(serverVersion: Self.conflictVersion(message))
         }

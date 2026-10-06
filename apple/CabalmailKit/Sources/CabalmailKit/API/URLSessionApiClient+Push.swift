@@ -46,6 +46,6 @@ extension URLSessionApiClient {
         if let messageID { body["msg_id"] = messageID }
         let request = try await post("/push_envelope", json: body)
         let data = try await send(request, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(PushEnvelope.self, from: data)
+        return try decodeReply(PushEnvelope.self, from: data, for: request)
     }
 }

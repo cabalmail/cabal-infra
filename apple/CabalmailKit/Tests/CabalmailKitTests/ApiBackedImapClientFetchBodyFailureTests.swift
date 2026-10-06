@@ -62,15 +62,13 @@ final class ApiBackedImapClientFetchBodyFailureTests: XCTestCase {
         }
     }
 
-    /// Pins current behaviour, which looks like a defect: `CabalmailError`
-    /// documents that wire failures are normalized into the enum, but
-    /// `fetchMessage` decodes with a bare `JSONDecoder`, so a 200 the client
-    /// can't parse escapes as `Swift.DecodingError` and the reader shows
-    /// Foundation's generic copy instead of "Couldn't read the server's
-    /// reply." The same bare decode sits behind every JSON endpoint in
-    /// `URLSessionApiClient`; this pins it for the reader path only.
-    /// Tracked in #1805.
-    func testUnparseable200ThrowsRawDecodingErrorNotCabalmailError() async throws {
+    /// A 200 the client can't parse is `.decoding` naming the endpoint, and
+    /// the reader says "Couldn't read the server's reply." (#1805). Before,
+    /// `fetchMessage` decoded with a bare `JSONDecoder`, so `Swift.DecodingError`
+    /// escaped the package and the reader showed Foundation's "The data
+    /// couldn't be read because it isn't in the correct format." Every other
+    /// endpoint's unparseable 200 is covered by `ApiClientDecodeFailureTests`.
+    func testUnparseable200ThrowsDecodingNamingTheEndpointWithoutTheS3Hop() async throws {
         let bodies = [
             "<html><body>Bad Gateway</body></html>",
             "",
@@ -80,8 +78,13 @@ final class ApiBackedImapClientFetchBodyFailureTests: XCTestCase {
         for body in bodies {
             let harness = FetchBodyHarness(api: [.json(200, body)])
             let error = await harness.fetchError()
-            XCTAssertTrue(error is DecodingError, "\(body): got \(String(describing: error))")
-            XCTAssertNil(error as? CabalmailError, body)
+            XCTAssertFalse(error is DecodingError, "\(body): got \(String(describing: error))")
+            XCTAssertEqual(error as? CabalmailError, .decoding("fetch_message returned an unexpected reply"), body)
+            XCTAssertEqual(
+                error?.localizedDescription,
+                "Couldn't read the server's reply. fetch_message returned an unexpected reply.",
+                body
+            )
             let hops = await harness.wire.hops
             XCTAssertEqual(hops, ["api"], body)
         }

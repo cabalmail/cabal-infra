@@ -49,7 +49,7 @@ extension URLSessionApiClient {
         if let direct = try? JSONDecoder().decode([Address].self, from: data) {
             return direct
         }
-        return try JSONDecoder().decode(LowercaseAddressesWrapper.self, from: data).addresses
+        return try decodeReply(LowercaseAddressesWrapper.self, from: data, for: request).addresses
     }
 
     // The `Items` key is PascalCase because the Lambda emits the shape
@@ -154,7 +154,7 @@ extension URLSessionApiClient {
     public func listFolders(host: String) async throws -> ApiFolderList {
         let request = try await get("/list_folders", query: [URLQueryItem(name: "host", value: host)])
         let data = try await send(request, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(ApiFolderList.self, from: data)
+        return try decodeReply(ApiFolderList.self, from: data, for: request)
     }
 
     public func createFolder(host: String, parent: String, name: String) async throws {
@@ -200,7 +200,7 @@ extension URLSessionApiClient {
         if flagged { query.append(URLQueryItem(name: "flagged", value: "1")) }
         let request = try await get("/folder_status", query: query)
         let data = try await send(request, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(ApiFolderStatus.self, from: data)
+        return try decodeReply(ApiFolderStatus.self, from: data, for: request)
     }
 }
 
@@ -306,6 +306,56 @@ extension URLSessionApiClient {
             )
         }
         return retryData
+    }
+
+    /// Decodes a 2xx reply to `request` as `type`. Every strict decode in the
+    /// client goes through here, so a reply that doesn't parse (an HTML
+    /// error page or an empty body behind a 200, or a shape that drifted from
+    /// the Lambda's) throws `CabalmailError.decoding` naming the endpoint,
+    /// rather than letting `Swift.DecodingError` out of the package to be
+    /// shown with Foundation's generic copy (#1805). The log line says where
+    /// the decode stopped, never what the body held, because replies carry
+    /// message content. Reads that deliberately fall back to a default on an
+    /// unparseable body keep their `try?` at the call site.
+    func decodeReply<T: Decodable>(_ type: T.Type, from data: Data, for request: URLRequest) throws -> T {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch let error as DecodingError {
+            let endpoint = request.url?.lastPathComponent ?? "The API"
+            CabalmailLog.warn("API", "\(endpoint) reply didn't decode as \(T.self): \(error.whereItStopped)")
+            throw CabalmailError.decoding("\(endpoint) returned an unexpected reply")
+        }
+    }
+}
+
+private extension DecodingError {
+    /// The failure's kind and coding path (`uploads[0].url`) and nothing
+    /// else: `debugDescription` and the underlying error can quote the
+    /// reply ("Unexpected character '<' around line 1, column 1").
+    var whereItStopped: String {
+        switch self {
+        case .typeMismatch(let type, let context):
+            return "expected \(type) at \(Self.path(context))"
+        case .valueNotFound(let type, let context):
+            return "no \(type) value at \(Self.path(context))"
+        case .keyNotFound(let key, let context):
+            return "no \"\(key.stringValue)\" key at \(Self.path(context))"
+        case .dataCorrupted(let context):
+            return "unreadable data at \(Self.path(context))"
+        @unknown default:
+            return "an unknown decoding failure"
+        }
+    }
+
+    static func path(_ context: Context) -> String {
+        let path = context.codingPath.reduce(into: "") { path, key in
+            if let index = key.intValue {
+                path += "[\(index)]"
+            } else {
+                path += path.isEmpty ? key.stringValue : ".\(key.stringValue)"
+            }
+        }
+        return path.isEmpty ? "the top level" : path
     }
 }
 

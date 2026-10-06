@@ -15,7 +15,7 @@ extension URLSessionApiClient {
         }
         let httpRequest = try await put("/save_draft", json: json)
         let data = try await send(httpRequest, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(ApiSaveDraftResponse.self, from: data)
+        return try decodeReply(ApiSaveDraftResponse.self, from: data, for: httpRequest)
     }
 
     public func discardDraft(host: String, uid: UInt32, uidValidity: UInt32) async throws -> Bool {
