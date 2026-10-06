@@ -4,102 +4,31 @@ import CabalmailKit
 
 // Cross-folder search rows and the mailbox each one belongs to. IMAP UIDs
 // are unique only within a folder, so a result set spanning folders can
-// hand the client the same UID twice; the index has to survive that and
-// still route each row to its own mailbox.
+// hand the client the same UID twice: `Archive` UID 1 next to `zeta0802`
+// UID 1 (the #1777 shape). Each row carries its own folder (a `MessageRef`),
+// so the selection names exactly the rows picked and every action reaches
+// exactly those messages. Before MessageRef a bare-UID selection could not
+// say which UID-1 row the user meant, and a guard left both alone.
 @MainActor
 final class SearchSourceFolderTests: XCTestCase {
+    private let archived = MessageRef(folder: "Archive", uid: 1)
+    private let zeta = MessageRef(folder: "zeta0802", uid: 1)
+    private let inbox = MessageRef(folder: "INBOX", uid: 2)
 
-    // MARK: - The index
-
-    func testDuplicateUIDsAcrossFoldersResolveSeparately() {
-        let index = SearchSourceFolderIndex([
-            SearchedEnvelope(
-                envelope: TestFixtures.makeEnvelope(uid: 1, messageId: "<archive@example.com>"),
-                folder: "Archive"
-            ),
-            SearchedEnvelope(
-                envelope: TestFixtures.makeEnvelope(uid: 1, messageId: "<zeta@example.com>"),
-                folder: "zeta0802"
-            ),
-        ])
-        XCTAssertEqual(
-            index.folder(for: TestFixtures.makeEnvelope(uid: 1, messageId: "<archive@example.com>")),
-            "Archive"
-        )
-        XCTAssertEqual(
-            index.folder(for: TestFixtures.makeEnvelope(uid: 1, messageId: "<zeta@example.com>")),
-            "zeta0802",
-            "the second row keeps its own mailbox rather than inheriting the first row's"
-        )
-        XCTAssertEqual(
-            index.folders(for: TestFixtures.makeEnvelope(uid: 1, messageId: "<zeta@example.com>")),
-            ["zeta0802"],
-            "rows the key tells apart are not ambiguous on their own"
-        )
-    }
-
-    func testSameMessageFiledInTwoFoldersResolvesByUID() {
-        // The other collision shape: one Message-ID, two folders, two UIDs.
-        let index = SearchSourceFolderIndex([
-            SearchedEnvelope(
-                envelope: TestFixtures.makeEnvelope(uid: 7, messageId: "<copy@example.com>"),
-                folder: "Archive"
-            ),
-            SearchedEnvelope(
-                envelope: TestFixtures.makeEnvelope(uid: 12, messageId: "<copy@example.com>"),
-                folder: "INBOX"
-            ),
-        ])
-        XCTAssertEqual(
-            index.folder(for: TestFixtures.makeEnvelope(uid: 7, messageId: "<copy@example.com>")),
-            "Archive"
-        )
-        XCTAssertEqual(
-            index.folder(for: TestFixtures.makeEnvelope(uid: 12, messageId: "<copy@example.com>")),
-            "INBOX"
-        )
-    }
-
-    func testMissingMessageIDFallsBackToTheUIDMap() {
-        let index = SearchSourceFolderIndex([
-            SearchedEnvelope(envelope: TestFixtures.makeEnvelope(uid: 3), folder: "Archive"),
-            SearchedEnvelope(envelope: TestFixtures.makeEnvelope(uid: 3), folder: "zeta0802"),
-        ])
-        // Nothing tells these two apart, so first-in-server-order wins --
-        // best effort, but not a trap -- and the index says there were two,
-        // so the bulk guard leaves them alone.
-        XCTAssertEqual(index.folder(for: TestFixtures.makeEnvelope(uid: 3)), "Archive")
-        XCTAssertEqual(index.folders(for: TestFixtures.makeEnvelope(uid: 3)), ["Archive", "zeta0802"])
-        // A row whose Message-ID isn't in the index still resolves by UID.
-        XCTAssertEqual(
-            index.folder(for: TestFixtures.makeEnvelope(uid: 3, messageId: "<late@example.com>")),
-            "Archive"
-        )
-    }
-
-    func testUnknownRowAndEmptyIndexResolveToNil() {
-        XCTAssertTrue(SearchSourceFolderIndex().isEmpty)
-        XCTAssertNil(SearchSourceFolderIndex().folder(for: TestFixtures.makeEnvelope(uid: 1)))
-        let index = SearchSourceFolderIndex([
-            SearchedEnvelope(envelope: TestFixtures.makeEnvelope(uid: 1), folder: "Archive"),
-        ])
-        XCTAssertNil(index.folder(for: TestFixtures.makeEnvelope(uid: 99)))
-    }
-
-    // MARK: - Through the view model
+    // MARK: - Rows carry their folder
 
     func testSearchWithCollidingUIDsRoutesEachRowToItsFolder() async throws {
         let imap = FakeImapClient()
-        let archived = TestFixtures.makeEnvelope(
+        let archivedRow = TestFixtures.makeEnvelope(
             uid: 1, messageId: "<archive@example.com>", subject: "Fixer 843 draft probe"
         )
-        let zeta = TestFixtures.makeEnvelope(
+        let zetaRow = TestFixtures.makeEnvelope(
             uid: 1, messageId: "<zeta@example.com>", subject: "smtp cutover probe 0726"
         )
         await imap.scriptSearch(SearchResult(
             envelopes: [
-                SearchedEnvelope(envelope: archived, folder: "Archive"),
-                SearchedEnvelope(envelope: zeta, folder: "zeta0802"),
+                SearchedEnvelope(envelope: archivedRow, folder: "Archive"),
+                SearchedEnvelope(envelope: zetaRow, folder: "zeta0802"),
             ],
             totalEstimate: 2,
             nextCursor: nil,
@@ -109,7 +38,7 @@ final class SearchSourceFolderTests: XCTestCase {
         let model = try TestFixtures.makeModel(imap: imap, envelopes: [])
         model.searchQuery = "probe"
 
-        // Before the fix this trapped in Dictionary(uniqueKeysWithValues:)
+        // Before the first fix this trapped in Dictionary(uniqueKeysWithValues:)
         // -- "Fatal error: Duplicate values for key: '1'" -- taking the
         // whole app down the instant the results came back.
         await model.runSearch()
@@ -117,11 +46,11 @@ final class SearchSourceFolderTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
         XCTAssertTrue(model.isSearchActive)
         XCTAssertEqual(model.envelopes.count, 2, "both matches render")
-        XCTAssertEqual(model.sourceFolder(for: archived), "Archive")
-        XCTAssertEqual(model.sourceFolder(for: zeta), "zeta0802")
+        XCTAssertEqual(model.envelopes.map { model.rowRef(for: $0) }, [archived, zeta])
+        XCTAssertEqual(model.envelopes.map(\.subject), [archivedRow.subject, zetaRow.subject])
     }
 
-    func testClearingASearchDropsTheIndex() async throws {
+    func testClearingASearchHandsTheRowsBackToTheFolder() async throws {
         let imap = FakeImapClient()
         let hit = TestFixtures.makeEnvelope(uid: 1, messageId: "<archive@example.com>")
         await imap.scriptSearch(SearchResult(
@@ -134,19 +63,19 @@ final class SearchSourceFolderTests: XCTestCase {
         let model = try TestFixtures.makeModel(imap: imap, envelopes: [])
         model.searchQuery = "probe"
         await model.runSearch()
-        XCTAssertEqual(model.sourceFolder(for: hit), "Archive")
+        XCTAssertEqual(model.envelopes.map { model.rowRef(for: $0) }, [archived])
 
         // `clearSearch` runs a folder refresh the fake traps on; the state
         // reset it does first is what this asserts.
         await model.clearSearch()
-        XCTAssertTrue(model.sourceFolderIndex.isEmpty)
-        XCTAssertEqual(model.sourceFolder(for: hit), "INBOX", "folder mode owns every row again")
+        XCTAssertFalse(model.isSearchActive)
+        XCTAssertTrue(model.envelopes.isEmpty, "no foreign row outlives the search")
     }
+
     // MARK: - Bulk actions over colliding UIDs
 
-    /// A cross-folder search holding Archive UID 1, zeta0802 UID 1, and an
-    /// unambiguous INBOX UID 2. A bare-UID selection of 1 can't say which
-    /// of the two rows the user meant.
+    /// A cross-folder search holding Archive UID 1, zeta0802 UID 1, and
+    /// INBOX UID 2.
     private func collidingSearchModel(imap: FakeImapClient) async throws -> MessageListViewModel {
         await imap.scriptSearch(SearchResult(
             envelopes: [
@@ -175,61 +104,81 @@ final class SearchSourceFolderTests: XCTestCase {
         return model
     }
 
-    func testBulkSeenSkipsCollidingUIDsAndActsOnTheRest() async throws {
+    private func row(_ ref: MessageRef, in model: MessageListViewModel) throws -> Envelope {
+        try XCTUnwrap(model.envelope(for: ref))
+    }
+
+    func testBulkSeenActsOnExactlyTheSelectedRows() async throws {
         let imap = FakeImapClient()
         let model = try await collidingSearchModel(imap: imap)
 
-        // Before the fix this trapped in priorFlagState's
-        // Dictionary(uniqueKeysWithValues:), and the grouping would have
-        // flagged both UID-1 messages.
-        await model.setSeen(true, uids: [1, 2])
+        await model.setSeen(true, refs: [archived, inbox])
 
         let calls = await imap.flagCalls
-        XCTAssertEqual(calls.count, 1, "only the unambiguous row reaches the server")
-        XCTAssertEqual(calls.first?.folder, "INBOX")
-        XCTAssertEqual(calls.first?.uids, [2])
-        let collided = model.envelopes.filter { $0.uid == 1 }
-        XCTAssertEqual(collided.count, 2)
-        XCTAssertTrue(collided.allSatisfy { !$0.flags.contains(.seen) }, "neither UID-1 row changes")
-        XCTAssertNotNil(model.skippedNotice, "the user is told why some rows were left alone")
+        XCTAssertEqual(Set(calls.map(\.folder)), ["Archive", "INBOX"])
+        XCTAssertEqual(calls.first { $0.folder == "Archive" }?.uids, [1])
+        XCTAssertEqual(calls.first { $0.folder == "INBOX" }?.uids, [2])
+        XCTAssertTrue(try row(archived, in: model).flags.contains(.seen))
+        XCTAssertTrue(try row(inbox, in: model).flags.contains(.seen))
+        XCTAssertFalse(
+            try row(zeta, in: model).flags.contains(.seen),
+            "zeta0802 UID 1 shares the selected row's UID and is left alone"
+        )
+        XCTAssertNil(model.errorMessage)
     }
 
-    func testBulkFlagSkipsCollidingUIDs() async throws {
+    func testBulkFlagReachesOnlyTheChosenOfTwoCollidingRows() async throws {
         let imap = FakeImapClient()
         let model = try await collidingSearchModel(imap: imap)
 
-        await model.setFlagged(true, uids: [1])
+        await model.setFlagged(true, refs: [zeta])
 
         let calls = await imap.flagCalls
-        XCTAssertTrue(calls.isEmpty)
-        XCTAssertTrue(model.envelopes.allSatisfy { !$0.flags.contains(.flagged) })
-        XCTAssertNotNil(model.skippedNotice)
+        XCTAssertEqual(calls.map(\.folder), ["zeta0802"])
+        XCTAssertEqual(calls.first?.uids, [1])
+        XCTAssertTrue(try row(zeta, in: model).flags.contains(.flagged))
+        XCTAssertFalse(try row(archived, in: model).flags.contains(.flagged), "the Archive UID-1 row is not flagged")
     }
 
-    func testBulkMoveSkipsCollidingUIDsAndMovesTheRest() async throws {
+    func testBulkMoveMovesExactlyTheSelectedRows() async throws {
         let imap = FakeImapClient()
         let model = try await collidingSearchModel(imap: imap)
-        model.selectedUIDs = [1, 2]
+        model.selectedRefs = [archived, inbox]
 
-        await model.moveMessages(uids: [1, 2], to: "Junk")
+        await model.moveMessages(refs: [archived, inbox], to: "Junk")
 
         let calls = await imap.moveCalls
-        XCTAssertEqual(calls.count, 1)
-        XCTAssertEqual(calls.first?.folder, "INBOX")
-        XCTAssertEqual(calls.first?.uids, [2])
-        XCTAssertEqual(model.envelopes.map(\.uid), [1, 1], "both UID-1 rows stay put")
-        XCTAssertEqual(model.selectedUIDs, [1], "the rows left in place stay selected")
-        XCTAssertNotNil(model.skippedNotice)
+        XCTAssertEqual(Set(calls.map(\.folder)), ["Archive", "INBOX"])
+        XCTAssertEqual(calls.first { $0.folder == "Archive" }?.uids, [1])
+        XCTAssertEqual(calls.first { $0.folder == "INBOX" }?.uids, [2])
+        XCTAssertEqual(model.envelopes.map { model.rowRef(for: $0) }, [zeta], "only the row nobody picked stays")
+        // The #1792 leftover: a selected UID left behind used to open the
+        // other row in the wide reader. Nothing is left selected.
+        XCTAssertEqual(model.selectedRefs, [])
     }
 
-    func testBulkDisposeLeavesCollidingUIDsInPlace() async throws {
+    func testBulkDisposeArchivesOnlyTheChosenCopy() async throws {
         let imap = FakeImapClient()
         let model = try await collidingSearchModel(imap: imap)
 
-        await model.disposeMessages(uids: [1], action: .archive)
+        await model.disposeMessages(refs: [zeta], action: .archive)
 
         let calls = await imap.moveCalls
-        XCTAssertTrue(calls.isEmpty, "Archive UID 1 and zeta0802 UID 1 are both untouched")
-        XCTAssertEqual(model.envelopes.count, 3)
+        XCTAssertEqual(calls.map(\.folder), ["zeta0802"])
+        XCTAssertEqual(calls.first?.uids, [1])
+        XCTAssertEqual(calls.first?.destination, "Archive")
+        XCTAssertEqual(model.envelopes.map { model.rowRef(for: $0) }, [archived, inbox], "Archive UID 1 stays listed")
+    }
+
+    func testSelectingOneOfTwoCollidingRowsSelectsOnlyIt() async throws {
+        let imap = FakeImapClient()
+        let model = try await collidingSearchModel(imap: imap)
+
+        model.toggleSelection(try row(zeta, in: model))
+
+        XCTAssertEqual(model.selectedRefs, [zeta], "one tick, one row")
+        XCTAssertEqual(model.selectedRefs.count, 1, "the bar counts one message")
+        model.selectAllVisible()
+        XCTAssertEqual(model.selectedRefs, [archived, zeta, inbox], "select all counts both UID-1 rows")
     }
 }

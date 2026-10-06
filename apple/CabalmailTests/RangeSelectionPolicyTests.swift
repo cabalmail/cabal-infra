@@ -101,28 +101,28 @@ final class RangeSelectionPolicyTests: XCTestCase {
     /// can never be left over from an earlier anchor.
     func testPinningTheAnchorSnapshotsTheSelectionAtThatMoment() throws {
         let model = try makeModel()
-        model.selectedUIDs = [367]
-        model.setSelectionAnchor(367)
-        XCTAssertEqual(model.selectionRangeBase, [367])
+        model.selectedRefs = [ref(367)]
+        model.setSelectionAnchor(ref(367))
+        XCTAssertEqual(model.selectionRangeBase, [ref(367)])
 
         // Command-click 369: toggle first, then pin, which is the order
         // `applyToggleSelection` uses.
         model.toggleSelection(try envelope(369, in: model))
-        model.setSelectionAnchor(369)
-        XCTAssertEqual(model.selectionAnchor, 369)
-        XCTAssertEqual(model.selectionRangeBase, [367, 369])
+        model.setSelectionAnchor(ref(369))
+        XCTAssertEqual(model.selectionAnchor, ref(369))
+        XCTAssertEqual(model.selectionRangeBase, [ref(367), ref(369)])
 
         // Command-click 369 again, dropping it: the base follows the drop,
         // so a shift-click cannot resurrect it.
         model.toggleSelection(try envelope(369, in: model))
-        model.setSelectionAnchor(369)
-        XCTAssertEqual(model.selectionRangeBase, [367])
+        model.setSelectionAnchor(ref(369))
+        XCTAssertEqual(model.selectionRangeBase, [ref(367)])
 
         // And it is a snapshot, not a mirror: a selection change with no new
         // pin -- which is every range operation -- leaves the base alone.
-        model.selectedUIDs = [367, 316, 313]
+        model.selectedRefs = [ref(367), ref(316), ref(313)]
         XCTAssertEqual(
-            model.selectionRangeBase, [367],
+            model.selectionRangeBase, [ref(367)],
             "a range operation must not fold its own span into the base"
         )
     }
@@ -133,48 +133,48 @@ final class RangeSelectionPolicyTests: XCTestCase {
         let model = try makeModel()
 
         // 1. Click 367.
-        model.selectedUIDs = [367]
-        model.setSelectionAnchor(367)
+        model.selectedRefs = [ref(367)]
+        model.setSelectionAnchor(ref(367))
         // 2. Command-click 369.
         model.toggleSelection(try envelope(369, in: model))
-        model.setSelectionAnchor(369)
+        model.setSelectionAnchor(ref(369))
         // 3. Command-click 313.
         model.toggleSelection(try envelope(313, in: model))
-        model.setSelectionAnchor(313)
-        XCTAssertEqual(model.selectedUIDs, [367, 369, 313], "the healthy 3-selected state")
+        model.setSelectionAnchor(ref(313))
+        XCTAssertEqual(model.selectedRefs, [ref(367), ref(369), ref(313)], "the healthy 3-selected state")
 
         // 4. Shift-click 312.
         let outcome = RangeSelectionPolicy.outcome(
             base: model.selectionRangeBase,
-            anchor: model.selectionAnchor ?? model.selectedUIDs.first,
-            target: 312,
-            ordered: model.envelopes.map(\.uid)
+            anchor: model.selectionAnchor ?? model.selectedRefs.first,
+            target: ref(312),
+            ordered: model.envelopes.map { model.rowRef(for: $0) }
         )
-        model.selectedUIDs = outcome.selected
+        model.selectedRefs = outcome.selected
         XCTAssertEqual(
-            model.selectedUIDs, [367, 369, 313, 312],
+            model.selectedRefs, [ref(367), ref(369), ref(313), ref(312)],
             "the range joins the selection; 367 and 369 are not dropped (#1768)"
         )
-        XCTAssertEqual(model.selectionAnchor, 313, "the anchor still pivots the next span")
+        XCTAssertEqual(model.selectionAnchor, ref(313), "the anchor still pivots the next span")
     }
 
     /// Shift+Down after a command-click: the keyboard path shares the rule,
     /// so it keeps the command-picked rows too.
     func testShiftArrowKeepsTheCommandClickedRows() throws {
         let model = try makeModel()
-        model.selectedUIDs = [367]
-        model.setSelectionAnchor(367)
+        model.selectedRefs = [ref(367)]
+        model.setSelectionAnchor(ref(367))
         model.toggleSelection(try envelope(369, in: model))
-        model.setSelectionAnchor(369)
+        model.setSelectionAnchor(ref(369))
 
         // Shift+Down from the cursor at 369 lands on 316.
         let outcome = RangeSelectionPolicy.outcome(
             base: model.selectionRangeBase,
             anchor: model.selectionAnchor,
-            target: 316,
-            ordered: model.envelopes.map(\.uid)
+            target: ref(316),
+            ordered: model.envelopes.map { model.rowRef(for: $0) }
         )
-        XCTAssertEqual(outcome.selected, [367, 369, 316])
+        XCTAssertEqual(outcome.selected, [ref(367), ref(369), ref(316)])
     }
 
     /// The guard rail for extending from the *base* rather than from the live
@@ -184,33 +184,33 @@ final class RangeSelectionPolicyTests: XCTestCase {
     /// second span replaces the first.
     func testASecondShiftClickOnTheModelGivesTheFirstSpanBack() throws {
         let model = try makeModel()
-        model.selectedUIDs = [367]
-        model.setSelectionAnchor(367)
+        model.selectedRefs = [ref(367)]
+        model.setSelectionAnchor(ref(367))
         model.toggleSelection(try envelope(369, in: model))
-        model.setSelectionAnchor(369)
+        model.setSelectionAnchor(ref(369))
 
-        let shiftClick: (UInt32) -> Set<UInt32> = { target in
+        let shiftClick: (UInt32) -> Set<MessageRef> = { target in
             RangeSelectionPolicy.outcome(
                 base: model.selectionRangeBase,
                 anchor: model.selectionAnchor,
-                target: target,
-                ordered: model.envelopes.map(\.uid)
+                target: self.ref(target),
+                ordered: model.envelopes.map { model.rowRef(for: $0) }
             ).selected
         }
 
-        model.selectedUIDs = shiftClick(312)
-        XCTAssertEqual(model.selectedUIDs, [367, 369, 316, 313, 312])
+        model.selectedRefs = shiftClick(312)
+        XCTAssertEqual(model.selectedRefs, [ref(367), ref(369), ref(316), ref(313), ref(312)])
         // Same anchor, a shorter span: 316, 313 and 312 are the first span's
         // and must go, while 367 -- command-picked -- stays.
-        model.selectedUIDs = shiftClick(369)
-        XCTAssertEqual(model.selectedUIDs, [367, 369])
+        model.selectedRefs = shiftClick(369)
+        XCTAssertEqual(model.selectedRefs, [ref(367), ref(369)])
     }
 
     func testClearingTheSelectionClearsTheBaseToo() throws {
         let model = try makeModel()
-        model.selectedUIDs = [367, 369]
-        model.setSelectionAnchor(369)
-        model.selectedUIDs.removeAll()
+        model.selectedRefs = [ref(367), ref(369)]
+        model.setSelectionAnchor(ref(369))
+        model.selectedRefs.removeAll()
         model.setSelectionAnchor(nil)
         XCTAssertNil(model.selectionAnchor)
         XCTAssertTrue(model.selectionRangeBase.isEmpty, "Esc must not leave a base behind")
@@ -227,5 +227,10 @@ final class RangeSelectionPolicyTests: XCTestCase {
 
     private func envelope(_ uid: UInt32, in model: MessageListViewModel) throws -> Envelope {
         try XCTUnwrap(model.envelopes.first { $0.uid == uid })
+    }
+
+    /// The ref of row `uid` in INBOX, the folder `makeModel()` lists.
+    private func ref(_ uid: UInt32) -> MessageRef {
+        MessageRef(folder: "INBOX", uid: uid)
     }
 }

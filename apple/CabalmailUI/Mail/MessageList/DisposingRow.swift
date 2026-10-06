@@ -1,4 +1,5 @@
 import SwiftUI
+import CabalmailKit
 
 /// Plays a message row out of the list in two legs — fade at full height,
 /// then collapse to zero height — while the view model holds the envelope in
@@ -21,12 +22,14 @@ import SwiftUI
 /// every visible row with it.
 struct DisposingRow<Content: View>: View {
     let model: MessageListViewModel
-    let uid: UInt32
+    /// The row's message. Keyed by ref, not UID, so disposing one of two
+    /// search rows that share a UID plays only that row out.
+    let ref: MessageRef
     let rowHeight: CGFloat
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        let phase = model.rowDisposalPhases[uid]
+        let phase = model.rowDisposalPhases[ref]
         content()
             .opacity(phase == nil ? 1 : 0)
             // No `.clipped()`: the row keeps its intrinsic `rowHeight` and

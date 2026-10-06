@@ -220,40 +220,38 @@ public final class AppState {
     var lastDraftReplaced: DraftReplacedSignal?
     private var draftReplacedTick = 0
 
-    /// UIDs with a flag write in flight from the detail view, keyed by folder
-    /// path (IMAP UIDs are only unique within a mailbox, so a bare UID set
+    /// Messages with a flag write in flight from the detail view (keyed by
+    /// ref: IMAP UIDs are only unique within a mailbox, so a bare UID set
     /// would let a pending write in one folder shield an unrelated row with
     /// the same UID in another). `MessageListViewModel.shieldFetched` reads
     /// this so a refresh that lands mid-write can't revert the detail view's
     /// optimistic flag - the cross-view analogue of the list's own
-    /// `pendingFlagUIDs`. The detail view brackets each write via
-    /// `setFlagWrite(folderPath:uid:inFlight:)`. Read directly at merge time
-    /// (never from a view body), so observation tracking is irrelevant here.
-    private(set) var pendingFlagWriteUIDs: [String: Set<UInt32>] = [:]
+    /// `pendingFlagRefs`. The detail view brackets each write via
+    /// `setFlagWrite(_:inFlight:)`. Read directly at merge time (never from
+    /// a view body), so observation tracking is irrelevant here.
+    private(set) var pendingFlagWriteRefs: Set<MessageRef> = []
 
-    /// UIDs the detail view has optimistically removed (archive / trash /
-    /// move) but whose server move is still in flight, keyed by source folder
-    /// path. The detail view prunes the list row up front via
-    /// `signalDisposed`; without this `MessageListViewModel.shieldFetched`
-    /// would let a refresh that lands before the move completes resurrect the
-    /// row (the source folder still returns the UID). The cross-view analogue
-    /// of the list's own `pendingRemovedUIDs`; bracketed via
-    /// `setMoveInFlight(folderPath:uid:inFlight:)`. Folder-keyed for the same
-    /// per-mailbox UID-uniqueness reason as `pendingFlagWriteUIDs`.
-    private(set) var pendingMoveUIDs: [String: Set<UInt32>] = [:]
+    /// Messages the detail view has optimistically removed (archive / trash /
+    /// move) but whose server move is still in flight. The detail view prunes
+    /// the list row up front via `signalDisposed`; without this
+    /// `MessageListViewModel.shieldFetched` would let a refresh that lands
+    /// before the move completes resurrect the row (the source folder still
+    /// returns the UID). The cross-view analogue of the list's own
+    /// `pendingRemovedRefs`; bracketed via `setMoveInFlight(_:inFlight:)`.
+    private(set) var pendingMoveRefs: Set<MessageRef> = []
 
-    /// UIDs the server has confirmed gone from a folder -- a list or reader
-    /// dispose, move or purge landed -- keyed by folder path, with when that
-    /// was confirmed. The shields above end when a move resolves, but a
-    /// refresh already in flight can still answer with the folder as it was
-    /// before the move and put the message back (the list then shifts under
-    /// the user's pointer). IMAP never reuses a UID within a mailbox, so a
-    /// fetch that still carries one of these is stale by definition, and
+    /// Messages the server has confirmed gone from their folder -- a list or
+    /// reader dispose, move or purge landed -- with when that was confirmed.
+    /// The shields above end when a move resolves, but a refresh already in
+    /// flight can still answer with the folder as it was before the move and
+    /// put the message back (the list then shifts under the user's pointer).
+    /// IMAP never reuses a UID within a mailbox, so a fetch that still
+    /// carries one of these is stale by definition, and
     /// `MessageListViewModel.shieldFetched` drops it. Entries age out after
     /// `confirmedRemovalWindow`, longer than any request can stay in flight.
-    /// Read at merge time only, like `pendingMoveUIDs`.
+    /// Read at merge time only, like `pendingMoveRefs`.
     /// Maintained by the methods in `AppState+ConfirmedRemovals.swift`.
-    var confirmedRemovals: [String: [UInt32: ContinuousClock.Instant]] = [:]
+    var confirmedRemovals: [MessageRef: ContinuousClock.Instant] = [:]
 
     /// True while a message-row drag is in flight on a wide-screen layout.
     /// `MailRootView`'s sidebar watches this to temporarily reveal the
@@ -580,30 +578,19 @@ public final class AppState {
 // properties can't live in an extension). Split out for the same SwiftLint
 // type-body budget as the other extensions in this file.
 extension AppState {
-    func signalDisposed(folderPath: String, uid: UInt32, wasUnread: Bool = false) {
-        signalDisposed(folderPath: folderPath, uids: [uid], wasUnread: wasUnread)
+    func signalDisposed(_ ref: MessageRef) {
+        signalDisposed([ref])
     }
 
-    /// Multi-UID form, for a sender that invalidates more than one row at
-    /// once: a send-from-draft retires every Drafts copy its compose
-    /// session created, not just the newest (#1071).
-    func signalDisposed(folderPath: String, uids: [UInt32], wasUnread: Bool = false) {
-        guard !uids.isEmpty else { return }
+    /// Multi-message form, for a sender that invalidates more than one row
+    /// at once: a send-from-draft retires every Drafts copy its compose
+    /// session created, not just the newest (#1071). The dispose's unread
+    /// delta has already travelled on `signalFlagChange` from the reader's
+    /// mark-read, so this moves no count.
+    func signalDisposed(_ refs: [MessageRef]) {
+        guard !refs.isEmpty else { return }
         disposedTick += 1
-        lastDisposedEnvelope = DisposedEnvelope(
-            folderPath: folderPath,
-            uids: uids,
-            tick: disposedTick
-        )
-        // Dispose marks the message `\Seen` before the move, so the source
-        // folder loses one unread message iff the row was unread to begin
-        // with. The `setSeen(true)` path that ran moments earlier already
-        // applied a -1 via `signalFlagChange`; passing `wasUnread` lets the
-        // list-swipe path (which doesn't go through `setSeen`) report the
-        // same delta exactly once.
-        if wasUnread {
-            applyUnreadDelta(folderPath: folderPath, delta: -1)
-        }
+        lastDisposedEnvelope = DisposedEnvelope(refs: refs, tick: disposedTick)
     }
 
     /// A compose session changed what is in Drafts. The retired UIDs are
@@ -632,76 +619,75 @@ extension AppState {
     /// landing mid-write can't revert the row. No revert on failure — unlike
     /// the detail view's toggles there's no surface left to show an error on
     /// (the composer is gone), and the next full refresh restores truth.
-    func markAnswered(folderPath: String, uid: UInt32) {
-        signalFlagChange(folderPath: folderPath, uid: uid, flag: .answered, added: true)
+    func markAnswered(_ ref: MessageRef) {
+        signalFlagChange(ref, flag: .answered, added: true)
         guard let client else { return }
-        setFlagWrite(folderPath: folderPath, uid: uid, inFlight: true)
+        setFlagWrite(ref, inFlight: true)
         Task {
-            defer { setFlagWrite(folderPath: folderPath, uid: uid, inFlight: false) }
+            defer { setFlagWrite(ref, inFlight: false) }
             try? await client.imapClient.setFlags(
-                folder: folderPath,
-                uids: [uid],
+                folder: ref.folder,
+                uids: [ref.uid],
                 flags: [.answered],
                 operation: .add
             )
         }
     }
 
-    func signalFlagChange(folderPath: String, uid: UInt32, flag: Flag, added: Bool) {
+    func signalFlagChange(_ ref: MessageRef, flag: Flag, added: Bool) {
         flagChangeTick += 1
         lastEnvelopeFlagChange = EnvelopeFlagChange(
-            folderPath: folderPath,
-            uid: uid,
+            ref: ref,
             flag: flag,
             added: added,
             tick: flagChangeTick
         )
         if flag == .seen {
-            applyUnreadDelta(folderPath: folderPath, delta: added ? -1 : 1)
+            applyUnreadDelta(folderPath: ref.folder, delta: added ? -1 : 1)
         }
     }
 
-    func signalReadAdvance(folderPath: String, uid: UInt32, advance: MarkReadAdvance) {
+    func signalReadAdvance(_ ref: MessageRef, advance: MarkReadAdvance) {
         readAdvanceTick += 1
         lastReadAdvanceRequest = ReadAdvanceRequest(
-            folderPath: folderPath,
-            uid: uid,
+            ref: ref,
             advance: advance,
             tick: readAdvanceTick
         )
     }
 
     /// Mark a detail-view flag write as in flight (`true`, when the STORE is
-    /// dispatched) or resolved (`false`, on success or failure). While a UID
-    /// is in flight the list's merge keeps the optimistic flag instead of the
-    /// fetched one; clearing it lets the next refresh carry server truth. Safe
-    /// to call `false` for a UID that was never inserted (a no-op removal).
-    func setFlagWrite(folderPath: String, uid: UInt32, inFlight: Bool) {
+    /// dispatched) or resolved (`false`, on success or failure). While a
+    /// message is in flight the list's merge keeps the optimistic flag
+    /// instead of the fetched one; clearing it lets the next refresh carry
+    /// server truth. Safe to call `false` for a message that was never
+    /// inserted (a no-op removal).
+    func setFlagWrite(_ ref: MessageRef, inFlight: Bool) {
         if inFlight {
-            pendingFlagWriteUIDs[folderPath, default: []].insert(uid)
+            pendingFlagWriteRefs.insert(ref)
         } else {
-            pendingFlagWriteUIDs[folderPath]?.remove(uid)
-            if pendingFlagWriteUIDs[folderPath]?.isEmpty == true {
-                pendingFlagWriteUIDs[folderPath] = nil
-            }
+            pendingFlagWriteRefs.remove(ref)
         }
     }
 
     /// Mark a detail-view archive / trash / move as in flight (`true`, before
     /// the server move) or resolved (`false`, on success or failure). While a
-    /// UID is in flight the list's merge keeps the optimistically-pruned row
-    /// gone; clearing it lets the next refresh re-add the row if the move
+    /// message is in flight the list's merge keeps the optimistically-pruned
+    /// row gone; clearing it lets the next refresh re-add the row if the move
     /// failed, or confirm its absence if it succeeded. Safe to call `false`
-    /// for a UID that was never inserted (a no-op removal).
-    func setMoveInFlight(folderPath: String, uid: UInt32, inFlight: Bool) {
+    /// for a message that was never inserted (a no-op removal).
+    func setMoveInFlight(_ ref: MessageRef, inFlight: Bool) {
         if inFlight {
-            pendingMoveUIDs[folderPath, default: []].insert(uid)
+            pendingMoveRefs.insert(ref)
         } else {
-            pendingMoveUIDs[folderPath]?.remove(uid)
-            if pendingMoveUIDs[folderPath]?.isEmpty == true {
-                pendingMoveUIDs[folderPath] = nil
-            }
+            pendingMoveRefs.remove(ref)
         }
+    }
+
+    /// True while a detail-view move out of `folderPath` is in flight: a
+    /// STATUS of that folder may still count the message.
+    func hasMoveInFlight(folderPath: String) -> Bool {
+        pendingMoveRefs.contains { $0.folder == folderPath }
     }
 }
 
@@ -749,8 +735,8 @@ extension AppState {
         subscribedFolderPaths = nil
         savedFolderCounts.reset()
         confirmedRemovals = [:]
-        pendingFlagWriteUIDs = [:]
-        pendingMoveUIDs = [:]
+        pendingFlagWriteRefs = []
+        pendingMoveRefs = []
         pendingSpotlightRef = nil
         AttachmentFolders.removeAll()
     }

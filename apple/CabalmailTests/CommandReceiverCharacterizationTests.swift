@@ -97,16 +97,14 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
     /// (`selectFilter`). Refresh re-runs it with the pill still lit:
     /// `hardReload` keeps `filterTab` (`resetFilterTab: false`), and with it
     /// the filters the pill imposed. Reset, they would leave nothing to match
-    /// on and the reload would end the search. The in-place reload also keeps
-    /// a skipped-rows notice, which a fresh search drops (`preserveDepth`).
-    func testHardReloadOnTheSearchSurfaceKeepsAPillDrivenSearchAndItsNotice() async throws {
+    /// on and the reload would end the search.
+    func testHardReloadOnTheSearchSurfaceKeepsAPillDrivenSearch() async throws {
         let imap = FakeImapClient()
         await imap.scriptSearch(page(firstUID: 1, count: 2, cursor: nil))
         let model = try makeSearchModel(imap: imap)
         await model.setSearchAnchor(Folder(path: "Archive"))
         await model.selectFilter(.unread)
         XCTAssertTrue(model.isSearchActive)
-        model.skippedNotice = "1 message was already gone."
 
         await model.hardReload()
 
@@ -119,7 +117,6 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
         XCTAssertEqual(reload.folder, "Archive", "still narrowed to the anchor")
         XCTAssertEqual(model.filterTab, .unread, "the pill stays lit")
         XCTAssertTrue(model.isSearchActive)
-        XCTAssertEqual(model.skippedNotice, "1 message was already gone.")
         XCTAssertEqual(model.envelopes.map(\.uid), [1, 2])
         await assertNoFolderTraffic(imap)
     }

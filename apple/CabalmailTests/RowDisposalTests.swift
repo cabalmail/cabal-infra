@@ -11,6 +11,11 @@ import CabalmailKit
 @MainActor
 final class RowDisposalTests: XCTestCase {
 
+    /// The identity of `uid`'s row in the fixture model's folder (INBOX).
+    private func ref(_ uid: UInt32) -> MessageRef {
+        MessageRef(folder: "INBOX", uid: uid)
+    }
+
     func testDisposalFadesAtFullHeightBeforeCollapsing() async throws {
         let model = try TestFixtures.makeModel(
             imap: FakeImapClient(),
@@ -18,13 +23,13 @@ final class RowDisposalTests: XCTestCase {
         )
 
         let started = ContinuousClock.now
-        let disposal = model.beginRowDisposal(uid: 1)
+        let disposal = model.beginRowDisposal(ref(1))
         XCTAssertEqual(
-            model.rowDisposalPhases[1], .fading,
+            model.rowDisposalPhases[ref(1)], .fading,
             "the fade starts immediately, at full height, so nothing shifts yet"
         )
         await disposal.value
-        XCTAssertEqual(model.rowDisposalPhases[1], .collapsing)
+        XCTAssertEqual(model.rowDisposalPhases[ref(1)], .collapsing)
         // Both legs are sleeps, so this is a guaranteed lower bound: the point
         // of the animation is that it takes long enough to be perceived.
         XCTAssertGreaterThanOrEqual(ContinuousClock.now - started, .milliseconds(300))
@@ -36,12 +41,12 @@ final class RowDisposalTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 1)]
         )
 
-        let disposal = model.beginRowDisposal(uid: 1)
+        let disposal = model.beginRowDisposal(ref(1))
         disposal.cancel()
         await disposal.value
 
         XCTAssertEqual(
-            model.rowDisposalPhases[1], .fading,
+            model.rowDisposalPhases[ref(1)], .fading,
             "a cancellation mid-fade (failed write, row coming back) must not fall through to the collapse"
         )
     }
@@ -63,7 +68,7 @@ final class RowDisposalTests: XCTestCase {
             model.envelopes.map(\.uid), [1, 2],
             "the row stays in place (and every row index stays stable) while it animates out"
         )
-        XCTAssertNotNil(model.rowDisposalPhases[1])
+        XCTAssertNotNil(model.rowDisposalPhases[ref(1)])
 
         await disposeTask.value
 

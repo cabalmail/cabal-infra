@@ -222,10 +222,10 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         try await fixture.seedSnapshot(reader, envelopes: envelopes)
         let recorder = RelayRecorder()
         recorder.attach(to: reader)
-        let open = uid
+        let open = MessageRef(folder: reader.folder.path, uid: uid)
         reader.onFlagChanged = { [weak list, weak recorder] flag, added in
             recorder?.flagChanges.append(RelayRecorder.FlagChange(flag: flag, added: added))
-            list?.applyFlagChange(uid: open, flag: flag, added: added)
+            list?.applyFlagChange(open, flag: flag, added: added)
         }
         return WiredPair(list: list, reader: reader, recorder: recorder)
     }

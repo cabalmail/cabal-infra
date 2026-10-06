@@ -29,12 +29,17 @@ final class OptimisticPruneTotalTests: XCTestCase {
         return model
     }
 
+    /// The identity of `uid`'s row in `folder` (the model's INBOX unless named).
+    private func ref(_ uid: UInt32, in folder: String = "INBOX") -> MessageRef {
+        MessageRef(folder: folder, uid: uid)
+    }
+
     func testDisposeSignalledFromTheReaderDropsTheSlot() throws {
         // The send-a-draft path: ComposeView posts `signalDisposed`, the list
         // observes it and calls `pruneEnvelope`.
         let model = try makeModel(uids: [7], folderPath: "Drafts")
 
-        model.pruneEnvelope(uid: 7)
+        model.pruneEnvelope(ref(7, in: "Drafts"))
 
         XCTAssertTrue(model.envelopes.isEmpty)
         XCTAssertEqual(
@@ -46,7 +51,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
     func testPruneOfAnUnloadedUIDLeavesTheTotalAlone() throws {
         let model = try makeModel(uids: [1, 2])
 
-        model.pruneEnvelope(uid: 99)
+        model.pruneEnvelope(ref(99))
 
         XCTAssertEqual(
             model.totalMessages, 2,
@@ -114,7 +119,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
         let imap = FakeImapClient()
         let model = try makeModel(imap: imap, uids: [1, 2], folderPath: FolderTree.trashPath)
 
-        await model.purgeMessages(uids: [1, 2])
+        await model.purgeMessages(refs: [ref(1, in: FolderTree.trashPath), ref(2, in: FolderTree.trashPath)])
 
         XCTAssertTrue(model.envelopes.isEmpty)
         XCTAssertEqual(model.totalMessages, 0)
@@ -124,7 +129,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
         let model = try makeModel(uids: [1, 2])
         model.isSearchActive = true
 
-        model.pruneEnvelope(uid: 1)
+        model.pruneEnvelope(ref(1))
 
         XCTAssertEqual(
             model.totalMessages, 2,

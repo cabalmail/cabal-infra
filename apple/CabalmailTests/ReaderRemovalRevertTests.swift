@@ -42,26 +42,33 @@ final class ReaderRemovalRevertTests: XCTestCase {
             preferences: Preferences(store: InMemoryPreferenceStore())
         )
         let folder = inbox
+        let openRef = MessageRef(folder: folder, uid: open)
         reader.onFlagChanged = { [weak list] flag, added in
-            list?.applyFlagChange(uid: open, flag: flag, added: added)
+            list?.applyFlagChange(openRef, flag: flag, added: added)
         }
         reader.onMoveInFlight = { [weak appState] inFlight in
-            appState?.setMoveInFlight(folderPath: folder, uid: open, inFlight: inFlight)
+            appState?.setMoveInFlight(openRef, inFlight: inFlight)
         }
         reader.onMoveFailed = { [weak list] markUnread in
-            list?.restorePrunedEnvelope(uid: open, markUnread: markUnread)
+            list?.restorePrunedEnvelope(openRef, markUnread: markUnread)
         }
         return Pair(list: list, reader: reader)
+    }
+
+    /// The identity of `uid` in `folder` (INBOX unless a test says otherwise).
+    private func ref(_ uid: UInt32, in folder: String = "INBOX") -> MessageRef {
+        MessageRef(folder: folder, uid: uid)
     }
 
     func testAFailedReaderDisposePutsTheUnreadRowBack() async throws {
         let imap = FakeImapClient()
         await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
         let pair = try makePair(imap: imap, uids: [3, 2, 1], unread: [2], open: 2)
+        let row = ref(2)
         var failures = 0
 
         await pair.reader.dispose(
-            onSuccess: { pair.list.pruneEnvelope(uid: 2) },
+            onSuccess: { pair.list.pruneEnvelope(row) },
             onFailure: { _ in failures += 1 }
         )
 
@@ -77,8 +84,9 @@ final class ReaderRemovalRevertTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
         let pair = try makePair(imap: imap, uids: [3, 2, 1], open: 2)
+        let row = ref(2)
 
-        await pair.reader.move(to: "Projects", onSuccess: { pair.list.pruneEnvelope(uid: 2) })
+        await pair.reader.move(to: "Projects", onSuccess: { pair.list.pruneEnvelope(row) })
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
         XCTAssertEqual(pair.list.totalMessages, 3)
@@ -88,8 +96,9 @@ final class ReaderRemovalRevertTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptPurgeResults([.failure(CabalmailError.network("boom"))])
         let pair = try makePair(imap: imap, uids: [3, 2, 1], open: 2)
+        let row = ref(2)
 
-        await pair.reader.purge(onSuccess: { pair.list.pruneEnvelope(uid: 2) })
+        await pair.reader.purge(onSuccess: { pair.list.pruneEnvelope(row) })
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
         XCTAssertEqual(pair.list.totalMessages, 3)
@@ -97,8 +106,9 @@ final class ReaderRemovalRevertTests: XCTestCase {
 
     func testASuccessfulReaderDisposeKeepsTheRowGone() async throws {
         let pair = try makePair(imap: FakeImapClient(), uids: [3, 2, 1], open: 2)
+        let row = ref(2)
 
-        await pair.reader.dispose(onSuccess: { pair.list.pruneEnvelope(uid: 2) })
+        await pair.reader.dispose(onSuccess: { pair.list.pruneEnvelope(row) })
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 1])
         XCTAssertEqual(pair.list.totalMessages, 2)
@@ -107,10 +117,10 @@ final class ReaderRemovalRevertTests: XCTestCase {
     func testAFailureThatBeatsThePruneKeepsTheRow() throws {
         // Both signals can reach the list in one update, failure first.
         let pair = try makePair(imap: FakeImapClient(), uids: [3, 2, 1], unread: [2], open: 2)
-        pair.list.applyFlagChange(uid: 2, flag: .seen, added: true)
+        pair.list.applyFlagChange(ref(2), flag: .seen, added: true)
 
-        pair.list.restorePrunedEnvelope(uid: 2, markUnread: true)
-        pair.list.pruneEnvelope(uid: 2)
+        pair.list.restorePrunedEnvelope(ref(2), markUnread: true)
+        pair.list.pruneEnvelope(ref(2))
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
         XCTAssertEqual(pair.list.totalMessages, 3)
@@ -127,8 +137,8 @@ final class ReaderRemovalRevertTests: XCTestCase {
         )
         list.totalMessages = 1
 
-        list.pruneEnvelope(uid: 7)
-        list.restorePrunedEnvelope(uid: 7)
+        list.pruneEnvelope(ref(7, in: "Drafts"))
+        list.restorePrunedEnvelope(ref(7, in: "Drafts"))
 
         XCTAssertTrue(list.envelopes.isEmpty)
         XCTAssertEqual(list.totalMessages, 0)

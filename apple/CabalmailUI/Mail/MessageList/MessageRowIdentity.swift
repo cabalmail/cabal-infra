@@ -9,25 +9,16 @@ import CabalmailKit
 /// UID 1 and `alpha0803/kid` UID 1, say), and a `ForEach` handed two
 /// elements with the same id draws only one of them: the second match is
 /// counted by the header and then silently dropped from the list. Keying
-/// on UID *plus* Message-ID separates those rows, matching the key
-/// `SearchSourceFolderIndex` already uses to route each row back to its
-/// own mailbox.
-///
-/// `occurrence` is the last-resort tiebreak for rows that are
-/// indistinguishable even then — same UID and no Message-ID on either,
-/// which the server can return for envelopes it couldn't parse. Distinct
-/// identities there are still better than a vanished row; it only means
-/// SwiftUI rebuilds the later duplicate if an earlier one is removed.
+/// on the row's `MessageRef` — its folder plus UID — separates those rows,
+/// including one message filed in two folders under one UID (mail you send
+/// yourself, in INBOX and Sent). The list loads each ref once (the search
+/// paths drop a row a later page re-delivers), so the ref is unique per row.
 ///
 /// `generation` changes when the message's row has to be replaced rather
 /// than updated -- after a destructive full swipe that left it in place
 /// (`MessageListViewModel.replaceRows(showing:)`).
 struct MessageRowIdentity: Hashable {
-    let uid: UInt32
-    let messageID: String?
-    /// 0 for the first row with this (uid, messageID) pair, 1 for the next,
-    /// and so on. Non-zero only in the indistinguishable case above.
-    let occurrence: Int
+    let ref: MessageRef
     var generation = 0
 }
 
@@ -38,32 +29,22 @@ struct IdentifiedEnvelope: Identifiable, Hashable {
 }
 
 extension MessageRowIdentity {
-    /// Pairs each envelope with an identity unique across `envelopes`,
-    /// preserving order. What `ForEach` iterates in the search / filtered
-    /// list. `generations` is the model's per-UID row generation.
+    /// Pairs each envelope with its row identity, preserving order. What
+    /// `ForEach` iterates in the search / filtered list. `generations` is
+    /// the model's per-message row generation. Every row the model loads
+    /// carries its folder (`MessageListViewModel.placedInFolder(_:)`, and
+    /// `SearchedEnvelope` for search rows); a row without one keys on its
+    /// UID alone, which is all a single-folder list needs.
     static func identify(
         _ envelopes: [Envelope],
-        generations: [UInt32: Int] = [:]
+        generations: [MessageRef: Int] = [:]
     ) -> [IdentifiedEnvelope] {
-        var seen: [Key: Int] = [:]
-        return envelopes.map { envelope in
-            let key = Key(uid: envelope.uid, messageID: envelope.messageId)
-            let occurrence = seen[key, default: 0]
-            seen[key] = occurrence + 1
+        envelopes.map { envelope in
+            let ref = envelope.ref ?? MessageRef(folder: "", uid: envelope.uid)
             return IdentifiedEnvelope(
-                id: MessageRowIdentity(
-                    uid: envelope.uid,
-                    messageID: envelope.messageId,
-                    occurrence: occurrence,
-                    generation: generations[envelope.uid] ?? 0
-                ),
+                id: MessageRowIdentity(ref: ref, generation: generations[ref] ?? 0),
                 envelope: envelope
             )
         }
-    }
-
-    private struct Key: Hashable {
-        let uid: UInt32
-        let messageID: String?
     }
 }

@@ -28,14 +28,14 @@ extension MessageListViewModel {
         .archiving(in: folder.path)
     }
 
-    /// Permanently delete an explicit UID set. Serves both the single-
+    /// Permanently delete an explicit ref set. Serves both the single-
     /// row surfaces (swipe, row menu — a one-element set) and the
     /// multi-selection surfaces (selection menu, action bar,
     /// Cmd+Delete); every caller confirms with the user first.
     ///
-    /// Mirrors `performMove`'s optimistic prune / restore shape. UIDs
+    /// Mirrors `performMove`'s optimistic prune / restore shape. Refs
     /// whose row isn't truly in Trash (a cross-folder search row, or a
-    /// UID already mid-removal) are dropped up front — the
+    /// message already mid-removal) are dropped up front — the
     /// `/purge_messages` Lambda rejects non-trash folders, so gating
     /// client-side turns a mis-wired call into a no-op rather than a
     /// server error toast.
@@ -45,19 +45,17 @@ extension MessageListViewModel {
     /// `replaceRows(showing:)`), and the message moving up into that row
     /// would otherwise inherit it -- as would the message itself if the
     /// purge is refused.
-    func purgeMessages(uids: Set<UInt32>) async {
-        replaceRows(showing: uids)
-        let condemned = envelopes.filter {
-            uids.contains($0.uid) && sourceFolder(for: $0) == FolderTree.trashPath
-        }
+    func purgeMessages(refs: Set<MessageRef>) async {
+        replaceRows(showing: refs)
+        let condemned = loadedRows(refs).filter { rowRef(for: $0).folder == FolderTree.trashPath }
         guard !condemned.isEmpty else { return }
-        let condemnedUIDs = Set(condemned.map(\.uid))
+        let condemnedRefs = Set(condemned.map { rowRef(for: $0) })
         let unreadCount = condemned.filter { !$0.flags.contains(.seen) }.count
 
-        envelopes.removeAll { condemnedUIDs.contains($0.uid) }
+        envelopes.removeAll { condemnedRefs.contains(rowRef(for: $0)) }
         adjustTotalMessages(by: -condemned.count)
-        pendingRemovedUIDs.formUnion(condemnedUIDs)
-        defer { pendingRemovedUIDs.subtract(condemnedUIDs) }
+        pendingRemovedRefs.formUnion(condemnedRefs)
+        defer { pendingRemovedRefs.subtract(condemnedRefs) }
         if unreadCount > 0 {
             appState.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: -unreadCount)
         }
@@ -69,9 +67,12 @@ extension MessageListViewModel {
             )
             await confirmRemoval(from: FolderTree.trashPath, uids: condemned.map(\.uid))
         } catch {
-            envelopes.append(contentsOf: condemned)
+            // A search re-run while the purge was out may already have put
+            // the rows back; each message is listed once.
+            let restored = condemned.filter { index(of: rowRef(for: $0)) == nil }
+            envelopes.append(contentsOf: restored)
             envelopes.sort(by: envelopeOrder)
-            adjustTotalMessages(by: condemned.count)
+            adjustTotalMessages(by: restored.count)
             // Not once the session has ended (#1851).
             if unreadCount > 0, appState.acceptsCounts(from: client) {
                 appState.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: unreadCount)
@@ -79,7 +80,7 @@ extension MessageListViewModel {
             errorMessage = error.localizedDescription
         }
         // Purged rows leave any active selection; like `moveMessages`,
-        // UIDs outside the set stay selected.
-        selectedUIDs.subtract(condemnedUIDs)
+        // messages outside the set stay selected.
+        selectedRefs.subtract(condemnedRefs)
     }
 }

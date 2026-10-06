@@ -120,13 +120,13 @@ final class MessageListWindowReconcileTests: XCTestCase {
         let world = try await World.opened(size: 400, pages: 1)
         let pagesBefore = await world.server.pageCalls.count
         await world.server.remove(330)
-        world.model.pendingRemovedUIDs.insert(399)
+        world.model.pendingRemovedRefs.insert(MessageRef(folder: "INBOX", uid: 399))
 
         await world.model.refresh()
         let pagesDuring = await world.server.pageCalls.count
         XCTAssertEqual(pagesDuring, pagesBefore, "a reply that may count a removal in flight proves nothing")
 
-        world.model.pendingRemovedUIDs.remove(399)
+        world.model.pendingRemovedRefs.remove(MessageRef(folder: "INBOX", uid: 399))
         await world.model.refresh()
         XCTAssertFalse(world.model.envelopes.contains { $0.uid == 330 })
         try await world.assertAligned()
@@ -139,12 +139,12 @@ final class MessageListWindowReconcileTests: XCTestCase {
 
         let refresh = Task { await world.model.refresh() }
         await world.server.awaitHeld(.page)
-        world.model.pendingRemovedUIDs.insert(399)
+        world.model.pendingRemovedRefs.insert(MessageRef(folder: "INBOX", uid: 399))
         await world.server.release(.page)
         await refresh.value
 
         XCTAssertTrue(world.model.envelopes.contains { $0.uid == 330 }, "the read was dropped, not installed")
-        world.model.pendingRemovedUIDs.remove(399)
+        world.model.pendingRemovedRefs.remove(MessageRef(folder: "INBOX", uid: 399))
         await world.model.refresh()
         XCTAssertFalse(world.model.envelopes.contains { $0.uid == 330 })
         try await world.assertAligned()
@@ -154,14 +154,14 @@ final class MessageListWindowReconcileTests: XCTestCase {
         let world = try await World.opened(size: 400, pages: 1)
         let pagesBefore = await world.server.pageCalls.count
         world.model.bulkMode = true
-        world.model.selectedUIDs = [380]
+        world.model.selectedRefs = [MessageRef(folder: "INBOX", uid: 380)]
         await world.server.remove(330)
 
         await world.model.refresh()
         let pagesDuring = await world.server.pageCalls.count
         XCTAssertEqual(pagesDuring, pagesBefore, "rows don't move under a selection being built")
 
-        world.model.selectedUIDs = []
+        world.model.selectedRefs = []
         await world.model.refresh()
         XCTAssertFalse(world.model.envelopes.contains { $0.uid == 330 })
         try await world.assertAligned()

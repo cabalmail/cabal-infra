@@ -72,17 +72,18 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
     func testSignOutWithAClientClearsTheRemovalAndInFlightShields() async {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
-        state.recordConfirmedRemovals(folderPath: "INBOX", uids: [5])
-        state.setFlagWrite(folderPath: "INBOX", uid: 6, inFlight: true)
-        state.setMoveInFlight(folderPath: "Archive", uid: 7, inFlight: true)
-        XCTAssertEqual(state.confirmedRemovalUIDs(folderPath: "INBOX"), [5], "precondition")
+        let removed = MessageRef(folder: "INBOX", uid: 5)
+        state.recordConfirmedRemovals([removed])
+        state.setFlagWrite(MessageRef(folder: "INBOX", uid: 6), inFlight: true)
+        state.setMoveInFlight(MessageRef(folder: "Archive", uid: 7), inFlight: true)
+        XCTAssertEqual(state.confirmedRemovalRefs(folderPath: "INBOX"), [removed], "precondition")
 
         await state.signOut()
 
         XCTAssertEqual(state.confirmedRemovals, [:])
-        XCTAssertEqual(state.confirmedRemovalUIDs(folderPath: "INBOX"), [])
-        XCTAssertEqual(state.pendingFlagWriteUIDs, [:])
-        XCTAssertEqual(state.pendingMoveUIDs, [:])
+        XCTAssertEqual(state.confirmedRemovalRefs(folderPath: "INBOX"), [])
+        XCTAssertEqual(state.pendingFlagWriteRefs, [])
+        XCTAssertEqual(state.pendingMoveRefs, [])
     }
 
     /// Every reader's attachment folder goes with the session (#1813). Each

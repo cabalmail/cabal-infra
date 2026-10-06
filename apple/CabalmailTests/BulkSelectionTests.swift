@@ -17,11 +17,11 @@ final class BulkSelectionTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)]
         )
         model.toggleSelection(model.envelopes[0])
-        XCTAssertEqual(model.selectedUIDs, [1])
+        XCTAssertEqual(model.selectedRefs, [ref(1)])
         model.toggleSelection(model.envelopes[1])
-        XCTAssertEqual(model.selectedUIDs, [1, 2])
+        XCTAssertEqual(model.selectedRefs, [ref(1), ref(2)])
         model.toggleSelection(model.envelopes[0])
-        XCTAssertEqual(model.selectedUIDs, [2])
+        XCTAssertEqual(model.selectedRefs, [ref(2)])
     }
 
     func testSelectAllVisibleRespectsFilterTab() throws {
@@ -35,11 +35,11 @@ final class BulkSelectionTests: XCTestCase {
         )
         model.filterTab = .unread
         model.selectAllVisible()
-        XCTAssertEqual(model.selectedUIDs, [1, 3], "select-all scopes to the visible (filtered) rows")
+        XCTAssertEqual(model.selectedRefs, [ref(1), ref(3)], "select-all scopes to the visible (filtered) rows")
 
         model.filterTab = .all
         model.selectAllVisible()
-        XCTAssertEqual(model.selectedUIDs, [1, 2, 3])
+        XCTAssertEqual(model.selectedRefs, [ref(1), ref(2), ref(3)])
     }
 
     func testExitBulkModeClearsSelection() throws {
@@ -48,10 +48,10 @@ final class BulkSelectionTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 1)]
         )
         model.bulkMode = true
-        model.selectedUIDs = [1]
+        model.selectedRefs = [ref(1)]
         model.exitBulkMode()
         XCTAssertFalse(model.bulkMode)
-        XCTAssertTrue(model.selectedUIDs.isEmpty)
+        XCTAssertTrue(model.selectedRefs.isEmpty)
     }
 
     func testLeaveBulkModeKeepsTheSelection() throws {
@@ -60,14 +60,14 @@ final class BulkSelectionTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 1)]
         )
         model.bulkMode = true
-        model.selectedUIDs = [1]
+        model.selectedRefs = [ref(1)]
         // `endSelectionMode()` runs synchronously right after the view kicks
         // off `Task { await model.bulkMove(...) }`, and that task reads
-        // `selectedUIDs` when it starts — so dropping the mode must not clear
+        // `selectedRefs` when it starts — so dropping the mode must not clear
         // the set, or the move would run against an empty selection.
         model.leaveBulkMode()
         XCTAssertFalse(model.bulkMode)
-        XCTAssertEqual(model.selectedUIDs, [1])
+        XCTAssertEqual(model.selectedRefs, [ref(1)])
     }
 
     // MARK: - Optimistic flag state
@@ -82,7 +82,7 @@ final class BulkSelectionTests: XCTestCase {
             appState: appState
         )
 
-        await model.setSeen(true, uids: [1, 2])
+        await model.setSeen(true, refs: [ref(1), ref(2)])
 
         XCTAssertTrue(model.envelopes.allSatisfy { $0.flags.contains(.seen) })
         XCTAssertNil(model.errorMessage)
@@ -108,7 +108,7 @@ final class BulkSelectionTests: XCTestCase {
             appState: appState
         )
 
-        await model.setSeen(true, uids: [1, 2])
+        await model.setSeen(true, refs: [ref(1), ref(2)])
 
         XCTAssertEqual(appState.folderUnreadCounts["INBOX"], 4, "only the real transition counts")
     }
@@ -126,7 +126,7 @@ final class BulkSelectionTests: XCTestCase {
             appState: appState
         )
 
-        await model.setSeen(true, uids: [1, 2])
+        await model.setSeen(true, refs: [ref(1), ref(2)])
 
         XCTAssertTrue(
             model.envelopes.allSatisfy { !$0.flags.contains(.seen) },
@@ -151,7 +151,7 @@ final class BulkSelectionTests: XCTestCase {
             appState: appState
         )
 
-        await model.setSeen(true, uids: [1, 2])
+        await model.setSeen(true, refs: [ref(1), ref(2)])
 
         let byUID = Dictionary(uniqueKeysWithValues: model.envelopes.map { ($0.uid, $0) })
         XCTAssertTrue(byUID[1]!.flags.contains(.seen), "the succeeded row keeps the change")
@@ -175,7 +175,7 @@ final class BulkSelectionTests: XCTestCase {
             ]
         )
 
-        await model.setSeen(true, uids: [1, 2])
+        await model.setSeen(true, refs: [ref(1), ref(2)])
 
         let byUID = Dictionary(uniqueKeysWithValues: model.envelopes.map { ($0.uid, $0) })
         XCTAssertTrue(
@@ -192,12 +192,12 @@ final class BulkSelectionTests: XCTestCase {
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)]
         )
-        model.selectedUIDs = [1, 2]
+        model.selectedRefs = [ref(1), ref(2)]
 
-        await model.moveMessages(uids: [1, 2], to: "Archive")
+        await model.moveMessages(refs: [ref(1), ref(2)], to: "Archive")
 
         XCTAssertTrue(model.envelopes.isEmpty)
-        XCTAssertTrue(model.selectedUIDs.isEmpty)
+        XCTAssertTrue(model.selectedRefs.isEmpty)
         let calls = await imap.moveCalls
         XCTAssertEqual(calls.count, 1)
         XCTAssertEqual(calls.first?.uids, [1, 2])
@@ -215,7 +215,7 @@ final class BulkSelectionTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)]
         )
 
-        await model.moveMessages(uids: [1, 2], to: "Archive")
+        await model.moveMessages(refs: [ref(1), ref(2)], to: "Archive")
 
         XCTAssertEqual(
             model.envelopes.map(\.uid), [2],
@@ -223,7 +223,7 @@ final class BulkSelectionTests: XCTestCase {
         )
         XCTAssertEqual(model.errorMessage, "Moved 1 of 2 messages. 1 could not be moved.")
         XCTAssertTrue(
-            model.pendingRemovedUIDs.isEmpty,
+            model.pendingRemovedRefs.isEmpty,
             "refresh shields drop once the batch settles"
         )
     }
@@ -238,7 +238,7 @@ final class BulkSelectionTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)]
         )
 
-        await model.moveMessages(uids: [1, 2], to: "Archive")
+        await model.moveMessages(refs: [ref(1), ref(2)], to: "Archive")
 
         XCTAssertEqual(Set(model.envelopes.map(\.uid)), [1, 2])
         XCTAssertNotNil(model.errorMessage)
@@ -254,7 +254,7 @@ final class BulkSelectionTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)]
         )
 
-        await model.disposeMessages(uids: [1, 2], action: .archive)
+        await model.disposeMessages(refs: [ref(1), ref(2)], action: .archive)
 
         XCTAssertTrue(model.envelopes.isEmpty)
         let flags = await imap.flagCalls
@@ -263,5 +263,12 @@ final class BulkSelectionTests: XCTestCase {
         XCTAssertEqual(moves.count, 1)
         XCTAssertEqual(moves.first?.uids, [1, 2])
         XCTAssertEqual(moves.first?.markSeen, true)
+    }
+
+    // MARK: - Fixture
+
+    /// The ref of row `uid` in INBOX, the folder every model here is over.
+    private func ref(_ uid: UInt32) -> MessageRef {
+        MessageRef(folder: "INBOX", uid: uid)
     }
 }

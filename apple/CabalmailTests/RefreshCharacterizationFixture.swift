@@ -25,6 +25,11 @@ final class RefreshCharacterizationFixture {
         scratchRoots = []
     }
 
+    /// The identity of `uid` in the fixture's folder.
+    func ref(_ uid: UInt32) -> MessageRef {
+        MessageRef(folder: folderPath, uid: uid)
+    }
+
     /// A list with `loaded` in memory and nothing learned from the server
     /// yet: no UIDVALIDITY, no snapshot, counts at zero but `total`.
     func makeModel(

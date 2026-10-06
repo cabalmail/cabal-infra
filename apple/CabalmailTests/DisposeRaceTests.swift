@@ -53,6 +53,11 @@ final class DisposeRaceTests: XCTestCase {
         uids.map { TestFixtures.makeEnvelope(uid: $0, flags: [.seen]) }
     }
 
+    /// The identity of `uid`'s message in the inbox.
+    private func ref(_ uid: UInt32) -> MessageRef {
+        MessageRef(folder: inbox, uid: uid)
+    }
+
     /// Polls on the main actor (letting the model's own tasks run) until
     /// `condition` holds or `timeout` passes.
     private func eventually(
@@ -86,7 +91,7 @@ final class DisposeRaceTests: XCTestCase {
         XCTAssertEqual(model.totalMessages, 2)
         XCTAssertFalse(model.isDisposingRow, "rows take hits again once the gap has closed")
         XCTAssertTrue(
-            model.pendingRemovedUIDs.contains(1),
+            model.pendingRemovedRefs.contains(ref(1)),
             "the UID stays shielded from a refresh until the move lands"
         )
 
@@ -94,8 +99,8 @@ final class DisposeRaceTests: XCTestCase {
         await dispose.value
 
         XCTAssertEqual(model.envelopes.map(\.uid), [2, 3])
-        XCTAssertTrue(model.pendingRemovedUIDs.isEmpty)
-        XCTAssertEqual(appState.confirmedRemovalUIDs(folderPath: inbox), [1])
+        XCTAssertTrue(model.pendingRemovedRefs.isEmpty)
+        XCTAssertEqual(appState.confirmedRemovalRefs(folderPath: inbox), [ref(1)])
     }
 
     func testAMoveThatFailsAfterTheRowLeftPutsItBackWhereItWas() async throws {
@@ -118,7 +123,7 @@ final class DisposeRaceTests: XCTestCase {
         XCTAssertNotNil(model.errorMessage)
         XCTAssertTrue(model.rowDisposalPhases.isEmpty)
         XCTAssertTrue(
-            appState.confirmedRemovalUIDs(folderPath: inbox).isEmpty,
+            appState.confirmedRemovalRefs(folderPath: inbox).isEmpty,
             "a failed move is not a confirmed removal"
         )
     }
@@ -127,12 +132,12 @@ final class DisposeRaceTests: XCTestCase {
         let model = try makeModel(imap: FakeImapClient(), uids: [1, 2])
         XCTAssertFalse(model.isDisposingRow)
 
-        let disposal = model.beginRowDisposal(uid: 1)
+        let disposal = model.beginRowDisposal(ref(1))
         XCTAssertTrue(model.isDisposingRow, "from the first frame of the fade")
         await disposal.value
         XCTAssertTrue(model.isDisposingRow, "through the collapse")
 
-        model.endRowDisposal(uid: 1)
+        model.endRowDisposal(ref(1))
         XCTAssertFalse(model.isDisposingRow)
     }
 
@@ -210,15 +215,15 @@ final class DisposeRaceTests: XCTestCase {
         // The reader's archive has already pruned the list row (so the list
         // holds only 4) and its move is in flight.
         let model = try makeModel(imap: imap, uids: [4], appState: appState)
-        appState.setMoveInFlight(folderPath: inbox, uid: 5, inFlight: true)
+        appState.setMoveInFlight(ref(5), inFlight: true)
 
         await imap.holdNext(.topEnvelopes)
         let refresh = Task { await model.refresh() }
         await imap.awaitHeld(.topEnvelopes)
         // The move lands, in the reader's order: confirmation recorded, then
         // the in-flight shield dropped.
-        appState.recordConfirmedRemovals(folderPath: inbox, uids: [5])
-        appState.setMoveInFlight(folderPath: inbox, uid: 5, inFlight: false)
+        appState.recordConfirmedRemovals([ref(5)])
+        appState.setMoveInFlight(ref(5), inFlight: false)
         await imap.releaseHeld(.topEnvelopes)
         await refresh.value
 
@@ -257,16 +262,16 @@ final class DisposeRaceTests: XCTestCase {
     func testConfirmedRemovalsAgeOutAndClear() {
         let appState = AppState()
         let start = ContinuousClock.now
-        appState.recordConfirmedRemovals(folderPath: inbox, uids: [1, 2], at: start)
+        appState.recordConfirmedRemovals([ref(1), ref(2)], at: start)
 
-        XCTAssertEqual(appState.confirmedRemovalUIDs(folderPath: inbox, now: start + .seconds(59)), [1, 2])
-        XCTAssertTrue(appState.confirmedRemovalUIDs(folderPath: inbox, now: start + .seconds(61)).isEmpty)
-        XCTAssertTrue(appState.confirmedRemovalUIDs(folderPath: "Archive", now: start).isEmpty, "folder-keyed")
+        XCTAssertEqual(appState.confirmedRemovalRefs(folderPath: inbox, now: start + .seconds(59)), [ref(1), ref(2)])
+        XCTAssertTrue(appState.confirmedRemovalRefs(folderPath: inbox, now: start + .seconds(61)).isEmpty)
+        XCTAssertTrue(appState.confirmedRemovalRefs(folderPath: "Archive", now: start).isEmpty, "folder-keyed")
 
         XCTAssertTrue(appState.removalConfirmed(folderPath: inbox, after: start - .seconds(1)))
         XCTAssertFalse(appState.removalConfirmed(folderPath: inbox, after: start))
 
         appState.clearConfirmedRemovals(folderPath: inbox)
-        XCTAssertTrue(appState.confirmedRemovalUIDs(folderPath: inbox, now: start).isEmpty)
+        XCTAssertTrue(appState.confirmedRemovalRefs(folderPath: inbox, now: start).isEmpty)
     }
 }

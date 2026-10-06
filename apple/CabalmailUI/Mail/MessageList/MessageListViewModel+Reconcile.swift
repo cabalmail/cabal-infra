@@ -220,7 +220,7 @@ extension MessageListViewModel {
     /// has and the next one tries again, since the anchor hasn't moved.
     var canRereadWindow: Bool {
         !isLoadingMore && !isLoadingPrevious && !isLoadingWindow
-            && !(bulkMode && !selectedUIDs.isEmpty) && !isSearchActive
+            && !(bulkMode && !selectedRefs.isEmpty) && !isSearchActive
     }
 
     /// After a top-page refresh: anchor the window if the page proved it

@@ -113,8 +113,8 @@ extension MessageListViewModel {
     /// already applied: one is still in flight here or in the reader, or the
     /// server confirmed one after `startedAt`.
     func removalMayPostdate(_ startedAt: ContinuousClock.Instant) -> Bool {
-        !pendingRemovedUIDs.isEmpty
-            || !(appState.pendingMoveUIDs[folder.path]?.isEmpty ?? true)
+        !pendingRemovedRefs.isEmpty
+            || appState.hasMoveInFlight(folderPath: folder.path)
             || appState.removalConfirmed(folderPath: folder.path, after: startedAt)
     }
 
@@ -225,7 +225,6 @@ extension MessageListViewModel {
         flagged = 0
         savedMessageCount = nil
         hasMore = true
-        sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
         await refresh(prefetched: probe)
     }
@@ -264,27 +263,27 @@ extension MessageListViewModel {
     /// and the cache persist run through this so memory and disk stay in
     /// agreement. The optimistic flags are read back from the current
     /// in-memory `envelopes`, which is where the write paths stash them.
+    /// The page is this folder's, so its rows come back placed in it
+    /// (`placedInFolder(_:)`).
     func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
-        let detailFlagWrites = appState.pendingFlagWriteUIDs[folder.path] ?? []
-        let detailMoves = appState.pendingMoveUIDs[folder.path] ?? []
-        let confirmedGone = appState.confirmedRemovalUIDs(folderPath: folder.path)
-        return fetched.compactMap { fetchedEnvelope in
+        let confirmedGone = appState.confirmedRemovalRefs(folderPath: folder.path)
+        return placedInFolder(fetched).compactMap { fetchedEnvelope in
+            let ref = rowRef(for: fetchedEnvelope)
             // A row optimistically removed by either this view model
-            // (`pendingRemovedUIDs`) or the detail view (shared, folder-keyed
-            // `appState.pendingMoveUIDs`) stays gone until the move resolves --
-            // and after that, a UID the server confirmed gone stays gone for
-            // good: IMAP never reuses one within a mailbox, so a fetch that
-            // still carries it was answered before the move landed.
-            if pendingRemovedUIDs.contains(fetchedEnvelope.uid)
-                || detailMoves.contains(fetchedEnvelope.uid)
-                || confirmedGone.contains(fetchedEnvelope.uid) { return nil }
+            // (`pendingRemovedRefs`) or the detail view (shared
+            // `appState.pendingMoveRefs`) stays gone until the move resolves --
+            // and after that, a message the server confirmed gone stays gone
+            // for good: IMAP never reuses a UID within a mailbox, so a fetch
+            // that still carries it was answered before the move landed.
+            if pendingRemovedRefs.contains(ref)
+                || appState.pendingMoveRefs.contains(ref)
+                || confirmedGone.contains(ref) { return nil }
             // A flag write in flight from either this view model
-            // (`pendingFlagUIDs`) or the detail view (shared, folder-keyed
-            // `appState.pendingFlagWriteUIDs`) shields the row's flags.
-            let flagWriteInFlight = pendingFlagUIDs.contains(fetchedEnvelope.uid)
-                || detailFlagWrites.contains(fetchedEnvelope.uid)
-            if flagWriteInFlight,
-               let local = envelopes.first(where: { $0.uid == fetchedEnvelope.uid }) {
+            // (`pendingFlagRefs`) or the detail view (shared
+            // `appState.pendingFlagWriteRefs`) shields the row's flags.
+            let flagWriteInFlight = pendingFlagRefs.contains(ref)
+                || appState.pendingFlagWriteRefs.contains(ref)
+            if flagWriteInFlight, let local = envelope(for: ref) {
                 return rebuildEnvelope(fetchedEnvelope, flags: local.flags)
             }
             return fetchedEnvelope
@@ -298,13 +297,13 @@ extension MessageListViewModel {
     /// include these too." Shielded so an in-flight local write survives a
     /// concurrent refresh (see `shieldFetched`).
     func mergeFetched(_ fetched: [Envelope]) {
-        var byUID: [UInt32: Envelope] = Dictionary(
-            uniqueKeysWithValues: envelopes.map { ($0.uid, $0) }
+        var byRef: [MessageRef: Envelope] = Dictionary(
+            uniqueKeysWithValues: envelopes.map { (rowRef(for: $0), $0) }
         )
         for envelope in shieldFetched(fetched) {
-            byUID[envelope.uid] = envelope
+            byRef[rowRef(for: envelope)] = envelope
         }
-        envelopes = byUID.values.sorted(by: envelopeOrder)
+        envelopes = byRef.values.sorted(by: envelopeOrder)
     }
 
     /// Fetches the page immediately above the window and prepends it, then
@@ -395,7 +394,7 @@ extension MessageListViewModel {
             )
             guard !fetched.isEmpty else { return }
             windowStart = UInt32(start)
-            envelopes = fetched.sorted(by: envelopeOrder)
+            envelopes = placedInFolder(fetched).sorted(by: envelopeOrder)
             hasTrimmedFront = start > 0
             hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
         } catch {
@@ -463,7 +462,9 @@ extension MessageListViewModel {
             )
             guard !Task.isCancelled, !fetched.isEmpty,
                   sortAtKickoff == sortCriterion, total == totalMessages else { return }
-            bottomPrefetch = BottomPrefetch(start: start, total: total, envelopes: fetched.sorted(by: envelopeOrder))
+            bottomPrefetch = BottomPrefetch(
+                start: start, total: total, envelopes: placedInFolder(fetched).sorted(by: envelopeOrder)
+            )
         } catch {
             // Best-effort (see above): End takes the normal round trip.
         }
@@ -537,8 +538,9 @@ extension MessageListViewModel {
             // finishing its fade-then-collapse would otherwise see it absent
             // from the fetch and yank it out instantly -- the very jump the
             // animation exists to avoid. `dispose(_:)` removes it either way.
-            disappeared = envelopes.map(\.uid)
-                .filter { !fetchedUIDs.contains($0) && !pendingRemovedUIDs.contains($0) }
+            disappeared = envelopes.map(\.uid).filter {
+                !fetchedUIDs.contains($0) && !pendingRemovedRefs.contains(MessageRef(folder: folder.path, uid: $0))
+            }
         } else {
             disappeared = []
         }

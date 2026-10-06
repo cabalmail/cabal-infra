@@ -58,12 +58,12 @@ extension MessageListView {
                                 indexedRow(slot.index, model: model, visible: visible)
                             }
                         } else {
-                            // Identity comes from `MessageRowIdentity`, not
-                            // `Envelope.id` (the UID): a cross-folder search can
-                            // return the same UID from two folders, and a
-                            // `ForEach` given two elements with one id draws only
-                            // the first — the other match disappears from the
-                            // list while the header still counts it.
+                            // Identity comes from `MessageRowIdentity` (the row's
+                            // ref), not `Envelope.id` (the UID): a cross-folder
+                            // search can return the same UID from two folders,
+                            // and a `ForEach` given two elements with one id
+                            // draws only the first — the other match disappears
+                            // from the list while the header still counts it.
                             let rows = MessageRowIdentity.identify(visible, generations: model.rowGenerations)
                             ForEach(rows) { row in
                                 messageRow(row.envelope, model: model, visible: visible)
@@ -255,7 +255,7 @@ extension MessageListView {
         // phase flips would re-run the whole list body -- `filteredEnvelopes`
         // (O(loaded rows)) and every visible row with it. Inside the wrapper
         // the invalidation stops at the already-built rows.
-        DisposingRow(model: model, uid: envelope.uid, rowHeight: rowHeight) {
+        DisposingRow(model: model, ref: model.rowRef(for: envelope), rowHeight: rowHeight) {
             if scenePhase == .background {
                 placeholderRow()
             } else {
@@ -316,8 +316,8 @@ extension MessageListView {
             // Right-clicking a row that's part of a multi-selection acts on the
             // whole selection (Finder / Mail semantics); otherwise it's the
             // single right-clicked row.
-            if model.selectedUIDs.count > 1, model.selectedUIDs.contains(envelope.uid) {
-                selectionContextMenu(for: model.selectedUIDs, model: model)
+            if model.selectedRefs.count > 1, model.isSelected(envelope) {
+                selectionContextMenu(for: model.selectedRefs, model: model)
             } else {
                 rowContextMenu(for: envelope, model: model)
             }
@@ -361,7 +361,7 @@ extension MessageListView {
     }
 
     /// Wide layouts (macOS, iPad regular width, visionOS). Selection lives in
-    /// `selectedUIDs`: a plain click selects one, and on macOS command/shift
+    /// `selectedRefs`: a plain click selects one, and on macOS command/shift
     /// clicks build a multi-selection (see `selectRow`). The reading-pane
     /// derivation below shows the single selected message, or hands the parent
     /// a count placeholder for zero / many.
@@ -386,15 +386,13 @@ extension MessageListView {
                 }
             }
             // Derive the reading-pane selection from the selection set: exactly
-            // one selected -> show that message; zero or many -> the parent
-            // shows the count placeholder. One-way, so the existing
-            // `.onChange(of: selection)` cross-folder routing is unchanged.
-            .onChange(of: model.selectedUIDs) { _, uids in
-                if uids.count == 1 { model.setSelectionAnchor(uids.first) }
-                selection = uids.count == 1
-                    ? model.envelopes.first { $0.uid == uids.first }
-                    : nil
-                onSelectionCountChanged(uids.count)
+            // one selected -> show that message, the row the ref names (of two
+            // search rows sharing a UID, the one picked); zero or many -> the
+            // parent shows the count placeholder.
+            .onChange(of: model.selectedRefs) { _, refs in
+                if refs.count == 1 { model.setSelectionAnchor(refs.first) }
+                selection = refs.count == 1 ? refs.first.flatMap(model.envelope(for:)) : nil
+                onSelectionCountChanged(refs.count)
             }
     }
 
@@ -405,7 +403,7 @@ extension MessageListView {
     }
 
     /// Sets selection from a tap. Compact iPhone opens the reader directly.
-    /// Wide layouts route through `selectedUIDs` (the reading pane derives
+    /// Wide layouts route through `selectedRefs` (the reading pane derives
     /// from it). On macOS the tap is modifier-aware -- command toggles the
     /// row, shift extends the range from the anchor, a plain click replaces
     /// the selection -- read from `NSEvent.modifierFlags` at click time, the
@@ -427,9 +425,10 @@ extension MessageListView {
             return
         }
         #endif
-        model.selectedUIDs = [envelope.uid]
-        model.setSelectionAnchor(envelope.uid)
-        model.selectionCursor = envelope.uid
+        let ref = model.rowRef(for: envelope)
+        model.selectedRefs = [ref]
+        model.setSelectionAnchor(ref)
+        model.selectionCursor = ref
     }
 
     /// Shift-click range selection over `ordered` (the visible rows in display
@@ -439,17 +438,18 @@ extension MessageListView {
     /// `ModifierClickGesture` (`wideRow`); the original anchor is kept so a
     /// following shift-click re-pivots from it.
     func applyRangeSelection(to target: Envelope, model: MessageListViewModel, ordered: [Envelope]) {
+        let targetRef = model.rowRef(for: target)
         let outcome = RangeSelectionPolicy.outcome(
             base: model.selectionRangeBase,
-            anchor: model.selectionAnchor ?? model.selectedUIDs.first,
-            target: target.uid,
-            ordered: ordered.map(\.uid)
+            anchor: model.selectionAnchor ?? model.selectedRefs.first,
+            target: targetRef,
+            ordered: ordered.map { model.rowRef(for: $0) }
         )
-        model.selectedUIDs = outcome.selected
+        model.selectedRefs = outcome.selected
         if let newAnchor = outcome.newAnchor { model.setSelectionAnchor(newAnchor) }
         // Cursor follows the shift-clicked end so a subsequent shift-arrow
         // grows the range from here, not from the anchor.
-        model.selectionCursor = target.uid
+        model.selectionCursor = targetRef
     }
 
     /// Command/control-click: flip the row's membership and make it the new
@@ -458,8 +458,9 @@ extension MessageListView {
         model.toggleSelection(envelope)
         // After the toggle, so the base a following shift-click extends from
         // includes (or no longer includes) this row.
-        model.setSelectionAnchor(envelope.uid)
-        model.selectionCursor = envelope.uid
+        let ref = model.rowRef(for: envelope)
+        model.setSelectionAnchor(ref)
+        model.selectionCursor = ref
     }
 
     /// Up/Down arrow navigation, and Shift+Up/Down range extension. A plain
@@ -479,8 +480,8 @@ extension MessageListView {
         let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
         // Move from the current cursor (the moving end), falling back to the
         // anchor / first selected row when keyboard nav hasn't started yet.
-        let cursorUID = model.selectionCursor ?? model.selectionAnchor ?? model.selectedUIDs.first
-        let cursorIdx = cursorUID.flatMap { uid in visible.firstIndex { $0.uid == uid } }
+        let cursorRef = model.selectionCursor ?? model.selectionAnchor ?? model.selectedRefs.first
+        let cursorIdx = cursorRef.flatMap { ref in visible.firstIndex { model.rowRef(for: $0) == ref } }
         let next: Int
         if let cursorIdx {
             next = min(max(cursorIdx + delta, 0), visible.count - 1)
@@ -488,23 +489,24 @@ extension MessageListView {
             next = delta > 0 ? 0 : visible.count - 1
         }
         let target = visible[next]
+        let targetRef = model.rowRef(for: target)
         if extend {
             // Anchor stays put; the span runs anchor...cursor inclusive and is
             // unioned onto what the anchor was pinned over, same rule as the
             // shift-click path.
             let outcome = RangeSelectionPolicy.outcome(
                 base: model.selectionRangeBase,
-                anchor: model.selectionAnchor ?? cursorUID ?? target.uid,
-                target: target.uid,
-                ordered: visible.map(\.uid)
+                anchor: model.selectionAnchor ?? cursorRef ?? targetRef,
+                target: targetRef,
+                ordered: visible.map { model.rowRef(for: $0) }
             )
-            model.selectedUIDs = outcome.selected
+            model.selectedRefs = outcome.selected
             if let newAnchor = outcome.newAnchor { model.setSelectionAnchor(newAnchor) }
-            model.selectionCursor = target.uid
+            model.selectionCursor = targetRef
         } else {
-            model.selectedUIDs = [target.uid]
-            model.setSelectionAnchor(target.uid)
-            model.selectionCursor = target.uid
+            model.selectedRefs = [targetRef]
+            model.setSelectionAnchor(targetRef)
+            model.selectionCursor = targetRef
         }
         // The virtualized `ForEach` is keyed by slot (absolute folder index
         // plus generation); the filtered fallback by envelope id. Scroll to
@@ -524,7 +526,7 @@ extension MessageListView {
     /// membership (the native list draws the highlight; this only tints the
     /// unread dot); on compact it mirrors the single-selection binding.
     func rowIsSelected(_ envelope: Envelope, model: MessageListViewModel) -> Bool {
-        isWideLayout ? model.selectedUIDs.contains(envelope.uid) : envelope == selection
+        isWideLayout ? model.isSelected(envelope) : envelope == selection
     }
 
     /// The bottom bulk-action bar shows whenever a real multi-selection exists
@@ -533,17 +535,17 @@ extension MessageListView {
     /// the bar is reachable before any row is picked.
     func showsBulkActionBar(model: MessageListViewModel) -> Bool {
         if model.bulkMode { return true }
-        return isWideLayout && model.selectedUIDs.count >= 2
+        return isWideLayout && model.selectedRefs.count >= 2
     }
 
     /// Esc clears the selection and exits any touch edit mode. Returns
     /// `.ignored` when there's nothing to clear so the key can do other things.
     func escapePressed(model: MessageListViewModel) -> KeyPress.Result {
-        let hadSelection = !model.selectedUIDs.isEmpty
+        let hadSelection = !model.selectedRefs.isEmpty
         let wasEditing = model.bulkMode
         model.leaveBulkMode()
         guard hadSelection || wasEditing else { return .ignored }
-        model.selectedUIDs.removeAll()
+        model.selectedRefs.removeAll()
         model.setSelectionAnchor(nil)
         model.selectionCursor = nil
         return .handled

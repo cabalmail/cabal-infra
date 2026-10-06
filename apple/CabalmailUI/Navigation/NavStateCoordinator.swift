@@ -405,3 +405,39 @@ public final class NavStateCoordinator {
         }
     }
 }
+
+// MARK: - MessageRef entry points
+
+// The reader and the shells name the open message by its `MessageRef`; the
+// cursor and the resume record keep their own (folder, uid, Message-ID)
+// fields, so these forward to the field-wise forms. The ref's UIDVALIDITY is
+// never written into the cursor: it carries the one a restore primed it
+// with, or none, as it always has.
+extension NavStateCoordinator {
+    /// Records that the user opened the message `ref` names.
+    func recordMessage(_ ref: MessageRef) {
+        recordMessage(folderPath: ref.folder, uid: ref.uid, messageID: ref.messageId)
+    }
+
+    /// `recordMessageScroll(folderPath:uid:messageID:position:atTop:)` for
+    /// the message `ref` names.
+    func recordMessageScroll(_ ref: MessageRef, position: ReadingPosition, atTop: Bool) {
+        recordMessageScroll(
+            folderPath: ref.folder, uid: ref.uid, messageID: ref.messageId,
+            position: position, atTop: atTop
+        )
+    }
+
+    /// The pending scroll restore, if it targets the message `ref` names.
+    func consumeScrollRestore(for ref: MessageRef) -> PendingScrollRestore? {
+        consumeScrollRestore(folderPath: ref.folder, uid: ref.uid, messageID: ref.messageId)
+    }
+}
+
+extension NavStateCoordinator.PendingRestore {
+    /// The message to restore, when the cursor named one by UID: what the
+    /// list falls back to after the Message-ID.
+    var ref: MessageRef? {
+        uid.map { MessageRef(folder: folderPath, uid: $0, messageId: messageID) }
+    }
+}

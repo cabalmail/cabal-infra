@@ -26,7 +26,8 @@ extension TestFixtures {
             preferences: Preferences(store: InMemoryPreferenceStore()),
             appState: appState
         )
-        model.envelopes = envelopes
+        // Placed in the folder, as every path that loads rows places them.
+        model.envelopes = model.placedInFolder(envelopes)
         return model
     }
 

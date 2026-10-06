@@ -73,20 +73,19 @@ struct Toast: Equatable, Sendable {
     }
 }
 
-/// Signal payload for a successful dispose action. Carries the folder path
-/// and UIDs so list views in non-matching folders can ignore it, plus a
-/// monotonic `tick` so `.onChange` fires even if the same UID value
-/// reappears after a folder switch + UIDVALIDITY reset.
+/// Signal payload for a successful dispose action. Carries the disposed
+/// messages' refs so list views showing other folders can ignore it, plus a
+/// monotonic `tick` so `.onChange` fires even if the same message reappears
+/// after a folder switch + UIDVALIDITY reset.
 ///
-/// `uids` is usually one element — a disposed message is one row. A
+/// `refs` is usually one element — a disposed message is one row. A
 /// send-from-draft names several: every copy its compose session left in
 /// Drafts, since an autosave replaces the copy under a new UID and the list
 /// may be rendering any of them (#1071). One signal rather than several
 /// because `.onChange` observes the latest value, so back-to-back posts in
 /// the same update would drop all but the last.
 struct DisposedEnvelope: Equatable, Sendable {
-    let folderPath: String
-    let uids: [UInt32]
+    let refs: [MessageRef]
     let tick: Int
 }
 
@@ -95,8 +94,7 @@ struct DisposedEnvelope: Equatable, Sendable {
 /// this asks the list to put it back. `tick` is monotonic for the same
 /// reason as `DisposedEnvelope`'s.
 struct FailedRemoval: Equatable, Sendable {
-    let folderPath: String
-    let uid: UInt32
+    let ref: MessageRef
     /// The reader's dispose had marked an unread message read; the restored
     /// row comes back unread.
     let markUnread: Bool
@@ -121,8 +119,7 @@ struct DraftReplacedSignal: Equatable, Sendable {
 /// `tick` is monotonic so toggling the same flag back and forth still fires
 /// the observer.
 struct EnvelopeFlagChange: Equatable, Sendable {
-    let folderPath: String
-    let uid: UInt32
+    let ref: MessageRef
     let flag: Flag
     let added: Bool
     let tick: Int
@@ -136,8 +133,7 @@ struct EnvelopeFlagChange: Equatable, Sendable {
 /// "clear the selection". `tick` is monotonic for the usual reason: marking
 /// the same UID read again after an unread round trip must still fire.
 struct ReadAdvanceRequest: Equatable, Sendable {
-    let folderPath: String
-    let uid: UInt32
+    let ref: MessageRef
     let advance: MarkReadAdvance
     let tick: Int
 }
@@ -146,10 +142,21 @@ struct ReadAdvanceRequest: Equatable, Sendable {
 /// Folder-mode lists collapse to a single source; a cross-folder search
 /// selection can span several, so each item carries its own `sourceFolder`
 /// rather than relying on the sidebar's current selection. Codable so it
-/// rides inside the drag `NSItemProvider` (see `MessageDragPayload`).
+/// rides inside the drag `NSItemProvider` (see `MessageDragPayload`); its
+/// two keys are the payload's wire form, so the item converts to and from
+/// a `MessageRef` rather than holding one.
 struct MessageDragItem: Codable, Hashable, Sendable {
     let uid: UInt32
     let sourceFolder: String
+}
+
+extension MessageDragItem {
+    init(_ ref: MessageRef) {
+        self.init(uid: ref.uid, sourceFolder: ref.folder)
+    }
+
+    /// The dragged message.
+    var ref: MessageRef { MessageRef(folder: sourceFolder, uid: uid) }
 }
 
 /// Signal payload for a drag-and-drop move. Posted by a folder row's drop
@@ -186,16 +193,14 @@ extension AppState {
     public func requestMarkFolderRead(in window: UUID? = nil) { commandWindow = window; markFolderReadRequestTick += 1 }
     func requestMoveSelection(in window: UUID? = nil) { commandWindow = window; moveSelectionRequestTick += 1 }
 
-    /// The reader's dispose, move or purge of `uid` failed on the server, so
+    /// The reader's dispose, move or purge of `ref` failed on the server, so
     /// the row its optimistic `signalDisposed` pruned should come back.
     /// `markUnread` hands back the unread count the dispose's read mark took.
-    func signalRemovalFailed(folderPath: String, uid: UInt32, markUnread: Bool = false) {
+    func signalRemovalFailed(_ ref: MessageRef, markUnread: Bool = false) {
         failedRemovalTick += 1
-        lastFailedRemoval = FailedRemoval(
-            folderPath: folderPath, uid: uid, markUnread: markUnread, tick: failedRemovalTick
-        )
+        lastFailedRemoval = FailedRemoval(ref: ref, markUnread: markUnread, tick: failedRemovalTick)
         if markUnread {
-            applyUnreadDelta(folderPath: folderPath, delta: 1)
+            applyUnreadDelta(folderPath: ref.folder, delta: 1)
         }
     }
 }
