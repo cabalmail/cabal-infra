@@ -101,18 +101,10 @@ extension MessageDetailView {
         guard !didConsumeScrollRestore, let model, let coordinator = appState.navCoordinator else { return }
         guard model.htmlBody != nil || model.plainText != nil else { return }
         didConsumeScrollRestore = true
-        if let restore = coordinator.consumeScrollRestore(
-            folderPath: folder.path,
-            uid: envelope.uid,
-            messageID: envelope.messageId
-        ) {
+        if let restore = coordinator.consumeScrollRestore(for: messageRef) {
             restoreScrollAnchor = restore.anchor
             restoreScrollOffset = restore.offset
-        } else if let position = coordinator.readingPosition(
-            folderPath: folder.path,
-            uid: envelope.uid,
-            messageID: envelope.messageId
-        ) {
+        } else if let position = coordinator.readingPosition(for: messageRef) {
             restoreScrollAnchor = position.anchor
             restoreScrollOffset = position.offset
         }
@@ -125,9 +117,7 @@ extension MessageDetailView {
     /// change, and ignores it unless the cursor is still on this message.
     func reportMessageScroll(offset: Int?, anchor: String?, fraction: Double? = nil, atTop: Bool) {
         appState.navCoordinator?.recordMessageScroll(
-            folderPath: folder.path,
-            uid: envelope.uid,
-            messageID: envelope.messageId,
+            messageRef,
             position: ReadingPosition(anchor: anchor, offset: offset, fraction: fraction),
             atTop: atTop
         )

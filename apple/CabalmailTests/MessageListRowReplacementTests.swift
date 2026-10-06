@@ -27,6 +27,11 @@ final class MessageListRowReplacementTests: XCTestCase {
         model.rowSlots(count: count).map(\.generation)
     }
 
+    /// The identity of `uid`'s row in `folder` (the model's INBOX unless named).
+    private func ref(_ uid: UInt32, in folder: String = "INBOX") -> MessageRef {
+        MessageRef(folder: folder, uid: uid)
+    }
+
     func testSlotsAreKeyedByIndexUntilARowIsReplaced() throws {
         let model = try makeModel(uids: [1, 2, 3])
         let slots = model.rowSlots(count: 3)
@@ -40,13 +45,19 @@ final class MessageListRowReplacementTests: XCTestCase {
         model.windowStart = 10
         model.totalMessages = 13
 
-        model.replaceRows(showing: [6])
+        model.replaceRows(showing: [ref(6)])
 
         XCTAssertEqual(model.rowSlot(at: 11).generation, 1, "UID 6 sits at absolute index 10 + 1")
         XCTAssertEqual(model.rowSlot(at: 10).generation, 0)
         XCTAssertEqual(model.rowSlot(at: 12).generation, 0)
-        XCTAssertEqual(model.rowGenerations, [6: 1], "the filtered list's row for UID 6 is renewed too")
+        XCTAssertEqual(model.rowGenerations, [ref(6): 1], "the filtered list's row for UID 6 is renewed too")
         XCTAssertEqual(model.rowSlots(count: 13)[11], model.rowSlot(at: 11))
+        // What the filtered / search list draws (`MessageListView.virtualizedList`).
+        XCTAssertEqual(
+            MessageRowIdentity.identify(model.envelopes, generations: model.rowGenerations).map(\.id.generation),
+            [0, 1, 0],
+            "the filtered list builds UID 6 a new row and leaves the others"
+        )
     }
 
     func testDisposeReplacesTheSwipedRowAsTheMessageLeaves() async throws {
@@ -73,7 +84,12 @@ final class MessageListRowReplacementTests: XCTestCase {
             generations(model, count: 3), [1, 0, 0],
             "the message stays, but in a new row: the swiped one may be held open behind its own button"
         )
-        XCTAssertEqual(model.rowGenerations[1], 1)
+        XCTAssertEqual(model.rowGenerations[ref(1)], 1)
+        XCTAssertEqual(
+            MessageRowIdentity.identify(model.envelopes, generations: model.rowGenerations).map(\.id.generation),
+            [1, 0, 0],
+            "in the filtered list too"
+        )
     }
 
     func testTheSlotThatWasSwipedIsReplacedEvenIfTheListShifts() async throws {
@@ -102,7 +118,7 @@ final class MessageListRowReplacementTests: XCTestCase {
     func testPurgeReplacesTheCondemnedRowsBeforeTheyLeave() async throws {
         let model = try makeModel(uids: [1, 2, 3], folderPath: FolderTree.trashPath)
 
-        await model.purgeMessages(uids: [2])
+        await model.purgeMessages(refs: [ref(2, in: FolderTree.trashPath)])
 
         XCTAssertEqual(model.envelopes.map(\.uid), [1, 3])
         XCTAssertEqual(

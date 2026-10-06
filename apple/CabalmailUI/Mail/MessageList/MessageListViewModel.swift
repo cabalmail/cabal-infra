@@ -70,15 +70,6 @@ final class MessageListViewModel {
     // Internal so `performLoadWindow` in the `+Refresh` sibling can clear it.
     var isLoadingWindow = false
     var errorMessage: String?
-    /// Why the last action on selected rows left some of them alone (the
-    /// cross-folder guard, `unambiguous(_:)` in `+Bulk`, behind the bulk bar,
-    /// the selection menu and shortcuts, a row menu's Archive or Delete, and
-    /// a multi-row drag). Not `errorMessage`: that reports the list's own
-    /// failures, scrolls with the rows and is cleared by the next successful
-    /// load, which in search mode is a page the user pulls in just by
-    /// scrolling. This answers something the user just did, so the list pins
-    /// it until they dismiss it, act again, or leave the results.
-    var skippedNotice: String?
 
     /// Active sort key. Drives both the in-memory display order and the
     /// wire sort the Lambda applies. Mutated via `setSort(_:)`.
@@ -95,17 +86,18 @@ final class MessageListViewModel {
     /// the per-row tap selects rather than opening the detail pane.
     var bulkMode: Bool = false
 
-    /// UIDs the user has selected while `bulkMode` is on. Keyed by UID
-    /// only — cross-folder search rows look up their source via
-    /// `sourceFolder(for:)`, which is the same path single-row operations
-    /// already use.
-    var selectedUIDs: Set<UInt32> = []
+    /// The rows the user has selected: on wide layouts every selection
+    /// (one row opens the reader), on touch layouts the Select mode's
+    /// checkboxes. Keyed by `MessageRef`, so of two search rows that share a
+    /// UID exactly the one picked is selected, and every action on the
+    /// selection reaches exactly the messages in it.
+    var selectedRefs: Set<MessageRef> = []
 
     /// Anchor row for range selection: the fixed pivot a shift-click or
     /// shift-arrow extends from -- the last row plainly selected or
     /// command-clicked. Settable only through `setSelectionAnchor(_:)`, so
     /// it cannot drift out of step with `selectionRangeBase`.
-    private(set) var selectionAnchor: UInt32?
+    private(set) var selectionAnchor: MessageRef?
 
     /// The selection a range operation extends *from*: whatever was selected
     /// at the moment `selectionAnchor` was pinned.
@@ -115,20 +107,20 @@ final class MessageListViewModel {
     /// survive (#1768). It is never written on its own -- a base left over
     /// from an earlier anchor would resurrect rows the user has since
     /// dropped -- which is what `setSelectionAnchor(_:)` enforces.
-    private(set) var selectionRangeBase: Set<UInt32> = []
+    private(set) var selectionRangeBase: Set<MessageRef> = []
 
     /// Pin the pivot for range selection, recording the selection it starts
     /// from. The anchor and its base always move together.
-    func setSelectionAnchor(_ uid: UInt32?) {
-        selectionAnchor = uid
-        selectionRangeBase = selectedUIDs
+    func setSelectionAnchor(_ ref: MessageRef?) {
+        selectionAnchor = ref
+        selectionRangeBase = selectedRefs
     }
 
     /// The moving end of a keyboard range selection (the row a plain arrow
     /// last landed on, or a shift-arrow last extended to). Distinct from the
     /// anchor so shift-arrow grows/shrinks the range from the right end rather
     /// than collapsing it. Plain selection sets cursor == anchor.
-    var selectionCursor: UInt32?
+    var selectionCursor: MessageRef?
 
     /// Free-text term submitted from the search field. Filters live in
     /// `searchFilters`; the two are sent together when `runSearch()` runs.
@@ -173,13 +165,11 @@ final class MessageListViewModel {
     /// triggering row's `.task` cancellation (the `loadMoreTask` pattern).
     var loadMoreSearchTask: Task<Void, Never>?
 
-    /// Per-row source folder for cross-folder results. Empty in folder
-    /// mode and single-folder searches; `sourceFolder(for:)` falls back
-    /// to `folder.path` then. Internal (not private) so the search
-    /// extension in `+Search.swift` can populate it.
-    var sourceFolderIndex = SearchSourceFolderIndex()
-
-    private var uidValidity: UInt32?
+    /// The folder's UIDVALIDITY, from the last STATUS or the cache snapshot.
+    /// Nil until one answers, and always in `.search` scope, which has no
+    /// folder. Readable so the sibling extensions can stamp it onto the refs
+    /// they build for this folder's rows (`rowRef(for:)`).
+    private(set) var uidValidity: UInt32?
     // Folder message count from the last STATUS. Pagination loads until the
     // loaded envelope count reaches it. Internal so the +Refresh sibling
     // extension can read it after a page merge to recompute `hasMore`.
@@ -266,45 +256,45 @@ final class MessageListViewModel {
     // refresh. A refresh dispatched just before a local write lands returns
     // the row's pre-write server state; applying it verbatim would resurrect
     // a row we just moved or revert a flag we just toggled, leaving the user
-    // staring at an apparent no-op until the next refresh. While a UID sits
-    // in either set, `mergeFetched` (and the cache persist) refuse to apply
-    // the fetched copy for it; the sets clear when the write resolves, so the
-    // following refresh carries server truth. Internal (not `private`) so the
-    // write paths in the sibling extensions (`+Optimistic`, `+Move`, `+Bulk`)
-    // and the merge in `+Refresh` can reach them.
+    // staring at an apparent no-op until the next refresh. While a message
+    // sits in either set, `mergeFetched` (and the cache persist) refuse to
+    // apply the fetched copy for it; the sets clear when the write resolves,
+    // so the following refresh carries server truth. Internal (not `private`)
+    // so the write paths in the sibling extensions (`+Optimistic`, `+Move`,
+    // `+Bulk`) and the merge in `+Refresh` can reach them.
 
-    /// UIDs on their way out of `envelopes` (dispose or move) whose
+    /// Messages on their way out of `envelopes` (dispose or move) whose
     /// server-side move is still in flight — including, on the dispose path,
     /// the few hundred milliseconds where the row is still present but
     /// animating out (`rowDisposalPhases`). Besides the merge shield this
     /// doubles as `dispose(_:)`'s re-entrance guard: a duplicate rapid-swipe
-    /// tap whose UID is already enqueued short-circuits, preventing
+    /// tap whose message is already enqueued short-circuits, preventing
     /// re-entrant `ForEach(model.envelopes)` diffing while several in-flight
     /// moves are still returning.
-    var pendingRemovedUIDs: Set<UInt32> = []
+    var pendingRemovedRefs: Set<MessageRef> = []
 
-    /// Rows `pruneEnvelope(uid:)` took out for a reader dispose / move /
+    /// Rows `pruneEnvelope(_:)` took out for a reader dispose / move /
     /// purge that is still in flight, with the index each held, so a failed
     /// server write can put the row back (`restorePrunedEnvelope`).
     /// Only in-flight removals are kept, so it holds a handful at most.
-    @ObservationIgnored var readerPrunedEnvelopes: [UInt32: (envelope: Envelope, index: Int)] = [:]
+    @ObservationIgnored var readerPrunedEnvelopes: [MessageRef: (envelope: Envelope, index: Int)] = [:]
     /// Reader removals that failed before their prune ran; the prune skips
-    /// them. See `restorePrunedEnvelope(uid:markUnread:)`.
-    @ObservationIgnored var readerFailedUIDs: Set<UInt32> = []
+    /// them. See `restorePrunedEnvelope(_:markUnread:)`.
+    @ObservationIgnored var readerFailedRefs: Set<MessageRef> = []
 
-    /// UIDs with an in-flight flag write (`\Seen` / `\Flagged`) that this view
-    /// model issued. While a UID sits here `mergeFetched` keeps the optimistic
-    /// flags rather than letting a stale fetch revert them. Flag writes that
-    /// originate in the detail view are tracked separately, in the shared
-    /// `AppState.pendingFlagWriteUIDs` (its write lifecycle lives in the detail
-    /// view model); `shieldFetched` consults both.
-    var pendingFlagUIDs: Set<UInt32> = []
+    /// Messages with an in-flight flag write (`\Seen` / `\Flagged`) that this
+    /// view model issued. While a message sits here `mergeFetched` keeps the
+    /// optimistic flags rather than letting a stale fetch revert them. Flag
+    /// writes that originate in the detail view are tracked separately, in
+    /// the shared `AppState.pendingFlagWriteRefs` (its write lifecycle lives
+    /// in the detail view model); `shieldFetched` consults both.
+    var pendingFlagRefs: Set<MessageRef> = []
 
-    /// Rows mid-disposal animation, keyed by UID. A disposed row stays in
-    /// `envelopes` while it fades and then collapses (see `beginRowDisposal`
-    /// in `+Optimistic`), so the list closes the gap visibly instead of
+    /// Rows mid-disposal animation. A disposed row stays in `envelopes`
+    /// while it fades and then collapses (see `beginRowDisposal` in
+    /// `+Optimistic`), so the list closes the gap visibly instead of
     /// instantaneously. Empty except during those ~300ms.
-    var rowDisposalPhases: [UInt32: RowDisposalPhase] = [:]
+    var rowDisposalPhases: [MessageRef: RowDisposalPhase] = [:]
 
     /// Generation of each replaced slot of the virtualized list, keyed by
     /// absolute index; an absent index is generation 0. Part of the row's
@@ -313,7 +303,7 @@ final class MessageListViewModel {
     var slotGenerations: [Int: Int] = [:]
     /// The same for the filtered / search list, whose rows are keyed by
     /// message (`MessageRowIdentity`) rather than by slot.
-    var rowGenerations: [UInt32: Int] = [:]
+    var rowGenerations: [MessageRef: Int] = [:]
 
     init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, appState: AppState) {
         self.scope = scope
@@ -468,7 +458,7 @@ final class MessageListViewModel {
     /// there's no jump and no trim-retrigger thrash. The fetches run on
     /// model-owned tasks so they outlive the row `.task`'s cancellation.
     func ensureLoaded(around absoluteIndex: Int) {
-        guard !isSearchActive, pendingRemovedUIDs.isEmpty, !alignment.isReconciling,
+        guard !isSearchActive, pendingRemovedRefs.isEmpty, !alignment.isReconciling,
               !isLoading, !isLoadingMore, !isLoadingPrevious, !isLoadingWindow
               else { return }
         let windowLo = Int(windowStart)
@@ -550,8 +540,7 @@ final class MessageListViewModel {
     // `MessageListViewModel+Refresh.swift` alongside `mergeFetched`, to keep
     // this type body under SwiftLint's length cap.
 
-    // Structured search (`runSearch`, `clearSearch`, `sourceFolder(for:)`,
-    // and the query builder) lives in `MessageListViewModel+Search.swift`
+    // Structured search (`runSearch`, `clearSearch`, and the query builder) lives in `MessageListViewModel+Search.swift`
     // so the primary type body stays under SwiftLint's length cap.
 
     // The per-row flag actions (`markRead`, `toggleSeen`, `toggleFlag`) live in
@@ -566,7 +555,7 @@ final class MessageListViewModel {
         // Messages just left this folder (a confirmed dispose / move / purge),
         // so a bottom window staged at the old positions is misaligned -- drop
         // it. The in-flight removal already blocks adoption via `ensureLoaded`'s
-        // `pendingRemovedUIDs` gate; this covers the window after it clears.
+        // `pendingRemovedRefs` gate; this covers the window after it clears.
         invalidateBottomPrefetch()
         try? await client.envelopeCache.remove(uids: uids, folder: folder)
         for uid in uids {
@@ -610,22 +599,23 @@ extension MessageListViewModel {
         self.init(scope: .folder(folder), client: client, preferences: preferences, appState: appState)
     }
 
-    /// Drop a UID from the in-memory envelope list after it was disposed
-    /// elsewhere (currently: the detail-view archive button). The detail
-    /// view model already pruned the envelope + body caches; this only
-    /// touches the list's in-memory copy so the row disappears immediately
-    /// without a server round trip.
-    func pruneEnvelope(uid: UInt32) {
-        if readerFailedUIDs.remove(uid) != nil { return }
-        let removedIndex = envelopes.firstIndex { $0.uid == uid }
+    /// Drop a message's row from the in-memory envelope list after it was
+    /// disposed elsewhere (currently: the detail-view archive button). The
+    /// detail view model already pruned the envelope + body caches; this
+    /// only touches the list's in-memory copy so the row disappears
+    /// immediately without a server round trip.
+    func pruneEnvelope(_ ref: MessageRef) {
+        if readerFailedRefs.remove(ref) != nil { return }
+        let removedIndex = index(of: ref)
         let removed = removedIndex.map { envelopes[$0] }
         if let removed, let removedIndex {
             stashForReaderRevert(removed, at: removedIndex)
         }
         let loadedBefore = envelopes.count
-        envelopes.removeAll { $0.uid == uid }
-        // Only adjust when a row really left the window: a signal for a UID
-        // we never had loaded says nothing reliable about the folder total.
+        if let removedIndex { envelopes.remove(at: removedIndex) }
+        // Only adjust when a row really left the window: a signal for a
+        // message we never had loaded says nothing reliable about the folder
+        // total.
         adjustTotalMessages(by: envelopes.count - loadedBefore)
         // Same for the Unread pill, which otherwise only moves on a flag flip
         // against a loaded row: the reader's dispose folds the `\Seen` marking
@@ -646,17 +636,53 @@ extension MessageListViewModel {
     /// Apply a flag toggle that originated outside the list (currently: the
     /// detail view's Mark-as-read toggle). Updates the in-memory envelope so
     /// the row's bold styling and unread dot match the new state without
-    /// waiting for a refresh. No-op when the UID isn't currently in the
+    /// waiting for a refresh. No-op when the message isn't currently in the
     /// window.
-    func applyFlagChange(uid: UInt32, flag: Flag, added: Bool) {
-        applyOptimisticFlag(uid: uid, flag: flag, add: added)
+    func applyFlagChange(_ ref: MessageRef, flag: Flag, added: Bool) {
+        applyOptimisticFlag(ref, flag: flag, add: added)
+    }
+
+    /// The list's half of the reader's flag signal
+    /// (`AppState.lastEnvelopeFlagChange`). A folder list takes only its own
+    /// folder's signals. The search surface's `folder` is a sentinel and its
+    /// rows come from many folders, so it takes the signal for whichever row
+    /// it names, matched by the row's ref (#1859); a signal for a message it
+    /// doesn't list changes nothing.
+    func applyReaderFlagChange(_ signal: EnvelopeFlagChange) {
+        guard isSearchScope || signal.ref.folder == folder.path else { return }
+        applyFlagChange(signal.ref, flag: signal.flag, added: signal.added)
+    }
+
+    /// The identity of `envelope`'s row. Every row this model loads carries
+    /// its folder (`placedInFolder(_:)`, and `SearchedEnvelope` for search
+    /// rows); one that doesn't is taken to be this folder's.
+    func rowRef(for envelope: Envelope) -> MessageRef {
+        envelope.ref(defaultFolder: folder.path, uidValidity: uidValidity)
+    }
+
+    /// Position of `ref`'s row in `envelopes`, while it is loaded.
+    func index(of ref: MessageRef) -> Int? {
+        envelopes.firstIndex { rowRef(for: $0) == ref }
+    }
+
+    /// The loaded row for `ref`.
+    func envelope(for ref: MessageRef) -> Envelope? {
+        index(of: ref).map { envelopes[$0] }
+    }
+
+    /// `fetched`, a page of this folder's rows, placed in this folder so each
+    /// row names its own message. Every folder-mode path that brings rows
+    /// into `envelopes` goes through this (or through `shieldFetched`, which
+    /// calls it).
+    func placedInFolder(_ fetched: [Envelope]) -> [Envelope] {
+        fetched.map { $0.folder == nil ? $0.inFolder(folder.path) : $0 }
     }
 
     // Internal so `loadInitial` in the `+Refresh` sibling can reach it.
     func hydrateFromCache() async {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             uidValidity = snapshot.uidValidity
-            envelopes = snapshot.envelopes.values.sorted(by: envelopeOrder)
+            envelopes = placedInFolder(Array(snapshot.envelopes.values)).sorted(by: envelopeOrder)
             // Nothing says where these rows sit on the server now; the
             // refresh that follows decides (`planWindow`).
             forgetWindowAnchor()

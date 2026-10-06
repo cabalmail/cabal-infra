@@ -18,18 +18,15 @@ struct MessageListView: View {
     var folder: Folder { scope.folder }
     /// True for the global search surface.
     var isSearchScope: Bool { scope.isSearch }
+    /// The row the reader shows. Every row carries its own folder
+    /// (`Envelope.folder`), so the host opens the reader against the
+    /// message's true mailbox (`MessageFolderPolicy`) — a cross-folder search
+    /// result included — rather than the sidebar's current selection.
     @Binding var selection: Envelope?
-    /// Fires when the selected envelope is a cross-folder search result.
-    /// The string is the result's source folder path — `MailRootView` uses
-    /// it to build a synthetic `Folder` for `MessageDetailView` so the
-    /// detail's mark-read / archive / move operations target the message's
-    /// true mailbox rather than the sidebar's current selection. `nil`
-    /// fires when the selection clears or returns to a same-folder row.
-    let onSearchResultSelected: (String?) -> Void
     /// Reports how many messages are currently selected so the parent can show
     /// a "N messages selected" placeholder in the reading pane during a multi-
     /// selection. Fires only on wide/keyboard layouts, where the native multi-
-    /// select list drives `selectedUIDs`; compact iPhone keeps the single-
+    /// select list drives `selectedRefs`; compact iPhone keeps the single-
     /// selection + touch edit-mode flow and never calls this.
     let onSelectionCountChanged: (Int) -> Void
     /// Fires when the user picks another folder from the folder-switch menu
@@ -128,7 +125,7 @@ struct MessageListView: View {
     /// Set by the delete affordances while the list shows Trash (row
     /// swipe / menu for a single message; selection menu, action bar,
     /// and Cmd+Delete for a multi-selection); presents the "Delete
-    /// Forever?" confirmation for the captured UID set. Non-private so
+    /// Forever?" confirmation for the captured messages. Non-private so
     /// the `+Rows` / `+Bulk` / `+Actions` extensions can stage it.
     @State var purgeCandidate: PurgeCandidate?
     /// Set by `requestDispose` when a dispose crosses the large-selection
@@ -140,7 +137,7 @@ struct MessageListView: View {
     @State var bulkMoveSheetPresented = false
     /// Set by the wide-layout selection context menu's "Move to folder…"
     /// item and the Cmd+M shortcut; presents the MoveToFolderSheet for
-    /// the captured UID set (see `MessageListView+Actions.swift`).
+    /// the captured messages (see `MessageListView+Actions.swift`).
     @State var moveCandidate: SelectionMoveCandidate?
     /// `true` while the unsubscribed-folder banner's Refresh button is
     /// in flight. The banner lives in `+UnsubscribedBanner.swift`;
@@ -183,7 +180,7 @@ struct MessageListView: View {
     /// the candidate is already cleared and this does nothing.
     private func withdrawPurgeCandidate() {
         if let candidate = purgeCandidate {
-            model?.replaceRows(showing: candidate.uids)
+            model?.replaceRows(showing: candidate.refs)
         }
         purgeCandidate = nil
     }
@@ -204,19 +201,17 @@ struct MessageListView: View {
     private var disposeDialogTitle: String {
         guard let candidate = disposeCandidate else { return "" }
         let verb = candidate.action == .trash ? "Delete" : "Archive"
-        return "\(verb) \(candidate.uids.count) Messages?"
+        return "\(verb) \(candidate.refs.count) Messages?"
     }
 
     @ViewBuilder
     private func moveSheet(for envelope: Envelope) -> some View {
         if let client = appState.client {
-            // Cross-folder search rows live in `sourceFolderIndex`; the
-            // sidebar's `folder` is the search scope, not the row's true
-            // mailbox. Excluding the row's actual source folder from the
-            // picker is what the user expects.
-            let sourcePath = model?.sourceFolder(for: envelope) ?? folder.path
+            // A cross-folder search row's mailbox is its own, not the
+            // list's `folder` (the search scope). Excluding the row's
+            // actual folder from the picker is what the user expects.
             MoveToFolderSheet(
-                currentFolder: Folder(path: sourcePath),
+                currentFolder: MessageFolderPolicy.folder(for: envelope, in: folder) ?? folder,
                 client: client,
                 onSelect: { destination in
                     envelopeToMove = nil
@@ -259,9 +254,6 @@ struct MessageListView: View {
         .overlay {
             searchResultsPlaceholder(model: model, visibleRowCount: visible.count)
         }
-        // Inside the safe-area insets below, so it sits above the bulk
-        // action bar rather than on it.
-        .overlay(alignment: .bottom) { skippedNoticeBanner(model: model) }
         // A search/filter list that empties out from under the user (every
         // loaded Unread row marked read, say) has no rows left to fire the
         // near-end prefetch, so kick the next page from here instead. The
@@ -431,7 +423,7 @@ extension MessageListView {
             Button("Delete Forever", role: .destructive) {
                 purgeCandidate = nil
                 if let model {
-                    Task { await model.purgeMessages(uids: candidate.uids) }
+                    Task { await model.purgeMessages(refs: candidate.refs) }
                 }
             }
             Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {
@@ -439,9 +431,9 @@ extension MessageListView {
             }
         } message: { candidate in
             Text(
-                candidate.uids.count == 1
+                candidate.refs.count == 1
                 ? "This message will be permanently deleted. This can't be undone."
-                : "These \(candidate.uids.count) messages will be permanently deleted. This can't be undone."
+                : "These \(candidate.refs.count) messages will be permanently deleted. This can't be undone."
             )
         }
         // Large-selection dispose guard (threshold in `+Actions.swift`):
@@ -468,8 +460,8 @@ extension MessageListView {
         } message: { candidate in
             Text(
                 candidate.action == .trash
-                ? "\(candidate.uids.count) messages will be moved to Trash."
-                : "\(candidate.uids.count) messages will be archived."
+                ? "\(candidate.refs.count) messages will be moved to Trash."
+                : "\(candidate.refs.count) messages will be archived."
             )
         }
     }
@@ -584,31 +576,35 @@ extension MessageListView {
             // preference (so the user can keep triaging without bouncing
             // back to the list), then prune the matching row so it
             // disappears immediately. Other folders ignore the signal.
-            guard let signal, signal.folderPath == folder.path else { return }
-            // A send-from-draft names every UID its compose session held in
+            guard let signal, let model else { return }
+            let refs = Set(signal.refs.filter { $0.folder == folder.path })
+            guard !refs.isEmpty else { return }
+            // A send-from-draft names every copy its compose session held in
             // Drafts (#1071); whichever of them this list actually loaded is
-            // the row on screen, so that's the one the advance walks from.
-            let current = model?.envelopes.first { signal.uids.contains($0.uid) }
+            // the row on screen -- the first in list order, should it hold
+            // more than one -- so that's the one the advance walks from.
+            let current = model.envelopes.first { refs.contains(model.rowRef(for: $0)) }
+            let currentRef = current.map(model.rowRef(for:))
             // Drop the rest first: they're stale copies of the same draft,
             // and leaving one in place would let the advance walk onto a row
             // that's about to disappear.
-            for uid in signal.uids where uid != current?.uid {
-                model?.pruneEnvelope(uid: uid)
+            for ref in refs where ref != currentRef {
+                model.pruneEnvelope(ref)
             }
             // Compute the advance target before pruning - every advance
             // policy walks from `current`'s index, which disappears once
             // it's pruned.
             let next = current.flatMap {
-                model?.advanceTarget(after: $0, following: preferences.disposeAdvance)
+                model.advanceTarget(after: $0, following: preferences.disposeAdvance)
             }
-            if let current {
-                model?.pruneEnvelope(uid: current.uid)
+            if let currentRef {
+                model.pruneEnvelope(currentRef)
             }
             if isWideLayout {
-                // Wide layouts drive the reading pane off `selectedUIDs`;
+                // Wide layouts drive the reading pane off `selectedRefs`;
                 // advancing the set re-derives `selection` via the list's
-                // `.onChange(of: selectedUIDs)` below.
-                model?.selectedUIDs = next.map { [$0.uid] } ?? []
+                // `.onChange(of: selectedRefs)` below.
+                model.selectedRefs = next.map { [model.rowRef(for: $0)] } ?? []
             } else {
                 selection = next
             }
@@ -617,8 +613,8 @@ extension MessageListView {
             // The reader's dispose / move / purge failed after the handler
             // above pruned its row: put the row back. The selection stays
             // where the advance left it, as with a failed swipe.
-            guard let signal, signal.folderPath == folder.path else { return }
-            model?.restorePrunedEnvelope(uid: signal.uid, markUnread: signal.markUnread)
+            guard let signal, signal.ref.folder == folder.path else { return }
+            model?.restorePrunedEnvelope(signal.ref, markUnread: signal.markUnread)
         }
         .onChange(of: appState.lastDraftReplaced) { _, signal in
             // A compose session saved over a Drafts copy this list may be
@@ -631,12 +627,12 @@ extension MessageListView {
             // option. Advance the selection like the dispose handler above,
             // but never prune (the row is still here, just read now) and
             // never clear the selection — no candidate means stay put.
-            guard let signal, signal.folderPath == folder.path else { return }
-            guard let current = model?.envelopes.first(where: { $0.uid == signal.uid }),
-                  let next = model?.markReadAdvanceTarget(after: current, following: signal.advance)
+            guard let signal, signal.ref.folder == folder.path, let model,
+                  let current = model.envelope(for: signal.ref),
+                  let next = model.markReadAdvanceTarget(after: current, following: signal.advance)
             else { return }
             if isWideLayout {
-                model?.selectedUIDs = [next.uid]
+                model.selectedRefs = [model.rowRef(for: next)]
             } else {
                 selection = next
             }
@@ -644,25 +640,11 @@ extension MessageListView {
         .onChange(of: appState.lastEnvelopeFlagChange) { _, signal in
             // Detail view toggled \Seen (or another flag in the future).
             // Apply it directly to the matching row so the bold styling +
-            // unread dot flip without waiting for the next refresh.
-            // Other folders ignore the signal.
-            guard let signal, signal.folderPath == folder.path else { return }
-            model?.applyFlagChange(
-                uid: signal.uid,
-                flag: signal.flag,
-                added: signal.added
-            )
-        }
-        // Push the selected envelope's true source folder up to the
-        // root view. In folder mode this is always `folder.path`; in
-        // cross-folder search mode the model's `sourceFolder(for:)`
-        // returns the per-row mailbox so the detail view's operations
-        // (mark read, archive, move) land in the right place.
-        .onChange(of: selection) { _, newSelection in
-            guard let model else { return }
-            let resolved = newSelection.map(model.sourceFolder(for:))
-            let projected = resolved.flatMap { $0 == folder.path ? nil : $0 }
-            onSearchResultSelected(projected)
+            // unread dot flip without waiting for the next refresh. The
+            // model decides which signals are this list's: its own folder's,
+            // or on the search surface the row's (#1859).
+            guard let signal else { return }
+            model?.applyReaderFlagChange(signal)
         }
         // A folder row in the sidebar received a dropped message (or
         // selection). The drop handler posts the destination + payload on
@@ -700,22 +682,20 @@ extension MessageListView {
     /// Selects the message named by a pending cross-client restore, if it
     /// targets this folder and is present in the loaded window. Matches by
     /// Message-ID first (survives the message being moved by another client),
-    /// then by UID. A miss (deleted, or not in the loaded window) leaves the
-    /// list unselected — the graceful-degradation path.
+    /// then by the restore's ref. A miss (deleted, or not in the loaded
+    /// window) leaves the list unselected — the graceful-degradation path.
     private func applyPendingRestore(model: MessageListViewModel) {
         guard !isSearchScope,
               let restore = appState.navCoordinator?.consumePendingRestore(for: folder.path)
         else { return }
         let match = restore.messageID.flatMap { messageID in
             model.envelopes.first { $0.messageId == messageID }
-        } ?? restore.uid.flatMap { uid in
-            model.envelopes.first { $0.uid == uid }
-        }
+        } ?? restore.ref.flatMap(model.envelope(for:))
         guard let match else { return }
         if isWideLayout {
-            // Wide layouts drive the reading pane off `selectedUIDs`; the list's
-            // own `.onChange(of: selectedUIDs)` re-derives `selection`.
-            model.selectedUIDs = [match.uid]
+            // Wide layouts drive the reading pane off `selectedRefs`; the list's
+            // own `.onChange(of: selectedRefs)` re-derives `selection`.
+            model.selectedRefs = [model.rowRef(for: match)]
         } else {
             selection = match
         }

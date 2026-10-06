@@ -17,7 +17,6 @@ extension MailRootView {
                     dismissFolderPanel()
                     selectedFolder = nil
                     selectedEnvelope = nil
-                    crossFolderDetail = nil
                     listSelectionCount = 0
                 }
                 selectedFeedScope = picked

@@ -10,16 +10,18 @@ import CabalmailKit
 // users who rely on unread state as a "come back to it" marker.
 //
 // Re-entrance: the sheet binding gates double-fire at the UI layer
-// (one envelope owns one sheet at a time), so we skip the `pendingDispose
-// UIDs` guard that `dispose(_:)` uses for rapid-swipe protection.
+// (one envelope owns one sheet at a time), so we skip the
+// `pendingRemovedRefs` guard that `dispose(_:)` uses for rapid-swipe
+// protection.
 extension MessageListViewModel {
     func moveTo(_ envelope: Envelope, destination: String) async {
-        let source = sourceFolder(for: envelope)
+        let ref = rowRef(for: envelope)
+        let source = ref.folder
         guard source != destination else { return }
-        let originalIndex = envelopes.firstIndex { $0.uid == envelope.uid }
+        let originalIndex = index(of: ref)
         let wasUnread = !envelope.flags.contains(.seen)
         let loadedBefore = envelopes.count
-        envelopes.removeAll { $0.uid == envelope.uid }
+        if let originalIndex { envelopes.remove(at: originalIndex) }
         // Drop the vacated slot from the folder total too, or the index-
         // addressed list keeps rendering an unresolvable skeleton row in it
         // (and the All pill keeps counting it) until the next STATUS.
@@ -27,8 +29,8 @@ extension MessageListViewModel {
         // Shield the removal from a concurrent refresh: until the move lands
         // the source folder still returns this UID, and an unshielded merge
         // would resurrect the row.
-        pendingRemovedUIDs.insert(envelope.uid)
-        defer { pendingRemovedUIDs.remove(envelope.uid) }
+        pendingRemovedRefs.insert(ref)
+        defer { pendingRemovedRefs.remove(ref) }
         if wasUnread {
             appState.applyUnreadDelta(folderPath: source, delta: -1)
             appState.applyUnreadDelta(folderPath: destination, delta: 1)
@@ -37,10 +39,10 @@ extension MessageListViewModel {
         do {
             try await client.imapClient.move(
                 folder: source,
-                uids: [envelope.uid],
+                uids: [ref.uid],
                 destination: destination
             )
-            await confirmRemoval(from: source, uids: [envelope.uid])
+            await confirmRemoval(from: source, uids: [ref.uid])
         } catch {
             restoreEnvelope(envelope, at: originalIndex)
             // Not once the session has ended (#1851).
@@ -52,35 +54,31 @@ extension MessageListViewModel {
         }
     }
 
+    /// What dragging `envelope`'s row carries. When a multi-selection exists
+    /// and this row is part of it, the whole selection, in list order;
+    /// otherwise just this row - matching Finder / Mail, where grabbing an
+    /// unselected item drags only it. Each item is a row's own ref, so a
+    /// cross-folder search selection routes every message back to its own
+    /// folder on drop, and dragging one of two rows that share a UID lifts
+    /// only that one.
+    func dragItems(liftedFrom envelope: Envelope) -> [MessageDragItem] {
+        if selectedRefs.count > 1, isSelected(envelope) {
+            return loadedRows(selectedRefs).map { MessageDragItem(rowRef(for: $0)) }
+        }
+        return [MessageDragItem(rowRef(for: envelope))]
+    }
+
     /// Perform a drag-and-drop move posted from a sidebar folder. The payload
-    /// already carries each UID's owning mailbox, so we group by source and
-    /// hand off to the shared `performMove`. UIDs that were part of an active
-    /// bulk selection are dropped from `selectedUIDs` afterwards so the
-    /// action bar's count stays truthful; bulk mode itself is left as the
-    /// user set it (a drag isn't a "done selecting" signal).
-    ///
-    /// A UID the request carries more than once is a bare-UID selection that
-    /// spans rows from different folders (`dragItems(for:model:)` adds every
-    /// loaded row whose UID is selected), which is the bulk actions' case, so
-    /// it gets their cross-folder guard and stays put. A UID carried once
-    /// names its one row, as a single-row drag does, and stays unguarded like
-    /// a swipe; for copies the source-folder index can't tell apart that row
-    /// carries the first copy's folder, as the swipe and the reader do, until
-    /// selection keys on folder plus UID.
+    /// carries each message's ref (its owning mailbox and UID), so we group
+    /// by source and hand off to the shared `performMove`. Dragged messages
+    /// that were part of an active bulk selection are dropped from
+    /// `selectedRefs` afterwards so the action bar's count stays truthful;
+    /// bulk mode itself is left as the user set it (a drag isn't a "done
+    /// selecting" signal).
     func applyMoveRequest(_ request: MessageMoveRequest) async {
-        let query = submittedQuery
-        let repeated = Set(Dictionary(grouping: request.items, by: \.uid).filter { $0.value.count > 1 }.keys)
-        let guarded = unambiguous(repeated)
-        let skipped = repeated.subtracting(guarded.kept)
-        let items = request.items.filter { !skipped.contains($0.uid) }
-        let grouping = Dictionary(grouping: items, by: \.sourceFolder)
-            .mapValues { $0.map(\.uid) }
-        await performMove(uidsBySource: grouping, to: request.destination, markSeenFirst: false)
-        // Every dragged UID leaves the selection, skipped ones included: a
-        // lone skipped UID left selected would open its first copy in the
-        // wide layouts' reader, a message the drag didn't move.
-        selectedUIDs.subtract(request.items.map(\.uid))
-        if request.items.count > 1 { settleSkippedNotice(guarded.notice, searchedFor: query) }
+        let refs = request.items.map(\.ref)
+        await performMove(uidsBySource: refs.uidsByFolder(), to: request.destination, markSeenFirst: false)
+        selectedRefs.subtract(refs)
     }
 
     /// Shared optimistic move used by the bulk-action bar and the drag-and-
@@ -95,6 +93,11 @@ extension MessageListViewModel {
     /// message `\Seen` before the move (archived == read) so the source
     /// loses the unread but the destination doesn't gain it; a plain move
     /// carries unread state with the message.
+    ///
+    /// The groups are already folder-qualified, so the prune, the shield and
+    /// every revert work on the moving messages' refs: a row elsewhere in a
+    /// cross-folder search that shares a UID with a moving one is not moved,
+    /// pruned or counted.
     func performMove(
         uidsBySource: [String: [UInt32]],
         to destination: String,
@@ -102,22 +105,22 @@ extension MessageListViewModel {
     ) async {
         let groups = uidsBySource.filter { $0.key != destination && !$0.value.isEmpty }
         guard !groups.isEmpty else { return }
-        let movingUIDs = Set(groups.values.flatMap { $0 })
-        let snapshot = envelopes.filter { movingUIDs.contains($0.uid) }
+        let movingRefs = Set(groups.flatMap { folder, uids in uids.map { MessageRef(folder: folder, uid: $0) } })
+        let snapshot = envelopes.filter { movingRefs.contains(rowRef(for: $0)) }
         let unreadBySource = Dictionary(
             grouping: snapshot.filter { !$0.flags.contains(.seen) },
-            by: { sourceFolder(for: $0) }
+            by: { rowRef(for: $0).folder }
         ).mapValues { $0.count }
 
         // Optimistic prune. A per-source failure reinserts that group below.
-        // Shield every moving UID from a concurrent refresh until the whole
-        // batch settles - the source folders keep returning them until their
-        // move lands, and an unshielded merge would resurrect the rows.
+        // Shield every moving message from a concurrent refresh until the
+        // whole batch settles - the source folders keep returning them until
+        // their move lands, and an unshielded merge would resurrect the rows.
         let loadedBefore = envelopes.count
-        envelopes.removeAll { movingUIDs.contains($0.uid) }
+        envelopes.removeAll { movingRefs.contains(rowRef(for: $0)) }
         adjustTotalMessages(by: envelopes.count - loadedBefore)
-        pendingRemovedUIDs.formUnion(movingUIDs)
-        defer { pendingRemovedUIDs.subtract(movingUIDs) }
+        pendingRemovedRefs.formUnion(movingRefs)
+        defer { pendingRemovedRefs.subtract(movingRefs) }
         for (source, count) in unreadBySource {
             appState.applyUnreadDelta(folderPath: source, delta: -count)
             if !markSeenFirst {
@@ -164,7 +167,7 @@ extension MessageListViewModel {
         unread: Int,
         markSeenFirst: Bool
     ) {
-        let restored = snapshot.filter { sourceFolder(for: $0) == source }
+        let restored = snapshot.filter { rowRef(for: $0).folder == source && index(of: rowRef(for: $0)) == nil }
         envelopes.append(contentsOf: restored)
         envelopes.sort(by: envelopeOrder)
         adjustTotalMessages(by: restored.count)
@@ -190,14 +193,14 @@ extension MessageListViewModel {
         markSeenFirst: Bool
     ) {
         let restored = snapshot.filter {
-            sourceFolder(for: $0) == source && failed.contains($0.uid)
+            rowRef(for: $0).folder == source && failed.contains($0.uid) && index(of: rowRef(for: $0)) == nil
         }
         envelopes.append(contentsOf: restored)
         envelopes.sort(by: envelopeOrder)
         adjustTotalMessages(by: restored.count)
         if markSeenFirst {
             for envelope in restored {
-                applyOptimisticFlag(uid: envelope.uid, flag: .seen, add: true)
+                applyOptimisticFlag(rowRef(for: envelope), flag: .seen, add: true)
             }
         } else if appState.acceptsCounts(from: client) {
             let unread = restored.filter { !$0.flags.contains(.seen) }.count

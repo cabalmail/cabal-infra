@@ -11,6 +11,12 @@ import CabalmailKit
 final class MessageDetailViewModel {
     let folder: Folder
     let envelope: Envelope
+    /// The message this reader shows: `envelope` in `folder`. The host hands
+    /// the reader the folder the selected row came from, so this is that
+    /// row's own message, even when another search row shares its UID.
+    var ref: MessageRef {
+        MessageRef(folder: folder.path, uid: envelope.uid, messageId: envelope.messageId)
+    }
     // Internal (not `private`) so the flag-handling methods, lifted into the
     // `+Flags` sibling extension to keep this type body under SwiftLint's cap,
     // can reach them.

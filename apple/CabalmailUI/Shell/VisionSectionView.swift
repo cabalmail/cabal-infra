@@ -218,11 +218,9 @@ private struct VisionMailPane: View {
         .onChange(of: selectedEnvelope) { _, envelope in
             guard let folderPath = selectedFolder?.path else { return }
             if let envelope {
-                appState.navCoordinator?.recordMessage(
-                    folderPath: folderPath,
-                    uid: envelope.uid,
-                    messageID: envelope.messageId
-                )
+                // Anchored to the selected folder, as on the other layouts.
+                let ref = envelope.ref(defaultFolder: folderPath)
+                if ref.folder == folderPath { appState.navCoordinator?.recordMessage(ref) }
             } else {
                 appState.navCoordinator?.recordNoMessage(folderPath: folderPath)
             }
@@ -235,7 +233,6 @@ private struct VisionMailPane: View {
             MessageListView(
                 scope: .folder(selectedFolder),
                 selection: $selectedEnvelope,
-                onSearchResultSelected: { _ in },
                 onSelectionCountChanged: { listSelectionCount = $0 },
                 // The list's folder-switch menu writes the cross-tab
                 // selection exactly as a Folders-tab pick does. `self.`
@@ -261,7 +258,8 @@ private struct VisionMailPane: View {
                 systemImage: "envelope.badge",
                 description: Text("Use the action bar below the list to act on them together.")
             )
-        } else if let folder = selectedFolder, let selectedEnvelope {
+        } else if let selectedEnvelope,
+                  let folder = MessageFolderPolicy.folder(for: selectedEnvelope, in: selectedFolder) {
             MessageDetailView(folder: folder, envelope: selectedEnvelope)
                 .id("\(folder.path)#\(selectedEnvelope.uid)")
         } else {

@@ -46,7 +46,8 @@ struct SearchView: View {
                     // Every result carries its source folder, so the reader's
                     // operations target the message's true mailbox.
                     MessageDetailView(
-                        folder: Folder(path: model.sourceFolder(for: envelope)),
+                        folder: MessageFolderPolicy.folder(for: envelope, in: nil)
+                            ?? Folder(path: model.rowRef(for: envelope).folder),
                         envelope: envelope
                     )
                 }
@@ -79,7 +80,6 @@ struct SearchView: View {
             scope: .search,
             injectedSearchModel: model,
             selection: $selectedEnvelope,
-            onSearchResultSelected: { _ in },
             onSelectionCountChanged: { _ in }
         )
         .searchable(text: $model.searchQuery, prompt: "Search all mail")

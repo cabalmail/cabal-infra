@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.25.1] - 2026-10-06
+
+### Fixed
+- Apple: **A search result you read loses its unread dot.** Opening an
+  unread message from the search results, or marking it read or unread in
+  the reader, now updates its row in the results at once, as it does in a
+  folder's list. Before, the row kept its unread dot until the next search.
+- Apple: **Search results that share an ID now act on their own message.**
+  A search across folders can list two messages under the same ID, or a
+  message you sent yourself in both Inbox and Sent. Each result now
+  remembers which folder it came from, so selecting, swiping, flagging,
+  marking read or unread, moving, archiving, deleting, dragging, or opening
+  one of them reaches exactly that message. Ticking one no longer selects
+  both, the reader opens the copy you picked, and bulk actions no longer
+  leave these results unchanged with a note telling you to act on them from
+  their own folders. A result repeated where two pages of results meet is
+  listed once.
+
 ## [1.25.0] - 2026-10-06
 
 ### Added

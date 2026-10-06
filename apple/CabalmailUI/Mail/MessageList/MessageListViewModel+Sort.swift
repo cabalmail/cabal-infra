@@ -68,7 +68,6 @@ extension MessageListViewModel {
             return
         }
         envelopes.removeAll()
-        sourceFolderIndex = SearchSourceFolderIndex()
         resetWindow()
         await refresh(prefetched: probe)
         // Re-stage the bottom window in the new order (resetWindow dropped the

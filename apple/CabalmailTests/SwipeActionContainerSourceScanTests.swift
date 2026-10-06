@@ -201,7 +201,7 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
     func testCancelledDeleteForeverReplacesTheRows() throws {
         let code = Self.code(in: try Self.source(Self.listViewSource))
         let helper = try Self.slice(code, from: "private func withdrawPurgeCandidate()")
-        XCTAssertTrue(helper.contains("replaceRows(showing: candidate.uids)"))
+        XCTAssertTrue(helper.contains("replaceRows(showing: candidate.refs)"))
         let binding = try Self.slice(code, from: "private var purgeDialogBinding: Binding<Bool> {")
         XCTAssertTrue(binding.contains("withdrawPurgeCandidate()"), "dismissing the dialog must replace the rows")
         guard let dialog = code.range(of: "\"Delete Forever?\""),

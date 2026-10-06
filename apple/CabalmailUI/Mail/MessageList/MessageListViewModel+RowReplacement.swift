@@ -64,22 +64,22 @@ extension MessageListViewModel {
         MessageListSlot(index: index, generation: slotGenerations[index] ?? 0)
     }
 
-    /// The absolute index the message with `uid` occupies, while it's loaded.
-    func slotIndex(of uid: UInt32) -> Int? {
-        envelopes.firstIndex { $0.uid == uid }.map { Int(windowStart) + $0 }
+    /// The absolute index `ref`'s message occupies, while it's loaded.
+    func slotIndex(of ref: MessageRef) -> Int? {
+        index(of: ref).map { Int(windowStart) + $0 }
     }
 
-    /// Gives each message in `uids` a new row in place of the one it has now,
+    /// Gives each message in `refs` a new row in place of the one it has now,
     /// in both list shapes -- and gives each slot in `slots` one too. Called
     /// when a row that a destructive full swipe may be holding open is settled:
     /// it leaves, or it stays. Harmless where nothing was held open: the row is
     /// rebuilt where it would otherwise have been updated. Call it while the
     /// messages are still in `envelopes`, or their slots can't be found.
-    func replaceRows(showing uids: some Sequence<UInt32>, alsoAt slots: [Int] = []) {
+    func replaceRows(showing refs: some Sequence<MessageRef>, alsoAt slots: [Int] = []) {
         var replaced = Set(slots)
-        for uid in uids {
-            rowGenerations[uid, default: 0] += 1
-            if let slot = slotIndex(of: uid) { replaced.insert(slot) }
+        for ref in refs {
+            rowGenerations[ref, default: 0] += 1
+            if let slot = slotIndex(of: ref) { replaced.insert(slot) }
         }
         for slot in replaced {
             slotGenerations[slot, default: 0] += 1

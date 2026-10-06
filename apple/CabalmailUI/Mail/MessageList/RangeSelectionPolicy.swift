@@ -17,14 +17,17 @@ import Foundation
 /// else (#1768: `{367, 369, 313}` plus a shift-click one row down became
 /// `{313, 312}`), so the span is unioned onto the selection that was in
 /// force when the anchor was pinned.
+///
+/// Generic over the row identity: the message list passes `MessageRef`s, so
+/// two rows that share a UID (a cross-folder search) are two rows here too.
 enum RangeSelectionPolicy {
     /// The selection after a range operation, and the anchor to adopt.
-    struct Outcome: Equatable {
-        let selected: Set<UInt32>
+    struct Outcome<ID: Hashable>: Equatable {
+        let selected: Set<ID>
         /// Non-nil only when the anchor could not be resolved, in which case
         /// `target` becomes the new pivot. The anchor otherwise stays put,
         /// which is what lets a second shift-click replace the first's span.
-        let newAnchor: UInt32?
+        let newAnchor: ID?
     }
 
     /// Extend from `anchor` to `target` over `ordered` (the visible rows in
@@ -34,12 +37,12 @@ enum RangeSelectionPolicy {
     /// (`MessageListViewModel.selectionRangeBase`), deliberately not the
     /// current selection: an earlier shift-click's span has to be replaced by
     /// this one, and unioning onto the live selection would grow it instead.
-    static func outcome(
-        base: Set<UInt32>,
-        anchor: UInt32?,
-        target: UInt32,
-        ordered: [UInt32]
-    ) -> Outcome {
+    static func outcome<ID: Hashable>(
+        base: Set<ID>,
+        anchor: ID?,
+        target: ID,
+        ordered: [ID]
+    ) -> Outcome<ID> {
         guard let anchor,
               let anchorIndex = ordered.firstIndex(of: anchor),
               let targetIndex = ordered.firstIndex(of: target)

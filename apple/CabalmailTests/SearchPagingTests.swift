@@ -100,8 +100,11 @@ final class SearchPagingTests: XCTestCase {
             model.envelopes.count, 51,
             "a colliding UID from another folder is a distinct row, not a duplicate"
         )
+        // The appended row as the list holds it: the local `zeta` was never
+        // placed in a folder, so it is the loaded copy that names its own.
+        let loadedZeta = try XCTUnwrap(model.envelopes.first { $0.messageId == zeta.messageId })
         XCTAssertEqual(
-            model.sourceFolder(for: zeta), "zeta0802",
+            model.rowRef(for: loadedZeta).folder, "zeta0802",
             "the source-folder index extends with appended pages"
         )
     }

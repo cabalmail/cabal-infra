@@ -38,7 +38,7 @@ extension MessageListView {
 
     /// Called when a bulk move / dispose commits — the actions that remove
     /// the selected rows. Drops the mode so the action bar dismisses; the
-    /// action itself clears `selectedUIDs` once its async body has read them
+    /// action itself clears `selectedRefs` once its async body has read them
     /// (`leaveBulkMode` deliberately leaves the set alone, since this runs
     /// before the `Task` that does the moving). The read/unread and flag
     /// buttons deliberately skip it: their rows stay on screen, and keeping
@@ -49,38 +49,12 @@ extension MessageListView {
         model?.leaveBulkMode()
     }
 
-    /// The bulk actions' "left unchanged" note (`model.skippedNotice`), pinned
-    /// to the bottom of the list so it is on screen at any scroll position,
-    /// just above the action bar when one is showing. It overlays the rows rather
-    /// than joining them, so nothing moves when it comes or goes, and it hangs
-    /// from the bottom for the reason the root banners do
-    /// (`StatusBannerPlacement`, #1426): the top of the list is what the user
-    /// is reading. The animation is scoped to this container so it can't
-    /// animate the row changes the same action makes.
-    func skippedNoticeBanner(model: MessageListViewModel) -> some View {
-        VStack {
-            if let notice = model.skippedNotice {
-                ToastBanner(
-                    toast: Toast(kind: .info, message: notice),
-                    onDismiss: { model.skippedNotice = nil }
-                )
-                .padding(.bottom, 6)
-                .padding(.horizontal, 12)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                // `.contain` keeps the close button its own element.
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("list.skippedNotice")
-            }
-        }
-        .animation(.default, value: model.skippedNotice)
-    }
-
     /// Bottom action bar rendered in `safeAreaInset` while bulkMode is
     /// active. Mirrors React's bulk-mode pill row (Archive / Move /
     /// Delete / Mark Read/Unread / Flag).
     @ViewBuilder
     func bulkActionBar(model: MessageListViewModel) -> some View {
-        let count = model.selectedUIDs.count
+        let count = model.selectedRefs.count
         VStack(spacing: 0) {
             Divider()
             // Widest row that fits the message-list column, which is far
@@ -187,7 +161,7 @@ extension MessageListView {
                 identifier: "bulk.delete",
                 showsCaption: showsCaptions
             ) {
-                purgeCandidate = PurgeCandidate(uids: model.selectedUIDs)
+                purgeCandidate = PurgeCandidate(refs: model.selectedRefs)
             }
         }
     }
@@ -203,7 +177,7 @@ extension MessageListView {
     private func bulkArchive(model: MessageListViewModel, intent: DisposeIntent) {
         switch intent {
         case .restore:
-            restoreSelection(uids: model.selectedUIDs, model: model)
+            restoreSelection(refs: model.selectedRefs, model: model)
             endSelectionMode()
         case .move(let action):
             if model.isTrashFolder {
@@ -211,7 +185,7 @@ extension MessageListView {
                 endSelectionMode()
             } else {
                 requestDispose(
-                    uids: model.selectedUIDs,
+                    refs: model.selectedRefs,
                     action: action,
                     exitBulk: true,
                     model: model
@@ -282,16 +256,10 @@ extension MessageListView {
     /// "Read" vs "Unread" label on the toolbar button so the action
     /// always matches the majority intent.
     private func bulkSelectionContainsUnread(_ model: MessageListViewModel) -> Bool {
-        model.envelopes.contains { envelope in
-            model.selectedUIDs.contains(envelope.uid)
-                && !envelope.flags.contains(.seen)
-        }
+        model.loadedRows(model.selectedRefs).contains { !$0.flags.contains(.seen) }
     }
 
     private func bulkSelectionContainsUnflagged(_ model: MessageListViewModel) -> Bool {
-        model.envelopes.contains { envelope in
-            model.selectedUIDs.contains(envelope.uid)
-                && !envelope.flags.contains(.flagged)
-        }
+        model.loadedRows(model.selectedRefs).contains { !$0.flags.contains(.flagged) }
     }
 }

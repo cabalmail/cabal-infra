@@ -46,7 +46,7 @@ final class SignOutLateDeltaTests: XCTestCase {
         try await assertLateChangeIsDropped(held: .move) { imap in
             await imap.scriptMoveResults([.failure(Self.refused)])
         } run: { list, envelopes in
-            await list.moveMessages(uids: Set(envelopes.map(\.uid)), to: "Archive")
+            await list.moveMessages(refs: Set(envelopes.map { list.rowRef(for: $0) }), to: "Archive")
         }
     }
 
@@ -54,7 +54,7 @@ final class SignOutLateDeltaTests: XCTestCase {
         try await assertLateChangeIsDropped(held: .move) { imap in
             await imap.scriptMoveResults([.failure(CabalmailError.bulkPartialFailure(succeeded: [1], failed: [2]))])
         } run: { list, envelopes in
-            await list.moveMessages(uids: Set(envelopes.map(\.uid)), to: "Archive")
+            await list.moveMessages(refs: Set(envelopes.map { list.rowRef(for: $0) }), to: "Archive")
         }
     }
 
@@ -78,14 +78,14 @@ final class SignOutLateDeltaTests: XCTestCase {
         try await assertLateChangeIsDropped(folder: FolderTree.trashPath, held: .purge) { imap in
             await imap.scriptPurgeResults([.failure(Self.refused)])
         } run: { list, envelopes in
-            await list.purgeMessages(uids: Set(envelopes.map(\.uid)))
+            await list.purgeMessages(refs: Set(envelopes.map { list.rowRef(for: $0) }))
         }
     }
 
     func testABulkMarkReadThatAnswersAfterTheNextSignInChangesNothing() async throws {
         try await assertLateChangeIsDropped(held: .setFlags) { _ in
         } run: { list, envelopes in
-            await list.setSeen(true, uids: Set(envelopes.map(\.uid)))
+            await list.setSeen(true, refs: Set(envelopes.map { list.rowRef(for: $0) }))
         }
     }
 
@@ -127,7 +127,7 @@ final class SignOutLateDeltaTests: XCTestCase {
         let list = try makeList(folder: "INBOX", over: XCTUnwrap(harness.appState.client))
         harness.appState.setFolderCounts(folderPath: "INBOX", unread: 5, total: 50)
 
-        await list.setSeen(true, uids: Set(unread.map(\.uid)))
+        await list.setSeen(true, refs: Set(unread.map { list.rowRef(for: $0) }))
 
         XCTAssertEqual(harness.appState.folderUnreadCounts["INBOX"], 3)
     }

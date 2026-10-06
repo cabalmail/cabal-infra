@@ -41,13 +41,13 @@ extension MessageListViewModel {
     /// not. Disposing the bottom row falls back to the row above it — the
     /// new bottom — rather than bouncing back to the list.
     func nextEnvelope(after current: Envelope) -> Envelope? {
-        guard let index = envelopes.firstIndex(where: { $0.uid == current.uid }) else {
+        guard let position = index(of: rowRef(for: current)) else {
             return envelopes.first
         }
-        if index + 1 < envelopes.count {
-            return envelopes[index + 1]
+        if position + 1 < envelopes.count {
+            return envelopes[position + 1]
         }
-        return index > 0 ? envelopes[index - 1] : nil
+        return position > 0 ? envelopes[position - 1] : nil
     }
 
     /// The nearest unread envelope below `current` in the current list
@@ -56,28 +56,28 @@ extension MessageListViewModel {
     /// bounce back to the list when unread messages remain further up.
     /// Returns nil when no other unread messages exist in this folder.
     func nextUnreadEnvelope(after current: Envelope) -> Envelope? {
-        guard let index = envelopes.firstIndex(where: { $0.uid == current.uid }) else {
+        guard let position = index(of: rowRef(for: current)) else {
             return envelopes.first { !$0.flags.contains(.seen) }
         }
-        if let below = envelopes.dropFirst(index + 1)
+        if let below = envelopes.dropFirst(position + 1)
             .first(where: { !$0.flags.contains(.seen) }) {
             return below
         }
-        return envelopes.prefix(index).reversed()
+        return envelopes.prefix(position).reversed()
             .first(where: { !$0.flags.contains(.seen) })
     }
 
     /// Mirror of `nextUnreadEnvelope`: the nearest unread above (newer),
     /// falling back to the nearest unread below.
     func previousUnreadEnvelope(before current: Envelope) -> Envelope? {
-        guard let index = envelopes.firstIndex(where: { $0.uid == current.uid }) else {
+        guard let position = index(of: rowRef(for: current)) else {
             return envelopes.first { !$0.flags.contains(.seen) }
         }
-        if let above = envelopes.prefix(index).reversed()
+        if let above = envelopes.prefix(position).reversed()
             .first(where: { !$0.flags.contains(.seen) }) {
             return above
         }
-        return envelopes.dropFirst(index + 1)
+        return envelopes.dropFirst(position + 1)
             .first(where: { !$0.flags.contains(.seen) })
     }
 
@@ -85,6 +85,7 @@ extension MessageListViewModel {
     /// message itself — its optimistic `\Seen` mark travels on a separate
     /// signal, so its row may still read as unread here.
     func firstUnreadEnvelope(excluding current: Envelope) -> Envelope? {
-        envelopes.first { $0.uid != current.uid && !$0.flags.contains(.seen) }
+        let currentRef = rowRef(for: current)
+        return envelopes.first { rowRef(for: $0) != currentRef && !$0.flags.contains(.seen) }
     }
 }

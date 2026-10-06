@@ -80,7 +80,47 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
     /// render as "not verified", never as pass (see `AuthResults`).
     public let authResults: AuthResults?
 
+    /// The folder this envelope was listed from, when the producer stamped
+    /// one: every search row carries its own (`SearchedEnvelope`), and the
+    /// message list stamps its folder onto every row it loads, so a row
+    /// names its message on its own (`ref`). Nil for an envelope nothing
+    /// has placed yet, such as one decoded from a cache snapshot, whose
+    /// folder is the snapshot's.
+    ///
+    /// Not encoded: an `EnvelopeCache` snapshot is already one folder's,
+    /// and leaving it out keeps the snapshot bytes as they were (see
+    /// `CodingKeys`). It does take part in `==`, so the same message's row
+    /// in INBOX and its row in Sent are two different rows.
+    public private(set) var folder: String?
+
+    /// The per-folder UID. Unique only within one folder: rows from several
+    /// folders identify by `ref` instead.
     public var id: UInt32 { uid }
+
+    /// The message's identity, when the envelope knows its folder.
+    public var ref: MessageRef? {
+        folder.map { MessageRef(folder: $0, uid: uid, messageId: messageId) }
+    }
+
+    /// The message's identity, taking `defaultFolder` for an envelope that
+    /// carries no folder. `uidValidity` is the default folder's, so it is
+    /// attached only when the ref lands in that folder.
+    public func ref(defaultFolder: String, uidValidity: UInt32? = nil) -> MessageRef {
+        let resolved = folder ?? defaultFolder
+        return MessageRef(
+            folder: resolved,
+            uid: uid,
+            uidValidity: resolved == defaultFolder ? uidValidity : nil,
+            messageId: messageId
+        )
+    }
+
+    /// A copy placed in `folder`.
+    public func inFolder(_ folder: String) -> Envelope {
+        var copy = self
+        copy.folder = folder
+        return copy
+    }
 
     /// Display bucket for `authResults` — the list row shows a warning
     /// icon only for `.warning`; the detail view chips render in all
@@ -107,7 +147,8 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         size: UInt32? = nil,
         hasAttachments: Bool = false,
         isImportant: Bool = false,
-        authResults: AuthResults? = nil
+        authResults: AuthResults? = nil,
+        folder: String? = nil
     ) {
         self.uid = uid
         self.messageId = messageId
@@ -127,6 +168,16 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         self.hasAttachments = hasAttachments
         self.isImportant = isImportant
         self.authResults = authResults
+        self.folder = folder
+    }
+
+    /// Every stored field but `folder`, which a snapshot never carries.
+    /// Spelled out (rather than synthesized) only to leave `folder` out of
+    /// the encoded form.
+    private enum CodingKeys: String, CodingKey {
+        case uid, messageId, date, subject, from, sender, replyTo, to, cc, bcc
+        case inReplyTo, references, flags, internalDate, size, hasAttachments
+        case isImportant, authResults
     }
 
     public init(from decoder: Decoder) throws {
@@ -158,6 +209,7 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         // Nil (not-verified) for cache snapshots predating the field —
         // absent auth data must never decode into anything pass-shaped.
         self.authResults = try container.decodeIfPresent(AuthResults.self, forKey: .authResults)
+        self.folder = nil
     }
 }
 
@@ -182,7 +234,8 @@ extension Envelope {
             size: size,
             hasAttachments: hasAttachments,
             isImportant: isImportant,
-            authResults: authResults
+            authResults: authResults,
+            folder: folder
         )
     }
 
@@ -215,7 +268,8 @@ extension Envelope {
             size: size,
             hasAttachments: hasAttachments,
             isImportant: isImportant,
-            authResults: authResults
+            authResults: authResults,
+            folder: folder
         )
     }
 }
