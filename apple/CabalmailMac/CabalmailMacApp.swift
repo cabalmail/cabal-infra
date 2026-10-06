@@ -1,5 +1,4 @@
 import SwiftUI
-import CoreSpotlight
 import CabalmailKit
 import CabalmailUI
 
@@ -57,66 +56,29 @@ struct CabalmailMacApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
-                .task {
-                    // Hand the app-root Preferences to AppState before any
-                    // restore so the session's PreferencesSyncCoordinator can
-                    // pull the server copy (server wins on login).
-                    appState.usePreferences(preferences)
-                    // Give the AppKit delegate's Spotlight-continuation
-                    // bridge its AppState before the restore suspends —
-                    // a cold launch from a Spotlight result parks its
-                    // activity in the router until this runs.
-                    SpotlightRouter.shared.attach(appState)
-                    // Warm the "Open in Private Window" availability cache
-                    // so the first link menu of the session lays out with
-                    // its rows decided (see PrivateLinkHandoff).
-                    PrivateLinkHandoff.prime()
-                    await appState.restoreIfPossible()
-                    if preferences.crashReportingEnabled {
-                        appState.client?.setCrashReportingEnabled(true)
+                .appRootLifecycle(
+                    appState: appState,
+                    preferences: preferences,
+                    scenePhase: scenePhase,
+                    beforeRestore: {
+                        // Give the AppKit delegate's Spotlight-continuation
+                        // bridge its AppState before the restore suspends —
+                        // a cold launch from a Spotlight result parks its
+                        // activity in the router until this runs.
+                        SpotlightRouter.shared.attach(appState)
+                        // Warm the "Open in Private Window" availability
+                        // cache so the first link menu of the session lays
+                        // out with its rows decided (see PrivateLinkHandoff).
+                        PrivateLinkHandoff.prime()
                     }
-                }
-                .onChange(of: appState.client != nil) { _, hasClient in
-                    guard hasClient else { return }
-                    if preferences.crashReportingEnabled {
-                        appState.client?.setCrashReportingEnabled(true)
-                    }
-                }
-                .onChange(of: scenePhase) { _, phase in
-                    // Leaving the foreground: write the local resume session
-                    // now, so a debounce in flight isn't lost if the process
-                    // is terminated while backgrounded.
-                    if phase != .active { appState.navCoordinator?.flushSession() }
-                    // Pick up settings changed on another device while this
-                    // window was in the background (server wins, unless a
-                    // local edit is still pending its push).
-                    guard phase == .active else { return }
-                    Task { await appState.prefsCoordinator?.reconcile() }
-                    // Feeds: fresh items and the offline mutation queue.
-                    Task { await appState.refreshFeedsOnForeground() }
-                }
-                .onOpenURL { url in
-                    // mailto: clicks from Safari / Mail.app / other
-                    // apps route here once the user has set Cabalmail
-                    // as macOS's default mail handler (System Settings
-                    // -> Desktop & Dock -> Default mail reader).
-                    if let mailto = MailtoURL(url) {
-                        appState.requestCompose(seed: mailto.draft(), in: appState.lastActiveMainWindow)
-                    }
-                }
-                .onContinueUserActivity(CSSearchableItemActionType) { activity in
-                    // Kept for symmetry with iOS, but macOS never delivers
-                    // this — the working path is AppDelegate's
-                    // `application(_:continue:restorationHandler:)` via
-                    // `SpotlightRouter` (see SpotlightRouting.swift).
-                    appState.handleSpotlightActivity(activity)
-                }
+                )
         }
         // A WindowGroup's default reaction to an external event (an
         // incoming mailto: URL) is to *spawn a fresh window of the
         // group* to receive it — so a mailto: click used to open a
         // spurious second main window alongside the compose window the
-        // handler above requests. An empty matching set disables that
+        // root's `.onOpenURL` (in `appRootLifecycle`) requests. An empty
+        // matching set disables that
         // new-window spawning; `.onOpenURL` is still delivered to the
         // existing main window, which is what we want.
         .handlesExternalEvents(matching: [])

@@ -1,5 +1,4 @@
 import SwiftUI
-import CoreSpotlight
 import CabalmailKit
 import CabalmailUI
 
@@ -59,65 +58,19 @@ struct CabalmailApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
-                .task {
-                    // Hand the app-root Preferences to AppState before any
-                    // restore so the session's PreferencesSyncCoordinator can
-                    // pull the server copy (server wins on login).
-                    appState.usePreferences(preferences)
-                    // Launch-time auto-restore. `restoreIfPossible()` is a
-                    // no-op once the user is signed in, so SwiftUI re-
-                    // running this `.task` across scene re-attaches (e.g.
-                    // on resume) stays cheap.
-                    await appState.restoreIfPossible()
-                    // Opt-in MetricKit needs to register as a subscriber
-                    // *early* in the launch — before `applicationDidFinish
-                    // Launching` returns — or diagnostic payloads from the
-                    // last session won't be delivered. Re-running on every
-                    // `.task` firing is safe because `start()` is idempotent.
-                    if preferences.crashReportingEnabled {
-                        appState.client?.setCrashReportingEnabled(true)
+                .appRootLifecycle(
+                    appState: appState,
+                    preferences: preferences,
+                    scenePhase: scenePhase,
+                    onForeground: {
+                        // Re-offer the session to the watch on every return
+                        // to the foreground — see
+                        // AppState.refreshWatchSession() for why the
+                        // launch-time push alone strands a watch app
+                        // installed while this app was already running.
+                        Task { await appState.refreshWatchSession() }
                     }
-                }
-                .onChange(of: appState.client != nil) { _, hasClient in
-                    guard hasClient else { return }
-                    if preferences.crashReportingEnabled {
-                        appState.client?.setCrashReportingEnabled(true)
-                    }
-                }
-                .onChange(of: scenePhase) { _, phase in
-                    // Leaving the foreground: write the local resume session
-                    // now, so a debounce in flight isn't lost if the process
-                    // is terminated while backgrounded.
-                    if phase != .active { appState.navCoordinator?.flushSession() }
-                    // Re-offer the session to the watch on every return to
-                    // the foreground — see AppState.refreshWatchSession()
-                    // for why the launch-time push alone strands a watch
-                    // app installed while this app was already running.
-                    guard phase == .active else { return }
-                    Task { await appState.refreshWatchSession() }
-                    // Pick up settings changed on another device while this
-                    // one was backgrounded (server wins, unless a local edit
-                    // is still pending its push).
-                    Task { await appState.prefsCoordinator?.reconcile() }
-                    // Feeds: fresh items and the offline mutation queue.
-                    Task { await appState.refreshFeedsOnForeground() }
-                }
-                .onOpenURL { url in
-                    // Cold-launch mailto: arrives here before any view
-                    // is wired to observe `composeRequestTick`. The seed
-                    // is parked on `AppState.pendingComposeSeed` and
-                    // drained by `ComposeRequestRouter`'s initial `.task`
-                    // on the signed-in root.
-                    if let mailto = MailtoURL(url) {
-                        appState.requestCompose(seed: mailto.draft(), in: appState.lastActiveMainWindow)
-                    }
-                }
-                .onContinueUserActivity(CSSearchableItemActionType) { activity in
-                    // A tapped Spotlight result. Parks on AppState until the
-                    // session is wired when it arrives via cold launch (see
-                    // SpotlightRouting.swift).
-                    appState.handleSpotlightActivity(activity)
-                }
+                )
         }
         // Same Message menu the macOS menu bar shows. On iPadOS the
         // commands surface through the hardware-keyboard menu (hold
