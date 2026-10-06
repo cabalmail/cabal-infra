@@ -242,7 +242,7 @@ struct FolderListView: View {
         // state.
         .task {
             if model == nil, let client = appState.client {
-                let newModel = FolderListViewModel(client: client, appState: appState)
+                let newModel = FolderListViewModel(client: client, mailStore: appState.mailStore)
                 model = newModel
                 // Race the inbox STATUS against the folder list so the
                 // inbox badge is correct by the time the user's eyes

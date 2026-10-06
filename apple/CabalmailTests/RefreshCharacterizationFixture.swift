@@ -41,7 +41,7 @@ final class RefreshCharacterizationFixture {
         total: UInt32 = 0
     ) async throws -> MessageListViewModel {
         let model = try TestFixtures.makeModel(
-            imap: imap, envelopes: rows(loaded, flags: flags), folderPath: folderPath, appState: appState
+            imap: imap, envelopes: rows(loaded, flags: flags), folderPath: folderPath, mailStore: mailStore
         )
         model.totalMessages = total
         await track(model.client)
@@ -49,10 +49,10 @@ final class RefreshCharacterizationFixture {
     }
 
     /// The same folder opened again in the same session: a new list model
-    /// over `model`'s client, preferences and `AppState`.
+    /// over `model`'s client, preferences and mail store.
     func reopen(_ model: MessageListViewModel) -> MessageListViewModel {
         MessageListViewModel(
-            folder: model.folder, client: model.client, preferences: model.preferences, appState: appState
+            folder: model.folder, client: model.client, preferences: model.preferences, mailStore: mailStore
         )
     }
 
@@ -63,7 +63,7 @@ final class RefreshCharacterizationFixture {
             scope: .search,
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: appState
+            mailStore: mailStore
         )
     }
 

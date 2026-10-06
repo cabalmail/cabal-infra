@@ -189,7 +189,7 @@ final class SignOutLateDeltaTests: XCTestCase {
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore())
         )
-        MessageDetailView.relayOutcomes(of: reader, to: harness.appState)
+        MessageDetailView.relayOutcomes(of: reader, to: harness.appState.mailStore)
         return reader
     }
 
@@ -198,7 +198,7 @@ final class SignOutLateDeltaTests: XCTestCase {
             folder: Folder(path: folder, attributes: [], isSubscribed: true),
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: harness.appState
+            mailStore: harness.appState.mailStore
         )
         list.envelopes = unread
         return list

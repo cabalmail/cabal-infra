@@ -482,7 +482,7 @@ extension MessageListView {
                         scope: scope,
                         client: client,
                         preferences: preferences,
-                        appState: appState
+                        mailStore: appState.mailStore
                     )
                     await model?.loadInitial()
                     await model?.startWatching()

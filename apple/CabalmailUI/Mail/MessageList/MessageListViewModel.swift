@@ -28,7 +28,9 @@ final class MessageListViewModel {
     // in sibling files (`+Optimistic`, `+NextUnread`) can reach them.
     let client: CabalmailClient
     let preferences: Preferences
-    let appState: AppState
+    /// The session's shared mail state: the folder counts this list keeps
+    /// the sidebar's in step with, and the shields its merges honour.
+    let mailStore: MailSessionStore
     // Top-page size. Kept small for a fast first paint on a cold folder, and
     // reused as the "have we paginated past the top page?" threshold in
     // `applyRefreshPage` (+Refresh sibling file), so it's internal not private.
@@ -305,12 +307,12 @@ final class MessageListViewModel {
     /// message (`MessageRowIdentity`) rather than by slot.
     var rowGenerations: [MessageRef: Int] = [:]
 
-    init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, appState: AppState) {
+    init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore) {
         self.scope = scope
         self.folder = scope.folder
         self.client = client
         self.preferences = preferences
-        self.appState = appState
+        self.mailStore = mailStore
     }
 
     /// Start the watcher-driven auto-refresh loop. Called from the view's
@@ -416,7 +418,7 @@ final class MessageListViewModel {
                     try? await client.bodyCache.invalidate(folder: folder.path)
                     envelopes = []
                     resetWindow()
-                    appState.mailStore.shields.clearConfirmedRemovals(folderPath: folder.path)
+                    mailStore.shields.clearConfirmedRemovals(folderPath: folder.path)
                     generation = alignment.generation
                 }
                 self.uidValidity = fresh
@@ -595,8 +597,8 @@ extension MessageListViewModel {
 
     /// Convenience for the folder path — the overwhelming majority of call
     /// sites. Equivalent to `init(scope: .folder(folder), ...)`.
-    convenience init(folder: Folder, client: CabalmailClient, preferences: Preferences, appState: AppState) {
-        self.init(scope: .folder(folder), client: client, preferences: preferences, appState: appState)
+    convenience init(folder: Folder, client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore) {
+        self.init(scope: .folder(folder), client: client, preferences: preferences, mailStore: mailStore)
     }
 
     /// Drop a message's row from the in-memory envelope list after it was

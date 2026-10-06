@@ -67,7 +67,9 @@ final class SignOutLateCountTests: XCTestCase {
     /// ended, whatever is wired now.
     func testASidebarStatusThatAnswersAfterTheNextSignInIsDropped() async throws {
         try await signIn(as: "alice")
-        let sidebar = FolderListViewModel(client: try XCTUnwrap(harness.appState.client), appState: harness.appState)
+        let sidebar = FolderListViewModel(
+            client: try XCTUnwrap(harness.appState.client), mailStore: harness.appState.mailStore
+        )
         let refresh = await holdASidebarStatus(on: sidebar)
         await harness.appState.signOut()
         try await signIn(as: "bob")
@@ -86,7 +88,9 @@ final class SignOutLateCountTests: XCTestCase {
     /// Negative control: a live session's STATUS is published as before.
     func testALiveSessionsSidebarStatusIsPublished() async throws {
         try await signIn(as: "alice")
-        let sidebar = FolderListViewModel(client: try XCTUnwrap(harness.appState.client), appState: harness.appState)
+        let sidebar = FolderListViewModel(
+            client: try XCTUnwrap(harness.appState.client), mailStore: harness.appState.mailStore
+        )
         await harness.imap.scriptStatusResults([.success(archive)])
 
         await sidebar.refreshFolderCount(path: "Archive")
@@ -122,12 +126,14 @@ final class SignOutLateCountTests: XCTestCase {
     func testMarkAllReadAndEmptyTrashFinishingAfterASignOutSetNoCounts() async throws {
         try await signIn(as: "alice")
         let client = try XCTUnwrap(harness.appState.client)
-        let sidebar = FolderListViewModel(client: client, appState: harness.appState)
+        let sidebar = FolderListViewModel(client: client, mailStore: harness.appState.mailStore)
         await harness.appState.signOut()
         await harness.imap.scriptMarkFolderReadResults([.success(3)])
         await harness.imap.scriptEmptyTrashResults([.success(())])
 
-        try await FolderMarkAllRead.perform(folderPath: "Archive", client: client, appState: harness.appState)
+        try await FolderMarkAllRead.perform(
+            folderPath: "Archive", client: client, mailStore: harness.appState.mailStore
+        )
         await sidebar.emptyTrash()
 
         XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts, [:])
@@ -141,7 +147,7 @@ final class SignOutLateCountTests: XCTestCase {
         let fixture = OfflineFolderFixture()
         let client = try fixture.makeClient(folderState: await fixture.savedState())
         let state = AppState()
-        let sidebar = FolderListViewModel(client: client, appState: state)
+        let sidebar = FolderListViewModel(client: client, mailStore: state.mailStore)
         state.teardownGate.markEnded(client)
 
         await sidebar.loadFolderList()
@@ -160,7 +166,7 @@ final class SignOutLateCountTests: XCTestCase {
     private func signOutWithASidebarStatusLandingMidTeardown() async throws -> [String: Int] {
         try await signIn(as: "alice")
         let state = harness.appState
-        let sidebar = FolderListViewModel(client: try XCTUnwrap(state.client), appState: state)
+        let sidebar = FolderListViewModel(client: try XCTUnwrap(state.client), mailStore: state.mailStore)
         let refresh = await holdASidebarStatus(on: sidebar)
 
         let gate = holdFirstSessionWillEnd()
@@ -196,7 +202,7 @@ final class SignOutLateCountTests: XCTestCase {
             folder: Folder(path: "Archive", attributes: [], isSubscribed: true),
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: harness.appState
+            mailStore: harness.appState.mailStore
         )
     }
 

@@ -15,7 +15,7 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
         let model = try TestFixtures.makeModel(
             imap: FakeImapClient(),
             envelopes: [],
-            appState: appState
+            mailStore: appState.mailStore
         )
         _ = model.applyStatusCounts(
             FolderStatus(messages: 12, unseen: 3, uidValidity: 7, uidNext: 13)
@@ -36,7 +36,7 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
         let model = try TestFixtures.makeModel(
             imap: FakeImapClient(),
             envelopes: [],
-            appState: appState
+            mailStore: appState.mailStore
         )
         _ = model.applyStatusCounts(
             FolderStatus(messages: nil, unseen: nil, uidValidity: 7, uidNext: 13)
@@ -53,7 +53,7 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
             scope: .search,
             client: try TestFixtures.makeClient(imap: FakeImapClient()),
             preferences: Preferences(store: InMemoryPreferenceStore()),
-            appState: appState
+            mailStore: appState.mailStore
         )
         _ = model.applyStatusCounts(
             FolderStatus(messages: 12, unseen: 3, uidValidity: 7, uidNext: 13)

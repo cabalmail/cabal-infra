@@ -79,7 +79,7 @@ final class BulkSelectionTests: XCTestCase {
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)],
-            appState: appState
+            mailStore: appState.mailStore
         )
 
         await model.setSeen(true, refs: [ref(1), ref(2)])
@@ -105,7 +105,7 @@ final class BulkSelectionTests: XCTestCase {
                 TestFixtures.makeEnvelope(uid: 1),                  // unread -> transitions
                 TestFixtures.makeEnvelope(uid: 2, flags: [.seen]),  // already read
             ],
-            appState: appState
+            mailStore: appState.mailStore
         )
 
         await model.setSeen(true, refs: [ref(1), ref(2)])
@@ -123,7 +123,7 @@ final class BulkSelectionTests: XCTestCase {
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)],
-            appState: appState
+            mailStore: appState.mailStore
         )
 
         await model.setSeen(true, refs: [ref(1), ref(2)])
@@ -148,7 +148,7 @@ final class BulkSelectionTests: XCTestCase {
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)],
-            appState: appState
+            mailStore: appState.mailStore
         )
 
         await model.setSeen(true, refs: [ref(1), ref(2)])

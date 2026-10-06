@@ -33,13 +33,13 @@ final class DisposeRaceTests: XCTestCase {
     private func makeModel(
         imap: FakeImapClient,
         uids: [UInt32],
-        appState: AppState = AppState()
+        mailStore: MailSessionStore = AppState().mailStore
     ) throws -> MessageListViewModel {
         let model = try TestFixtures.makeModel(
             imap: imap,
             envelopes: uids.map { TestFixtures.makeEnvelope(uid: $0, flags: [.seen]) },
             folderPath: inbox,
-            appState: appState
+            mailStore: mailStore
         )
         model.totalMessages = UInt32(uids.count)
         return model
@@ -78,7 +78,7 @@ final class DisposeRaceTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.holdNext(.move)
         let appState = AppState()
-        let model = try makeModel(imap: imap, uids: [1, 2, 3], appState: appState)
+        let model = try makeModel(imap: imap, uids: [1, 2, 3], mailStore: appState.mailStore)
 
         let dispose = Task { await model.dispose(model.envelopes[0]) }
         await imap.awaitHeld(.move)
@@ -108,7 +108,7 @@ final class DisposeRaceTests: XCTestCase {
         await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
         await imap.holdNext(.move)
         let appState = AppState()
-        let model = try makeModel(imap: imap, uids: [1, 2, 3], appState: appState)
+        let model = try makeModel(imap: imap, uids: [1, 2, 3], mailStore: appState.mailStore)
 
         let dispose = Task { await model.dispose(model.envelopes[1]) }
         await imap.awaitHeld(.move)
@@ -170,7 +170,7 @@ final class DisposeRaceTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptInitialLoad(status: status(messages: 3), topEnvelopes: page([5, 4, 3]))
         let appState = AppState()
-        let model = try makeModel(imap: imap, uids: [5, 4, 3], appState: appState)
+        let model = try makeModel(imap: imap, uids: [5, 4, 3], mailStore: appState.mailStore)
 
         await imap.holdNext(.status)
         let refresh = Task { await model.refresh() }
@@ -214,7 +214,7 @@ final class DisposeRaceTests: XCTestCase {
         let appState = AppState()
         // The reader's archive has already pruned the list row (so the list
         // holds only 4) and its move is in flight.
-        let model = try makeModel(imap: imap, uids: [4], appState: appState)
+        let model = try makeModel(imap: imap, uids: [4], mailStore: appState.mailStore)
         appState.mailStore.shields.setMoveInFlight(ref(5), inFlight: true)
 
         await imap.holdNext(.topEnvelopes)

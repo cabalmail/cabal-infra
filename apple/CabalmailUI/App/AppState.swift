@@ -317,6 +317,9 @@ public final class AppState {
         let teardownGate = SessionTeardownGate()
         self.teardownGate = teardownGate
         mailStore = MailSessionStore(teardownGate: teardownGate)
+        // A data change behind the list (Mark All as Read, Empty Trash)
+        // reaches every window, as `requestRefresh()` with no window does.
+        mailStore.onListRefreshRequested = { [weak self] in self?.requestRefresh() }
     }
 
     // `signOut()` lives in the "Session wiring" extension below, alongside

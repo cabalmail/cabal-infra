@@ -22,7 +22,7 @@ final class OfflineSidebarTests: XCTestCase {
     func testOfflineSidebarDrawsTheSavedFoldersAndBadges() async throws {
         let appState = AppState()
         let client = try fixture.makeClient(folderState: await fixture.savedState())
-        let model = FolderListViewModel(client: client, appState: appState)
+        let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
 
         await model.loadFolderList()
 
@@ -50,7 +50,7 @@ final class OfflineSidebarTests: XCTestCase {
     func testWithoutSavedStateTheOfflineSidebarIsEmpty() async throws {
         let appState = AppState()
         let client = try fixture.makeClient(folderState: FolderStateCache())
-        let model = FolderListViewModel(client: client, appState: appState)
+        let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
 
         await model.loadFolderList()
 
@@ -67,7 +67,7 @@ final class OfflineSidebarTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 9, total: 30)
         let client = try fixture.makeClient(folderState: await fixture.savedState())
-        let model = FolderListViewModel(client: client, appState: appState)
+        let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
 
         await model.loadFolderList()
 
@@ -79,7 +79,7 @@ final class OfflineSidebarTests: XCTestCase {
     func testLiveListIsNotASavedCopy() async throws {
         let model = FolderListViewModel(
             client: try fixture.makeClient(folderState: await fixture.savedState(), transport: FolderServerTransport()),
-            appState: AppState()
+            mailStore: AppState().mailStore
         )
 
         await model.loadFolderList()
@@ -98,7 +98,7 @@ final class OfflineSidebarTests: XCTestCase {
             client: try fixture.makeClient(
                 folderState: cache, transport: SwitchableFolderTransport(connectivity: connectivity)
             ),
-            appState: AppState()
+            mailStore: AppState().mailStore
         )
         await model.loadFolderList()
         let live = model.folders.map(\.path)
@@ -130,7 +130,7 @@ final class OfflineSidebarTests: XCTestCase {
                 folderState: await fixture.savedState(),
                 transport: SwitchableFolderTransport(connectivity: connectivity)
             ),
-            appState: appState
+            mailStore: appState.mailStore
         )
 
         await model.loadFolderList()
@@ -164,7 +164,7 @@ final class OfflineSidebarTests: XCTestCase {
                 folderState: await fixture.savedState(),
                 transport: SwitchableFolderTransport(connectivity: connectivity)
             ),
-            appState: appState
+            mailStore: appState.mailStore
         )
         await model.loadFolderList()
 
@@ -187,7 +187,7 @@ final class OfflineSidebarTests: XCTestCase {
         let cache = FolderStateCache(directory: fixture.root.appendingPathComponent("folders"))
         let online = FolderListViewModel(
             client: try fixture.makeClient(folderState: cache, transport: FolderServerTransport()),
-            appState: AppState()
+            mailStore: AppState().mailStore
         )
         await online.loadFolderList()
         let projects = try XCTUnwrap(online.folders.first { $0.path == "Projects" })
@@ -196,7 +196,9 @@ final class OfflineSidebarTests: XCTestCase {
         XCTAssertTrue(deleted)
         await online.toggleSubscription(archive)
 
-        let offline = FolderListViewModel(client: try fixture.makeClient(folderState: cache), appState: AppState())
+        let offline = FolderListViewModel(
+            client: try fixture.makeClient(folderState: cache), mailStore: AppState().mailStore
+        )
         await offline.loadFolderList()
 
         XCTAssertTrue(offline.isShowingSavedCopy)

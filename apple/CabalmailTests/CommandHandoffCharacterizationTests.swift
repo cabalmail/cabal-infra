@@ -128,7 +128,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         await imap.scriptMarkFolderReadResults([.success(4)])
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 4, total: 20)
-        let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), appState: appState)
+        let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), mailStore: appState.mailStore)
         appState.requestReply(in: windowA)
         let before = appState.refreshRequestTick
 
@@ -149,7 +149,9 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.success(2)])
         let appState = AppState()
-        let model = try TestFixtures.makeModel(imap: imap, envelopes: [], folderPath: "Sent", appState: appState)
+        let model = try TestFixtures.makeModel(
+            imap: imap, envelopes: [], folderPath: "Sent", mailStore: appState.mailStore
+        )
         appState.requestMarkFolderRead(in: windowA)
         XCTAssertFalse(appState.commandReaches(windowB))
 
@@ -168,7 +170,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         try await client.envelopeCache.store(trashSnapshot(), for: FolderTree.trashPath)
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
-        let model = FolderListViewModel(client: client, appState: appState)
+        let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
         appState.requestReply(in: windowA)
         let before = appState.refreshRequestTick
 
@@ -192,7 +194,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         try await client.envelopeCache.store(trashSnapshot(), for: FolderTree.trashPath)
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
-        let model = FolderListViewModel(client: client, appState: appState)
+        let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
         appState.requestReply(in: windowA)
 
         await model.emptyTrash()

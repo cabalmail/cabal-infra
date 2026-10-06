@@ -47,7 +47,7 @@ final class OfflineCountTests: XCTestCase {
     func testLiveCountsAreSavedForTheNextLaunch() async throws {
         let cache = FolderStateCache(directory: fixture.root.appendingPathComponent("folders"))
         let client = try fixture.makeClient(folderState: cache, transport: FolderServerTransport())
-        let sidebar = FolderListViewModel(client: client, appState: AppState())
+        let sidebar = FolderListViewModel(client: client, mailStore: AppState().mailStore)
         await sidebar.loadFolderList()
         await sidebar.refreshSubscribedCounts()
         let projects = await cache.lastKnownStatus(for: "Projects")
@@ -83,7 +83,9 @@ final class OfflineCountTests: XCTestCase {
         let cache = await fixture.savedState()
         let appState = AppState()
         appState.mailStore.counts.savedFolderCounts.cache = cache
-        let model = fixture.makeListModel(client: try fixture.makeClient(folderState: cache), appState: appState)
+        let model = fixture.makeListModel(
+            client: try fixture.makeClient(folderState: cache), mailStore: appState.mailStore
+        )
         _ = model.applyStatusCounts(FolderStatus(messages: 22, unseen: 2, flagged: 1))
         // An unread message archived here: the list shows one fewer of each.
         model.totalMessages = 21

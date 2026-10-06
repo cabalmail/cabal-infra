@@ -57,7 +57,7 @@ extension MessageListViewModel {
         pendingRemovedRefs.formUnion(condemnedRefs)
         defer { pendingRemovedRefs.subtract(condemnedRefs) }
         if unreadCount > 0 {
-            appState.mailStore.counts.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: -unreadCount)
+            mailStore.counts.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: -unreadCount)
         }
 
         do {
@@ -74,8 +74,8 @@ extension MessageListViewModel {
             envelopes.sort(by: envelopeOrder)
             adjustTotalMessages(by: restored.count)
             // Not once the session has ended (#1851).
-            if unreadCount > 0, appState.mailStore.acceptsCounts(from: client) {
-                appState.mailStore.counts.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: unreadCount)
+            if unreadCount > 0, mailStore.acceptsCounts(from: client) {
+                mailStore.counts.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: unreadCount)
             }
             errorMessage = error.localizedDescription
         }
