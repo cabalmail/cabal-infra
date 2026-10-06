@@ -36,6 +36,10 @@ class _RecordingTable:
     def delete_item(self, Key=None, **_kwargs):  # pylint: disable=invalid-name
         DELETES.append(Key)
 
+    def query(self, **_kwargs):  # pylint: disable=invalid-name
+        '''push_register's lookup of other accounts' rows: none here.'''
+        return {'Items': []}
+
 
 _TABLE = _RecordingTable()
 

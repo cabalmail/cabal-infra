@@ -62,11 +62,24 @@ flowchart LR
    removes any other account's row for it (found through the table's
    `by_device_token` index). That clears the row a failed sign-out
    deregistration leaves behind as soon as the next account's app
-   registers, so the old account's pushes stop reaching the device. The
-   removal is best-effort and never fails the registration. It can't reach
-   another deployment's table: a device that leaves prod offline and signs
-   in to stage keeps getting prod's pushes until it registers with prod
-   again.
+   registers, so the old account's pushes stop reaching the device. Each
+   row records the sign-in time (`auth_time`) of the session that last
+   registered it, and only an older sign-in's row is removed, so a late
+   register request from the previous account can't remove the newer
+   account's row. The removal is best-effort and never fails the
+   registration.
+
+   What the cleanup can't reach: a device left signed out, or one whose
+   next account never registers (notifications turned off in the app),
+   keeps getting the old account's pushes until `push_token_gc` reaps the
+   idle row or the push service rejects the token; and a device that
+   leaves prod offline and signs in to stage keeps getting prod's pushes
+   until it registers with prod again, since each deployment has its own
+   table. Token ownership is not proven: an account that registers a token
+   another account uses removes that account's row until its app next
+   registers. Tokens are never shown to other users. Several macOS app
+   instances on one Mac share a token, so instances signed in to different
+   accounts take the registration from each other on every launch.
 
 What APNs sees per push: the device token it already knows, the app's bundle
 id, an AWS egress IP, and a payload containing only the alert text `"New
@@ -358,7 +371,11 @@ app restart.
   uninstalled devices are pruned automatically on the next push attempt,
   and the weekly `push_token_gc` Lambda reaps rows idle for 90+ days as
   the backstop for devices no rejection ever surfaces (logs at
-  `/cabal/lambda/push_token_gc`).
+  `/cabal/lambda/push_token_gc`). Registration also removes other
+  accounts' rows for the registering token; `/cabal/lambda/push_register`
+  logs each removal, each row kept because a newer sign-in registered it,
+  and `stale-row cleanup failed` when the `by_device_token` lookup fails,
+  which is expected only until a deploy has created the index.
 - **Enrichment during IMAP rolls.** `/push_envelope` returns 503 while a
   planned IMAP redeploy is in flight; devices fall back to the generic
   alert. Nothing needs doing.
