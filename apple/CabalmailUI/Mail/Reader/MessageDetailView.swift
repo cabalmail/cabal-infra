@@ -364,7 +364,7 @@ extension MessageDetailView {
         // write fails, after the session has ended: not then (#1851).
         model.onFlagChanged = { [weak appState] flag, added in
             guard appState?.mailStore.acceptsCounts(from: client) == true else { return }
-            appState?.signalFlagChange(ref, flag: flag, added: added)
+            appState?.mailStore.signalFlagChange(ref, flag: flag, added: added)
         }
         // Bracket each flag write so the list shields the optimistic
         // flag from a refresh that lands before the write resolves
@@ -388,7 +388,7 @@ extension MessageDetailView {
         // ...or, if the server refuses, put the pruned row back.
         model.onMoveFailed = { [weak appState] markUnread in
             guard appState?.mailStore.acceptsCounts(from: client) == true else { return }
-            appState?.signalRemovalFailed(ref, markUnread: markUnread)
+            appState?.mailStore.signalRemovalFailed(ref, markUnread: markUnread)
         }
     }
 }

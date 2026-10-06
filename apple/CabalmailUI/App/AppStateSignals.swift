@@ -1,10 +1,10 @@
 import Foundation
 import CabalmailKit
 
-// Helper value types posted by `AppState` to coordinate one-way signals
-// between detail / list / compose views. Each carries a monotonic `tick`
-// so `.onChange` fires even when the same logical payload (UID, flag,
-// folder) recurs after a folder switch or UIDVALIDITY reset.
+// Helper value types `AppState` posts — the sign-in reason, the toast and
+// the drag-and-drop move request — plus its command bumpers and window
+// targeting. The reader's and composer's one-way signals to the message
+// list live in `MessageSignals` (`AppState.mailStore.signals`).
 
 /// Why the app is showing the sign-in form when the user did not ask for it.
 /// A deliberate Sign Out leaves `AppState.signedOutReason` nil and the form
@@ -73,71 +73,6 @@ struct Toast: Equatable, Sendable {
     }
 }
 
-/// Signal payload for a successful dispose action. Carries the disposed
-/// messages' refs so list views showing other folders can ignore it, plus a
-/// monotonic `tick` so `.onChange` fires even if the same message reappears
-/// after a folder switch + UIDVALIDITY reset.
-///
-/// `refs` is usually one element — a disposed message is one row. A
-/// send-from-draft names several: every copy its compose session left in
-/// Drafts, since an autosave replaces the copy under a new UID and the list
-/// may be rendering any of them (#1071). One signal rather than several
-/// because `.onChange` observes the latest value, so back-to-back posts in
-/// the same update would drop all but the last.
-struct DisposedEnvelope: Equatable, Sendable {
-    let refs: [MessageRef]
-    let tick: Int
-}
-
-/// Signal payload for a reader dispose, move or purge that failed on the
-/// server. The row was already pruned on the optimistic `DisposedEnvelope`;
-/// this asks the list to put it back. `tick` is monotonic for the same
-/// reason as `DisposedEnvelope`'s.
-struct FailedRemoval: Equatable, Sendable {
-    let ref: MessageRef
-    /// The reader's dispose had marked an unread message read; the restored
-    /// row comes back unread.
-    let markUnread: Bool
-    let tick: Int
-}
-
-/// Signal payload for a Drafts copy that `/save_draft` replaced in place —
-/// posted when a compose session closes via Save Draft rather than Send.
-/// Distinct from `DisposedEnvelope` because a replace is not a dispose:
-/// something took the retired copy's place, so the list re-points at the
-/// survivor instead of advancing to the next message per the user's
-/// after-dispose preference (#1078).
-struct DraftReplacedSignal: Equatable, Sendable {
-    let folderPath: String
-    let replacement: DraftReplacement
-    let tick: Int
-}
-
-/// Signal payload for a flag change driven from outside the list (currently:
-/// the detail view toggling `\Seen`). The list view applies this directly to
-/// its in-memory envelope so the row updates without a server round trip.
-/// `tick` is monotonic so toggling the same flag back and forth still fires
-/// the observer.
-struct EnvelopeFlagChange: Equatable, Sendable {
-    let ref: MessageRef
-    let flag: Flag
-    let added: Bool
-    let tick: Int
-}
-
-/// Signal payload for a mark-read that should also move the reading pane
-/// (the detail toolbar's mark-read control, whose macOS option menu picks
-/// where to go next). Distinct from `DisposedEnvelope` because the marked
-/// row stays in the list — the observer only advances the selection, it
-/// never prunes, and a missing advance target means "stay put" rather than
-/// "clear the selection". `tick` is monotonic for the usual reason: marking
-/// the same UID read again after an unread round trip must still fire.
-struct ReadAdvanceRequest: Equatable, Sendable {
-    let ref: MessageRef
-    let advance: MarkReadAdvance
-    let tick: Int
-}
-
 /// One message inside a drag payload: the UID plus the mailbox that owns it.
 /// Folder-mode lists collapse to a single source; a cross-folder search
 /// selection can span several, so each item carries its own `sourceFolder`
@@ -183,8 +118,7 @@ struct MessageMoveRequest: Equatable, Sendable {
 // MARK: - Message-menu selection intents
 
 // Bumpers for the selection-scoped tick counters declared on the main
-// type (stored properties can't live in an extension under @Observable),
-// plus the reader's removal-failed signal for the same reason.
+// type (stored properties can't live in an extension under @Observable).
 // Here rather than in `AppState.swift` so that file stays under SwiftLint's
 // `file_length` cap.
 extension AppState {
@@ -192,17 +126,6 @@ extension AppState {
     func requestToggleFlagged(in window: UUID? = nil) { commandWindow = window; toggleFlaggedRequestTick += 1 }
     public func requestMarkFolderRead(in window: UUID? = nil) { commandWindow = window; markFolderReadRequestTick += 1 }
     func requestMoveSelection(in window: UUID? = nil) { commandWindow = window; moveSelectionRequestTick += 1 }
-
-    /// The reader's dispose, move or purge of `ref` failed on the server, so
-    /// the row its optimistic `signalDisposed` pruned should come back.
-    /// `markUnread` hands back the unread count the dispose's read mark took.
-    func signalRemovalFailed(_ ref: MessageRef, markUnread: Bool = false) {
-        failedRemovalTick += 1
-        lastFailedRemoval = FailedRemoval(ref: ref, markUnread: markUnread, tick: failedRemovalTick)
-        if markUnread {
-            mailStore.counts.applyUnreadDelta(folderPath: ref.folder, delta: 1)
-        }
-    }
 }
 
 // MARK: - Command window targeting

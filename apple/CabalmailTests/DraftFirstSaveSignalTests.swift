@@ -36,14 +36,14 @@ final class DraftFirstSaveSignalTests: XCTestCase {
     func testAppStatePublishesAnArrivalOnlySignal() {
         let appState = AppState()
 
-        appState.signalDraftReplaced(
+        appState.mailStore.signals.signalDraftReplaced(
             folderPath: "Drafts",
             replacement: DraftReplacement(retiredUIDs: [], survivingUID: 700)
         )
 
-        XCTAssertEqual(appState.lastDraftReplaced?.folderPath, "Drafts")
+        XCTAssertEqual(appState.mailStore.signals.lastDraftReplaced?.folderPath, "Drafts")
         XCTAssertEqual(
-            appState.lastDraftReplaced?.replacement,
+            appState.mailStore.signals.lastDraftReplaced?.replacement,
             DraftReplacement(retiredUIDs: [], survivingUID: 700)
         )
     }
@@ -53,12 +53,12 @@ final class DraftFirstSaveSignalTests: XCTestCase {
     func testAppStateStillDropsASignalWithNothingInIt() {
         let appState = AppState()
 
-        appState.signalDraftReplaced(
+        appState.mailStore.signals.signalDraftReplaced(
             folderPath: "Drafts",
             replacement: DraftReplacement(retiredUIDs: [], survivingUID: nil)
         )
 
-        XCTAssertNil(appState.lastDraftReplaced)
+        XCTAssertNil(appState.mailStore.signals.lastDraftReplaced)
     }
 
     // MARK: - What the list does with it

@@ -155,7 +155,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         Self.bumpEveryCommand(on: state, seed: seed, window: window)
         let ticks = Self.ticks(of: state)
         XCTAssertFalse(ticks.contains(0), "precondition: every tick was bumped")
-        let disposed = state.lastDisposedEnvelope
+        let disposed = state.mailStore.signals.lastDisposedEnvelope
         let move = state.pendingMoveRequest
 
         await state.signOut()
@@ -167,7 +167,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.pendingFeedCommand, .refresh)
         XCTAssertEqual(state.pendingSidebarTreeCommand, .expandAllFolders)
         XCTAssertNotNil(disposed)
-        XCTAssertEqual(state.lastDisposedEnvelope, disposed)
+        XCTAssertEqual(state.mailStore.signals.lastDisposedEnvelope, disposed)
         XCTAssertNotNil(move)
         XCTAssertEqual(state.pendingMoveRequest, move)
     }
@@ -201,8 +201,8 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         state.requestFeedCommand(.refresh)
         state.requestSidebarTree(.expandAllFolders)
         state.requestMove(items: [MessageDragItem(uid: 9, sourceFolder: "INBOX")], to: "Archive", from: nil)
-        state.signalRemovalFailed(MessageRef(folder: "INBOX", uid: 8))
-        state.signalDisposed(MessageRef(folder: "INBOX", uid: 9))
+        state.mailStore.signalRemovalFailed(MessageRef(folder: "INBOX", uid: 8))
+        state.mailStore.signals.signalDisposed(MessageRef(folder: "INBOX", uid: 9))
         state.requestSettings()
         state.noteActiveMainWindow(window)
         // Last, so its window is the recorded target.
@@ -215,7 +215,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
             state.replyAllRequestTick, state.forwardRequestTick, state.toggleSeenRequestTick,
             state.toggleFlaggedRequestTick, state.moveSelectionRequestTick, state.markFolderReadRequestTick,
             state.settingsRequestTick, state.feedCommandTick, state.sidebarTreeCommandTick,
-            state.moveRequestTick, state.failedRemovalTick,
+            state.moveRequestTick, state.mailStore.signals.failedRemovalTick,
         ]
     }
 

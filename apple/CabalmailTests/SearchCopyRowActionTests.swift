@@ -226,6 +226,8 @@ final class SearchCopyRowActionTests: XCTestCase {
         XCTAssertEqual(calls.map(\.folder), ["INBOX", "INBOX"], "mark-read-on-open, then the toolbar's Flag")
         XCTAssertEqual(calls.map(\.uids), [[9], [9]])
         XCTAssertEqual(reader.ref, inbox)
-        XCTAssertEqual(appState.lastEnvelopeFlagChange?.ref, inbox, "the list is told about the INBOX copy")
+        XCTAssertEqual(
+            appState.mailStore.signals.lastEnvelopeFlagChange?.ref, inbox, "the list is told about the INBOX copy"
+        )
     }
 }

@@ -187,40 +187,6 @@ public final class AppState {
     /// handoff consumed by `routePendingSpotlightOpen()` (SpotlightRouting).
     @ObservationIgnored var pendingSpotlightRef: SpotlightMessageRef?
 
-    /// Latest envelope disposed from the detail view. `MessageListView`
-    /// observes this via `.onChange` and prunes the matching UID from its
-    /// in-memory list so the moved message disappears immediately, without
-    /// waiting for the next refresh. `tick` is monotonic so
-    /// re-disposing the same UID (e.g. in a different folder) still fires
-    /// the observer.
-    var lastDisposedEnvelope: DisposedEnvelope?
-    private var disposedTick = 0
-
-    /// Latest reader dispose / move / purge whose server write failed after
-    /// `lastDisposedEnvelope` had already pruned the row. `MessageListView`
-    /// puts the row back. Sent by `signalRemovalFailed` in
-    /// `AppStateSignals.swift`, hence the internal tick.
-    var lastFailedRemoval: FailedRemoval?
-    var failedRemovalTick = 0
-
-    /// Latest envelope-flag change driven from the detail view (currently:
-    /// `\Seen` toggles). `MessageListView` observes this so the row's bold
-    /// styling and unread dot flip the moment the user taps "Mark as read"
-    /// in the detail toolbar, without waiting for the next refresh. `tick`
-    /// is monotonic so a revert (after a server error) still
-    /// fires the observer when the same UID + flag flips back.
-    var lastEnvelopeFlagChange: EnvelopeFlagChange?
-    private var flagChangeTick = 0
-
-    /// Latest mark-read-and-advance driven from the detail view's mark-read
-    /// control. `MessageListView` observes this and moves the selection per
-    /// the carried `MarkReadAdvance`; the `\Seen` flip itself travels on
-    /// `lastEnvelopeFlagChange` as usual.
-    var lastReadAdvanceRequest: ReadAdvanceRequest?
-    private var readAdvanceTick = 0
-    var lastDraftReplaced: DraftReplacedSignal?
-    private var draftReplacedTick = 0
-
     /// True while a message-row drag is in flight on a wide-screen layout.
     /// `MailRootView`'s sidebar watches this to temporarily reveal the
     /// folder list as a drop target when the user is on the Addresses tab,
@@ -239,8 +205,9 @@ public final class AppState {
     var moveRequestTick = 0
 
     /// The mail state the folder list, message list, reader and composer
-    /// share (`MailSessionStore`): the folder counts and the shields that
-    /// keep a refresh from undoing a write in flight. One for the life of
+    /// share (`MailSessionStore`): the folder counts, the shields that keep
+    /// a refresh from undoing a write in flight, and the signals the reader
+    /// and composer send the list. One for the life of
     /// this `AppState`, reset in place at sign-out (`forgetAccountState`).
     /// A `let`, so nothing observes the reference; views observe the
     /// store's own properties through it.
@@ -263,10 +230,8 @@ public final class AppState {
     func requestForward(in window: UUID? = nil) { commandWindow = window; forwardRequestTick += 1 }
     public func requestSettings(in window: UUID? = nil) { commandWindow = window; settingsRequestTick += 1 }
     // The selection-scoped request bumpers live in the "Message-menu
-    // selection intents" extension below (SwiftLint type-body budget), and
-    // the cross-view signal senders (`signalDisposed`, `signalFlagChange`,
-    // `signalReadAdvance`, `markAnswered`) in the "Cross-view signals"
-    // extension below, for the same budget.
+    // selection intents" extension in `AppStateSignals.swift` (SwiftLint
+    // type-body budget).
 
     /// Publishes a toast and auto-clears it after `duration`. The task lives
     /// outside structured concurrency because the caller's scope (usually a
@@ -526,92 +491,6 @@ public final class AppState {
             // blip, IMAP reconnection) the prior badge value stays put
             // until the next poll succeeds.
         }
-    }
-}
-
-// MARK: - Cross-view signals
-
-// Senders for the one-way detail → list signals declared in the class body
-// above (their tick counters stay there — stored properties can't live in
-// an extension). Split out for the same SwiftLint
-// type-body budget as the other extensions in this file.
-extension AppState {
-    func signalDisposed(_ ref: MessageRef) {
-        signalDisposed([ref])
-    }
-
-    /// Multi-message form, for a sender that invalidates more than one row
-    /// at once: a send-from-draft retires every Drafts copy its compose
-    /// session created, not just the newest (#1071). The dispose's unread
-    /// delta has already travelled on `signalFlagChange` from the reader's
-    /// mark-read, so this moves no count.
-    func signalDisposed(_ refs: [MessageRef]) {
-        guard !refs.isEmpty else { return }
-        disposedTick += 1
-        lastDisposedEnvelope = DisposedEnvelope(refs: refs, tick: disposedTick)
-    }
-
-    /// A compose session changed what is in Drafts. The retired UIDs are
-    /// already expunged server-side and the survivor carries the content the
-    /// user just saved, so the list prunes the one and re-points at the
-    /// other (#1078).
-    ///
-    /// A first save retires nothing and only adds: the survivor alone is
-    /// enough to send, because the refresh the list runs on this signal is
-    /// what surfaces the new row instead of leaving it to the 30 s status
-    /// poll (#1083). A signal with neither half is the one that says
-    /// nothing — an empty compose that never reached the server.
-    func signalDraftReplaced(folderPath: String, replacement: DraftReplacement) {
-        guard !replacement.retiredUIDs.isEmpty || replacement.survivingUID != nil else { return }
-        draftReplacedTick += 1
-        lastDraftReplaced = DraftReplacedSignal(
-            folderPath: folderPath,
-            replacement: replacement,
-            tick: draftReplacedTick
-        )
-    }
-
-    /// Marks a replied-to message `\Answered` after its reply sends: signal
-    /// the list optimistically (so the replied arrow appears at once), then
-    /// STORE the flag best-effort. Shielded via `setFlagWrite` so a refresh
-    /// landing mid-write can't revert the row. No revert on failure — unlike
-    /// the detail view's toggles there's no surface left to show an error on
-    /// (the composer is gone), and the next full refresh restores truth.
-    func markAnswered(_ ref: MessageRef) {
-        signalFlagChange(ref, flag: .answered, added: true)
-        guard let client else { return }
-        mailStore.shields.setFlagWrite(ref, inFlight: true)
-        Task {
-            defer { mailStore.shields.setFlagWrite(ref, inFlight: false) }
-            try? await client.imapClient.setFlags(
-                folder: ref.folder,
-                uids: [ref.uid],
-                flags: [.answered],
-                operation: .add
-            )
-        }
-    }
-
-    func signalFlagChange(_ ref: MessageRef, flag: Flag, added: Bool) {
-        flagChangeTick += 1
-        lastEnvelopeFlagChange = EnvelopeFlagChange(
-            ref: ref,
-            flag: flag,
-            added: added,
-            tick: flagChangeTick
-        )
-        if flag == .seen {
-            mailStore.counts.applyUnreadDelta(folderPath: ref.folder, delta: added ? -1 : 1)
-        }
-    }
-
-    func signalReadAdvance(_ ref: MessageRef, advance: MarkReadAdvance) {
-        readAdvanceTick += 1
-        lastReadAdvanceRequest = ReadAdvanceRequest(
-            ref: ref,
-            advance: advance,
-            tick: readAdvanceTick
-        )
     }
 }
 

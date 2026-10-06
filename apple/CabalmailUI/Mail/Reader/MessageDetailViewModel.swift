@@ -139,7 +139,7 @@ final class MessageDetailViewModel {
     /// is true when a dispose had marked an unread message read, so the row
     /// comes back unread; it rides this one call rather than a separate
     /// `onFlagChanged`, which could reach the list before the row does.
-    /// Wired to `AppState.signalRemovalFailed` in `MessageDetailView`; nil
+    /// Wired to `MailSessionStore.signalRemovalFailed` in `MessageDetailView`; nil
     /// in tests.
     var onMoveFailed: ((Bool) -> Void)?
 
