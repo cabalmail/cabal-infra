@@ -9,9 +9,16 @@ import CabalmailKit
 /// the client's or the transport's actor and suspends back here for state
 /// writes.
 ///
+/// One client per account: the background paths (a notification action, an
+/// App Intent, the macOS silent-push enrichment) borrow the session's client
+/// through `borrowClient()` instead of building their own, so one send queue
+/// drains the outbox and one observer hears an expiry.
+///
 /// `AppState` holds one and forwards its session surface here. What a
 /// session's start and end do to `AppState`'s own state runs through
-/// `SessionOwnerHooks`, which `AppState` installs in its init.
+/// `SessionOwnerHooks`, which `AppState` installs in its init. The app
+/// entries make one before any scene and hand the same one to `AppState`,
+/// `PushRegistrar` and `IntentBridge`; `AppState()` makes its own.
 @Observable
 @MainActor
 public final class SessionManager {
@@ -97,6 +104,16 @@ public final class SessionManager {
     /// `PreferencesSyncCoordinator` for it. Weak-by-convention: the app scene
     /// owns it for the whole process lifetime.
     private var preferences: Preferences?
+
+    /// The stored account's client while no session is wired, built by
+    /// whichever of a borrower and the launch restore asked first, lent to
+    /// every borrower, and adopted by the restore. Let go when a session is
+    /// wired or ends.
+    @ObservationIgnored private var standby: CabalmailClient?
+
+    /// The build of `standby` in flight; whoever else asks for it waits on
+    /// this build instead of starting another.
+    @ObservationIgnored private var standbyBuild: StandbyBuild?
 
     /// The client of the second-factor submit in flight, which a cancel
     /// meanwhile must not shut down: the submit may still wire it.
@@ -184,6 +201,10 @@ public final class SessionManager {
     ///   without forcing a password re-entry.
     /// - Any other error → `.error(message)`.
     ///
+    /// A client a borrower already built for the stored account is the one
+    /// this restore wires; a borrower that asks while this restore builds
+    /// it waits for the same build (`storedAccountClient`).
+    ///
     /// Idempotent: if a client is already wired or sign-in is in flight,
     /// this is a no-op, so `.task` can call it without worrying about
     /// SwiftUI's lifecycle re-firing it.
@@ -215,8 +236,9 @@ public final class SessionManager {
         do {
             // Offline, the last good config.json stands in for the fetch so
             // the cached mail, Outbox and feeds stay reachable at launch.
-            let configuration = try await sessionEnvironment.loadConfiguration(domain)
-            let newClient = try sessionEnvironment.makeClient(configuration, secureStore, sessionInvalidation)
+            let newClient = try await storedAccountClient(
+                domain: domain, secureStore: secureStore, forRestore: true
+            )
             built = newClient
             // Validates the keychain contents: a fresh ID token passes; an
             // expired one triggers a silent refresh; an expired / revoked
@@ -255,6 +277,9 @@ public final class SessionManager {
             }
             return
         }
+        // The restore built (or adopted) the stored account's client and is
+        // not wiring it, so nothing lends it any more.
+        if let built, standby === built { standby = nil }
         letGo(of: built)
         guard let error = error as? CabalmailError else {
             status = .error(error.localizedDescription)
@@ -300,6 +325,8 @@ extension SessionManager {
         // on is dropped rather than written back over it (#1848).
         if let client { teardownGate.markEnded(client) }
         owner.forgetAccount()
+        // Whatever was lent goes with the session, wired or not.
+        letGo(of: takeStandby())
         guard let client else {
             status = .signedOut
             return
@@ -326,6 +353,7 @@ extension SessionManager {
         // A sign-in over a wired session (#1826) replaces its client.
         let replaced = client
         self.client = newClient
+        if let standby = takeStandby(), standby !== newClient { letGo(of: standby) }
         owner.clientInstalled(newClient)
         self.navCoordinator = sessionEnvironment.makeNavCoordinator(newClient)
         if let preferences {
@@ -364,14 +392,86 @@ extension SessionManager {
     }
 }
 
-// MARK: - Letting a client go
+// MARK: - Lending the client
 
 extension SessionManager {
+    /// The client background work borrows: a notification action, an App
+    /// Intent, the macOS silent-push enrichment. With a session, its client.
+    /// Without one, the stored account's, built once through the restore's
+    /// environment (the cached config.json, the keychain, the expiry
+    /// monitor) without wiring a session, and adopted by the next restore.
+    /// Nil when no account is stored, or when the session the build was for
+    /// ended while it ran. Throws what building it threw.
+    public func borrowClient() async throws -> CabalmailClient? {
+        if let client { return client }
+        let domain = controlDomain
+        let username = lastUsername
+        guard !domain.isEmpty, !username.isEmpty else { return nil }
+        let secureStore = sessionEnvironment.makeSecureStore()
+        guard (try? secureStore.get(SecureStoreKey.authTokens)) != nil else { return nil }
+        let lent = try await storedAccountClient(domain: domain, secureStore: secureStore)
+        // A session wired while the build ran lends its own client; one that
+        // ended took the build with it.
+        if let client { return client }
+        return standby === lent ? lent : nil
+    }
+
+    /// The stored account's client while no session is wired: `standby`, or
+    /// one build of it shared by whoever asks while it runs. A build is lent
+    /// only if it finishes with no session wired and no sign-out since it
+    /// started. Otherwise it is let go, unless a restore took part in it:
+    /// the restore still decides, wiring it or ending the session it built
+    /// (#1827), as it did with a client it built alone.
+    private func storedAccountClient(
+        domain: String, secureStore: SecureStore, forRestore: Bool = false
+    ) async throws -> CabalmailClient {
+        if let standby { return standby }
+        if standbyBuild != nil {
+            if forRestore { standbyBuild?.restoreTookPart = true }
+            return try await withCheckedThrowingContinuation { standbyBuild?.waiters.append($0) }
+        }
+        standbyBuild = StandbyBuild(restoreTookPart: forRestore)
+        let generation = teardownGate.generation
+        do {
+            let configuration = try await sessionEnvironment.loadConfiguration(domain)
+            let built = try sessionEnvironment.makeClient(configuration, secureStore, sessionInvalidation)
+            let build = finishStandbyBuild(.success(built))
+            if teardownGate.generation == generation, client == nil {
+                standby = built
+            } else if !build.restoreTookPart {
+                letGo(of: built)
+            }
+            return built
+        } catch {
+            finishStandbyBuild(.failure(error))
+            throw error
+        }
+    }
+
+    /// Ends the build in flight, resuming whoever waited on it.
+    @discardableResult
+    private func finishStandbyBuild(_ result: Result<CabalmailClient, Error>) -> StandbyBuild {
+        let build = standbyBuild ?? StandbyBuild(restoreTookPart: false)
+        standbyBuild = nil
+        for waiter in build.waiters {
+            waiter.resume(with: result)
+        }
+        return build
+    }
+
+    /// Takes `standby` out of the lending slot, for the caller to wire or
+    /// let go of.
+    private func takeStandby() -> CabalmailClient? {
+        defer { standby = nil }
+        return standby
+    }
+
     /// A client the manager no longer holds stops what it runs on its own:
     /// its send queue and its Spotlight feed. Its API calls and caches keep
-    /// working for anyone still holding it. Never the wired client.
+    /// working for anyone still holding it. Never the wired client or the
+    /// one being lent.
     private func letGo(of dropped: CabalmailClient?) {
-        guard let dropped, dropped !== client else { return }
+        guard let dropped, dropped !== client, dropped !== standby else { return }
         Task { await dropped.shutdown() }
     }
 }
@@ -449,8 +549,10 @@ extension SessionManager {
 
     /// Ends a session the launch restore built but never wired, because the
     /// user signed out while it was being built (#1827). Its cursor is built
-    /// only to clear the resume state this launch would have restored.
+    /// only to clear the resume state this launch would have restored. The
+    /// client was the stored account's, so the lending slot lets it go too.
     func endUnwiredSession(_ client: CabalmailClient) async {
+        if standby === client { standby = nil }
         await endSession(of: client, cursor: sessionEnvironment.makeNavCoordinator(client))
         await client.shutdown()
     }
@@ -485,6 +587,13 @@ extension SessionManager {
         guard let client else { return }
         await pushSessionToWatch(client: client, username: lastUsername)
     }
+}
+
+/// A build of the stored account's client in flight (`storedAccountClient`).
+private struct StandbyBuild {
+    var waiters: [CheckedContinuation<CabalmailClient, Error>] = []
+    /// A launch restore started or joined it, and will wire it or end it.
+    var restoreTookPart: Bool
 }
 
 /// Sign-in paused at a second-factor challenge (identity plan Phase 1).

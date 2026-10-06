@@ -24,7 +24,7 @@ struct CabalmailMacApp: App {
     // minimal AppKit delegate — the same AppDelegate.swift source the iOS
     // target compiles, with an NSApplicationDelegate branch (see that file).
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var appState = AppState()
+    @State private var appState: AppState
     @State private var preferences = Preferences(store: UserDefaultsPreferenceStore())
     @Environment(\.scenePhase) private var scenePhase
     // Mac residency: whether the status-item menu is installed. Backed by
@@ -39,6 +39,13 @@ struct CabalmailMacApp: App {
         // copy has to be gone before the first window is built. See
         // `SplitViewAutosave`.
         SplitViewAutosave.clearSavedFrames(windowGroupID: mainWindowID)
+        // One session manager for the process, made before any scene: the
+        // window's AppState runs the session on it, and the notification
+        // actions and silent-push enrichment borrow its client rather than
+        // build their own.
+        let sessions = SessionManager()
+        _appState = State(initialValue: AppState(sessionManager: sessions))
+        PushRegistrar.shared.attach(sessions)
     }
 
     var body: some Scene {

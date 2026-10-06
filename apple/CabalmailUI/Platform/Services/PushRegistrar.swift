@@ -150,19 +150,21 @@ struct PushNotificationCenter {
 
 /// Owns the APNs registration lifecycle and the notification-action
 /// handlers for the iOS and macOS apps (docs/0.11.x/push-notifications.md,
-/// phases 1/3/4; macOS parity is phase 6). `AppState` drives the session
-/// edges (`sessionDidStart` / `sessionWillEnd`), `AppDelegate` feeds it
-/// token and action callbacks. One implementation for both platforms —
+/// phases 1/3/4; macOS parity is phase 6). `SessionManager` drives the
+/// session edges (`sessionDidStart` / `sessionWillEnd`), `AppDelegate` feeds
+/// it token and action callbacks. One implementation for both platforms —
 /// the UIKit/AppKit divergences live in small shims (`Platform` below and
 /// `BackgroundTaskToken` at the bottom of the file).
 ///
 /// A singleton (rather than something hung off `AppState`) because the
 /// application-delegate callbacks it services — token registration,
 /// background notification actions — can fire before SwiftUI has built any
-/// state, e.g. on a cold background launch from a lock-screen action.
+/// state, e.g. on a cold background launch from a lock-screen action. The
+/// app entry hands it the session manager before any of that can happen,
+/// and the actions borrow that manager's client.
 @MainActor
-final class PushRegistrar {
-    static let shared = PushRegistrar()
+public final class PushRegistrar {
+    public static let shared = PushRegistrar()
 
     /// The two values `/push_register` derives the APNs topic from. The
     /// Lambda validates the pair (`com.cabalmail.Cabalmail` -> `ios`,
@@ -195,9 +197,15 @@ final class PushRegistrar {
     /// hang off it. Weak — the registrar outlives any session.
     private(set) weak var appState: AppState?
 
-    /// The session client while signed in, or a throwaway bootstrap client
-    /// built for a background action on a terminated app (`activeClient()`).
-    private var client: CabalmailClient?
+    /// The process's session manager, handed in by the app entry
+    /// (`attach(_:)`); the actions and the enrichment borrow its client.
+    private var sessions: SessionManager?
+
+    /// The wired session's client, from `sessionDidStart` until
+    /// `sessionWillEnd` has deregistered: what token registration and
+    /// deregistration use. A token that arrives outside that window parks
+    /// for the next session rather than register with one that is ending.
+    private var sessionClient: CabalmailClient?
 
     /// APNs token that arrived before a session was wired (the system
     /// re-delivers the token on every `registerForRemoteNotifications`,
@@ -238,6 +246,12 @@ final class PushRegistrar {
         self.enrichmentStore = enrichmentStore
     }
 
+    /// Called once from the app entry's init, before any scene exists and so
+    /// before a delegate callback can need a client.
+    public func attach(_ sessions: SessionManager) {
+        self.sessions = sessions
+    }
+
     /// Registers the `MAIL_MESSAGE` category the dispatch Lambda stamps on
     /// every payload. Called once at launch from `AppDelegate`.
     static func registerNotificationCategories() {
@@ -260,7 +274,7 @@ final class PushRegistrar {
     /// each launch refreshes the server row — a cheap upsert by design.
     func sessionDidStart(appState: AppState, client: CabalmailClient) {
         self.appState = appState
-        self.client = client
+        self.sessionClient = client
         forgetOtherAccount("\(appState.lastUsername)@\(appState.controlDomain)")
         enrichmentStore.updateAPIURL(client.configuration.invokeUrl)
         // Honor the user's master toggle: once notifications are off, a
@@ -308,7 +322,7 @@ final class PushRegistrar {
         // master toggle off (e.g. a rotation callback racing the toggle);
         // registering it would silently re-enable pushes.
         guard !PushSettings.isUserDisabled(in: defaults) else { return }
-        guard let client else {
+        guard let client = sessionClient else {
             pendingToken = tokenHex
             return
         }
@@ -344,7 +358,7 @@ final class PushRegistrar {
         }
     }
 
-    /// Deregisters this device's token. Called from `AppState.signOut()`
+    /// Deregisters this device's token. Called from the session's sign-out
     /// *before* the Cognito tokens are wiped — `/push_deregister` needs an
     /// authenticated call like every other endpoint.
     func sessionWillEnd() async {
@@ -354,7 +368,7 @@ final class PushRegistrar {
         pendingOpen = nil
         notificationCenter.removeAllDeliveredNotifications()
         defer {
-            client = nil
+            sessionClient = nil
             appState = nil
             // Drop the NSE's mirrored credentials alongside the session
             // (also cleared by the mirroring store when the tokens are
@@ -362,7 +376,7 @@ final class PushRegistrar {
             enrichmentStore.clear()
         }
         guard
-            let client,
+            let client = sessionClient,
             let token = defaults.string(forKey: Self.lastTokenKey)
         else { return }
         do {
@@ -628,31 +642,17 @@ extension PushRegistrar {
         }
     }
 
-    /// The session client, or — on a cold background launch, where no scene
-    /// ever attaches and `AppState.restoreIfPossible()` never runs — a
-    /// client bootstrapped from the persisted control domain and keychain
-    /// tokens. Auth refresh happens through the normal client path either
-    /// way. Returns nil when signed out.
+    /// The session's client, borrowed from the session manager: the wired
+    /// session's, or on a cold background launch (no scene, so no restore)
+    /// the stored account's, which the manager builds once and the next
+    /// restore adopts. Nil when signed out, or when building it failed.
     private func activeClient() async -> CabalmailClient? {
-        if let client { return client }
-        let domain = defaults.string(forKey: "cabalmail.controlDomain") ?? ""
-        guard !domain.isEmpty else { return nil }
-        let store = AppState.makeSecureStore()
-        guard (try? store.get(SecureStoreKey.authTokens)) != nil else { return nil }
-        guard
-            let configuration = try? await ConfigLoader.load(controlDomain: domain),
-            let cacheDirectory = try? AppState.makeCacheDirectory(),
-            let bootstrapped = try? CabalmailClient.make(
-                configuration: configuration,
-                secureStore: store,
-                cacheDirectory: cacheDirectory
-            )
-        else { return nil }
-        // Cache it: a burst of actions (several notifications triaged from
-        // the lock screen) shouldn't rebuild the client per action. A later
-        // sign-in replaces it via `sessionDidStart`.
-        client = bootstrapped
-        return bootstrapped
+        do {
+            return try await sessions?.borrowClient()
+        } catch {
+            CabalmailLog.warn("Push", "no client to borrow: \(error)")
+            return nil
+        }
     }
 }
 

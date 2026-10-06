@@ -19,12 +19,20 @@ struct CabalmailApp: App {
     // destination-filters the extension the same way).
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     #endif
-    @State private var appState = AppState()
+    @State private var appState: AppState
     @State private var preferences = Preferences(store: UserDefaultsPreferenceStore())
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // One session manager for the process, made before any scene: the
+        // window's AppState runs the session on it, and the notification
+        // actions and App Intents, which can run on a launch that never
+        // builds a scene, borrow its client rather than build their own.
+        let sessions = SessionManager()
+        _appState = State(initialValue: AppState(sessionManager: sessions))
         #if os(iOS)
+        PushRegistrar.shared.attach(sessions)
+        IntentBridge.shared.attach(sessions)
         // The App Intents live in this target, so the shared session
         // lifecycle reaches them through these hooks. Installed here, before
         // the first `.task` can restore a session.

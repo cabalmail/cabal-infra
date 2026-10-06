@@ -412,20 +412,3 @@ extension AppState {
         )
     }
 }
-
-// MARK: - Client construction helpers
-
-extension AppState {
-    /// The keychain store a session client persists Cognito tokens through
-    /// (`SessionEnvironment.liveSecureStore()`). Public for the push and App
-    /// Intents cold-launch bootstraps, which still build their own client.
-    public static func makeSecureStore() -> SecureStore {
-        SessionEnvironment.liveSecureStore()
-    }
-
-    /// The application-support cache directory
-    /// (`SessionEnvironment.liveCacheDirectory()`), for the same bootstraps.
-    public static func makeCacheDirectory() throws -> URL {
-        try SessionEnvironment.liveCacheDirectory()
-    }
-}
