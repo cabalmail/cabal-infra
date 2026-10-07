@@ -141,7 +141,7 @@ extension URLSessionApiClient {
         }
         let request = try await get("/list_messages", query: items)
         let data = try await send(request, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(MessageIdsPayload.self, from: data).messageIds
+        return try decodeReply(MessageIdsPayload.self, from: data, for: request).messageIds
     }
 
     public func searchEnvelopes(host: String, query: SearchQuery) async throws -> ApiSearchResponse {
@@ -150,7 +150,7 @@ extension URLSessionApiClient {
             query: searchEnvelopesQueryItems(host: host, query: query)
         )
         let data = try await send(request, expectedStatuses: 200..<300)
-        let decoded = try JSONDecoder().decode(SearchEnvelopesPayload.self, from: data)
+        let decoded = try decodeReply(SearchEnvelopesPayload.self, from: data, for: request)
         return ApiSearchResponse(
             envelopes: decoded.envelopes,
             totalEstimate: decoded.totalEstimate,
@@ -174,7 +174,7 @@ extension URLSessionApiClient {
         // descending here so callers get a stable, most-recent-first list
         // matching how the React client displays the same data.
         struct Payload: Decodable { let envelopes: [String: ApiEnvelope] }
-        let decoded = try JSONDecoder().decode(Payload.self, from: data)
+        let decoded = try decodeReply(Payload.self, from: data, for: request)
         return decoded.envelopes.values.sorted { $0.id > $1.id }
     }
 
@@ -191,7 +191,7 @@ extension URLSessionApiClient {
             URLQueryItem(name: "seen", value: markSeen ? "true" : "false"),
         ])
         let data = try await send(request, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(ApiMessageBody.self, from: data)
+        return try decodeReply(ApiMessageBody.self, from: data, for: request)
     }
 
     public func listAttachments(
@@ -208,7 +208,7 @@ extension URLSessionApiClient {
         ])
         let data = try await send(request, expectedStatuses: 200..<300)
         struct Payload: Decodable { let attachments: [ApiAttachmentDescriptor] }
-        return try JSONDecoder().decode(Payload.self, from: data).attachments
+        return try decodeReply(Payload.self, from: data, for: request).attachments
     }
 
     public func fetchAttachmentURL(_ request: FetchAttachmentRequest) async throws -> URL {
@@ -222,8 +222,8 @@ extension URLSessionApiClient {
         ])
         let data = try await send(httpRequest, expectedStatuses: 200..<300)
         struct Payload: Decodable { let url: String }
-        let decoded = try JSONDecoder().decode(Payload.self, from: data)
-        guard let url = URL(string: decoded.url) else {
+        let decoded = try decodeReply(Payload.self, from: data, for: httpRequest)
+        guard let url = URL(followableReplyString: decoded.url) else {
             throw CabalmailError.decoding("fetch_attachment returned invalid url")
         }
         return url
@@ -248,8 +248,8 @@ extension URLSessionApiClient {
         ])
         let data = try await send(request, expectedStatuses: 200..<300)
         struct Payload: Decodable { let url: String }
-        let decoded = try JSONDecoder().decode(Payload.self, from: data)
-        guard let url = URL(string: decoded.url) else {
+        let decoded = try decodeReply(Payload.self, from: data, for: request)
+        guard let url = URL(followableReplyString: decoded.url) else {
             throw CabalmailError.decoding("fetch_inline_image returned invalid url")
         }
         return url
@@ -308,7 +308,7 @@ extension URLSessionApiClient {
             "folder": folder,
         ])
         let data = try await send(httpRequest, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(MarkFolderReadPayload.self, from: data).flipped
+        return try decodeReply(MarkFolderReadPayload.self, from: data, for: httpRequest).flipped
     }
 
     // MARK: - Send
@@ -349,14 +349,14 @@ extension URLSessionApiClient {
         let data = try await send(httpRequest, expectedStatuses: 200..<300)
         struct Entry: Decodable { let key: String; let url: String }
         struct Payload: Decodable { let uploads: [Entry] }
-        let decoded = try JSONDecoder().decode(Payload.self, from: data)
+        let decoded = try decodeReply(Payload.self, from: data, for: httpRequest)
         guard decoded.uploads.count == files.count else {
             throw CabalmailError.decoding(
                 "upload_url returned \(decoded.uploads.count) entries for \(files.count) files"
             )
         }
         return try decoded.uploads.map { entry in
-            guard let url = URL(string: entry.url) else {
+            guard let url = URL(followableReplyString: entry.url) else {
                 throw CabalmailError.decoding("upload_url returned an invalid URL")
             }
             return AttachmentUpload(key: entry.key, url: url)

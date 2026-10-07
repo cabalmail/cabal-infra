@@ -190,37 +190,45 @@ final class RestorePipelineCharacterizationTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
-    /// Pins current behaviour, which looks like a defect: `OfflineLaunch`
-    /// treats every `.transport` as "Cognito unreachable", and the keychain
-    /// reports its own failures as `.transport`. So a refresh that reached
-    /// Cognito and succeeded, but could not be saved, passes validation as
-    /// if offline; the new pair is dropped and the next token read refreshes
-    /// all over again. Counting `.transport` as unreachable is deliberate and
-    /// older than `OfflineLaunch` (2028a6a1 moved it out of AppState), and
-    /// dropping it would land restore on `.signedOut`; the root is the
-    /// keychain reusing a wire-error case.
-    /// Tracked in #1808.
-    func testKeychainWriteFailureDuringASuccessfulRefreshStillPasses() async throws {
+    /// A refresh that reached Cognito and succeeded but could not be saved
+    /// fails the restore with `.storage`, keeps the expired pair and
+    /// announces nothing (#1808). The keychain used to report its failures
+    /// as `.transport`, which `OfflineLaunch` counts as "Cognito
+    /// unreachable" on purpose (#1779), so the restore passed as if offline,
+    /// the refreshed pair was dropped, and every later token read refreshed
+    /// again. `OfflineLaunch` is unchanged: the keychain has its own case.
+    /// Once the keychain can be written again, the next restore refreshes
+    /// and saves the new pair.
+    func testKeychainWriteFailureDuringASuccessfulRefreshFailsTheRestoreAndKeepsTheExpiredPair() async throws {
         let store = WriteFailingSecureStore()
         let expired = RestoreHarness.tokens(id: "OLD-ID", expiresIn: -3600)
         try harness.seed(expired, into: store.base)
         store.failWrites = true
         let announcements = harness.monitor.events()
 
-        let client = try await harness.restore(store: store)
+        do {
+            _ = try await harness.restore(store: store)
+            XCTFail("expected the restore to fail on the keychain write")
+        } catch let error as CabalmailError {
+            XCTAssertEqual(error, .storage("Keychain write failed (-25308)"))
+            XCTAssertEqual(
+                error.localizedDescription,
+                "Couldn't read or save data on this device. Keychain write failed (-25308)."
+            )
+        }
 
         let trail = await harness.network.trail
         XCTAssertEqual(trail, ["GET config.json", "Cognito InitiateAuth REFRESH_TOKEN_AUTH"])
         XCTAssertEqual(store.failedWrites, 1)
-        XCTAssertEqual(try harness.storedTokens(in: store.base), expired, "the refreshed pair was lost")
+        XCTAssertEqual(try harness.storedTokens(in: store.base), expired, "the expired pair is kept for a later launch")
         let count = await bufferedCount(announcements)
-        XCTAssertEqual(count, 0)
+        XCTAssertEqual(count, 0, "a device failure is not an ended session")
 
         store.failWrites = false
+        let client = try await harness.restore(store: store)
         let token = try await client.authService.currentIdToken()
         XCTAssertEqual(token, "NEW-ID")
-        let after = await harness.network.trail
-        XCTAssertEqual(after.filter { $0.hasPrefix("Cognito") }.count, 2, "the lost refresh is paid for twice")
+        XCTAssertEqual(try harness.storedTokens(in: store.base)?.idToken, "NEW-ID", "the retry saves the new pair")
     }
 }
 
@@ -455,7 +463,7 @@ private actor RestoreNetwork: HTTPTransport {
 }
 
 /// A keychain whose writes can be made to fail the way `KeychainSecureStore`
-/// reports an OSStatus: as `.transport`.
+/// reports an OSStatus: as `.storage`.
 private final class WriteFailingSecureStore: SecureStore {
     let base = InMemorySecureStore()
     private let state = Mutex((failing: false, failures: 0))
@@ -472,7 +480,7 @@ private final class WriteFailingSecureStore: SecureStore {
             if state.failing { state.failures += 1 }
             return state.failing
         }
-        if fail { throw CabalmailError.transport("Keychain write failed (-25308)") }
+        if fail { throw CabalmailError.storage("Keychain write failed (-25308)") }
         try base.set(value, forKey: key)
     }
 

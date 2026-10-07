@@ -293,10 +293,12 @@ final class ConfigLoaderCacheCharacterizationTests: XCTestCase {
     /// other error is rethrown even with a good copy cached, and an error
     /// that is not a `CabalmailError` passes through raw.
     ///
-    /// Both errors here come only from a custom transport. The production
-    /// `URLSessionHTTPTransport` turns every `URLError`, a cooperative cancel
-    /// included, into `.network`, which does fall back; so a cancelled launch
-    /// still gets the cached config. This guards the `default` branch.
+    /// Both errors here come only from a custom transport, on a live task.
+    /// The production `URLSessionHTTPTransport` throws `.cancelled` only for
+    /// a cooperative cancel, when the caller's task IS cancelled, and that
+    /// does fall back, so a cancelled launch still gets the cached config
+    /// (#1815, pinned in `HTTPTransportCancellationTests`). This guards the
+    /// `default` branch.
     func testOtherErrorsDoNotFallBack() async throws {
         _ = try await load(over: Self.answering(200))
         do {

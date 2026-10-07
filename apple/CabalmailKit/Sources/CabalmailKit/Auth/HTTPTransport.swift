@@ -31,7 +31,11 @@ public protocol HTTPTransport: Sendable {
 ///    retries once after a short backoff (Apple's own guidance for `-1005`).
 ///    Any `URLError` that escapes is normalized into
 ///    `CabalmailError.network(localizedDescription)` so callers and toast
-///    UIs see a readable message instead of the verbose NSError dump.
+///    UIs see a readable message instead of the verbose NSError dump —
+///    except a `URLError.cancelled` that arrives while our own Task IS
+///    cancelled, which is the caller's cooperative cancel and is thrown as
+///    `CabalmailError.cancelled`, so the caller's cancellation guards
+///    recognise it (#1815).
 public struct URLSessionHTTPTransport: HTTPTransport {
     public let session: URLSession
     #if canImport(UIKit) && !os(watchOS)
@@ -79,11 +83,20 @@ public struct URLSessionHTTPTransport: HTTPTransport {
             do {
                 return try await performOnce(request)
             } catch let retryErr as URLError {
-                throw CabalmailError.network(retryErr.localizedDescription)
+                throw Self.normalized(retryErr)
             }
         } catch let err as URLError {
-            throw CabalmailError.network(err.localizedDescription)
+            throw Self.normalized(err)
         }
+    }
+
+    /// The `CabalmailError` an escaping `URLError` becomes. A cancel while
+    /// our own Task is cancelled is the caller's and reads as `.cancelled`;
+    /// every other one, a spurious cancel after its retry included, is
+    /// `.network`.
+    static func normalized(_ err: URLError) -> CabalmailError {
+        if err.code == .cancelled, Task.isCancelled { return .cancelled }
+        return .network(err.localizedDescription)
     }
 
     private func performOnce(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {

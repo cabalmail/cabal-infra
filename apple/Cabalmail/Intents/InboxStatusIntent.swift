@@ -23,8 +23,10 @@ struct InboxStatusIntent: AppIntent {
             throw IntentError.friendly(error)
         }
         // Keep the app's badge state coherent when it's running; the 60s
-        // poller reconciles any drift either way.
-        IntentBridge.shared.appState?.mailStore.counts.setInboxUnread(unread)
+        // poller reconciles any drift either way. Through the store's count
+        // gate, so a STATUS that answers after a sign-out can't put this
+        // account's count back on the badge (#1892).
+        IntentBridge.shared.appState?.mailStore.setInboxUnread(unread, fetchedThrough: client)
         guard unread > 0 else {
             return .result(value: 0, dialog: "Your inbox has no unread messages.")
         }

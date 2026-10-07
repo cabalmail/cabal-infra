@@ -133,11 +133,15 @@ extension CabalmailClient {
     /// succeeding. `sendInFlight` joins them: the API is holding an
     /// unresolved claim on this Message-Id, so the message is neither sent
     /// nor refused and the outbox is where it belongs until the claim
-    /// clears (#1019). `invalidCredentials`, `server`, and the
-    /// rest are application-level and surface to the user immediately.
+    /// clears (#1019). So does `storage`: a keychain that can't be read
+    /// for the token (before the first unlock after a restart) is the
+    /// device's state, not the message's, and queued the same way while the
+    /// keychain reported its failures as `transport` (#1808).
+    /// `invalidCredentials`, `server`, and the rest are application-level
+    /// and surface to the user immediately.
     static func shouldQueue(_ error: CabalmailError) -> Bool {
         switch error {
-        case .network, .transport, .cancelled, .sendInFlight:
+        case .network, .transport, .cancelled, .sendInFlight, .storage:
             return true
         default:
             return false

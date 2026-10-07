@@ -254,7 +254,7 @@ public actor SendQueue {
             // clears within the server's dedupe window, and the next drain
             // either delivers it or is told it already went out.
             entry.attempts = original.attempts
-            try? await outbox.update(entry)
+            guard await writeBack(entry) else { return }
             CabalmailLog.info(
                 "SendQueue",
                 "deferred \(entry.id): an earlier submission of it is still in flight"
@@ -279,7 +279,21 @@ public actor SendQueue {
                     "giving up on \(entry.id) after \(entry.attempts) attempts; kept for the user"
                 )
             }
-            try? await outbox.update(entry)
+            await writeBack(entry)
         }
+    }
+
+    /// Records an attempt on its entry, unless the entry left the outbox
+    /// while the attempt ran (a sign-out's wipe, a discard): then it stays
+    /// gone (#1909).
+    @discardableResult
+    private func writeBack(_ entry: Outbox.Entry) async -> Bool {
+        do {
+            if try await outbox.update(entry) { return true }
+            CabalmailLog.info("SendQueue", "\(entry.id) left the outbox during its attempt; not written back")
+        } catch {
+            CabalmailLog.warn("SendQueue", "couldn't record the attempt on \(entry.id): \(error)")
+        }
+        return false
     }
 }

@@ -100,7 +100,10 @@ public final class MailCounts {
     /// diverge. The badge task re-reads `inboxUnreadCount` at execution time
     /// rather than capturing `count`, so a burst of deltas can't land the
     /// badge on a stale intermediate value if the tasks run out of order.
-    public func setInboxUnread(_ count: Int) {
+    /// Internal: a count fetched outside this module goes through
+    /// `MailSessionStore.setInboxUnread(_:fetchedThrough:)`, which asks the
+    /// count gate first.
+    func setInboxUnread(_ count: Int) {
         inboxUnreadCount = max(0, count)
         Task {
             try? await UNUserNotificationCenter.current().setBadgeCount(inboxUnreadCount)

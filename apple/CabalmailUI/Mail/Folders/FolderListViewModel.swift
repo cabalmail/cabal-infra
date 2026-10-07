@@ -23,6 +23,13 @@ final class FolderListViewModel {
     /// the server can't be reached. It can lag the server, so the parent's
     /// launch landing doesn't reconcile against it.
     private(set) var isShowingSavedCopy = false
+    /// A load reached an outcome: the server's list, the saved copy drawn
+    /// because the server couldn't be reached, or an error worth showing. A
+    /// load cut short by its own task's cancellation (the sidebar leaving the
+    /// screen mid-load, as on iPhone when the launch pushes INBOX over it)
+    /// leaves this false, so the next appearance loads again
+    /// (`reloadIfCutShort`, #1908): `RulesViewModel.load`'s rule (#1328).
+    private(set) var hasAttemptedLoad = false
     /// Paths whose counts are currently being fetched on-demand (lazy
     /// unsubscribed selection or the in-pane refresh button). The view
     /// reads this to render a spinner on the unsubscribed-folder banner's
@@ -57,6 +64,15 @@ final class FolderListViewModel {
         await refreshSubscribedCounts()
     }
 
+    /// The sidebar's `.task` on each appearance after the one that built this
+    /// model: a first load cut short (#1908) is loaded again, as a manual
+    /// refresh would. Once any load has reached an outcome this is a no-op,
+    /// so pushing over the sidebar and back doesn't refetch.
+    func reloadIfCutShort() async {
+        guard !hasAttemptedLoad else { return }
+        await refresh()
+    }
+
     /// Fetch + publish the folder list without walking per-folder STATUS.
     /// Split out so the parent view can seed a default selection (Inbox)
     /// the moment the sidebar arrives — the unread-count walk fans out
@@ -65,10 +81,17 @@ final class FolderListViewModel {
     /// empty pane.
     func loadFolderList() async {
         isLoading = true
-        defer { isLoading = false }
+        // Cut short before any outcome, the load stays pending: the spinner
+        // holds until the next appearance resumes it. Otherwise it settles.
+        defer { if hasAttemptedLoad { isLoading = false } }
         do {
             let (all, savedBecause) = try await client.foldersForDisplay()
             if let savedBecause {
+                // `foldersForDisplay` falls back on a cancelled request too
+                // (`shouldQueue` takes `.cancelled`). When the cancel was this
+                // task's, nothing failed: no error, no saved copy, no attempt.
+                guard !Task.isCancelled else { return }
+                hasAttemptedLoad = true
                 errorMessage = savedBecause.localizedDescription
                 // A list fetched live this session is newer than the saved
                 // one, which predates any folder deleted or subscription
@@ -77,6 +100,9 @@ final class FolderListViewModel {
                 await showSavedCopy(all)
                 return
             }
+            // A list that answered before a cancel is applied, as
+            // `RulesViewModel` and the message list apply theirs.
+            hasAttemptedLoad = true
             folders = sortForSidebar(all)
             // Badges seeded from a saved copy (here, or by visionOS's landing
             // model) go with it, so a recount cut short leaves them blank
@@ -100,6 +126,12 @@ final class FolderListViewModel {
                 Set(all.filter(\.isSubscribed).map(\.path))
             )
         } catch {
+            // SwiftUI tearing the sidebar's `.task` down mid-request is not a
+            // failure. Read off the Task alone, not the error (nor a
+            // `CancellationError` check): one that isn't this task's would
+            // otherwise leave the spinner up on a sidebar still on screen.
+            guard !Task.isCancelled else { return }
+            hasAttemptedLoad = true
             errorMessage = error.localizedDescription
         }
     }
