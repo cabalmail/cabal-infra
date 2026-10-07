@@ -434,7 +434,8 @@ targets:
   # token the main app mirrors into the shared keychain group, and rewrites
   # the bare "New mail" alert into sender / subject / snippet. Deliberately
   # tiny: no CabalmailKit, only the Foundation-only CabalmailShared product,
-  # which names the containers and the token format it shares with the app.
+  # which names the containers and spells the token, msgRef and
+  # /push_envelope formats it shares with the app.
   # The values it needs arrive via the App Group container and the shared
   # keychain (see docs/0.11.x/push-notifications.md and PushEnrichmentStore).
   CabalmailNotificationService:

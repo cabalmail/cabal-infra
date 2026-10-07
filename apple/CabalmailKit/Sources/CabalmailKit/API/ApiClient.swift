@@ -1,3 +1,4 @@
+import CabalmailShared
 import Foundation
 
 /// Cabalmail-specific HTTP endpoints fronted by API Gateway + Lambda.
@@ -192,8 +193,9 @@ public protocol ApiClient: Sendable {
 
     /// Resolves a pushed message reference into its display envelope via
     /// `/push_envelope` — the same Lambda the Notification Service Extension
-    /// calls (the NSE deliberately keeps its own CabalmailKit-free copy of
-    /// this wire code). Used by the macOS app to enrich notifications while
+    /// calls, with the same request body and reply type from CabalmailShared
+    /// (`PushMessageCoordinates`, `PushEnvelope`), which the NSE links instead
+    /// of the Kit. Used by the macOS app to enrich notifications while
     /// it is running, working around the platform defect that kills the NSE
     /// before it can. `uid` is a best-effort hint, `messageID` the durable
     /// identity; the Lambda resolves the real uid server-side and returns it.
@@ -541,27 +543,6 @@ public struct PushDeviceRegistration: Sendable, Hashable {
         self.appVersion = appVersion
         self.locale = locale
         self.enabledFolders = enabledFolders
-    }
-}
-
-/// Decoded `/push_envelope` response: the sender / subject / snippet the
-/// dispatch payload deliberately omits. `uid` is the server-resolved UID
-/// (the payload's was a pre-delivery hint); callers stamp it back into the
-/// notification's msgRef so Mark as Read / Archive / Open act on the message
-/// the notification shows. Mirrors the NSE's private twin in
-/// `CabalmailNotificationService/NotificationService.swift` — keep the wire
-/// shapes in sync.
-public struct PushEnvelope: Decodable, Sendable {
-    public let from: String
-    public let subject: String
-    public let snippet: String
-    public let uid: UInt32?
-
-    public init(from: String, subject: String, snippet: String, uid: UInt32?) {
-        self.from = from
-        self.subject = subject
-        self.snippet = snippet
-        self.uid = uid
     }
 }
 

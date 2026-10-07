@@ -26,7 +26,8 @@ let nseLog = Logger(subsystem: "com.cabalmail.nse", category: "enrich")
 ///
 /// Deliberately tiny: no CabalmailKit. Beside the system frameworks it links
 /// only CabalmailShared, the Foundation-only module that names the
-/// containers and the token's JSON shape for both sides. The two inputs
+/// containers and spells the token, `msgRef` and `/push_envelope` formats
+/// for both sides. The two inputs
 /// arrive via containers both processes share (written by CabalmailKit's
 /// `PushEnrichmentStore`):
 /// - `api_url` in the App Group `UserDefaults`, and
@@ -39,7 +40,7 @@ final class NotificationService: UNNotificationServiceExtension {
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
         state.begin(content: request.content, handler: contentHandler)
-        guard let query = EnvelopeQuery(userInfo: request.content.userInfo) else {
+        guard let query = PushMessageCoordinates(userInfo: request.content.userInfo) else {
             nseLog.error("fallback: no parseable msgRef in payload")
             state.deliverFallback()
             return
@@ -81,7 +82,7 @@ final class NotificationService: UNNotificationServiceExtension {
     private static func fetchEnvelope(
         endpoint: URL,
         token: String,
-        query: EnvelopeQuery
+        query: PushMessageCoordinates
     ) async -> PushEnvelope? {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -108,47 +109,6 @@ final class NotificationService: UNNotificationServiceExtension {
         }
         return envelope
     }
-}
-
-/// The `msgRef` coordinates, parsed from the payload. `uid` is a
-/// best-effort hint; `msg_id` is authoritative — both are forwarded and
-/// `/push_envelope` resolves the real uid server-side.
-private struct EnvelopeQuery: Sendable {
-    let folder: String
-    let uid: UInt32?
-    let messageID: String?
-
-    init?(userInfo: [AnyHashable: Any]) {
-        guard
-            let ref = userInfo["msgRef"] as? [String: Any],
-            let folder = ref["folder"] as? String, !folder.isEmpty
-        else { return nil }
-        self.folder = folder
-        // 0 is the dispatch Lambda's explicit "no hint" sentinel (procmail
-        // could not read Dovecot's next-uid); map it to nil so it is never
-        // forwarded as if it were a real UID.
-        let rawUid = (ref["uid"] as? NSNumber)?.uint32Value
-        self.uid = rawUid == 0 ? nil : rawUid
-        let rawMessageID = ref["msg_id"] as? String
-        self.messageID = (rawMessageID?.isEmpty ?? true) ? nil : rawMessageID
-    }
-
-    var requestBody: [String: Any] {
-        var body: [String: Any] = ["folder": folder]
-        if let uid { body["uid"] = Int(uid) }
-        if let messageID { body["msg_id"] = messageID }
-        return body
-    }
-}
-
-/// Decoded `/push_envelope` response. `uid` is the server-resolved UID (the
-/// payload's was a pre-delivery hint); `deliver` writes it back into the
-/// notification's msgRef so the main app's actions target the right message.
-private struct PushEnvelope: Decodable, Sendable {
-    let from: String
-    let subject: String
-    let snippet: String
-    let uid: UInt32?
 }
 
 /// Deliver-once box shared between `didReceive`'s enrichment task and
@@ -182,14 +142,13 @@ private final class DeliveryState: @unchecked Sendable {
             enriched.title = envelope.from
             enriched.body = envelope.subject + "\n" + envelope.snippet
             // The payload's uid was a pre-delivery hint; the server resolved
-            // the real one by Message-ID. Rewrite msgRef so Mark as Read /
-            // Archive / Open act on the message this notification shows.
-            if let resolved = envelope.uid, resolved != 0,
-               var ref = enriched.userInfo["msgRef"] as? [String: Any] {
-                ref["uid"] = Int(resolved)
-                var info = enriched.userInfo
-                info["msgRef"] = ref
-                enriched.userInfo = info
+            // the real one by Message-ID. Patch it into msgRef, leaving the
+            // rest of the payload alone, so Mark as Read / Archive / Open act
+            // on the message this notification shows.
+            if let patched = PushMessageCoordinates.patching(
+                enriched.userInfo, resolvedUID: envelope.uid
+            ) {
+                enriched.userInfo = patched
             }
             content = enriched
         } else {
