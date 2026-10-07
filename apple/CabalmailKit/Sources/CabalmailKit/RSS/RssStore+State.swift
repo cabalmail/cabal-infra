@@ -194,6 +194,31 @@ extension RssStore {
         emit(.feeds([feedId]))
     }
 
+    /// Records a sync's progress (its since and state cursors and the time)
+    /// and leaves "load older" where it is. A feed's sync and a "Load older
+    /// items" can overlap, and each used to write back the whole row it read
+    /// when it started, putting back the other's cursor (#1938).
+    public func setSyncProgress(feedId: String, sinceCursor: String, stateCursor: String, lastSyncedAt: String) throws {
+        try database.run("""
+            INSERT INTO feed_sync (feed_id, since_cursor, state_cursor, last_synced_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT(feed_id) DO UPDATE SET since_cursor = excluded.since_cursor,
+              state_cursor = excluded.state_cursor, last_synced_at = excluded.last_synced_at
+            """, [.init(feedId), .init(sinceCursor), .init(stateCursor), .init(lastSyncedAt)])
+        emit(.feeds([feedId]))
+    }
+
+    /// Records "load older" progress and leaves the sync's cursors where
+    /// they are (`setSyncProgress`).
+    public func setOlderCursor(feedId: String, olderCursor: String, olderExhausted: Bool) throws {
+        try database.run("""
+            INSERT INTO feed_sync (feed_id, older_cursor, older_exhausted) VALUES (?, ?, ?)
+            ON CONFLICT(feed_id) DO UPDATE SET older_cursor = excluded.older_cursor,
+              older_exhausted = excluded.older_exhausted
+            """, [.init(feedId), .init(olderCursor), .init(olderExhausted)])
+        // Whether there is older history to load is the list's to show.
+        emit(.feeds([feedId]))
+    }
+
     public func itemCount(feedId: String) throws -> Int {
         try database.rows("SELECT COUNT(*) FROM items WHERE feed_id = ?", [.init(feedId)]).first?.int(0) ?? 0
     }

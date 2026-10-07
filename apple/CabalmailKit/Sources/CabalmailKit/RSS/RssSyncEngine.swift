@@ -135,8 +135,8 @@ public actor RssSyncEngine {
             try await store.upsertItems(page.items)
             received += page.items.count
             state.sinceCursor = page.items.map(\.fetchedKey).max() ?? Self.sentinelCursor
-            state.olderCursor = page.nextCursor ?? ""
-            state.olderExhausted = page.nextCursor == nil
+            try await store.setOlderCursor(feedId: subscription.feedId, olderCursor: page.nextCursor ?? "",
+                                           olderExhausted: page.nextCursor == nil)
         }
         var pages = 0
         var since = state.sinceCursor == Self.sentinelCursor ? "" : state.sinceCursor
@@ -159,8 +159,10 @@ public actor RssSyncEngine {
             if !page.nextSince.isEmpty { state.stateCursor = page.nextSince }
             if !page.hasMore { break }
         }
-        state.lastSyncedAt = RssStore.isoNow()
-        try await store.setSyncState(feedId: subscription.feedId, state)
+        // Only the sync's own cursors: a "Load older items" may have moved
+        // the older cursor since this pass read the row (#1938).
+        try await store.setSyncProgress(feedId: subscription.feedId, sinceCursor: state.sinceCursor,
+                                        stateCursor: state.stateCursor, lastSyncedAt: RssStore.isoNow())
         return received
     }
 
@@ -168,15 +170,16 @@ public actor RssSyncEngine {
     /// returns how many arrived (0 when the server has no more).
     @discardableResult
     public func loadOlder(for subscription: RssSubscription) async throws -> Int {
-        var state = try await store.syncState(feedId: subscription.feedId)
+        let state = try await store.syncState(feedId: subscription.feedId)
         guard !state.olderExhausted else { return 0 }
         let page = try await client.listItems(
             scope: .subscription(subscription.subscriptionId), filter: .all, order: .newest,
             limit: pageSize, cursor: state.olderCursor.isEmpty ? nil : state.olderCursor)
         try await store.upsertItems(page.items)
-        state.olderCursor = page.nextCursor ?? ""
-        state.olderExhausted = page.nextCursor == nil
-        try await store.setSyncState(feedId: subscription.feedId, state)
+        // Only the older cursor: a sync of this feed may have moved its own
+        // cursors since this read the row (#1938).
+        try await store.setOlderCursor(feedId: subscription.feedId, olderCursor: page.nextCursor ?? "",
+                                       olderExhausted: page.nextCursor == nil)
         return page.items.count
     }
 
