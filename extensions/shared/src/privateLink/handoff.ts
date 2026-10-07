@@ -33,7 +33,7 @@ const BLOCKED_SCHEMES = /^\s*(javascript|data|file|about|blob|vbscript):/i;
 
 /**
  * Token shape, kept in step with `PrivateLinkTokenStore.newToken()` in
- * apple/CabalmailUI/Platform/Services/PrivateLinkTokenStore.swift. Anchored and fixed-length so
+ * apple/CabalmailKit/Sources/CabalmailShared/PrivateLinkTokenStore.swift. Anchored and fixed-length so
  * no percent-encoded URL can be mistaken for one.
  */
 export const PRIVATE_LINK_TOKEN = /^[0-9a-f]{32}$/;

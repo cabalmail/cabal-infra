@@ -987,23 +987,32 @@ Rules that keep the module working:
   if the sources were compiled there, including protocol conformances
   that nothing names by symbol (Swift looks those up at run time, and an
   archive member nothing references is otherwise left out). `CabalmailUI`
-  imports CabalmailKit without linking it, and `CabalmailMacTests` and
-  `CabalmailiOSTests` depend on `CabalmailUI` with `link: false`: the
-  host app carries both modules, and a second copy splits their types
-  (`as? CabalmailError` casts fail). Any new target that links the
-  library needs the same `-force_load`.
+  imports CabalmailKit and CabalmailShared without linking them, and
+  `CabalmailMacTests` and `CabalmailiOSTests` depend on `CabalmailUI` and
+  CabalmailShared with `link: false`: the host app carries every one of
+  these modules (CabalmailShared inside the Kit), and a second copy
+  splits their types (`as? CabalmailError` casts fail). Any new target
+  that links the library needs the same `-force_load`.
 - **Asset catalogs stay in the app targets.** A static library carries no
   resources. Shared code looks assets up by name (`Image("CabalmailMark")`
   resolves against the app bundle) rather than through generated asset
   symbols, which exist only in the app modules.
-- **Four files are also compiled by path into other targets**, which do
+- **Two files are also compiled by path into the watch app**, which does
   not link the library: `Platform/HostPlatform.swift` and
-  `Platform/ConfirmationDialogPolicy.swift` into the watch app, and
-  `Platform/Services/ExtensionControlDomainStore.swift` and
-  `Platform/Services/PrivateLinkTokenStore.swift` into both Safari web
-  extensions. Moving one means updating its path in `project.yml` (and,
-  for the token store, in `extensions/shared/test/privateLink.test.ts`,
-  which reads it), and none of them may import `CabalmailUI`.
+  `Platform/ConfirmationDialogPolicy.swift`. Moving one means updating
+  its path in `project.yml`, and neither may import `CabalmailUI`. The
+  stores the Safari web extensions read are not compiled by path: they
+  live in the `CabalmailShared` module (see "Extension-shared values"
+  below), which both Safari appexes link.
+- **The Safari appex folders keep their historical names.** The native
+  handler both Safari appexes compile,
+  `SafariWebExtensionHandler.swift`, lives in
+  `apple/CabalmailMacWebExtension/` despite the name, and
+  `apple/CabalmailWebExtension/` holds only the iOS appex's `Info.plist`
+  and entitlements. Renaming them touches the source, `Info.plist` and
+  entitlement paths in `project.yml`, `.swiftlint.yml`'s folder list and
+  the changelog gate's folder list for no change in behaviour, so it waits for XcodeGen target
+  templates, which a future extension would bring.
 
 The module is sorted into feature folders, at most two levels deep.
 Loose files in a feature folder are shared by that feature's subfolders.
@@ -1034,7 +1043,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
 | `Platform/` | Small per-OS adapters: host platform, confirmation-dialog roles, the pasteboard |
-| `Platform/Services/` | Push (the app delegate and `PushRegistrar`), the watch hand-off, the stores the Safari extension reads (control domain, private-link tokens) |
+| `Platform/Services/` | Push (the app delegate and `PushRegistrar`) and the watch hand-off |
 
 A file belongs in `Shared/` only if it knows nothing about any one
 feature, or if several features use it without carrying one feature's
@@ -1046,16 +1055,20 @@ layout-level branches belong in `Shell/` and new OS adapters in
 ### Extension-shared values: the `CabalmailShared` module
 
 The app extensions don't link CabalmailKit, which keeps them small and
-keeps the Kit's resource bundle out of them. What a notification service
-extension and the app must spell identically lives instead in
-`CabalmailShared`, a second library product of the `CabalmailKit`
-package (`apple/CabalmailKit/Sources/CabalmailShared/`):
+keeps the Kit's resource bundle out of them. What an extension and the
+app must spell identically lives instead in `CabalmailShared`, a second
+library product of the `CabalmailKit` package
+(`apple/CabalmailKit/Sources/CabalmailShared/`):
 
 - `AppGroup.identifier`, the App Group whose `UserDefaults` suite the
-  apps write and the extensions read. The Safari web extensions don't
-  link the module yet: they compile `ExtensionControlDomainStore.swift`
-  by path (see "Shared app layer" above), whose `appGroupID` is still its
-  own literal.
+  apps write and the extensions read.
+- `ExtensionControlDomainStore` and `PrivateLinkTokenStore`, the two
+  stores the Safari web extensions' native handler reads: the control
+  domain the app signed in to, and the private-link token rows (#1765).
+  The app writes both. `extensions/shared/test/privateLink.test.ts` reads
+  the token store's source by path to check its token alphabet, and
+  `extensions.yml` runs that test on a pull request that changes the
+  file, so a move updates both paths.
 - `PushHandoff` and `PushTokenPayload`: where the app leaves the API URL
   and the Cognito ID token for the notification service extensions (the
   defaults key, the keychain service, account and access-group suffix),
@@ -1066,8 +1079,9 @@ How it is linked:
 
 - **The Kit depends on it**, so the apps and the watch get it inside the
   Kit and link nothing new.
-- **The two notification service extensions link the `CabalmailShared`
-  product** and import it, never the Kit. It is a static product with no
+- **The two notification service extensions and the two Safari web
+  extensions link the `CabalmailShared` product** and import it, never
+  the Kit. It is a static product with no
   resources, so its code lands in each extension's own binary and
   nothing new is embedded or signed.
 - **Keep it Foundation only**, with no resources, no logging (the

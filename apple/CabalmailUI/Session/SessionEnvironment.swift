@@ -1,6 +1,7 @@
 import Foundation
 import UserNotifications
 import CabalmailKit
+import CabalmailShared
 
 // The seams `SessionManager` reaches the world through: the environment its
 // lifecycle builds clients in, and the platform hooks a session starts and
