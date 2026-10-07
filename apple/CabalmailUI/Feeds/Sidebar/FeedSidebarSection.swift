@@ -75,20 +75,9 @@ struct FeedSidebarRowLabel: View {
                                  : AnyShapeStyle(Color.primary.opacity(0.7)))
             Spacer(minLength: 4)
             healthBadge
-            // Same rule as the mail rows (`FolderCountBadge`): nothing is
-            // drawn when the mode's count is zero, so no empty capsule.
-            if let badge = FolderCountBadge.text(display: preferences.folderCountDisplay,
-                                                 unread: row.unread, total: row.total) {
-                Text(badge)
-                    .font(.caption.monospacedDigit())
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Color.secondary.opacity(0.2)))
-                    .accessibilityLabel(
-                        FolderCountBadge.accessibilityLabel(display: preferences.folderCountDisplay,
-                                                            unread: row.unread, total: row.total) ?? badge
-                    )
-            }
+            // The mail rows' capsule and rule (`CountBadge`): nothing is
+            // drawn when the mode hides the count.
+            CountBadge(display: preferences.folderCountDisplay, unread: row.unread, total: row.total)
         }
         .padding(.leading, CGFloat(row.depth) * 14)
         .contentShape(Rectangle())
