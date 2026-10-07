@@ -109,6 +109,25 @@ final class BimiUrlCacheTests: XCTestCase {
         XCTAssertEqual(requests, 1)
     }
 
+    /// The signing failure's `"Error"` (or any URL that isn't absolute
+    /// http(s) with a host) is a failed lookup, not "no logo" (#1804): not
+    /// cached, so the next lookup asks again and caches the real answer.
+    func testAnUnfollowableURLIsAskedAgainAndItsAnswerThenCached() async {
+        let transport = BimiTransport([.respond(200, #"{"url": "Error"}"#), .respond(200, Self.logoBody)])
+        let cache = BimiUrlCache()
+        let client = makeClient(transport)
+
+        let first = await cache.url(forDomain: "signing-failed.example", using: client)
+        let second = await cache.url(forDomain: "signing-failed.example", using: client)
+        let third = await cache.url(forDomain: "signing-failed.example", using: client)
+
+        XCTAssertNil(first)
+        XCTAssertEqual(second, Self.logoURL)
+        XCTAssertEqual(third, Self.logoURL)
+        let requests = await transport.requests
+        XCTAssertEqual(requests, 2)
+    }
+
     /// A failure is forgotten for its own domain only: another domain's
     /// cached answer stays put.
     func testFailedLookupLeavesOtherDomainsCached() async {

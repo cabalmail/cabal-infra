@@ -223,7 +223,7 @@ extension URLSessionApiClient {
         let data = try await send(httpRequest, expectedStatuses: 200..<300)
         struct Payload: Decodable { let url: String }
         let decoded = try decodeReply(Payload.self, from: data, for: httpRequest)
-        guard let url = URL(string: decoded.url) else {
+        guard let url = URL(followableReplyString: decoded.url) else {
             throw CabalmailError.decoding("fetch_attachment returned invalid url")
         }
         return url
@@ -249,7 +249,7 @@ extension URLSessionApiClient {
         let data = try await send(request, expectedStatuses: 200..<300)
         struct Payload: Decodable { let url: String }
         let decoded = try decodeReply(Payload.self, from: data, for: request)
-        guard let url = URL(string: decoded.url) else {
+        guard let url = URL(followableReplyString: decoded.url) else {
             throw CabalmailError.decoding("fetch_inline_image returned invalid url")
         }
         return url
@@ -356,7 +356,7 @@ extension URLSessionApiClient {
             )
         }
         return try decoded.uploads.map { entry in
-            guard let url = URL(string: entry.url) else {
+            guard let url = URL(followableReplyString: entry.url) else {
                 throw CabalmailError.decoding("upload_url returned an invalid URL")
             }
             return AttachmentUpload(key: entry.key, url: url)

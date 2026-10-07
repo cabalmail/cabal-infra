@@ -114,28 +114,29 @@ final class ApiBackedImapClientFetchBodyTests: XCTestCase {
         }
     }
 
-    /// Pins current behaviour, which looks like a defect: when S3 signing
-    /// fails, `sign_url` answers the literal string "Error" in `message_raw`.
-    /// `URL(string: "Error")` is a valid relative URL, so the Kit does not
-    /// treat it as missing; it issues a second, host-less GET to "Error". The
-    /// production `URLSessionHTTPTransport` refuses that as
-    /// `URLError.unsupportedURL`, so the reader shows "Couldn't reach the
-    /// server. unsupported URL." for what was a server-side signing failure.
-    /// Tracked in #1804.
-    func testSignFailureMarkerIsFollowedAsARelativeURL() async throws {
-        let harness = FetchBodyHarness(api: [.json(200, FetchBodyFixture.lambdaBody(messageRawToken: #""Error""#))])
+    /// When S3 signing fails, `sign_url` answers the literal string "Error"
+    /// in `message_raw`. It reads as no presigned URL: one request, the
+    /// missing-URL copy, and no second GET (#1804). Before, `URL(string:
+    /// "Error")` parsed as a relative URL and the Kit followed it with a
+    /// host-less GET, which `URLSessionHTTPTransport` refused as
+    /// `unsupportedURL`, so the reader said "Couldn't reach the server.
+    /// unsupported URL." for a server-side signing failure. Scheme-less,
+    /// host-less and non-HTTP strings read the same way.
+    func testSignFailureMarkerReadsAsAMissingURLWithoutASecondRequest() async throws {
+        for token in [#""Error""#, #""/relative/path""#, #""https:///no-host""#, #""ftp://s3.example/raw""#] {
+            let harness = FetchBodyHarness(api: [.json(200, FetchBodyFixture.lambdaBody(messageRawToken: token))])
 
-        let error = await harness.fetchError()
+            let error = await harness.fetchError()
 
-        XCTAssertEqual(error as? FetchBodyUnroutedRequest, FetchBodyUnroutedRequest(url: "Error"),
-                       "the transport's own error for the relative GET passes through")
-        let requests = await harness.wire.requests
-        XCTAssertEqual(requests.count, 2)
-        let followed = try XCTUnwrap(requests.last?.url)
-        XCTAssertEqual(followed.absoluteString, "Error")
-        XCTAssertNil(followed.host)
-        XCTAssertNil(followed.scheme)
-        XCTAssertNil(requests.last?.value(forHTTPHeaderField: "Authorization"))
+            XCTAssertEqual(error as? CabalmailError, .decoding("fetch_message returned no presigned URL"), token)
+            XCTAssertEqual(
+                error?.localizedDescription,
+                "Couldn't read the server's reply. fetch_message returned no presigned URL.",
+                token
+            )
+            let requests = await harness.wire.requests
+            XCTAssertEqual(requests.count, 1, "\(token): no second GET")
+        }
     }
 
     func testSequentialFetchesRepeatBothHopsBelowTheBodyCache() async throws {
