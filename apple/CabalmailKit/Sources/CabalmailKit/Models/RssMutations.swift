@@ -87,19 +87,21 @@ public struct RssFolderUpdate: Sendable, Hashable {
     public var parentFolderId: String?
     public var displayOrder: Int?
     public var defaultFilter: RssItemFilter?
+    public var orderingMode: RssOrderingMode?
 
     public init(
         name: String? = nil, parentFolderId: String? = nil, displayOrder: Int? = nil,
-        defaultFilter: RssItemFilter? = nil
+        defaultFilter: RssItemFilter? = nil, orderingMode: RssOrderingMode? = nil
     ) {
         self.name = name
         self.parentFolderId = parentFolderId
         self.displayOrder = displayOrder
         self.defaultFilter = defaultFilter
+        self.orderingMode = orderingMode
     }
 
     public var isEmpty: Bool {
-        name == nil && parentFolderId == nil && displayOrder == nil && defaultFilter == nil
+        name == nil && parentFolderId == nil && displayOrder == nil && defaultFilter == nil && orderingMode == nil
     }
 }
 
@@ -112,6 +114,7 @@ extension RssFolder {
         if let value = update.parentFolderId { folder.parentFolderId = value }
         if let value = update.displayOrder { folder.displayOrder = value }
         if let value = update.defaultFilter { folder.defaultFilter = value }
+        if let value = update.orderingMode { folder.orderingMode = value }
         return folder
     }
 }

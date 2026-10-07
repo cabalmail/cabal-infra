@@ -296,23 +296,27 @@ public struct RssFolder: Sendable, Codable, Hashable, Identifiable {
     /// The filter pill this folder's list opens on (sticky, like a
     /// subscription's `defaultFilter`).
     public var defaultFilter: RssItemFilter
+    /// The order this folder's own merged list opens in (sticky, like a
+    /// subscription's `orderingMode`). It does not change the feeds inside.
+    public var orderingMode: RssOrderingMode
 
     public var id: String { folderId }
 
     public init(
         folderId: String, parentFolderId: String = "", name: String, displayOrder: Int = 0,
-        defaultFilter: RssItemFilter = .defaultForFeeds
+        defaultFilter: RssItemFilter = .defaultForFeeds, orderingMode: RssOrderingMode = .newestFirst
     ) {
         self.folderId = folderId
         self.parentFolderId = parentFolderId
         self.name = name
         self.displayOrder = displayOrder
         self.defaultFilter = defaultFilter
+        self.orderingMode = orderingMode
     }
 
     private enum CodingKeys: String, CodingKey {
         case folderId = "folder_id", parentFolderId = "parent_folder_id", name, displayOrder = "display_order"
-        case defaultFilter = "default_filter"
+        case defaultFilter = "default_filter", orderingMode = "ordering_mode"
     }
 
     public init(from decoder: Decoder) throws {
@@ -323,6 +327,9 @@ public struct RssFolder: Sendable, Codable, Hashable, Identifiable {
         displayOrder = try container.decodeIfPresent(Int.self, forKey: .displayOrder) ?? 0
         let filterRaw = try container.decodeIfPresent(String.self, forKey: .defaultFilter) ?? ""
         defaultFilter = RssItemFilter(rawValue: filterRaw) ?? .defaultForFeeds
+        // A server from before folders had an order sends none: newest first.
+        let orderingRaw = try container.decodeIfPresent(String.self, forKey: .orderingMode) ?? ""
+        orderingMode = RssOrderingMode(rawValue: orderingRaw) ?? .newestFirst
     }
 }
 
