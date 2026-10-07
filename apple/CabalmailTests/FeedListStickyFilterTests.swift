@@ -34,7 +34,7 @@ final class FeedListStickyFilterTests: XCTestCase {
         let model = FeedItemListViewModel(
             scope: scope, subscription: subscription, folder: folder,
             client: try TestFixtures.makeClient(imap: FakeImapClient()),
-            preferences: preferences, defaults: persister, bus: FeedStateBus()
+            preferences: preferences, defaults: persister
         )
         return (model, preferences)
     }

@@ -191,6 +191,8 @@ struct FolderListView: View {
             }
         }
         .task { await loadFeedModelIfNeeded() }
+        // The Feeds section's tree and badges follow the store while it is up.
+        .task(id: feedModel.map(ObjectIdentifier.init)) { await feedModel?.observe() }
         // "Folders" (not "Mailboxes" — the mailbox is the per-user singleton;
         // this list is its folders). In the Mail sidebar the visible text is
         // suppressed and the Cabalmail mark stands in (see `MailRootView`);

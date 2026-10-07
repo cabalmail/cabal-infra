@@ -1019,7 +1019,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu |
 | `Mail/Reader/` | `MessageDetailView`, `MessageDetailViewModel` and their extension files: the header, the toolbar and its policies, attachments, calendar invites, View Source |
 | `Mail/Search/` | The search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
-| `Feeds/` | The Feeds tab root, the feed change bus, feed health and per-feed web storage |
+| `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
 | `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (router, slot registry, scene) |

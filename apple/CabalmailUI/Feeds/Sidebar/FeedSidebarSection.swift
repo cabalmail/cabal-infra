@@ -161,14 +161,16 @@ struct FeedSidebarList: View {
         .task {
             if model == nil, let client = appState.client {
                 management = FeedManagementViewModel(client: client)
-                let model = FeedSidebarViewModel(client: client)
-                self.model = model
-                await model.load()
+                model = FeedSidebarViewModel(client: client)
             }
             // Every appearance, not only the first: a refresh cut short as
             // the sidebar left (a push, a tab switch) is owed, and this is
             // where it is paid (#1908). A no-op once one has finished.
             await model?.refreshIfNeeded()
+        }
+        // The tree and badges follow the store while the sidebar is up.
+        .task(id: model.map(ObjectIdentifier.init)) {
+            await model?.observe()
         }
     }
 

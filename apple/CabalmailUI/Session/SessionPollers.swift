@@ -65,8 +65,8 @@ final class SessionPollers {
     }
 
     /// Every fifteen minutes while signed in: pull the catalog and each
-    /// subscription's new items, drain the pending mutation queue, then tell
-    /// the open feed views to re-read the store. The first pass runs at once,
+    /// subscription's new items and drain the pending mutation queue; the
+    /// open feed views follow the store's changes. The first pass runs at once,
     /// so the Feeds section is current before the user opens it. Idempotent:
     /// a second call while the task is running is a no-op. The server's
     /// fetcher decides how often a feed is actually fetched; this only
@@ -97,8 +97,5 @@ final class SessionPollers {
         _ = await engine.syncAll()
         // A subscription removed on another device takes its site data along.
         await FeedWebStorage.dropDeparted(from: engine.store)
-        // The store changed under the open views: badges re-read their
-        // counts and a list still on its first page reloads.
-        FeedStateBus.shared.post()
     }
 }
