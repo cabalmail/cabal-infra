@@ -131,7 +131,13 @@ extension URLSessionApiClient {
         struct Payload: Decodable { let url: String? }
         let decoded = try? JSONDecoder().decode(Payload.self, from: data)
         guard let raw = decoded?.url, !raw.isEmpty else { return nil }
-        return URL(string: raw)
+        // An answer that isn't a followable URL (the signing failure's
+        // "Error", #1804) is a failed lookup, not "no logo": thrown, so
+        // `BimiUrlCache` asks again rather than caching a blank avatar.
+        guard let url = URL(followableReplyString: raw) else {
+            throw CabalmailError.decoding("fetch_bimi returned invalid url")
+        }
+        return url
     }
 
     public func listMyDomains() async throws -> [String] {
