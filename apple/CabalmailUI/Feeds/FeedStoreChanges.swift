@@ -36,28 +36,34 @@ enum FeedStoreChanges {
     /// next one, so a burst (a sync's pages and cursors, a catalog and its
     /// feeds) costs one re-read rather than one per write. Returns when the
     /// stream ends (the store went) or the calling task is cancelled (the
-    /// view went). Both loops are that task's children, so nothing outlives
-    /// it and no view model owns a task.
+    /// view went). The collecting loop is that task's child, so nothing
+    /// outlives it and no view model owns a task.
     static func follow(
         _ changes: AsyncStream<RssStore.Change>,
         apply: (FeedChangeBatch) async -> Void
     ) async {
         let pending = PendingFeedChanges()
         let (ready, signal) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                for await change in changes {
-                    pending.batch.add(change)
-                    signal.yield()
-                }
-                signal.finish()
-            }
-            for await _ in ready {
-                let batch = pending.take()
-                if !batch.isEmpty { await apply(batch) }
-            }
-            group.cancelAll()
+        async let collecting: Void = collect(changes, into: pending, signal: signal)
+        for await _ in ready {
+            let batch = pending.take()
+            if !batch.isEmpty { await apply(batch) }
         }
+        await collecting
+    }
+
+    /// The other loop: merges each change into the pending batch and says a
+    /// batch is ready, until the stream ends or the task is cancelled.
+    private static func collect(
+        _ changes: AsyncStream<RssStore.Change>,
+        into pending: PendingFeedChanges,
+        signal: AsyncStream<Void>.Continuation
+    ) async {
+        for await change in changes {
+            pending.batch.add(change)
+            signal.yield()
+        }
+        signal.finish()
     }
 }
 
