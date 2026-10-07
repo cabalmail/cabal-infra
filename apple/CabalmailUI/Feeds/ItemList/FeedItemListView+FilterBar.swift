@@ -11,12 +11,14 @@ extension FeedItemListView {
         @Bindable var model = model
         VStack(spacing: 6) {
             HStack(spacing: 6) {
-                // The message list's pills, without counts.
+                // The message list's pills, counting the scope's items as
+                // mail's count the folder's.
                 FilterPillStrip {
                     ForEach(RssItemFilter.allCases) { filter in
                         FilterPill(
                             label: filterLabel(filter),
                             isOn: model.filter == filter,
+                            count: model.filterCounts?.count(for: filter),
                             identifier: "feed.filter.\(filter.rawValue)"
                         ) {
                             model.selectFilter(filter)
