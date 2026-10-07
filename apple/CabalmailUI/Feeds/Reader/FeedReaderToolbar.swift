@@ -14,9 +14,17 @@ struct FeedReaderToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         #if os(iOS)
-        ForEach(FeedReaderToolbarLayout.menuBar, id: \.self) { action in
-            ToolbarItem { barItem(action) }
-        }
+        // The View menu is ranked above the other items in the system's
+        // overflow (iOS 27; an iPhone Duo's vertical strip folds far sooner
+        // than a horizontal bar): it is the only touch route to reader view,
+        // remote content and the article, as the mail reader's menu is the
+        // only route to its demoted actions.
+        // `FeedReaderToolbarLayoutTests` pins the list as Read, Flag, View.
+        let actions = FeedReaderToolbarLayout.menuBar
+        ToolbarItem { barItem(actions[0]) }
+        ToolbarItem { barItem(actions[1]) }
+        ToolbarItem { barItem(actions[2]) }
+            .keepsInBarFirst()
         #else
         let actions = FeedReaderToolbarLayout.wideBar(
             showingArticle: model.showingArticle, hasArticle: model.articleURL != nil
