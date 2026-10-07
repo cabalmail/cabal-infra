@@ -102,9 +102,14 @@ final class FeedItemListSyncCancellationTests: XCTestCase {
 
         XCTAssertEqual(model.items.map(\.itemId), ["i1"])
         let announced = await bufferedElements(changes)
-        XCTAssertEqual(announced.count, 1, "the feed that finished before the cancel, not the one cut short")
-        guard case .feeds(let feeds)? = announced.first else { return XCTFail("\(announced)") }
-        XCTAssertEqual(feeds.count, 1)
+        var feeds: Set<String> = []
+        for change in announced {
+            guard case .feeds(let ids) = change else { return XCTFail("\(announced)") }
+            feeds.formUnion(ids)
+        }
+        // A feed's sync may announce more than once (its first page, then its
+        // cursors); what matters is which feeds it named.
+        XCTAssertEqual(feeds.count, 1, "the feed that finished before the cancel, not the one cut short: \(announced)")
     }
 
     /// The control: an uncancelled failure is still shown.
