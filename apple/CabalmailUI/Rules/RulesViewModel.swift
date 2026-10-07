@@ -101,9 +101,10 @@ final class RulesViewModel {
             // failure: painting it would tell the user the rules couldn't be
             // reached when nothing was ever asked of the server. Stay in the
             // loading state with the attempt unrecorded so the re-created
-            // view's `.task` retries (#1328). `URLSessionHTTPTransport`
-            // normalizes the escaping error to `CabalmailError.network`, so
-            // the cancellation is read off the Task, not off the error.
+            // view's `.task` retries (#1328). The cancellation is read off
+            // the Task, not off the error: `URLSessionHTTPTransport` reports
+            // it as `CabalmailError.cancelled` (#1815), and as `.network`
+            // before that.
             if Task.isCancelled || error is CancellationError {
                 return
             }

@@ -61,6 +61,55 @@ final class HTTPTransportCancellationTests: XCTestCase {
         XCTAssertEqual(ScriptedURLProtocol.callCount, 2)
     }
 
+    /// A launch whose task is cancelled while config.json is in flight (its
+    /// window closed during the splash) still gets the cached copy, as it did
+    /// when the cancel read as `.network` (#1779). Without the fallback the
+    /// restore would land on the sign-in form, and a borrower waiting on the
+    /// same build would fail with it.
+    func testACancelledConfigFetchStillGetsTheCachedCopy() async throws {
+        let (cache, cleanUp) = try Self.configurationCache()
+        defer { cleanUp() }
+        let cached = TestFixtures.makeConfiguration()
+        cache.save(cached, controlDomain: "cabalmail.example")
+        let transport = Self.transport(over: HoldingURLProtocol.self)
+        let launch = Task {
+            try await ConfigLoader.load(controlDomain: "cabalmail.example", transport: transport, cache: cache)
+        }
+        try await waitUntil { HoldingURLProtocol.started == 1 }
+
+        launch.cancel()
+        let loaded = try await launch.value
+
+        XCTAssertEqual(loaded, cached)
+    }
+
+    /// The control: with nothing cached, the same cancel is rethrown.
+    func testACancelledConfigFetchWithNothingCachedThrowsCancelled() async throws {
+        let (cache, cleanUp) = try Self.configurationCache()
+        defer { cleanUp() }
+        let transport = Self.transport(over: HoldingURLProtocol.self)
+        let launch = Task { () -> Error? in
+            do {
+                _ = try await ConfigLoader.load(controlDomain: "cabalmail.example", transport: transport, cache: cache)
+                return nil
+            } catch {
+                return error
+            }
+        }
+        try await waitUntil { HoldingURLProtocol.started == 1 }
+
+        launch.cancel()
+        let error = await launch.value
+
+        XCTAssertEqual(error as? CabalmailError, .cancelled)
+    }
+
+    private static func configurationCache() throws -> (ConfigurationCache, () -> Void) {
+        let suite = "HTTPTransportCancellationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        return (ConfigurationCache(defaults: defaults), { defaults.removePersistentDomain(forName: suite) })
+    }
+
     private static func transport(over protocolClass: URLProtocol.Type) -> URLSessionHTTPTransport {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [protocolClass]

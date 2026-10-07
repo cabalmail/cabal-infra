@@ -9,8 +9,8 @@ import CabalmailKit
 // with nothing left to reload. The load now runs on an unstructured,
 // model-owned task (the `refreshFromPull` pattern), so it completes even when
 // the caller's task is cancelled. `FakeImapClient` mirrors the production
-// transport by failing with `network("cancelled")` when the caller's Task is
-// cancelled.
+// transport by failing with `.cancelled` (`network("cancelled")` before
+// #1815) when the caller's Task is cancelled.
 @MainActor
 final class MessageListInitialLoadTests: XCTestCase {
 
