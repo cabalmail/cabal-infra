@@ -76,6 +76,16 @@ ALL_FEEDS_FILTER_KEY = 'filter:feeds:all'
 ALL_FEEDS_FILTER_VALUES = {'all', 'unread', 'favorite'}
 MAX_MAIL_FILTER_FOLDER_LENGTH = 512
 
+# Sticky list order, under the `order:` prefix like the pills under `filter:`:
+#   order:feeds:all -> one of the rss ordering modes (the all-feeds list)
+# A single feed's or feed folder's order sticks on its own row instead
+# (`ordering_mode`, rss_api.py); the all-feeds scope has no row. Same per-key
+# merge as the pills. Only the all-feeds list is known so far.
+ORDER_PREFIX = 'order:'
+ALL_FEEDS_ORDER_KEY = 'order:feeds:all'
+ALL_FEEDS_ORDER_VALUES = {'newest_first', 'oldest_first',
+                          'newest_day_oldest_within', 'oldest_day_newest_within'}
+
 # The signature lands in the outgoing message body (not a header), so newlines
 # and tabs are legitimate; only other control characters are rejected. Capped
 # so a runaway value can't bloat every row.
@@ -198,6 +208,10 @@ def _validate_app(value):
             cleaned[key] = palette
         elif key.startswith(FILTER_PREFIX):
             if not _valid_list_filter(key, val):
+                return None
+            cleaned[key] = val
+        elif key.startswith(ORDER_PREFIX):
+            if key != ALL_FEEDS_ORDER_KEY or val not in ALL_FEEDS_ORDER_VALUES:
                 return None
             cleaned[key] = val
         else:

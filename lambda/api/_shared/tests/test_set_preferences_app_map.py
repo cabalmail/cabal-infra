@@ -72,6 +72,26 @@ class AppMap(unittest.TestCase):
         self.assertEqual(call({'filter:feeds:sub-1': 'all'})[0], 400)
         self.assertEqual(call({'filter:other': 'all'})[0], 400)
 
+    def test_all_feeds_order_takes_the_feed_orderings(self):
+        status, body = call({'order:feeds:all': 'oldest_day_newest_within'})
+        self.assertEqual((status, body['app']), (200, {'order:feeds:all': 'oldest_day_newest_within'}))
+        self.assertEqual(call({'order:feeds:all': 'oldest'})[0], 400)
+        # Only the all-feeds list lives here; a feed's or folder's order is
+        # on its own row, and no mail list has an order key yet.
+        self.assertEqual(call({'order:feeds:sub-1': 'oldest_first'})[0], 400)
+        self.assertEqual(call({'order:mail:INBOX': 'oldest_first'})[0], 400)
+
+    def test_all_feeds_orderings_match_the_feed_rows(self):
+        # set_preferences ships without rss_api, so the four modes are
+        # restated here; they must stay the rows' ordering_mode values.
+        rss_api = os.path.join(os.path.dirname(__file__), '..', 'rss_api.py')
+        with open(rss_api, encoding='utf-8') as handle:
+            source = handle.read()
+        start = source.index('ORDERING_MODES = (')
+        modes = source[start:source.index(')', start)]
+        self.assertEqual(MOD.ALL_FEEDS_ORDER_VALUES,
+                         {m.strip(" '\n") for m in modes.split('(', 1)[1].split(',') if m.strip(" '\n")})
+
     def test_mail_folder_filters_merge_per_key(self):
         status, body = call({'filter:mail:INBOX': 'unread', 'filter:mail:Archive/2026': 'flagged'})
         self.assertEqual(status, 200)

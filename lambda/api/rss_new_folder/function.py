@@ -2,12 +2,13 @@
 
 Body: {"name": "...", "parent_folder_id": "..."?, "display_order": n?}
 
-The folder's list opens on the Unread pill until the user picks another
-(`default_filter`, sticky through /rss_update_folder).
+The folder's list opens on the Unread pill, newest first, until the user
+picks another (`default_filter` and `ordering_mode`, sticky through
+/rss_update_folder).
 '''
 import uuid
-from rss_api import (ApiError, DEFAULT_ITEM_FILTER, MAX_TITLE_LENGTH, body_of,  # pylint: disable=import-error
-                     folders, guarded, ok, serialize_folder, username)
+from rss_api import (ApiError, DEFAULT_ITEM_FILTER, MAX_TITLE_LENGTH, ORDERING_MODES,  # pylint: disable=import-error
+                     body_of, folders, guarded, ok, serialize_folder, username)
 
 
 @guarded
@@ -25,6 +26,7 @@ def handler(event, _context):
         'name': name,
         'display_order': display_order(body.get('display_order')),
         'default_filter': DEFAULT_ITEM_FILTER,
+        'ordering_mode': ORDERING_MODES[0],
     }
     if parent:
         row['parent_folder_id'] = parent
