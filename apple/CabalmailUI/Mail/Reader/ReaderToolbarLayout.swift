@@ -20,16 +20,9 @@ enum ReaderToolbarAction: String, CaseIterable {
 
 /// Which reader actions each platform's bar draws and which ones ride a menu.
 /// Pure, so the layout policy is an enforced invariant instead of a comment
-/// that goes stale under a new SDK.
-///
-/// On the touch platforms the bar sizes itself to its content, and past a
-/// certain item count the system takes over: on the iOS 27 SDK it silently
-/// folds the tail into its own `ToolbarOverflowBarButtonItem`, which swallowed
-/// Reader view and Archive/Delete Forever outright and nested our `…` menu a
-/// tap deeper. Seven items fit on the iOS 26 SDK with about 2pt to spare at
-/// 402pt (measured), so the previous ceiling was never a ceiling — it was the
-/// bar being exactly full. Demoting to `capacity` keeps every action
-/// addressable regardless of which SDK compacts at what width.
+/// that goes stale under a new SDK. The budgets and the placement are
+/// `ReaderToolbarPolicy`'s, shared with the feed reader; the names below
+/// forward to it.
 ///
 /// macOS turned out not to be "unaffected in its roomy top toolbar" after
 /// all: below ~1300pt of window AppKit folds the toolbar's *trailing* items
@@ -39,22 +32,13 @@ enum ReaderToolbarAction: String, CaseIterable {
 /// `macToolbar` orders every action by reverse demotion priority and lets the
 /// system popup do the demoting in exactly that order.
 enum ReaderToolbarLayout {
-    /// Items the bottom bar draws before the system starts compacting —
-    /// measured on the iOS 27 SDK at 402pt, where four app buttons plus the
-    /// system's overflow control were what rendered. Bottom bar only: the
-    /// compact navigation bar also seats the back button and has its own
-    /// budget, `topBarCapacity`.
-    static let capacity = 5
+    /// `ReaderToolbarPolicy.capacity`: items the bottom bar draws before the
+    /// system starts compacting.
+    static let capacity = ReaderToolbarPolicy.capacity
 
-    /// Items the compact navigation bar carries beside the back button.
-    /// Not measured on a device: derived from the bottom bar's five slots at
-    /// 402pt on the iOS 27 SDK, less one for the back button, and from the
-    /// feed reader, whose three items plus a title are known to fit. The iOS
-    /// 27 SDK pads each bar item wider than 26 did, and anything past the
-    /// budget folds into a system overflow that this repo has found inert
-    /// (#1626, #1670), so the set stays at four rather than reusing the
-    /// bottom bar's five.
-    static let topBarCapacity = 4
+    /// `ReaderToolbarPolicy.topBarCapacity`: items the compact navigation bar
+    /// carries beside the back button.
+    static let topBarCapacity = ReaderToolbarPolicy.topBarCapacity
 
     /// What the compact navigation bar gives up to stay inside
     /// `topBarCapacity`, on top of `demotedToOverflow`: the overflow menu
@@ -69,12 +53,9 @@ enum ReaderToolbarLayout {
     /// whenever the pane is wide enough — see `ownBar(leading:paneWidth:)`.
     static let demotedToOverflow: [ReaderToolbarAction] = [.readerMode, .remoteContent]
 
-    /// Narrowest pane at which the reader's own bar draws all seven actions.
-    /// Derived from the density that shipped on the iPhone system bar — five
-    /// items across the measured 402pt is ~80pt of bar per item — so seven
-    /// items must have at least that much room before the demoted toggles
-    /// come back.
-    static let fullSetMinWidth: CGFloat = 560
+    /// `ReaderToolbarPolicy.fullSetMinWidth`: the narrowest pane at which
+    /// the reader's own bar draws all seven actions.
+    static let fullSetMinWidth = ReaderToolbarPolicy.fullSetMinWidth
 
     /// Actions that are first-class toolbar buttons on macOS but menu rows in
     /// the reader's own `…` menu on the touch platforms, which have no room
@@ -106,38 +87,14 @@ enum ReaderToolbarLayout {
         ]
     }
 
-    /// Where the reader's touch action set lives.
-    enum Placement: Equatable {
-        /// Trailing items of the navigation bar, the way the feed reader
-        /// draws its controls. Compact width, where the section tab bar
-        /// owns the bottom edge.
-        case topBar
-        /// A system `.bottomBar` toolbar group (regular width before iOS 27).
-        case bottomBar
-        /// The reader's own bar pinned under the reading pane (regular width
-        /// on iOS 27 and later).
-        case ownBar
-    }
+    /// Where the reader's touch action set lives (`ReaderToolbarPolicy`).
+    typealias Placement = ReaderToolbarPolicy.Placement
 
-    /// Which bar carries the touch action set.
-    ///
-    /// Compact width puts the actions in the navigation bar so the section
-    /// tab bar can stay on screen while a message is open, matching the feed
-    /// reader. The reader used to hide the tab bar and take the bottom edge
-    /// for a `.bottomBar` group, which left the reader as the one screen
-    /// without the Mail / Feeds / Addresses / Settings tabs.
-    ///
-    /// At regular width there is no section tab bar, and the bottom edge
-    /// stays the actions' home. A `.bottomBar` group in a
-    /// `NavigationSplitView`'s detail column attaches to that column's
-    /// navigation container on the iOS 26 SDK and to the *window* on iOS 27
-    /// (measured both ways; an explicit `NavigationStack` around the column
-    /// does not move it back). That spreads the reader's actions across the
-    /// list column too, so Reply and Mark-as-read render under the message
-    /// list they don't act on; iOS 27 therefore draws the pane-scoped bar.
+    /// Which bar carries the mail reader's touch action set:
+    /// `ReaderToolbarPolicy.placement(for: .mail, ...)`, which explains the
+    /// choice.
     static func placement(isRegularWidth: Bool, isOS27OrLater: Bool) -> Placement {
-        guard isRegularWidth else { return .topBar }
-        return isOS27OrLater ? .ownBar : .bottomBar
+        ReaderToolbarPolicy.placement(for: .mail, isRegularWidth: isRegularWidth, isOS27OrLater: isOS27OrLater)
     }
 
     /// Compact navigation-bar items, in drawn order. The view draws each as
