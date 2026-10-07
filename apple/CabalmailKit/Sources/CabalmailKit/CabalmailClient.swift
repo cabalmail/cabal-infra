@@ -160,8 +160,8 @@ public actor CabalmailClient {
             outbox: outbox,
             folderStateCache: folderState,
             spotlightIndexer: spotlight,
+            rss: api,
             rssStore: rssStore,
-            rssSync: rssStore.map { RssSyncEngine(client: api, store: $0) },
             observeReachability: true
         )
     }
@@ -182,8 +182,8 @@ public actor CabalmailClient {
         outbox: Outbox,
         folderStateCache: FolderStateCache,
         spotlightIndexer: SpotlightIndexer?,
+        rss: RssClient?,
         rssStore: RssStore?,
-        rssSync: RssSyncEngine?,
         observeReachability: Bool
     ) {
         self.configuration = configuration
@@ -197,9 +197,10 @@ public actor CabalmailClient {
         self.outbox = outbox
         self.folderStateCache = folderStateCache
         self.spotlightIndexer = spotlightIndexer
-        self.rss = apiClient as? RssClient
+        self.rss = rss
         self.rssStore = rssStore
-        self.rssSync = rssSync
+        // Built from the same feed client, so the two can't disagree.
+        self.rssSync = rss.flatMap { rss in rssStore.map { RssSyncEngine(client: rss, store: $0) } }
         self.metricKitCollector = .shared
         if let spotlightIndexer {
             // Feed the indexer from the envelope cache's change stream until
