@@ -10,8 +10,10 @@ import CabalmailKit
 /// last chose for this feed (`RssSubscription.defaultFilter`), folder
 /// (`RssFolder.defaultFilter`), or the all-feeds list
 /// (`Preferences.rssAllFeedsFilter`) -- Unread until then -- and a tap
-/// writes the pill back there (`selectFilter`). The rows sync through the
-/// server, so the choice follows the account across devices.
+/// writes the pill back there (`selectFilter`). A single feed's order is
+/// sticky the same way (`RssSubscription.orderingMode`, `selectOrdering`).
+/// The rows sync through the server, so the choices follow the account
+/// across devices.
 ///
 /// Everything the list shows comes from `RssStore`; the network only runs
 /// in `sync()` (fresh items) and `loadOlder()` (history), both of which
@@ -26,6 +28,8 @@ final class FeedItemListViewModel {
     var filter: RssItemFilter {
         didSet { Task { await reload() } }
     }
+    /// The active order. Set through `selectOrdering` from the Order menu;
+    /// the view reloads when it changes.
     var ordering: RssOrderingMode
     var searchQuery = "" {
         didSet { Task { await reload() } }
@@ -72,7 +76,7 @@ final class FeedItemListViewModel {
         self.preferences = preferences
         self.defaults = defaults ?? engine
         self.bus = bus
-        self.ordering = subscription?.orderingMode ?? .newestFirst
+        self.ordering = FeedListOrderingPolicy.initial(subscription: subscription)
         self.filter = FeedListFilterPolicy.initial(scope: scope, subscription: subscription, folder: folder,
                                                    allFeedsFilter: preferences.rssAllFeedsFilter)
         bus.subscribe(self) { [weak self] change in self?.apply(change) }
@@ -89,23 +93,49 @@ final class FeedItemListViewModel {
         case .all:
             preferences.rssAllFeedsFilter = filter
         case .subscription:
-            guard let subscription, let defaults,
+            guard let subscription,
                   let update = FeedListFilterPolicy.stickyUpdate(for: subscription, filter: filter)
             else { return }
-            self.subscription = subscription.applying(update)
-            Task { [bus] in
-                _ = try? await defaults.updateSubscription(subscription, update)
-                bus.postCatalogChanged()
-            }
+            persist(update, to: subscription)
         case .folder:
-            guard let folder, let defaults,
+            guard let folder,
                   let update = FeedListFilterPolicy.stickyUpdate(for: folder, filter: filter)
             else { return }
-            self.folder = folder.applying(update)
-            Task { [bus] in
-                _ = try? await defaults.updateFolder(folder, update)
-                bus.postCatalogChanged()
-            }
+            persist(update, to: folder)
+        }
+    }
+
+    /// An Order menu pick: applies the order, then makes it the order this
+    /// feed's list opens on, on every device, through the same optimistic
+    /// write as the pill. Only a single feed has an order to keep; the menu
+    /// is offered only there (`canSearch`).
+    func selectOrdering(_ ordering: RssOrderingMode) {
+        guard ordering != self.ordering else { return }
+        self.ordering = ordering
+        guard let subscription,
+              let update = FeedListOrderingPolicy.stickyUpdate(for: subscription, ordering: ordering)
+        else { return }
+        persist(update, to: subscription)
+    }
+
+    /// Holds the updated row at once, then writes it through the store to
+    /// the server; a failure leaves the next catalog refresh to reconcile.
+    private func persist(_ update: RssSubscriptionUpdate, to subscription: RssSubscription) {
+        guard let defaults else { return }
+        self.subscription = subscription.applying(update)
+        Task { [bus] in
+            _ = try? await defaults.updateSubscription(subscription, update)
+            bus.postCatalogChanged()
+        }
+    }
+
+    /// The folder counterpart of `persist(_:to:)` for a subscription.
+    private func persist(_ update: RssFolderUpdate, to folder: RssFolder) {
+        guard let defaults else { return }
+        self.folder = folder.applying(update)
+        Task { [bus] in
+            _ = try? await defaults.updateFolder(folder, update)
+            bus.postCatalogChanged()
         }
     }
 
@@ -320,6 +350,22 @@ enum FeedListFilterPolicy {
     /// The folder counterpart of `stickyUpdate(for:filter:)`.
     static func stickyUpdate(for folder: RssFolder, filter: RssItemFilter) -> RssFolderUpdate? {
         folder.defaultFilter == filter ? nil : RssFolderUpdate(defaultFilter: filter)
+    }
+}
+
+/// Which order a single feed's list opens on, and what an Order menu pick
+/// writes back. Pure so it can be unit-tested without a client.
+enum FeedListOrderingPolicy {
+    /// The feed's stored order, or newest first for a list with no single
+    /// subscription (a folder, All Feeds) or a row not at hand.
+    static func initial(subscription: RssSubscription?) -> RssOrderingMode {
+        subscription?.orderingMode ?? .newestFirst
+    }
+
+    /// The subscription update a pick of `ordering` writes, or nil when the
+    /// row already says so.
+    static func stickyUpdate(for subscription: RssSubscription, ordering: RssOrderingMode) -> RssSubscriptionUpdate? {
+        subscription.orderingMode == ordering ? nil : RssSubscriptionUpdate(orderingMode: ordering)
     }
 }
 
