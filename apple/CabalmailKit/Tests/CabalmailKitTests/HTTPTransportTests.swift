@@ -122,7 +122,7 @@ final class HTTPTransportTests: XCTestCase {
         // `URLSessionHTTPTransport` only normalizes URLError-level failures.
         // Non-2xx HTTP responses pass through so `URLSessionApiClient.send`
         // can run its 401 token-refresh path and surface other statuses as
-        // `.server(code:message:)`.
+        // `.http(status:body:)`.
         ScriptedURLProtocol.script(responses: [(Data("nope".utf8), 500)])
         let transport = makeTransport()
         let (_, response) = try await transport.perform(sampleRequest())

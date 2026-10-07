@@ -1,0 +1,202 @@
+import SwiftUI
+import CabalmailKit
+
+/// The feed reader's toolbar, drawn from `FeedReaderToolbarLayout`, which
+/// says which actions each shape of the bar draws and in what order. This
+/// picks the shape: the touch top bar on iOS, where three items plus a title
+/// fit and the View menu carries the rest, and the wide bar on macOS and
+/// visionOS, where each action is its own item. Every control carries its
+/// `FeedReaderAction` identifier (`feed.reader.<action>`).
+///
+/// The bar takes the two values that decide its set (`showingArticle`,
+/// `hasArticle`) from the reader's view, which reads them from the model, so
+/// the set follows them. Each item is a `FeedReaderBarItem` view, which reads
+/// the item's state itself: a toolbar content type's body did not refresh
+/// for the model's reads (measured: Flag kept reading "Flag" after a flag).
+struct FeedReaderToolbar: ToolbarContent {
+    let model: FeedItemDetailViewModel
+    let showingArticle: Bool
+    let hasArticle: Bool
+    /// The article control says when it needs a connection.
+    let isOffline: Bool
+
+    var body: some ToolbarContent {
+        #if os(iOS)
+        // The View menu is ranked above the other items in the system's
+        // overflow (iOS 27; an iPhone Duo's vertical strip folds far sooner
+        // than a horizontal bar): it is the only touch route to reader view,
+        // remote content and the article, as the mail reader's menu is the
+        // only route to its demoted actions.
+        // `FeedReaderToolbarLayoutTests` pins the list as Read, Flag, View.
+        let actions = FeedReaderToolbarLayout.menuBar
+        ToolbarItem { item(actions[0]) }
+        ToolbarItem { item(actions[1]) }
+        ToolbarItem { item(actions[2]) }
+            .keepsInBarFirst()
+        #else
+        let actions = FeedReaderToolbarLayout.wideBar(showingArticle: showingArticle, hasArticle: hasArticle)
+        ForEach(actions, id: \.self) { action in
+            ToolbarItem { item(action) }
+        }
+        #endif
+    }
+
+    private func item(_ action: FeedReaderAction) -> FeedReaderBarItem {
+        FeedReaderBarItem(action: action, model: model, isOffline: isOffline)
+    }
+}
+
+/// One control of the feed reader's bar, a view of its own so the state it
+/// draws (read, flagged, reader view, remote content, the article) is
+/// tracked and its face refreshes when that changes.
+struct FeedReaderBarItem: View {
+    let action: FeedReaderAction
+    let model: FeedItemDetailViewModel
+    let isOffline: Bool
+
+    var body: some View {
+        barItem(action)
+    }
+
+    @ViewBuilder
+    private func barItem(_ action: FeedReaderAction) -> some View {
+        switch action {
+        case .read:
+            Button {
+                Task { await model.setRead(!model.item.isRead) }
+            } label: {
+                Label(model.item.isRead ? "Mark as unread" : "Mark as read",
+                      systemImage: model.item.isRead ? "envelope.badge" : "envelope.open")
+            }
+            .accessibilityIdentifier(action.identifier)
+        case .favorite:
+            // The mail reader's flag control, word for word and glyph for
+            // glyph (`MessageDetailView+FlagOptions`); the identifier keeps
+            // the wire name for the probes.
+            Button {
+                Task { await model.setFavorite(!model.item.isFavorite) }
+            } label: {
+                Label(model.item.isFavorite ? "Unflag" : "Flag",
+                      systemImage: model.item.isFavorite ? "flag.slash" : "flag")
+            }
+            .accessibilityIdentifier(action.identifier)
+        case .readerMode:
+            readerModeButton
+        case .remoteContent:
+            remoteContentButton
+        case .article:
+            articleButton
+        case .more:
+            moreMenu
+        }
+    }
+
+    private var readerModeButton: some View {
+        Button {
+            model.toggleReaderMode()
+        } label: {
+            Label(model.readerMode ? "Show original formatting" : "Show reader view",
+                  systemImage: model.readerMode ? "text.alignleft" : "doc.richtext")
+        }
+        .accessibilityIdentifier(FeedReaderAction.readerMode.identifier)
+    }
+
+    private var remoteContentButton: some View {
+        Button {
+            model.toggleRemoteContent()
+        } label: {
+            Label(model.remoteContentAllowed ? "Hide remote content" : "Show remote content",
+                  systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash")
+        }
+        .disabled(model.item.bodyHtml.isEmpty)
+        .accessibilityIdentifier(FeedReaderAction.remoteContent.identifier)
+    }
+
+    private var articleButton: some View {
+        Button {
+            model.toggleArticle()
+        } label: {
+            Label(articleTitle, systemImage: articleSymbol)
+        }
+        .accessibilityIdentifier(FeedReaderAction.article.identifier)
+    }
+
+    #if os(iOS)
+    /// iOS: the View menu, the only touch route to reader view, remote
+    /// content and the article (`FeedReaderToolbarLayout.viewMenu`).
+    private var moreMenu: some View {
+        let sections = FeedReaderToolbarLayout.viewMenu(
+            showingArticle: model.showingArticle, hasArticle: model.articleURL != nil
+        )
+        return Menu {
+            ForEach(sections.indices, id: \.self) { index in
+                if index > 0 { Divider() }
+                ForEach(sections[index], id: \.self) { item in
+                    menuRow(item, browserIcon: true)
+                }
+            }
+        } label: {
+            Label("View", systemImage: "ellipsis.circle")
+        }
+        .accessibilityIdentifier(FeedReaderAction.more.identifier)
+    }
+    #else
+    /// macOS and visionOS: the link rows (`FeedReaderToolbarLayout.moreMenu`)
+    /// for an item with an article; the wide bar draws the rest as items.
+    @ViewBuilder
+    private var moreMenu: some View {
+        if model.articleURL != nil {
+            Menu {
+                ForEach(FeedReaderToolbarLayout.moreMenu, id: \.self) { item in
+                    menuRow(item, browserIcon: false)
+                }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+            .accessibilityIdentifier(FeedReaderAction.more.identifier)
+        }
+    }
+    #endif
+
+    /// One menu row. The link rows need the item's article URL, which the
+    /// layout only lists them for.
+    @ViewBuilder
+    private func menuRow(_ item: FeedReaderMenuItem, browserIcon: Bool) -> some View {
+        switch item {
+        case .readerMode:
+            readerModeButton
+        case .remoteContent:
+            remoteContentButton
+        case .article:
+            articleButton
+        case .openInBrowser:
+            if let url = model.articleURL {
+                if browserIcon {
+                    Link(destination: url) { Label("Open in browser", systemImage: "safari") }
+                } else {
+                    Link("Open in browser", destination: url)
+                }
+            }
+        case .shareLink:
+            if let url = model.articleURL {
+                ShareLink(item: url) { Label("Share link", systemImage: "square.and.arrow.up") }
+            }
+        case .copyLink:
+            if let url = model.articleURL {
+                Button("Copy link") { copyToPasteboard(url.absoluteString) }
+            }
+        }
+    }
+
+    /// "Open article" gains a "needs a connection" note while unreachable;
+    /// the button stays enabled because the page may already be cached.
+    private var articleTitle: String {
+        if model.showingArticle { return "Show feed content" }
+        return isOffline ? "Open article (needs a connection)" : "Open article"
+    }
+
+    private var articleSymbol: String {
+        if model.showingArticle { return "doc.plaintext" }
+        return isOffline ? "wifi.slash" : "safari"
+    }
+}

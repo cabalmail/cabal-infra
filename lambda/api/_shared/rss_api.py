@@ -384,4 +384,7 @@ def serialize_folder(row):
         'name': row.get('name', ''),
         'display_order': row.get('display_order', 0),
         'default_filter': row.get('default_filter', DEFAULT_ITEM_FILTER),
+        # Rows written before folders had an order (and OPML imports) read
+        # as newest first, the subscription default.
+        'ordering_mode': row.get('ordering_mode', ORDERING_MODES[0]),
     }

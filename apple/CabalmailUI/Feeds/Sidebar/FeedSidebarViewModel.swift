@@ -192,6 +192,8 @@ enum FeedErrorText {
         "invalid_opml": "That file isn't an OPML outline.",
     ]
 
+    /// A failure without a token is `.http` and reads as its localized
+    /// sentence, not the raw reply body.
     static func describe(_ error: Error) -> String {
         if case let CabalmailError.server(code, message) = error {
             if let known = serverMessages[code] { return known }

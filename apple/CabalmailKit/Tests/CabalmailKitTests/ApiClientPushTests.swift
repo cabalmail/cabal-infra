@@ -159,10 +159,10 @@ final class ApiClientPushTests: XCTestCase {
             _ = try await client.fetchPushEnvelope(folder: "INBOX", uid: nil, messageID: nil)
             XCTFail("Expected server error")
         } catch let error as CabalmailError {
-            guard case .server(let code, _) = error else {
-                return XCTFail("Expected .server, got \(error)")
+            guard case .http(let status, _) = error else {
+                return XCTFail("Expected .http, got \(error)")
             }
-            XCTAssertEqual(code, "500")
+            XCTAssertEqual(status, 500)
         }
     }
 
@@ -182,10 +182,10 @@ final class ApiClientPushTests: XCTestCase {
             ))
             XCTFail("Expected server error")
         } catch let error as CabalmailError {
-            guard case .server(let code, _) = error else {
-                return XCTFail("Expected .server, got \(error)")
+            guard case .http(let status, _) = error else {
+                return XCTFail("Expected .http, got \(error)")
             }
-            XCTAssertEqual(code, "500")
+            XCTAssertEqual(status, 500)
         }
     }
 }

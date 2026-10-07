@@ -25,8 +25,8 @@ extension URLSessionApiClient {
             // flags bad forwards before the PUT, and the folder warning fires
             // for every folder target on every save, so it isn't actionable.
             return try decodeReply(RuleSet.self, from: data, for: request)
-        } catch CabalmailError.server(let code, let message) where code == "409" {
-            throw RuleSetConflictError(serverVersion: Self.conflictVersion(message))
+        } catch CabalmailError.http(409, let body) {
+            throw RuleSetConflictError(serverVersion: Self.conflictVersion(body))
         }
     }
 

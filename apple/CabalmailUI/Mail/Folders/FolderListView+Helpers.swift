@@ -276,15 +276,6 @@ extension FolderListView {
         }
     }
 
-    /// Render the count badge text honoring the user's
-    /// `folderCountDisplay` preference. Returns `nil` when nothing
-    /// should be shown so the badge capsule collapses entirely (no
-    /// stray "0" badges on read folders). The rule itself lives in
-    /// `FolderCountBadge`, which the feed rows share.
-    func countBadgeText(unread: Int?, total: Int?) -> String? {
-        FolderCountBadge.text(display: preferences.folderCountDisplay, unread: unread, total: total)
-    }
-
     /// Fire a one-shot STATUS for an unsubscribed folder the user just
     /// selected, so the row's badge stops being blank. Subscribed
     /// folders are already covered by the launch-time walk; INBOX is
@@ -423,7 +414,7 @@ extension FolderListView {
     var newFolderSheet: some View {
         if let model {
             NewFolderSheet(parents: model.possibleParents, form: newFolderForm) { name, parent in
-                await model.createFolder(name: name, parent: parent)
+                try await model.createFolder(name: name, parent: parent)
             }
         }
     }

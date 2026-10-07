@@ -42,10 +42,11 @@ struct FilterPill: View {
         .accessibilityIdentifier(identifier)
     }
 
-    /// What VoiceOver reads: the label, then the count when there is one.
+    /// What VoiceOver reads: the label, then the count when there is one,
+    /// grouped for the locale the way the drawn count is ("All, 12,345").
     static func spokenLabel(_ label: String, count: Int?) -> String {
         guard let count else { return label }
-        return "\(label), \(count)"
+        return "\(label), \(count.formatted())"
     }
 }
 

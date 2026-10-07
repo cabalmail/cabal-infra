@@ -9,7 +9,8 @@ import Foundation
 ///
 /// Server-side failures with a documented `code` token surface as
 /// `CabalmailError.server(code: <token>, message: <Error>)`, e.g.
-/// `code == "not_a_feed"`; failures without one carry the HTTP status.
+/// `code == "not_a_feed"`; failures without one are
+/// `CabalmailError.http(status:body:)`.
 public protocol RssClient: Sendable {
     func listSubscriptions() async throws -> RssCatalog
     func subscribe(url: String, folderId: String?) async throws -> RssSubscribeResult

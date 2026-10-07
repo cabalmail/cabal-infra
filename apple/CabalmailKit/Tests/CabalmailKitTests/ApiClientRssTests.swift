@@ -93,6 +93,22 @@ final class ApiClientRssTests: XCTestCase {
         }
     }
 
+    /// A failure with no token (API Gateway's own 502, or the RSS handler's
+    /// unhandled-exception 500) is `.http`; only a coded body is `.server`.
+    func testAFailureWithoutATokenIsHttp() async throws {
+        let gateway = #"{"message": "Internal server error"}"#
+        let unhandled = #"{"Error": "boom"}"#
+        for (status, body) in [(502, gateway), (500, unhandled)] {
+            let (client, _) = makeClient([(body, status)])
+            do {
+                _ = try await client.listSubscriptions()
+                XCTFail("expected an error")
+            } catch let error as CabalmailError {
+                XCTAssertEqual(error, .http(status: status, body: body))
+            }
+        }
+    }
+
     func testListItemsQueryAndSyncQuery() async throws {
         let page = """
         {"items": [{"feed_id": "f", "sort_key": "2026#i1", "title": "T", "is_read": true}], "next_cursor": "c2"}

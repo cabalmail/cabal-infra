@@ -371,10 +371,7 @@ extension URLSessionApiClient {
         request.httpBody = data
         let (respData, response) = try await transport.perform(request)
         guard (200..<300).contains(response.statusCode) else {
-            throw CabalmailError.server(
-                code: String(response.statusCode),
-                message: String(data: respData, encoding: .utf8) ?? ""
-            )
+            throw CabalmailError.http(status: response.statusCode, body: String(data: respData, encoding: .utf8) ?? "")
         }
     }
 
@@ -383,10 +380,7 @@ extension URLSessionApiClient {
         request.httpMethod = "GET"
         let (data, response) = try await transport.perform(request)
         guard (200..<300).contains(response.statusCode) else {
-            throw CabalmailError.server(
-                code: String(response.statusCode),
-                message: String(data: data, encoding: .utf8) ?? ""
-            )
+            throw CabalmailError.http(status: response.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
         return data
     }
@@ -407,9 +401,8 @@ private struct DuplicateInFlightBody: Decodable {
 /// queued messages as sent when nothing had been delivered (#1019). Any other
 /// error passes through unchanged.
 private func sendInFlightError(_ error: CabalmailError) -> CabalmailError {
-    guard case .server(let code, let message) = error,
-          code == "409",
-          let data = message.data(using: .utf8),
+    guard case .http(409, let body) = error,
+          let data = body.data(using: .utf8),
           let body = try? JSONDecoder().decode(DuplicateInFlightBody.self, from: data),
           body.status == "duplicate_in_flight" else {
         return error
