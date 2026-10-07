@@ -93,7 +93,7 @@ public actor ApiBackedImapClient: ImapClient {
         // unavailable from this endpoint, so the returned set is empty —
         // callers that need flags should consult the prior envelope fetch.
         let body = try await api.fetchMessage(host: host, folder: folder, id: uid, markSeen: false)
-        guard let raw = body.messageRaw, let url = URL(string: raw) else {
+        guard let raw = body.messageRaw, let url = URL(followableReplyString: raw) else {
             throw CabalmailError.decoding("fetch_message returned no presigned URL")
         }
         let data = try await api.fetchPresignedData(url: url)
