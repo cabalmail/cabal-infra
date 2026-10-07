@@ -50,8 +50,7 @@ for A.
 | C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Not started |
 | C2    | Native: first admin feature — Users (approve, disable, delete)   | Not started |
 
-Tracking issues: one per workstream (A, B, C), linked from the PR that
-lands this plan.
+Tracking issues: A #1950, B #1951, C #1952.
 
 ## Decisions
 
