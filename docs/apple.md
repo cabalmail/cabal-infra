@@ -1074,6 +1074,13 @@ library product of the `CabalmailKit` package
   defaults key, the keychain service, account and access-group suffix),
   and the JSON the token is stored as. `PushEnrichmentStore` writes them;
   `CabalmailNotificationService/NotificationService.swift` reads them.
+- `PushMessageCoordinates` and `PushEnvelope`, the two push wire formats:
+  the payload's `msgRef` (folder, uid hint and `msg_id`; a uid of 0 or an
+  empty `msg_id` reads as none), which is also the `/push_envelope`
+  request body, and that endpoint's reply. The notification extension
+  parses, sends and patches with them; the Kit's `fetchPushEnvelope`
+  sends and decodes with them; the app's `PushMessageRef` parses through
+  them and the macOS in-app enrichment writes with them.
 
 How it is linked:
 

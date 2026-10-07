@@ -60,8 +60,9 @@ let package = Package(
             swiftSettings: checkedSettings
         ),
         // The values and stores the app extensions share with the apps: the
-        // App Group, the push handoff's keys and token payload, and the Safari
-        // extension's control-domain and private-link token stores. The
+        // App Group, the push handoff's keys and token payload, the push
+        // msgRef and /push_envelope wire types, and the Safari extension's
+        // control-domain and private-link token stores. The
         // notification service and Safari web extensions link this product
         // and not the Kit; the Kit depends on it, so the apps get it inside
         // the Kit and link nothing new. Keep it Foundation only, with no resources and no logging (the
