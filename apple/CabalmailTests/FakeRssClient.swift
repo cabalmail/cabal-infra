@@ -4,7 +4,21 @@ import CabalmailKit
 /// Scripted `RssClient` for the app-layer feed tests: a catalog the tests
 /// set, recorded calls, and canned results for the management endpoints.
 /// Items calls return empty pages so `RssSyncEngine` can run against it.
+///
+/// The catalog and items calls can be held (`holdNext`), and like a URLSession
+/// data task they fail with `cancelledError` when the calling task is
+/// cancelled, for the cancellation tests (#1908).
 actor FakeRssClient: RssClient {
+    enum HeldCall: Hashable, Sendable { case catalog, items }
+
+    private(set) var catalogCalls = 0
+    private(set) var itemsCalls = 0
+    private var holdArmed: Set<HeldCall> = []
+    private var held: [HeldCall: CheckedContinuation<Void, Never>] = [:]
+    private var cancelledError: any Error & Sendable = CabalmailError.cancelled
+    private var catalogError: (any Error & Sendable)?
+    private var itemsError: (any Error & Sendable)?
+
     private(set) var catalog = RssCatalog(folders: [], subscriptions: [])
     private(set) var subscribeCalls: [(url: String, folderId: String?)] = []
     private(set) var unsubscribeCalls: [String] = []
@@ -18,6 +32,25 @@ actor FakeRssClient: RssClient {
 
     func set(catalog: RssCatalog) { self.catalog = catalog }
     func set(failNext: Error?) { self.failNext = failNext }
+    func set(cancelledError: any Error & Sendable) { self.cancelledError = cancelledError }
+    func set(catalogError: (any Error & Sendable)?) { self.catalogError = catalogError }
+    func set(itemsError: (any Error & Sendable)?) { self.itemsError = itemsError }
+
+    /// Parks the next `call` until `releaseHeld(_:)`.
+    func holdNext(_ call: HeldCall) { holdArmed.insert(call) }
+    func isHolding(_ call: HeldCall) -> Bool { held[call] != nil }
+
+    func releaseHeld(_ call: HeldCall) {
+        held.removeValue(forKey: call)?.resume()
+    }
+
+    /// Holds the call if armed, then fails it if its task was cancelled.
+    private func pass(_ call: HeldCall) async throws {
+        if holdArmed.remove(call) != nil {
+            await withCheckedContinuation { held[call] = $0 }
+        }
+        if Task.isCancelled { throw cancelledError }
+    }
 
     private func maybeFail() throws {
         if let error = failNext {
@@ -30,7 +63,12 @@ actor FakeRssClient: RssClient {
         try JSONDecoder().decode(T.self, from: Data(json.utf8))
     }
 
-    func listSubscriptions() async throws -> RssCatalog { catalog }
+    func listSubscriptions() async throws -> RssCatalog {
+        catalogCalls += 1
+        try await pass(.catalog)
+        if let catalogError { throw catalogError }
+        return catalog
+    }
 
     func subscribe(url: String, folderId: String?) async throws -> RssSubscribeResult {
         try maybeFail()
@@ -109,15 +147,24 @@ actor FakeRssClient: RssClient {
 
     func listItems(scope: RssItemScope, filter: RssItemFilter, order: RssItemOrder, limit: Int,
                    cursor: String?) async throws -> RssItemsPage {
-        RssItemsPage(items: [], nextCursor: nil)
+        try await itemsCall()
+        return RssItemsPage(items: [], nextCursor: nil)
     }
 
     func syncItems(subscriptionId: String, since: String, limit: Int) async throws -> RssSyncPage {
-        RssSyncPage(items: [], nextSince: since, hasMore: false)
+        try await itemsCall()
+        return RssSyncPage(items: [], nextSince: since, hasMore: false)
     }
 
     func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage {
-        RssStateSyncPage(states: [], nextSince: since, hasMore: false)
+        try await itemsCall()
+        return RssStateSyncPage(states: [], nextSince: since, hasMore: false)
+    }
+
+    private func itemsCall() async throws {
+        itemsCalls += 1
+        try await pass(.items)
+        if let itemsError { throw itemsError }
     }
 
     func getItem(feedId: String, sortKey: String) async throws -> RssItem {
