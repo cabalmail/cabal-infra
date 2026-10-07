@@ -43,6 +43,9 @@ final class FeedItemListViewModel {
     var errorMessage: String?
     /// Items with a queued (not yet pushed) state change, for the row mark.
     var pendingIds: Set<String> = []
+    /// What the All / Unread / Flagged pills count for this scope, over the
+    /// items the device holds; nil until the first read.
+    var filterCounts: RssStore.FilterCounts?
     /// Subscription id → display title, for the feed label on rows in
     /// multi-feed scopes. Read with the page; empty in single-feed scope.
     var subscriptionTitles: [String: String] = [:]
@@ -158,9 +161,17 @@ final class FeedItemListViewModel {
         if !batch.feeds.isDisjoint(with: scopeFeedIds), items.count <= pageSize { reloads = true }
         if reloads {
             await reload()
-        } else if !batch.items.isEmpty {
-            await patch(batch.items)
+        } else {
+            if !batch.items.isEmpty { await patch(batch.items) }
+            // A paged list keeps its rows, but its pills still count what
+            // the store now holds.
+            await readCounts()
         }
+    }
+
+    private func readCounts() async {
+        guard let store else { return }
+        filterCounts = (try? await store.filterCounts(in: scope)) ?? filterCounts
     }
 
     /// What the catalog decides for this list: its subscription or folder
@@ -237,6 +248,7 @@ final class FeedItemListViewModel {
                 subscriptionTitles = Self.titles(of: try await store.subscriptions())
             }
             scopeFeedIds = Set(try await store.feedIds(in: scope))
+            filterCounts = try await store.filterCounts(in: scope)
             if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty, let subscription {
                 items = try await store.search(feedId: subscription.feedId, query: searchQuery)
                 hasMoreLocal = false
@@ -315,6 +327,7 @@ final class FeedItemListViewModel {
         replace(item) { $0.isRead = isRead }
         try? await engine.setRead(item, isRead)
         await patch([item.id])
+        await readCounts()
     }
 
     func setFavorite(_ item: RssItem, _ isFavorite: Bool) async {
@@ -322,6 +335,7 @@ final class FeedItemListViewModel {
         replace(item) { $0.isFavorite = isFavorite }
         try? await engine.setFavorite(item, isFavorite)
         await patch([item.id])
+        await readCounts()
     }
 
     /// The swipe bindings, exposed so the row picks the button each edge
