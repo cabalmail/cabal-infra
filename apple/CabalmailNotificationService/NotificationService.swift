@@ -1,3 +1,4 @@
+import CabalmailShared
 import Foundation
 import os
 import Security
@@ -23,9 +24,11 @@ let nseLog = Logger(subsystem: "com.cabalmail.nse", category: "enrich")
 /// "New mail" content instead. Never block, never crash: a hung NSE gets
 /// its process killed and the user sees nothing at all.
 ///
-/// Deliberately tiny: Foundation + UserNotifications only, no CabalmailKit.
-/// The two inputs arrive via containers both processes share (written by
-/// CabalmailKit's `PushEnrichmentStore`):
+/// Deliberately tiny: no CabalmailKit. Beside the system frameworks it links
+/// only CabalmailShared, the Foundation-only module that names the
+/// containers and the token's JSON shape for both sides. The two inputs
+/// arrive via containers both processes share (written by CabalmailKit's
+/// `PushEnrichmentStore`):
 /// - `api_url` in the App Group `UserDefaults`, and
 /// - the ID token JSON in the shared keychain access group.
 final class NotificationService: UNNotificationServiceExtension {
@@ -202,17 +205,13 @@ private final class DeliveryState: @unchecked Sendable {
 }
 
 /// Reads the two values the main app mirrors via CabalmailKit's
-/// `PushEnrichmentStore` — keep key names in sync with that type.
-private enum PushHandoff {
-    static let appGroupID = "group.com.cabalmail.Cabalmail"
-    static let apiURLDefaultsKey = "cabal.push.api_url"
-    static let keychainService = "com.cabalmail.push"
-    static let keychainAccount = "push.auth"
-
+/// `PushEnrichmentStore`, at the coordinates CabalmailShared's
+/// `PushHandoff` names for both of them.
+private extension PushHandoff {
     /// `<api_url>/push_envelope`, or nil before the app has ever signed in.
     static func enrichmentEndpoint() -> URL? {
         guard
-            let raw = UserDefaults(suiteName: appGroupID)?.string(forKey: apiURLDefaultsKey),
+            let raw = UserDefaults(suiteName: AppGroup.identifier)?.string(forKey: apiURLDefaultsKey),
             let base = URL(string: raw)
         else { return nil }
         return base.appendingPathComponent("push_envelope")
@@ -248,7 +247,7 @@ private enum PushHandoff {
                 nseLog.error("keychain: group-less read failed (\(status)), no AppIdentifierPrefix to retry with")
                 return nil
             }
-            query[kSecAttrAccessGroup as String] = prefix + "com.cabalmail.shared"
+            query[kSecAttrAccessGroup as String] = prefix + keychainAccessGroupSuffix
             status = SecItemCopyMatching(query as CFDictionary, &item)
         }
         guard status == errSecSuccess, let data = item as? Data else {
@@ -264,17 +263,5 @@ private enum PushHandoff {
             return nil
         }
         return payload.idToken
-    }
-}
-
-/// Mirror of CabalmailKit's `PushTokenPayload` wire shape (the extension
-/// doesn't link the Kit).
-private struct PushTokenPayload: Decodable {
-    let idToken: String
-    let expiresAt: Date
-
-    enum CodingKeys: String, CodingKey {
-        case idToken = "id_token"
-        case expiresAt = "expires_at"
     }
 }

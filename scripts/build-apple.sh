@@ -94,14 +94,16 @@ watchos()  { build_scheme CabalmailWatch 'generic/platform=watchOS'; }
 kit_test() {
   log "test CabalmailKit (macOS)"
   # Run from the SwiftPM package dir (apple/CabalmailKit) so xcodebuild
-  # resolves the package's auto-synthesized CabalmailKit scheme, which has
-  # a test action. Run from apple/ instead and the same scheme name resolves
-  # to the xcodegen-generated project's build-only CabalmailKit scheme,
-  # failing with "Scheme CabalmailKit is not currently configured for the
-  # test action". Mirrors apple.yml's macOS test leg (working-directory:
-  # apple/CabalmailKit), including -skipPackagePluginValidation.
+  # resolves the package's auto-synthesized schemes. The package has two
+  # library products (CabalmailKit and CabalmailShared), so Xcode gives
+  # only CabalmailKit-Package a test action; -scheme CabalmailKit fails with
+  # "Scheme CabalmailKit is not currently configured for the test action",
+  # as it also does from apple/, where the name resolves to the
+  # xcodegen-generated project's build-only scheme. Mirrors apple.yml's
+  # macOS test leg (working-directory: apple/CabalmailKit), including
+  # -skipPackagePluginValidation.
   ( cd CabalmailKit && run_xcodebuild test \
-      -scheme CabalmailKit \
+      -scheme CabalmailKit-Package \
       -destination 'platform=macOS' \
       -skipPackagePluginValidation \
       -test-timeouts-enabled YES \

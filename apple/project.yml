@@ -429,14 +429,21 @@ targets:
   # `mutable-content: 1` push, calls `/push_envelope` with the Cognito ID
   # token the main app mirrors into the shared keychain group, and rewrites
   # the bare "New mail" alert into sender / subject / snippet. Deliberately
-  # tiny: Foundation + UserNotifications only, no CabalmailKit — the values
-  # it needs arrive via the App Group container and the shared keychain
-  # (see docs/0.11.x/push-notifications.md and PushEnrichmentStore).
+  # tiny: no CabalmailKit, only the Foundation-only CabalmailShared product,
+  # which names the containers and the token format it shares with the app.
+  # The values it needs arrive via the App Group container and the shared
+  # keychain (see docs/0.11.x/push-notifications.md and PushEnrichmentStore).
   CabalmailNotificationService:
     type: app-extension
     platform: iOS
     sources:
       - path: CabalmailNotificationService
+    dependencies:
+      # A static product with no resources, so its code lands in this
+      # appex's own binary and nothing is embedded (see the CabalmailShared
+      # target in CabalmailKit/Package.swift).
+      - package: CabalmailKit
+        product: CabalmailShared
     info:
       path: CabalmailNotificationService/Info.plist
       properties:
@@ -533,8 +540,8 @@ targets:
           PROVISIONING_PROFILE_SPECIFIER: "$(IOS_WEBEXT_APP_STORE_PROFILE_UUID)"
 
   # macOS twin of CabalmailNotificationService (push phase 6). Compiles the
-  # SAME Swift source — the NSE is Foundation + UserNotifications + Security
-  # only, with nothing platform-conditional in it — into a separate macOS
+  # SAME Swift source — the NSE is the system frameworks plus CabalmailShared,
+  # with nothing platform-conditional in it — into a separate macOS
   # appex product with its own bundle id, Info.plist, and entitlements
   # (sandboxed mac processes need explicit network.client; see the
   # entitlements file). Embedded in CabalmailMac, never in the iOS/visionOS
@@ -544,6 +551,10 @@ targets:
     platform: macOS
     sources:
       - path: CabalmailNotificationService/NotificationService.swift
+    dependencies:
+      # As in the iOS NSE: linked into this appex's binary, not embedded.
+      - package: CabalmailKit
+        product: CabalmailShared
     info:
       path: CabalmailMacNotificationService/Info.plist
       properties:

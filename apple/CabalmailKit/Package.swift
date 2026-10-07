@@ -27,10 +27,16 @@ let package = Package(
     ],
     products: [
         .library(name: "CabalmailKit", targets: ["CabalmailKit"]),
+        // What the app extensions link instead of the whole Kit. With a
+        // second product, Xcode gives only the `CabalmailKit-Package` scheme
+        // a test action, which is the scheme apple.yml and
+        // scripts/build-apple.sh test with.
+        .library(name: "CabalmailShared", targets: ["CabalmailShared"]),
     ],
     targets: [
         .target(
             name: "CabalmailKit",
+            dependencies: ["CabalmailShared"],
             path: "Sources/CabalmailKit",
             resources: [
                 // Rich-text editor HTML + bridge script. .copy preserves
@@ -53,6 +59,22 @@ let package = Package(
             ],
             swiftSettings: checkedSettings
         ),
+        // The values the app extensions share with the apps: the App Group,
+        // and the push handoff's keys and token payload. The notification
+        // service extensions link this product and not the Kit; the Kit
+        // depends on it, so the apps get it inside the Kit and link nothing
+        // new. Keep it Foundation only, with no resources and no logging (the
+        // os.Logger lint rule exempts only CabalmailLog and the extension),
+        // and leave the product type automatic: a static product with no
+        // resources puts its code in each extension's own binary, so nothing
+        // new is embedded or signed. A resource would add a bundle to every
+        // extension, and a framework inside an .appex is what App Store
+        // upload rejects.
+        .target(
+            name: "CabalmailShared",
+            path: "Sources/CabalmailShared",
+            swiftSettings: checkedSettings
+        ),
         // Test doubles shared with the app-layer test bundle. Deliberately
         // not a product: CabalmailMacTests compiles these same sources itself
         // (project.yml). Linking a product that depends on CabalmailKit put a
@@ -66,7 +88,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CabalmailKitTests",
-            dependencies: ["CabalmailKit", "CabalmailKitTestSupport"],
+            dependencies: ["CabalmailKit", "CabalmailKitTestSupport", "CabalmailShared"],
             path: "Tests/CabalmailKitTests",
             swiftSettings: checkedSettings
         ),

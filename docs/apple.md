@@ -19,7 +19,10 @@ apple/
                              #   window, menu-bar extra, asset catalogs
   CabalmailWatch/            # Watch companion app (address management only),
                              #   embedded in the iOS product
-  CabalmailKit/              # Shared Swift package — networking, models, auth, caching
+  CabalmailKit/              # Shared Swift package — networking, models, auth, caching;
+                             #   its second product, CabalmailShared, holds what the app
+                             #   extensions share with the apps (see "Extension-shared
+                             #   values" below)
 ```
 
 ## Bootstrap
@@ -702,7 +705,7 @@ TestFlight upload and skips the notarization steps.
 
 | Job | Runs when | What it does |
 |---|---|---|
-| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on CabalmailKit across macOS / iOS / visionOS destinations |
+| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) across macOS / iOS / visionOS destinations |
 | `app-build` | Same | Unsigned `xcodebuild build` for `Cabalmail` (iOS) and `CabalmailMac` (macOS) |
 | `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
@@ -1039,6 +1042,52 @@ logic; otherwise it stays with its feature. Platform conditionals
 (`#if os`) are still spread through the feature folders; new
 layout-level branches belong in `Shell/` and new OS adapters in
 `Platform/`.
+
+### Extension-shared values: the `CabalmailShared` module
+
+The app extensions don't link CabalmailKit, which keeps them small and
+keeps the Kit's resource bundle out of them. What a notification service
+extension and the app must spell identically lives instead in
+`CabalmailShared`, a second library product of the `CabalmailKit`
+package (`apple/CabalmailKit/Sources/CabalmailShared/`):
+
+- `AppGroup.identifier`, the App Group whose `UserDefaults` suite the
+  apps write and the extensions read. The Safari web extensions don't
+  link the module yet: they compile `ExtensionControlDomainStore.swift`
+  by path (see "Shared app layer" above), whose `appGroupID` is still its
+  own literal.
+- `PushHandoff` and `PushTokenPayload`: where the app leaves the API URL
+  and the Cognito ID token for the notification service extensions (the
+  defaults key, the keychain service, account and access-group suffix),
+  and the JSON the token is stored as. `PushEnrichmentStore` writes them;
+  `CabalmailNotificationService/NotificationService.swift` reads them.
+
+How it is linked:
+
+- **The Kit depends on it**, so the apps and the watch get it inside the
+  Kit and link nothing new.
+- **The two notification service extensions link the `CabalmailShared`
+  product** and import it, never the Kit. It is a static product with no
+  resources, so its code lands in each extension's own binary and
+  nothing new is embedded or signed.
+- **Keep it Foundation only**, with no resources, no logging (the
+  `os.Logger` lint rule exempts only `CabalmailLog` and the notification
+  extension) and no UI imports, and leave its product type automatic. A
+  resource would add a bundle to every extension, and a dynamic product
+  would put a framework inside each `.appex`, which App Store upload
+  rejects.
+- **Entitlements keep their literals**, since a plist can't import a
+  module: the App Group is in six entitlements files and the keychain
+  group in four (both apps and both notification extensions). No test
+  reads them, so change them by hand with the module.
+  `PushHandoffContractTests` pins each Swift constant to the shipped
+  value, so a change on the code side fails the Kit tests instead of
+  quietly turning every enriched notification back into "New mail".
+- **The Kit's xcodebuild test scheme is `CabalmailKit-Package`.** With two
+  library products, Xcode gives only that scheme a test action, so
+  `apple.yml` and `scripts/build-apple.sh` run
+  `xcodebuild test -scheme CabalmailKit-Package` from
+  `apple/CabalmailKit`. `swift test` is unaffected.
 
 ### Runtime configuration: published `config.json`
 
