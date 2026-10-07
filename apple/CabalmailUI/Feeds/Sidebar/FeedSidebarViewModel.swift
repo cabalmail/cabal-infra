@@ -7,8 +7,8 @@ import CabalmailKit
 /// local `RssStore`, refreshed through `RssSyncEngine`.
 ///
 /// Reads come from the store, so the sidebar renders offline and instantly;
-/// `refresh()` pulls the catalog, syncs every subscription's items (four at a
-/// time), pushes pending mutations, and reloads. Departed subscriptions'
+/// `refresh()` runs the engine's `syncAll` (the catalog, every
+/// subscription's items four at a time, the pending mutations) and reloads. Departed subscriptions'
 /// per-feed web-view storage is dropped here, since only the app layer has
 /// WebKit.
 @Observable
@@ -77,32 +77,22 @@ final class FeedSidebarViewModel {
         }
     }
 
-    /// Catalog + items + pending drain, then a reload. Safe to call from
-    /// several triggers at once: overlapping calls coalesce on `isRefreshing`.
+    /// Catalog + items + pending drain, then a reload: the engine's one
+    /// `syncAll` pass, which it joins to a pass the session's poller already
+    /// has in flight. Safe to call from several triggers at once: overlapping
+    /// calls coalesce on `isRefreshing`.
     func refresh() async {
         guard !isRefreshing, let engine else { return }
         isRefreshing = true
         defer { finishRefresh() }
         errorMessage = nil
-        do {
-            try await engine.refreshCatalog()
-            await load()
-        } catch {
-            // A refresh whose task was cancelled (the views' `.task` as the
-            // sidebar leaves the screen mid-sync: a push, a tab switch, the
-            // iPad sidebar hidden) has nothing to report (#1908). Read off the
-            // task, not the error, whose shape has varied.
-            if !Task.isCancelled { errorMessage = FeedErrorText.describe(error) }
-        }
-        if !Task.isCancelled {
-            let failures = await engine.syncAll()
-            // A cancel during the sync fails every feed with it, which would
-            // read as "every feed failed" here; that is no outcome either.
-            if !Task.isCancelled, let first = failures.first, errorMessage == nil,
-               failures.count == subscriptions.count, !subscriptions.isEmpty {
-                // Every feed failed: almost certainly offline; one line, not one per feed.
-                errorMessage = FeedErrorText.describe(first.value)
-            }
+        let report = await engine.syncAll()
+        // A refresh whose task was cancelled (the views' `.task` as the
+        // sidebar leaves the screen mid-sync: a push, a tab switch, the iPad
+        // sidebar hidden) stops waiting and has nothing to report (#1908).
+        // Read off the task, not the result.
+        if let report, !Task.isCancelled {
+            errorMessage = Self.errorLine(for: report)
         }
         // Cut short, the refresh is owed: the next `.task` runs it again.
         let cutShort = Task.isCancelled
@@ -110,6 +100,16 @@ final class FeedSidebarViewModel {
         await FeedWebStorage.dropDeparted(from: store)
         await load()
         needsRefresh = cutShort
+    }
+
+    /// The one line a pass leaves on the sidebar: the catalog's failure, or
+    /// every feed failing (almost certainly offline; one line, not one per
+    /// feed). A failed queue drain or some feeds failing says nothing here,
+    /// and neither counts toward "every feed" (#1904).
+    static func errorLine(for report: RssSyncReport) -> String? {
+        if let error = report.catalogError { return FeedErrorText.describe(error) }
+        if report.everyFeedFailed, let error = report.firstFeedError { return FeedErrorText.describe(error) }
+        return nil
     }
 
     /// The views' `.task`: a refresh until one has run to an outcome. Waits
