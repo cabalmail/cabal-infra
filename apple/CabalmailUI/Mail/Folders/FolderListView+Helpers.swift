@@ -241,41 +241,6 @@ extension FolderListView {
         if changed { collapsedPathsRaw = encodeCollapsed(set) }
     }
 
-    /// Foreground for the folder row's icon. `FolderIconTint` owns the
-    /// rule and records what each candidate is worth in contrast (#1318);
-    /// this only spells the cases as styles. The accent is the
-    /// asset-catalog color, pinned explicitly rather than ridden through
-    /// `.tint`: macOS repaints environment tints with the user's system
-    /// accent (System Settings > Appearance) whenever that isn't
-    /// "multicolor", which left the wide layouts' icons off-brand. The
-    /// pinned color resolves the same light/dark variants on every
-    /// platform, so compact renders identically to before.
-    func iconForeground(isSelected: Bool) -> AnyShapeStyle {
-        switch FolderIconTint.tint(isSelected: isSelected) {
-        case .inherited:
-            return AnyShapeStyle(.primary)
-        case .accent:
-            return AnyShapeStyle(ColorTokens.accentForestFg)
-        }
-    }
-
-    /// Foreground for the folder name: accent while the folder has
-    /// unread messages, dimmed once it's caught up, and left alone on
-    /// the selected row. `FolderNameTint` owns the rule and records
-    /// what each case is worth in contrast (#1297); this only spells
-    /// the cases as styles. The accent is the pinned asset-catalog
-    /// color, for the reason `iconForeground` gives.
-    func folderNameForeground(hasUnread: Bool, isSelected: Bool) -> AnyShapeStyle {
-        switch FolderNameTint.tint(hasUnread: hasUnread, isSelected: isSelected) {
-        case .inherited:
-            return AnyShapeStyle(.primary)
-        case .unread:
-            return AnyShapeStyle(ColorTokens.accentForestFg)
-        case .caughtUp:
-            return AnyShapeStyle(Color.primary.opacity(FolderNameTint.dimmedOpacity))
-        }
-    }
-
     /// Fire a one-shot STATUS for an unsubscribed folder the user just
     /// selected, so the row's badge stops being blank. Subscribed
     /// folders are already covered by the launch-time walk; INBOX is
