@@ -289,6 +289,15 @@ class Folders(unittest.TestCase):
         self.assertEqual(tables['cabal-rss-folder'].rows[(USER, child_id)]['default_filter'], 'all')
         self.assertEqual(call(upd, body={'folder_id': child_id, 'default_filter': 'starred'})[1]['code'],
                          'invalid_default_filter')
+        # A new folder's list opens newest first; the order sticks per folder,
+        # on its own (a body carrying only the order is an update).
+        self.assertEqual(top['folder']['ordering_mode'], 'newest_first')
+        _, ordered = call(upd, body={'folder_id': child_id, 'ordering_mode': 'oldest_day_newest_within'})
+        self.assertEqual(ordered['folder']['ordering_mode'], 'oldest_day_newest_within')
+        self.assertEqual(tables['cabal-rss-folder'].rows[(USER, child_id)]['ordering_mode'],
+                         'oldest_day_newest_within')
+        self.assertEqual(call(upd, body={'folder_id': child_id, 'ordering_mode': 'spiral'})[1]['code'],
+                         'invalid_ordering_mode')
         tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'title': 'T', 'due_shard': 'active'}
         tables['cabal-rss-subscription'].rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1',
                                                                 'folder_id': child_id, 'folder_key': f'{child_id}#s1'}
@@ -296,6 +305,13 @@ class Folders(unittest.TestCase):
                                                                 'folder_id': '~root', 'folder_key': '~root#s2'}
         _, listing = call(lst)
         self.assertEqual(len(listing['folders']), 2)
+        # A row written before folders had an order (or by an OPML import)
+        # reads newest first.
+        tables['cabal-rss-folder'].rows[(USER, 'legacy')] = {'user': USER, 'folder_id': 'legacy', 'name': 'L'}
+        _, relisted = call(lst)
+        legacy = next(f for f in relisted['folders'] if f['folder_id'] == 'legacy')
+        self.assertEqual(legacy['ordering_mode'], 'newest_first')
+        del tables['cabal-rss-folder'].rows[(USER, 'legacy')]
         self.assertEqual(listing['subscriptions'][0]['feed']['title'], 'T')
         # A root subscription is stored with the sentinel but is '' on the wire.
         self.assertEqual({s['subscription_id']: s['folder_id'] for s in listing['subscriptions']},
