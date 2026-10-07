@@ -51,6 +51,16 @@ public final class MailSessionStore {
         !teardownGate.hasEnded(client)
     }
 
+    /// The Inbox unread count a caller outside this module fetched through
+    /// `client` (the iOS Check Inbox intent), written to the app badge only
+    /// if `acceptsCounts(from:)` still takes it. The intent used to write it
+    /// straight to `counts`, so a STATUS that answered after a sign-out put
+    /// the signed-out account's count back on the badge (#1892).
+    public func setInboxUnread(_ count: Int, fetchedThrough client: CabalmailClient) {
+        guard acceptsCounts(from: client) else { return }
+        counts.setInboxUnread(count)
+    }
+
     /// The reader changed a flag on `ref` (or a reply marked it
     /// `\Answered`): tell the list, and for `\Seen` move the folder's unread
     /// count with it.

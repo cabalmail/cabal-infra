@@ -468,10 +468,14 @@ extension SessionManager {
 
     /// A client the manager no longer holds stops what it runs on its own:
     /// its send queue and its Spotlight feed. Its API calls and caches keep
-    /// working for anyone still holding it. Never the wired client or the
-    /// one being lent.
+    /// working for anyone still holding it, but a count fetched through it
+    /// is no longer written: a lent client let go because another account
+    /// signed in, or at a sign-out with no session wired, is marked ended
+    /// like a session's (#1892). Never the wired client or the one being
+    /// lent.
     private func letGo(of dropped: CabalmailClient?) {
         guard let dropped, dropped !== client, dropped !== standby else { return }
+        teardownGate.markEnded(dropped)
         Task { await dropped.shutdown() }
     }
 }
