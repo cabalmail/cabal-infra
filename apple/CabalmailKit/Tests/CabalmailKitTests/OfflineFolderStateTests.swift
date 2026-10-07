@@ -136,7 +136,7 @@ final class OfflineFolderStateTests: XCTestCase {
             _ = try await harness.launch(network).foldersForDisplay()
             XCTFail("expected the refusal to throw")
         } catch let error as CabalmailError {
-            guard case .server = error else { return XCTFail("expected .server, got \(error)") }
+            guard case .http = error else { return XCTFail("expected .http, got \(error)") }
         }
     }
 

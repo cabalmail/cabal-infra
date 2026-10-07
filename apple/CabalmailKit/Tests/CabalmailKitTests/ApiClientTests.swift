@@ -137,8 +137,8 @@ final class ApiClientTests: XCTestCase {
         }
     }
 
-    func testNonMaintenance503SurfacesAsServer() async throws {
-        // A 503 that isn't the maintenance shape must still surface as .server,
+    func testNonMaintenance503SurfacesAsHttp() async throws {
+        // A 503 that isn't the maintenance shape must still surface as .http,
         // so unrelated upstream failures aren't mislabeled as planned maintenance.
         let http = RecordingHTTPTransport(responses: [(Data("upstream down".utf8), 503)])
         let auth = StubAuthService()
@@ -151,7 +151,7 @@ final class ApiClientTests: XCTestCase {
             _ = try await client.listAddresses()
             XCTFail("Expected server error")
         } catch let error as CabalmailError {
-            XCTAssertEqual(error, .server(code: "503", message: "upstream down"))
+            XCTAssertEqual(error, .http(status: 503, body: "upstream down"))
         }
     }
 

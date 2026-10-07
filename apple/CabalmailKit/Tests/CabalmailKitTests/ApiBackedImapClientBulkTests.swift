@@ -132,8 +132,8 @@ final class ApiBackedImapClientBulkTests: XCTestCase {
         } catch CabalmailError.bulkPartialFailure {
             XCTFail("total failure must not masquerade as partial")
         } catch let error as CabalmailError {
-            guard case .server = error else {
-                return XCTFail("expected .server, got \(error)")
+            guard case .http(500, _) = error else {
+                return XCTFail("expected .http(500), got \(error)")
             }
         }
     }

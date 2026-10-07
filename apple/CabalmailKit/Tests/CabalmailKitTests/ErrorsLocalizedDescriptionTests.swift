@@ -68,12 +68,38 @@ final class ErrorsLocalizedDescriptionTests: XCTestCase {
         XCTAssertEqual(CabalmailError.storage("").localizedDescription, "Couldn't read or save data on this device.")
     }
 
+    /// An API or S3 failure moved from `.server` to `.http`; what the user
+    /// reads is the same sentence it was.
+    func testHttpReadsExactlyAsTheServerCaseDid() {
+        let replies: [(status: Int, body: String)] = [
+            (502, #"{"message": "Internal server error"}"#),
+            (404, #"{"status": "That message is no longer in INBOX"}"#),
+            (500, ""),
+            (502, "<html><head><title>502 Bad Gateway</title></head></html>"),
+            (403, "<Error><Code>AccessDenied</Code></Error>"),
+        ]
+        for reply in replies {
+            XCTAssertEqual(
+                CabalmailError.http(status: reply.status, body: reply.body).localizedDescription,
+                CabalmailError.server(code: String(reply.status), message: reply.body).localizedDescription,
+                "\(reply.status) \(reply.body)"
+            )
+        }
+        XCTAssertEqual(
+            CabalmailError.http(status: 502, body: #"{"message": "Internal server error"}"#).localizedDescription,
+            "Internal server error."
+        )
+        XCTAssertEqual(CabalmailError.http(status: 500, body: "").localizedDescription,
+                       "The server couldn't complete that request (500).")
+    }
+
     func testNoCaseFallsBackToTheEnumDescription() {
         let cases: [CabalmailError] = [
             .notConfigured, .notSignedIn, .invalidCredentials, .authExpired,
             .network("boom"), .transport("boom"), .protocolError("boom"), .decoding("boom"),
             .cancelled, .storage("boom"),
             .server(code: "404", message: ""),
+            .http(status: 404, body: ""),
             .maintenance(message: "Mail is briefly unavailable."),
             .bulkPartialFailure(succeeded: [1, 2], failed: [3])
         ]
@@ -81,7 +107,8 @@ final class ErrorsLocalizedDescriptionTests: XCTestCase {
             let text = error.localizedDescription
             XCTAssertEqual(text, error.errorDescription, "\(error): the existential must see the same copy")
             XCTAssertFalse(
-                text.contains("(code:") || text.contains("\\\"") || text.hasSuffix(")\""),
+                text.contains("(code:") || text.contains("(status:") || text.contains("\\\"")
+                    || text.hasSuffix(")\""),
                 "\(error) still reads as a raw enum: \(text)"
             )
             XCTAssertFalse(text.isEmpty, "\(error) has no user-facing copy")

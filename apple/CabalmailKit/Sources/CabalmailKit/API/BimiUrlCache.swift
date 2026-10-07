@@ -64,7 +64,7 @@ public actor BimiUrlCache {
         await url(forDomain: domain) { key in
             do {
                 return try await client.fetchBimiURL(senderDomain: key)
-            } catch CabalmailError.server(let code, _) where code == "400" {
+            } catch CabalmailError.http(400, _) {
                 return nil
             }
         }
