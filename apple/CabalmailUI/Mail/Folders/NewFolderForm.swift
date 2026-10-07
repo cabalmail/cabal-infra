@@ -24,9 +24,30 @@ final class NewFolderForm {
         parent.isEmpty ? nil : parent
     }
 
+    /// Why the last Create failed, for the sheet to show. It lives here for
+    /// the same reason the input does: the sheet's own state would lose it
+    /// when its body is re-created. The sidebar's error line is behind the
+    /// sheet, so a failure written there went unseen (#1915).
+    private(set) var errorMessage: String?
+
     /// Whitespace-only input is not a folder name.
     var canCreate: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Runs `create` with the typed name and chosen parent. True when it
+    /// succeeded and the sheet can close; a failure's sentence stays in
+    /// `errorMessage` and the sheet stays open.
+    @MainActor
+    func submit(_ create: (String, String?) async throws -> Void) async -> Bool {
+        errorMessage = nil
+        do {
+            try await create(name, chosenParent)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     /// Cleared before each presentation so a new sheet starts empty rather
@@ -34,5 +55,6 @@ final class NewFolderForm {
     func reset() {
         name = ""
         parent = ""
+        errorMessage = nil
     }
 }

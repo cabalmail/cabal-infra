@@ -414,7 +414,7 @@ extension FolderListView {
     var newFolderSheet: some View {
         if let model {
             NewFolderSheet(parents: model.possibleParents, form: newFolderForm) { name, parent in
-                await model.createFolder(name: name, parent: parent)
+                try await model.createFolder(name: name, parent: parent)
             }
         }
     }

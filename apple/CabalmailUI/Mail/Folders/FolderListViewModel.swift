@@ -218,23 +218,20 @@ final class FolderListViewModel {
     /// server rejects the SUBSCRIBE the folder still exists and the reload
     /// below surfaces it. Reloads the full list (rather than appending) so the
     /// new folder slots into the sidebar tree sort, then back-fills counts.
-    /// Returns true on success so the presenting sheet can dismiss itself.
-    func createFolder(name: String, parent: String?) async -> Bool {
+    /// A failed create is thrown for the New Folder sheet to show, rather
+    /// than written to `errorMessage`, which the sidebar draws behind the
+    /// sheet (#1915). The sheet's Create is disabled for a blank name
+    /// (`NewFolderForm.canCreate`).
+    func createFolder(name: String, parent: String?) async throws {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return false }
-        do {
-            try await client.imapClient.createFolder(name: trimmed, parent: parent)
-            try? await client.imapClient.subscribe(
-                path: fullPath(for: trimmed, parent: parent)
-            )
-            await loadFolderList()
-            await refreshSubscribedCounts()
-            errorMessage = nil
-            return true
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        return false
+        guard !trimmed.isEmpty else { return }
+        try await client.imapClient.createFolder(name: trimmed, parent: parent)
+        try? await client.imapClient.subscribe(
+            path: fullPath(for: trimmed, parent: parent)
+        )
+        await loadFolderList()
+        await refreshSubscribedCounts()
+        errorMessage = nil
     }
 
     /// Delete a user folder. Gated by `canDelete` so system folders and
