@@ -99,25 +99,31 @@ final class FeedSidebarRefreshCancellationTests: XCTestCase {
         XCTAssertEqual(again, calls, "a finished refresh isn't repeated on every appearance")
     }
 
-    /// The appearance's `.task` arrives while the cancelled refresh is still
-    /// unwinding: it waits for that refresh, then runs its own, instead of
-    /// being folded into the dead one.
+    /// The appearance's `.task` arrives while the cancelled refresh's pass is
+    /// still unwinding. The cancelled refresh stopped waiting for it at once;
+    /// the appearance is not folded into that dead pass but waits for it to
+    /// end and then gets a pass of its own.
     func testAnAppearanceDuringTheCancelledRefreshWaitsAndThenRefreshes() async throws {
         let rss = try XCTUnwrap(rss)
         await rss.holdNext(.catalog)
         let first = Task { await model.refresh() }
         try await waitUntil { await rss.isHolding(.catalog) }
         first.cancel()
+        await first.value
+        XCTAssertTrue(model.needsRefresh)
         let next = Task { await model.refreshIfNeeded() }
-        try await waitUntilOnMainActor { self.model.waitingRefreshCount == 1 }
+        try await waitUntilOnMainActor { self.model.isRefreshing }
+        let stillUnwinding = await rss.isHolding(.catalog)
+        XCTAssertTrue(stillUnwinding)
 
         await rss.releaseHeld(.catalog)
-        await first.value
         await next.value
 
         XCTAssertEqual(model.subscriptions.map(\.subscriptionId), ["sub-1"])
         XCTAssertFalse(model.needsRefresh)
         XCTAssertNil(model.errorMessage)
+        let calls = await rss.catalogCalls
+        XCTAssertEqual(calls, 2, "the dead pass's catalog, then the appearance's own")
     }
 
     /// The control: arriving during a live refresh, it waits and then does
@@ -135,7 +141,7 @@ final class FeedSidebarRefreshCancellationTests: XCTestCase {
         await next.value
 
         let calls = await rss.catalogCalls
-        XCTAssertEqual(calls, 2, "the live refresh's catalog and its sync's, and no second refresh")
+        XCTAssertEqual(calls, 1, "the live refresh's one catalog fetch, and no second refresh")
         XCTAssertFalse(model.needsRefresh)
         XCTAssertNil(model.errorMessage)
     }
@@ -157,6 +163,30 @@ final class FeedSidebarRefreshCancellationTests: XCTestCase {
         await model.refresh()
 
         XCTAssertEqual(model.errorMessage, "Couldn't reach the server. The request timed out.")
+        XCTAssertFalse(model.needsRefresh)
+    }
+
+    /// #1904: a failed drain of the pending queue is not a feed, so one feed
+    /// of two failing plus the queue failing is not "every feed failed".
+    func testSomeFeedsAndTheQueueFailingIsNotEveryFeedFailing() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("feed-sidebar-1904-\(UUID().uuidString)")
+        directories.append(directory)
+        let store = try RssStore(directory: directory)
+        await rss.set(catalog: RssCatalog(folders: [], subscriptions: [
+            RssSubscription(subscriptionId: "sub-1", feedId: "feed-1"),
+            RssSubscription(subscriptionId: "sub-2", feedId: "feed-2"),
+        ]))
+        try await store.upsertItems([RssItem(feedId: "feed-1", itemId: "i1", sortKey: "k1")])
+        try await store.setRead(feedId: "feed-1", sortKey: "k1", true)
+        await rss.set(itemsError: CabalmailError.network("The request timed out."), forSubscription: "sub-2")
+        await rss.set(pushError: CabalmailError.network("The request timed out."))
+        model = FeedSidebarViewModel(store: store, engine: RssSyncEngine(client: rss, store: store),
+                                     bus: FeedStateBus())
+
+        await model.refresh()
+
+        XCTAssertNil(model.errorMessage, "sub-1 synced; the sidebar has nothing to say")
         XCTAssertFalse(model.needsRefresh)
     }
 

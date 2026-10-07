@@ -3,7 +3,7 @@ import Foundation
 /// Keeps `RssStore` current with the server and pushes the user's local
 /// state changes back (docs/1.x/rss-implementation-plan.md, phase 5).
 ///
-/// Three jobs, all idempotent and safe to overlap:
+/// Three jobs, all idempotent:
 ///   * `refreshCatalog()` - folders and subscriptions from the server; the
 ///     store deletes what departed and reports it so the app can drop the
 ///     matching web-view storage.
@@ -23,6 +23,15 @@ import Foundation
 ///     between batches. A failure leaves the queue intact for the next
 ///     attempt.
 ///
+/// Single flight: the app asks from several places at once (the session's
+/// poller, the Feeds sidebar, the item list, the reader's marks), so the
+/// work is shared rather than repeated. There is one `syncAll` pass, one sync
+/// per feed (which `syncAll` and the scope syncs join), and one drain, with a
+/// drain asked for mid-pass getting one more pass so a change queued after
+/// the pass read the queue still goes. A caller whose task is cancelled stops
+/// waiting and gets nothing back; the work stops once nobody waits for it
+/// (`SharedRun`).
+///
 /// The engine never decides *when* to run; the app calls it from its
 /// triggers (selection, foreground, background refresh, reconnect).
 public actor RssSyncEngine {
@@ -34,12 +43,26 @@ public actor RssSyncEngine {
     public var pageSize = 100
     /// Since-sync pages per feed per run.
     public var maxPagesPerRun = 5
-    /// Feeds synced at once by `syncAll`.
+    /// Feeds synced at once by `syncAll` and the scope syncs.
     public var concurrency = 4
+
+    /// The `syncAll` pass in flight.
+    private var allFlight: Flight<RssSyncReport>?
+    /// Each feed's sync in flight, by feed id.
+    private var feedFlights: [String: Flight<Result<Int, Error>>] = [:]
+    /// The pending queue's pusher.
+    private let pending: RssPendingDrain
+
+    /// Callers waiting on the `syncAll` pass in flight, on a feed's sync, and
+    /// on the drain queued behind the one pushing: the tests' view of a join.
+    var syncAllWaiterCount: Int { allFlight?.run.waiterCount ?? 0 }
+    func feedSyncWaiterCount(_ feedId: String) -> Int { feedFlights[feedId]?.run.waiterCount ?? 0 }
+    var queuedDrainWaiterCount: Int { get async { await pending.queuedWaiterCount } }
 
     public init(client: RssClient, store: RssStore) {
         self.client = client
         self.store = store
+        pending = RssPendingDrain(client: client, store: store)
     }
 
     // MARK: - Catalog
@@ -53,8 +76,56 @@ public actor RssSyncEngine {
     // MARK: - Items
 
     /// Syncs one subscription's items; returns how many the store received.
+    /// A sync of the same feed already in flight is joined, not repeated.
+    /// Throws `CancellationError` when the caller is cancelled first.
     @discardableResult
     public func syncItems(for subscription: RssSubscription) async throws -> Int {
+        guard !Task.isCancelled else { throw CancellationError() }
+        let feedId = subscription.feedId
+        let (flight, ticket) = Flight.join(feedFlights[feedId]) { [self] id in
+            let result: Result<Int, Error>
+            do {
+                result = .success(try await syncFeedPass(subscription))
+            } catch {
+                result = .failure(error)
+            }
+            await endFeedFlight(feedId, id)
+            return result
+        }
+        feedFlights[feedId] = flight
+        guard let result = await flight.run.value(for: ticket) else { throw CancellationError() }
+        return try result.get()
+    }
+
+    private func endFeedFlight(_ feedId: String, _ id: UUID) {
+        if feedFlights[feedId]?.id == id { feedFlights[feedId] = nil }
+    }
+
+    /// Syncs the feeds a scope covers, `concurrency` at a time, then drains
+    /// the queue: the item list's refresh. Every feed is tried whatever
+    /// another one does, and a feed `syncAll` is already syncing is joined.
+    /// Nil when the caller is cancelled before the pass ends.
+    public func syncItems(in scope: RssItemScope) async -> RssSyncReport? {
+        guard !Task.isCancelled else { return nil }
+        var report = RssSyncReport()
+        do {
+            let feedIds = Set(try await store.feedIds(in: scope))
+            let subscriptions = try await store.subscriptions().filter { feedIds.contains($0.feedId) }
+            report.subscriptionIds = subscriptions.map(\.subscriptionId)
+            report.feedErrors = await syncFeeds(subscriptions)
+        } catch {
+            report.catalogError = error
+        }
+        guard !Task.isCancelled else { return nil }
+        do {
+            try await drainPending()
+        } catch {
+            report.pendingError = error
+        }
+        return Task.isCancelled ? nil : report
+    }
+
+    private func syncFeedPass(_ subscription: RssSubscription) async throws -> Int {
         var state = try await store.syncState(feedId: subscription.feedId)
         var received = 0
         if state.sinceCursor.isEmpty {
@@ -110,20 +181,52 @@ public actor RssSyncEngine {
     }
 
     /// Catalog, then every subscription, `concurrency` at a time; then the
-    /// pending queue. Per-feed failures are collected, not fatal.
+    /// pending queue. A pass already in flight is joined. Per-feed failures
+    /// are collected, not fatal, and reported apart from the catalog's and
+    /// the queue's (#1904). Nil when the caller is cancelled before the pass
+    /// ends.
     @discardableResult
-    public func syncAll() async -> [String: Error] {
-        var failures: [String: Error] = [:]
+    public func syncAll() async -> RssSyncReport? {
+        guard !Task.isCancelled else { return nil }
+        let (flight, ticket) = Flight.join(allFlight) { [self] id in
+            let report = await syncAllPass()
+            await endAllFlight(id)
+            return report
+        }
+        allFlight = flight
+        return await flight.run.value(for: ticket)
+    }
+
+    private func endAllFlight(_ id: UUID) {
+        if allFlight?.id == id { allFlight = nil }
+    }
+
+    private func syncAllPass() async -> RssSyncReport {
+        var report = RssSyncReport()
         do {
             try await refreshCatalog()
         } catch {
-            failures["catalog"] = error
-            return failures
+            report.catalogError = error
+            return report
         }
-        let subs = (try? await store.subscriptions()) ?? []
+        let subscriptions = (try? await store.subscriptions()) ?? []
+        report.subscriptionIds = subscriptions.map(\.subscriptionId)
+        report.feedErrors = await syncFeeds(subscriptions)
+        guard !Task.isCancelled else { return report }
+        do {
+            try await drainPending()
+        } catch {
+            report.pendingError = error
+        }
+        return report
+    }
+
+    /// Syncs `subscriptions` through their feed runs, `concurrency` at a
+    /// time; the failures by subscription id.
+    private func syncFeeds(_ subscriptions: [RssSubscription]) async -> [String: Error] {
+        var failures: [String: Error] = [:]
         await withTaskGroup(of: (String, Error?).self) { group in
-            var iterator = subs.makeIterator()
-            var running = 0
+            var iterator = subscriptions.makeIterator()
             func launch(_ sub: RssSubscription) {
                 group.addTask { [self] in
                     do {
@@ -134,6 +237,7 @@ public actor RssSyncEngine {
                     }
                 }
             }
+            var running = 0
             while running < concurrency, let sub = iterator.next() {
                 launch(sub)
                 running += 1
@@ -143,82 +247,19 @@ public actor RssSyncEngine {
                 if let sub = iterator.next() { launch(sub) }
             }
         }
-        do {
-            try await drainPending()
-        } catch {
-            failures["pending"] = error
-        }
         return failures
     }
 
     // MARK: - Pending mutations
 
-    /// One server call of a drain, in queue order.
-    private enum DrainStep {
-        case itemStates([RssItemStateChange], pendingIds: [Int])
-        case markAllRead(RssStore.PendingMutation)
-    }
-
-    /// Pushes queued state changes. Returns how many queue rows were cleared.
+    /// Pushes queued state changes (`RssPendingDrain`). Returns how many queue
+    /// rows were cleared. Joins a drain that has not yet read the queue; asked
+    /// for while one is pushing, it waits for one more pass behind it, so a
+    /// change made after the queue was read still goes. Throws
+    /// `CancellationError` when the caller is cancelled first.
     @discardableResult
     public func drainPending() async throws -> Int {
-        let pending = try await store.pendingMutations()
-        guard !pending.isEmpty else { return 0 }
-        var cleared = 0
-        for step in Self.drainSteps(pending) {
-            switch step {
-            case .itemStates(let changes, let ids):
-                _ = try await client.setItemState(changes)
-                try await store.deletePending(ids: ids)
-                cleared += ids.count
-            case .markAllRead(let mutation):
-                // The tap-time watermark, not the replay time: items that
-                // arrived while the row sat in the queue stay unread.
-                let result = try await client.markAllRead(
-                    scope: .subscription(mutation.subscriptionId),
-                    watermark: mutation.watermark.isEmpty ? nil : mutation.watermark)
-                try await store.applyServerWatermark(subscriptionId: mutation.subscriptionId,
-                                                     watermark: result.readWatermark)
-                try await store.deletePending(ids: [mutation.id])
-                cleared += 1
-            }
-        }
-        return cleared
-    }
-
-    /// The queue as server calls. Item marks between two mark-all-reads
-    /// coalesce (the queue holds one row per item and kind, so read +
-    /// favorite for one item become one change) into batches of at most
-    /// 100; a mark-all-read is a fence. The user's order is what the server
-    /// must see: replaying "mark all read, then mark X unread" the other
-    /// way round lets the server's mark-all-read flip X straight back.
-    private static func drainSteps(_ pending: [RssStore.PendingMutation]) -> [DrainStep] {
-        var steps: [DrainStep] = []
-        var changes: [String: RssItemStateChange] = [:]
-        var changeIds: [String: [Int]] = [:]
-        func closeBatch() {
-            let keys = changes.keys.sorted()
-            for start in stride(from: 0, to: keys.count, by: 100) {
-                let batch = Array(keys[start..<min(start + 100, keys.count)])
-                steps.append(.itemStates(batch.map { changes[$0]! }, pendingIds: batch.flatMap { changeIds[$0] ?? [] }))
-            }
-            changes = [:]
-            changeIds = [:]
-        }
-        for mutation in pending {
-            if mutation.kind == .markAllRead {
-                closeBatch()
-                steps.append(.markAllRead(mutation))
-                continue
-            }
-            let key = "\(mutation.feedId)#\(mutation.sortKey)"
-            var change = changes[key] ?? RssItemStateChange(feedId: mutation.feedId, sortKey: mutation.sortKey)
-            if mutation.kind == .read { change.isRead = mutation.value } else { change.isFavorite = mutation.value }
-            changes[key] = change
-            changeIds[key, default: []].append(mutation.id)
-        }
-        closeBatch()
-        return steps
+        try await pending.drain()
     }
 
     // MARK: - Local mutations (store first, then a best-effort push)

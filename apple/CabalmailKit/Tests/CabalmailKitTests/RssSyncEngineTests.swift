@@ -212,15 +212,21 @@ final class RssSyncEngineTests: XCTestCase {
                                      RssItemsPage(items: [item(1, feed: "f2")], nextCursor: nil)])
         await client.set(syncPages: [RssSyncPage(items: [], nextSince: "", hasMore: false),
                                      RssSyncPage(items: [], nextSince: "", hasMore: false)])
-        var failures = await engine.syncAll()
-        XCTAssertTrue(failures.isEmpty, "\(failures)")
+        let reported = await engine.syncAll()
+        var report = try XCTUnwrap(reported)
+        XCTAssertTrue(report.feedErrors.isEmpty, "\(report.feedErrors)")
+        XCTAssertNil(report.catalogError)
+        XCTAssertNil(report.pendingError)
+        XCTAssertEqual(report.subscriptionIds, ["s1", "s2"])
         let observed16 = try await store.items(.init(scope: .all)).count
         XCTAssertEqual(observed16, 2)
         // s2 disappears server-side; its items go with it.
         await client.set(catalog: RssCatalog(folders: [], subscriptions: [subscription]))
         await client.set(syncPages: [RssSyncPage(items: [], nextSince: "", hasMore: false)])
-        failures = await engine.syncAll()
-        XCTAssertTrue(failures.isEmpty)
+        let reportedAgain = await engine.syncAll()
+        report = try XCTUnwrap(reportedAgain)
+        XCTAssertTrue(report.feedErrors.isEmpty)
+        XCTAssertEqual(report.subscriptionIds, ["s1"])
         let observed17 = try await store.items(.init(scope: .all)).map(\.feedId)
         XCTAssertEqual(observed17, ["f1"])
     }
@@ -232,12 +238,28 @@ actor FakeRssClient: RssClient {
     struct ListCall: Equatable { let scope: RssItemScope; let cursor: String? }
     struct SyncCall: Equatable { let subscriptionId: String; let since: String }
 
+    /// A call the single-flight tests can park (`holdNext`) until released.
+    /// Like a URLSession data task, a parked call fails once released if its
+    /// task was cancelled meanwhile.
+    enum Gate: Hashable, Sendable {
+        case catalog
+        case sync(String)
+        case push
+    }
+
     private var catalog = RssCatalog(folders: [], subscriptions: [])
+    private var catalogError: Error?
     private var listPages: [RssItemsPage] = []
     private var syncPages: [RssSyncPage] = []
     private var statePages: [RssStateSyncPage] = []
+    private var syncErrors: [String: Error] = [:]
+    private var emptyPagesByDefault = false
     private var markAllReadWatermark = "w"
     private var failNextState = false
+    private var armed: [Gate: Int] = [:]
+    private var parked: [Gate: [CheckedContinuation<Void, Never>]] = [:]
+    private var syncsInFlight = 0
+    private(set) var catalogCalls = 0
     private(set) var listCalls: [ListCall] = []
     private(set) var syncCalls: [SyncCall] = []
     private(set) var stateSyncCalls: [SyncCall] = []
@@ -247,16 +269,59 @@ actor FakeRssClient: RssClient {
     private(set) var markAllReadWatermarks: [String?] = []
     /// Every mutating call in the order it arrived ("state" / "mark_all_read").
     private(set) var pushLog: [String] = []
+    /// Catalog calls as they start and end, for the ordering tests.
+    private(set) var catalogLog: [String] = []
+    /// The most since-syncs that were out at once.
+    private(set) var mostSyncsInFlight = 0
 
     func set(catalog: RssCatalog) { self.catalog = catalog }
+    func set(catalogError: Error?) { self.catalogError = catalogError }
     func set(listPages: [RssItemsPage]) { self.listPages = listPages }
     func set(syncPages: [RssSyncPage]) { self.syncPages = syncPages }
     /// Unscripted state syncs answer with an empty, exhausted page.
     func set(statePages: [RssStateSyncPage]) { self.statePages = statePages }
     func set(markAllReadWatermark: String) { self.markAllReadWatermark = markAllReadWatermark }
     func set(failNextState: Bool) { self.failNextState = failNextState }
+    func set(syncError: Error?, for subscriptionId: String) { syncErrors[subscriptionId] = syncError }
+    /// Answer unscripted list and since-sync calls with an empty, exhausted
+    /// page instead of failing them.
+    func set(emptyPagesByDefault: Bool) { self.emptyPagesByDefault = emptyPagesByDefault }
 
-    func listSubscriptions() async throws -> RssCatalog { catalog }
+    /// Parks the next `gate` call (each call to this arms one more).
+    func holdNext(_ gate: Gate) { armed[gate, default: 0] += 1 }
+    func heldCount(_ gate: Gate) -> Int { parked[gate]?.count ?? 0 }
+    func isHolding(_ gate: Gate) -> Bool { heldCount(gate) > 0 }
+
+    /// Releases the longest-parked `gate` call.
+    func release(_ gate: Gate) {
+        guard var waiting = parked[gate], !waiting.isEmpty else { return }
+        let first = waiting.removeFirst()
+        parked[gate] = waiting
+        first.resume()
+    }
+
+    private func pass(_ gate: Gate) async throws {
+        if let count = armed[gate], count > 0 {
+            armed[gate] = count - 1
+            await withCheckedContinuation { parked[gate, default: []].append($0) }
+        }
+        if Task.isCancelled { throw CancellationError() }
+    }
+
+    func listSubscriptions() async throws -> RssCatalog {
+        catalogCalls += 1
+        catalogLog.append("start")
+        do {
+            try await pass(.catalog)
+        } catch {
+            catalogLog.append("cancelled")
+            throw error
+        }
+        catalogLog.append("end")
+        if let catalogError { throw catalogError }
+        return catalog
+    }
+
     func subscribe(url: String, folderId: String?) async throws -> RssSubscribeResult { fatalError("unused") }
     func unsubscribe(subscriptionId: String) async throws -> RssUnsubscribeResult { fatalError("unused") }
     func updateSubscription(_: String, _: RssSubscriptionUpdate) async throws -> RssSubscription {
@@ -271,12 +336,19 @@ actor FakeRssClient: RssClient {
     func listItems(scope: RssItemScope, filter: RssItemFilter, order: RssItemOrder, limit: Int,
                    cursor: String?) async throws -> RssItemsPage {
         listCalls.append(ListCall(scope: scope, cursor: cursor))
+        if listPages.isEmpty, emptyPagesByDefault { return RssItemsPage(items: [], nextCursor: nil) }
         guard !listPages.isEmpty else { throw CabalmailError.transport("no scripted list page") }
         return listPages.removeFirst()
     }
 
     func syncItems(subscriptionId: String, since: String, limit: Int) async throws -> RssSyncPage {
         syncCalls.append(SyncCall(subscriptionId: subscriptionId, since: since))
+        syncsInFlight += 1
+        mostSyncsInFlight = max(mostSyncsInFlight, syncsInFlight)
+        defer { syncsInFlight -= 1 }
+        try await pass(.sync(subscriptionId))
+        if let error = syncErrors[subscriptionId] { throw error }
+        if syncPages.isEmpty, emptyPagesByDefault { return RssSyncPage(items: [], nextSince: since, hasMore: false) }
         guard !syncPages.isEmpty else { throw CabalmailError.transport("no scripted sync page") }
         return syncPages.removeFirst()
     }
@@ -290,6 +362,7 @@ actor FakeRssClient: RssClient {
     func getItem(feedId: String, sortKey: String) async throws -> RssItem { fatalError("unused") }
 
     func setItemState(_ changes: [RssItemStateChange]) async throws -> Int {
+        try await pass(.push)
         if failNextState {
             failNextState = false
             throw CabalmailError.transport("offline")

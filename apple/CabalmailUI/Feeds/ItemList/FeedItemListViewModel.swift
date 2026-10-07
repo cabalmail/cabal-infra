@@ -221,31 +221,26 @@ final class FeedItemListViewModel {
     }
 
     /// Fresh items from the server for the feeds in scope, then a reload.
+    /// The engine syncs them four at a time, joining any feed another pass
+    /// is already syncing, and tries every feed whatever another one does.
     func sync() async {
-        guard !isSyncing, let engine, let store else { return }
+        guard !isSyncing, let engine else { return }
         isSyncing = true
         defer { isSyncing = false }
-        do {
-            let subs = try await store.subscriptions()
-            let feedIds = Set(try await store.feedIds(in: scope))
-            for sub in subs where feedIds.contains(sub.feedId) {
-                try await engine.syncItems(for: sub)
-            }
-            // Best-effort: a drain failure must not fail the sync, which has
-            // already fetched. `_ =` says the discard is deliberate (#1507).
-            _ = try? await engine.drainPending()
-            errorMessage = nil
-        } catch {
-            // A sync whose task was cancelled has nothing to report: the
-            // list's `.task` as it leaves the screen mid-sync (a pushed reader
-            // or a tab switch on iPhone, a scope change), or a pull cut short
-            // (#1908). Read off the task, not the error, whose shape has
-            // varied. An earlier error stands; the store is still re-read and
-            // the bus told below, since feeds synced before the cancel have
-            // landed. No retry is armed here: the list's `.task(id: scope)`
-            // runs `start()`, which builds a fresh model and syncs, on every
-            // appearance; a `model == nil` gate there would need one.
-            if !Task.isCancelled { errorMessage = FeedErrorText.describe(error) }
+        let report = await engine.syncItems(in: scope)
+        // A sync whose task was cancelled has nothing to report: the list's
+        // `.task` as it leaves the screen mid-sync (a pushed reader or a tab
+        // switch on iPhone, a scope change), or a pull cut short (#1908). It
+        // stops waiting at once, and the engine stops the work once nobody
+        // waits for it. Read off the task, not the result. An earlier error
+        // stands; the store is still re-read and the bus told below, since
+        // feeds synced before the cancel have landed. No retry is armed here:
+        // the list's `.task(id: scope)` runs `start()`, which builds a fresh
+        // model and syncs, on every appearance; a `model == nil` gate there
+        // would need one. A failed drain stays quiet, as before: the queue
+        // waits for the next one.
+        if let report, !Task.isCancelled {
+            errorMessage = (report.catalogError ?? report.firstFeedError).map(FeedErrorText.describe)
         }
         await reload()
         postBroad()
