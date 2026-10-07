@@ -7,8 +7,16 @@ import CabalmailKit
 /// fit and the View menu carries the rest, and the wide bar on macOS and
 /// visionOS, where each action is its own item. Every control carries its
 /// `FeedReaderAction` identifier (`feed.reader.<action>`).
+///
+/// The bar takes the two values that decide its set (`showingArticle`,
+/// `hasArticle`) from the reader's view, which reads them from the model, so
+/// the set follows them. Each item is a `FeedReaderBarItem` view, which reads
+/// the item's state itself: a toolbar content type's body did not refresh
+/// for the model's reads (measured: Flag kept reading "Flag" after a flag).
 struct FeedReaderToolbar: ToolbarContent {
     let model: FeedItemDetailViewModel
+    let showingArticle: Bool
+    let hasArticle: Bool
     /// The article control says when it needs a connection.
     let isOffline: Bool
 
@@ -21,18 +29,33 @@ struct FeedReaderToolbar: ToolbarContent {
         // only route to its demoted actions.
         // `FeedReaderToolbarLayoutTests` pins the list as Read, Flag, View.
         let actions = FeedReaderToolbarLayout.menuBar
-        ToolbarItem { barItem(actions[0]) }
-        ToolbarItem { barItem(actions[1]) }
-        ToolbarItem { barItem(actions[2]) }
+        ToolbarItem { item(actions[0]) }
+        ToolbarItem { item(actions[1]) }
+        ToolbarItem { item(actions[2]) }
             .keepsInBarFirst()
         #else
-        let actions = FeedReaderToolbarLayout.wideBar(
-            showingArticle: model.showingArticle, hasArticle: model.articleURL != nil
-        )
+        let actions = FeedReaderToolbarLayout.wideBar(showingArticle: showingArticle, hasArticle: hasArticle)
         ForEach(actions, id: \.self) { action in
-            ToolbarItem { barItem(action) }
+            ToolbarItem { item(action) }
         }
         #endif
+    }
+
+    private func item(_ action: FeedReaderAction) -> FeedReaderBarItem {
+        FeedReaderBarItem(action: action, model: model, isOffline: isOffline)
+    }
+}
+
+/// One control of the feed reader's bar, a view of its own so the state it
+/// draws (read, flagged, reader view, remote content, the article) is
+/// tracked and its face refreshes when that changes.
+struct FeedReaderBarItem: View {
+    let action: FeedReaderAction
+    let model: FeedItemDetailViewModel
+    let isOffline: Bool
+
+    var body: some View {
+        barItem(action)
     }
 
     @ViewBuilder
