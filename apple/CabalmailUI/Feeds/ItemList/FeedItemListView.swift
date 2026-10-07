@@ -24,6 +24,11 @@ struct FeedItemListView: View {
     @Environment(Preferences.self) private var preferences
     /// Aims this list's compose requests at its own window.
     @Environment(\.commandWindowID) private var commandWindowID
+    #if !os(macOS)
+    /// Whether this is the wide layout, which decides where the scope switch
+    /// is drawn (`scopeSwitchHost`).
+    @Environment(\.showsSettingsGear) var showsSettingsGear
+    #endif
     @State var model: FeedItemListViewModel?
     /// Gates for the launch restore — see `applyLaunchRestoreWhenReady`.
     @State private var hasAppeared = false
@@ -54,6 +59,12 @@ struct FeedItemListView: View {
             }
             .navigationTitle(title)
         )
+        #if os(iOS) || os(visionOS)
+        // Inline, as the message list's title is. On a wide iPad the switch
+        // draws in the column instead (`scopeSwitchHost`), and a large
+        // title's band would stay behind there, empty, above it.
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             // New Message stays in the toolbar in feed scope, in the same
             // slot the mail list gives it, so switching between mail and
@@ -65,7 +76,10 @@ struct FeedItemListView: View {
                 if let model { refreshButton(model) }
             }
             #else
+            // Ranked to stay, as the message list's Compose is: on a narrow
+            // column the bar folds its trailing items first (#1626).
             ToolbarItem { composeButton }
+                .keepsInBar()
             if let model { ToolbarItem { refreshButton(model) } }
             #endif
             if let model {
