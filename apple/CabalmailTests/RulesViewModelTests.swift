@@ -289,11 +289,11 @@ final class RulesLoadCancellationTests: XCTestCase {
         XCTAssertTrue(model.rules.isEmpty)
     }
 
-    /// The shape production actually sees: `URLSessionHTTPTransport`
-    /// normalizes the cancelled data task to `CabalmailError.network`, whose
+    /// The shape production saw until #1815: `URLSessionHTTPTransport`
+    /// normalized the cancelled data task to `CabalmailError.network`, whose
     /// `localizedDescription` is the reported "Couldn't reach the server.
-    /// cancelled." — so the cancellation has to be read off the Task, not off
-    /// the error.
+    /// cancelled." The cancellation is read off the Task, not off the error,
+    /// so it stays unpainted whatever the error says.
     func testCancellationNormalizedToANetworkErrorIsStillNotPainted() async {
         let backend = FakeRulesBackend()
         backend.heldFetchError = CabalmailError.network("cancelled")
@@ -349,8 +349,8 @@ private final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
     var holdFetches = false
     /// How a released-while-cancelled fetch fails. `CancellationError` is the
     /// cooperative throw; `CabalmailError.network("cancelled")` is what
-    /// `URLSessionHTTPTransport` actually normalizes a cancelled data task
-    /// into, which is the shape production sees.
+    /// `URLSessionHTTPTransport` normalized a cancelled data task into until
+    /// #1815 (it is `.cancelled` now).
     var heldFetchError: Error = CancellationError()
     private var heldFetches: [CheckedContinuation<Void, Never>] = []
     private(set) var fetchCount = 0

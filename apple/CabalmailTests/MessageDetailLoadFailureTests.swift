@@ -3,23 +3,21 @@ import CabalmailKit
 @testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8: how `MessageDetailViewModel`
-/// fails to open a message today, and how it starts, de-duplicates, retries
-/// and abandons a load.
+/// fails to open a message, and how it starts, de-duplicates, retries and
+/// abandons a load.
 ///
 /// Protects: the user-facing error copy the reader shows (#940 replaced the
 /// raw enum dump with `CabalmailError.localizedDescription`); the #403 load
 /// task (owned by the model so SwiftUI's `.task` double-fire can't cancel it,
-/// started once per reader by `startLoadIfNeeded()`); and the one automatic
-/// retry on `URLError.cancelled`. That retry, and every other `URLError`
-/// branch, is reachable only from a test double: `URLSessionHTTPTransport`
-/// turns every `URLError` into `CabalmailError.network`, so the tests that
-/// throw a raw `URLError` are labelled fake-only. Keeping them pins the
-/// branches as they are; it is not a claim that production can reach them.
-/// The cancelled-task early returns inside the `URLError.cancelled` and
-/// `CancellationError` catches (`if Task.isCancelled { return }`) are
-/// unreachable from this fake as well -- after a hold it throws
-/// `.network("cancelled")` for a cancelled task before it reads its script
-/// -- so no test protects them, and deleting them changes no result here.
+/// started once per reader by `startLoadIfNeeded()`); and the one rule for a
+/// cancel (#1815): a load whose own task is cancelled leaves quietly and
+/// un-attempted, whatever it was thrown. The reader has one catch and no
+/// retry of its own. The transport retries a spurious URLSession cancel once
+/// and reports a cooperative one as `.cancelled`, which the fake mirrors:
+/// after a hold it throws `.cancelled` for a cancelled task before it reads
+/// its script. The tests that throw a raw `URLError` or `CancellationError`
+/// are fake-only (the transport normalizes both away); they pin that the
+/// one catch shows whatever arrives on a live task.
 @MainActor
 final class MessageDetailLoadFailureTests: XCTestCase {
     private var fixture: MessageDetailLoadFixture!
@@ -91,10 +89,9 @@ final class MessageDetailLoadFailureTests: XCTestCase {
         assertFailedOpen(model, message: copy)
     }
 
-    /// How a cancelled live fetch reaches the reader: the transport has
-    /// already turned `URLError.cancelled` into `.network("cancelled")`, which
-    /// the #403 guards don't recognise, so it paints the error screen.
-    /// Tracked in #1815.
+    /// A spurious URLSession cancel that failed its retry in the transport
+    /// reaches the reader as `.network("cancelled")` on a live task, and is
+    /// shown like any network failure, with no second retry here.
     func testANetworkCancelledErrorShowsCouldNotReachTheServer() async throws {
         let (model, imap) = try await makeReader(bodies: [.failure(CabalmailError.network("cancelled"))])
 
@@ -105,14 +102,12 @@ final class MessageDetailLoadFailureTests: XCTestCase {
         XCTAssertEqual(fetches.count, 1, "no retry for the normalized error")
     }
 
-    /// Pins current behaviour, which looks like a (latent) defect: the #403
-    /// guards mean a load whose task is cancelled mid-fetch should leave
-    /// quietly, un-attempted, but the cancellation arrives as
-    /// `.network("cancelled")` (the fake mirrors the transport here) and is
-    /// reported as a failure. Latent because nothing cancels the reader's
-    /// load task today; the guards only matter if something starts to.
-    /// Tracked in #1815.
-    func testCancellingTheLoadTaskMidFetchPaintsTheErrorScreen() async throws {
+    /// A load whose task is cancelled mid-fetch leaves quietly, un-attempted,
+    /// so the view keeps its spinner for the next live task (#1815). Before,
+    /// the cancel arrived as `.network("cancelled")` and painted "Couldn't
+    /// reach the server. cancelled." with Retry. Latent until something
+    /// cancels the reader's load task; nothing in the view does today.
+    func testCancellingTheLoadTaskMidFetchLeavesQuietlyUnattempted() async throws {
         let (model, imap) = try await makeReader(bodies: [.success(MessageDetailMimeFixture.alternative)])
         await imap.holdNext(.fetchBody)
 
@@ -122,7 +117,12 @@ final class MessageDetailLoadFailureTests: XCTestCase {
         await imap.releaseHeld(.fetchBody)
         await load.value
 
-        assertFailedOpen(model, message: "Couldn't reach the server. cancelled.")
+        XCTAssertFalse(model.hasAttemptedLoad, "left un-attempted, so the view keeps its spinner")
+        XCTAssertFalse(model.isLoading)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertNil(model.plainText)
+        let fetches = await imap.fetchBodyCalls
+        XCTAssertEqual(fetches.count, 1, "no retry of a cancelled load")
     }
 
     func testARawDecodingErrorShowsItsLocalizedDescription() async throws {
@@ -141,9 +141,24 @@ final class MessageDetailLoadFailureTests: XCTestCase {
         assertFailedOpen(model, message: decodingError.localizedDescription)
     }
 
-    // MARK: - Fake-only branches (a raw URLError never reaches the reader)
+    // MARK: - What arrives on a live task is shown, once
 
-    func testFakeOnlyURLErrorCancelledIsRetriedOnceAndThenRenders() async throws {
+    /// `.cancelled` on a live task is shown, not swallowed: the reader's
+    /// guard is its own task, not the error's case. (The transport throws
+    /// `.cancelled` only for a cancelled task, so this is fake-only.)
+    func testACancelledErrorOnALiveTaskIsShown() async throws {
+        let (model, imap) = try await makeReader(bodies: [.failure(CabalmailError.cancelled)])
+
+        await model.load()
+
+        assertFailedOpen(model, message: "That request was cancelled.")
+        let fetches = await imap.fetchBodyCalls
+        XCTAssertEqual(fetches.count, 1)
+    }
+
+    /// Fake-only: a raw `URLError.cancelled` is shown with its own text and
+    /// not retried. The one retry of a spurious cancel is the transport's.
+    func testFakeOnlyURLErrorCancelledIsShownWithoutARetry() async throws {
         let (model, imap) = try await makeReader(bodies: [
             .failure(URLError(.cancelled)),
             .success(MessageDetailMimeFixture.alternative),
@@ -151,24 +166,9 @@ final class MessageDetailLoadFailureTests: XCTestCase {
 
         await model.load()
 
-        XCTAssertEqual(model.plainText, MessageDetailMimeFixture.alternativePlain)
-        XCTAssertNil(model.errorMessage)
-        XCTAssertTrue(model.hasAttemptedLoad)
+        assertFailedOpen(model, message: URLError(.cancelled).localizedDescription)
         let fetches = await imap.fetchBodyCalls
-        XCTAssertEqual(fetches.count, 2)
-    }
-
-    func testFakeOnlyURLErrorCancelledTwiceShowsTheGenericCopy() async throws {
-        let (model, imap) = try await makeReader(bodies: [
-            .failure(URLError(.cancelled)),
-            .failure(URLError(.cancelled)),
-        ])
-
-        await model.load()
-
-        assertFailedOpen(model, message: "Couldn't load message body.")
-        let fetches = await imap.fetchBodyCalls
-        XCTAssertEqual(fetches.count, 2, "one automatic retry, no more")
+        XCTAssertEqual(fetches.count, 1, "the reader has no retry of its own")
     }
 
     func testFakeOnlyOtherURLErrorShowsItsLocalizedDescriptionWithoutARetry() async throws {
@@ -181,12 +181,14 @@ final class MessageDetailLoadFailureTests: XCTestCase {
         XCTAssertEqual(fetches.count, 1)
     }
 
-    func testFakeOnlyCancellationErrorOnALiveTaskShowsTheGenericCopyWithoutARetry() async throws {
+    /// Fake-only: a `CancellationError` on a live task is shown with its own
+    /// text, like any other error, and not retried.
+    func testFakeOnlyCancellationErrorOnALiveTaskIsShownWithoutARetry() async throws {
         let (model, imap) = try await makeReader(bodies: [.failure(CancellationError())])
 
         await model.load()
 
-        assertFailedOpen(model, message: "Couldn't load message body.")
+        assertFailedOpen(model, message: CancellationError().localizedDescription)
         let fetches = await imap.fetchBodyCalls
         XCTAssertEqual(fetches.count, 1)
     }

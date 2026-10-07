@@ -139,8 +139,17 @@ public actor Outbox {
         }
     }
 
-    public func update(_ entry: Entry) throws {
+    /// Rewrites an entry that is still queued, and returns whether it was.
+    /// An entry removed in the meantime stays removed: an attempt that
+    /// outlived its entry (the outbox wiped by a sign-out while a drain's
+    /// send was in flight, or the message discarded) must not write it back,
+    /// or the next account's queue would send the previous account's mail
+    /// (#1909).
+    @discardableResult
+    public func update(_ entry: Entry) throws -> Bool {
+        guard fileManager.fileExists(atPath: fileURL(for: entry.id).path) else { return false }
         try store(entry)
+        return true
     }
 
     /// Puts a failed entry back in the queue with a fresh retry budget. The

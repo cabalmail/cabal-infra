@@ -177,39 +177,23 @@ final class MessageDetailViewModel {
             isLoading = false
             if completed { hasAttemptedLoad = true }
         }
-        // One automatic retry on transient `URLError.cancelled`.
-        var attemptsRemaining = 2
-        while attemptsRemaining > 0 {
-            attemptsRemaining -= 1
-            do {
-                let bytes = try await fetchBodyBytes()
-                let tree = MimeParser.parse(bytes)
-                try await hydrate(from: tree)
-                errorMessage = nil
-                donateBodyToSpotlight()
-                scheduleMarkAsReadIfNeeded()
-                completed = true
-                return
-            } catch let urlError as URLError where urlError.code == .cancelled {
-                if Task.isCancelled { return }
-                if attemptsRemaining > 0 { continue }
-                errorMessage = "Couldn't load message body."
-                completed = true
-                return
-            } catch let urlError as URLError {
-                errorMessage = urlError.localizedDescription
-                completed = true
-                return
-            } catch is CancellationError {
-                if Task.isCancelled { return }
-                errorMessage = "Couldn't load message body."
-                completed = true
-                return
-            } catch {
-                errorMessage = error.localizedDescription
-                completed = true
-                return
-            }
+        do {
+            let bytes = try await fetchBodyBytes()
+            let tree = MimeParser.parse(bytes)
+            try await hydrate(from: tree)
+            errorMessage = nil
+            donateBodyToSpotlight()
+            scheduleMarkAsReadIfNeeded()
+            completed = true
+        } catch {
+            // This load's task was cancelled mid-fetch: leave quietly,
+            // un-attempted, for the next live task to take over. The
+            // transport reports that cancel as `.cancelled` (#1815); a
+            // spurious URLSession cancel has had its one retry there and
+            // arrives as `.network`, a failure like any other.
+            if Task.isCancelled { return }
+            errorMessage = error.localizedDescription
+            completed = true
         }
     }
 
