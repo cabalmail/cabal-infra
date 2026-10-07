@@ -44,6 +44,12 @@ final class FeedStoreSignOutTests: XCTestCase {
         XCTAssertEqual(left, [], "the next store on the file finds nothing of the last session's")
     }
 
+    // The whole-client tests below run on macOS only. Clearing a client's
+    // local data also empties its Spotlight index, and on an iOS or visionOS
+    // simulator with no host app Core Spotlight's delete-all stalls for
+    // minutes, past the test time allowance (the iOS Kit job on #1940). The
+    // store-level test above covers the retire on every platform.
+    #if os(macOS)
     /// The app's sign-out path, through a client the factory built: what a
     /// sync still in flight writes after the sign-out's clear never reaches
     /// the next client on the same cache directory.
@@ -86,4 +92,5 @@ final class FeedStoreSignOutTests: XCTestCase {
             cacheDirectory: root
         )
     }
+    #endif
 }
