@@ -71,6 +71,14 @@ private extension CabalmailError {
         switch self {
         case .server, .decoding:
             return true
+        case .cancelled:
+            // The caller's own task was cancelled mid-fetch (a launch whose
+            // window closed). The transport used to report that as
+            // `.network`, which fell back, so a cancelled launch got the
+            // cached config; it keeps doing so now that the cancel reads as
+            // `.cancelled` (#1815). A `.cancelled` on a live task is
+            // rethrown.
+            return Task.isCancelled
         default:
             return isUnreachable
         }
