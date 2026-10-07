@@ -58,22 +58,33 @@ extension RssStore {
     }
 
     /// Mark-all-read for one subscription, the way the server does it:
-    /// advance the watermark and flip items explicitly marked unread.
+    /// advance the watermark and flip items explicitly marked unread. One
+    /// transaction with the queued push: a watermark advanced here with no
+    /// push queued would read as read on this device for good, since the
+    /// store keeps the higher of its own and the server's (#1939).
     public func markAllRead(subscriptionId: String, watermark: String? = nil) throws {
         let watermark = watermark ?? Self.isoNow()
         guard let sub = try subscription(id: subscriptionId) else { return }
-        try database.run(
-            "UPDATE subscriptions SET read_watermark = MAX(read_watermark, ?) WHERE subscription_id = ?",
-            [.init(watermark), .init(subscriptionId)])
-        try database.run("""
-            UPDATE items SET is_read = 1 WHERE feed_id = ? AND state_is_explicit = 1 AND is_read = 0
-              AND published_at <= ?
-            """, [.init(sub.feedId), .init(watermark)])
-        // `created_at` carries the watermark itself (the tap time, unless the
-        // caller passed one), which `pendingMutations` hands to the drain.
-        try database.run(
-            "INSERT INTO pending (kind, subscription_id, feed_id, created_at) VALUES ('mark_all_read', ?, ?, ?)",
-            [.init(subscriptionId), .init(sub.feedId), .init(watermark)])
+        try database.exec("BEGIN")
+        do {
+            try database.run(
+                "UPDATE subscriptions SET read_watermark = MAX(read_watermark, ?) WHERE subscription_id = ?",
+                [.init(watermark), .init(subscriptionId)])
+            try database.run("""
+                UPDATE items SET is_read = 1 WHERE feed_id = ? AND state_is_explicit = 1 AND is_read = 0
+                  AND published_at <= ?
+                """, [.init(sub.feedId), .init(watermark)])
+            // `created_at` carries the watermark itself (the tap time, unless
+            // the caller passed one), which `pendingMutations` hands to the
+            // drain.
+            try database.run(
+                "INSERT INTO pending (kind, subscription_id, feed_id, created_at) VALUES ('mark_all_read', ?, ?, ?)",
+                [.init(subscriptionId), .init(sub.feedId), .init(watermark)])
+            try database.exec("COMMIT")
+        } catch {
+            try? database.exec("ROLLBACK")
+            throw error
+        }
         emit(.feeds([sub.feedId]))
     }
 
