@@ -33,9 +33,41 @@ extension FeedItemListView {
         #if os(macOS)
         content.titleSwitchToolbarHost { scopeSwitchMenu }
         #else
-        content.toolbarTitleMenu { scopeSwitchMenuItems }
+        switch scopeSwitchHost {
+        case .titleMenu:
+            content.toolbarTitleMenu { scopeSwitchMenuItems }
+        case .columnHeader:
+            // The column-scoped bar has no width to spare for a title, menu
+            // or not: in feed scope on a landscape iPad the title menu
+            // vanished outright and the bar's other items folded into the
+            // system overflow (`FolderSwitchPlacement`, #1626). So the switch
+            // is drawn in the column, as the message list's is, and the bar's
+            // title goes with it.
+            VStack(spacing: 0) {
+                TitleSwitchHeaderMenu(
+                    title: title, spokenKind: "Feed scope", hint: "Switch feed or folder",
+                    identifier: "feed.scopeSwitch"
+                ) {
+                    scopeSwitchMenuItems
+                }
+                content
+            }
+            .toolbar(removing: .title)
+        }
         #endif
     }
+
+    #if !os(macOS)
+    /// Where the switch is drawn on this layout: the message list's rule
+    /// (`FolderSwitchPlacement`), read from the same `showsSettingsGear`
+    /// flag, since the feed list is the same narrow split column.
+    var scopeSwitchHost: FolderSwitchHost {
+        FolderSwitchPlacement.host(
+            isWideSidebar: showsSettingsGear,
+            columnScopedToolbar: GlobalSearchFieldPlacement.platformColumnScopedToolbar
+        )
+    }
+    #endif
 
     #if os(macOS)
     /// macOS: the scope name, bold like the toolbar title it stands in for,

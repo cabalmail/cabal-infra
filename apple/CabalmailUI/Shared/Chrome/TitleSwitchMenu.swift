@@ -37,6 +37,46 @@ struct TitleSwitchMenuRows<Option: Hashable>: View {
     }
 }
 
+#if !os(macOS)
+/// A list column's title-switch menu drawn as a header row inside the
+/// column, above the list, for the layouts whose column-scoped bar has no
+/// width to spare for a title menu (`FolderSwitchPlacement`, #1626): the
+/// name in headline weight with a chevron, a tap opening the menu. The feed
+/// list's scope menu uses it; the message list declares its own twin
+/// (`folderSwitchHeaderMenu`).
+struct TitleSwitchHeaderMenu<Items: View>: View {
+    let title: String
+    /// What VoiceOver reads before the name ("Feed scope, Rust Blog").
+    let spokenKind: String
+    let hint: String
+    let identifier: String
+    @ViewBuilder let items: () -> Items
+
+    var body: some View {
+        Menu {
+            items()
+        } label: {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(spokenKind), \(title)")
+        .accessibilityHint(hint)
+        .accessibilityIdentifier(identifier)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal)
+        .padding(.vertical, 4)
+    }
+}
+#endif
+
 #if os(macOS)
 extension View {
     /// Puts a list column's title-switch menu where its toolbar title was.
