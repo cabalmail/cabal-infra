@@ -46,6 +46,7 @@ final class AsyncStreamTerminationCaptureScanTests: XCTestCase {
         "IMAP/MailboxWatcher.swift": .weakHandler,
         "Logging/DebugLogStore.swift": .weakHandler,
         "Outbox/Outbox.swift": .weakHandler,
+        "RSS/RssStore.swift": .weakHandler,
         "Reachability.swift": .weakHandler,
     ]
 

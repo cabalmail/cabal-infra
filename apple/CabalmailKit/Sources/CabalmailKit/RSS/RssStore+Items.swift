@@ -90,6 +90,7 @@ extension RssStore {
             try? database.exec("ROLLBACK")
             throw error
         }
+        emit(.feeds(Set(items.map(\.feedId))))
     }
 
     /// One page of items for the query, read state computed.

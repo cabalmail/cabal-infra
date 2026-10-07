@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// The RSS reader's on-device store: the whole catalog (folders,
 /// subscriptions), the items the device has synced, the caller's read and
@@ -19,11 +20,17 @@ import Foundation
 /// watermark` is exact for a non-explicit item. Marks made elsewhere
 /// arrive through the engine's state sync (`applyServerStates`), since the
 /// item sync is keyed on ingest time and never re-delivers a changed item.
+///
+/// Every write is announced on `changes()` once it commits, so the views
+/// that read the store re-read it when it moves rather than being told by
+/// whoever wrote.
 public actor RssStore {
     let database: SQLiteDatabase
     /// Directory the database lives in (the caller may keep other RSS state
     /// beside it).
     public nonisolated let directory: URL
+    /// Announces each committed write on `changes()`.
+    let changeBroadcast = RssChangeBroadcast()
 
     static let schemaVersion = 5
 
@@ -34,6 +41,38 @@ public actor RssStore {
         try database.exec("PRAGMA journal_mode = WAL")
         try database.exec("PRAGMA synchronous = NORMAL")
         try Self.migrate(database)
+    }
+
+    // MARK: - Changes
+
+    /// What a write changed, announced on `changes()` after it commits.
+    public enum Change: Sendable, Equatable {
+        /// Items whose read or favorite state the user changed here, or whose
+        /// queued change was pushed, by `RssItem.id`: rows patch in place.
+        case items(Set<String>)
+        /// Feeds whose items or read state moved wholesale, by feed id: a
+        /// sync, the server's states or watermark, a mark-all-read, the items
+        /// of a departed subscription deleted.
+        case feeds(Set<String>)
+        /// Folders or subscriptions were added, changed or removed.
+        case catalog
+        /// Every row went (sign-out).
+        case cleared
+    }
+
+    /// Every later write, as it commits. Any number of observers; nothing
+    /// is replayed, so subscribe before reading what the stream will keep
+    /// current. Each stream ends when the store is released.
+    public func changes() -> AsyncStream<Change> {
+        changeBroadcast.stream()
+    }
+
+    /// Test hook: whether any change-stream observer is registered.
+    var hasChangeObservers: Bool { changeBroadcast.hasObservers }
+
+    /// Announces a committed write. Empty sets announce nothing.
+    func emit(_ change: Change) {
+        changeBroadcast.emit(change)
     }
 
     /// Opens the store, and when the file cannot be opened or migrated -
@@ -90,6 +129,7 @@ public actor RssStore {
             DELETE FROM pending; DELETE FROM feed_sync; DELETE FROM items;
             DELETE FROM subscriptions; DELETE FROM folders; DELETE FROM departed_data_stores;
             """)
+        emit(.cleared)
     }
 
     // MARK: - Per-subscription web storage
@@ -137,6 +177,8 @@ public actor RssStore {
     /// cursors, and pending mutations of feeds no longer subscribed.
     public func replaceCatalog(_ catalog: RssCatalog) throws -> CatalogDiff {
         let existing = try subscriptions()
+        let watermarks = Dictionary(existing.map { ($0.subscriptionId, $0.readWatermark) },
+                                    uniquingKeysWith: { first, _ in first })
         let keep = Set(catalog.subscriptions.map(\.subscriptionId))
         let removed = existing.filter { !keep.contains($0.subscriptionId) }
         let keptFeeds = Set(catalog.subscriptions.map(\.feedId))
@@ -153,29 +195,44 @@ public actor RssStore {
                 try deleteFeedRows(feedId)
             }
             for sub in catalog.subscriptions {
-                try upsertSubscription(sub)
+                try writeSubscription(sub)
             }
             let folderIds = catalog.folders.map(\.folderId)
             for row in try database.rows("SELECT folder_id FROM folders") where !folderIds.contains(row.string(0)) {
                 try database.run("DELETE FROM folders WHERE folder_id = ?", [.init(row.string(0))])
             }
             for folder in catalog.folders {
-                try upsertFolder(folder)
+                try writeFolder(folder)
             }
             try database.exec("COMMIT")
         } catch {
             try? database.exec("ROLLBACK")
             throw error
         }
-        return CatalogDiff(
+        let diff = CatalogDiff(
             removedSubscriptionIds: removed.map(\.subscriptionId),
             removedDataStoreUuids: removed.map(\.dataStoreUuid).filter { !$0.isEmpty },
             removedFeedIds: Array(Set(removed.map(\.feedId)).subtracting(keptFeeds)).sorted()
         )
+        emit(.catalog)
+        // A watermark another device advanced reads items as read here, and a
+        // departed feed's items are gone: both move the lists, not just the tree.
+        let advanced = catalog.subscriptions.filter { $0.readWatermark > (watermarks[$0.subscriptionId] ?? "") }
+        emit(.feeds(Set(advanced.map(\.feedId)).union(diff.removedFeedIds)))
+        return diff
     }
 
     /// Writes one subscription (after a server-side update or subscribe).
     public func upsertSubscription(_ sub: RssSubscription) throws {
+        let watermark = try subscription(id: sub.subscriptionId)?.readWatermark ?? ""
+        try writeSubscription(sub)
+        emit(.catalog)
+        if sub.readWatermark > watermark { emit(.feeds([sub.feedId])) }
+    }
+
+    /// The row write behind `upsertSubscription`, which `replaceCatalog`
+    /// runs inside its transaction and announces once at the end.
+    private func writeSubscription(_ sub: RssSubscription) throws {
         let feedJson = sub.feed.flatMap { try? JSONEncoder().encode($0) }
             .flatMap { String(data: $0, encoding: .utf8) }
         try database.run("""
@@ -205,6 +262,11 @@ public actor RssStore {
 
     /// Writes one folder (with the catalog, or after a server-side update).
     public func upsertFolder(_ folder: RssFolder) throws {
+        try writeFolder(folder)
+        emit(.catalog)
+    }
+
+    private func writeFolder(_ folder: RssFolder) throws {
         try database.run("""
             INSERT INTO folders (folder_id, parent_folder_id, name, display_order, default_filter)
             VALUES (?, ?, ?, ?, ?)
@@ -285,6 +347,45 @@ public actor RssStore {
     func deleteFeedRows(_ feedId: String) throws {
         for table in ["items", "feed_sync", "pending"] {
             try database.run("DELETE FROM \(table) WHERE feed_id = ?", [.init(feedId)])
+        }
+    }
+}
+
+/// `RssStore`'s change announcements: each observer's continuation, a yield
+/// to every one, and their end when the store goes. Its own type, behind a
+/// lock rather than in the actor, so a store write announces without a hop
+/// and a stream's termination handler forgets its observer at once.
+final class RssChangeBroadcast: Sendable {
+    private let continuations = Mutex<[UUID: AsyncStream<RssStore.Change>.Continuation]>([:])
+
+    deinit {
+        // Finish outstanding streams so a consumer's `for await` loop ends
+        // with the store (sign-out releases the per-session client) instead
+        // of suspending forever and retaining its task's captures.
+        for continuation in continuations.withLock({ Array($0.values) }) {
+            continuation.finish()
+        }
+    }
+
+    func stream() -> AsyncStream<RssStore.Change> {
+        let (stream, continuation) = AsyncStream<RssStore.Change>.makeStream()
+        let id = UUID()
+        continuations.withLock { $0[id] = continuation }
+        continuation.onTermination = { @Sendable [weak self] _ in
+            self?.continuations.withLock { $0[id] = nil }
+        }
+        return stream
+    }
+
+    var hasObservers: Bool { continuations.withLock { !$0.isEmpty } }
+
+    func emit(_ change: RssStore.Change) {
+        switch change {
+        case .items(let ids) where ids.isEmpty, .feeds(let ids) where ids.isEmpty: return
+        default: break
+        }
+        for continuation in continuations.withLock({ Array($0.values) }) {
+            continuation.yield(change)
         }
     }
 }
