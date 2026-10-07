@@ -33,7 +33,11 @@ extension FeedItemListView {
                         // inline picker still draws its title as a section
                         // header, repeating the word on the button just
                         // pressed, so the label is hidden (VoiceOver keeps it).
-                        Picker("Order", selection: $model.ordering) {
+                        // A pick is sticky for the feed (`selectOrdering`).
+                        Picker("Order", selection: Binding(
+                            get: { model.ordering },
+                            set: { model.selectOrdering($0) }
+                        )) {
                             Text("Newest first").tag(RssOrderingMode.newestFirst)
                             Text("Oldest first").tag(RssOrderingMode.oldestFirst)
                             Text("Newest day, oldest first within").tag(RssOrderingMode.newestDayOldestWithin)
