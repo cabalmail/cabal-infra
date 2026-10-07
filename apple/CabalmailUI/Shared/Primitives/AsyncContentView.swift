@@ -12,8 +12,9 @@ import CabalmailKit
 /// the same in every one, and stays that way by construction.
 ///
 /// `retry` is the caller's own reload closure, invoked as-is: the owning view
-/// keeps its `isLoading` / `errorMessage` state and its loader, and this view
-/// only decides which of the three to show.
+/// keeps its `isLoading` / `errorMessage` state and its loader (usually an
+/// `AsyncContentLoader`), and this view only decides which of the three to
+/// show.
 ///
 /// This is not the only error presentation in the app, and deliberately so.
 /// Screens that surface an error *beside* their content rather than instead of

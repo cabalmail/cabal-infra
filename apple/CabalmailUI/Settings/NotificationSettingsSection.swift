@@ -238,9 +238,7 @@ struct NotificationFolderPickerView: View {
     @Environment(AppState.self) private var appState
     @Binding var selection: Set<String>
 
-    @State private var folders: [Folder] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var loader = AsyncContentLoader<[Folder]>()
 
     var body: some View {
         content
@@ -253,12 +251,12 @@ struct NotificationFolderPickerView: View {
 
     private var content: some View {
         AsyncContentView(
-            isLoading: isLoading,
+            isLoading: loader.isLoading,
             loadingLabel: "Loading folders…",
-            errorMessage: errorMessage,
+            errorMessage: loader.errorMessage,
             retry: { Task { await load() } },
             content: {
-                List(folders) { folder in
+                List(loader.value ?? []) { folder in
                     Button {
                         toggle(folder.path)
                     } label: {
@@ -294,22 +292,18 @@ struct NotificationFolderPickerView: View {
         }
     }
 
+    /// A load cut short by the view going away (or rebuilt mid-push with
+    /// its state kept) paints nothing over the next load's list (#1908).
     @MainActor
     private func load() async {
         guard let client = appState.client else {
-            isLoading = false
-            errorMessage = "Sign in to load folders."
+            loader.fail("Sign in to load folders.")
             return
         }
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        do {
-            let all = try await client.imapClient.listFolders()
-            folders = sortForPicker(all)
-        } catch {
-            errorMessage = "Couldn't load folders: \(error.localizedDescription)"
-        }
+        await loader.load(
+            { try await sortForPicker(client.imapClient.listFolders()) },
+            failure: { "Couldn't load folders: \($0.localizedDescription)" }
+        )
     }
 
     /// Same visible order as the sidebar and MoveToFolderSheet — INBOX

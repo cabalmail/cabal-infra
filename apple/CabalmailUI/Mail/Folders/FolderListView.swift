@@ -57,7 +57,10 @@ struct FolderListView: View {
     /// them back. `MailRootView` uses it to complete the launch INBOX landing:
     /// the fetched INBOX replaces the provisional `Folder(path: "INBOX")`
     /// its launch task pre-selected (so the message list never waited on
-    /// this fetch), and the saved-position resume probe runs.
+    /// this fetch), and the saved-position resume probe runs. Nor does the
+    /// load a later appearance resumes after the first was cut short (#1908):
+    /// on iPhone the user has come back to this list by then, and the landing
+    /// would push them into the folder they left.
     var onFoldersLoaded: ([Folder]) -> Void = { _ in }
 
     // The wide sidebar's Mail section disclosure — persisted so the sidebar
@@ -260,6 +263,10 @@ struct FolderListView: View {
                 // counts. Unsubscribed folders are fetched lazily by
                 // `lazyFetchCountIfNeeded` when the user selects one.
                 await newModel.refreshSubscribedCounts()
+            } else if let model {
+                // Back on screen with the model it kept: a first load cut
+                // short by this list leaving the screen loads now (#1908).
+                await model.reloadIfCutShort()
             }
         }
         .task { await reloadWhenBackOnline() }

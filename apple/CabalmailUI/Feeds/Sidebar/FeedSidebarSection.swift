@@ -172,12 +172,16 @@ struct FeedSidebarList: View {
             setAllCollapsed(command.collapses)
         }
         .task {
-            guard model == nil, let client = appState.client else { return }
-            management = FeedManagementViewModel(client: client)
-            let model = FeedSidebarViewModel(client: client)
-            self.model = model
-            await model.load()
-            await model.refresh()
+            if model == nil, let client = appState.client {
+                management = FeedManagementViewModel(client: client)
+                let model = FeedSidebarViewModel(client: client)
+                self.model = model
+                await model.load()
+            }
+            // Every appearance, not only the first: a refresh cut short as
+            // the sidebar left (a push, a tab switch) is owed, and this is
+            // where it is paid (#1908). A no-op once one has finished.
+            await model?.refreshIfNeeded()
         }
     }
 
