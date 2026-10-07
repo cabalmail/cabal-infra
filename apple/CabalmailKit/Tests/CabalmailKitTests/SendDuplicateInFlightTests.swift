@@ -55,14 +55,14 @@ final class SendDuplicateInFlightTests: XCTestCase {
 
     func testUnrelatedConflictIsNotMistakenForAnInFlightSend() async throws {
         // Only /send's own duplicate body earns the new case; any other 409
-        // keeps the generic server error so it still reaches the user.
+        // keeps the generic `.http` error so it still reaches the user.
         let body = #"{"status":"That message is no longer in Drafts"}"#
         let client = makeClient(responses: [(Data(body.utf8), 409)])
         do {
             try await client.sendMessage(Self.makeRequest())
             XCTFail("a rejected send was reported as successful")
         } catch let error as CabalmailError {
-            XCTAssertEqual(error, .server(code: "409", message: body))
+            XCTAssertEqual(error, .http(status: 409, body: body))
         }
     }
 

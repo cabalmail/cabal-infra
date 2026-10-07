@@ -13,13 +13,13 @@ import XCTest
 final class ApiBackedImapClientFetchBodyFailureTests: XCTestCase {
     /// #940: the reader shows the server's own sentence. The Lambda names the
     /// leaf of the dotted folder, so a nested folder reads as its last part.
-    func testMessageGone404ThrowsServerErrorWithTheServersSentence() async throws {
+    func testMessageGone404ThrowsHttpWithTheServersSentence() async throws {
         let body = #"{"status": "That message is no longer in Foo", "folder": "Lists.Foo", "id": 7}"#
         let harness = FetchBodyHarness(api: [.json(404, body)])
 
         let error = await harness.fetchError()
 
-        XCTAssertEqual(error as? CabalmailError, .server(code: "404", message: body))
+        XCTAssertEqual(error as? CabalmailError, .http(status: 404, body: body))
         XCTAssertEqual(error?.localizedDescription, "That message is no longer in Foo.")
         let hops = await harness.wire.hops
         XCTAssertEqual(hops, ["api"])
@@ -40,9 +40,9 @@ final class ApiBackedImapClientFetchBodyFailureTests: XCTestCase {
         }
     }
 
-    /// Any other non-2xx from the API hop: `.server` with the raw body, one
+    /// Any other non-2xx from the API hop: `.http` with the raw body, one
     /// request, no retry, no S3 hop.
-    func testOtherApiFailuresThrowServerWithTheRawBodyAndNoRetry() async throws {
+    func testOtherApiFailuresThrowHttpWithTheRawBodyAndNoRetry() async throws {
         // #1410 named the 400; API Gateway's own 502 and a plain 503 use
         // `message`; an empty 500 falls back to the status code.
         let cases: [Int: (body: String, copy: String)] = [
@@ -55,7 +55,7 @@ final class ApiBackedImapClientFetchBodyFailureTests: XCTestCase {
         for (status, expected) in cases.sorted(by: { $0.key < $1.key }) {
             let harness = FetchBodyHarness(api: [.json(status, expected.body)])
             let error = await harness.fetchError()
-            XCTAssertEqual(error as? CabalmailError, .server(code: String(status), message: expected.body), "\(status)")
+            XCTAssertEqual(error as? CabalmailError, .http(status: status, body: expected.body), "\(status)")
             XCTAssertEqual(error?.localizedDescription, expected.copy, "\(status)")
             let hops = await harness.wire.hops
             XCTAssertEqual(hops, ["api"], "\(status)")
@@ -90,11 +90,11 @@ final class ApiBackedImapClientFetchBodyFailureTests: XCTestCase {
         }
     }
 
-    /// The presigned GET bypasses `send`: a non-2xx is `.server` with the raw
+    /// The presigned GET bypasses `send`: a non-2xx is `.http` with the raw
     /// body whatever the status. A presigned URL carries its own signature,
     /// so even a 401 from it triggers no token refresh and no replay, and
     /// S3's 503 SlowDown is not retried.
-    func testPresignedFailuresThrowServerWithoutRefreshOrRetry() async throws {
+    func testPresignedFailuresThrowHttpWithoutRefreshOrRetry() async throws {
         let accessDenied = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
             + "<Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>R1</RequestId></Error>"
         let slowDown = "<Error><Code>SlowDown</Code><Message>Please reduce your request rate.</Message></Error>"
@@ -107,7 +107,7 @@ final class ApiBackedImapClientFetchBodyFailureTests: XCTestCase {
                 auth: auth
             )
             let error = await harness.fetchError()
-            XCTAssertEqual(error as? CabalmailError, .server(code: String(status), message: body), "\(status)")
+            XCTAssertEqual(error as? CabalmailError, .http(status: status, body: body), "\(status)")
             XCTAssertEqual(error?.localizedDescription, "The server couldn't complete that request (\(status)).",
                            "\(status)")
             let hops = await harness.wire.hops
@@ -198,7 +198,7 @@ final class ApiBackedImapClientFetchBodyAuthTests: XCTestCase {
         let gone = #"{"status": "That message is no longer in Foo", "folder": "Lists.Foo", "id": 7}"#
         let maintenance = #"{"status": "maintenance", "message": "Back in five minutes.", "retry_after": 30}"#
         let cases: [String: (replay: FetchBodyReply, expected: CabalmailError)] = [
-            "404": (.json(404, gone), .server(code: "404", message: gone)),
+            "404": (.json(404, gone), .http(status: 404, body: gone)),
             "maintenance": (.json(503, maintenance), .maintenance(message: "Back in five minutes.")),
         ]
         for (label, scripted) in cases.sorted(by: { $0.key < $1.key }) {

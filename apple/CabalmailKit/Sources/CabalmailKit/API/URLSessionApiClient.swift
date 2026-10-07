@@ -278,10 +278,7 @@ extension URLSessionApiClient {
         }
         guard expectedStatuses.contains(response.statusCode) else {
             if let maintenance = cabalMaintenanceError(data, response) { throw maintenance }
-            throw CabalmailError.server(
-                code: String(response.statusCode),
-                message: String(data: data, encoding: .utf8) ?? ""
-            )
+            throw CabalmailError.http(status: response.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
         return data
     }
@@ -308,9 +305,9 @@ extension URLSessionApiClient {
         }
         guard expectedStatuses.contains(retryResponse.statusCode) else {
             if let maintenance = cabalMaintenanceError(retryData, retryResponse) { throw maintenance }
-            throw CabalmailError.server(
-                code: String(retryResponse.statusCode),
-                message: String(data: retryData, encoding: .utf8) ?? ""
+            throw CabalmailError.http(
+                status: retryResponse.statusCode,
+                body: String(data: retryData, encoding: .utf8) ?? ""
             )
         }
         return retryData
@@ -376,7 +373,7 @@ private struct CabalMaintenanceBody: Decodable {
 
 /// Maps a 503 `{"status":"maintenance"}` response to `.maintenance` so an IMAP
 /// redeploy surfaces friendly "temporarily unavailable" copy instead of a
-/// generic `.server` error. Returns nil for any other status or body shape, so
+/// generic `.http` error. Returns nil for any other status or body shape, so
 /// unrelated 503s fall through to the normal error path.
 private func cabalMaintenanceError(
     _ data: Data,
