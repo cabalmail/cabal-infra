@@ -305,10 +305,6 @@ struct FolderListView: View {
         withFolderDrop(folder, droppable: isDroppable) {
         row(
             for: folder,
-            badge: countBadgeText(
-                unread: appState.mailStore.counts.folderUnreadCounts[folder.path],
-                total: appState.mailStore.counts.folderTotalCounts[folder.path]
-            ),
             depth: sectionRow.depth,
             hasChildren: sectionRow.hasChildren,
             isCollapsed: collapsed.contains(folder.path)
@@ -339,15 +335,15 @@ struct FolderListView: View {
     @ViewBuilder
     private func row(
         for folder: Folder,
-        badge: String?,
         depth: Int,
         hasChildren: Bool,
         isCollapsed: Bool
     ) -> some View {
         let isSelected = selection?.path == folder.path
-        // Keyed off the unread count itself, not the badge string, which
-        // can show totals under the .total/.both display modes.
-        let hasUnread = (appState.mailStore.counts.folderUnreadCounts[folder.path] ?? 0) > 0
+        let unread = appState.mailStore.counts.folderUnreadCounts[folder.path]
+        // Keyed off the unread count itself, not the badge, which can show
+        // totals under the .total/.both display modes.
+        let hasUnread = (unread ?? 0) > 0
         HStack {
             if depth > 0 {
                 Spacer().frame(width: CGFloat(depth) * 14)
@@ -385,14 +381,8 @@ struct FolderListView: View {
             Text(folder.name)
                 .foregroundStyle(folderNameForeground(hasUnread: hasUnread, isSelected: isSelected))
             Spacer()
-            if let badge {
-                Text(badge)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.15), in: Capsule())
-            }
+            CountBadge(display: preferences.folderCountDisplay, unread: unread,
+                       total: appState.mailStore.counts.folderTotalCounts[folder.path])
         }
         #if os(visionOS)
         // visionOS spatial UIs want an explicit hover affordance — eye-
