@@ -11,7 +11,7 @@ import CabalmailKit
 struct NewFolderSheet: View {
     let parents: [Folder]
     @Bindable var form: NewFolderForm
-    let onCreate: (String, String?) async -> Bool
+    let onCreate: (String, String?) async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var isSubmitting = false
@@ -77,6 +77,7 @@ struct NewFolderSheet: View {
                     // survives for VoiceOver the way the name field's does.
                     .labelsHidden()
             }
+            errorLabel
         }
     }
     #else
@@ -88,9 +89,20 @@ struct NewFolderSheet: View {
             Section("Parent") {
                 parentPicker
             }
+            errorLabel
         }
     }
     #endif
+
+    // Drawn as the feed folder sheet draws its own (`FeedFolderSheet`).
+    @ViewBuilder
+    private var errorLabel: some View {
+        if let errorMessage = form.errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(ColorTokens.dangerFg)
+        }
+    }
 
     // The example belongs *inside* the empty field, so it is a prompt rather
     // than the field's title: macOS `Form` promotes a `TextField`'s title
@@ -118,7 +130,6 @@ struct NewFolderSheet: View {
     private func submit() async {
         isSubmitting = true
         defer { isSubmitting = false }
-        let succeeded = await onCreate(form.name, form.chosenParent)
-        if succeeded { dismiss() }
+        if await form.submit(onCreate) { dismiss() }
     }
 }
