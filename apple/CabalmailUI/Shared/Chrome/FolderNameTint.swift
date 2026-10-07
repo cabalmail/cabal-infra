@@ -1,8 +1,9 @@
 import Foundation
 
-/// How a folder row's name is coloured for its unread state.
+/// How a sidebar tree row's name is coloured for its unread state, on mail
+/// folders and feeds alike (`SidebarTreeRowLabel` draws it).
 ///
-/// A pure rule rather than an inline `if` in `FolderListView` so it can be
+/// A pure rule rather than an inline `if` in the row so it can be
 /// tested directly, the way `FolderSectionDisclosure` and
 /// `CompactColumnPolicy` are.
 ///

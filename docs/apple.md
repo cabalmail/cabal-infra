@@ -1026,7 +1026,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
-| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), sidebar header and filter rows, toolbar priority, branding |
+| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), branding |
 | `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout |
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |

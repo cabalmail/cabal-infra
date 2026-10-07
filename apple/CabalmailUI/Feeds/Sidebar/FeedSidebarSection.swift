@@ -48,39 +48,37 @@ struct FeedSidebarRowLabel: View {
     @Environment(Preferences.self) private var preferences
 
     var body: some View {
-        HStack(spacing: 6) {
-            if case .folder(let folder) = row.kind {
-                Button {
-                    toggleCollapse(folder.folderId)
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .rotationEffect(.degrees(isCollapsed(folder.folderId) ? 0 : 90))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 14, height: 14)
-                        .opacity(row.hasChildren ? 1 : 0)
-                }
-                .buttonStyle(.borderless)
-                .disabled(!row.hasChildren)
-                .accessibilityLabel(isCollapsed(folder.folderId) ? "Expand \(folder.name)" : "Collapse \(folder.name)")
-                Image(systemName: "folder")
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(ColorTokens.accentForestFg))
-            } else {
-                Color.clear.frame(width: 14, height: 14)
-                Image(systemName: "dot.radiowaves.up.forward")
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(ColorTokens.accentForestFg))
-            }
-            Text(row.title)
-                .lineLimit(1)
-                .foregroundStyle(row.unread > 0 || isSelected ? AnyShapeStyle(.primary)
-                                 : AnyShapeStyle(Color.primary.opacity(0.7)))
-            Spacer(minLength: 4)
+        SidebarTreeRowLabel(
+            title: row.title,
+            systemImage: Self.symbol(for: row.kind),
+            depth: row.depth,
+            disclosure: disclosure,
+            hasUnread: row.unread > 0,
+            isSelected: isSelected,
+            titleLineLimit: 1
+        ) {
             healthBadge
             // The mail rows' capsule and rule (`CountBadge`): nothing is
             // drawn when the mode hides the count.
             CountBadge(display: preferences.folderCountDisplay, unread: row.unread, total: row.total)
         }
-        .padding(.leading, CGFloat(row.depth) * 14)
+        // The whole row is the hit target of the wide layout's row button,
+        // spacer included.
         .contentShape(Rectangle())
+    }
+
+    /// A folder row with rows under it gets the chevron; anything else keeps
+    /// the slot empty.
+    private var disclosure: SidebarTreeDisclosure? {
+        guard case .folder(let folder) = row.kind, row.hasChildren else { return nil }
+        return .init(isCollapsed: isCollapsed(folder.folderId), name: folder.name,
+                     toggle: { toggleCollapse(folder.folderId) })
+    }
+
+    /// The tree's glyphs: a folder (All Feeds included) or a feed.
+    static func symbol(for kind: FeedSidebarRow.Kind) -> String {
+        if case .subscription = kind { return "dot.radiowaves.up.forward" }
+        return "folder"
     }
 
     /// The fetcher's health for a subscription row: a warning mark from

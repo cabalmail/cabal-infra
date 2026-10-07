@@ -517,7 +517,7 @@ private struct MessageRow: View {
     // the platform blue. The asset-catalog color is pinned explicitly rather
     // than taken from `Color.accentColor`, which macOS repaints with the
     // user's system accent whenever that isn't "multicolor" (same reasoning
-    // as `iconForeground` in FolderListView+Helpers.swift).
+    // as `SidebarTreeRowLabel.iconStyle`).
     private var unreadDotColor: Color {
         envelope.flags.contains(.seen) ? .clear : ColorTokens.accentForestFg
     }

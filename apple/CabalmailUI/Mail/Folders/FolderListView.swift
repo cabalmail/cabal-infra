@@ -339,59 +339,23 @@ struct FolderListView: View {
         hasChildren: Bool,
         isCollapsed: Bool
     ) -> some View {
-        let isSelected = selection?.path == folder.path
         let unread = appState.mailStore.counts.folderUnreadCounts[folder.path]
-        // Keyed off the unread count itself, not the badge, which can show
-        // totals under the .total/.both display modes.
-        let hasUnread = (unread ?? 0) > 0
-        HStack {
-            if depth > 0 {
-                Spacer().frame(width: CGFloat(depth) * 14)
-            }
-            // Always reserve the chevron slot so the folder icon column
-            // stays aligned across leaf and parent rows at the same depth.
-            // Without the placeholder, parent rows shift right by the
-            // chevron's width and visually read as one indent level deeper
-            // than their peers.
-            Group {
-                if hasChildren {
-                    Button {
-                        toggleCollapse(folder.path)
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .rotationEffect(.degrees(isCollapsed ? 0 : 90))
-                            .foregroundStyle(.secondary)
-                    }
-                    // Borderless lets the chevron handle taps without also
-                    // triggering row selection in the surrounding List.
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(isCollapsed ? "Expand \(folder.name)" : "Collapse \(folder.name)")
-                    .accessibilityIdentifier("folder.disclose.\(folder.path)")
-                } else {
-                    Color.clear
-                }
-            }
-            .frame(width: 14, height: 14)
-            Image(systemName: iconName(for: folder))
-                // Accent while unselected, and the row's own foreground
-                // once it is: the selection fill is the platform's to
-                // choose and no pinned color survives all of the ones it
-                // draws (#1318, `FolderIconTint`).
-                .foregroundStyle(iconForeground(isSelected: isSelected))
-            Text(folder.name)
-                .foregroundStyle(folderNameForeground(hasUnread: hasUnread, isSelected: isSelected))
-            Spacer()
+        SidebarTreeRowLabel(
+            title: folder.name,
+            systemImage: iconName(for: folder),
+            depth: depth,
+            disclosure: hasChildren ? SidebarTreeDisclosure(
+                isCollapsed: isCollapsed, name: folder.name, identifier: "folder.disclose.\(folder.path)",
+                toggle: { toggleCollapse(folder.path) }
+            ) : nil,
+            // Keyed off the unread count itself, not the badge, which can
+            // show totals under the .total/.both display modes.
+            hasUnread: (unread ?? 0) > 0,
+            isSelected: selection?.path == folder.path
+        ) {
             CountBadge(display: preferences.folderCountDisplay, unread: unread,
                        total: appState.mailStore.counts.folderTotalCounts[folder.path])
         }
-        #if os(visionOS)
-        // visionOS spatial UIs want an explicit hover affordance — eye-
-        // tracking highlights the row before the user commits with a pinch,
-        // and the default list row doesn't provide that feedback out of the
-        // box. `.hoverEffect(.highlight)` matches Apple Mail on visionOS.
-        .contentShape(Rectangle())
-        .hoverEffect(.highlight)
-        #endif
     }
 
 }

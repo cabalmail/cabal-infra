@@ -1,13 +1,14 @@
 import Foundation
 
-/// How a folder row's icon is coloured for its selection state.
+/// How a sidebar tree row's icon is coloured for its selection state, on mail
+/// folders and feeds alike (`SidebarTreeRowLabel` draws it).
 ///
-/// A pure rule rather than an inline `if` in `FolderListView`, the way
+/// A pure rule rather than an inline `if` in the row, the way
 /// `FolderNameTint` and `FolderSectionDisclosure` are.
 ///
 /// The sibling of `FolderNameTint`, and it exists for the same reason: a
 /// row's foreground may not be pinned to a colour picked for a selection
-/// fill the platform is free to draw differently. `iconForeground` pinned
+/// fill the platform is free to draw differently. The folder row once pinned
 /// `Color.white` on the touch platforms because "iPadOS sidebar selection
 /// paints the row in the accent color" — measured false on iPadOS 26.5
 /// (#1318). What that fill is, on the two states a selected folder row is
