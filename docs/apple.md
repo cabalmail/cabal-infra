@@ -1074,6 +1074,82 @@ server-side. Issue #371 made the switch after the earlier hand-rolled
 `NWConnection` IMAP and SMTP clients proved unreliable across network
 transitions and sleep/wake; that stack has since been deleted.
 
+### API errors: what a failed request throws
+
+Every Kit API request throws `CabalmailError`, with one deliberate
+exception: a lost `/set_rules` race throws `RuleSetConflictError`. (A
+Cognito 2xx that isn't JSON still escapes as a Foundation error, #1902.)
+The user-facing copy for every case is the enum's `LocalizedError`
+conformance in `Models/Errors.swift`. Most views show
+`error.localizedDescription`; some word particular cases themselves,
+among them the sign-in form (`SignInErrorText`), the composer
+(`ComposeViewModel.describe`), Siri (`IntentError`), the feed views
+(`FeedErrorText`) and the message list's bulk actions.
+
+- **The Lambda API or S3 said no: `.http(status:body:)`.** Any non-2xx
+  from the Lambda API, or from a presigned S3 URL, that the next two
+  bullets don't cover, with `body` the reply as text. Its copy is the
+  body's `status` string, or its `message` string when there is no
+  `status`, if that string is more than one word: a one-word `status`
+  such as `unable` doesn't fall through to `message`, and a handler's
+  `{"Error": ...}` body isn't read (#1918). Otherwise it is "The server
+  couldn't complete that request (NNN)." The callers that act on a
+  particular failure compare the status: a 409 `duplicate_in_flight` from
+  `/send` becomes `.sendInFlight`, a 409 from `/set_rules` becomes
+  `RuleSetConflictError`, and a 400 from `/fetch_bimi` is cached as "no
+  logo".
+- **A failure carrying a code: `.server(code:message:)`.** Three sources
+  produce it: the RSS API's error tokens (`not_a_feed`,
+  `needs_credentials`, ...), which `FeedErrorText` maps to copy; Cognito's
+  exception names (`NotAuthorizedException` is `.invalidCredentials` or
+  `.authExpired` instead, and an unreadable reply gets the code
+  `Unknown`); and the `config.json` fetch, with its HTTP status as the
+  code. Some views show `.server`'s message as written: Siri, the feed
+  views for a token they have no copy for, and the sign-in form (bare for
+  a Cognito trigger's copy, after "Server error:" otherwise; a mistyped
+  second-factor code gets its own sentence). An RSS token carries the
+  reply's `Error` sentence and every other Lambda API failure is `.http`,
+  so none of them shows a raw Lambda API reply.
+- **Two Lambda API statuses are handled first.** A 401 forces a token
+  refresh (one shared by a burst of 401s) and replays the request once; a
+  401 on the replay announces the session's expiry and throws
+  `.authExpired`. A 503 with `{"status": "maintenance"}` is
+  `.maintenance(message:)`, whose message is shown as written. A
+  presigned S3 URL gets neither: its 401 or 503 is plain `.http`.
+- **A 2xx that didn't parse: `.decoding`.** Every strict decode of a
+  Lambda API reply, the RSS endpoints included, goes through
+  `URLSessionApiClient.decodeReply`, which names the endpoint
+  ("list_envelopes returned an unexpected reply") and writes where the
+  decode stopped (its kind and coding path, never a field's value) to
+  `CabalmailLog`. A few
+  reads are lenient on purpose and fall back instead. The `config.json`
+  fetch and the Cognito calls decode on their own paths. A URL the API
+  hands back for the client to fetch (the presigned message, attachment,
+  inline-image and upload URLs, and the BIMI logo) is followed only when
+  it is absolute `http` or `https` with a host
+  (`URL(followableReplyString:)`). Anything else fails the call as
+  `.decoding`, which for `/fetch_bimi` is a lookup the cache retries
+  rather than a cached "no logo".
+- **No answer: `.network`.** `URLSessionHTTPTransport` turns every
+  `URLError` but the caller's own cancel into `.network`, retrying a
+  dropped connection, a timeout or a cancel nobody asked for once first.
+  A reply that isn't HTTP at all is `.transport`.
+- **The caller gave up: `.cancelled`.** Only when the request's own task
+  was cancelled, as when SwiftUI tears down a view's `.task`. Callers that
+  stay quiet on a cancel read `Task.isCancelled` rather than matching
+  `.cancelled`, because some paths answer a cancel with something else:
+  the folder list, for one, falls back to its saved copy.
+- **This device's storage failed: `.storage`.** A keychain call; see the
+  storage section below.
+
+A first send (`CabalmailClient.send(_:)`) treats `.network`, `.transport`,
+`.cancelled`, `.sendInFlight` and `.storage` as "queue the message in the
+outbox and retry" (`CabalmailClient.shouldQueue`). Any other error is
+thrown to the composer, which stays open and shows it. A message already
+in the outbox is retried by `SendQueue`, whatever the error, until
+`Outbox.maxAttempts` (a `.sendInFlight` answer doesn't spend an attempt),
+then marked failed and offered back to the user (`FailedSendBanner`).
+
 ### Storage: Keychain for secrets, on-disk Codable for mirrors
 
 - Cognito tokens: one JSON blob in the data-protection keychain
