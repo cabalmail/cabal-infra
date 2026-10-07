@@ -92,6 +92,16 @@ public actor RssStore {
             """)
     }
 
+    /// Drops every row and closes this store for good: every later read or
+    /// write throws. For the signed-out session's store, which a feed sync
+    /// still in flight could otherwise write that account's feeds back into
+    /// after the clear; the file is the one the next account's store opens
+    /// (#1937).
+    public func retire() throws {
+        try clear()
+        database.close()
+    }
+
     // MARK: - Per-subscription web storage
 
     /// Every web-storage identifier this store knows of - the current

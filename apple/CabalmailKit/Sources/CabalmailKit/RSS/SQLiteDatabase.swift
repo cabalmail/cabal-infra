@@ -73,6 +73,12 @@ final class SQLiteDatabase {
         if let handle { sqlite3_close_v2(handle) }
     }
 
+    /// Closes the file for good; every later statement throws.
+    func close() {
+        if let handle { sqlite3_close_v2(handle) }
+        handle = nil
+    }
+
     /// Runs one or more statements with no binds (DDL, PRAGMAs).
     func exec(_ sql: String) throws {
         guard let handle else { throw Error(code: SQLITE_MISUSE, message: "closed") }
