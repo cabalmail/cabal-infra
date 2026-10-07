@@ -28,6 +28,18 @@ extension CabalmailClient {
         await spotlightIndexer?.removeAll()
     }
 
+    /// `clearLocalData()` for the client of a session that is ending. Its
+    /// feed store is retired rather than only emptied: a feed sync the
+    /// session started (the Feeds sidebar's, which runs until the sidebar
+    /// goes after the sign-out) would otherwise write the account's catalog
+    /// and items back into the file the next account's client opens (#1937).
+    /// A client that carries on, such as a new account's whose cache a
+    /// different user left behind, uses `clearLocalData()`.
+    public func clearLocalDataEndingSession() async {
+        try? await rssStore?.retire()
+        await clearLocalData()
+    }
+
     /// Kicks the Spotlight sweep for the current session — refreshes the
     /// subscribed-folder set and indexes each subscribed folder's top page.
     /// Called (fire-and-forget) by `wireSession` on sign-in / restore.

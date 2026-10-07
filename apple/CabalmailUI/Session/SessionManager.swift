@@ -541,8 +541,9 @@ extension SessionManager {
         // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
         // dropping the session so the next account to sign in on this device
         // can't read the previous user's messages from the shared on-disk
-        // cache.
-        await client.clearLocalData()
+        // cache. The feed store is closed too, so a feed sync still running
+        // for this session can't write it back (#1937).
+        await client.clearLocalDataEndingSession()
         try? await client.authService.signOut()
         // Tell the watch to drop its copy of the credentials too.
         sessionEnvironment.hooks.sessionDidEnd()
