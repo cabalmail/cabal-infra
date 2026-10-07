@@ -11,21 +11,17 @@ extension FeedItemListView {
         @Bindable var model = model
         VStack(spacing: 6) {
             HStack(spacing: 6) {
-                ForEach(RssItemFilter.allCases) { filter in
-                    Button {
-                        model.selectFilter(filter)
-                    } label: {
-                        Text(filterLabel(filter))
-                            .font(.subheadline.weight(model.filter == filter ? .semibold : .regular))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(
-                                model.filter == filter ? ColorTokens.accentForestFg.opacity(0.18) : Color.clear,
-                                in: Capsule()
-                            )
+                // The message list's pills, without counts.
+                FilterPillStrip {
+                    ForEach(RssItemFilter.allCases) { filter in
+                        FilterPill(
+                            label: filterLabel(filter),
+                            isOn: model.filter == filter,
+                            identifier: "feed.filter.\(filter.rawValue)"
+                        ) {
+                            model.selectFilter(filter)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("feed.filter.\(filter.rawValue)")
                 }
                 Spacer()
                 if model.canSearch {
