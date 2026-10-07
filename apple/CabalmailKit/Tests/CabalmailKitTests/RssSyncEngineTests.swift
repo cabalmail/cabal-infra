@@ -245,6 +245,8 @@ actor FakeRssClient: RssClient {
         case catalog
         case sync(String)
         case push
+        /// The merged listing ("load older" and a feed's first page).
+        case list
     }
 
     private var catalog = RssCatalog(folders: [], subscriptions: [])
@@ -336,6 +338,7 @@ actor FakeRssClient: RssClient {
     func listItems(scope: RssItemScope, filter: RssItemFilter, order: RssItemOrder, limit: Int,
                    cursor: String?) async throws -> RssItemsPage {
         listCalls.append(ListCall(scope: scope, cursor: cursor))
+        try await pass(.list)
         if listPages.isEmpty, emptyPagesByDefault { return RssItemsPage(items: [], nextCursor: nil) }
         guard !listPages.isEmpty else { throw CabalmailError.transport("no scripted list page") }
         return listPages.removeFirst()
