@@ -17,7 +17,9 @@ import CabalmailKit
 ///
 /// Everything the list shows comes from `RssStore`; the network only runs
 /// in `sync()` (fresh items) and `loadOlder()` (history), both of which
-/// re-read the store afterwards.
+/// re-read the store afterwards. `observe()` keeps the list current with
+/// writes made anywhere else: a row patches in place, and a sync or a
+/// catalog change re-reads the first page.
 @Observable
 @MainActor
 final class FeedItemListViewModel {
@@ -51,11 +53,11 @@ final class FeedItemListViewModel {
     private let engine: RssSyncEngine?
     private let preferences: Preferences
     private let defaults: FeedDefaultsPersisting?
-    private let bus: FeedStateBus
     private let pageSize = 100
-    /// True while this model's own broad post is being delivered, so the
-    /// handler below doesn't reload a list that was just reloaded.
-    private var postingSelf = false
+    /// The feeds this scope covers as of the last read: a sync of one of
+    /// them reloads the list, and a catalog change that moves a feed in or
+    /// out of the scope does too.
+    private var scopeFeedIds: Set<String> = []
 
     /// The single subscription this list shows, when it shows exactly one;
     /// search, load-older, and the ordering preference only make sense then.
@@ -66,7 +68,7 @@ final class FeedItemListViewModel {
 
     init(scope: RssItemScope, subscription: RssSubscription?, folder: RssFolder? = nil,
          client: CabalmailClient, preferences: Preferences, defaults: FeedDefaultsPersisting? = nil,
-         bus: FeedStateBus = .shared, store: RssStore? = nil, engine: RssSyncEngine? = nil) {
+         store: RssStore? = nil, engine: RssSyncEngine? = nil) {
         self.scope = scope
         self.subscription = subscription
         self.folder = folder
@@ -75,11 +77,9 @@ final class FeedItemListViewModel {
         self.engine = engine
         self.preferences = preferences
         self.defaults = defaults ?? engine
-        self.bus = bus
         self.ordering = FeedListOrderingPolicy.initial(subscription: subscription)
         self.filter = FeedListFilterPolicy.initial(scope: scope, subscription: subscription, folder: folder,
                                                    allFeedsFilter: preferences.rssAllFeedsFilter)
-        bus.subscribe(self) { [weak self] change in self?.apply(change) }
     }
 
     /// A pill tap: applies the filter, then makes it the pill this scope's
@@ -120,53 +120,104 @@ final class FeedItemListViewModel {
 
     /// Holds the updated row at once, then writes it through the store to
     /// the server; a failure leaves the next catalog refresh to reconcile.
+    /// The store's write tells the sidebar and the settings sheet.
     private func persist(_ update: RssSubscriptionUpdate, to subscription: RssSubscription) {
         guard let defaults else { return }
         self.subscription = subscription.applying(update)
-        Task { [bus] in
-            _ = try? await defaults.updateSubscription(subscription, update)
-            bus.postCatalogChanged()
-        }
+        Task { _ = try? await defaults.updateSubscription(subscription, update) }
     }
 
     /// The folder counterpart of `persist(_:to:)` for a subscription.
     private func persist(_ update: RssFolderUpdate, to folder: RssFolder) {
         guard let defaults else { return }
         self.folder = folder.applying(update)
-        Task { [bus] in
-            _ = try? await defaults.updateFolder(folder, update)
-            bus.postCatalogChanged()
+        Task { _ = try? await defaults.updateFolder(folder, update) }
+    }
+
+    // MARK: - Following the store
+
+    /// The view's `.task` while the list is up: re-reads the first page,
+    /// then follows the store's changes until the view goes.
+    func observe() async {
+        guard let store else { return }
+        let changes = await store.changes()
+        await reload()
+        await FeedStoreChanges.follow(changes) { batch in await apply(batch) }
+    }
+
+    /// One batch of store changes. A sync, a mark-all-read or another
+    /// device's marks re-read the list while it is still on its first page,
+    /// so new items appear; a list the user has paged through keeps its
+    /// place and picks them up on its next reload. A changed mark patches
+    /// its row in place, so the dot and flag agree without a reload; rows
+    /// stay put even when they no longer match the filter, and the next
+    /// reload settles that, the same as the list's own swipe actions.
+    func apply(_ batch: FeedChangeBatch) async {
+        var reloads = batch.cleared
+        if batch.catalog, await readCatalog() { reloads = true }
+        if !batch.feeds.isDisjoint(with: scopeFeedIds), items.count <= pageSize { reloads = true }
+        if reloads {
+            await reload()
+        } else if !batch.items.isEmpty {
+            await patch(batch.items)
         }
     }
 
-    /// A state change made elsewhere (the reader's toolbar, another list):
-    /// patch the row in place so the dot and star agree without a reload.
-    /// Rows stay put even when they no longer match the filter; the next
-    /// reload settles that, the same as the list's own swipe actions.
-    func apply(_ change: RssItem?) {
-        guard let change else {
-            // A refetch elsewhere (the periodic sync, another scope's
-            // load-older): re-read while still on the first page, so new
-            // items appear; a list the user has paged through keeps its
-            // place and picks them up on its next reload.
-            if !postingSelf, items.count <= pageSize { Task { await reload() } }
-            return
+    /// What the catalog decides for this list: its subscription or folder
+    /// row (sticky defaults, the feed's health), the feed titles on rows, and
+    /// which feeds the scope covers. True when the list must reload: the
+    /// scope gained or lost a feed, or the feed's order changed in its
+    /// settings sheet or on another device.
+    private func readCatalog() async -> Bool {
+        guard let store else { return false }
+        var reloads = false
+        switch scope {
+        case .subscription(let id):
+            if let row = (try? await store.subscription(id: id)) ?? nil {
+                subscription = row
+                let stored = FeedListOrderingPolicy.initial(subscription: row)
+                if stored != ordering {
+                    ordering = stored
+                    reloads = true
+                }
+            }
+        case .folder(let id):
+            if let row = (try? await store.folder(id: id)) ?? nil { folder = row }
+        case .all:
+            break
         }
-        replace(change) {
-            $0.isRead = change.isRead
-            $0.isFavorite = change.isFavorite
+        if subscription == nil, let subs = try? await store.subscriptions() {
+            subscriptionTitles = Self.titles(of: subs)
         }
+        if let feeds = try? await store.feedIds(in: scope), Set(feeds) != scopeFeedIds { reloads = true }
+        return reloads
+    }
+
+    /// Re-reads the rows the store says changed: their read and flag state
+    /// and the queued mark.
+    private func patch(_ ids: Set<String>) async {
+        guard let store else { return }
+        for row in items where ids.contains(row.id) {
+            let fresh = (try? await store.item(feedId: row.feedId, sortKey: row.sortKey)) ?? nil
+            let queued = (try? await store.hasPending(feedId: row.feedId, sortKey: row.sortKey)) == true
+            if let fresh {
+                replace(row) {
+                    $0.isRead = fresh.isRead
+                    $0.isFavorite = fresh.isFavorite
+                }
+            }
+            if queued { pendingIds.insert(row.id) } else { pendingIds.remove(row.id) }
+        }
+    }
+
+    private static func titles(of subscriptions: [RssSubscription]) -> [String: String] {
+        Dictionary(subscriptions.map { ($0.subscriptionId, $0.displayTitle) },
+                   uniquingKeysWith: { first, _ in first })
     }
 
     /// The feed label for a row: the subscription's title, else the URL host.
     func feedName(for item: RssItem) -> String {
         FeedItemLabels.feedName(for: item, titles: subscriptionTitles)
-    }
-
-    private func postBroad() {
-        postingSelf = true
-        bus.post()
-        postingSelf = false
     }
 
     var canSearch: Bool { subscription != nil }
@@ -183,10 +234,9 @@ final class FeedItemListViewModel {
                 olderExhausted = try await store.syncState(feedId: subscription.feedId).olderExhausted
             }
             if subscription == nil {
-                let subs = try await store.subscriptions()
-                subscriptionTitles = Dictionary(subs.map { ($0.subscriptionId, $0.displayTitle) },
-                                                uniquingKeysWith: { first, _ in first })
+                subscriptionTitles = Self.titles(of: try await store.subscriptions())
             }
+            scopeFeedIds = Set(try await store.feedIds(in: scope))
             if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty, let subscription {
                 items = try await store.search(feedId: subscription.feedId, query: searchQuery)
                 hasMoreLocal = false
@@ -233,17 +283,15 @@ final class FeedItemListViewModel {
         // switch on iPhone, a scope change), or a pull cut short (#1908). It
         // stops waiting at once, and the engine stops the work once nobody
         // waits for it. Read off the task, not the result. An earlier error
-        // stands; the store is still re-read and the bus told below, since
-        // feeds synced before the cancel have landed. No retry is armed here:
-        // the list's `.task(id: scope)` runs `start()`, which builds a fresh
-        // model and syncs, on every appearance; a `model == nil` gate there
-        // would need one. A failed drain stays quiet, as before: the queue
-        // waits for the next one.
+        // stands; the store is still re-read below, since feeds synced before
+        // the cancel have landed. No retry is armed here: the list's
+        // `.task(id: scope)` builds a fresh model and syncs on every
+        // appearance; a `model == nil` gate there would need one. A failed
+        // drain stays quiet, as before: the queue waits for the next one.
         if let report, !Task.isCancelled {
             errorMessage = (report.catalogError ?? report.firstFeedError).map(FeedErrorText.describe)
         }
         await reload()
-        postBroad()
     }
 
     /// Older history for a single feed, then a reload.
@@ -258,29 +306,22 @@ final class FeedItemListViewModel {
             errorMessage = FeedErrorText.describe(error)
         }
         await reload()
-        postBroad()
     }
 
     // MARK: - Mutations (optimistic; the engine queues and pushes)
 
     func setRead(_ item: RssItem, _ isRead: Bool) async {
         guard let engine else { return }
-        var changed = item
-        changed.isRead = isRead
         replace(item) { $0.isRead = isRead }
         try? await engine.setRead(item, isRead)
-        bus.post(changed)
-        await refreshPendingMarks()
+        await patch([item.id])
     }
 
     func setFavorite(_ item: RssItem, _ isFavorite: Bool) async {
         guard let engine else { return }
-        var changed = item
-        changed.isFavorite = isFavorite
         replace(item) { $0.isFavorite = isFavorite }
         try? await engine.setFavorite(item, isFavorite)
-        bus.post(changed)
-        await refreshPendingMarks()
+        await patch([item.id])
     }
 
     /// The swipe bindings, exposed so the row picks the button each edge
@@ -302,7 +343,6 @@ final class FeedItemListViewModel {
             try? await engine.markAllRead(subscriptionId: sub.subscriptionId)
         }
         await reload()
-        postBroad()
     }
 
     private func replace(_ item: RssItem, _ change: (inout RssItem) -> Void) {

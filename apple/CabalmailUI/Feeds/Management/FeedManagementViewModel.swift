@@ -7,8 +7,8 @@ import CabalmailKit
 ///
 /// Every call goes to the server first and then brings the local store in
 /// line, either with the row the server returned (subscribe, update) or by
-/// re-reading the catalog (folders, unsubscribe, import), and finally tells
-/// the open feed views through `FeedStateBus`. Errors propagate to the
+/// re-reading the catalog (folders, unsubscribe, import); the store's own
+/// change stream tells the open feed views. Errors propagate to the
 /// presenting sheet, which words them with `FeedErrorText`.
 ///
 /// Takes the Kit pieces directly rather than a `CabalmailClient` so the
@@ -19,22 +19,20 @@ final class FeedManagementViewModel {
     private let rss: RssClient
     private let store: RssStore
     private let engine: RssSyncEngine?
-    private let bus: FeedStateBus
 
     /// True while a call is in flight; sheets disable their confirm button.
     var isBusy = false
 
-    init(rss: RssClient, store: RssStore, engine: RssSyncEngine?, bus: FeedStateBus = .shared) {
+    init(rss: RssClient, store: RssStore, engine: RssSyncEngine?) {
         self.rss = rss
         self.store = store
         self.engine = engine
-        self.bus = bus
     }
 
     /// Nil when the session has no RSS wiring (a bare client in tests).
-    convenience init?(client: CabalmailClient, bus: FeedStateBus = .shared) {
+    convenience init?(client: CabalmailClient) {
         guard let rss = client.rss, let store = client.rssStore else { return nil }
-        self.init(rss: rss, store: store, engine: client.rssSync, bus: bus)
+        self.init(rss: rss, store: store, engine: client.rssSync)
     }
 
     // MARK: - Subscriptions
@@ -45,12 +43,10 @@ final class FeedManagementViewModel {
         try await busy {
             let result = try await rss.subscribe(url: url, folderId: folderId.flatMap { $0.isEmpty ? nil : $0 })
             try await store.upsertSubscription(result.subscription)
-            bus.postCatalogChanged()
             if !result.existing, let engine {
                 // Best effort: the sidebar already shows the feed; items
                 // arrive with the next sync if this one fails.
                 _ = try? await engine.syncItems(for: result.subscription)
-                bus.post()
             }
             return result
         }
@@ -68,7 +64,6 @@ final class FeedManagementViewModel {
         try await busy {
             let updated = try await rss.updateSubscription(subscription.subscriptionId, update)
             try await store.upsertSubscription(updated)
-            bus.postCatalogChanged()
             return updated
         }
     }
@@ -112,7 +107,6 @@ final class FeedManagementViewModel {
         for sub in subs {
             try await engine.markAllRead(subscriptionId: sub.subscriptionId)
         }
-        bus.post()
     }
 
     // MARK: - OPML
@@ -124,10 +118,7 @@ final class FeedManagementViewModel {
             let result = try await rss.importOpml(opml, folderId: folderId)
             try await refreshCatalog()
             if let engine, result.created > 0 {
-                Task { [bus] in
-                    _ = await engine.syncAll()
-                    bus.post()
-                }
+                Task { _ = await engine.syncAll() }
             }
             return result
         }
@@ -147,7 +138,6 @@ final class FeedManagementViewModel {
             _ = try await store.replaceCatalog(try await rss.listSubscriptions())
         }
         await FeedWebStorage.dropDeparted(from: store)
-        bus.postCatalogChanged()
     }
 
     private func busy<T>(_ work: () async throws -> T) async throws -> T {

@@ -117,8 +117,14 @@ struct FeedItemListView: View {
         }
         .task(id: scope) {
             await start()
+            // The list follows the store for as long as it is up, from
+            // before the sync, so a mark made elsewhere meanwhile lands too.
+            let model = model
+            async let following: Void? = model?.observe()
+            await model?.sync()
             initialLoadComplete = true
             applyLaunchRestoreWhenReady()
+            _ = await following
         }
         .onAppear {
             hasAppeared = true
@@ -180,7 +186,6 @@ struct FeedItemListView: View {
                                           client: client, preferences: preferences)
         self.model = model
         await model.reload()
-        await model.sync()
     }
 
     private func scopeTitle(subscription: RssSubscription?, folder: RssFolder?) -> String {

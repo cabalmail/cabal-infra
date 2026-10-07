@@ -41,7 +41,7 @@ final class FeedSidebarRefreshCancellationTests: XCTestCase {
             ),
         ]))
         let engine = RssSyncEngine(client: rss, store: store)
-        model = FeedSidebarViewModel(store: store, engine: engine, bus: FeedStateBus())
+        model = FeedSidebarViewModel(store: store, engine: engine)
     }
 
     // MARK: - A cut-short refresh is no outcome
@@ -181,8 +181,7 @@ final class FeedSidebarRefreshCancellationTests: XCTestCase {
         try await store.setRead(feedId: "feed-1", sortKey: "k1", true)
         await rss.set(itemsError: CabalmailError.network("The request timed out."), forSubscription: "sub-2")
         await rss.set(pushError: CabalmailError.network("The request timed out."))
-        model = FeedSidebarViewModel(store: store, engine: RssSyncEngine(client: rss, store: store),
-                                     bus: FeedStateBus())
+        model = FeedSidebarViewModel(store: store, engine: RssSyncEngine(client: rss, store: store))
 
         await model.refresh()
 

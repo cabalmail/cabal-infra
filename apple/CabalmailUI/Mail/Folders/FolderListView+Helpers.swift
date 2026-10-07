@@ -179,9 +179,10 @@ extension FolderListView {
     }
 
     /// Creates the Feeds section's model on first appearance (wide layouts
-    /// only) and loads it from the store; every appearance then runs the
-    /// refresh until one has finished, so one cut short as the sidebar went
-    /// away (hidden, or rebuilt mid-sync) is taken over here (#1908).
+    /// only), which `observe()` then reads and keeps current; every
+    /// appearance runs the refresh until one has finished, so one cut short
+    /// as the sidebar went away (hidden, or rebuilt mid-sync) is taken over
+    /// here (#1908).
     func loadFeedModelIfNeeded() async {
         guard feedSelection != nil else { return }
         let model: FeedSidebarViewModel
@@ -191,7 +192,6 @@ extension FolderListView {
             feedManagement = FeedManagementViewModel(client: client)
             model = FeedSidebarViewModel(client: client)
             feedModel = model
-            await model.load()
         } else {
             return
         }

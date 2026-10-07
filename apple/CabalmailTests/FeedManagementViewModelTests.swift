@@ -3,16 +3,14 @@ import CabalmailKit
 @testable import CabalmailUI
 
 /// The management model against a scripted client and a real (temporary)
-/// store: every mutation lands on the server first, then in the store, and
-/// tells the bus.
+/// store: every mutation lands on the server first, then in the store, whose
+/// change stream tells the open feed views.
 @MainActor
 final class FeedManagementViewModelTests: XCTestCase {
     private var directory: URL!
     private var store: RssStore!
     private var client: FakeRssClient!
-    private var bus: FeedStateBus!
-    private var catalogPosts = 0
-    private var broadPosts = 0
+    private var changes: AsyncStream<RssStore.Change>!
     private var model: FeedManagementViewModel!
 
     override func setUp() async throws {
@@ -20,13 +18,18 @@ final class FeedManagementViewModelTests: XCTestCase {
             .appendingPathComponent("feed-mgmt-\(UUID().uuidString)")
         store = try RssStore(directory: directory)
         client = FakeRssClient()
-        bus = FeedStateBus()
-        catalogPosts = 0
-        broadPosts = 0
-        bus.subscribeCatalog(self) { [weak self] in self?.catalogPosts += 1 }
-        bus.subscribe(self) { [weak self] item in if item == nil { self?.broadPosts += 1 } }
+        changes = await store.changes()
         model = FeedManagementViewModel(rss: client, store: store,
-                                        engine: RssSyncEngine(client: client, store: store), bus: bus)
+                                        engine: RssSyncEngine(client: client, store: store))
+    }
+
+    /// What the store announced so far (once per test: it ends the stream).
+    private func announced() async -> [RssStore.Change] {
+        await bufferedElements(changes)
+    }
+
+    private func catalogAnnouncements() async -> Int {
+        await announced().filter { $0 == .catalog }.count
     }
 
     override func tearDown() async throws {
@@ -41,8 +44,10 @@ final class FeedManagementViewModelTests: XCTestCase {
         let calls = await client.subscribeCalls
         XCTAssertEqual(calls.count, 1)
         XCTAssertNil(calls[0].folderId, "an empty folder id is sent as top level, not as \"\"")
-        XCTAssertEqual(catalogPosts, 1)
-        XCTAssertEqual(broadPosts, 1, "a new feed's first page is pulled, and the lists told")
+        let announced = await announced()
+        XCTAssertEqual(announced.filter { $0 == .catalog }.count, 1)
+        XCTAssertTrue(announced.contains(.feeds([result.subscription.feedId])),
+                      "a new feed's first page is pulled, and the lists told")
     }
 
     func testUnsubscribeRemovesTheRowThroughACatalogRefresh() async throws {
@@ -77,7 +82,8 @@ final class FeedManagementViewModelTests: XCTestCase {
         _ = try await model.deleteFolder(renamed)
         folders = try await store.folders()
         XCTAssertTrue(folders.isEmpty)
-        XCTAssertEqual(catalogPosts, 3)
+        let catalogAnnouncements = await catalogAnnouncements()
+        XCTAssertEqual(catalogAnnouncements, 3)
     }
 
     func testServerErrorsPropagateAndLeaveTheStoreAlone() async throws {
@@ -91,7 +97,8 @@ final class FeedManagementViewModelTests: XCTestCase {
         }
         let subs = try await store.subscriptions()
         XCTAssertTrue(subs.isEmpty)
-        XCTAssertEqual(catalogPosts, 0)
+        let catalogAnnouncements = await catalogAnnouncements()
+        XCTAssertEqual(catalogAnnouncements, 0)
         XCTAssertFalse(model.isBusy)
     }
 
@@ -100,7 +107,9 @@ final class FeedManagementViewModelTests: XCTestCase {
         XCTAssertEqual(result.created, 2)
         XCTAssertEqual(FeedOpmlSummary.text(for: result),
                        "2 new feeds, 1 feed already subscribed, 1 folder created.")
-        XCTAssertEqual(catalogPosts, 1)
+        // The import's own catalog refresh; the sync it kicks off may follow.
+        let first = await announced().first
+        XCTAssertEqual(first, .catalog)
     }
 
     func testExportReturnsTheDocument() async throws {

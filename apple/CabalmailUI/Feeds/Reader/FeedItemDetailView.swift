@@ -76,6 +76,9 @@ struct FeedItemDetailView: View {
             }
         }
         .task { await observeReachability() }
+        // The toolbar's read and flag state follow the store once the model
+        // exists (built from `onAppear`, above).
+        .task(id: model.map(ObjectIdentifier.init)) { await model?.observe() }
     }
 
     /// True when the body runs under the bottom chrome's glass. On iOS that

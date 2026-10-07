@@ -60,7 +60,7 @@ final class FeedItemListSyncTests: XCTestCase {
         return FeedItemListViewModel(
             scope: scope, subscription: nil,
             client: try TestFixtures.makeClient(imap: FakeImapClient()),
-            preferences: preferences, bus: FeedStateBus(),
+            preferences: preferences,
             store: store, engine: RssSyncEngine(client: rss, store: store)
         )
     }

@@ -4,7 +4,8 @@ import CabalmailKit
 
 /// Backs the Feeds sidebar section (wide layouts) and the Feeds tab's
 /// sidebar (compact / visionOS): the catalog and unread counts from the
-/// local `RssStore`, refreshed through `RssSyncEngine`.
+/// local `RssStore`, refreshed through `RssSyncEngine` and kept current by
+/// the store's changes (`observe()`).
 ///
 /// Reads come from the store, so the sidebar renders offline and instantly;
 /// `refresh()` runs the engine's `syncAll` (the catalog, every
@@ -41,27 +42,34 @@ final class FeedSidebarViewModel {
     private let store: RssStore?
     private let engine: RssSyncEngine?
 
-    convenience init(client: CabalmailClient, bus: FeedStateBus = .shared) {
-        self.init(store: client.rssStore, engine: client.rssSync, bus: bus)
+    convenience init(client: CabalmailClient) {
+        self.init(store: client.rssStore, engine: client.rssSync)
     }
 
-    init(store: RssStore?, engine: RssSyncEngine?, bus: FeedStateBus = .shared) {
+    init(store: RssStore?, engine: RssSyncEngine?) {
         self.store = store
         self.engine = engine
-        // Any read / favorite change or refetch elsewhere moves the unread
-        // badges; a refetch also refreshes each feed's health, so the whole
-        // catalog is re-read from the store (cheap: one SQLite pass).
-        bus.subscribe(self) { [weak self] change in
-            Task { if change == nil { await self?.load() } else { await self?.reloadCounts() } }
-        }
-        // A subscribe, unsubscribe, or folder edit (the management sheets,
-        // an OPML import) changes the tree itself.
-        bus.subscribeCatalog(self) { [weak self] in
-            Task { await self?.load() }
-        }
     }
 
     var hasSubscriptions: Bool { !subscriptions.isEmpty }
+
+    /// The views' `.task` while the sidebar is up: reads the store, then
+    /// follows its changes until the view goes. A catalog change (a
+    /// subscribe, a folder edit, a sync's catalog with each feed's health)
+    /// re-reads the tree; anything else, a mark or a sync's items, moves only
+    /// the badges.
+    func observe() async {
+        guard let store else { return }
+        let changes = await store.changes()
+        await load()
+        await FeedStoreChanges.follow(changes) { batch in
+            if batch.catalog || batch.cleared {
+                await load()
+            } else {
+                await reloadCounts()
+            }
+        }
+    }
 
     /// Reads the store (no network).
     func load() async {
@@ -136,8 +144,8 @@ final class FeedSidebarViewModel {
         }
     }
 
-    /// Reloads counts only (after a read-state change elsewhere). Totals
-    /// are re-read too: a load-older or a sync lands in the same bus post.
+    /// Reloads counts only (after a read-state change). Totals are re-read
+    /// too: a load-older or a sync moves them.
     func reloadCounts() async {
         guard let store else { return }
         unreadCounts = (try? await store.unreadCounts()) ?? unreadCounts

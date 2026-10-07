@@ -35,7 +35,7 @@ final class FeedItemDetailStickyDefaultsTests: XCTestCase {
         let item = RssItem(feedId: "f", subscriptionId: "s", itemId: "i", sortKey: "k", url: url,
                            summaryHtml: "<p>hi</p>")
         return FeedItemDetailViewModel(item: item, subscription: subscription, engine: nil,
-                                       preferences: preferences, defaults: persister, bus: FeedStateBus())
+                                       preferences: preferences, defaults: persister)
     }
 
     /// Waits for the write-through task the toggle spawned.
