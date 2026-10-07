@@ -20,6 +20,15 @@ final class FilterPillTests: XCTestCase {
         XCTAssertEqual(FilterPill.spokenLabel("All", count: 0), "All, 0")
     }
 
+    /// A large count is grouped as the drawn one is (`Text("\(count)")`
+    /// formats with the locale), so the label and the pill agree.
+    func testSpokenLabelGroupsALargeCountForTheLocale() {
+        XCTAssertEqual(FilterPill.spokenLabel("All", count: 12_345), "All, \(12_345.formatted())")
+        XCTAssertNotEqual(
+            FilterPill.spokenLabel("All", count: 12_345), "All, 12345", "the en_US test host groups thousands"
+        )
+    }
+
     func testSpokenLabelWithoutACountIsTheLabel() {
         XCTAssertEqual(FilterPill.spokenLabel("Flagged", count: nil), "Flagged")
     }
