@@ -25,11 +25,29 @@ final class FeedSidebarViewModel {
     /// True once the first `load()` has read the store, so an empty catalog
     /// can be told apart from a not-yet-loaded one.
     var hasLoaded = false
+    /// True until a refresh runs to an outcome (synced, or failed for a
+    /// reason worth showing), and again after one a cooperative cancel cut
+    /// short. The views' `.task` refreshes while it holds, so the next
+    /// appearance takes over a sync the last one abandoned (#1908; the
+    /// `RulesViewModel.load` rule, #1328).
+    private(set) var needsRefresh = true
+    /// `refreshIfNeeded` calls waiting out the refresh in flight.
+    @ObservationIgnored private var refreshWaiters: [CheckedContinuation<Void, Never>] = []
+    /// How many of those there are; the tests' view of the wait.
+    var waitingRefreshCount: Int { refreshWaiters.count }
 
-    private let client: CabalmailClient
+    /// The client's `rssStore` / `rssSync`, or a test's. Nil on a bare
+    /// client, where every load and refresh is a no-op.
+    private let store: RssStore?
+    private let engine: RssSyncEngine?
 
-    init(client: CabalmailClient, bus: FeedStateBus = .shared) {
-        self.client = client
+    convenience init(client: CabalmailClient, bus: FeedStateBus = .shared) {
+        self.init(store: client.rssStore, engine: client.rssSync, bus: bus)
+    }
+
+    init(store: RssStore?, engine: RssSyncEngine?, bus: FeedStateBus = .shared) {
+        self.store = store
+        self.engine = engine
         // Any read / favorite change or refetch elsewhere moves the unread
         // badges; a refetch also refreshes each feed's health, so the whole
         // catalog is re-read from the store (cheap: one SQLite pass).
@@ -47,7 +65,7 @@ final class FeedSidebarViewModel {
 
     /// Reads the store (no network).
     func load() async {
-        guard let store = client.rssStore else { return }
+        guard let store else { return }
         do {
             folders = try await store.folders()
             subscriptions = try await store.subscriptions()
@@ -62,30 +80,66 @@ final class FeedSidebarViewModel {
     /// Catalog + items + pending drain, then a reload. Safe to call from
     /// several triggers at once: overlapping calls coalesce on `isRefreshing`.
     func refresh() async {
-        guard !isRefreshing, let engine = client.rssSync else { return }
+        guard !isRefreshing, let engine else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer { finishRefresh() }
         errorMessage = nil
         do {
             try await engine.refreshCatalog()
             await load()
         } catch {
-            errorMessage = FeedErrorText.describe(error)
+            // A refresh whose task was cancelled (the views' `.task` as the
+            // sidebar leaves the screen mid-sync: a push, a tab switch, the
+            // iPad sidebar hidden) has nothing to report (#1908). Read off the
+            // task, not the error, whose shape has varied.
+            if !Task.isCancelled { errorMessage = FeedErrorText.describe(error) }
         }
-        let failures = await engine.syncAll()
-        if let first = failures.first, errorMessage == nil, failures.count == subscriptions.count,
-           !subscriptions.isEmpty {
-            // Every feed failed: almost certainly offline; one line, not one per feed.
-            errorMessage = FeedErrorText.describe(first.value)
+        if !Task.isCancelled {
+            let failures = await engine.syncAll()
+            // A cancel during the sync fails every feed with it, which would
+            // read as "every feed failed" here; that is no outcome either.
+            if !Task.isCancelled, let first = failures.first, errorMessage == nil,
+               failures.count == subscriptions.count, !subscriptions.isEmpty {
+                // Every feed failed: almost certainly offline; one line, not one per feed.
+                errorMessage = FeedErrorText.describe(first.value)
+            }
         }
-        await FeedWebStorage.dropDeparted(from: client.rssStore)
+        // Cut short, the refresh is owed: the next `.task` runs it again.
+        let cutShort = Task.isCancelled
+        // Whatever reached the store before a cancel is shown regardless.
+        await FeedWebStorage.dropDeparted(from: store)
         await load()
+        needsRefresh = cutShort
+    }
+
+    /// The views' `.task`: a refresh until one has run to an outcome. Waits
+    /// out a refresh still in flight first, typically the one a cancelled
+    /// `.task` started and is still unwinding as the view comes back, which
+    /// `refresh()`'s coalescing would otherwise fold this call into, ending
+    /// both with nothing loaded.
+    func refreshIfNeeded() async {
+        while isRefreshing {
+            await withCheckedContinuation { refreshWaiters.append($0) }
+            if Task.isCancelled { return }
+        }
+        guard needsRefresh, !Task.isCancelled else { return }
+        await refresh()
+    }
+
+    /// Ends a refresh and wakes the `refreshIfNeeded` calls waiting on it.
+    private func finishRefresh() {
+        isRefreshing = false
+        let waiters = refreshWaiters
+        refreshWaiters = []
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
 
     /// Reloads counts only (after a read-state change elsewhere). Totals
     /// are re-read too: a load-older or a sync lands in the same bus post.
     func reloadCounts() async {
-        guard let store = client.rssStore else { return }
+        guard let store else { return }
         unreadCounts = (try? await store.unreadCounts()) ?? unreadCounts
         totalCounts = (try? await store.totalCounts()) ?? totalCounts
     }

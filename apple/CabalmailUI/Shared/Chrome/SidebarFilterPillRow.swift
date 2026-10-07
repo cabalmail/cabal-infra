@@ -1,5 +1,4 @@
 import SwiftUI
-import CabalmailKit
 
 /// One pill of a sidebar filter row.
 struct SidebarFilterPill: Identifiable {
@@ -10,12 +9,10 @@ struct SidebarFilterPill: Identifiable {
 }
 
 /// The filter row above a sidebar tree: pills on the leading edge, the
-/// Expand all / Collapse all affordances on the trailing edge. Drawn the way
-/// the message list's `filterPill` draws its pills: same font, padding,
-/// rounded rectangle, and accent wash. The feed item list's `filterBar` does
-/// not match yet; it draws capsules with an `accentForestFg` tint. The pills'
-/// semantics (radio vs. toggles) are the caller's; this only draws what it is
-/// told is on.
+/// Expand all / Collapse all affordances on the trailing edge. The pills are
+/// `FilterPill`s, the same ones the message list and the feed item list
+/// draw. Their semantics (radio vs. toggles) are the caller's; this only
+/// draws what it is told is on.
 struct SidebarFilterPillRow: View {
     let pills: [SidebarFilterPill]
     /// Machine-facing prefix for the pills (`folder.filter` / `feed.filter`);
@@ -37,20 +34,12 @@ struct SidebarFilterPillRow: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(pills) { pill in
-                Button(action: pill.action) {
-                    Text(pill.label)
-                        .font(.subheadline.weight(pill.isOn ? .semibold : .regular))
-                        .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(pill.isOn ? ColorTokens.accentForestWash : Color.clear)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(pill.isOn ? .isSelected : [])
-                .accessibilityIdentifier("\(identifierPrefix).pill.\(pill.id)")
+                FilterPill(
+                    label: pill.label,
+                    isOn: pill.isOn,
+                    identifier: "\(identifierPrefix).pill.\(pill.id)",
+                    action: pill.action
+                )
             }
             Spacer(minLength: 4)
             if let expansion {

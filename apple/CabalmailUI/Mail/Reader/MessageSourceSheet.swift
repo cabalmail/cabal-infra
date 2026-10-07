@@ -38,9 +38,7 @@ struct MessageSourceSheet: View {
     let onClose: () -> Void
 
     @State private var tab: Tab
-    @State private var raw: String?
-    @State private var errorMessage: String?
-    @State private var isLoading = true
+    @State private var source = AsyncContentLoader<String>()
 
     init(
         model: MessageDetailViewModel,
@@ -82,9 +80,9 @@ struct MessageSourceSheet: View {
 
     private var content: some View {
         AsyncContentView(
-            isLoading: isLoading,
+            isLoading: source.isLoading,
             loadingLabel: "Loading source…",
-            errorMessage: errorMessage,
+            errorMessage: source.errorMessage,
             retry: { Task { await load() } },
             content: {
                 ScrollView([.vertical, .horizontal]) {
@@ -110,8 +108,8 @@ struct MessageSourceSheet: View {
                 } label: {
                     Label("Copy", systemImage: "doc.on.doc")
                 }
-                .disabled(raw == nil)
-                if let raw {
+                .disabled(source.value == nil)
+                if let raw = source.value {
                     ShareLink(
                         item: MessageSourceFile(raw: raw, subject: model.envelope.subject),
                         preview: SharePreview(emlFilename(for: model.envelope.subject))
@@ -123,12 +121,12 @@ struct MessageSourceSheet: View {
                 Image(systemName: "ellipsis.circle")
                     .accessibilityLabel("Source actions")
             }
-            .disabled(raw == nil)
+            .disabled(source.value == nil)
         }
     }
 
     private var currentText: String {
-        guard let raw else { return "" }
+        guard let raw = source.value else { return "" }
         switch tab {
         case .full:
             return raw
@@ -139,17 +137,13 @@ struct MessageSourceSheet: View {
         }
     }
 
+    /// A load cut short by the sheet going away paints nothing (#1908).
     @MainActor
     private func load() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        do {
-            let bytes = try await model.rawSourceBytes()
-            raw = MessageSource.decode(bytes)
-        } catch {
-            errorMessage = "Couldn't load message source: \(error.localizedDescription)"
-        }
+        await source.load(
+            { try await MessageSource.decode(model.rawSourceBytes()) },
+            failure: { "Couldn't load message source: \($0.localizedDescription)" }
+        )
     }
 
     private func copyCurrent() {

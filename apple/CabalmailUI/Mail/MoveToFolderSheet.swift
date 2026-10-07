@@ -18,9 +18,7 @@ struct MoveToFolderSheet: View {
     let onSelect: (Folder) -> Void
     let onCancel: () -> Void
 
-    @State private var folders: [Folder] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var loader = AsyncContentLoader<[Folder]>()
     @State private var search: String = ""
 
     var body: some View {
@@ -45,9 +43,9 @@ struct MoveToFolderSheet: View {
 
     private var content: some View {
         AsyncContentView(
-            isLoading: isLoading,
+            isLoading: loader.isLoading,
             loadingLabel: "Loading folders…",
-            errorMessage: errorMessage,
+            errorMessage: loader.errorMessage,
             retry: { Task { await load() } },
             content: {
                 if visibleFolders.isEmpty {
@@ -78,6 +76,7 @@ struct MoveToFolderSheet: View {
     }
 
     private var visibleFolders: [Folder] {
+        let folders = loader.value ?? []
         let normalized = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return folders }
         return folders.filter { folder in
@@ -86,17 +85,13 @@ struct MoveToFolderSheet: View {
         }
     }
 
+    /// A load cut short by the sheet going away paints nothing (#1908).
     @MainActor
     private func load() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        do {
-            let all = try await client.imapClient.listFolders()
-            folders = sortForPicker(all)
-        } catch {
-            errorMessage = "Couldn't load folders: \(error.localizedDescription)"
-        }
+        await loader.load(
+            { try await sortForPicker(client.imapClient.listFolders()) },
+            failure: { "Couldn't load folders: \($0.localizedDescription)" }
+        )
     }
 
     /// Subscribed folders minus the source and any `\Noselect` containers,

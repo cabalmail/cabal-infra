@@ -41,7 +41,10 @@ final class FeedItemListViewModel {
     /// multi-feed scopes. Read with the page; empty in single-feed scope.
     var subscriptionTitles: [String: String] = [:]
 
-    private let client: CabalmailClient
+    /// The client's `rssStore` / `rssSync`, or a test's. Nil on a bare
+    /// client, where every load is a no-op.
+    private let store: RssStore?
+    private let engine: RssSyncEngine?
     private let preferences: Preferences
     private let defaults: FeedDefaultsPersisting?
     private let bus: FeedStateBus
@@ -59,13 +62,15 @@ final class FeedItemListViewModel {
 
     init(scope: RssItemScope, subscription: RssSubscription?, folder: RssFolder? = nil,
          client: CabalmailClient, preferences: Preferences, defaults: FeedDefaultsPersisting? = nil,
-         bus: FeedStateBus = .shared) {
+         bus: FeedStateBus = .shared, store: RssStore? = nil, engine: RssSyncEngine? = nil) {
         self.scope = scope
         self.subscription = subscription
         self.folder = folder
-        self.client = client
+        let engine = engine ?? client.rssSync
+        self.store = store ?? client.rssStore
+        self.engine = engine
         self.preferences = preferences
-        self.defaults = defaults ?? client.rssSync
+        self.defaults = defaults ?? engine
         self.bus = bus
         self.ordering = subscription?.orderingMode ?? .newestFirst
         self.filter = FeedListFilterPolicy.initial(scope: scope, subscription: subscription, folder: folder,
@@ -139,7 +144,7 @@ final class FeedItemListViewModel {
 
     /// First page from the store.
     func reload() async {
-        guard let store = client.rssStore else { return }
+        guard let store else { return }
         do {
             if let subscription {
                 // The engine learns on the first sync whether the server has
@@ -173,7 +178,7 @@ final class FeedItemListViewModel {
     /// offset then skips or repeats rows. Anything already shown is
     /// dropped, so `ForEach` never sees a duplicate id.
     func loadMore() async {
-        guard hasMoreLocal, let store = client.rssStore, searchQuery.isEmpty, let last = items.last else { return }
+        guard hasMoreLocal, let store, searchQuery.isEmpty, let last = items.last else { return }
         do {
             let page = try await store.items(.init(scope: scope, filter: filter, ordering: ordering,
                                                    limit: pageSize, after: .init(after: last)))
@@ -187,7 +192,7 @@ final class FeedItemListViewModel {
 
     /// Fresh items from the server for the feeds in scope, then a reload.
     func sync() async {
-        guard !isSyncing, let engine = client.rssSync, let store = client.rssStore else { return }
+        guard !isSyncing, let engine, let store else { return }
         isSyncing = true
         defer { isSyncing = false }
         do {
@@ -201,7 +206,16 @@ final class FeedItemListViewModel {
             _ = try? await engine.drainPending()
             errorMessage = nil
         } catch {
-            errorMessage = FeedErrorText.describe(error)
+            // A sync whose task was cancelled has nothing to report: the
+            // list's `.task` as it leaves the screen mid-sync (a pushed reader
+            // or a tab switch on iPhone, a scope change), or a pull cut short
+            // (#1908). Read off the task, not the error, whose shape has
+            // varied. An earlier error stands; the store is still re-read and
+            // the bus told below, since feeds synced before the cancel have
+            // landed. No retry is armed here: the list's `.task(id: scope)`
+            // runs `start()`, which builds a fresh model and syncs, on every
+            // appearance; a `model == nil` gate there would need one.
+            if !Task.isCancelled { errorMessage = FeedErrorText.describe(error) }
         }
         await reload()
         postBroad()
@@ -209,7 +223,7 @@ final class FeedItemListViewModel {
 
     /// Older history for a single feed, then a reload.
     func loadOlder() async {
-        guard let subscription, let engine = client.rssSync, !isLoadingOlder else { return }
+        guard let subscription, let engine, !isLoadingOlder else { return }
         isLoadingOlder = true
         defer { isLoadingOlder = false }
         do {
@@ -225,7 +239,7 @@ final class FeedItemListViewModel {
     // MARK: - Mutations (optimistic; the engine queues and pushes)
 
     func setRead(_ item: RssItem, _ isRead: Bool) async {
-        guard let engine = client.rssSync else { return }
+        guard let engine else { return }
         var changed = item
         changed.isRead = isRead
         replace(item) { $0.isRead = isRead }
@@ -235,7 +249,7 @@ final class FeedItemListViewModel {
     }
 
     func setFavorite(_ item: RssItem, _ isFavorite: Bool) async {
-        guard let engine = client.rssSync else { return }
+        guard let engine else { return }
         var changed = item
         changed.isFavorite = isFavorite
         replace(item) { $0.isFavorite = isFavorite }
@@ -256,7 +270,7 @@ final class FeedItemListViewModel {
     }
 
     func markAllRead() async {
-        guard let engine = client.rssSync, let store = client.rssStore else { return }
+        guard let engine, let store else { return }
         let feedIds = Set((try? await store.feedIds(in: scope)) ?? [])
         let subs = ((try? await store.subscriptions()) ?? []).filter { feedIds.contains($0.feedId) }
         for sub in subs {
@@ -272,7 +286,7 @@ final class FeedItemListViewModel {
     }
 
     private func refreshPendingMarks() async {
-        guard let store = client.rssStore else { return }
+        guard let store else { return }
         var pending: Set<String> = []
         for item in items where (try? await store.hasPending(feedId: item.feedId, sortKey: item.sortKey)) == true {
             pending.insert(item.id)
