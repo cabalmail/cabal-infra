@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.28.0] - 2026-10-07
+
+### Changed
+- Apple: **Feed filter pills match the message list's.** The All, Unread
+  and Flagged pills above a feed's items now look like the ones above a
+  mailbox: the same rounded shape and highlight, and they stack instead of
+  squeezing when the column is too narrow for the row. VoiceOver now
+  reports the selected pill in the message list and the feed list, as it
+  already did in the sidebar filter rows.
+
+### Fixed
+- Apple: **A screen that leaves mid-load no longer keeps a "cancelled"
+  error.** When the folder sidebar, the Feeds sidebar or a feed's list went
+  off screen while it was loading (on iPhone, the launch opens the inbox
+  over the folder sidebar at once), the load's cancellation showed as
+  "Couldn't reach the server. cancelled.", and the sidebars kept it until a
+  manual refresh. Such a load now shows nothing, and the sidebar loads
+  again the next time it appears. The message source and Move to Folder
+  sheets and the notification folder picker do the same.
+- Apple: **A cancelled request no longer reads as a network failure.** When
+  the app itself cancelled a request (a sheet or window closed while it was
+  loading), the request was reported as "Couldn't reach the server.
+  cancelled." It now reads as cancelled, and a message whose loading is
+  cancelled goes back to its spinner instead of an error with Retry. A
+  launch whose window closes while it is starting still uses the saved
+  server settings, as before.
+- Apple: **Badge after Check Inbox and signing out.** If Siri's or
+  Shortcuts' Check Inbox was still waiting on the server when you signed
+  out, or signed out and into another account, its answer could put the
+  signed-out account's unread count back on the app badge. The badge now
+  keeps only counts from the account that's signed in.
+- Apple: **A session that can't be saved no longer passes as offline.**
+  If the app renewed your session at launch but the device's keychain
+  wouldn't save the renewed sign-in, the launch carried on as if offline
+  with the old, expired one, and every later request renewed it again. It
+  now stops on "Couldn't read or save data on this device." and keeps the
+  saved session for the next launch. Other keychain failures also read as
+  a problem on the device rather than "The connection failed."
+- Apple: **A message the server couldn't prepare no longer reads as a
+  network failure.** When the server failed to prepare a message for
+  download, the app tried to fetch the word "Error" as an address and
+  showed "Couldn't reach the server. unsupported URL." It now says
+  "Couldn't read the server's reply. fetch_message returned no presigned
+  URL." without the extra request, and a sender logo that fails the same
+  way is looked up again later instead of staying blank.
+- Apple: **Signing out no longer risks leaving queued mail behind.** If a
+  queued message was being retried at the moment you signed out and that
+  retry failed, it could be written back to the device's outbox after
+  sign-out had cleared it, and then be sent by the next account to sign in
+  on the device. A message removed from the outbox now stays removed.
+- Apple: **A reply the app can't read says so.** When the server answered
+  with something other than the data the app expected (an error page or an
+  empty reply in place of a message, folder list or rule set), the app
+  showed "The data couldn't be read because it isn't in the correct
+  format." It now says "Couldn't read the server's reply." and names the
+  request that failed, and the feed reader no longer shows a raw decoding
+  dump for the same failure.
+
 ## [1.27.1] - 2026-10-06
 
 ### Fixed
