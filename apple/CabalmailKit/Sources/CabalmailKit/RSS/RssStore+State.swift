@@ -46,6 +46,7 @@ extension RssStore {
         try database.run("UPDATE items SET is_read = ?, state_is_explicit = 1 WHERE feed_id = ? AND sort_key = ?",
                    [.init(isRead), .init(feedId), .init(sortKey)])
         try enqueue(kind: .read, feedId: feedId, sortKey: sortKey, value: isRead)
+        emit(.items(["\(feedId)#\(sortKey)"]))
     }
 
     /// Favorites or unfavorites an item locally and queues the change.
@@ -53,6 +54,7 @@ extension RssStore {
         try database.run("UPDATE items SET is_favorite = ? WHERE feed_id = ? AND sort_key = ?",
                    [.init(isFavorite), .init(feedId), .init(sortKey)])
         try enqueue(kind: .favorite, feedId: feedId, sortKey: sortKey, value: isFavorite)
+        emit(.items(["\(feedId)#\(sortKey)"]))
     }
 
     /// Mark-all-read for one subscription, the way the server does it:
@@ -72,6 +74,7 @@ extension RssStore {
         try database.run(
             "INSERT INTO pending (kind, subscription_id, feed_id, created_at) VALUES ('mark_all_read', ?, ?, ?)",
             [.init(subscriptionId), .init(sub.feedId), .init(watermark)])
+        emit(.feeds([sub.feedId]))
     }
 
     /// Applies state rows the server reported (the state sync) to the
@@ -102,6 +105,7 @@ extension RssStore {
             try? database.exec("ROLLBACK")
             throw error
         }
+        emit(.feeds(Set(states.map(\.feedId))))
     }
 
     /// Applies a watermark the SERVER reported (after a push or a catalog
@@ -110,6 +114,7 @@ extension RssStore {
         try database.run(
             "UPDATE subscriptions SET read_watermark = MAX(read_watermark, ?) WHERE subscription_id = ?",
             [.init(watermark), .init(subscriptionId)])
+        if let feedId = try subscription(id: subscriptionId)?.feedId { emit(.feeds([feedId])) }
     }
 
     public func pendingMutations() throws -> [PendingMutation] {
@@ -133,10 +138,16 @@ extension RssStore {
                      [.init(feedId), .init(sortKey)]).first) != nil
     }
 
+    /// Clears pushed queue rows; their items lose the "queued" mark.
     public func deletePending(ids: [Int]) throws {
         guard !ids.isEmpty else { return }
-        try database.run("DELETE FROM pending WHERE id IN (\(Self.placeholders(ids.count)))",
-                         ids.map(SQLiteDatabase.Value.init(_:)))
+        let binds = ids.map(SQLiteDatabase.Value.init(_:))
+        let items = try database.rows("""
+            SELECT feed_id, sort_key FROM pending
+            WHERE id IN (\(Self.placeholders(ids.count))) AND sort_key != ''
+            """, binds).map { "\($0.string(0))#\($0.string(1))" }
+        try database.run("DELETE FROM pending WHERE id IN (\(Self.placeholders(ids.count)))", binds)
+        emit(.items(Set(items)))
     }
 
     private func enqueue(kind: PendingKind, feedId: String, sortKey: String, value: Bool) throws {
@@ -168,6 +179,8 @@ extension RssStore {
               last_synced_at = excluded.last_synced_at, state_cursor = excluded.state_cursor
             """, [.init(feedId), .init(state.sinceCursor), .init(state.olderCursor),
                   .init(state.olderExhausted), .init(state.lastSyncedAt), .init(state.stateCursor)])
+        // Whether there is older history to load is the list's to show.
+        emit(.feeds([feedId]))
     }
 
     public func itemCount(feedId: String) throws -> Int {
