@@ -22,6 +22,12 @@ on:
     paths:
       - 'extensions/**'
       - '.github/workflows/extensions.yml'
+      # Read from outside extensions/ by shared/test/privateLink.test.ts, so
+      # a change to either must run it (#1866). Pull requests only: a push
+      # to stage or main here runs the store uploads, which a change to
+      # these files alone must not trigger.
+      - 'apple/CabalmailKit/Sources/CabalmailShared/PrivateLinkTokenStore.swift'
+      - 'terraform/infra/modules/app/templates/private-link.html'
   workflow_dispatch:
 
 concurrency:

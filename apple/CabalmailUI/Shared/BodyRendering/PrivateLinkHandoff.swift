@@ -24,6 +24,7 @@
 // only: iOS Safari cannot create private windows through the extension
 // API, and iOS keeps the share sheet for private mode.
 
+import CabalmailShared
 import Foundation
 
 #if os(macOS)

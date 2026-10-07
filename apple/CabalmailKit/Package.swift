@@ -59,11 +59,12 @@ let package = Package(
             ],
             swiftSettings: checkedSettings
         ),
-        // The values the app extensions share with the apps: the App Group,
-        // and the push handoff's keys and token payload. The notification
-        // service extensions link this product and not the Kit; the Kit
-        // depends on it, so the apps get it inside the Kit and link nothing
-        // new. Keep it Foundation only, with no resources and no logging (the
+        // The values and stores the app extensions share with the apps: the
+        // App Group, the push handoff's keys and token payload, and the Safari
+        // extension's control-domain and private-link token stores. The
+        // notification service and Safari web extensions link this product
+        // and not the Kit; the Kit depends on it, so the apps get it inside
+        // the Kit and link nothing new. Keep it Foundation only, with no resources and no logging (the
         // os.Logger lint rule exempts only CabalmailLog and the extension),
         // and leave the product type automatic: a static product with no
         // resources puts its code in each extension's own binary, so nothing

@@ -178,7 +178,7 @@ describe('the token shape agrees across the three implementations', () => {
   });
 
   it('is what the app mints: 16 random bytes as lower-case hex', () => {
-    const store = read('apple/CabalmailUI/Platform/Services/PrivateLinkTokenStore.swift');
+    const store = read('apple/CabalmailKit/Sources/CabalmailShared/PrivateLinkTokenStore.swift');
     expect(store).toContain('(0..<16)');
     expect(store).toContain('"%02x"');
   });

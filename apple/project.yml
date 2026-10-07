@@ -56,7 +56,8 @@ targets:
   # BUNDLE_LOADER instead of linking their own. It imports CabalmailKit
   # without linking it for the same reason: the apps link the Kit once, and
   # a second copy breaks `as? CabalmailError` casts (see the
-  # CabalmailKitTestSupport target in CabalmailKit/Package.swift).
+  # CabalmailKitTestSupport target in CabalmailKit/Package.swift). The same
+  # goes for CabalmailShared, which reaches the apps inside the Kit.
   #
   # Membership is the folder: a new file under CabalmailUI/ is in both apps.
   # As a project target it inherits `SWIFT_STRICT_CONCURRENCY: complete`
@@ -71,6 +72,9 @@ targets:
       - path: CabalmailUI
     dependencies:
       - package: CabalmailKit
+        link: false
+      - package: CabalmailKit
+        product: CabalmailShared
         link: false
     settings:
       base:
@@ -490,7 +494,7 @@ targets:
 
   # Safari web extension, embedded in the iOS mail app (plan Phase 8.3;
   # OQ9 resolution). The iOS twin of CabalmailMacWebExtension: the same
-  # native handler source, the same shared control-domain store, and the
+  # native handler source, the same CabalmailShared stores, and the
   # same web bundle resources (built by scripts/sync-vendored.sh during
   # xcodegen generate, added as a group so the files land flat). What it
   # cannot do on iOS: the private-link handoff -- iOS Safari does not
@@ -503,11 +507,15 @@ targets:
     platform: iOS
     sources:
       - path: CabalmailMacWebExtension/SafariWebExtensionHandler.swift
-      - path: CabalmailUI/Platform/Services/ExtensionControlDomainStore.swift
-      # The private-link token rows the appex resolves (#1765).
-      - path: CabalmailUI/Platform/Services/PrivateLinkTokenStore.swift
       - path: ../extensions/safari/CabalmailExtension/Resources
         buildPhase: resources
+    dependencies:
+      # The control-domain and private-link token stores the handler reads.
+      # A static product with no resources, linked into this appex's own
+      # binary and not embedded (see the CabalmailShared target in
+      # CabalmailKit/Package.swift).
+      - package: CabalmailKit
+        product: CabalmailShared
     info:
       path: CabalmailWebExtension/Info.plist
       properties:
@@ -609,22 +617,21 @@ targets:
   # scripts/sync-vendored.sh (preGenCommand) -- a group, NOT `type: folder`,
   # so the files land flat at Contents/Resources where Safari and App Store
   # validation expect manifest.json (the standalone host shipped nested
-  # once; App Store error 90850). The native handler answers one message:
-  # the control domain the mail app published to the shared App Group, so
-  # the user never types the server twice.
+  # once; App Store error 90850). The native handler answers out of the
+  # shared App Group: the control domain the mail app published, so the
+  # user never types the server twice, and the private-link token rows.
   CabalmailMacWebExtension:
     type: app-extension
     platform: macOS
     sources:
       - path: CabalmailMacWebExtension/SafariWebExtensionHandler.swift
-      # Compiled into the appex's own module from the shared CabalmailUI
-      # tree (the appex does not link CabalmailUI): the appex reads what
-      # AppState publishes.
-      - path: CabalmailUI/Platform/Services/ExtensionControlDomainStore.swift
-      # The private-link token rows the appex resolves (#1765).
-      - path: CabalmailUI/Platform/Services/PrivateLinkTokenStore.swift
       - path: ../extensions/safari/CabalmailExtension/Resources
         buildPhase: resources
+    dependencies:
+      # As in the iOS appex: the stores come from CabalmailShared, linked
+      # into this appex's binary, not embedded.
+      - package: CabalmailKit
+        product: CabalmailShared
     info:
       path: CabalmailMacWebExtension/Info.plist
       properties:
@@ -686,6 +693,10 @@ targets:
       - target: CabalmailUI
         link: false
       - package: CabalmailKit
+      # Imported, not linked: the host app carries it inside the Kit.
+      - package: CabalmailKit
+        product: CabalmailShared
+        link: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMacTests
@@ -713,6 +724,10 @@ targets:
       - target: CabalmailUI
         link: false
       - package: CabalmailKit
+      # Imported, not linked, as in CabalmailMacTests.
+      - package: CabalmailKit
+        product: CabalmailShared
+        link: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailiOSTests

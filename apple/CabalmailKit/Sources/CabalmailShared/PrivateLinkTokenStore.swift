@@ -25,14 +25,14 @@
 // also why resolution is not destructive: the redirector tab is still
 // open in that case and a reload must still work.
 //
-// Compiled into CabalmailUI and both appexes alike, following
-// ExtensionControlDomainStore.swift.
+// It lives in CabalmailShared beside ExtensionControlDomainStore: the app
+// mints through it and both Safari web extensions resolve through it.
 
 import Foundation
 
-enum PrivateLinkTokenStore {
+public enum PrivateLinkTokenStore {
     /// Same container and key namespace as ExtensionControlDomainStore.
-    static let appGroupID = ExtensionControlDomainStore.appGroupID
+    static let appGroupID = AppGroup.identifier
     static let defaultsKey = "cabal.extension.private_link.rows"
 
     /// How long a minted row stays resolvable, and how many may coexist.
@@ -114,7 +114,7 @@ enum PrivateLinkTokenStore {
     /// Publish `target` for the extension. Returns the token to put in the
     /// fragment, or nil when there is no container to publish into -- the
     /// caller then uses the fragment form.
-    static func mint(_ target: URL, now: TimeInterval = Date().timeIntervalSince1970) -> String? {
+    public static func mint(_ target: URL, now: TimeInterval = Date().timeIntervalSince1970) -> String? {
         guard defaults != nil else { return nil }
         let token = newToken()
         write(inserting(target.absoluteString, token: token, into: read(), now: now))
@@ -125,7 +125,7 @@ enum PrivateLinkTokenStore {
     }
 
     /// Resolve a token for the extension's native handler.
-    static func resolve(
+    public static func resolve(
         _ token: String, now: TimeInterval = Date().timeIntervalSince1970
     ) -> String? {
         let table = read()
@@ -135,7 +135,7 @@ enum PrivateLinkTokenStore {
     }
 
     /// Retire a row once the extension has opened it.
-    static func forget(_ token: String, now: TimeInterval = Date().timeIntervalSince1970) {
+    public static func forget(_ token: String, now: TimeInterval = Date().timeIntervalSince1970) {
         var table = pruned(read(), now: now)
         table.removeValue(forKey: token)
         write(table)

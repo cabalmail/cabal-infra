@@ -14,8 +14,10 @@
 //   `forget-private-link` once the private window is up.
 //
 // Unknown messages get an empty acknowledgement, matching the standalone
-// host's handler.
+// host's handler. Both stores come from CabalmailShared, the one module
+// this appex links (both Safari appexes compile this file).
 
+import CabalmailShared
 import SafariServices
 
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {

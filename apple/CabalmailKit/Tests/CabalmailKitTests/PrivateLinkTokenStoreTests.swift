@@ -1,12 +1,11 @@
 import XCTest
-@testable import CabalmailUI
+@testable import CabalmailShared
 
 /// The App Group row table behind the opaque-token form of the
-/// private-link handoff (#1765). The container itself is unavailable to
-/// the test runner (unsigned bundle, no App Group), which is exactly why
-/// the table algebra is pure: expiry, the cap and resolution are the parts
-/// that can be wrong, and they are asserted here rather than inferred from
-/// a live round-trip.
+/// private-link handoff (#1765). The table algebra is pure, so expiry, the
+/// cap and resolution, the parts that can be wrong, are asserted directly;
+/// two tests also go through the container, which the unentitled test
+/// runner gets as a plain preferences domain (see `suite`).
 final class PrivateLinkTokenStoreTests: XCTestCase {
     private let now: TimeInterval = 1_000_000
 
