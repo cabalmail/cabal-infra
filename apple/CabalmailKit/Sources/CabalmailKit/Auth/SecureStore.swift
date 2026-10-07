@@ -52,6 +52,8 @@ public final class InMemorySecureStore: SecureStore {
 /// to the file-based login keychain, which needs no keychain-access-group
 /// entitlement -- so a locally-run (ad-hoc / unsigned) dev build can store
 /// credentials instead of failing with errSecMissingEntitlement (-34018).
+/// Every OSStatus other than success (or not-found, where that means
+/// absent) throws `CabalmailError.storage` with the status in its detail.
 public struct KeychainSecureStore: SecureStore {
     public let service: String
     public let accessGroup: String?
@@ -90,17 +92,17 @@ public struct KeychainSecureStore: SecureStore {
             let attrs: [String: Any] = [kSecValueData as String: value]
             let update = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
             guard update == errSecSuccess else {
-                throw CabalmailError.transport("Keychain update failed: \(update)")
+                throw CabalmailError.storage("Keychain update failed: \(update)")
             }
         case errSecItemNotFound:
             query[kSecValueData as String] = value
             query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
             let add = SecItemAdd(query as CFDictionary, nil)
             guard add == errSecSuccess else {
-                throw CabalmailError.transport("Keychain add failed: \(add)")
+                throw CabalmailError.storage("Keychain add failed: \(add)")
             }
         default:
-            throw CabalmailError.transport("Keychain query failed: \(status)")
+            throw CabalmailError.storage("Keychain query failed: \(status)")
         }
     }
 
@@ -114,14 +116,14 @@ public struct KeychainSecureStore: SecureStore {
         case errSecSuccess:        return item as? Data
         case errSecItemNotFound:   return nil
         default:
-            throw CabalmailError.transport("Keychain read failed: \(status)")
+            throw CabalmailError.storage("Keychain read failed: \(status)")
         }
     }
 
     public func remove(_ key: String) throws {
         let status = SecItemDelete(baseQuery(key) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw CabalmailError.transport("Keychain delete failed: \(status)")
+            throw CabalmailError.storage("Keychain delete failed: \(status)")
         }
     }
 }

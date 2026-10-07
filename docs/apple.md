@@ -1077,7 +1077,14 @@ transitions and sleep/wake; that stack has since been deleted.
 ### Storage: Keychain for secrets, on-disk Codable for mirrors
 
 - Cognito tokens: one JSON blob in the data-protection keychain
-  (`KeychainSecureStore`, `kSecUseDataProtectionKeychain = true`).
+  (`KeychainSecureStore`, `kSecUseDataProtectionKeychain = true`). A
+  keychain call that fails (any OSStatus but success, or not-found where
+  that means absent) throws `CabalmailError.storage`, never `.transport`:
+  the launch restore counts `.transport` as "offline" and passes, and a
+  refresh whose new tokens can't be saved must not (#1808). The restore
+  lands such a failure on the error status with the tokens kept; its first
+  token read is a `try?`, so a keychain that can't be read at all (before
+  the first unlock after a restart) stays signed out instead.
 - Username and password: neither is stored. `CognitoAuthService`
   scrubs the `imap.username` and `imap.password` items older builds
   wrote.
@@ -1330,14 +1337,16 @@ fetches.
 
 `CabalmailClient.send(_:)` returns `SendOutcome.sent` or `.queued`.
 Transport / network errors (`CabalmailError.network`, connection
-timeouts) queue the `OutgoingMessage` into the on-disk `Outbox` and
-surface a warning toast; application-level rejections (auth failure,
-malformed recipient, permanent SMTP 5xx) throw immediately so the
-compose sheet can correct them. `SendQueue` drains the outbox when
-`NWPathMonitor` reports reachability or on an explicit user kick, with
-`maxAttempts = 10` before an entry is dropped so a permanently bad
-recipient can't spin forever. One JSON file per entry under app support,
-same layout as `DraftStore`.
+timeouts), a cancelled request, the API's duplicate-in-flight answer
+(`.sendInFlight`) and a keychain that can't be read for the token
+(`.storage`) queue the `OutgoingMessage` into the on-disk `Outbox` and
+surface a warning toast (`CabalmailClient.shouldQueue`);
+application-level rejections (auth failure, malformed recipient,
+permanent SMTP 5xx) throw immediately so the compose sheet can correct
+them. `SendQueue` drains the outbox when `NWPathMonitor` reports
+reachability or on an explicit user kick, with `maxAttempts = 10` before
+an entry is dropped so a permanently bad recipient can't spin forever.
+One JSON file per entry under app support, same layout as `DraftStore`.
 
 ### MetricKit is opt-in
 

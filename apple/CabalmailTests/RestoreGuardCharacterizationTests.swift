@@ -151,10 +151,10 @@ final class RestoreGuardCharacterizationTests: XCTestCase {
 
     /// The token check is `try?`, so a store that throws on read (a
     /// data-protection keychain that is unavailable on a background launch
-    /// reports `.transport("Keychain read failed: ...")`) counts as no
-    /// tokens: `.signedOut` with no reason and no configuration load, and the
-    /// tokens it could not read are kept for a later launch. A read error is
-    /// not taken for an expiry.
+    /// reports `.storage("Keychain read failed: ...")`, `.transport` before
+    /// #1808) counts as no tokens: `.signedOut` with no reason and no
+    /// configuration load, and the tokens it could not read are kept for a
+    /// later launch. A read error is not taken for an expiry.
     func testAStoreThatCannotBeReadCountsAsNoTokensAndKeepsThem() async throws {
         harness.seedLastSession()
         try await harness.seedTokens()
@@ -251,7 +251,7 @@ private struct UnreadableSecureStore: SecureStore {
     }
 
     func get(_ key: String) throws -> Data? {
-        throw CabalmailError.transport("Keychain read failed: -25308")
+        throw CabalmailError.storage("Keychain read failed: -25308")
     }
 
     func remove(_ key: String) throws {

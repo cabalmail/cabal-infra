@@ -58,11 +58,21 @@ final class ErrorsLocalizedDescriptionTests: XCTestCase {
         )
     }
 
+    /// A keychain failure reads as the device's storage, not the network
+    /// (#1808), with the keychain's own detail carried like the wire cases'.
+    func testStorageNamesTheDeviceAndCarriesTheKeychainDetail() {
+        XCTAssertEqual(
+            CabalmailError.storage("Keychain read failed: -25308").localizedDescription,
+            "Couldn't read or save data on this device. Keychain read failed: -25308."
+        )
+        XCTAssertEqual(CabalmailError.storage("").localizedDescription, "Couldn't read or save data on this device.")
+    }
+
     func testNoCaseFallsBackToTheEnumDescription() {
         let cases: [CabalmailError] = [
             .notConfigured, .notSignedIn, .invalidCredentials, .authExpired,
             .network("boom"), .transport("boom"), .protocolError("boom"), .decoding("boom"),
-            .cancelled,
+            .cancelled, .storage("boom"),
             .server(code: "404", message: ""),
             .maintenance(message: "Mail is briefly unavailable."),
             .bulkPartialFailure(succeeded: [1, 2], failed: [3])

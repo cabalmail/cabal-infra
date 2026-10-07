@@ -17,6 +17,13 @@ public enum CabalmailError: Error, Sendable, Equatable {
     case decoding(String)
     case cancelled
 
+    /// The device's own storage failed: a keychain read, write or delete
+    /// answered an OSStatus other than success or not-found. Distinct from
+    /// `.transport`, which is the wire: a keychain that can't save a
+    /// refreshed token pair says nothing about whether the server is
+    /// reachable (#1808).
+    case storage(String)
+
     /// Authentication token expired and could not be refreshed.
     case authExpired
 
@@ -69,6 +76,8 @@ extension CabalmailError: LocalizedError {
             return explain("Couldn't read the server's reply.", detail)
         case .cancelled:
             return "That request was cancelled."
+        case .storage(let detail):
+            return explain("Couldn't read or save data on this device.", detail)
         case .server(let code, let message):
             // The API explains itself in the body ("That message is no
             // longer in Drafts"); prefer that sentence over the status code.
