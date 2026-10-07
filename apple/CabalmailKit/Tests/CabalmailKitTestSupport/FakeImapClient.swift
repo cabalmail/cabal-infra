@@ -293,8 +293,8 @@ public actor FakeImapClient: ImapClient {
         await parkIfHeld(.status)
         // Mirror the production transport: a URLSession data task whose
         // surrounding Task is cancelled fails with `URLError.cancelled`,
-        // which `URLSessionHTTPTransport` normalizes to `network(...)`.
-        if Task.isCancelled, !statusAnswersAfterCancellation { throw CabalmailError.network("cancelled") }
+        // which `URLSessionHTTPTransport` reports as `.cancelled` (#1815).
+        if Task.isCancelled, !statusAnswersAfterCancellation { throw CabalmailError.cancelled }
         if let scripted = statusResults.next() { return try scripted.get() }
         guard let statusResult else { return try trap() }
         return statusResult
@@ -304,7 +304,7 @@ public actor FakeImapClient: ImapClient {
     ) async throws -> [Envelope] {
         envelopesCalls.append(EnvelopesCall(folder: folder, offset: offset, limit: limit, sort: sort))
         await parkIfHeld(.envelopes)
-        if Task.isCancelled { throw CabalmailError.network("cancelled") }
+        if Task.isCancelled { throw CabalmailError.cancelled }
         if let scripted = envelopesResults.next() { return try scripted.get() }
         guard let folderContents else { return try trap() }
         return folderContents.page(offset: offset, limit: limit)
@@ -317,14 +317,14 @@ public actor FakeImapClient: ImapClient {
         ))
         await parkIfHeld(.topEnvelopes)
         // Cancellation-sensitive for the same reason as `status(path:flagged:)`.
-        if Task.isCancelled { throw CabalmailError.network("cancelled") }
+        if Task.isCancelled { throw CabalmailError.cancelled }
         guard let topEnvelopesResult else { return try trap() }
         return topEnvelopesResult
     }
     public func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage {
         fetchBodyCalls.append(FetchBodyCall(folder: folder, uid: uid))
         await parkIfHeld(.fetchBody)
-        if Task.isCancelled { throw CabalmailError.network("cancelled") }
+        if Task.isCancelled { throw CabalmailError.cancelled }
         guard let scripted = bodies[BodyKey(folder: folder, uid: uid)]?.next() else { return try trap() }
         // Like `ApiBackedImapClient`, the raw fetch carries no flags.
         return RawMessage(uid: uid, bytes: try scripted.get())
