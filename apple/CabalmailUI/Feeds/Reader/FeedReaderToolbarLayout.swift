@@ -40,9 +40,10 @@ enum FeedReaderMenuItem: Hashable {
 
 /// Which feed reader actions each bar draws, in drawn order, and what its
 /// menus carry. Pure, so the order the view draws, the macOS stand-ins and
-/// the tests all read one list. Budgets and placement are
-/// `ReaderToolbarPolicy`'s, shared with the mail reader: the feed reader
-/// always uses the system top bar.
+/// the tests all read one list. The touch bar is held to
+/// `ReaderToolbarPolicy`'s top-bar budget, and the policy's placement for
+/// feeds, the system top bar, is what lets the reader's body run under the
+/// tab bar on iPhone.
 ///
 /// The bar takes one of two shapes, and the view picks the shape per
 /// platform: the touch top bar on iPhone and iPad, where three items plus a

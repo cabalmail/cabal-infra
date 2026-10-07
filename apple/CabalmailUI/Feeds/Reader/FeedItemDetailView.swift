@@ -12,6 +12,9 @@ struct FeedItemDetailView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #endif
     @State private var model: FeedItemDetailViewModel?
     @State private var isOffline = false
     /// Where the reader was in this item's body last time it was open, from
@@ -72,6 +75,24 @@ struct FeedItemDetailView: View {
         .task { await observeReachability() }
     }
 
+    /// True when the body runs under the bottom chrome's glass. On iOS that
+    /// follows where `ReaderToolbarPolicy` puts the feed reader's actions:
+    /// the system top bar at every width, so the bottom edge is the section
+    /// tab bar's and the body runs under it, as the mail reader's does on its
+    /// compact top bar. The other platforms keep it under their bottom chrome
+    /// as before.
+    private var bodyRunsUnderBottomBar: Bool {
+        #if os(iOS)
+        let isOS27OrLater: Bool
+        if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
+        return ReaderToolbarPolicy.placement(
+            for: .feeds, isRegularWidth: horizontalSizeClass == .regular, isOS27OrLater: isOS27OrLater
+        ) == .topBar
+        #else
+        return true
+        #endif
+    }
+
     /// The item's key in the reading-position cache.
     private var positionKey: String { ReadingPositionKey.feed(itemID: item.id) }
 
@@ -120,7 +141,7 @@ struct FeedItemDetailView: View {
                         // page's `position: fixed` bottom elements (consent
                         // and subscribe bars) to the web view's real bottom
                         // edge, where the tray shield would swallow their taps.
-                        runsUnderBottomBar: true,
+                        runsUnderBottomBar: bodyRunsUnderBottomBar,
                         onScrollCaptured: { capture in
                             appState.navCoordinator?.recordFeedScroll(itemID: item.id, capture: capture)
                         }

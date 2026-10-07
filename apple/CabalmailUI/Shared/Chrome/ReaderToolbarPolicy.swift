@@ -1,10 +1,12 @@
 import Foundation
 
-/// The reader toolbar's budgets and placement, for both readers: the mail
-/// reader lays its actions out in `ReaderToolbarLayout`, the feed reader in
-/// `FeedReaderToolbarLayout`, and both read how much room a bar has and which
-/// bar carries the actions from here, so a new SDK's folding is answered in
-/// one place.
+/// The reader toolbar's budgets and placement, for both readers. The mail
+/// reader lays its actions out in `ReaderToolbarLayout`, which sizes its bars
+/// from the budgets here; the feed reader lays its out in
+/// `FeedReaderToolbarLayout`, whose touch bar is held to `topBarCapacity` by
+/// test. Both readers ask `placement(for:...)` which bar carries their actions,
+/// which also decides whether the reader's body runs under the bottom bar. A
+/// new SDK's folding is answered here, in one place.
 ///
 /// On the touch platforms the bar sizes itself to its content, and past a
 /// certain item count the system takes over: on the iOS 27 SDK it silently
@@ -61,8 +63,9 @@ enum ReaderToolbarPolicy {
 
     /// Which bar carries a reader's touch action set.
     ///
-    /// The feed reader always uses the system top bar: its set is three
-    /// items, inside `topBarCapacity`, at every width.
+    /// The feed reader always uses the system top bar: its touch set is
+    /// three items, inside `topBarCapacity`, at every width (macOS and
+    /// visionOS draw its wider set in the window's own toolbar).
     ///
     /// The mail reader at compact width puts its actions in the navigation
     /// bar so the section tab bar can stay on screen while a message is
