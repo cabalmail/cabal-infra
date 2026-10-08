@@ -134,6 +134,35 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         XCTAssertEqual(statuses.count, 2, "the background STATUS and the reset's probe, and no rerun")
     }
 
+    /// A background refresh's STATUS still out when Refresh rebuilds the list
+    /// was asked for before the reset's probe, and may count an older folder.
+    /// Landing after the reset, it is dropped: it doesn't put its older
+    /// count over the one the reset shows.
+    func testAStatusAResetOvertookDoesNotOverwriteTheResetsCounts() async throws {
+        let model = try await fixture.makeModel(loaded: [3, 2, 1], total: 3)
+        await fixture.scriptRefresh(messages: 4, page: [4, 3, 2, 1])
+        // Answered in the order they answer: the reset's probe first, with
+        // UID 4, then the background STATUS held from before it.
+        await fixture.imap.scriptStatusResults([
+            .success(fixture.status(messages: 4, uidNext: 5)),
+            .success(fixture.status(messages: 3, uidNext: 4)),
+        ])
+        await fixture.imap.holdNext(.status)
+        let background = Task { await model.refresh() }
+        await fixture.imap.awaitHeld(.status)
+
+        await model.hardReload()
+        XCTAssertEqual(model.totalMessages, 4)
+        await fixture.imap.releaseHeld(.status)
+        await background.value
+
+        XCTAssertEqual(model.totalMessages, 4, "the older count was dropped")
+        XCTAssertEqual(model.envelopes.map(\.uid), [4, 3, 2, 1])
+        let statuses = await fixture.statusCalls()
+        XCTAssertEqual(statuses.count, 2, "the background STATUS and the probe; the reset answered both")
+        XCTAssertFalse(model.isLoading)
+    }
+
     /// The reset's pass runs on the STATUS its probe asked for, so it answers
     /// only the refreshes asked for before that probe. One asked for while the
     /// probe was out (the watcher, seeing UID 4 arrive) gets a pass of its
