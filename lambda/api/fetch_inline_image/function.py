@@ -8,6 +8,7 @@ from helper import get_message # pylint: disable=import-error
 from helper import validate_content_id # pylint: disable=import-error
 from helper import validate_folder_name # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
+from helper import invalid_input_response # pylint: disable=import-error
 from helper import CACHE_BUCKET # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
@@ -26,10 +27,7 @@ def handler(event, _context):
         msg_id = validate_uid(query_string.get('id'))
         index = validate_content_id(query_string.get('index'))
     except ValueError as err:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"status": f"Invalid input: {err}"})
-        }
+        return invalid_input_response(err)
     bucket = CACHE_BUCKET
     key_prefix = f"{user}/{folder}/{msg_id}/{index}"
     key = ""

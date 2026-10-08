@@ -3,6 +3,7 @@ folder, plus an optional FLAGGED count.'''
 import json
 from helper import get_imap_client # pylint: disable=import-error
 from helper import validate_folder_name # pylint: disable=import-error
+from helper import invalid_input_response # pylint: disable=import-error
 from helper import maintenance_guard # pylint: disable=import-error
 
 ATTRS = ['MESSAGES', 'UNSEEN', 'UIDVALIDITY', 'UIDNEXT']
@@ -32,10 +33,7 @@ def handler(event, _context):
     try:
         folder = validate_folder_name(query_string.get('folder')).replace("/", ".")
     except ValueError as err:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"status": f"Invalid input: {err}"})
-        }
+        return invalid_input_response(err)
     want_flagged = query_string.get('flagged') in TRUTHY
     # SEARCH runs against the selected mailbox, so a flagged count needs the
     # target folder selected; otherwise stay on INBOX (STATUS reads any folder

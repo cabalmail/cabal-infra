@@ -3,6 +3,7 @@ import json
 from helper import ( # pylint: disable=import-error
     delete_prefix,
     get_imap_client,
+    invalid_input_response,
     validate_trash_folder,
     CACHE_BUCKET,
 )
@@ -17,11 +18,11 @@ def handler(event, _context):
     try:
         body = json.loads(event['body'])
     except (TypeError, json.JSONDecodeError):
-        return _invalid('request body is not valid JSON')
+        return invalid_input_response('request body is not valid JSON')
     try:
         folder = validate_trash_folder(body.get('folder'))
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     imap_folder = folder.replace("/", ".")
     client = get_imap_client(None, user, imap_folder)
     try:
@@ -46,11 +47,4 @@ def handler(event, _context):
         "body": json.dumps({
             "status": "emptied"
         })
-    }
-
-def _invalid(err):
-    '''Builds the 400 returned when a validator rejects the request.'''
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {err}"})
     }
