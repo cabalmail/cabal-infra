@@ -95,11 +95,13 @@ struct MailRootView: View {
     @State private var contentColumnWidth: CGFloat = 0
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
-    /// Global-search model for the wide (iPad-regular / macOS) layout, owned
-    /// here so the toolbar search field and the content column share one query
-    /// and result set. The compact-width analogue is `SearchView` (the iPhone
-    /// `Tab(role: .search)`); there's no bottom tab bar here, so search is
-    /// reached from the message-list column's toolbar instead.
+    /// Global-search model for the wide (iPad-regular / macOS) layout: the
+    /// window's (`SceneNavigator.searchModel`), held here so the toolbar
+    /// search field and the content column share one query and result set.
+    /// The compact-width analogue is `SearchView` (the iPhone
+    /// `Tab(role: .search)`), which takes the same model; there's no bottom
+    /// tab bar here, so search is reached from the message-list column's
+    /// toolbar instead.
     @State var searchModel: MessageListViewModel?
     /// Focus on the global search field. Drives the content-column swap: while
     /// the field is focused (or holds a query / active search) the content
@@ -391,25 +393,27 @@ struct MailRootView: View {
         }
         // Catch-all drop target behind the whole split view: a message
         // released anywhere that isn't a folder row (the message list, the
-        // reading pane, sidebar chrome) ends the drag so the sidebar flips
-        // back. Folder rows are nested, more-specific drop targets, so a real
-        // drop onto a folder is handled there and never reaches this. Returns
-        // false - nothing is moved on a cancelled drag.
+        // reading pane, sidebar chrome) is refused. Folder rows are nested,
+        // more-specific drop targets, so a real drop onto a folder is handled
+        // there and never reaches this. Kept, though it moves nothing, so a
+        // drag over the split looks as it always has.
         .dropDestination(for: MessageDragPayload.self) { _, _ in
-            appState.endMessageDrag()
-            return false
+            false
         }
         .task {
             // The window's launch landing — or, for a tree a layout swap has
             // just built, the window's route (`SceneNavigator`). A wide tree
             // may land in the feed reader instead.
             await navigator.mailTreeAppeared(tree, isWide: isWideSidebar)
-            // Shared with the compact Search tab so a layout swap keeps the
-            // query and results (#1654); this split anchors it to the folder.
+            // The window's, shared with its compact Search tab so a layout
+            // swap keeps the query and results (#1654); this split anchors it
+            // to the folder.
             if searchModel == nil, let client = appState.client {
-                let shared = appState.sharedSearchModel(client: client, preferences: preferences)
-                shared.searchAnchor = selectedFolder
-                searchModel = shared
+                let model = navigator.searchModel(
+                    client: client, preferences: preferences, mailStore: appState.mailStore
+                )
+                model.searchAnchor = selectedFolder
+                searchModel = model
             }
         }
         // Addresses live in a trailing panel rather than the left sidebar,
