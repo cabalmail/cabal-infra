@@ -28,22 +28,19 @@ final class SceneNavigatorHandOffTests: XCTestCase {
     private let archive = Folder(path: "Archive", isSubscribed: true)
     private let message = TestFixtures.makeEnvelope(uid: 9, messageId: "<nine@example.com>")
 
-    /// A feed-store lookup that waits until the test releases it.
+    /// A feed-store lookup that waits until the test releases it. Main
+    /// actor throughout, like the navigator that calls it.
+    @MainActor
     private final class HeldLookup {
-        private var entered: CheckedContinuation<Void, Never>?
         private var held: CheckedContinuation<RssItemScope?, Never>?
-        private var didEnter = false
 
         func lookup() async -> RssItemScope? {
-            didEnter = true
-            entered?.resume()
-            entered = nil
-            return await withCheckedContinuation { held = $0 }
+            await withCheckedContinuation { held = $0 }
         }
 
-        func waitUntilEntered() async {
-            if didEnter { return }
-            await withCheckedContinuation { entered = $0 }
+        /// Fails the test rather than hanging if the lookup is never reached.
+        func waitUntilEntered(file: StaticString = #filePath, line: UInt = #line) async throws {
+            try await waitUntilOnMainActor(timeout: 5, file: file, line: line) { self.held != nil }
         }
 
         func release(with scope: RssItemScope?) {
@@ -83,7 +80,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let wide = UUID()
 
         let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false) }
-        await lookup.waitUntilEntered()
+        try await lookup.waitUntilEntered()
 
         XCTAssertNil(navigator.folder(in: wide))
         navigator.selectMessage(TestFixtures.makeEnvelope(uid: 12), isSearching: false, from: compact)
@@ -106,7 +103,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
         let wide = UUID()
         let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false) }
-        await lookup.waitUntilEntered()
+        try await lookup.waitUntilEntered()
 
         let compactAgain = UUID()
         _ = await navigator.mailTreeAppeared(compactAgain, isWide: false, showingFeeds: false)
@@ -119,6 +116,23 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         XCTAssertEqual(navigator.route.mail.message, MessageRef(folder: "INBOX", uid: 9))
     }
 
+    /// The same with no scope to open: the replaced tree moves neither the
+    /// section nor the session to mail behind the compact Feeds tab.
+    func testATreeReplacedDuringAHandOffWithNoScopeMovesNothing() async throws {
+        let coordinator = try makeCoordinator()
+        let lookup = HeldLookup()
+        let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
+        let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+        try await lookup.waitUntilEntered()
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+
+        lookup.release(with: nil)
+        _ = await handOff.value
+
+        XCTAssertEqual(navigator.route.section, .feeds)
+        XCTAssertEqual(coordinator.session.section, .feeds)
+    }
+
     /// A wide tree that reopens the session's feed scope clears the mail
     /// side, as a feed pick does, but is not a pick: a utility tab survives.
     func testAWideHandOffIntoFeedsKeepsAUtilityTab() async throws {
@@ -128,7 +142,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         navigator.showTab(.settings)
         let wide = UUID()
         let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false) }
-        await lookup.waitUntilEntered()
+        try await lookup.waitUntilEntered()
 
         lookup.release(with: .all)
         let scope = await handOff.value
@@ -146,7 +160,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
         navigator.showTab(.settings)
         let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
-        await lookup.waitUntilEntered()
+        try await lookup.waitUntilEntered()
 
         lookup.release(with: nil)
         _ = await handOff.value
@@ -171,6 +185,68 @@ final class SceneNavigatorHandOffTests: XCTestCase {
 
         XCTAssertEqual(coordinator.pendingRestore?.uid, 4)
         XCTAssertEqual(coordinator.pendingRestore?.messageID, "<four@example.com>")
+    }
+
+    /// A navigation's restore carries the reading position another device
+    /// left; a hand-off before the list applies it keeps that restore rather
+    /// than re-parking the message bare.
+    func testAHandOffKeepsANavigationsReadingPosition() async throws {
+        let coordinator = try makeCoordinator()
+        let navigator = SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: .mail)
+        let compact = UUID()
+        _ = await navigator.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        navigator.foldersLoaded([inbox])
+        navigator.selectMessage(message, isSearching: false, from: compact)
+
+        navigator.navigate(to: NavState(folder: "INBOX", uid: 4, messageScroll: 640, clientID: "other-install"))
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+
+        XCTAssertEqual(coordinator.pendingRestore?.uid, 4)
+        XCTAssertEqual(coordinator.pendingScrollRestore?.offset, 640)
+    }
+
+    /// A feed pick in the wide split is a pick: a utility tab carried in
+    /// from the compact layout follows it to Feeds.
+    func testAFeedPickInTheSplitMovesAUtilityTab() async throws {
+        let coordinator = try makeCoordinator()
+        let navigator = SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: .mail)
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        navigator.foldersLoaded([inbox])
+        navigator.showTab(.settings)
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+
+        navigator.showFeeds()
+
+        XCTAssertEqual(navigator.compactTab, .feeds)
+    }
+
+    /// A wide window's first landing reopens the session's feed scope, and a
+    /// tree that replaced it during the lookup keeps its own landing.
+    func testAWideFeedsLandingOpensItsScopeUnlessReplaced() async throws {
+        store.saveSession(ResumeSession(section: .feeds, folder: "Archive", feedScope: .all))
+        let coordinator = try makeCoordinator()
+        let opened = SceneNavigator(
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds, feedsLaunchTarget: { _ in .all }
+        )
+        let scope = await opened.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        XCTAssertEqual(scope, .all)
+        XCTAssertNil(opened.selectedFolder)
+        XCTAssertEqual(opened.route.section, .feeds)
+
+        let lookup = HeldLookup()
+        let replaced = SceneNavigator(
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
+            feedsLaunchTarget: { _ in await lookup.lookup() }
+        )
+        let landing = Task { await replaced.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+        try await lookup.waitUntilEntered()
+        let compact = UUID()
+        _ = await replaced.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        lookup.release(with: .all)
+
+        let staleScope = await landing.value
+        XCTAssertNil(staleScope)
+        XCTAssertEqual(replaced.folder(in: compact)?.path, "Archive", "the compact tree's landing stands")
     }
 
     /// On the wide layout, opening a different message is a pick: the tab a

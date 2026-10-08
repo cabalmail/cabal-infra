@@ -163,7 +163,7 @@ final class SceneNavigator {
             enterFeeds()
             return scope
         }
-        let scope = await rehand(isWide: isWide)
+        let scope = await rehand(tree, isWide: isWide)
         // A tree that a second swap replaced while this one waited on the
         // feed store takes nothing over.
         guard appearingTree == tree else { return nil }
@@ -180,12 +180,14 @@ final class SceneNavigator {
     /// wide layout cleared it for a feed), the tree lands on the live session,
     /// as every rebuilt tree used to. The feed reader is not on the navigator
     /// yet, so a wide tree in the feeds section re-opens the session's scope.
-    private func rehand(isWide: Bool) async -> RssItemScope? {
+    private func rehand(_ tree: UUID, isWide: Bool) async -> RssItemScope? {
         selectedEnvelope = nil
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
         guard let coordinator = coordinator() else { return nil }
         if isWide, route.section == .feeds {
-            if let scope = await feedsLaunchTarget(coordinator) { return scope }
+            let scope = await feedsLaunchTarget(coordinator)
+            guard appearingTree == tree else { return nil }
+            if let scope { return scope }
             // No scope to open, so the split shows mail: the section moves,
             // as the landing's folder record used to move it.
             moveSection(to: .mail)
@@ -195,7 +197,10 @@ final class SceneNavigator {
             // Where the user is now, not where the process started (#1555).
             coordinator.didConsumeLaunchSession = true
             if hasClient() { landOnSessionFolder(coordinator) }
-        } else if let message = route.mail.message {
+        } else if let message = route.mail.message, !coordinator.hasPendingRestore(of: message) {
+            // Unless that message is already parked — a navigation's, with
+            // the reading position it carries, which a bare re-park would
+            // drop.
             coordinator.scheduleRestore(for: message)
         }
         return nil
