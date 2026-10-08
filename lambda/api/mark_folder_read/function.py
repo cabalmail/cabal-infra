@@ -10,6 +10,7 @@ import json
 from helper import ( # pylint: disable=import-error
     apply_in_batches,
     get_imap_client,
+    invalid_input_response,
     validate_folder_name,
 )
 
@@ -25,13 +26,13 @@ def handler(event, _context):
     try:
         body = json.loads(event['body'])
     except (TypeError, json.JSONDecodeError):
-        return _invalid('request body is not valid JSON')
+        return invalid_input_response('request body is not valid JSON')
     if not isinstance(body, dict):
-        return _invalid('request body must be an object')
+        return invalid_input_response('request body must be an object')
     try:
         folder = validate_folder_name(body.get('folder'))
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     client = get_imap_client(body.get('host'), user, folder.replace("/", "."))
     try:
         # SEARCH UNSEEN materializes only the unread UIDs, which is what the
@@ -64,12 +65,4 @@ def _unable():
     return {
         "statusCode": 500,
         "body": json.dumps({"status": "unable"})
-    }
-
-
-def _invalid(err):
-    '''Builds the 400 returned when a validator rejects the request.'''
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {err}"})
     }

@@ -3,6 +3,7 @@ import json
 import time
 from helper import ( # pylint: disable=import-error
     get_imap_client,
+    invalid_input_response,
     log_folder_size_bucket,
     query_params,
     validate_folder_name,
@@ -26,7 +27,7 @@ def handler(event, _context):
         offset, limit = validate_pagination(
             query_string.get('offset'), query_string.get('limit'))
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     client = get_imap_client(query_string['host'], user, folder.replace("/", "."))
     flags = [b'NOT', b'DELETED']
     response = client.sort(sort_criterion, flags)
@@ -50,11 +51,4 @@ def handler(event, _context):
             "message_ids": message_ids,
             "total": total
         })
-    }
-
-def _invalid(err):
-    '''Builds the 400 returned when a validator rejects the request.'''
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {err}"})
     }

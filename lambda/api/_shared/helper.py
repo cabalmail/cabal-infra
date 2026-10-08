@@ -497,6 +497,18 @@ def apply_in_batches(ids, operation):
     return succeeded, failed
 
 
+def invalid_input_response(err):
+    '''400 a handler returns when a validator rejects the request, naming the
+    ValueError (or plain message) it raised.
+
+    The shape every endpoint already built inline, named once so a client sees
+    the same `Invalid input: ...` body whichever validator refused it.'''
+    return {
+        "statusCode": 400,
+        "body": json.dumps({"status": f"Invalid input: {err}"})
+    }
+
+
 def too_many_ids_response():
     '''413 the bulk endpoints return when an id list exceeds MAX_IDS_PER_REQUEST,
     carrying the cap so a client can split the request and retry.'''
@@ -548,10 +560,7 @@ def parse_json_body(event):
             if isinstance(body, dict):
                 return body, None
             message = 'request body must be a JSON object'
-    return None, {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {message}"})
-    }
+    return None, invalid_input_response(message)
 
 
 def parse_bulk_request(event):
@@ -564,11 +573,7 @@ def parse_bulk_request(event):
     try:
         body = json.loads(event['body'])
     except (TypeError, json.JSONDecodeError):
-        return None, {
-            "statusCode": 400,
-            "body": json.dumps(
-                {"status": "Invalid input: request body is not valid JSON"})
-        }
+        return None, invalid_input_response('request body is not valid JSON')
     raw_ids = body.get('ids')
     if isinstance(raw_ids, (list, tuple)) and len(raw_ids) > MAX_IDS_PER_REQUEST:
         return None, too_many_ids_response()
