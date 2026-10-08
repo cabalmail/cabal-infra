@@ -167,7 +167,11 @@ final class MessageListWindowReconcileTests: XCTestCase {
         try await world.assertAligned()
     }
 
-    func testAnOverlappingRefreshDoesNotFoldTheTopPageIntoAWindowAReadMovedDeep() async throws {
+    /// A refresh asked for while a quiet one is out waits for it (#1820),
+    /// so the quiet pass's top page lands on the window it was asked for,
+    /// never on one a re-read has since moved deep. The rerun then sees the
+    /// change and reads the window again, centred on the viewport.
+    func testARefreshAskedForWhileOneIsOutRealignsTheWindowOnceThatOneLands() async throws {
         let world = try await World.opened(size: 1000, pages: 2)
         world.model.visibleRowIndices = [380: 1, 420: 1]
         await world.server.holdNext(.top)
@@ -178,11 +182,14 @@ final class MessageListWindowReconcileTests: XCTestCase {
         // re-read centres on the viewport, plus a removal to trigger it.
         await world.server.arrive(200)
         await world.server.remove(900)
-        await world.model.refresh()
-        XCTAssertTrue(world.model.hasTrimmedFront)
+        let rerun = Task { await world.model.refresh() }
+        try await waitUntilOnMainActor { world.model.refreshFlight.waiting == 1 }
+        XCTAssertFalse(world.model.hasTrimmedFront, "nothing moves the window while the quiet pass is out")
 
         await world.server.release(.top)
         await quiet.value
+        await rerun.value
+        XCTAssertTrue(world.model.hasTrimmedFront)
         try await world.assertAligned()
     }
 

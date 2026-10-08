@@ -132,6 +132,35 @@ final class ListPagingWorld {
         XCTAssertFalse(model.isLoadingWindow, "a jump is still running", file: file, line: line)
     }
 
+    /// The UIDs the folder's envelope snapshot holds for `model`'s client.
+    func snapshotUIDs(_ model: MessageListViewModel) async -> Set<UInt32> {
+        guard let snapshot = await model.client.envelopeCache.snapshot(for: Self.folderPath) else {
+            return []
+        }
+        return Set(snapshot.envelopes.keys)
+    }
+
+    /// A list whose 250 rows the counts can't place any more (a message was
+    /// removed elsewhere, and UIDNEXT can't say where), with a page below
+    /// still out: the refresh plans a re-read, which first waits for that
+    /// page. Returns the list and the refresh, parked in that wait.
+    func refreshWaitingOnAPage() async throws -> (MessageListViewModel, Task<Void, Never>) {
+        let model = try await openedList()
+        model.ensureLoaded(around: 0)
+        await settle(model)
+        await model.persistTask?.value
+        await imap.answerEnvelopesAfterCancellation()
+        await imap.holdNext(.envelopes)
+        model.ensureLoaded(around: 100)
+        XCTAssertTrue(model.isLoadingMore)
+        await imap.awaitHeld(.envelopes)
+        await scriptServer(size: 999)
+        let refresh = Task { await model.refresh() }
+        // Everything from the counts to the wait runs without a suspension.
+        try await waitUntilOnMainActor { model.totalMessages == 999 }
+        return (model, refresh)
+    }
+
     /// Every page request so far, in order.
     func pages() async -> [Page] {
         await imap.envelopesCalls.map {

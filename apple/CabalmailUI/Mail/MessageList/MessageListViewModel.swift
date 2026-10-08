@@ -9,11 +9,11 @@ import CabalmailKit
 /// Window strategy: on open, `STATUS` the folder for its message count, then
 /// fetch the top page via `topEnvelopes`. Older pages lazy-load as the user
 /// scrolls, through positional `envelopes(offset:limit:)` calls against the
-/// paginated `/list_messages` (large-mailbox plan Layer 3.1). The loaded
-/// count versus the STATUS total decides `hasMore`, so sparse folders no
-/// longer dead-end (Layer 3.3). The envelope cache stores everything keyed by
-/// `UIDVALIDITY` so reopen is instant while the refresh runs in the
-/// background.
+/// paginated `/list_messages` (large-mailbox plan Layer 3.1). Where the
+/// window ends against the STATUS total, and whether a page there came back
+/// empty, decide `hasMore`, so sparse folders no longer dead-end (Layer
+/// 3.3). The envelope cache stores everything keyed by `UIDVALIDITY` so
+/// reopen is instant while the refresh runs in the background.
 @Observable
 @MainActor
 final class MessageListViewModel {
@@ -59,7 +59,11 @@ final class MessageListViewModel {
     let prefetchDistance = 250
 
     var envelopes: [Envelope] = []
-    var isLoading = false
+    /// A refresh, a reset or a search is in flight: the list's spinner, the
+    /// Refresh button's disabled state, and the gate that keeps page loads
+    /// out meanwhile. It falls only once the last of them has returned
+    /// (`holdLoading()`), so an overlapping one can't lower it for another.
+    private(set) var isLoading = false
     var isLoadingMore = false
     // Upward counterpart of `isLoadingMore`: a front-reload (loadPrevious) is
     // in flight. No top spinner (a top ProgressView would itself shift the
@@ -175,7 +179,10 @@ final class MessageListViewModel {
     // Folder message count from the last STATUS. Pagination loads until the
     // loaded envelope count reaches it. Internal so the +Refresh sibling
     // extension can read it after a page merge to recompute `hasMore`.
-    var totalMessages: UInt32 = 0
+    var totalMessages: UInt32 = 0 {
+        // A folder whose count moved may hold rows below the window again.
+        didSet { if totalMessages != oldValue { hasMore = true } }
+    }
     // Server-sourced folder counts from the last STATUS (+ SEARCH FLAGGED),
     // independent of how many envelopes are paged in. Drive the Unread/Flagged
     // filter-pill counts, mirroring the React pills; `totalMessages` is the All
@@ -187,6 +194,12 @@ final class MessageListViewModel {
     /// which also sizes the list, where a total nothing can load offline
     /// would draw placeholder rows.
     var savedMessageCount: Int?
+    /// Whether a page below the window may still hold rows; `ensureLoaded`
+    /// asks for one only while it is set. A page that comes back empty clears
+    /// it, so a STATUS that over-counts isn't asked for the same empty page by
+    /// every row that appears (#1823). Only a change to `totalMessages`, a
+    /// move of the window's end, or a reset sets it again
+    /// (`recomputeHasMore(windowEndBefore:)`).
     var hasMore = true
     // Sliding-window pagination state. `envelopes` holds a contiguous window
     // [windowStart, windowStart + count) of the folder's sorted list;
@@ -203,6 +216,10 @@ final class MessageListViewModel {
     /// What the window is known to line up with on the server, and the state
     /// of any re-read that realigns it (`+Reconcile`).
     @ObservationIgnored var alignment = WindowAlignment()
+    /// The refresh passes in flight and the refreshes parked on them.
+    @ObservationIgnored var refreshFlight = RefreshFlight()
+    /// The refreshes, resets and searches holding `isLoading` up.
+    @ObservationIgnored private var loadingHolds = 0
 
     /// Foreground-only change watcher (`MailboxWatcher`, which polls folder
     /// status). Nil when the view is offscreen; started on
@@ -225,7 +242,7 @@ final class MessageListViewModel {
     /// Debounced envelope-snapshot writer (see `schedulePersist`). Coalesces
     /// the O(loaded count) snapshot rewrite so a continuous scroll persists
     /// once when it settles, not on every page. Cancelled in `stopWatching()`.
-    private var persistTask: Task<Void, Never>?
+    private(set) var persistTask: Task<Void, Never>?
     /// Debounced "load where the list settled" after a keyboard page jump.
     /// Cancelled in `stopWatching()`.
     var keyScrollTask: Task<Void, Never>?
@@ -377,10 +394,19 @@ final class MessageListViewModel {
         await refresh()
     }
 
-    /// `prefetched` is a STATUS already asked for, with when it was asked:
-    /// `hardReload` and `setSort` check the server with one before dropping
-    /// the list, and it is used rather than asked for again.
-    func refresh(prefetched: PrefetchedStatus? = nil) async {
+    /// Brings the list up to date with the server: the folder's STATUS and
+    /// the window work it calls for, or, while a search is showing, that
+    /// search again.
+    ///
+    /// Single-flight (#1820, `RefreshFlight`): a refresh asked for while a
+    /// pass is out waits for it, then for one more pass that asks STATUS
+    /// afresh and answers every refresh that waited. `isLoading` stays up
+    /// until the last of them returns. `prefetched` is a STATUS already asked
+    /// for, with when it was asked, used rather than asked for again unless
+    /// the refresh had to wait. `startingOver` marks a reset's refresh
+    /// (`hardReload`, `setSort`, leaving a search), which runs at once: the
+    /// reset has already stood down whatever the pass out was for.
+    func refresh(prefetched: PrefetchedStatus? = nil, startingOver: Bool = false) async {
         // Re-route while a search is showing — pull-to-refresh and the
         // watcher / 60-second background refreshes shouldn't silently wipe
         // active search results back to the folder view. Re-running the
@@ -394,8 +420,34 @@ final class MessageListViewModel {
         // real folder to STATUS. A background/pull refresh here would query the
         // sentinel path; bail instead.
         if isSearchScope { return }
-        isLoading = true
-        defer { finishRefresh() }
+        holdLoading()
+        defer { releaseLoading() }
+        let ask = prefetched?.ask ?? refreshFlight.ask()
+        var status = prefetched
+        var supersede = startingOver
+        // A cancelled caller stops asking; a search that starts meanwhile
+        // makes the folder's refresh moot.
+        while !refreshFlight.hasAnswered(ask), !Task.isCancelled, !isSearchActive {
+            if refreshFlight.current != nil, !supersede {
+                await withCheckedContinuation { refreshFlight.park($0) }
+                status = nil
+                continue
+            }
+            let pass = refreshFlight.begin(answeringThrough: status?.ask)
+            await refreshPass(prefetched: status)
+            for waiter in refreshFlight.end(pass, finished: !Task.isCancelled) {
+                waiter.resume()
+            }
+            supersede = false
+            status = nil
+        }
+    }
+
+    /// One refresh pass: STATUS (or the one prefetched), the counts, then the
+    /// window. A reset or a search that starts while one of its awaits is
+    /// out moves the window's generation, and the pass then leaves the list
+    /// to it (#1870).
+    private func refreshPass(prefetched: PrefetchedStatus?) async {
         let startedAt = prefetched?.askedAt ?? ContinuousClock.now
         var generation = alignment.generation
         do {
@@ -406,8 +458,8 @@ final class MessageListViewModel {
                 status = prefetched.status
             } else {
                 status = try await client.folderStatus(path: folder.path, flagged: true)
+                guard generation == alignment.generation else { return }
             }
-            let uidNext = status.uidNext ?? 1
             // Only a concrete, *changed* UIDVALIDITY means "rebuild from
             // scratch." A missing/zero reading from a flaky STATUS must not
             // wipe a scrolled, paginated list back to the top page on a
@@ -416,6 +468,7 @@ final class MessageListViewModel {
                 if let known = self.uidValidity, known != fresh {
                     try? await client.envelopeCache.invalidate(folder: folder.path)
                     try? await client.bodyCache.invalidate(folder: folder.path)
+                    guard generation == alignment.generation else { return }
                     envelopes = []
                     resetWindow()
                     mailStore.shields.clearConfirmedRemovals(folderPath: folder.path)
@@ -430,14 +483,12 @@ final class MessageListViewModel {
             // STATUS drives the All/Unread/Flagged pill counts and the
             // pagination gate; helper lives in +Refresh to keep this body lean.
             let mayPredate = removalMayPostdate(startedAt)
-            let messages = applyStatusCounts(status, mayPredateRemoval: mayPredate)
+            _ = applyStatusCounts(status, mayPredateRemoval: mayPredate)
             let reading = windowReading(status, askedAt: startedAt,
                                         mayPredateRemoval: mayPredate, generation: generation)
             // Whether the loaded rows still sit where the server has them
             // decides what comes next: usually the top page, as always.
-            try await refreshWindow(reading, messages: messages, uidNext: uidNext,
-                                    uidValidity: uidValidity,
-                                    serverReportsEmpty: status.messages == 0)
+            try await refreshWindow(reading, status: status, generation: generation, uidValidity: uidValidity)
             errorMessage = nil
         } catch {
             // A refresh whose task was cancelled (the 60-second poll's, the
@@ -466,13 +517,16 @@ final class MessageListViewModel {
         let windowLo = Int(windowStart)
         let windowHi = windowLo + envelopes.count   // exclusive
         let prefetch = Int(prefetchDistance)
-        let total = Int(totalMessages)
         if absoluteIndex >= windowLo - prefetch && absoluteIndex <= windowHi + prefetch {
             // Near or inside the window: extend toward the approached edge.
-            if absoluteIndex >= windowHi - prefetch, windowHi < total {
+            // A fresh jump window is shorter than the runway, so an index can
+            // be in reach of both; the nearer edge goes first (#1823).
+            let below = absoluteIndex >= windowHi - prefetch && hasMore && windowHi < Int(totalMessages)
+            let above = absoluteIndex <= windowLo + prefetch && windowLo > 0
+            if below, !above || windowHi - 1 - absoluteIndex <= absoluteIndex - windowLo {
                 isLoadingMore = true
                 loadMoreTask = Task { [weak self] in await self?.performLoadMore() }
-            } else if absoluteIndex <= windowLo + prefetch, windowLo > 0 {
+            } else if above {
                 isLoadingPrevious = true
                 loadPrevTask = Task { [weak self] in await self?.performLoadPrevious() }
             }
@@ -489,6 +543,7 @@ final class MessageListViewModel {
     /// exit, including cancellation, via `defer`.
     private func performLoadMore() async {
         defer { isLoadingMore = false }
+        let generation = alignment.generation
         do {
             // Positional page in the current sort order. `mergeFetched`
             // dedups, so a shifted offset (a concurrent removal) can't
@@ -503,6 +558,9 @@ final class MessageListViewModel {
                 limit: loadMorePageSize,
                 sort: sortCriterion
             )
+            // A reset or a search that started while the page was out has
+            // replaced the rows it was addressed to (#1870).
+            guard generation == alignment.generation else { return }
             mergeFetched(fetched)
             // Trim the scrolled-past front so the loaded window stays bounded
             // (see `windowCap`). loadMore only fires near the bottom (within
@@ -720,8 +778,10 @@ extension MessageListViewModel {
     /// front has been trimmed: the snapshot is a warm-reopen cache and must
     /// stay top-anchored so a relaunch lands at the top of the folder, not
     /// mid-scroll. The cache therefore holds up to the first `windowCap` rows.
+    /// Search results are never the folder's snapshot, whatever was due to
+    /// be written when the search started (#1870).
     private func persistLoadedPages() async {
-        guard !hasTrimmedFront,
+        guard !hasTrimmedFront, !isSearchActive,
               let uidValidity, let uidNext = envelopes.map(\.uid).max() else { return }
         try? await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
     }
@@ -731,11 +791,60 @@ extension MessageListViewModel {
     /// clear, UIDVALIDITY change) so the next load starts at the top of the
     /// folder and the top-page refresh / persist resume.
     func resetWindow() {
+        standDownWindowLoads()
         windowStart = 0
         hasTrimmedFront = false
+        hasMore = true
         forgetWindowAnchor()
-        // A wiped / re-anchored window (hard reload, sort change, search clear,
-        // UIDVALIDITY change) invalidates any staged bottom window with it.
+    }
+
+    /// `hasMore` from where the window ends now, `windowEndBefore` being where
+    /// it ended before the change. An empty page's verdict stands while the
+    /// window's end hasn't moved (#1823); a change in `totalMessages` lifts it
+    /// through its didSet, and a reset through `resetWindow()`.
+    func recomputeHasMore(windowEndBefore: UInt32) {
+        let windowEnd = windowStart + UInt32(envelopes.count)
+        hasMore = windowEnd < totalMessages && (hasMore || windowEnd != windowEndBefore)
+    }
+
+    /// Stands down every load addressed to the rows on screen: the page
+    /// loads are cancelled, the staged bottom window dropped, and the
+    /// generation moved, so a page or a refresh pass that lands anyway drops
+    /// what it brought (#1870). Every reset runs it, and so does a search, as
+    /// it starts and as its rows replace the folder's.
+    func standDownWindowLoads() {
+        loadMoreTask?.cancel()
+        loadPrevTask?.cancel()
+        loadWindowTask?.cancel()
         invalidateBottomPrefetch()
+        alignment.generation += 1
+    }
+
+    /// After a search that stood the window's loads down and then didn't take
+    /// the list over (it failed, was cancelled, or another overtook it): what
+    /// the viewport shows loads once `isLoading` falls, and the bottom window
+    /// is staged again.
+    func resumeWindowLoads() {
+        guard !isSearchScope else { return }
+        alignment.needsSettleLoad = true
+        scheduleBottomPrefetch()
+    }
+
+    /// Holds `isLoading` up for a refresh, a reset or a search until the
+    /// matching `releaseLoading()`. The last release lowers it, and loads
+    /// what the viewport shows without rows (`needsSettleLoad`).
+    func holdLoading() {
+        loadingHolds += 1
+        isLoading = true
+    }
+
+    func releaseLoading() {
+        loadingHolds -= 1
+        guard loadingHolds == 0 else { return }
+        isLoading = false
+        if alignment.needsSettleLoad {
+            alignment.needsSettleLoad = false
+            scheduleEnsureLoaded()
+        }
     }
 }

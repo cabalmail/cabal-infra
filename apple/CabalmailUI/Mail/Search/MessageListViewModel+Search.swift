@@ -62,8 +62,15 @@ extension MessageListViewModel {
         // result set.
         let priorCursor = searchNextCursor
         searchNextCursor = nil
-        isLoading = true
-        defer { isLoading = false }
+        holdLoading()
+        defer { releaseLoading() }
+        // A folder page or refresh still out was addressed to the rows this
+        // search replaces; landing later, it would mix folder rows into the
+        // results (#1870). They stand down now, and again as the results
+        // land, for any that started meanwhile. A search that ends without
+        // taking the list over leaves the folder rows they were filling.
+        standDownWindowLoads()
+        defer { if !isSearchActive { resumeWindowLoads() } }
         // Snapshotted for the staleness check below: the filters this request
         // asked with, not whatever they hold when it answers.
         let filters = searchFilters
@@ -83,6 +90,7 @@ extension MessageListViewModel {
             // user has already ended (#1536). Same staleness rule
             // `loadMoreSearchResults` applies to its cursor.
             guard submittedQuery == trimmed, searchFilters == filters else { return }
+            standDownWindowLoads()
             envelopes = distinctRows(result.envelopes, after: [])
             searchTotalEstimate = result.totalEstimate
             searchTruncated = result.truncated
@@ -264,7 +272,7 @@ extension MessageListViewModel {
         // surface has no folder to return to, so it just lands on the empty
         // "type to search" state.
         guard !isSearchScope else { return }
-        await refresh()
+        await refresh(startingOver: true)
         // Offline the refresh can't answer, and the list used to stay empty
         // (#1796): the saved counts come back, and under the default order
         // the folder's cached rows too, as `loadInitial` starts from. The
