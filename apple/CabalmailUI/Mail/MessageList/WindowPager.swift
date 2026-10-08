@@ -70,7 +70,8 @@ struct WindowPager {
         window.keyScrollTask?.cancel()
         window.keyScrollTask = Task { [weak window = self.window] in
             try? await Task.sleep(for: .milliseconds(175))
-            guard !Task.isCancelled, let window else { return }
+            // Nothing to settle for a list that has gone.
+            guard !Task.isCancelled, let window, window.host != nil else { return }
             await window.loadMoreTask?.value
             await window.loadPrevTask?.value
             await window.loadWindowTask?.value

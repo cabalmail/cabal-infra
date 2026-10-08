@@ -62,9 +62,10 @@ struct WindowSnapshot {
     /// at the top of the folder rather than mid-scroll, which keeps it to the
     /// first `windowCap` rows. Search results are never the folder's
     /// snapshot, whatever was due to be written when the search started
-    /// (#1870).
+    /// (#1870), and with the list gone nothing is written: whether a search
+    /// was showing can't be known then.
     private func persistLoadedPages() async {
-        guard !window.hasTrimmedFront, !window.isSearchActive,
+        guard !window.hasTrimmedFront, let list = window.host, !list.isSearchActive,
               let uidValidity = window.uidValidity, let uidNext = window.envelopes.map(\.uid).max() else { return }
         try? await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
     }
