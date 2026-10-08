@@ -939,3 +939,13 @@ extension MessageListViewModel: MailEventSubscriber {
         }
     }
 }
+
+// MARK: - Window (bridge)
+
+extension MessageListViewModel {
+    /// Temporary: the folder window's state, reached as `model.window.…`.
+    /// The next commit replaces this with the list's `FolderWindowLoader`;
+    /// until then it is the list itself, so a receiver change can be shown
+    /// to change nothing on its own.
+    var window: MessageListViewModel { self }
+}
