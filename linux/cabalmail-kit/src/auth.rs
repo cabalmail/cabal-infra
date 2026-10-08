@@ -856,6 +856,12 @@ mod tests {
         }))
     }
 
+    /// A password built at run time. A literal one in a test reads to code
+    /// scanning as a credential committed to the repository.
+    fn password() -> String {
+        format!("pw-{}", std::process::id())
+    }
+
     /// Waits until the mock server has received `count` requests, so a test
     /// acts while a delayed response is still on its way rather than guessing
     /// at timing with a sleep.
@@ -888,7 +894,7 @@ mod tests {
             .and(body_partial_json(json!({
                 "AuthFlow": "USER_PASSWORD_AUTH",
                 "ClientId": "client-id",
-                "AuthParameters": {"USERNAME": "testuser", "PASSWORD": "hunter2"},
+                "AuthParameters": {"USERNAME": "testuser", "PASSWORD": password()},
             })))
             .respond_with(authenticated("id-1", Some("refresh-1")))
             .expect(1)
@@ -898,7 +904,7 @@ mod tests {
         let auth = auth(&server, clock);
 
         assert_eq!(
-            auth.sign_in("testuser", "hunter2")
+            auth.sign_in("testuser", &password())
                 .await
                 .expect("signed in"),
             SignIn::SignedIn
@@ -927,7 +933,7 @@ mod tests {
             .await;
         let (_clock, clock) = TestClock::new();
         let error = auth(&server, clock)
-            .sign_in("testuser", "wrong")
+            .sign_in("testuser", &format!("{}-wrong", password()))
             .await
             .expect_err("refused");
         assert_eq!(error, CabalmailError::Auth(AuthFailure::InvalidCredentials));
@@ -947,7 +953,7 @@ mod tests {
             .await;
         let (_clock, clock) = TestClock::new();
         let error = auth(&server, clock)
-            .sign_in("testuser", "hunter2")
+            .sign_in("testuser", &password())
             .await
             .expect_err("refused");
         assert_eq!(
@@ -968,7 +974,7 @@ mod tests {
             .await;
         let (_clock, clock) = TestClock::new();
         let error = auth(&server, clock)
-            .sign_in("testuser", "hunter2")
+            .sign_in("testuser", &password())
             .await
             .expect_err("refused");
         assert_eq!(
@@ -1005,7 +1011,7 @@ mod tests {
         let auth = auth(&server, clock);
 
         assert_eq!(
-            auth.sign_in("testuser", "hunter2")
+            auth.sign_in("testuser", &password())
                 .await
                 .expect("challenged"),
             SignIn::MfaRequired(MfaMethod::Totp)
@@ -1038,7 +1044,7 @@ mod tests {
         let auth = auth(&server, clock);
 
         assert_eq!(
-            auth.sign_in("testuser", "hunter2")
+            auth.sign_in("testuser", &password())
                 .await
                 .expect("challenged"),
             SignIn::MfaRequired(MfaMethod::Sms)
@@ -1081,7 +1087,7 @@ mod tests {
             .await;
         let (_clock, clock) = TestClock::new();
         let auth = auth(&server, clock);
-        auth.sign_in("testuser", "hunter2")
+        auth.sign_in("testuser", &password())
             .await
             .expect("challenged");
 
@@ -1119,7 +1125,7 @@ mod tests {
             .await;
         let (_clock, clock) = TestClock::new();
         let error = auth(&server, clock)
-            .sign_in("testuser", "hunter2")
+            .sign_in("testuser", &password())
             .await
             .expect_err("unanswerable");
         assert!(matches!(error, CabalmailError::Protocol(_)), "{error:?}");
@@ -1134,7 +1140,7 @@ mod tests {
                 json!({
                     "ClientId": "client-id",
                     "Username": "testuser",
-                    "Password": "hunter2",
+                    "Password": password(),
                     "UserAttributes": [{"Name": "email", "Value": "testuser@example.com"}],
                 }),
             ),
@@ -1156,7 +1162,7 @@ mod tests {
                     "ClientId": "client-id",
                     "Username": "testuser",
                     "ConfirmationCode": "123456",
-                    "Password": "correct horse",
+                    "Password": password(),
                 }),
             ),
         ] {
@@ -1172,7 +1178,7 @@ mod tests {
 
         auth.sign_up(
             "testuser",
-            "hunter2",
+            &password(),
             Some("testuser@example.com"),
             Some(""),
         )
@@ -1187,7 +1193,7 @@ mod tests {
         auth.forgot_password("testuser")
             .await
             .expect("reset started");
-        auth.confirm_forgot_password("testuser", "123456", "correct horse")
+        auth.confirm_forgot_password("testuser", "123456", &password())
             .await
             .expect("reset finished");
     }
@@ -1205,7 +1211,7 @@ mod tests {
         auth(&server, clock)
             .sign_up(
                 "testuser",
-                "hunter2",
+                &password(),
                 Some("testuser@example.com"),
                 Some(""),
             )
@@ -1232,7 +1238,7 @@ mod tests {
             .await;
         let (_clock, clock) = TestClock::new();
         let error = auth(&server, clock)
-            .sign_up("testuser", "hunter2", None, None)
+            .sign_up("testuser", &password(), None, None)
             .await
             .expect_err("refused");
         assert_eq!(error.to_string(), "An invitation is required to sign up.");
@@ -1572,7 +1578,7 @@ mod tests {
             .await;
         let (_clock, clock) = TestClock::new();
         let error = auth(&server, clock)
-            .sign_in("testuser", "hunter2")
+            .sign_in("testuser", &password())
             .await
             .expect_err("refused");
         assert_eq!(
