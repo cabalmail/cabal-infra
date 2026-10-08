@@ -6,6 +6,7 @@ from helper import get_imap_client # pylint: disable=import-error
 from helper import get_folder_list # pylint: disable=import-error
 from helper import parse_json_body # pylint: disable=import-error
 from helper import validate_folder_name # pylint: disable=import-error
+from helper import invalid_input_response # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
 
@@ -42,10 +43,7 @@ def handler(event, _context):
     try:
         name = validate_folder_name(body.get('name')).replace("/", ".")
     except ValueError as err:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"status": f"Invalid input: {err}"})
-        }
+        return invalid_input_response(err)
     client = get_imap_client(None, user, 'INBOX')
     try:
         client.delete_folder(name)

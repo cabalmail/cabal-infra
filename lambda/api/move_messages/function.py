@@ -1,9 +1,9 @@
 '''Moves a message from source folder to destination folder'''
-import json
 from helper import ( # pylint: disable=import-error
     apply_in_batches,
     batch_result_response,
     get_imap_client,
+    invalid_input_response,
     parse_bulk_request,
     validate_folder_name,
     validate_uid_list,
@@ -24,7 +24,7 @@ def handler(event, _context):
         destination = validate_folder_name(body.get('destination'))
         ids = validate_uid_list(body.get('ids'))
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     mark_seen = bool(body.get('mark_seen'))
     client = get_imap_client(body['host'], user, source.replace("/", "."))
     # Trash is auto-created by Dovecot at namespace init (auto = create in
@@ -50,10 +50,3 @@ def _move_batch(client, batch, dest, mark_seen):
     if mark_seen:
         client.add_flags(batch, r'\Seen', True)
     client.move(batch, dest)
-
-def _invalid(err):
-    '''Builds the 400 returned when a validator rejects the request.'''
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {err}"})
-    }

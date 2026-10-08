@@ -9,6 +9,7 @@ from helper import validate_attachment_filename # pylint: disable=import-error
 from helper import validate_folder_name # pylint: disable=import-error
 from helper import validate_part_index # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
+from helper import invalid_input_response # pylint: disable=import-error
 from helper import CACHE_BUCKET # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
@@ -28,10 +29,7 @@ def handler(event, _context):
         filename = validate_attachment_filename(query_string.get('filename'))
         index = validate_part_index(query_string.get('index'))
     except ValueError as err:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"status": f"Invalid input: {err}"})
-        }
+        return invalid_input_response(err)
     bucket = CACHE_BUCKET
     key = f"{user}/{folder}/{msg_id}/{filename}"
     message = get_message(query_string.get('host'), user,

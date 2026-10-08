@@ -2,6 +2,7 @@
 import json
 from helper import get_message # pylint: disable=import-error
 from helper import query_params # pylint: disable=import-error
+from helper import invalid_input_response # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
 from helper import message_gone_guard # pylint: disable=import-error
@@ -17,7 +18,7 @@ def handler(event, _context):
     try:
         query_string = query_params(event, 'host', 'folder', 'id')
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     message = get_message(query_string['host'], user,
                           query_string['folder'].replace("/","."), int(query_string['id']))
@@ -39,11 +40,4 @@ def handler(event, _context):
         "body": json.dumps({
             "attachments": attachments
         })
-    }
-
-def _invalid(err):
-    '''Builds the 400 returned when a required parameter is missing.'''
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {err}"})
     }
