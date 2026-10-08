@@ -434,10 +434,9 @@ extension NavStateCoordinator {
         ))
     }
 
-    /// Whether the pending restore already names `ref`'s message.
-    func hasPendingRestore(of ref: MessageRef) -> Bool {
-        guard let pendingRestore else { return false }
-        return pendingRestore.folderPath == ref.folder && pendingRestore.uid == ref.uid
+    /// Whether a restore for `folderPath` is waiting for its list.
+    func hasPendingRestore(in folderPath: String) -> Bool {
+        pendingRestore?.folderPath == folderPath
     }
 
     /// Records that the user opened the message `ref` names.

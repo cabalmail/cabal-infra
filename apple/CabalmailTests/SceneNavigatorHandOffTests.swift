@@ -40,7 +40,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
 
         /// Fails the test rather than hanging if the lookup is never reached.
         func waitUntilEntered(file: StaticString = #filePath, line: UInt = #line) async throws {
-            try await waitUntilOnMainActor(timeout: 5, file: file, line: line) { self.held != nil }
+            try await waitUntilOnMainActor(file: file, line: line) { self.held != nil }
         }
 
         func release(with scope: RssItemScope?) {
@@ -85,6 +85,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         XCTAssertNil(navigator.folder(in: wide))
         navigator.selectMessage(TestFixtures.makeEnvelope(uid: 12), isSearching: false, from: compact)
         navigator.setCompactColumn(.sidebar, isSearching: false, from: compact)
+        navigator.selectMessage(TestFixtures.makeEnvelope(uid: 13), isSearching: false, from: wide)
         XCTAssertEqual(navigator.route.mail.message, MessageRef(folder: "INBOX", uid: 9))
         XCTAssertEqual(coordinator.session.uid, 9)
 
@@ -130,6 +131,49 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         _ = await handOff.value
 
         XCTAssertEqual(navigator.route.section, .feeds)
+        XCTAssertEqual(coordinator.session.section, .feeds)
+    }
+
+    /// A swap back to a compact tab with no mail tree (the Feeds tab here)
+    /// during the wait: no tree replaces the wide one, but it was swapped
+    /// away, so it takes nothing over — with or without a scope.
+    func testATreeSwappedAwayDuringItsHandOffTakesNothingOver() async throws {
+        for found in [RssItemScope?.none, .all] {
+            let coordinator = try makeCoordinator()
+            let lookup = HeldLookup()
+            let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
+            let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+            try await lookup.waitUntilEntered()
+            navigator.layoutIsWide = false
+
+            lookup.release(with: found)
+            let scope = await handOff.value
+
+            XCTAssertNil(scope)
+            XCTAssertEqual(navigator.selectedFolder, inbox, "the mail position survives")
+            XCTAssertEqual(navigator.route.section, .feeds)
+            XCTAssertEqual(coordinator.session.section, .feeds)
+        }
+    }
+
+    /// The same for a wide window's first landing: swapped away during the
+    /// feed lookup, it does not land on mail behind the compact Feeds tab.
+    func testAFirstLandingSwappedAwayDuringItsLookupDoesNotLand() async throws {
+        store.saveSession(ResumeSession(section: .feeds, folder: "Archive", feedScope: .all))
+        let coordinator = try makeCoordinator()
+        let lookup = HeldLookup()
+        let navigator = SceneNavigator(
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
+            feedsLaunchTarget: { _ in await lookup.lookup() }
+        )
+        let landing = Task { await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+        try await lookup.waitUntilEntered()
+        navigator.layoutIsWide = false
+
+        lookup.release(with: nil)
+        _ = await landing.value
+
+        XCTAssertNil(navigator.selectedFolder)
         XCTAssertEqual(coordinator.session.section, .feeds)
     }
 

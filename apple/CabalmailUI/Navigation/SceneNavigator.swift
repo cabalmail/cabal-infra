@@ -158,15 +158,15 @@ final class SceneNavigator {
         layoutIsWide = isWide
         guard isRebuild, didLand else {
             mountedTree = tree
-            let scope = await landIfNeeded(isWide: isWide, showingFeeds: showingFeeds)
-            guard appearingTree == tree, scope != nil else { return nil }
+            let scope = await landIfNeeded(tree, isWide: isWide, showingFeeds: showingFeeds)
+            guard isCurrent(tree, isWide: isWide), scope != nil else { return nil }
             enterFeeds()
             return scope
         }
         let scope = await rehand(tree, isWide: isWide)
         // A tree that a second swap replaced while this one waited on the
         // feed store takes nothing over.
-        guard appearingTree == tree else { return nil }
+        guard isCurrent(tree, isWide: isWide) else { return nil }
         mountedTree = tree
         if scope != nil { enterFeeds() }
         return scope
@@ -186,7 +186,7 @@ final class SceneNavigator {
         guard let coordinator = coordinator() else { return nil }
         if isWide, route.section == .feeds {
             let scope = await feedsLaunchTarget(coordinator)
-            guard appearingTree == tree else { return nil }
+            guard isCurrent(tree, isWide: isWide) else { return nil }
             if let scope { return scope }
             // No scope to open, so the split shows mail: the section moves,
             // as the landing's folder record used to move it.
@@ -197,13 +197,21 @@ final class SceneNavigator {
             // Where the user is now, not where the process started (#1555).
             coordinator.didConsumeLaunchSession = true
             if hasClient() { landOnSessionFolder(coordinator) }
-        } else if let message = route.mail.message, !coordinator.hasPendingRestore(of: message) {
-            // Unless that message is already parked — a navigation's, with
-            // the reading position it carries, which a bare re-park would
-            // drop.
+        } else if let message = route.mail.message, !coordinator.hasPendingRestore(in: message.folder) {
+            // Unless a restore for the folder is already waiting: a
+            // navigation or a landing the list has not applied yet, newer
+            // than the open message and carrying any reading position with
+            // it, which a bare re-park would replace.
             coordinator.scheduleRestore(for: message)
         }
         return nil
+    }
+
+    /// Whether `tree` is still the one taking the window over, in the layout
+    /// it appeared in: a second swap during a feed-store wait may have built
+    /// another tree, or gone back to a compact tab that has no mail tree.
+    private func isCurrent(_ tree: UUID, isWide: Bool) -> Bool {
+        appearingTree == tree && layoutIsWide == isWide
     }
 
     // MARK: Landing
@@ -220,16 +228,19 @@ final class SceneNavigator {
     /// the list to reselect. The folder list's first load swaps the fetched
     /// folder in (`foldersLoaded`). Seeded as subscribed so the list doesn't
     /// flash the unsubscribed-folder banner before the real state arrives.
-    private func landIfNeeded(isWide: Bool, showingFeeds: Bool) async -> RssItemScope? {
+    private func landIfNeeded(_ tree: UUID, isWide: Bool, showingFeeds: Bool) async -> RssItemScope? {
         guard let coordinator = coordinator() else { return nil }
         if let request = coordinator.navigateRequest {
             navigate(to: request)
         }
         guard !didLand, selectedFolder == nil, !showingFeeds, hasClient() else { return nil }
         didLand = true
-        if isWide, coordinator.launchSection == .feeds,
-           let scope = await feedsLaunchTarget(coordinator) {
-            return scope
+        if isWide, coordinator.launchSection == .feeds {
+            let scope = await feedsLaunchTarget(coordinator)
+            // Swapped away during the lookup: the tree that takes over
+            // lands instead.
+            guard isCurrent(tree, isWide: isWide) else { return nil }
+            if let scope { return scope }
         }
         landOnSessionFolder(coordinator)
         return nil
@@ -247,7 +258,6 @@ final class SceneNavigator {
             coordinator.scheduleRestore(for: restore)
         }
         setFolder(Folder(path: target.folderPath, isSubscribed: true))
-        if let restore = target.messageRestore { nameMessage(of: restore) }
     }
 
     /// The folder list's first load. Finishes a provisional landing, or a
@@ -302,7 +312,6 @@ final class SceneNavigator {
                 coordinator.scheduleRestore(for: restore)
             }
             setFolder(folders.first(where: { $0.path == target.folderPath }) ?? inbox)
-            if let restore = target.messageRestore { nameMessage(of: restore) }
         } else {
             setFolder(inbox)
         }
@@ -331,7 +340,6 @@ final class SceneNavigator {
         if selectedFolder?.path != cursor.folder {
             setFolder(resolvedFolder(path: cursor.folder))
         }
-        nameMessage(of: cursor)
         didLand = true
         // The compact tab bar opens on Mail, noting the section as a tab
         // switch does; the wide layout's folder record moves the session.
@@ -443,16 +451,6 @@ final class SceneNavigator {
         guard ref.folder == folderPath else { return }
         route.mail.message = ref
         coordinator()?.recordMessage(ref)
-    }
-
-    /// Names `cursor`'s message in the route once its restore is parked, so
-    /// a swap before the list applies it re-parks that message rather than
-    /// the one open before. A cursor naming no message leaves the route's.
-    private func nameMessage(of cursor: NavState) {
-        guard let uid = cursor.uid, cursor.folder == route.mail.folderPath else { return }
-        route.mail.message = MessageRef(
-            folder: cursor.folder, uid: uid, uidValidity: cursor.uidValidity, messageId: cursor.messageID
-        )
     }
 
     /// A landing moved the window to `section`. The wide layout has no tab

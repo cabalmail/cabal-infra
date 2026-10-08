@@ -98,6 +98,38 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         XCTAssertNotEqual(coordinator.pendingRestore?.folderPath, "Lists", "no restore of the snapshot's message")
     }
 
+    /// A swap before the list has applied the launch landing's restore keeps
+    /// that restore for the new list.
+    func testASwapBeforeTheLandingsRestoreIsAppliedKeepsIt() async throws {
+        store.saveSession(ResumeSession(section: .mail, folder: "Lists.Cabal", uid: 42))
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+
+        XCTAssertEqual(coordinator.pendingRestore?.folderPath, "Lists.Cabal")
+        XCTAssertEqual(coordinator.pendingRestore?.uid, 42)
+    }
+
+    /// A same-folder navigation whose restore the list consumed but could not
+    /// match leaves the open message on screen; a swap re-parks that message,
+    /// not the one the navigation named.
+    func testASwapAfterAMissedNavigationReParksTheOpenMessage() async throws {
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        let first = UUID()
+        _ = await navigator.mailTreeAppeared(first, isWide: false, showingFeeds: false)
+        navigator.foldersLoaded([inbox])
+        navigator.selectMessage(message, isSearching: false, from: first)
+        navigator.navigate(to: NavState(folder: "INBOX", uid: 4, clientID: "push"))
+        _ = coordinator.consumePendingRestore(for: "INBOX")
+
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+
+        XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
+    }
+
     /// #1664: a compact stack is never handed a list and a reader in one
     /// update. A tree the swap has just built sees no folder and no message
     /// until it has taken over, so its list mounts only once the restore is

@@ -53,9 +53,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
 
         XCTAssertNil(scope)
         XCTAssertEqual(navigator.selectedFolder, Folder(path: "Lists.Cabal", isSubscribed: true))
-        XCTAssertEqual(navigator.route.mail, AppRoute.Mail(
-            folderPath: "Lists.Cabal", message: MessageRef(folder: "Lists.Cabal", uid: 42)
-        ), "the parked message is the route's, so a swap before the list applies it re-parks it")
+        XCTAssertEqual(navigator.route.mail.folderPath, "Lists.Cabal")
         XCTAssertEqual(coordinator.pendingRestore?.folderPath, "Lists.Cabal")
         XCTAssertEqual(coordinator.pendingRestore?.uid, 42)
         XCTAssertTrue(navigator.didLand)
@@ -77,7 +75,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
 
         navigator.foldersLoaded([inbox, archive])
         XCTAssertEqual(navigator.selectedFolder, archive)
-        XCTAssertEqual(navigator.route.mail.message, MessageRef(folder: "Archive", uid: 5))
+        XCTAssertEqual(coordinator.pendingRestore?.uid, 5)
         XCTAssertTrue(navigator.didLand, "the folder list's landing is the window's landing")
 
         // So backing out and a later load don't land the user again.
@@ -176,7 +174,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
         XCTAssertNil(navigator.selectedFolder)
         // The launch finished: the cursor write the landing held back goes
         // out (held here until the cross-device probe releases it).
-        try await waitUntilOnMainActor(timeout: 5) { coordinator.heldSnapshot != nil }
+        try await waitUntilOnMainActor { coordinator.heldSnapshot != nil }
     }
 
     /// The folder list's first load finishes a provisional landing: the
@@ -185,10 +183,45 @@ final class SceneNavigatorLandingTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        // The landing's own folder record wrote nothing: held back so the
+        // cross-device probe reads another install's cursor (past the 1 s
+        // save debounce).
+        try await Task.sleep(for: .milliseconds(1300))
+        XCTAssertNil(coordinator.heldSnapshot)
 
         navigator.foldersLoaded([inbox, archive])
 
-        try await waitUntilOnMainActor(timeout: 5) { coordinator.heldSnapshot?.folder == "INBOX" }
+        try await waitUntilOnMainActor { coordinator.heldSnapshot?.folder == "INBOX" }
+    }
+
+    /// The window has landed, so the same tree appearing again after the
+    /// user backed out to the folder list does not land them again.
+    func testAReappearingTreeDoesNotLandAgain() async throws {
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        let tree = UUID()
+        _ = await navigator.mailTreeAppeared(tree, isWide: false, showingFeeds: false)
+        navigator.foldersLoaded([inbox, archive])
+        navigator.selectFolder(nil)
+
+        _ = await navigator.mailTreeAppeared(tree, isWide: false, showingFeeds: false)
+
+        XCTAssertNil(navigator.selectedFolder)
+    }
+
+    /// Only the wide layout hosts feeds in the mail split: a compact Mail tab
+    /// landing with a feeds session lands on mail.
+    func testACompactLandingIgnoresAFeedsSession() async throws {
+        store.saveSession(ResumeSession(section: .feeds, folder: "Archive", feedScope: .all))
+        let coordinator = try makeCoordinator()
+        let navigator = SceneNavigator(
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds, feedsLaunchTarget: { _ in .all }
+        )
+
+        let scope = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+
+        XCTAssertNil(scope)
+        XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
     }
 
     /// The landing's missing-folder fallback: the session's folder is absent
