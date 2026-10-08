@@ -102,17 +102,17 @@ final class CommandTickCharacterizationTests: XCTestCase {
         }
     }
 
-    func testNoEntryPointPostsAListSignal() {
+    /// No command posts a mail event: the reader and the composer post
+    /// those, never a menu tick. (The five signal payloads this once read,
+    /// and the failed-removal tick, are the store's events now; a recorder
+    /// hears every kind.)
+    func testNoEntryPointPostsAListEvent() {
         for entry in entryPoints {
             let appState = AppState()
+            let events = MailEventRecorder(appState.mailStore)
             entry.request(appState, windowA)
             XCTAssertNil(appState.pendingMoveRequest, entry.name)
-            XCTAssertNil(appState.mailStore.signals.lastDisposedEnvelope, entry.name)
-            XCTAssertNil(appState.mailStore.signals.lastFailedRemoval, entry.name)
-            XCTAssertNil(appState.mailStore.signals.lastEnvelopeFlagChange, entry.name)
-            XCTAssertNil(appState.mailStore.signals.lastReadAdvanceRequest, entry.name)
-            XCTAssertNil(appState.mailStore.signals.lastDraftReplaced, entry.name)
-            XCTAssertEqual(appState.mailStore.signals.failedRemovalTick, 0, entry.name)
+            XCTAssertEqual(events.events, [], entry.name)
         }
     }
 

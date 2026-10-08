@@ -27,7 +27,7 @@ final class MessageShields {
 
     /// Messages the detail view has optimistically removed (archive / trash /
     /// move) but whose server move is still in flight. The detail view prunes
-    /// the list row up front via `signalDisposed`; without this
+    /// the list row up front (its `.removed` event); without this
     /// `MessageListViewModel.shieldFetched` would let a refresh that lands
     /// before the move completes resurrect the row (the source folder still
     /// returns the UID). The cross-view analogue of the list's own

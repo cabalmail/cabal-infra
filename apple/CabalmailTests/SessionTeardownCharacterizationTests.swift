@@ -146,16 +146,19 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
 
     /// The command ticks, their window target and the one-shot handoffs. The
     /// refactor replaces the ticks with focused-window commands; today a
-    /// sign-out never resets any of them.
+    /// sign-out never resets any of them. The reader's mail events (a failed
+    /// removal, a dispose) were delivered when posted, and a sign-out
+    /// neither posts another nor takes them back.
     func testSignOutWithNoClientLeavesTheCommandsAndHandoffsAlone() async {
         let state = AppState()
         let window = UUID()
         let seed = Draft(subject: "parked by a mailto: link")
         state.sessionManager.status = .signedIn
+        let events = MailEventRecorder(state.mailStore)
         Self.bumpEveryCommand(on: state, seed: seed, window: window)
         let ticks = Self.ticks(of: state)
         XCTAssertFalse(ticks.contains(0), "precondition: every tick was bumped")
-        let disposed = state.mailStore.signals.lastDisposedEnvelope
+        let posted = events.events
         let move = state.pendingMoveRequest
 
         await state.signOut()
@@ -166,8 +169,12 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.pendingComposeSeed, seed)
         XCTAssertEqual(state.pendingFeedCommand, .refresh)
         XCTAssertEqual(state.pendingSidebarTreeCommand, .expandAllFolders)
-        XCTAssertNotNil(disposed)
-        XCTAssertEqual(state.mailStore.signals.lastDisposedEnvelope, disposed)
+        let expected: [MailEvent.Change] = [
+            .restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false),
+            .removed([MessageRef(folder: "INBOX", uid: 9)]),
+        ]
+        XCTAssertEqual(posted.map(\.change), expected, "precondition: both mail events were posted")
+        XCTAssertEqual(events.events, posted, "sign-out posts no mail event")
         XCTAssertNotNil(move)
         XCTAssertEqual(state.pendingMoveRequest, move)
     }
@@ -201,8 +208,8 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         state.requestFeedCommand(.refresh)
         state.requestSidebarTree(.expandAllFolders)
         state.requestMove(items: [MessageDragItem(uid: 9, sourceFolder: "INBOX")], to: "Archive", from: nil)
-        state.mailStore.signalRemovalFailed(MessageRef(folder: "INBOX", uid: 8))
-        state.mailStore.signals.signalDisposed(MessageRef(folder: "INBOX", uid: 9))
+        state.mailStore.postRemovalFailed(MessageRef(folder: "INBOX", uid: 8), from: nil)
+        state.mailStore.events.post(.removed([MessageRef(folder: "INBOX", uid: 9)]), from: nil)
         state.requestSettings()
         state.noteActiveMainWindow(window)
         // Last, so its window is the recorded target.
@@ -215,7 +222,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
             state.replyAllRequestTick, state.forwardRequestTick, state.toggleSeenRequestTick,
             state.toggleFlaggedRequestTick, state.moveSelectionRequestTick, state.markFolderReadRequestTick,
             state.settingsRequestTick, state.feedCommandTick, state.sidebarTreeCommandTick,
-            state.moveRequestTick, state.mailStore.signals.failedRemovalTick,
+            state.moveRequestTick,
         ]
     }
 

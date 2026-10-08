@@ -215,7 +215,7 @@ extension MessageDetailView {
             onSuccess: {
                 // Fires before the server round trip so the list selection
                 // advances and the row vanishes instantly.
-                appState.mailStore.signals.signalDisposed(messageRef)
+                appState.mailStore.events.post(.removed([messageRef]), from: commandWindowID)
             },
             onFailure: { error in
                 // The model has already had the list put the row back;
@@ -229,14 +229,14 @@ extension MessageDetailView {
     }
 
     /// Confirmed permanent delete. Shares the dispose button's optimistic
-    /// signal / failure-toast plumbing, but the wire call expunges instead
+    /// event / failure-toast plumbing, but the wire call expunges instead
     /// of moving.
     func runPurge() {
         guard let model else { return }
         Task {
             await model.purge(
                 onSuccess: {
-                    appState.mailStore.signals.signalDisposed(messageRef)
+                    appState.mailStore.events.post(.removed([messageRef]), from: commandWindowID)
                 },
                 onFailure: { error in
                     appState.showToast(Toast(

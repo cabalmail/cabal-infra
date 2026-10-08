@@ -45,11 +45,15 @@ struct SearchView: View {
                 if let model {
                     // Every result carries its source folder, so the reader's
                     // operations target the message's true mailbox.
-                    MessageDetailView(
-                        folder: MessageFolderPolicy.folder(for: envelope, in: nil)
-                            ?? Folder(path: model.rowRef(for: envelope).folder),
-                        envelope: envelope
-                    )
+                    let folder = MessageFolderPolicy.folder(for: envelope, in: nil)
+                        ?? Folder(path: model.rowRef(for: envelope).folder)
+                    // Keyed on the message, as the split's reader is: an
+                    // archive from the reader moves the selection on to the
+                    // next result while this destination stays pushed, and
+                    // the reader must be rebuilt for it rather than keep the
+                    // archived message's model behind the new header.
+                    MessageDetailView(folder: folder, envelope: envelope)
+                        .id("\(folder.path)#\(envelope.uid)")
                 }
             }
             // On iPhone the Cabalmail mark heads the tab like every other
