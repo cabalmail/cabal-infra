@@ -166,9 +166,11 @@ final class SceneNavigatorLandingTests: XCTestCase {
         XCTAssertNil(navigator.selectedFolder)
     }
 
-    /// #1062: the session's folder was deleted since it was saved. The
-    /// landing falls back to INBOX and drops the message restore aimed at it.
-    func testADeletedSessionFolderFallsBackToInbox() async throws {
+    /// The landing's missing-folder fallback: the session's folder is absent
+    /// from the fetched list (deleted since it was saved, perhaps from
+    /// another device). The landing falls back to INBOX and drops the message
+    /// restore aimed at it.
+    func testAMissingSessionFolderFallsBackToInbox() async throws {
         store.saveSession(ResumeSession(section: .mail, folder: "Gone", uid: 5))
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
@@ -206,6 +208,24 @@ final class SceneNavigatorLandingTests: XCTestCase {
         XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
         XCTAssertEqual(coordinator.pendingRestore?.messageID, "<nine@example.com>")
         XCTAssertEqual(navigator.route.mail.message, MessageRef(folder: "INBOX", uid: 9))
+    }
+
+    /// Where the route has no mail position — here the user backed out to
+    /// the folder list — a rebuilt tree lands on the live session, as every
+    /// rebuilt tree did before the window kept a route.
+    func testARebuiltTreeWithNoFolderLandsOnTheLiveSession() async throws {
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        let first = UUID()
+        _ = await navigator.mailTreeAppeared(first, isWide: false, showingFeeds: false)
+        navigator.foldersLoaded([inbox, archive])
+        navigator.selectFolder(nil)
+        coordinator.recordFolder("Archive")
+
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+
+        XCTAssertEqual(navigator.selectedFolder, Folder(path: "Archive", isSubscribed: true))
+        XCTAssertTrue(navigator.awaitingLaunchReconcile)
     }
 
     /// #1664: a compact stack is never handed a list and a reader in one
@@ -265,10 +285,11 @@ final class SceneNavigatorLandingTests: XCTestCase {
         _ = await navigator.mailTreeAppeared(rebuilt, isWide: true, showingFeeds: false)
 
         navigator.setCompactColumn(.sidebar, isSearching: false, from: first)
-        navigator.selectMessage(nil, isSearching: false, from: first)
+        navigator.selectMessage(TestFixtures.makeEnvelope(uid: 12), isSearching: false, from: first)
 
         XCTAssertEqual(navigator.route.mail.message, MessageRef(folder: "INBOX", uid: 9))
-        XCTAssertEqual(coordinator.session.uid, 9, "the old tree's back-out was not recorded")
+        XCTAssertEqual(coordinator.session.uid, 9, "nothing the old tree wrote was recorded")
+        XCTAssertNil(navigator.envelope(in: rebuilt))
         XCTAssertEqual(navigator.compactColumn(in: rebuilt), .content)
     }
 

@@ -109,6 +109,14 @@ struct SignedInRootView: View {
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
                 navigator = SceneNavigator(appState: appState)
             }
+            #if !os(visionOS)
+            // Push, Spotlight and Siri write one app-wide request; the first
+            // window to see it takes it. visionOS's tab view still takes its
+            // own.
+            .onChange(of: appState.navCoordinator?.navigateRequest) {
+                navigator.takeNavigateRequest()
+            }
+            #endif
     }
 
     private func offerCrossDeviceCursor(atLaunch: Bool) async {
@@ -218,9 +226,10 @@ struct SignedInRootView: View {
 
     /// Builds the banner's trailing action. A `copyAddress` toast copies and
     /// swaps in the shared "successfully copied" confirmation; a `resumeCursor`
-    /// toast asks the nav coordinator to navigate to the cross-client cursor
-    /// and dismisses the banner. Returns nil for plain status toasts (no
-    /// trailing button).
+    /// toast moves this window to the cross-client cursor — this window's
+    /// navigator, not whichever window answers an app-wide request first
+    /// (#1845) — and dismisses the banner. Returns nil for plain status toasts
+    /// (no trailing button).
     private func actionHandler(for toast: Toast) -> (() -> Void)? {
         if let address = toast.copyAddress {
             return {
@@ -233,7 +242,11 @@ struct SignedInRootView: View {
                 if cursor.kind == .rss {
                     Task { await appState.navCoordinator?.requestFeedNavigation(cursor) }
                 } else {
+                    #if os(visionOS)
                     appState.navCoordinator?.navigateRequest = cursor
+                    #else
+                    navigator.navigate(to: cursor)
+                    #endif
                 }
                 appState.toast = nil
             }

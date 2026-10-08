@@ -412,11 +412,6 @@ struct MailRootView: View {
                 feedSidebarSelection.wrappedValue = request.scope
             }
         }
-        // The resume toast was tapped, or a push, Spotlight or Siri asked:
-        // navigate to the cursor (`SceneNavigator.navigate(to:)`).
-        .onChange(of: appState.navCoordinator?.navigateRequest) { _, _ in
-            navigator.takeNavigateRequest()
-        }
         .task {
             // The window's launch landing — or, for a tree a layout swap has
             // just built, the window's route (`SceneNavigator`). A wide tree

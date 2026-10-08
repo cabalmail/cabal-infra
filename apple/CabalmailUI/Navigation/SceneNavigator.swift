@@ -21,10 +21,11 @@ import CabalmailKit
 /// built later by a layout swap renders the window's route instead: the
 /// folder stays, and an open message is re-parked through
 /// `NavStateCoordinator.scheduleRestore`, so the new list selects it once it
-/// has appeared and loaded. Until a tree has appeared it sees the route's
-/// folder but no message, so a compact stack is never handed a list and a
-/// reader in one update (#1664), and writes from any other tree — the one a
-/// swap is tearing down — are dropped.
+/// has appeared and loaded. (A route with no folder lands on the live
+/// session, as a rebuilt tree always did.) Until a tree has appeared it sees
+/// the route's folder but no message, so a compact stack is never handed a
+/// list and a reader in one update (#1664), and writes from any other tree —
+/// the one a swap is tearing down — are dropped.
 ///
 /// Every transition does what the `MailRootView` handler it replaced did,
 /// cursor recording included. Search stays the view's (a transition that
@@ -135,21 +136,24 @@ final class SceneNavigator {
 
     /// A rebuilt tree renders the route: the folder stays, an open message is
     /// parked for the new list to select after its initial load, and the
-    /// compact column starts on that folder's list. The feed reader is not on
-    /// the navigator yet, so a wide tree in the feeds section re-opens the
-    /// session's scope, as every rebuilt tree used to.
+    /// compact column starts on that folder's list. Where the route has no
+    /// mail position — the user backed out to the folder list, or the wide
+    /// layout cleared it for a feed — the tree lands on the live session, as
+    /// every rebuilt tree used to. The feed reader is not on the navigator
+    /// yet, so a wide tree in the feeds section re-opens the session's scope.
     private func rehand(isWide: Bool) async -> RssItemScope? {
         selectedEnvelope = nil
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
         guard let coordinator = coordinator() else { return nil }
-        if let message = route.mail.message {
-            coordinator.scheduleRestore(for: NavState(
-                folder: message.folder, messageID: message.messageId, uid: message.uid,
-                clientID: coordinator.clientID
-            ))
+        if isWide, route.section == .feeds, let scope = await coordinator.consumeFeedsLaunchTarget() {
+            return scope
         }
-        guard isWide, route.section == .feeds else { return nil }
-        return await coordinator.consumeFeedsLaunchTarget()
+        if selectedFolder == nil {
+            if hasClient() { landOnSessionFolder(coordinator) }
+        } else if let message = route.mail.message {
+            coordinator.scheduleRestore(for: message)
+        }
+        return nil
     }
 
     // MARK: Landing
@@ -178,6 +182,15 @@ final class SceneNavigator {
            let scope = await coordinator.consumeFeedsLaunchTarget() {
             return scope
         }
+        landOnSessionFolder(coordinator)
+        return nil
+    }
+
+    /// The provisional mail landing: the session's folder (the launch
+    /// snapshot for a window's first landing, the live session after it),
+    /// its open message scheduled for the list, and the folder list's first
+    /// load to reconcile it.
+    private func landOnSessionFolder(_ coordinator: NavStateCoordinator) {
         let target = coordinator.mailLaunchTarget()
         awaitingLaunchReconcile = true
         coordinator.armProvisionalLanding()
@@ -185,7 +198,6 @@ final class SceneNavigator {
             coordinator.scheduleRestore(for: restore)
         }
         setFolder(Folder(path: target.folderPath, isSubscribed: true))
-        return nil
     }
 
     /// The folder list's first load. Finishes a provisional landing, or a
@@ -214,7 +226,7 @@ final class SceneNavigator {
     /// path, so the mounted list survives and nothing is re-recorded. A
     /// folder that no longer exists (deleted since the session was saved,
     /// perhaps from another device) falls back to INBOX and drops the message
-    /// restore aimed at it (#1062). The landing's own server write, held back
+    /// restore aimed at it. The landing's own server write, held back
     /// so the cross-device probe reads another install's cursor
     /// (`armProvisionalLanding`), goes out once the probe has run
     /// (`materializeLanding`).

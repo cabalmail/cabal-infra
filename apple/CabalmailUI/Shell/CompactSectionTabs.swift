@@ -94,13 +94,11 @@ struct CompactSectionTabs: View {
             }
         }
         .environment(\.showsCompactBrandMark, true)
-        // A tapped cross-device toast opens the section it names; the tab's
-        // own root follows the request from there.
+        // A tapped cross-device feed toast opens the Feeds tab; its root
+        // follows the request from there. A mail navigation moves the tab
+        // itself (`SceneNavigator.navigate(to:)`).
         .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
             if request != nil { navigator.showTab(.feeds) }
-        }
-        .onChange(of: appState.navCoordinator?.navigateRequest) { _, request in
-            if request != nil { navigator.showTab(.mail) }
         }
         // The same section, for the menus that share a chord across mail and
         // feeds (`SharedChordPolicy`): each tab keeps its selection while the
