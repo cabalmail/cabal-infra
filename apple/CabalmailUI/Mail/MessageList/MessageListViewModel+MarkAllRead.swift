@@ -7,8 +7,9 @@ import CabalmailKit
 // SwiftLint's `type_body_length` cap.
 extension MessageListViewModel {
     /// Same server call and after-effects as the sidebar's entry
-    /// (`FolderListViewModel.markAllRead(folderPath:)`); the `requestRefresh`
-    /// inside `FolderMarkAllRead` is what hard-reloads this very list.
+    /// (`FolderListViewModel.markAllRead(folderPath:)`); the list reload
+    /// `MailMutationService.markFolderRead` asks for is what hard-reloads this
+    /// very list.
     func markAllRead() async {
         do {
             try await FolderMarkAllRead.perform(folderPath: folder.path, client: client, mailStore: mailStore)

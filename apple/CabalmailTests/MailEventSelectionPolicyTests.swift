@@ -57,6 +57,19 @@ final class MailEventSelectionPolicyTests: XCTestCase {
         XCTAssertNil(answer(reaction, current: [other], in: windowB))
     }
 
+    /// A change another list made (a swipe, a bulk archive) advances no one:
+    /// that list saw to its own selection, and every other list, in any
+    /// window, lets go of the row. Its reactions name no window, so without
+    /// `advances` they would read as a compose window's and advance them all.
+    func testARemovalAnotherListMadeAdvancesNoOne() {
+        let reaction = ListSelectionReaction(kind: .removal, rows: [open], target: next, origin: nil, advances: false)
+        for window in [windowA, windowB, nil] {
+            XCTAssertEqual(answer(reaction, current: [open], in: window), [])
+            XCTAssertEqual(answer(reaction, current: [open, other], in: window), [other])
+            XCTAssertNil(answer(reaction, current: [other], in: window))
+        }
+    }
+
     /// Only a selection wholly on the leaving rows is the reader's message;
     /// a larger one just loses the rows that went.
     func testAMultiSelectionLosesTheRemovedRowsWithoutAdvancing() {

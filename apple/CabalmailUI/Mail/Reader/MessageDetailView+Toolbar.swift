@@ -210,16 +210,13 @@ extension MessageDetailView {
     /// Shared dispose flow behind the dispose control's primary action and
     /// its option-menu rows.
     func performDispose(model: MessageDetailViewModel, action: DisposeAction) async {
+        // The model's write drops the row from every list before the server
+        // round trip, so this window's selection advances at once.
         await model.dispose(
             action: action,
-            onSuccess: {
-                // Fires before the server round trip so the list selection
-                // advances and the row vanishes instantly.
-                appState.mailStore.events.post(.removed([messageRef]), from: commandWindowID)
-            },
             onFailure: { error in
-                // The model has already had the list put the row back;
-                // surface a toast so the user knows the move didn't take.
+                // Every list has already put the row back; surface a toast
+                // so the user knows the move didn't take.
                 appState.showToast(Toast(
                     kind: .error,
                     message: failureMessage(for: action, error: error)
@@ -229,15 +226,12 @@ extension MessageDetailView {
     }
 
     /// Confirmed permanent delete. Shares the dispose button's optimistic
-    /// event / failure-toast plumbing, but the wire call expunges instead
-    /// of moving.
+    /// removal and failure toast, but the wire call expunges instead of
+    /// moving.
     func runPurge() {
         guard let model else { return }
         Task {
             await model.purge(
-                onSuccess: {
-                    appState.mailStore.events.post(.removed([messageRef]), from: commandWindowID)
-                },
                 onFailure: { error in
                     appState.showToast(Toast(
                         kind: .error,

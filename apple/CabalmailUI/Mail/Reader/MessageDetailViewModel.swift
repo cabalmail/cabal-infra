@@ -104,47 +104,20 @@ final class MessageDetailViewModel {
     /// view is truly gone.
     private var loadTask: Task<Void, Never>?
 
-    /// Hook for the view to relay flag changes to the list view model so the
-    /// list row's unread dot / bold styling flips immediately. Set by
-    /// `MessageDetailView` after construction so the model itself stays
-    /// decoupled from `AppState`.
-    var onFlagChanged: ((Flag, Bool) -> Void)?
+    /// Where this reader's writes go: the signed-in store's mutation service
+    /// once `MessageDetailView` connects it (`connect(to:in:)`), which tells
+    /// every list, moves the counts and shields the write; until then (a
+    /// test's reader), a service of its own that nobody hears, so its server
+    /// calls still go out.
+    @ObservationIgnored private(set) var mutations: MailMutationService = .unconnected()
 
-    /// Brackets an in-flight flag write so every list can shield its
-    /// optimistic flag from a concurrent refresh, and a STATUS asked meanwhile
-    /// can't count the write twice: `true` when the STORE is dispatched,
-    /// `false` when it resolves (success or failure). Wired to the store's
-    /// record (`MessageShields.beginFlagWrite`, through `MessageDetailView`'s
-    /// `ReaderFlagWrites`, which names the write from the `onFlagChanged`
-    /// just before it); left nil in tests and in the dispose path (the row
-    /// leaves the list, so there's nothing to shield). Same decoupling
-    /// rationale as `onFlagChanged`.
-    var onFlagWriteInFlight: ((Bool) -> Void)?
+    /// The main window this reader is in (`commandWindowID`), which its
+    /// writes' events name, so only that window's list advances past a
+    /// message it removes (#1845).
+    @ObservationIgnored private(set) var window: UUID?
 
-    /// Brackets an in-flight archive / trash / move so the list can shield the
-    /// optimistically-pruned row from a refresh that lands before the move
-    /// resolves: `true` when the move is dispatched, `false` when it resolves
-    /// (success or failure). Wired to `MessageShields.setMoveInFlight` in
-    /// `MessageDetailView`; nil in tests. Same decoupling rationale as
-    /// `onFlagChanged`.
-    var onMoveInFlight: ((Bool) -> Void)?
-
-    /// Fires once the server has confirmed an archive / trash / move / purge
-    /// (never on failure), so the list can keep the message out of any
-    /// refresh that was already in flight when the move landed -- the shield
-    /// `onMoveInFlight` holds ends at that moment. Wired to
-    /// `MessageShields.recordConfirmedRemovals` in `MessageDetailView`; nil in
-    /// tests.
-    var onMoveConfirmed: (() -> Void)?
-
-    /// Fires when an archive / trash / move / purge fails on the server, so
-    /// the list can put back the row it pruned optimistically. The argument
-    /// is true when a dispose had marked an unread message read, so the row
-    /// comes back unread; it rides this one call rather than a separate
-    /// `onFlagChanged`, which could reach the list before the row does.
-    /// Wired to `MailSessionStore.postRemovalFailed` in `MessageDetailView`; nil
-    /// in tests.
-    var onMoveFailed: ((Bool) -> Void)?
+    /// Who this reader's writes are from, as the events name it.
+    var writer: MailWriter { .reader(self, in: window, through: client) }
 
     struct Attachment: Identifiable, Hashable {
         let id: String
@@ -164,6 +137,16 @@ final class MessageDetailViewModel {
         self.keywordSlots = Set(FlagPalette.slots(in: envelope.flags))
         self.remoteContentAllowed = preferences.loadRemoteContent == .always
         self.readerMode = preferences.defaultBodyRenderMode == .reader
+    }
+
+    /// Connects the reader to the signed-in account's store: its writes go
+    /// through the store's mutation service, naming `window`, and it hears
+    /// the store's events, so a flag another list or reader changes on its
+    /// message shows on its toolbar too.
+    func connect(to mailStore: MailSessionStore, in window: UUID?) {
+        mutations = mailStore.mutations
+        self.window = window
+        mailStore.events.subscribe(self)
     }
 
     func load() async {
@@ -244,62 +227,38 @@ final class MessageDetailViewModel {
     }
 
     /// Dispose target mirrors `MessageListViewModel.dispose(_:)`: read
-    /// `Preferences.disposeAction` at call time (Archive or Trash), mark
-    /// `\Seen` before the move (archived == read, matching the React app),
-    /// then run `UID MOVE` and prune both caches so a relaunch can't re-
-    /// hydrate the message into the list.
+    /// `Preferences.disposeAction` at call time (Archive or Trash), and have
+    /// the server mark the message `\Seen` as it moves it (archived == read,
+    /// matching the React app).
     ///
     /// `action` overrides the preference when the caller has already picked
     /// a destination — the overflow menu's alternate dispose item offers
     /// whichever of Archive / Delete the toolbar button doesn't. `nil`
     /// keeps the read-the-preference-at-call-time behavior.
     ///
-    /// Optimistic UI: `onSuccess` fires before the server round trip so the
-    /// list selection advances to the next unread message instantly. The
-    /// list view also prunes the row in response. If the server work fails,
-    /// `onMoveFailed` has the list re-insert the row, unread again if this
-    /// call marked it read (as the list's own dispose reverts its unread
-    /// delta), and `onFailure` shows the user a toast. Cache pruning still
-    /// waits for confirmation — pruning before that would leave the
-    /// persistent snapshot disagreeing with the server on a transient
-    /// failure.
+    /// Optimistic UI: the mutation service drops the row from every list
+    /// before the server round trip, so this window's selection advances to
+    /// the next message at once. If the server refuses, every list puts the
+    /// row back, unread again if this call marked it read (as the list's own
+    /// dispose reverts its unread count), and `onFailure` shows the user a
+    /// toast. The offline caches forget the message only once the server
+    /// confirms, so a transient failure can't leave the persistent snapshot
+    /// disagreeing with the server.
     func dispose(
         action: DisposeAction? = nil,
-        onSuccess: (() -> Void)? = nil,
         onFailure: ((Error) -> Void)? = nil
     ) async {
         let destination = (action ?? preferences.disposeAction).destinationFolder
         let wasSeen = isSeen
-        if !isSeen {
-            isSeen = true
-            onFlagChanged?(.seen, true)
-        }
-        // Shield the optimistic prune from a concurrent refresh until the move
-        // resolves; set before `onSuccess` (which prunes the list row) so the
-        // shield is in place before any refresh can re-add the row.
-        onMoveInFlight?(true)
-        defer { onMoveInFlight?(false) }
-        onSuccess?()
-        do {
-            // Mark-seen + move in a single call (server adds `\Seen` before
-            // moving) so the archive commits in one round trip — see
-            // MessageListViewModel.dispose for why the reduced call count
-            // matters when disposing as the app backgrounds.
-            try await client.imapClient.move(
-                folder: folder.path,
-                uids: [envelope.uid],
-                destination: destination,
-                markSeen: !wasSeen
-            )
-            await confirmRemoval()
-        } catch {
-            if !wasSeen {
-                isSeen = false
-            }
-            onMoveFailed?(!wasSeen)
-            errorMessage = error.localizedDescription
-            onFailure?(error)
-        }
+        isSeen = true
+        // Mark-seen + move in a single call (server adds `\Seen` before
+        // moving) so the archive commits in one round trip — see
+        // MessageListViewModel.dispose for why the reduced call count
+        // matters when disposing as the app backgrounds.
+        let outcome = await removeOpenMessage(.move(to: destination, markingSeen: !wasSeen), unread: !wasSeen)
+        guard outcome.failed.contains(ref) else { return }
+        isSeen = wasSeen
+        reportRefusal(outcome, to: onFailure)
     }
 
     /// The currently-configured dispose action, exposed so the toolbar can
@@ -312,33 +271,30 @@ final class MessageDetailViewModel {
     /// is "I'm done with this," whereas Move is "file this for later."
     /// Forcing the seen bit there would surprise users filing unread
     /// messages into project folders.
-    ///
-    /// Optimistic UI: `onSuccess` fires before the server round trip so
-    /// the list view can prune the row immediately. On failure the list
-    /// puts the row back (`onMoveFailed`) and the caller surfaces a toast;
-    /// cache pruning still waits for confirmation so a
-    /// transient error doesn't leave the persistent snapshot disagreeing
-    /// with the server.
     func move(
         to destination: String,
-        onSuccess: (() -> Void)? = nil,
         onFailure: ((Error) -> Void)? = nil
     ) async {
-        onMoveInFlight?(true)
-        defer { onMoveInFlight?(false) }
-        onSuccess?()
-        do {
-            try await client.imapClient.move(
-                folder: folder.path,
-                uids: [envelope.uid],
-                destination: destination
-            )
-            await confirmRemoval()
-        } catch {
-            onMoveFailed?(false)
-            errorMessage = error.localizedDescription
-            onFailure?(error)
-        }
+        let outcome = await removeOpenMessage(.move(to: destination, markingSeen: false), unread: !isSeen)
+        guard outcome.failed.contains(ref) else { return }
+        reportRefusal(outcome, to: onFailure)
+    }
+
+    /// The open message's removal, through the mutation service: the row
+    /// leaves every list at once, and comes back if the server refuses.
+    /// `unread` moves the message's unread count with it.
+    func removeOpenMessage(
+        _ removal: MailMutationService.Removal,
+        unread: Bool
+    ) async -> MailMutationService.RemovalOutcome {
+        await mutations.remove([ref], removal, unread: unread ? [ref] : [], by: writer).value
+    }
+
+    /// Shows a removal the server refused: its error on the reader, and the
+    /// caller's toast.
+    func reportRefusal(_ outcome: MailMutationService.RemovalOutcome, to onFailure: ((Error) -> Void)?) {
+        errorMessage = outcome.message
+        if let error = outcome.error { onFailure?(error) }
     }
 
     /// Returns the raw RFC 5322 bytes for the current message, going
@@ -358,9 +314,8 @@ final class MessageDetailViewModel {
 // stored properties (`client`, `folder`, `envelope`) through the type's
 // `@MainActor` isolation, inherited by the extension.
 
-// Internal (not `private`) so the move/dispose/purge paths — including the
-// `+Purge` sibling extension — can resolve the folder's UIDVALIDITY and
-// prune the message out of the caches.
+// Internal (not `private`) so the Drafts resume path (`+Drafts`) can
+// resolve the folder's UIDVALIDITY.
 extension MessageDetailViewModel {
     func currentUIDValidity() async throws -> UInt32 {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
@@ -368,34 +323,6 @@ extension MessageDetailViewModel {
         }
         let status = try await client.imapClient.status(path: folder.path)
         return status.uidValidity ?? 0
-    }
-
-    /// The server confirmed the message gone from this folder: tell the list
-    /// (see `onMoveConfirmed`), then prune the caches.
-    func confirmRemoval() async {
-        onMoveConfirmed?()
-        await pruneCachesAfterMove()
-    }
-
-    /// Cache cleanup once the open message has left `folder` — a confirmed
-    /// dispose, move, or purge. The single-message counterpart to
-    /// `MessageListViewModel.pruneCachesAfter(move:uids:)`. The body cache is
-    /// keyed by UIDVALIDITY, so an unresolvable validity leaves the body
-    /// entry alone rather than guessing at the key; the envelope row goes
-    /// either way.
-    func pruneCachesAfterMove() async {
-        let uidValidity = try? await currentUIDValidity()
-        try? await client.envelopeCache.remove(
-            uids: [envelope.uid],
-            folder: folder.path
-        )
-        if let uidValidity {
-            await client.bodyCache.remove(
-                folder: folder.path,
-                uidValidity: uidValidity,
-                uid: envelope.uid
-            )
-        }
     }
 }
 

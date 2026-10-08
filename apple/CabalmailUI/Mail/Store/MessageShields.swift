@@ -6,9 +6,11 @@ import CabalmailKit
 /// undoing a write made anywhere, and what a folder's STATUS may still be
 /// missing.
 ///
-/// Every writer brackets its write here: a list's swipe, bulk action, move
-/// or purge, the reader's flags and removals, a reply's `\Answered`. Every
-/// reader asks it: a list's merge (`MessageListViewModel.shieldFetched`)
+/// Every write to messages is bracketed here, by the mutation service
+/// (`MailMutationService`) for every list, reader and reply, and by a list
+/// for a moment longer while its own row is still leaving or being put
+/// back. (A notification's actions write outside it, #1973, and the
+/// whole-folder writes aren't bracketed.) Every reader asks it: a list's merge (`MessageListViewModel.shieldFetched`)
 /// keeps a row it is removing out and a row it is flagging at its local
 /// flags, whichever list or reader started the write; and every writer of a
 /// fetched STATUS (a list's refresh, the sidebar's, the unsubscribed-folder
@@ -57,6 +59,14 @@ final class MessageShields {
         let endedAt: ContinuousClock.Instant
     }
 
+    /// Plain moves of unread messages into a folder that are in flight,
+    /// with how many: the folder's unread count rose before the move landed,
+    /// so a STATUS asked before then may not count them yet.
+    private var arrivals: [String: Int] = [:]
+
+    /// Those moves that ended, per folder, with when.
+    private var endedArrivals: [(folder: String, endedAt: ContinuousClock.Instant)] = []
+
     /// How long a confirmed removal or an ended flag write keeps bounding a
     /// merge or a count. A request can't be in flight this long (the API
     /// gateway gives up after 29 s), so by then no fetch issued before the
@@ -84,9 +94,8 @@ final class MessageShields {
         }
     }
 
-    /// The reader's bracket around its dispose, move or purge: `true` when
-    /// it goes out, `false` when it resolves. Safe to call `false` for a
-    /// message that was never begun.
+    /// `beginRemoval` (`true`) or `endRemoval` (`false`) for one message,
+    /// as a flag. Safe to call `false` for a message that was never begun.
     func setMoveInFlight(_ ref: MessageRef, inFlight: Bool) {
         if inFlight { beginRemoval([ref]) } else { endRemoval([ref]) }
     }
@@ -129,6 +138,22 @@ final class MessageShields {
             writes[write] = held > 1 ? held - 1 : nil
             flagWrites[ref] = writes.isEmpty ? nil : writes
         }
+    }
+
+    /// Unread messages are being moved into `folder`, whose unread count
+    /// has already risen for them.
+    func beginArrival(into folder: String) {
+        arrivals[folder, default: 0] += 1
+    }
+
+    /// A move begun with `beginArrival` resolved, either way. It is
+    /// remembered for the window, since a STATUS asked before it ended may
+    /// not count the messages yet.
+    func endArrival(into folder: String, at now: ContinuousClock.Instant = .now) {
+        guard let held = arrivals[folder] else { return }
+        arrivals[folder] = held > 1 ? held - 1 : nil
+        endedArrivals.removeAll { now - $0.endedAt >= Self.confirmedRemovalWindow }
+        endedArrivals.append((folder, now))
     }
 
     /// Record that the server confirmed `refs` gone from their folders.
@@ -189,14 +214,17 @@ final class MessageShields {
     /// folder's unread count. A `\Seen` add in flight, or ended since, may
     /// not be counted in it yet, so the reply may still count that message
     /// unread: it may lower the count but not raise it. A `\Seen` removal is
-    /// the mirror image, and a removal in flight or confirmed since lowers
-    /// it like a read. Both at once hold the count where it is (#1880).
+    /// the mirror image, and so is an unread message moving in; a removal in
+    /// flight or confirmed since lowers it like a read. Both at once hold
+    /// the count where it is (#1880).
     func unreadBound(folderPath: String, askedAt: ContinuousClock.Instant) -> CountBound {
         let removing = hasRemovalInFlight(folderPath: folderPath)
             || removalConfirmed(folderPath: folderPath, after: askedAt)
+        let arriving = arrivals[folderPath] != nil
+            || endedArrivals.contains { $0.folder == folderPath && $0.endedAt > askedAt }
         return bound(
             lowering: removing || writes(.seen, added: true, in: folderPath, since: askedAt),
-            raising: writes(.seen, added: false, in: folderPath, since: askedAt)
+            raising: arriving || writes(.seen, added: false, in: folderPath, since: askedAt)
         )
     }
 
@@ -242,6 +270,8 @@ final class MessageShields {
         removals = [:]
         flagWrites = [:]
         endedFlagWrites = []
+        arrivals = [:]
+        endedArrivals = []
     }
 }
 

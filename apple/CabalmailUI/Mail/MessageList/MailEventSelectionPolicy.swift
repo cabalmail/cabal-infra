@@ -30,10 +30,13 @@ struct ListSelectionReaction: Equatable {
     let target: MessageRef?
     /// The window that started the event (`MailEvent.origin`).
     let origin: UUID?
+    /// Whether any selection may move on for it (`MailEvent.advances`):
+    /// false for a change another list made.
+    var advances = true
 }
 
-/// Whose selection moves when the reader or the composer changes mail, and
-/// where to (#1845).
+/// Whose selection moves when the reader, the composer or another list
+/// changes mail, and where to (#1845).
 ///
 /// A list's selection moves only when it is on the event's row. The window
 /// the user acted in advances, per their preference; a list in any other
@@ -41,7 +44,9 @@ struct ListSelectionReaction: Equatable {
 /// never moves another window's reader. A change no main window started (a
 /// compose window's send or save) advances every window whose selection is
 /// on the row, as before. Mark-read-and-advance belongs to its window alone:
-/// another window's list leaves its selection where it is.
+/// another window's list leaves its selection where it is. A change another
+/// list made (a swipe, a bulk action) advances no one: that list saw to its
+/// own selection, and every other list lets go of the row.
 enum MailEventSelectionPolicy {
     /// What a list view does with the reactions it hasn't applied yet,
     /// oldest first: the rows it selects (wide layouts) and the message its
@@ -84,7 +89,7 @@ enum MailEventSelectionPolicy {
     ) -> Set<MessageRef>? {
         let named = current.intersection(reaction.rows)
         guard !named.isEmpty else { return nil }
-        let advances = reaction.origin == nil || reaction.origin == window
+        let advances = reaction.advances && (reaction.origin == nil || reaction.origin == window)
         // Only a selection wholly on the event's rows (the reader's message)
         // moves on; a larger selection just loses the rows that went.
         let isOnTheRow = named == current

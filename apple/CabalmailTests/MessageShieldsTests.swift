@@ -173,6 +173,9 @@ final class MessageShieldsTests: XCTestCase {
         shields.beginFlagWrite([archive], flag: .seen, added: false)
         shields.endFlagWrite([archive], flag: .seen, added: false, at: start + .seconds(1))
         shields.recordConfirmedRemovals([archive], at: start)
+        shields.beginArrival(into: "Projects")
+        shields.beginArrival(into: "Lists")
+        shields.endArrival(into: "Lists", at: start + .seconds(1))
 
         shields.reset()
 
@@ -181,8 +184,12 @@ final class MessageShieldsTests: XCTestCase {
         XCTAssertEqual(shields.confirmedRemovals, [:])
         XCTAssertEqual(shields.unreadBound(folderPath: "INBOX", askedAt: start), .free)
         XCTAssertEqual(shields.unreadBound(folderPath: "Archive", askedAt: start), .free)
-        // A late end from the last account's reader records nothing.
+        XCTAssertEqual(shields.unreadBound(folderPath: "Projects", askedAt: start), .free)
+        XCTAssertEqual(shields.unreadBound(folderPath: "Lists", askedAt: start), .free)
+        // A late end from the last account's reader or move records nothing.
         shields.endFlagWrite([other], flag: .seen, added: true, at: start + .seconds(2))
+        shields.endArrival(into: "Projects", at: start + .seconds(2))
         XCTAssertEqual(shields.unreadBound(folderPath: "INBOX", askedAt: start), .free)
+        XCTAssertEqual(shields.unreadBound(folderPath: "Projects", askedAt: start), .free)
     }
 }

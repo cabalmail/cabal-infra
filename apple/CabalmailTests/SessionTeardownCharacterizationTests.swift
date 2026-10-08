@@ -208,7 +208,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         state.requestFeedCommand(.refresh)
         state.requestSidebarTree(.expandAllFolders)
         state.requestMove(items: [MessageDragItem(uid: 9, sourceFolder: "INBOX")], to: "Archive", from: nil)
-        state.mailStore.postRemovalFailed(MessageRef(folder: "INBOX", uid: 8), from: nil)
+        state.mailStore.events.post(.restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false), from: nil)
         state.mailStore.events.post(.removed([MessageRef(folder: "INBOX", uid: 9)]), from: nil)
         state.requestSettings()
         state.noteActiveMainWindow(window)

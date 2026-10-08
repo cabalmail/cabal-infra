@@ -193,41 +193,50 @@ final class StatusBoundEdgeTests: XCTestCase {
 
     // MARK: - The record's other users
 
-    /// Two reader writes out at once: neither leaves the record until both
-    /// have answered, whichever answers first, so a STATUS asked meanwhile
-    /// is bounded both ways.
-    func testOverlappingReaderWritesStayInTheRecordUntilBothAnswer() async throws {
+    /// Two reader writes out at once: each holds its own place in the
+    /// record until it answers, whichever answers first, so a STATUS asked
+    /// before either is bounded both ways, and one asked once the second has
+    /// answered only by the first, still out.
+    func testOverlappingReaderWritesEachStayInTheRecordUntilTheyAnswer() async throws {
         let imap = FakeImapClient()
         let appState = AppState()
         let shields = appState.mailStore.shields
         let reader = try await fixture.makeReader(imap: imap, uid: 3, folderPath: work)
         MessageDetailView.relayOutcomes(of: reader, to: appState.mailStore)
         await imap.holdNext(.setFlags)
+        let askedBefore = ContinuousClock.now
 
         let read = Task { await reader.setSeen(true) }
         await imap.awaitHeld(.setFlags)
         await reader.setSeen(false)
-        let askedAt = ContinuousClock.now
+        let askedAfter = ContinuousClock.now
 
         XCTAssertTrue(shields.isWritingFlags(ref(3)), "the second write answered; the first is still out")
-        XCTAssertEqual(shields.unreadBound(folderPath: work, askedAt: askedAt), .held)
+        XCTAssertEqual(shields.unreadBound(folderPath: work, askedAt: askedBefore), .held)
+        XCTAssertEqual(
+            shields.unreadBound(folderPath: work, askedAt: askedAfter), .lowerOnly,
+            "a STATUS asked after the mark-unread answered counts it; only the mark-read may be missing"
+        )
         await imap.releaseHeld(.setFlags)
         await read.value
         XCTAssertFalse(shields.isWritingFlags(ref(3)))
     }
 
-    /// A swipe that reaches a row another list is already removing lets go
-    /// of the row it held open, and sends no second move.
+    /// A swipe that reaches a row whose removal another list already has
+    /// out lets go of the row it held open, and sends no second move. The
+    /// first list's removal drops the row from every list that has it at
+    /// once, so the second list here is built while it is out, from rows
+    /// that still have it (as a list built from its saved rows would be).
     func testASwipeOnARowAnotherListIsRemovingLetsGoOfIt() async throws {
         let imap = FakeImapClient()
         let appState = AppState()
         let rows = [3, 2, 1].map { TestFixtures.makeEnvelope(uid: UInt32($0), flags: [.seen]) }
         let store = appState.mailStore
         let first = try TestFixtures.makeModel(imap: imap, envelopes: rows, folderPath: work, mailStore: store)
-        let second = try TestFixtures.makeModel(imap: imap, envelopes: rows, folderPath: work, mailStore: store)
         await imap.holdNext(.move)
         let dispose = Task { await first.dispose(first.envelopes[0]) }
         await imap.awaitHeld(.move)
+        let second = try TestFixtures.makeModel(imap: imap, envelopes: rows, folderPath: work, mailStore: store)
 
         await second.dispose(second.envelopes[0])
 
