@@ -42,4 +42,15 @@ final class CompactColumnPolicyTests: XCTestCase {
             .sidebar
         )
     }
+
+    func testAFolderChangeShowsTheFoldersList() {
+        XCTAssertEqual(CompactColumnPolicy.afterFolderChange(hasFolder: true), .content)
+        XCTAssertEqual(CompactColumnPolicy.afterFolderChange(hasFolder: false), .sidebar)
+    }
+
+    func testOnlyTheReaderKeepsTheOpenMessage() {
+        XCTAssertFalse(CompactColumnPolicy.dropsMessage(movingTo: .detail))
+        XCTAssertTrue(CompactColumnPolicy.dropsMessage(movingTo: .content))
+        XCTAssertTrue(CompactColumnPolicy.dropsMessage(movingTo: .sidebar))
+    }
 }
