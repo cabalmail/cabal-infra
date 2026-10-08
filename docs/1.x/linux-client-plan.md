@@ -24,7 +24,7 @@ Status tags mirror the **Status:** line on each work item. An item with no tag h
   - [Phase 2 verification](#phase-2-verification)
 - [Phase 3: Configuration, Authentication & API Client](#phase-3-configuration-authentication--api-client) — **in progress**
   - [1. Runtime configuration](#1-runtime-configuration) — **partial** (kit side; first-launch prompt moved to item 6)
-  - [2. Authentication](#2-authentication) — **shipped** (kit only)
+  - [2. Authentication](#2-authentication) — **partial** (kit side; stage sign-in needs item 6)
   - [3. Secret storage](#3-secret-storage)
   - [4. API client](#4-api-client)
   - [5. Models and caching](#5-models-and-caching)
@@ -404,7 +404,7 @@ Where the work stands, so it does not have to be reverse-engineered from git. Ev
 | --- | --- |
 | 1. Workspace scaffolding | **Complete** (2026-08-08). All five items shipped; `cargo run -p cabalmail-gtk` opens a window. |
 | 2. Build pipeline, packaging & test harness | **In progress.** Items 1, 2, 4, and 6 shipped, and item 5's artifact upload with them. Item 3 shipped layer (c) whole, and the *enforcement* halves of (a) and (d) - the coverage floor and the smoke job. What those two layers test is written with the code they test, so most of (a) and (d) arrives with Phases 3 to 5. Layer (b) moved to Phase 3, where the API client its fixtures decode into lands. Item 5's AUR publication is the one thing still blocked. |
-| 3. Configuration, authentication & API client | **In progress.** Item 1 is partial: the kit side is written, nothing in the app calls it yet, and its first-launch prompt for a control domain moved to item 6, the sign-in window, added 2026-09-22. Item 2 shipped in the kit on 2026-10-08; its tokens live in memory until item 3. |
+| 3. Configuration, authentication & API client | **In progress.** Item 1 is partial: the kit side is written, nothing in the app calls it yet, and its first-launch prompt for a control domain moved to item 6, the sign-in window, added 2026-09-22. Item 2 is partial in the same way: the kit side is written (2026-10-08), its tokens live in memory until item 3, and signing in against stage waits for item 6. |
 | 4-8 | Not started. |
 
 > **Paused (2026-08-24): AUR publication.** The AUR is closed to new account registrations, so the Arch package has no route to publication. Item 4's work is written, tested, and committed on the branch `claude/linux-phase-2-arch-packaging`, which is **not** pushed and has **no PR open** - deliberately, until the AUR question resolves. Item 5's AUR step was already a manual, human-gated act; it is now blocked outright. Nothing else in Phase 2 depends on either, so items 3 and 6 can proceed.
@@ -659,21 +659,23 @@ The control domain comes from `Settings.control_domain` (so it can be set in `co
 
 ### 2. Authentication
 
-**Status:** Shipped 2026-10-08, kit only. `cabalmail_kit::auth::CognitoAuth` ports `CognitoAuthService`.
+**Status:** Partial, 2026-10-08 (`d257c8ff`, and the review fixes after it). The kit side is written. Signing in against stage is still unverified, since it needs [item 6](#6-sign-in-window)'s window, and nothing in the app calls the kit yet. `cabalmail_kit::auth::CognitoAuth` ports `CognitoAuthService`.
 
 - Every operation in the list below is implemented, plus `totp_uri`, which builds the `otpauth://` URI in the same Key URI Format the React client uses.
 - Tokens are held in memory. `tokens()` and `restore()` are the seam item 3's secret store persists through.
-- Refresh fires 30 seconds before expiry, the Apple client's leeway. Refreshes are serialized behind an async mutex, and each waiting caller looks again before going to Cognito. Tests show ten concurrent requests with an expired token, and ten concurrent rejections of one token, each cost exactly one `REFRESH_TOKEN_AUTH`.
+- Refresh fires 30 seconds before expiry, the Apple client's leeway. Refreshes are serialized, and every caller waiting behind one takes its outcome, success or failure, instead of sending its own. Tests show ten concurrent requests with an expired token, ten concurrent rejections of one token, and ten callers behind a throttled refresh each cost exactly one `REFRESH_TOKEN_AUTH`.
 - `refresh_id_token(rejected)` is the 401 path item 4 will call.
-- Sign-out, or a new session, mid-refresh discards the refresh's result rather than reinstating the old session.
-- A refused refresh ends the session. A throttled one keeps it.
+- A sign-out mid-refresh stays signed out. A new session mid-refresh is what the waiting caller gets, rather than an error.
+- A refresh refused for good ends the session, and so does a refresh the pool will not issue tokens for. That includes the MFA trigger (`lambda/counter/require_admin_mfa`), which refuses every refresh once enforcement reaches an account with no second factor, and the trigger's message is kept. A throttled refresh keeps the session.
 - Cognito's named refusals arrive as a new `CabalmailError::Rejected { code, message }`. The UI routes on `code` (an unconfirmed account goes to confirmation) and shows `message`. A Lambda-trigger refusal shows only the trigger's message.
-- `NotAuthorizedException` means invalid credentials on sign-in and an expired session on refresh and MFA.
+- `NotAuthorizedException` covers more than a wrong password: it is also Cognito's answer to a locked or disabled account, an account that is already confirmed, and a revoked access token.
+  - Sign-in reports it as invalid credentials only when Cognito's message is its wrong-password sentence, and passes every other message through.
+  - Refresh and the MFA challenge report it as an expired session.
+  - Every other operation passes it through.
 - `Tokens` prints no token in its `Debug` output.
 - Not ported:
   - `disableTotp`, which this list does not name.
   - Revoking the refresh token on sign-out, which the Apple client does not do either.
-- Verification still open: signing in against stage, including with a TOTP-challenged account, needs [item 6](#6-sign-in-window)'s window.
 
 `auth/`: hand-rolled `USER_PASSWORD_AUTH` against `https://cognito-idp.<region>.amazonaws.com/`, mirroring `CognitoAuthService`. Required surface:
 
