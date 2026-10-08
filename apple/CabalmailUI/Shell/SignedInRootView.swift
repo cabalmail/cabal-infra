@@ -42,6 +42,11 @@ import CabalmailKit
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.commandWindowID) private var commandWindowID
+    /// This window's navigation, held here — above the layout switch — so a
+    /// swap between the tab tree and the split rebuilds only the layout and
+    /// the window keeps its folder, message and tab (`SceneNavigator`).
+    @State private var navigator: SceneNavigator
     @State private var isOffline = false
     @State private var failedSends = FailedSendMonitor()
     /// The window width the section layout was last laid out at; see
@@ -57,8 +62,19 @@ struct SignedInRootView: View {
     @State private var settingsPresented = false
     #endif
 
+    /// - Parameter appState: read once, to seed the navigator from the
+    ///   session's coordinator (a `@State` initial value can't reach the
+    ///   environment). SwiftUI keeps the first navigator for the view's life.
+    init(appState: AppState) {
+        _navigator = State(initialValue: SceneNavigator(appState: appState))
+    }
+
     var body: some View {
         sectionLayout
+            .environment(navigator)
+            // A new navigator — a new sign-in — gets new trees, which land
+            // on it rather than keep the last account's.
+            .id(ObjectIdentifier(navigator))
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.width
             } action: { width in
@@ -90,6 +106,27 @@ struct SignedInRootView: View {
             // because this view is in the visible hierarchy in every tab,
             // folder, and modal state; see ComposeRequestRouter.
             .composeRequestRouter()
+            .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
+            #if os(iOS)
+            .onChange(of: layoutChoice, initial: true) { _, layout in
+                navigator.layoutIsWide = layout == .regularSplit
+            }
+            #elseif os(macOS)
+            .onAppear { navigator.layoutIsWide = true }
+            #endif
+            // A new sign-in gets a new navigator, as it gets a new
+            // coordinator: nothing of the last account's place carries over.
+            .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
+                navigator = SceneNavigator(appState: appState)
+            }
+            #if !os(visionOS)
+            // Push, Spotlight and Siri write one app-wide request; the first
+            // window to see it takes it. visionOS's tab view still takes its
+            // own.
+            .onChange(of: appState.navCoordinator?.navigateRequest) {
+                navigator.takeNavigateRequest()
+            }
+            #endif
     }
 
     private func offerCrossDeviceCursor(atLaunch: Bool) async {
@@ -114,14 +151,9 @@ struct SignedInRootView: View {
         #else
         switch layoutChoice {
         case .compactTabs:
-            // Seeded from the live coordinator so a tree rebuilt mid-process
-            // (a fold, an iPad window narrowing) opens on the section the
-            // split was showing; the stored session covers a cold launch,
-            // before the coordinator exists. See `CompactSectionTabs` for why
-            // the selection lives on that view and not here.
-            CompactSectionTabs(
-                initialSection: appState.navCoordinator?.launchSection ?? ResumeSessionStore.storedSection()
-            )
+            // The tab comes from the navigator, so a tree rebuilt mid-process
+            // (a fold, an iPad window narrowing) opens on the tab it left.
+            CompactSectionTabs()
                 // The tab tree is compact width throughout, whatever the raw
                 // size class says in landscape on a Plus / Max: the Mail
                 // tab's split view must never expand into columns and
@@ -204,9 +236,10 @@ struct SignedInRootView: View {
 
     /// Builds the banner's trailing action. A `copyAddress` toast copies and
     /// swaps in the shared "successfully copied" confirmation; a `resumeCursor`
-    /// toast asks the nav coordinator to navigate to the cross-client cursor
-    /// and dismisses the banner. Returns nil for plain status toasts (no
-    /// trailing button).
+    /// toast moves this window to the cross-client cursor — this window's
+    /// navigator, not whichever window answers an app-wide request first
+    /// (#1845) — and dismisses the banner. Returns nil for plain status toasts
+    /// (no trailing button).
     private func actionHandler(for toast: Toast) -> (() -> Void)? {
         if let address = toast.copyAddress {
             return {
@@ -219,7 +252,11 @@ struct SignedInRootView: View {
                 if cursor.kind == .rss {
                     Task { await appState.navCoordinator?.requestFeedNavigation(cursor) }
                 } else {
+                    #if os(visionOS)
                     appState.navCoordinator?.navigateRequest = cursor
+                    #else
+                    navigator.navigate(to: cursor)
+                    #endif
                 }
                 appState.toast = nil
             }

@@ -70,8 +70,11 @@ public final class NavStateCoordinator {
 
     var pendingFeedRestore: PendingFeedRestore?
 
-    /// Set by the resume toast's action; observed by `MailRootView`, which
-    /// selects the folder and schedules the message restore, then clears it.
+    /// A cursor to open, from push, Spotlight or App Intents, which don't
+    /// know which window should answer. Each main window's `SceneNavigator`
+    /// observes it and the first to see it takes it (visionOS's
+    /// `VisionSectionView` takes its own); a window landing for the first time
+    /// drains one parked before it existed.
     public var navigateRequest: NavState?
 
     /// True once the launch-time cursor fetch has run. `MailRootView` uses it
@@ -421,6 +424,21 @@ public final class NavStateCoordinator {
 // never written into the cursor: it carries the one a restore primed it
 // with while it still names that message, or none.
 extension NavStateCoordinator {
+    /// Schedules a restore of the message `ref` names: a window re-parking
+    /// its open message for the list a layout swap rebuilt
+    /// (`SceneNavigator`). Carries the ref's UIDVALIDITY when it has one.
+    func scheduleRestore(for ref: MessageRef) {
+        scheduleRestore(for: NavState(
+            folder: ref.folder, messageID: ref.messageId, uid: ref.uid, uidValidity: ref.uidValidity,
+            clientID: clientID
+        ))
+    }
+
+    /// Whether a restore for `folderPath` is waiting for its list.
+    func hasPendingRestore(in folderPath: String) -> Bool {
+        pendingRestore?.folderPath == folderPath
+    }
+
     /// Records that the user opened the message `ref` names.
     func recordMessage(_ ref: MessageRef) {
         recordMessage(folderPath: ref.folder, uid: ref.uid, messageID: ref.messageId)

@@ -15,13 +15,22 @@ extension MailRootView {
                 if picked != nil {
                     if isSearching { endGlobalSearch() }
                     dismissFolderPanel()
-                    selectedFolder = nil
-                    selectedEnvelope = nil
+                    navigator.showFeeds()
                     listSelectionCount = 0
                 }
                 selectedFeedScope = picked
             }
         )
+    }
+
+    /// Opens the scope a landing or a layout swap's hand-off chose. The
+    /// navigator has already cleared the mail side; this is the view's half
+    /// of a feed pick, without counting as one.
+    func openFeedScope(_ scope: RssItemScope) {
+        if isSearching { endGlobalSearch() }
+        dismissFolderPanel()
+        listSelectionCount = 0
+        selectedFeedScope = scope
     }
 
     /// Content column: the feed item list while a feed scope is selected,
@@ -91,7 +100,7 @@ extension MailRootView {
     func feedNavigation() -> FeedNavigationModifier {
         FeedNavigationModifier(
             selectedFeedScope: $selectedFeedScope, selectedFeedItem: $selectedFeedItem,
-            selectedFeedSubscription: $selectedFeedSubscription, compactColumn: $compactColumn
+            selectedFeedSubscription: $selectedFeedSubscription, compactColumn: compactColumnSelection
         )
     }
 
