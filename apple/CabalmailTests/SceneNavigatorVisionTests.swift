@@ -5,8 +5,7 @@ import CabalmailKit
 /// visionOS's tab view on the window's navigator (`SceneNavigator`): its
 /// Folders tab, and its landing, which runs at launch whichever tab is up.
 /// These rules lived as `@State` handlers on `VisionSectionView` and its
-/// Mail pane, which no test could reach. The quiet landing is a rule of the
-/// navigator's, so it holds on the compact layout too.
+/// Mail pane, which no test could reach.
 @MainActor
 final class SceneNavigatorVisionTests: XCTestCase {
     private var suiteName: String!
@@ -85,21 +84,39 @@ final class SceneNavigatorVisionTests: XCTestCase {
         XCTAssertEqual(coordinator.session.folder, "Gone")
     }
 
-    /// On the compact layout the Mail tab's tree lands; when its folder list
-    /// arrives after the user switched to Feeds, the landing it finishes is
-    /// quiet as well.
-    func testAFolderListArrivingAfterASwitchToFeedsMovesNothing() async throws {
-        store.saveSession(ResumeSession(section: .mail, folder: "Archive"))
+    /// Once the window has shown mail, the landing records again, whatever
+    /// tab is up when the folder list arrives — as the Mail tab did once
+    /// built. Here a launch on Mail whose folder is gone: the user opened
+    /// Settings before the list came back, and the INBOX fallback still
+    /// replaces the deleted folder in the session.
+    func testALandingRecordsOnceTheWindowHasShownMail() async throws {
+        store.saveSession(ResumeSession(section: .mail, folder: "Gone"))
         let coordinator = try makeCoordinator()
-        let navigator = makeNavigator(coordinator, hasClient: false)
+        let navigator = makeNavigator(coordinator)
         _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        navigator.showTab(.settings)
+
+        navigator.foldersLoaded([inbox, archive])
+
+        XCTAssertEqual(navigator.selectedFolder, inbox)
+        XCTAssertEqual(coordinator.session.folder, "INBOX")
+    }
+
+    /// The same once a window that opened on Feeds has visited Mail: the
+    /// fallback is recorded even from Feeds, moving the session to mail, as
+    /// the Mail tab, built by that visit, did.
+    func testAFeedsWindowThatVisitedMailRecordsItsLanding() async throws {
+        store.saveSession(ResumeSession(section: .feeds, folder: "Gone"))
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        navigator.showTab(.mail)
         navigator.showTab(.feeds)
 
         navigator.foldersLoaded([inbox, archive])
 
-        XCTAssertEqual(navigator.selectedFolder, archive)
-        XCTAssertTrue(navigator.didLand)
-        XCTAssertEqual(coordinator.session.section, .feeds)
+        XCTAssertEqual(coordinator.session.folder, "INBOX")
+        XCTAssertEqual(coordinator.session.section, .mail)
     }
 
     // MARK: The Folders tab
@@ -136,7 +153,8 @@ final class SceneNavigatorVisionTests: XCTestCase {
 
     /// Only a new folder leaves the Folders tab. The landing's same-path
     /// swap, re-picking the folder already selected, and a cleared selection
-    /// (the selected folder deleted, #1062) leave the user where they are.
+    /// leave the user where they are. (Deleting the selected folder selects
+    /// INBOX, a new folder, #1062.)
     func testOnlyANewFolderLeavesTheFoldersTab() async throws {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
