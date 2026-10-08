@@ -24,7 +24,7 @@ extension MailRootView {
         Binding(
             get: { selectedFeedScope },
             set: { picked in
-                if picked != nil { feedListOpened() }
+                if picked != nil { feedListOpened(endingSearch: true) }
                 navigator.showFeeds(picked)
             }
         )
@@ -35,11 +35,12 @@ extension MailRootView {
         Binding(get: { selectedFeedItem }, set: { navigator.selectFeedItem($0, from: tree) })
     }
 
-    /// The view's half of opening a feed list, by a pick or otherwise (a
-    /// landing, a layout swap's hand-off, a tapped feed banner): the search
-    /// and the folder panel close, and the mail multi-selection goes.
-    func feedListOpened() {
-        if isSearching { endGlobalSearch() }
+    /// The view's half of opening a feed list: the folder panel closes and
+    /// the mail multi-selection goes. A pick or a tapped feed banner also
+    /// ends a search, as the search field's × does; a landing or a layout
+    /// swap's hand-off leaves it on screen (#1654).
+    func feedListOpened(endingSearch: Bool) {
+        if endingSearch, isSearching { endGlobalSearch() }
         dismissFolderPanel()
         listSelectionCount = 0
     }

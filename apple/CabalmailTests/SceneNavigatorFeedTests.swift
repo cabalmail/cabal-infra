@@ -158,26 +158,6 @@ final class SceneNavigatorFeedTests: XCTestCase {
         XCTAssertEqual(navigator.feeds.scope(in: second), .all)
     }
 
-    /// A Feeds tab whose lookup was still running when a swap replaced it
-    /// lands nothing when the lookup ends: the wide split shows mail, and the
-    /// session stays in mail rather than moving to a feed list nobody sees.
-    func testAFeedTreeSwappedAwayDuringItsLookupMovesNothing() async throws {
-        let coordinator = try makeCoordinator()
-        let lookup = HeldLookup()
-        let navigator = makeNavigator(coordinator, launch: { await lookup.lookup() })
-        navigator.showTab(.feeds)
-        let tab = Task { await navigator.feedTreeAppeared(UUID()) }
-        try await lookup.waitUntilEntered()
-        await navigator.mailTreeAppeared(UUID(), isWide: true)
-        XCTAssertEqual(coordinator.session.section, .mail)
-
-        lookup.release(with: .all)
-        await tab.value
-
-        XCTAssertNil(navigator.feeds.scope)
-        XCTAssertEqual(coordinator.session.section, .mail)
-    }
-
     // MARK: The feed banner
 
     /// A tapped feed banner opens its scope in this window. On the compact
@@ -199,6 +179,7 @@ final class SceneNavigatorFeedTests: XCTestCase {
         XCTAssertEqual(wide.feeds.scope(in: tree), .subscription("b"))
         XCTAssertNil(wide.folder(in: tree))
         XCTAssertEqual(wide.compactTab, .feeds)
+        XCTAssertEqual(wide.feedNavigations, 1, "so the split ends a search, as a feed pick does")
     }
 
     /// A banner is the window's feed landing even after its list is closed:

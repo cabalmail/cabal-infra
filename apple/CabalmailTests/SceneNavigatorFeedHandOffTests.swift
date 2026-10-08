@@ -66,6 +66,13 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         XCTAssertEqual(coordinator.pendingFeedRestore, NavStateCoordinator.PendingFeedRestore(scope: scope, item: item))
         XCTAssertEqual(coordinator.session.feedItemSortKey, "k")
         XCTAssertNil(navigator.folder(in: wide))
+
+        // The window landed in the feed reader: the wide sidebar's folder
+        // list arriving doesn't land mail behind it.
+        navigator.foldersLoaded([inbox])
+        XCTAssertTrue(navigator.splitShowsFeeds)
+        XCTAssertNil(navigator.folder(in: wide))
+        XCTAssertEqual(coordinator.session.section, .feeds)
     }
 
     /// The same for a window that has used both tabs, whose wide tree takes
@@ -84,6 +91,45 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         XCTAssertEqual(navigator.route.section, .feeds)
         XCTAssertEqual(navigator.feeds.scope(in: wide), scope)
         XCTAssertEqual(coordinator.pendingFeedRestore?.item, item)
+        XCTAssertNil(navigator.folder(in: wide), "the mail side clears, as for a feed pick")
+
+        // So a mail navigation to the folder the Mail tab had is a folder
+        // change that shows the message (#1964).
+        navigator.navigate(to: NavState(folder: "INBOX", uid: 4, clientID: "push"))
+        XCTAssertFalse(navigator.splitShowsFeeds)
+        XCTAssertEqual(navigator.folder(in: wide)?.path, "INBOX")
+    }
+
+    /// An item picked before the list applied the one parked for it (a
+    /// launch restore still waiting on the first sync) wins: the parked one
+    /// goes, and a swap parks the pick.
+    func testAPickBeforeTheParkedItemOpensWinsTheHandOff() async throws {
+        let coordinator = try makeCoordinator()
+        let (navigator, tab) = await compactReadingFeed(coordinator)
+        navigator.setFeedColumn(.content, from: tab)
+        coordinator.pendingFeedRestore = NavStateCoordinator.PendingFeedRestore(scope: scope, item: other)
+
+        navigator.selectFeedItem(item, from: tab)
+        XCTAssertNil(coordinator.pendingFeedRestore)
+
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
+        XCTAssertEqual(coordinator.pendingFeedRestore?.item, item)
+    }
+
+    /// A list picked over the one an item is parked for makes that item
+    /// stale: it would otherwise open when the list came back. A banner's
+    /// item, parked for the list it opens, stays.
+    func testAScopeChangeDropsAnItemParkedForAnotherList() async throws {
+        let coordinator = try makeCoordinator()
+        let (navigator, _) = await compactReadingFeed(coordinator)
+        coordinator.pendingFeedRestore = NavStateCoordinator.PendingFeedRestore(scope: scope, item: other)
+
+        navigator.selectFeedScope(.all)
+        XCTAssertNil(coordinator.pendingFeedRestore)
+
+        coordinator.pendingFeedRestore = NavStateCoordinator.PendingFeedRestore(scope: scope, item: other)
+        navigator.navigateFeeds(to: scope)
+        XCTAssertEqual(coordinator.pendingFeedRestore?.item, other)
     }
 
     /// The other way: narrowing (or folding) while reading in the wide split

@@ -72,6 +72,10 @@ final class SceneNavigator {
     /// trees (`FeedNavigationState`).
     private(set) var feeds = FeedNavigationState()
 
+    /// Counts the feed banners this window has followed, so the wide split
+    /// can end a search for one as it does for a feed pick (`navigateFeeds`).
+    private(set) var feedNavigations = 0
+
     /// The compact layout's tab, or visionOS's. Seeded from the resume
     /// session when the window is created and kept from then on, so a swap
     /// to the regular split and back reopens the tab it left — the Search,
@@ -203,7 +207,12 @@ final class SceneNavigator {
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
         guard let coordinator = coordinator() else { return }
         if isWide, route.section == .feeds {
-            if feeds.scope != nil { return }
+            if feeds.scope != nil {
+                // The split shows the window's feed list, so the mail side
+                // clears, as for a feed pick.
+                enterFeeds()
+                return
+            }
             if !feeds.didLand, await landsInFeeds(tree, coordinator) { return }
             // No list to show, so the split shows mail: the section moves,
             // as the landing's folder record used to move it.
@@ -249,27 +258,20 @@ final class SceneNavigator {
         if let request = coordinator.navigateRequest {
             navigate(to: request)
         }
-        guard !didLand, selectedFolder == nil, !(isWide && splitShowsFeeds), hasClient() else { return }
+        guard !didLand, selectedFolder == nil else { return }
+        if isWide, splitShowsFeeds {
+            // The Feeds tab landed before the window widened: the window has
+            // landed, in the feed reader, and the folder list's first load
+            // must not land mail behind it.
+            didLand = true
+            return
+        }
+        guard hasClient() else { return }
         didLand = true
         if isWide, coordinator.launchSection == .feeds, !feeds.didLand, await landsInFeeds(tree, coordinator) {
             return
         }
         landOnSessionFolder(coordinator)
-    }
-
-    /// The wide split's landing in feeds: the session's scope, when it is
-    /// still in the store, clearing the mail side as a feed pick does.
-    /// Returns whether that settled the tree: it opened the scope, or a swap
-    /// replaced it during the lookup and the tree that takes over lands
-    /// instead. False sends it on to mail.
-    private func landsInFeeds(_ tree: UUID, _ coordinator: NavStateCoordinator) async -> Bool {
-        let scope = await feedsLaunchTarget(coordinator)
-        guard isCurrent(tree, isWide: true) else { return true }
-        feeds.markLanded()
-        guard let scope else { return false }
-        enterFeeds()
-        record(feeds.openScope(scope))
-        return true
     }
 
     /// The provisional mail landing: the session's folder (the launch
@@ -562,12 +564,28 @@ extension SceneNavigator {
     /// on screen.
     func navigateFeeds(to scope: RssItemScope) {
         feeds.markLanded()
+        feedNavigations += 1
         if layoutIsWide {
             showFeeds(scope)
         } else {
             showTab(.feeds)
             record(feeds.selectScope(scope))
         }
+    }
+
+    /// The wide split's landing in feeds: the session's scope, when it is
+    /// still in the store, clearing the mail side as a feed pick does.
+    /// Returns whether that settled the tree: it opened the scope, or a swap
+    /// replaced it during the lookup and the tree that takes over lands
+    /// instead. False sends it on to mail.
+    private func landsInFeeds(_ tree: UUID, _ coordinator: NavStateCoordinator) async -> Bool {
+        let scope = await feedsLaunchTarget(coordinator)
+        guard isCurrent(tree, isWide: true) else { return true }
+        feeds.markLanded()
+        guard let scope else { return false }
+        enterFeeds()
+        record(feeds.openScope(scope))
+        return true
     }
 
     /// A tree that hosts feeds appeared: `FeedRootView`, or a wide
@@ -592,9 +610,19 @@ extension SceneNavigator {
             case .scope(let scope):
                 route.feeds = AppRoute.Feeds(scope: scope)
                 coordinator()?.recordFeedScope(scope)
+                // An item parked for another list is stale now: the list
+                // would otherwise open it the next time it comes back.
+                if let parked = coordinator()?.pendingFeedRestore?.scope, parked != scope {
+                    _ = coordinator()?.consumeFeedItemRestore(for: parked)
+                }
             case .item(let item):
                 route.feeds.item = item.map(AppRoute.Item.init)
                 coordinator()?.recordFeedItem(item)
+                // Picked before the list applied the item parked for it:
+                // the pick wins, and a later hand-off parks the pick.
+                if item != nil, let scope = feeds.scope {
+                    _ = coordinator()?.consumeFeedItemRestore(for: scope)
+                }
             }
         }
     }

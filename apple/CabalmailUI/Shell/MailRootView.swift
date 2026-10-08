@@ -380,11 +380,14 @@ struct MailRootView: View {
             // already done it and this is a no-op for it.
             if path != nil { dismissFolderPanel() }
         }
-        // A feed list opening without a pick — a landing, a layout swap's
-        // hand-off, a tapped feed banner — closes the search and the panel
-        // as a pick does (RSS plan, phase 5; see MailRootView+Feeds).
+        // A feed list opening without a pick (RSS plan, phase 5; see
+        // MailRootView+Feeds): a landing or a hand-off, or a tapped feed
+        // banner, which ends a search as a pick does.
         .onChange(of: selectedFeedScope) { _, scope in
-            if scope != nil { feedListOpened() }
+            if scope != nil { feedListOpened(endingSearch: false) }
+        }
+        .onChange(of: navigator.feedNavigations) {
+            if isWideSidebar { feedListOpened(endingSearch: true) }
         }
         // Catch-all drop target behind the whole split view: a message
         // released anywhere that isn't a folder row (the message list, the
